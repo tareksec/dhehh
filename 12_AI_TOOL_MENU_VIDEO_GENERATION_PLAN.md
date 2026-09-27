@@ -1,6 +1,6 @@
 # 12 — AI Tool Menu: Video Generation (Module Plan)
 
-Status: **Phases 0–2 built.** The tool is live on the Tool Menu: a user can pick a starting image (upload, Media Hub, or the video-reference quick-pick), write a prompt (with ✨ Enhance for providers that use it), and get a queued, self-polling Stability/Custom async generation. Not yet wired: attach-to-Product/Offer, the Video Library, and governance (Phases 3–5 below). Written as the pre-execution reference for phased implementation in Claude Code, mirroring how `11_AI_TOOL_MENU_IMAGE_GENERATION_PLAN.md` was used for Image Generation. Owner decisions already made (see §2) — provider breadth and the Product/Offer attach scope. Everything else below is the technical design.
+Status: **Phases 0–5 built — plan complete** (open follow-ups: a second named provider, Meta Ads video creatives). The tool is live on the Tool Menu: a user can pick a starting image (upload, Media Hub, or the video-reference quick-pick), write a prompt (with ✨ Enhance for providers that use it), get a queued, self-polling Stability/Custom async generation, attach the finished clip to a Product page or an Offer hero, and browse / star / reuse / copy-to-Google-Drive every clip in the Video Library. Phase 5 added per-role monthly caps, an approval workflow, and a usage dashboard. Written as the pre-execution reference for phased implementation in Claude Code, mirroring how `11_AI_TOOL_MENU_IMAGE_GENERATION_PLAN.md` was used for Image Generation. Owner decisions already made (see §2) — provider breadth and the Product/Offer attach scope. Everything else below is the technical design.
 
 ## 1. Overview
 
@@ -417,21 +417,33 @@ Per CLAUDE.md's rule that storefront-visible content must be admin-manageable vi
 - Finding: Stability's `/v2beta/image-to-video` takes no text prompt at all (image + seed/cfg_scale/motion_bucket_id only). `VideoGenerationClient::usesTextPrompt()` was added; for Stability the Enhance button is hidden and the prompt field says the prompt is not sent. Enhancement matters for the Custom adapter and future text-capable providers.
 - The Prompt Enhancer settings page labels guides "Image — …" / "Video — …" (both tools have a "General" context).
 
-**Phase 3 — Attach & handoff integrations**
+**Phase 3 — Attach & handoff integrations** ✅ done
 - `GeneratedVideoAttacher` service
 - Per-video "Attach to product" / "Attach to offer" actions on the gallery
 - New storefront blocks: product detail video block, offer hero video variant
 - Meta Ads video creative work explicitly skipped (§13(e))
+- As built: the product video sits under the photo gallery (`controls`, `playsinline`, poster = the first gallery photo). The offer hero plays the video muted, looped and autoplaying behind the headline, with `cover_image` as its poster; the cover image stays underneath, so it still shows when the visitor prefers reduced motion (`motion-reduce:hidden` on the `<video>`) and stays the social share image.
+- Addition: an admin needs a way to take a video off again (CLAUDE.md: storefront content must be admin-manageable). `ProductForm` and `OfferForm` gain a read-only `AttachedVideoPreview` field (shown only when `video_path` is set) with a **Remove video** hint action. It is still never an upload control (§6.4). Removing clears only `video_path`; the clip stays in Video Generation.
+- `ai_video.attached` is audit-logged now (as `ai_image.attached` is on Image Generation), not deferred to Phase 5. The gallery shows "Attached to …" per video and hides the attach buttons on a video that is awaiting or failed review.
 
-**Phase 4 — Productivity features**
+**Phase 4 — Productivity features** ✅ done
 - `VideoLibrary` page (search/filter/reuse-prompt, mirroring `ImageLibrary`)
 - Favourites
 - *(No batch-generation phase — count is always 1 by design; no image-to-image/background-removal equivalent for video in v1)*
+- As built: the library adds **Play** (a modal player), **Download**, and a **Google Drive** column/filter. "Reuse" opens Video Generation with `?from=<id>` and prefills the prompt, context, aspect ratio, duration, provider, and the same starting image. The generation gallery gains **Favourite** and the Drive button too.
+- Addition (owner request, 2026-09-27): **Save to Google Drive.** Owner asked whether Google Drive or MEGA could hold the library. Neither suits *serving* video: Drive throttles/blocks heavily-downloaded files and is not a web host; MEGA is end-to-end encrypted, so there is no plain URL for `<video>`. Clips therefore stay in the company's public storage (R2 when enabled), and Drive gets a **copy** on demand:
+  - `SaveVideoToDriveJob` (queued, one try) → `VideoDriveExporter` → `GoogleDriveBackupService::uploadStream()` (resumable upload, streamed, `supportsAllDrives=true`).
+  - Credentials: the service account already set on Settings → Backups → Google Drive Backup (no second secret). Folder: per company, `companies.settings->ai_tools->video_drive->folder_id`, set on Settings → Integrations → Video Providers (a pasted folder link is accepted). The page shows the service-account email to share the folder with.
+  - New `generated_videos` columns: `drive_status` (saving / saved / failed), `drive_file_id`, `drive_url`, `drive_saved_at`, `drive_error`. Audit event `ai_video.saved_to_drive`.
+  - Caveat surfaced in the UI: Google may refuse uploads by a service account into a normal My Drive folder ("Service Accounts do not have storage quota"); a Shared Drive folder works. Google's own error message is stored and shown on the row.
 
-**Phase 5 — Governance & polish**
+**Phase 5 — Governance & polish** ✅ done
 - `VideoGovernance` page + `VideoGovernanceService` (usage/cost dashboard, per-role monthly cap, approval workflow)
 - Add `ai_tools.video_generation.review` permission at this point (mirroring exactly when `.image_generation.review` was introduced)
 - Audit logging (`ai_video.generated`, `ai_video.attached`, `ai_video.review_approved/rejected`) via the existing `AuditLogService::record()`
+- As built: the page is super-admin-only, kept out of the sidebar, and opened from a **Video Governance** header button on the Tool Menu (next to Image Governance). The cap is checked in `VideoGeneration::generate()` *before* the form is dehydrated, so a blocked request never stores its upload; the remaining allowance shows under the form. Pending / rejected videos show a badge (with the reviewer's note) in the gallery, and the attach buttons stay hidden. Reviewers approve / reject from the Video Library, whose Review column is now shown by default.
+- §14(d) resolved: the cap counts **videos** (rows, failed excluded), not seconds — every request is one clip and Stability returns a fixed length. The storage shape stays unit-agnostic.
+- Permission snapshot: instead of re-running the full `ROLE_PERMISSIONS` → `user_roles` snapshot (Phase 0's approach, which overwrites any owner edits to built-in roles), `2026_09_28_100000_grant_video_review_permission_to_manager_role` only appends `.review` to a Manager row that already has `ai_tools.video_generation`.
 
 **Near-term follow-up (per §2, not a separate numbered phase):** a second named commercial adapter (Runway/Kling/similar) once Stability's submit/poll pattern is proven in production.
 
@@ -462,5 +474,5 @@ Run the affected test files plus the full `php artisan test` (no `--env` flag, p
 a. ~~Which video provider(s) to integrate first~~ — **resolved (§2):** Stability + Custom in Phase 1, a second named provider as an immediate near-term follow-up.
 b. **Exact duration/aspect-ratio presets.** `short`/`standard` durations and a `1:1`/`16:9`/`9:16` aspect set are reasonable, easily-changed defaults — but Stability's image-to-video API may currently support only a single fixed native duration with no real choice (unverified at planning time; needs checking against current docs before Phase 1's UI is finalized). If so, decide whether to hide the duration selector for a single-duration provider or show it as informational, since the preset menu only earns its keep once a second adapter with genuine duration choice exists.
 c. ~~Whether Product/Offer video attach is wanted in v1~~ — **resolved (§2):** yes, Generate + Attach.
-d. **Monthly cap unit: video count vs. total seconds**, and a default `cost_per_video` placeholder (or explicitly "0, admin must set it," matching `cost_per_image`'s current default). `VideoGovernanceService`'s `monthly_caps: {role: int}` storage shape is unit-agnostic — only the enforcement method's definition changes — so this can be decided (or changed later) without touching the schema.
+d. ~~Monthly cap unit~~ — **resolved (Phase 5):** video count. Original question: **Monthly cap unit: video count vs. total seconds**, and a default `cost_per_video` placeholder (or explicitly "0, admin must set it," matching `cost_per_image`'s current default). `VideoGovernanceService`'s `monthly_caps: {role: int}` storage shape is unit-agnostic — only the enforcement method's definition changes — so this can be decided (or changed later) without touching the schema.
 e. **Meta Ads video creative timeline.** Confirmed as new Meta Graph API work (a video-upload endpoint, a different object-story-spec branch), not a small addition on top of the existing image-hash-based flow. No committed timeline — flagged here so it isn't silently forgotten rather than deliberately deferred.

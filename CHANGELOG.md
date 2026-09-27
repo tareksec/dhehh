@@ -4,6 +4,33 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Put an AI video on a product page or an offer page.** In **AI Tools → Video Generation**, a finished video now has two more buttons next to **Download**:
+  - **Product** — pick a product. The video plays on the product page, under the photos, with the first photo as its cover. It replaces the product's current video, if it has one.
+  - **Offer hero** — pick an offer / landing page. The video plays in the page's top banner, silent and on a loop, behind the headline. The offer's cover image stays as the video's first frame and as the picture used when the page is shared. Visitors whose device asks for less motion see the cover image instead.
+  - Each video shows which product or offer it is attached to.
+  - A video waiting for a reviewer's approval, or rejected, cannot be attached.
+- **Remove a video from a product or offer.** When a product or offer has a video, its edit form shows the video with a **Remove video** link (Products → Product Images; Offers → the cover image section). Removing it takes it off the storefront. The clip stays in Video Generation, so you can attach it again. Videos cannot be uploaded here; they only come from Video Generation.
+- **Video Library** (AI Tools → Video Library). Every video your company has made, in one table:
+  - Search by prompt. Filter by purpose, status, who made it, review, favourites, attached to a product or offer, and saved to Google Drive.
+  - Per video: **Play**, **Download**, **Reuse** (opens Video Generation with the same prompt, settings and starting image), and **Add to favourites**.
+- **Favourite** button on each finished video in Video Generation. Starred videos can be filtered in the Video Library.
+- **Save to Google Drive.** A finished video can be copied to your company's Google Drive folder from Video Generation or the Video Library. You get a notification when it is there, and the button turns into **Open in Google Drive**. The storefront still plays the video from the app's own storage; Drive only holds a copy.
+  - Setup, by a super admin: the Google service account from **Settings → Backups → Google Drive Backup** is reused. Add the folder on **Settings → Integrations → Video Providers → Save to Google Drive** (paste the folder link) and share that folder with the service-account email shown there. Use a folder in a **Shared Drive**: Google may refuse uploads into a normal My Drive folder.
+  - If Google refuses an upload, the video shows **Failed** with Google's reason, and you can retry.
+  - Until the folder is set, the button is hidden.
+- **Video Governance** (AI Tools → Tool Menu → **Video Governance** button, super admins only), the same controls Image Governance has:
+  - **Monthly video cap per role.** 0 means unlimited; super admins are never capped; failed videos do not count. A user who has used their allowance is told so and nothing is generated. Video Generation shows how many videos are left this month.
+  - **Approval before attaching.** Videos made by the chosen roles are marked "pending review" and cannot be put on a product or offer until a reviewer approves them in the Video Library (**Approve** / **Reject** with a reason). The creator sees the badge and the reviewer's note.
+  - **This month's usage:** videos generated and estimated spend, by person and by provider.
+  - New permission **AI Tools: Video Generation — approve others' videos for attaching** (`ai_tools.video_generation.review`), given to the built-in Manager role.
+  - Everything is off until a super admin sets values.
+
+**Technical Notes:** new `GeneratedVideoAttacher` (`attachToProduct()` / `attachToOffer()`) writes the stored clip path into `products.video_path` / `offers.video_path` (the columns came with the Phase 1 migrations) and sets the generation's `linked` morph. It refuses an unfinished row, a row whose clip is missing, a row awaiting or failing review, and a record from another company (`VideoAttachmentException`). `VideoGeneration` gains `attachToProduct` / `attachToOffer` actions, scoped to the user's own rows, and records `ai_video.attached` in the audit log. New read-only `AttachedVideoPreview` form field (never dehydrated, no upload) on `ProductForm` and `OfferForm`, with a `removeVideo` hint action. `storefront/products/show.blade.php` gains a `data-product-video` block; `storefront/offers/blocks/hero.blade.php` plays `video_path` over `cover_image` (`motion-reduce:hidden`). New strings go through `__()` with keys in `lang/en.json` and `lang/bn.json`. Plan: `12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md` Phases 3–4. Phase 4: new `VideoLibrary` page (AI Tools cluster, `ai_tools.video_generation`); `VideoGeneration` gains `toggleFavorite` / `saveToDrive` actions and `?from=<id>` prefill. New `SaveVideoToDriveJob` (queued, one try, sets/clears `CompanyContext`) → `VideoDriveExporter` → new `GoogleDriveBackupService::uploadStream()` (resumable upload, streamed from the public disk, `supportsAllDrives=true`); the backup `upload()` is unchanged. Per-company folder in `companies.settings->ai_tools->video_drive->folder_id`. **Migration:** `2026_09_27_100000_add_google_drive_columns_to_generated_videos_table` adds `drive_status`, `drive_file_id`, `drive_url`, `drive_saved_at`, `drive_error` to `generated_videos`. Audit event `ai_video.saved_to_drive`. Phase 5: new `VideoGovernanceService` (`companies.settings->ai_tools->video_governance`, cap = count of non-failed videos this month) and super-admin `VideoGovernance` page (hidden from the sidebar, linked from the Tool Menu header). `VideoGeneration::generate()` checks the cap before dehydrating the form and sets `review_status`; `VideoLibrary` gains `approveReview` / `rejectReview` (audit `ai_video.review_approved` / `ai_video.review_rejected`). `User::ROLE_PERMISSIONS['manager']` gains `ai_tools.video_generation.review`. **Migration:** `2026_09_28_100000_grant_video_review_permission_to_manager_role` appends that permission to the stored Manager role only if the row already has `ai_tools.video_generation`, leaving everything else unchanged.
+
 ## [2.27.1] - 2026-09-27
 
 **Release type:** Maintenance Update

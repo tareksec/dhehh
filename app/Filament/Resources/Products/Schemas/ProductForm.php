@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Products\Schemas;
 
 use App\Filament\Concerns\OptimizesUploadedImages;
 use App\Filament\Concerns\SelectableFromMediaHub;
+use App\Filament\Forms\Components\AttachedVideoPreview;
 use App\Filament\Resources\Categories\Schemas\CategoryForm;
 use App\Models\Category;
 use App\Models\Product;
@@ -243,6 +244,8 @@ class ProductForm
                             ->hintAction(static::selectFromMediaHubAction())
                             ->downloadable()
                             ->openable(),
+                        AttachedVideoPreview::make('video_preview')
+                            ->columnSpanFull(),
                     ])
                     ->columns(2)
                     ->collapsible()

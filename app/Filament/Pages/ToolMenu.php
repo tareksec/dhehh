@@ -97,6 +97,12 @@ class ToolMenu extends Page
                 ->color('gray')
                 ->url(fn (): string => ImageGovernance::getUrl())
                 ->visible(fn (): bool => ImageGovernance::canAccess()),
+            Action::make('videoGovernance')
+                ->label(__('Video Governance'))
+                ->icon(Heroicon::OutlinedShieldCheck)
+                ->color('gray')
+                ->url(fn (): string => VideoGovernance::getUrl())
+                ->visible(fn (): bool => VideoGovernance::canAccess()),
         ];
     }
 

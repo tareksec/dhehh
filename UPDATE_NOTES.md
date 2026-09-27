@@ -2,6 +2,106 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-28 - Video Generation Phase 5: Video Governance (plan 12 complete)
+
+Reason — owner: "পরের কাজ গুলো কর" (do the next tasks) after Phase 4. Phase 5 is the last phase in `12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md` §12.
+
+What changed:
+- **Governance service and page:**
+  - `app/Services/VideoGeneration/VideoGovernanceService.php` holds the per-role monthly cap and review roles in `companies.settings->ai_tools->video_governance`, plus usage totals and `review()`.
+  - `app/Filament/Pages/VideoGovernance.php` + `resources/views/filament/pages/video-governance.blade.php` form the super-admin page. It is not in the sidebar; the Tool Menu header has a new **Video Governance** button (`ToolMenu.php`).
+- **Cap unit (plan §14(d)) — my call, easy to change:** videos per calendar month, failed ones excluded. Every request is one clip and Stability's clips are a fixed length, so a count matches what is spent. Switching to seconds later changes one method, not the stored settings.
+- **Video Generation:**
+  - The cap is enforced before the upload is saved, so a blocked request stores nothing.
+  - `review_status` is set to pending for review roles, and the audit log records it.
+  - An allowance line shows under the form. The gallery shows a pending/rejected badge with the reviewer's note, and the attach buttons stay hidden.
+- **Video Library:** Approve / Reject (with a reason) for holders of `ai_tools.video_generation.review`. The Review column is visible by default and shows the note.
+- **Permission:** `ai_tools.video_generation.review` is added to the Manager role and the custom-permission list (`app/Models/User.php`), and `docs/roles-and-permissions.md` is updated.
+- **Migration:** `2026_09_28_100000_grant_video_review_permission_to_manager_role.php` only **appends** the permission to the stored Manager role, and only if that role already has `ai_tools.video_generation`. I did not reuse Phase 0's full re-snapshot, because that overwrites any edits the owner made to built-in roles. It has **not** been run on the demo DB.
+- `VideoProviderSettings`: the cost hint no longer says "future" dashboard.
+- Plan doc 12: Phase 5 marked ✅ and the status line now says the plan is complete. `lang/en.json` + `lang/bn.json`: 33 new keys.
+
+Tests:
+- New `tests/Feature/VideoGovernanceServiceTest.php` (7) and `tests/Feature/VideoGovernancePageTest.php` (10). They cover page access, the Tool Menu button, save, usage, cap blocking, pending review, the gallery badge, approve/reject, the permission gate, and the additive migration.
+- Full `php artisan test`: 1519 passed (9153 assertions). `npm run build`: clean.
+
+Needs Bangla review:
+- "Video Governance" → "ভিডিও গভর্নেন্স" (transliteration)
+- "Monthly allowance: :count video(s) left this month." → "মাসিক সীমা: এই মাসে আর :countটি ভিডিও বানানো যাবে।"
+
+Commit status: committed and pushed to `main`.
+
+## 2026-09-27 - Video Generation Phase 4: Video Library, favourites, Save to Google Drive (plan 12)
+
+Reason — owner asked whether Google Drive or MEGA could be used for the video library. Answer given: neither can serve video to web pages reliably (Drive throttles popular files and is not a web host; MEGA is end-to-end encrypted, so no plain URL for `<video>`). Clips stay in the company's own storage (R2 when enabled). The owner then chose: "Phase 4-এর সাথে "Save to Google Drive" বোতামও যোগ কর" (do Phase 4 and add a Save to Google Drive button).
+
+What changed:
+- **Video Library** — new `app/Filament/Pages/VideoLibrary.php` + `resources/views/filament/pages/video-library.blade.php`.
+  - A table mirroring the Image Library, with search and filters (context, status, creator, review, favourites, attached, saved to Drive).
+  - Row actions: Play (modal, `partials/video-player.blade.php`), Reuse, Favourite, Download, Save to Google Drive / Open in Google Drive.
+  - It is in the AI Tools sidebar after Video Generation and uses the same `ai_tools.video_generation` permission. The table polls while a video is generating or a Drive copy is uploading.
+- **Video Generation page:**
+  - `toggleFavorite` and `saveToDrive` actions on each finished video. `partials/video-drive-status.blade.php` shows Save / Saving… / Open in Drive / Retry.
+  - `?from=<id>` prefill: prompt, context, aspect ratio, duration, provider, and the same starting image.
+  - The gallery keeps polling while a Drive copy uploads.
+- **Save to Google Drive:**
+  - `app/Filament/Pages/Concerns/SavesVideosToDrive.php` (shared queue logic).
+  - `app/Jobs/SaveVideoToDriveJob.php`, which notifies the requester on success or failure.
+  - `app/Services/VideoGeneration/VideoDriveExporter.php`, which holds the per-company folder in `companies.settings->ai_tools->video_drive->folder_id` and accepts a pasted folder link.
+  - `GoogleDriveBackupService` gains `hasServiceAccount()`, `serviceAccountEmail()` and `uploadStream()`. The upload is resumable and streamed, so there is no 5 MB multipart limit, and `supportsAllDrives=true` is set. The existing backup `upload()` is untouched.
+- **Settings → Integrations → Video Providers:** new "Save to Google Drive" section with the folder field. The help text shows the service-account email to share the folder with.
+  - The credentials are the existing Backups service account; no new secret is stored.
+- **Migration:** `database/migrations/2026_09_27_100000_add_google_drive_columns_to_generated_videos_table.php` (`drive_status`, `drive_file_id`, `drive_url`, `drive_saved_at`, `drive_error`). It has **not** been run on the demo DB.
+- `GeneratedVideo`: `DRIVE_*` constants, the new fillable fields and cast, `hasPlayableVideo()`, `isSavedToDrive()`, `isSavingToDrive()`.
+- Plan doc 12: Phase 4 marked ✅ with the Drive decision recorded. `lang/en.json` + `lang/bn.json`: 52 new keys.
+
+Owner check before using Drive:
+- On Settings → Integrations → Video Providers, paste a folder link from a **Shared Drive** and share it with the service-account email shown there.
+- Google has been refusing service-account uploads into normal My Drive folders with "Service Accounts do not have storage quota". If that happens, the row shows Google's message.
+- The same limit may also affect the existing backup upload to Drive, which was not changed here.
+
+Tests:
+- New `tests/Feature/VideoLibraryTest.php` (10) and `tests/Feature/SaveVideoToDriveTest.php` (6). Google's token exchange is stubbed; the Drive calls go through `Http::fake()`.
+- Affected files (Video Library, Drive, Video Generation page, Video Providers page, AI Tools menu, backups, translation parity): all passed.
+- Full `php artisan test`: 1502 passed (8943 assertions). `npm run build`: clean.
+
+Needs Bangla review:
+- "Context" → "উদ্দেশ্য" (the library column for "What is this for?")
+- "By" → "যিনি বানিয়েছেন"
+- "Reuse" → "আবার ব্যবহার করুন"
+- "Favourite" / "Favourited" → "প্রিয়" / "প্রিয়তে আছে"
+
+Commit status: committed and pushed to `main`.
+
+## 2026-09-27 - Video Generation Phase 3: attach videos to products and offers (plan 12)
+
+Reason — owner: "পরবর্তি কাজ কর" (do the next task) after Phase 2 was pushed. The next task in `12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md` §12 is Phase 3, attach & handoff.
+
+What changed:
+- **Service:** `app/Services/VideoGeneration/GeneratedVideoAttacher.php` + `VideoAttachmentException.php`. It writes the clip path into `products.video_path` / `offers.video_path` and links the generation. It refuses: not finished, clip missing, awaiting or rejected review, another company's record.
+- **Video Generation page:** `attachToProduct` / `attachToOffer` actions (the user's own rows only), with **Product** / **Offer hero** buttons on each finished video and an "Attached to …" line. The buttons are hidden while a video is not attachable. `ai_video.attached` is audit-logged.
+- **Storefront:**
+  - Product page: a video under the photo gallery (controls, poster = first photo).
+  - Offer hero block: muted, looped, autoplaying video over the cover image. The cover image is the poster, the reduced-motion fallback, and still the share image.
+- **Admin removal (added beyond the plan):** new `app/Filament/Forms/Components/AttachedVideoPreview.php` + `resources/views/filament/forms/components/attached-video-preview.blade.php`, on `ProductForm` (Product Images section) and `OfferForm` (after the cover image). It is shown only when a video is set and has a **Remove video** hint action. It is not an upload control, per plan §6.4. CLAUDE.md requires storefront content to be manageable from the admin panel; without this, an attached video could not be taken off.
+- Plan doc 12: Phase 3 marked ✅ with the as-built notes; status line now "Phases 0–3 built".
+- `lang/en.json` + `lang/bn.json`: 30 new keys.
+
+Tests:
+- New `tests/Feature/GeneratedVideoAttacherTest.php` (8).
+- New `tests/Feature/StorefrontGeneratedVideoTest.php` (7): product video block, offer hero video + fallback, remove from product and offer, preview hidden without a video.
+- `tests/Feature/VideoGenerationPageTest.php` +4: attach to product (with audit log), attach to offer, blocked while awaiting review, cannot attach another user's video.
+- Affected files: 32 passed. Full `php artisan test`: 1486 passed (8657 assertions). `npm run build`: clean.
+
+Not done (later phases): Video Library + favourites (Phase 4), governance + review permission (Phase 5), Meta Ads video creatives (deferred, §13(e)).
+
+Needs Bangla review (new `lang/bn.json` values):
+- "Use as an offer hero video" → "অফারের হিরো ভিডিও হিসেবে ব্যবহার করুন"; "Offer hero" → "অফার হিরো"; "Hero video updated" → "হিরো ভিডিও আপডেট হয়েছে"; "Set hero video" → "হিরো ভিডিও সেট করুন" — "হিরো" is a transliteration of the web term; the owner may prefer "ব্যানার".
+- "Attached to" → "যুক্ত আছে"
+- ":product video" → ":product ভিডিও"
+
+Commit status: committed and pushed to `main`.
+
 ## 2026-09-27 - CI: GitHub Actions on Node.js 24
 
 Reason — the owner saw "Node.js 20 is deprecated" and "setup-java v4 is deprecated" warnings on CI run #159 and approved the fix: "হ্যাঁ, ঠিক করে মেইন এ পুশ কর" (yes, fix it and push to main). These were only warnings: the run succeeded and the APK was built. The workflow file had not been changed by the previous push.

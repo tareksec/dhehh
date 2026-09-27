@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Offers\Schemas;
 
 use App\Filament\Concerns\OptimizesUploadedImages;
 use App\Filament\Concerns\SelectableFromMediaHub;
+use App\Filament\Forms\Components\AttachedVideoPreview;
 use App\Models\Offer;
 use App\Models\Product;
 use App\Models\ProductReview;
@@ -84,6 +85,8 @@ class OfferForm
                         ->imageEditor()
                         ->saveUploadedFileUsing(static::optimizeImageUpload())
                         ->hintAction(static::selectFromMediaHubAction())
+                        ->columnSpanFull(),
+                    AttachedVideoPreview::make('video_preview')
                         ->columnSpanFull(),
                     Toggle::make('online_payment_required')
                         ->label('Require full online payment')

@@ -58,6 +58,7 @@ ai_tools.menu
 ai_tools.image_generation
 ai_tools.image_generation.review
 ai_tools.video_generation
+ai_tools.video_generation.review
 ai_tools.content_creation
 ```
 
@@ -65,15 +66,16 @@ ai_tools.content_creation
 so role setup does not need revisiting when it ships, but nothing is gated by
 it yet. `ai_tools.video_generation` gates the Video Generation tool the same
 way `ai_tools.image_generation` gates Image Generation (generate + attach to a
-product or offer); its own `.review` sibling will be added when the Video
-Generation approval workflow ships, mirroring `ai_tools.image_generation.review`.
+product or offer, plus the Video Library).
 `ai_tools.image_generation.review` lets a user approve or reject other
 people's generated images on the Image Library when a company has turned on
-the approval workflow (AI Tools → Image Governance). By default only Super
-Admin (via `*`) and the built-in Manager role hold `ai_tools.menu`,
-`ai_tools.image_generation`, `ai_tools.image_generation.review`, and
-`ai_tools.video_generation`; grant them to any custom role from the role
-editor.
+the approval workflow (AI Tools → Image Governance).
+`ai_tools.video_generation.review` does the same for videos on the Video
+Library (AI Tools → Video Governance). By default only Super Admin (via `*`)
+and the built-in Manager role hold `ai_tools.menu`,
+`ai_tools.image_generation`, `ai_tools.image_generation.review`,
+`ai_tools.video_generation`, and `ai_tools.video_generation.review`; grant
+them to any custom role from the role editor.
 
 ## Custom Roles
 

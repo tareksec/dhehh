@@ -32,6 +32,9 @@
             ->filter()
             ->values();
 
+        // Only ever written by GeneratedVideoAttacher (AI Video Generation).
+        $productVideoUrl = \App\Support\CompanyMedia::publicUrl($product->video_path, $company);
+
         $isVariableProduct = (bool) $product->has_variants;
 
         $variants = $isVariableProduct
@@ -90,6 +93,20 @@
             @else
                 <div class="grid aspect-square w-full place-items-center rounded-lg border border-gray-200 bg-gray-100 text-7xl font-semibold text-[var(--storefront-brand)] dark:border-gray-800 dark:bg-gray-900">
                     {{ mb_substr($product->name, 0, 1) }}
+                </div>
+            @endif
+
+            @if ($productVideoUrl)
+                <div class="mt-3" data-product-video>
+                    <video
+                        class="aspect-video w-full rounded-lg border border-gray-200 bg-black object-contain dark:border-gray-800"
+                        src="{{ $productVideoUrl }}"
+                        @if ($galleryImages->isNotEmpty()) poster="{{ \App\Support\CompanyMedia::publicUrl($galleryImages->first(), $company) }}" @endif
+                        controls
+                        playsinline
+                        preload="metadata"
+                        aria-label="{{ __(':product video', ['product' => $product->name]) }}"
+                    ></video>
                 </div>
             @endif
         </div>
