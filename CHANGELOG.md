@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.28.1] - 2026-09-27
+
 **Release type:** Patch/Fix Update
 
 ### Fixed
@@ -14,7 +16,6 @@ All notable production changes to Business Dashboard are documented here.
 
 - New `OpenRouterImageProvider` adapter, registered in `ImageProviderResolver` and `ImageProviderSettingsService::API_FORMATS`. It posts to OpenRouter's single `POST /api/v1/images` endpoint (appending `/images` when the Base URL is the bare API root), sends `aspect_ratio`/`resolution`/`n`, and for image-to-image adds the source photo as a base64 data URL in `input_references` on the same call. The generic "Custom" adapter assumes OpenAI's `/images/generations` + `/images/edits` routes, which OpenRouter does not have.
 - Production needs a running queue worker (`php artisan queue:work`) for Image Generation; without one, generations stay "Queued" forever.
-
 ## [2.28.0] - 2026-09-27
 
 **Release type:** Minor Feature Update
