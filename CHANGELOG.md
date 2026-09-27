@@ -4,18 +4,7 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Minor Feature Update
-
-### Added
-
-- **Import investors from Excel, CSV or pasted text. Each one waits as a draft until you review and confirm it.** Go to Investments → **Investor Drafts**, or use **Import from Excel / CSV / text** on the Investors page.
-  - **Import Excel / CSV:** upload an `.xlsx`, `.csv` (or `.ods` / `.txt`) file. Column names can be in English or Bangla (Name / নাম, Phone / মোবাইল, Father's Name / পিতার নাম, NID / এনআইডি, Nominee / নমিনি, and so on). **Sample CSV** downloads a file with every column.
-  - **Paste text:** paste investor details as `Label: value` lines, with a blank line between investors, or paste a table copied from Excel.
-  - Every investor found becomes an **investor draft**, with the investor form already filled in. Drafts are not investors yet: they do not appear in the investor list, pickers or reports.
-  - Open a draft (**Review**) to check and correct it, then **Save & confirm**. You can also **Confirm** from the list, or select several and use **Confirm selected**. Only then is the investor added to the main investor list, and the draft is removed.
-  - A draft with a missing name or phone, a phone that already belongs to an investor, a phone that repeats in another draft, or an invalid email shows **Needs fixing** and cannot be confirmed until it is fixed. Notes from the import (a date of birth that could not be read, an unknown channel partner, a line that was not understood, an NID that Excel may have rounded) are shown on the review page.
-  - Phone numbers are cleaned automatically (`+880 1712-345678` → `01712345678`), and Bangla digits are read as numbers.
-  - **Discard** removes a draft you do not want.
+**Release type:** Patch/Fix Update
 
 ### Changed
 
@@ -31,11 +20,48 @@ All notable production changes to Business Dashboard are documented here.
 - **Extra NID check.** An NID that looks like a phone number is flagged for review.
 - **Sample CSV** now downloads in the same layout as your INV sheet.
 
+**Technical Notes:** `InvestorImportService` finds the header row below a title line, reads every Excel sheet, folds Bangla spelling variants when matching column names, and skips SL/total rows. The sample layout and new aliases live in `config/investor_import.php`. No migrations.
+
+## [2.25.0] - 2026-09-27
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Video Generation tool (AI Tools → Video Generation).** Turn a product photo and a prompt into a short marketing video. Pick a starting image (upload one, or pick an image marked "video reference" in the Image Library), a provider, the video shape (16:9, 1:1 or 9:16) and a length preset, then click Generate. The video is made in the background, so the page can be closed. The results list updates itself, and a bell notification arrives when a video is ready or has failed. Finished videos are saved to the company's storage and the Media library.
+  - A super admin sets up providers on **Settings → Integrations → Video Providers**: **Stability AI** (image-to-video) or a **Custom / self-hosted** endpoint. Each provider has its own encrypted, per-company API key, and an optional approximate cost per video for spend estimates.
+  - Stability AI makes one short clip of a fixed length. It ignores the length preset, and the form says so.
+  - The built-in Manager role now has the `ai_tools.video_generation` permission. It can be given to any custom role.
+  - Not in this release: attaching a video to a product or offer, the prompt enhancer, a video library and usage limits. These come in later phases.
+
+  **Technical Notes:** migrations `2026_09_20_000100_create_generated_videos_table`, `2026_09_20_000200_add_video_path_to_products_and_offers_tables` (nullable `video_path` on `products` and `offers`, used by the later attach phase) and `2026_09_20_000300_reseed_default_user_roles_for_video_generation` (refreshes the built-in role snapshot). Run `php artisan migrate --force`. New company-owned `GeneratedVideo` model (`BelongsToCompany` + `CompanyScope`, added to `MultiCompanyIsolationTest`). Provider layer in `app/Services/VideoGeneration/`: a `submit()` + `poll()` `VideoGenerationClient` contract, `StabilityVideoProvider` (`POST /v2beta/image-to-video`, then `GET .../result/{id}`: 202 = pending, 200 = video bytes) and `CustomVideoProvider`, resolved by `VideoProviderResolver`. Settings are stored at `companies.settings->ai_tools->video_generation` by `VideoProviderSettingsService`. Queued `GenerateVideoJob` submits once, then polls by `release()`-ing itself with back-off (15 s up to 60 s) until a 30-minute `retryUntil()` deadline. It streams the finished file to disk (`Http::sink`) instead of holding it in memory, sets and clears `CompanyContext` on every run, and a `failed()` safety net marks rows that time out. **Production needs a running queue worker.** Plan: `12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md` (Phases 0–1).
+
+### Changed
+
+- **The AI Tools menu now lists only the tools.** Provider and API-key setup moved to **Settings → Integrations**, in a new **AI tool providers** section with a card for each: **Image Providers**, **Video Providers**, **Prompt Enhancer** and **Smart Scan**. Each card opens the same settings page as before; its breadcrumb leads back to Integrations. Old `/admin/ai-tools/...` links to these pages redirect to their new address.
+- **Image Governance** is now a button at the top right of the **AI Tools** page (super admins only) instead of a menu item.
+- **AI Expense Scan is renamed Smart Scan** everywhere it shows: the settings page, **Finance → Smart Scans**, and its messages.
+
+**Technical Notes:** `ImageProviderSettings`, `VideoProviderSettings`, `PromptEnhancerSettings` and `ExpenseScanSettings` moved from the `AiTools` to the `Settings` cluster and use the new `OpenedFromIntegrations` trait (hidden from navigation, breadcrumb to Integrations). Their URLs are now `/admin/settings/{slug}` (slugs unchanged); a `301` route redirects the old `/admin/ai-tools/{slug}`. `Integrations::aiToolProviderLinks()` builds the cards, showing each only to users who can open that page. `ImageGovernance` stays in `AiTools` with `$shouldRegisterNavigation = false`, linked from the `imageGovernance` header action on `ToolMenu`. New and renamed labels go through `__()` with keys in `lang/en.json` and `lang/bn.json`. No migrations.
+## [2.24.0] - 2026-09-27
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Import investors from Excel, CSV or pasted text. Each one waits as a draft until you review and confirm it.** Go to Investments → **Investor Drafts**, or use **Import from Excel / CSV / text** on the Investors page.
+  - **Import Excel / CSV:** upload an `.xlsx`, `.csv` (or `.ods` / `.txt`) file. Column names can be in English or Bangla (Name / নাম, Phone / মোবাইল, Father's Name / পিতার নাম, NID / এনআইডি, Nominee / নমিনি, and so on). **Sample CSV** downloads a file with every column.
+  - **Paste text:** paste investor details as `Label: value` lines, with a blank line between investors, or paste a table copied from Excel.
+  - Every investor found becomes an **investor draft**, with the investor form already filled in. Drafts are not investors yet: they do not appear in the investor list, pickers or reports.
+  - Open a draft (**Review**) to check and correct it, then **Save & confirm**. You can also **Confirm** from the list, or select several and use **Confirm selected**. Only then is the investor added to the main investor list, and the draft is removed.
+  - A draft with a missing name or phone, a phone that already belongs to an investor, a phone that repeats in another draft, or an invalid email shows **Needs fixing** and cannot be confirmed until it is fixed. Notes from the import (a date of birth that could not be read, an unknown channel partner, a line that was not understood, an NID that Excel may have rounded) are shown on the review page.
+  - Phone numbers are cleaned automatically (`+880 1712-345678` → `01712345678`), and Bangla digits are read as numbers.
+  - **Discard** removes a draft you do not want.
+
 **Technical Notes:**
 - New migration `2026_09_26_100000_create_investor_drafts_table` (`investor_drafts`, company-owned; `nid_number` / `nominee_nid_or_passport` encrypted like on `investors`). Run `php artisan migrate --force`.
 - New `InvestorDraft` model (`BelongsToCompany` + `CompanyScope`), `App\Services\Investment\InvestorImportService` (reading with the existing `openspout/openspout` dependency), `InvestorDraftResource` in the Investments cluster. Column/label names live in `config/investor_import.php`.
 - Drafts need the `investments.manage` permission. Uploaded files are deleted right after they are read.
-
 ## [2.23.1] - 2026-09-26
 
 **Release type:** Patch/Fix Update

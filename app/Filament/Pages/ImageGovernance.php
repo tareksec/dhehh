@@ -29,13 +29,17 @@ use Illuminate\Support\Facades\Auth;
  *    admin-set "approx. cost per image" — nothing is read from a billing API).
  *
  * Super-admin-only, consistent with the other AI Tools configuration pages
- * (Image Providers, Prompt Enhancer).
+ * (Image Providers, Prompt Enhancer). Kept out of the sidebar — the AI Tools
+ * menu lists only the tools — and opened from the "Image Governance" header
+ * button on the Tool Menu.
  */
 class ImageGovernance extends Page
 {
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShieldCheck;
 
     protected static ?string $cluster = AiTools::class;
+
+    protected static bool $shouldRegisterNavigation = false;
 
     protected static ?int $navigationSort = 6;
 

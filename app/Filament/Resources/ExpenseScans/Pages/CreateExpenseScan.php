@@ -41,8 +41,8 @@ class CreateExpenseScan extends CreateRecord
 
         if (! $company || ! app(ExpenseScanConfigService::class)->isConfigured($company)) {
             Notification::make()
-                ->title('AI Expense Scan is not set up yet')
-                ->body('A super admin needs to add the AI model and API key on AI Tools → Expense Scan first.')
+                ->title(__('Smart Scan is not set up yet'))
+                ->body(__('A super admin needs to add the AI model and API key on Settings → Integrations → Smart Scan first.'))
                 ->danger()
                 ->persistent()
                 ->send();

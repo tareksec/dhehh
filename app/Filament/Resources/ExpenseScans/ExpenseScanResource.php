@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
 /**
- * AI Expense Scan: upload a photo of an expense note, let the AI read it
+ * Smart Scan: upload a photo of an expense note, let the AI read it
  * into draft lines, review/correct them, then publish them as Expenses.
  * Every page is gated on the `expenses.ai_scan` permission (owner's call —
  * only roles granted it can upload, review or publish).
@@ -33,11 +33,22 @@ class ExpenseScanResource extends Resource
 
     protected static ?string $cluster = Finance::class;
 
-    protected static ?string $navigationLabel = 'Expense Scans';
-
-    protected static ?string $modelLabel = 'expense scan';
-
     protected static ?int $navigationSort = 4;
+
+    public static function getNavigationLabel(): string
+    {
+        return __('Smart Scans');
+    }
+
+    public static function getModelLabel(): string
+    {
+        return __('smart scan');
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return __('smart scans');
+    }
 
     public static function form(Schema $schema): Schema
     {

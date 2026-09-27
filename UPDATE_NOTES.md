@@ -39,6 +39,56 @@ Verification:
 - Pint passes.
 
 Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে মেইন এ পুশ কর").
+## 2026-09-27 - AI Tools menu shows only tools; provider pages move to Integrations; Expense Scan → Smart Scan
+
+Reason — owner: "ai tool মেনুতে যে টুল প্রোভাইডার পেজ, AI Expense Scan (নতুন নাম দিবে smart scan) আছে সেগুলোকে ইন্টিগ্রেশন পেজে নিয়ে যাও। ai tool menu তে শুধু টুলগুলো শো করবে। Image Governance পেজকে ছবিতে দেখানো জায়গায় বসাও।" (the screenshot marked the top-right of the AI Tools page header).
+
+What changed:
+- Image Providers, Video Providers, Prompt Enhancer and Smart Scan settings pages moved to the Settings cluster, hidden from the sidebar (`OpenedFromIntegrations` trait) and linked from a new **AI tool providers** card section on Settings → Integrations. Breadcrumb: Integrations → page. Old `/admin/ai-tools/{slug}` URLs 301-redirect to `/admin/settings/{slug}`.
+- Image Governance hidden from the sidebar; opened from a new **Image Governance** header button on the AI Tools hub (visible only to users who can open it — super admins).
+- AI Tools sidebar now: Tool Menu, Image Generation, Image Library, Video Generation. Image Library stays because it is the working gallery for generated images, not configuration.
+- "AI Expense Scan" renamed **Smart Scan** in every user-visible place (settings page, Finance → Smart Scans, notifications, error messages, expense infolist note). Class names, slugs, table names and the `expenses.ai_scan` permission are unchanged.
+- Before this work, local `main` was fast-forwarded to `origin/main` (16 commits, v2.24.0), which is where Expense Scan lives. The uncommitted working tree was stashed and re-applied; two conflicts were resolved by keeping both sides (`CHANGELOG.md`, `MultiCompanyIsolationTest` model list). The backup stash `pre-pull backup (ai-tools reorg session)` is still in `git stash list`.
+- Not done: the local demo DB has 17 pending migrations from upstream/other sessions (including `2026_09_13_100000_encrypt_investor_pii_fields`). They were not run — the owner decides when to migrate.
+
+**Needs Bangla review:** 19 new `lang/bn.json` keys — Smart Scan labels/messages, "Image Governance", "AI tool providers" section text and card descriptions, "Open :label"; and the changed value for "This expense was read by Smart Scan from the photo or pasted text below."
+- Also: every user-visible "AI Tools → Image Providers / Video Providers / Prompt Enhancer" hint (Image/Video Generation pages, `GenerateImageJob`, `GenerateVideoJob`, `PromptEnhancementService`) now says "Settings → Integrations → …" and goes through `__()`. 10 more `lang/bn.json` keys for these (page names kept in English inside the Bangla text) — also need Bangla review.
+
+Important changed/new files:
+- `app/Filament/Pages/Concerns/OpenedFromIntegrations.php` (new)
+- `app/Filament/Pages/{ImageProviderSettings,VideoProviderSettings,PromptEnhancerSettings,ExpenseScanSettings,ImageGovernance,ToolMenu,Integrations}.php`
+- `resources/views/filament/pages/{integrations,expense-scan-settings}.blade.php`
+- `app/Filament/Resources/ExpenseScans/{ExpenseScanResource,Pages/CreateExpenseScan}.php`, `app/Filament/Resources/Expenses/Schemas/ExpenseInfolist.php`, `app/Services/ExpenseScan/ExpenseScanReader.php`, `app/Jobs/ProcessExpenseScanJob.php`
+- `routes/web.php`, `lang/en.json`, `lang/bn.json`
+- `app/Filament/Pages/{ImageGeneration,VideoGeneration}.php`, `app/Jobs/{GenerateImageJob,GenerateVideoJob}.php`, `app/Services/PromptEnhancement/PromptEnhancementService.php` (location hints)
+- tests: `AiToolMenuTest` (+4: menu lists only tools, governance header button, Integrations cards, old-URL redirects), URL updates in `ExpenseScanTest`, `ImageProviderSettingsPageTest`, `VideoProviderSettingsPageTest`, `PromptEnhancerSettingsPageTest`
+
+Verification:
+- Affected tests (AiToolMenu, ExpenseScan, provider/governance/Integrations page tests, MultiCompanyIsolation, TranslationParity): 77 passed.
+- Full `php artisan test` (plain, no `--env`): **1447 passed, 0 failed** (8184 assertions). `npm run build` clean. Pint run on the changed PHP files.
+
+Commit status: committed and pushed to `main` (together with the Video Generation Phase 0–1 work below).
+
+## 2026-09-27 - Video Generation tool, Phases 0–1 (plan 12)
+
+Reason — owner approved plan `12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md` ("ওকে শুরু কর"). Decisions locked by the owner: no single locked provider — ship Stability AI plus a Custom/self-hosted adapter; full generate + attach eventually (attach is Phase 3, not in this commit).
+
+What changed:
+- **Phase 0:** Tool Menu's Video Generation card is live (`ToolMenu::TOOLS['video_generation']['page'] = VideoGeneration::class`). Built-in Manager role gets `ai_tools.video_generation`; its role-editor label is now "AI Tools: Video Generation (generate + attach)". Migration `2026_09_20_000300_reseed_default_user_roles_for_video_generation` refreshes the `user_roles` snapshot. `docs/roles-and-permissions.md` updated.
+- **Phase 1:** `generated_videos` table + `GeneratedVideo` model (company-scoped, in `MultiCompanyIsolationTest`); nullable `products.video_path` / `offers.video_path` (for Phase 3 attach); `VideoProviderSettingsService` + `VideoProviderSettings` page (Stability / Custom profiles, encrypted per-company keys, optional cost per video); `VideoGenerationClient` (`submit()` + `poll()`), `StabilityVideoProvider`, `CustomVideoProvider`, `VideoProviderResolver`; `GenerateVideoJob` (submit → release/poll with back-off → stream result to storage + Media; 30-minute `retryUntil()`; `failed()` marks timed-out rows; bell notification on success/failure); `VideoGeneration` page (form, video-reference quick-pick from the Image Library, queued generation, self-refreshing results list).
+- Stability image-to-video accepts only 1024x576 / 768x768 / 576x1024 (16:9, 1:1, 9:16) and has no duration parameter; the duration preset is kept for Custom/future providers and the form says Stability ignores it.
+- Bug caught by tests: the quick-pick wrote a bare string into the `FileUpload` state (TypeError on Generate); fixed by wrapping it as `[uuid => path]`.
+- Not in this commit: Phase 2 (Prompt Enhancer), Phase 3 (attach to product/offer + storefront), Phase 4 (Video Library), Phase 5 (governance).
+
+Important new files:
+- `database/migrations/2026_09_20_000{100,200,300}_*.php`
+- `app/Models/GeneratedVideo.php`, `app/Jobs/GenerateVideoJob.php`, `app/Services/VideoGeneration/**`
+- `app/Filament/Pages/{VideoGeneration,VideoProviderSettings}.php` + their Blade views
+- tests: `VideoGenerationProviderAdaptersTest` (16), `VideoProviderSettingsServiceTest` (7), `GenerateVideoJobTest` (11), `VideoGenerationPageTest` (7), `VideoProviderSettingsPageTest` (4); `AiToolMenuTest` updated
+
+Verification: see the AI Tools menu entry above — full `php artisan test` 1447 passed, 0 failed.
+
+Commit status: committed together with the AI Tools menu reorganisation (the reorg links the Video Providers page).
 
 ## 2026-09-26 - Investor import from Excel / CSV / pasted text, with a draft → review → confirm step
 

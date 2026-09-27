@@ -2,7 +2,8 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Clusters\AiTools;
+use App\Filament\Clusters\Settings;
+use App\Filament\Pages\Concerns\OpenedFromIntegrations;
 use App\Services\CompanyContext;
 use App\Services\ExpenseScan\ExpenseScanConfigService;
 use BackedEnum;
@@ -19,30 +20,39 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Auth;
 
 /**
- * Super-admin config for AI Expense Scan (Finance → Expense Scans): the
+ * Super-admin config for Smart Scan (Finance → Smart Scans): the
  * vision model that reads photographed expense notes. Its own
  * provider/model/key, stored encrypted per company via
  * ExpenseScanConfigService at settings->ai_tools->expense_scan — kept apart
  * from the CRM / Prompt Enhancer keys so its cost is tracked on its own.
  *
- * Super-admin-only, consistent with the other AI Tools configuration pages.
+ * Super-admin-only, consistent with the other AI provider configuration
+ * pages. Opened from the "AI tool providers" cards on Settings → Integrations.
  */
 class ExpenseScanSettings extends Page
 {
+    use OpenedFromIntegrations;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentMagnifyingGlass;
 
-    protected static ?string $cluster = AiTools::class;
+    protected static ?string $cluster = Settings::class;
 
     protected static ?int $navigationSort = 6;
-
-    protected static ?string $navigationLabel = 'Expense Scan';
-
-    protected static ?string $title = 'AI Expense Scan';
 
     protected string $view = 'filament.pages.expense-scan-settings';
 
     /** @var array<string, mixed>|null */
     public ?array $data = [];
+
+    public static function getNavigationLabel(): string
+    {
+        return __('Smart Scan');
+    }
+
+    public function getTitle(): string
+    {
+        return __('Smart Scan');
+    }
 
     public static function canAccess(): bool
     {
@@ -85,7 +95,7 @@ class ExpenseScanSettings extends Page
                     ->columns(2)
                     ->schema([
                         Toggle::make('enabled')
-                            ->label('Enable AI Expense Scan for this company')
+                            ->label(__('Enable Smart Scan for this company'))
                             ->columnSpanFull(),
                         Select::make('api_format')
                             ->label('API format')
@@ -156,6 +166,6 @@ class ExpenseScanSettings extends Page
 
         $this->mount();
 
-        Notification::make()->title('AI Expense Scan settings saved')->success()->send();
+        Notification::make()->title(__('Smart Scan settings saved'))->success()->send();
     }
 }

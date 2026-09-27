@@ -20,9 +20,9 @@ use App\Http\Controllers\Admin\VoucherAttachmentDownloadController;
 use App\Http\Controllers\Admin\VoucherReceiptController;
 use App\Http\Controllers\ChatOrderController;
 use App\Http\Controllers\CourierWebhookController;
+use App\Http\Controllers\FirebaseServiceWorkerController;
 use App\Http\Controllers\InstallController;
 use App\Http\Controllers\MetaWebhookController;
-use App\Http\Controllers\FirebaseServiceWorkerController;
 use App\Http\Controllers\MobileCrashReportController;
 use App\Http\Controllers\PayStationWebhookController;
 use App\Http\Controllers\QuotationPublicController;
@@ -634,6 +634,11 @@ Route::middleware('auth')->group(function (): void {
         ->whereIn('legacy', ['fund-sources', 'fund-transfers'])
         ->where('path', '.*')
         ->name('admin.finance.legacy-fund-pages');
+
+    // AI provider/key pages moved from AI Tools to Settings (opened from Integrations).
+    Route::get('/admin/ai-tools/{page}', fn (string $page) => redirect("/admin/settings/{$page}", 301))
+        ->whereIn('page', ['image-provider-settings', 'video-provider-settings', 'prompt-enhancer-settings', 'expense-scan-settings'])
+        ->name('admin.ai-tools.legacy-provider-pages');
 
     Route::get('/admin/{legacy}/{path?}', LegacyAdminClusterRedirectController::class)
         ->whereIn('legacy', LegacyAdminClusterRedirectController::legacySegments())

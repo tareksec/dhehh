@@ -3,7 +3,13 @@
 namespace Tests\Feature;
 
 use App\Filament\Clusters\AiTools;
+use App\Filament\Pages\ExpenseScanSettings;
+use App\Filament\Pages\ImageGovernance;
+use App\Filament\Pages\ImageProviderSettings;
+use App\Filament\Pages\Integrations;
+use App\Filament\Pages\PromptEnhancerSettings;
 use App\Filament\Pages\ToolMenu;
+use App\Filament\Pages\VideoProviderSettings;
 use App\Models\Company;
 use App\Models\User;
 use App\Models\UserRole;
@@ -110,14 +116,14 @@ class AiToolMenuTest extends TestCase
 
         $this->assertContains('ai_tools.menu', User::ROLE_PERMISSIONS['manager']);
         $this->assertContains('ai_tools.image_generation', User::ROLE_PERMISSIONS['manager']);
+        $this->assertContains('ai_tools.video_generation', User::ROLE_PERMISSIONS['manager']);
 
-        // Reserved keys are not active on any built-in role yet.
+        // content_creation is still reserved — not active on any built-in role yet.
         foreach (User::ROLE_PERMISSIONS as $role => $permissions) {
             if ($permissions === ['*']) {
                 continue;
             }
 
-            $this->assertNotContains('ai_tools.video_generation', $permissions);
             $this->assertNotContains('ai_tools.content_creation', $permissions);
         }
     }
@@ -130,6 +136,69 @@ class AiToolMenuTest extends TestCase
 
         $this->assertFalse(AiTools::canAccess());
         $this->assertFalse(AiTools::shouldRegisterNavigation());
+    }
+
+    public function test_ai_tools_menu_lists_only_the_tools(): void
+    {
+        [$company, $admin] = $this->companyAndUser('super_admin');
+        $this->actingAs($admin);
+        app(CompanyContext::class)->set($company);
+
+        $labels = collect(AiTools::getNavigationItems()[0]->getChildItems())
+            ->map(fn ($item): string => (string) $item->getLabel())
+            ->all();
+
+        $this->assertContains('Tool Menu', $labels);
+        $this->assertContains('Image Generation', $labels);
+        $this->assertContains('Video Generation', $labels);
+
+        foreach (['Image Providers', 'Video Providers', 'Prompt Enhancer', 'Smart Scan', 'Expense Scan', 'Image Governance'] as $moved) {
+            $this->assertNotContains($moved, $labels, "{$moved} must not be listed in the AI Tools menu.");
+        }
+    }
+
+    public function test_tool_menu_header_links_image_governance_for_super_admin_only(): void
+    {
+        [$company, $admin] = $this->companyAndUser('super_admin');
+
+        Livewire::actingAs($admin)
+            ->test(ToolMenu::class)
+            ->assertActionVisible('imageGovernance')
+            ->assertActionHasUrl('imageGovernance', ImageGovernance::getUrl());
+
+        [, $manager] = $this->companyAndUser('manager');
+
+        Livewire::actingAs($manager)
+            ->test(ToolMenu::class)
+            ->assertActionHidden('imageGovernance');
+    }
+
+    public function test_integrations_page_links_the_ai_tool_provider_pages(): void
+    {
+        [$company, $admin] = $this->companyAndUser('super_admin');
+
+        $this->actingAs($admin)
+            ->withSession(['current_company_id' => $company->getKey()])
+            ->get(Integrations::getUrl())
+            ->assertOk()
+            ->assertSee('AI tool providers')
+            ->assertSee(ImageProviderSettings::getUrl(), escape: false)
+            ->assertSee(VideoProviderSettings::getUrl(), escape: false)
+            ->assertSee(PromptEnhancerSettings::getUrl(), escape: false)
+            ->assertSee(ExpenseScanSettings::getUrl(), escape: false)
+            ->assertSee('Smart Scan');
+    }
+
+    public function test_old_ai_tools_provider_page_urls_redirect_to_settings(): void
+    {
+        [$company, $admin] = $this->companyAndUser('super_admin');
+
+        foreach (['image-provider-settings', 'video-provider-settings', 'prompt-enhancer-settings', 'expense-scan-settings'] as $slug) {
+            $this->actingAs($admin)
+                ->withSession(['current_company_id' => $company->getKey()])
+                ->get("/admin/ai-tools/{$slug}")
+                ->assertRedirect("/admin/settings/{$slug}");
+        }
     }
 
     /**

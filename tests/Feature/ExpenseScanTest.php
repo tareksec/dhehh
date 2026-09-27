@@ -379,7 +379,7 @@ class ExpenseScanTest extends TestCase
             ->test(CreateExpenseScan::class)
             ->fillForm(['image_paths' => [UploadedFile::fake()->image('note.jpg')]])
             ->call('create')
-            ->assertNotified('AI Expense Scan is not set up yet');
+            ->assertNotified('Smart Scan is not set up yet');
 
         $this->assertSame(0, ExpenseScan::query()->count());
         Queue::assertNothingPushed();
@@ -477,7 +477,7 @@ class ExpenseScanTest extends TestCase
 
         $this->actingAs($this->user($company, 'manager'))
             ->withSession(['current_company_id' => $company->getKey()])
-            ->get('/admin/ai-tools/expense-scan-settings')
+            ->get('/admin/settings/expense-scan-settings')
             ->assertForbidden();
 
         Livewire::actingAs($this->user($company, 'super_admin'))
