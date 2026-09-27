@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.27.0] - 2026-09-27
+
 **Release type:** Minor Feature Update
 
 ### Fixed
@@ -21,7 +23,6 @@ All notable production changes to Business Dashboard are documented here.
   - The "External Fraud Check (Merchant Panel Login)" section is no longer shown for Steadfast.
 
 **Technical Notes:** `SteadfastCourierClient` gains `ping()` and `fraudCheck()` (`GET /fraud_check/score/{phone}`), URL-encodes path values, and retries only connection errors and 5xx. It never retries a 4xx: the guide says 10 failed logins in 5 minutes lock the key for 60 minutes, booking included. `SteadfastFraudClient` now calls the API instead of scraping the portal (the portal code is removed). After a 401 it skips lookups with the same keys for 15 minutes. The guide does not name the response fields, so `parseScore()` accepts the common spellings, at the top level or under `data`. A response with no delivered or cancelled count is treated as a failed check, never as a clean 0/0. `ExternalCourierFraudService` passes a Steadfast provider's booking API keys and `base_url` to the client. `CourierProviderInterface` gains `verifyWebhookRequest()` and `webhookSkipReason()`, with defaults in `AbstractCourierAdapter`. `CourierWebhookController` uses them and reads `Idempotency-Key`. `ProcessCourierWebhook` marks skipped events `ignored`. `CourierService::normalizeSteadfastStatus()` now returns `?string`. New strings go through `__()` with keys in `lang/en.json` and `lang/bn.json`. No migrations.
-
 ## [2.26.0] - 2026-09-27
 
 **Release type:** Minor Feature Update
