@@ -11,6 +11,8 @@ use App\Models\GeneratedImage;
 use App\Models\GeneratedVideo;
 use App\Services\AuditLogService;
 use App\Services\CompanyContext;
+use App\Services\PromptEnhancement\PromptEnhancementService;
+use App\Services\VideoGeneration\VideoProviderResolver;
 use App\Services\VideoGeneration\VideoProviderSettingsService;
 use App\Support\CompanyMedia;
 use BackedEnum;
@@ -43,8 +45,12 @@ use Illuminate\Validation\ValidationException;
  * `is_video_reference`-flagged pool — the only path that also records
  * `source_generated_image_id`, closing the loop that pool was built for.
  *
- * Attach-to-record actions, the Prompt Enhancer, favourites, and governance
- * are later phases (plan §12) — this page only generates and lists.
+ * The shared ✨ Enhance rewriter (Phase 2) works exactly as on Image
+ * Generation, with `video_generation.*` guides. It is hidden when the picked
+ * provider never sends the prompt (Stability image-to-video).
+ *
+ * Attach-to-record actions, favourites, and governance are later phases
+ * (plan §12) — this page only generates and lists.
  */
 class VideoGeneration extends Page
 {
@@ -84,6 +90,7 @@ class VideoGeneration extends Page
     {
         return [
             'prompt' => '',
+            'original_prompt' => null,
             'context' => 'general',
             'aspect_ratio' => GeneratedVideo::DEFAULT_ASPECT_RATIO,
             'duration_preset' => GeneratedVideo::DEFAULT_DURATION_PRESET,
@@ -132,11 +139,16 @@ class VideoGeneration extends Page
             ->columns(2)
             ->components([
                 Hidden::make('source_generated_image_id'),
+                Hidden::make('original_prompt'),
                 Textarea::make('prompt')
                     ->label('Motion / scene prompt')
                     ->required()
                     ->rows(3)
                     ->maxLength(2000)
+                    ->live(onBlur: true)
+                    ->helperText(fn (): ?string => $this->selectedProviderUsesPrompt()
+                        ? null
+                        : __('The selected provider makes the video from the starting image only — this prompt is saved with the video but not sent to it.'))
                     ->placeholder('Slow push-in on the product, soft studio lighting, subtle steam rising from the cup')
                     ->columnSpanFull(),
                 Select::make('context')
@@ -166,6 +178,7 @@ class VideoGeneration extends Page
                     ->default(fn (): ?string => $this->defaultProfileId())
                     ->required()
                     ->native(false)
+                    ->live()
                     ->helperText(fn (): ?string => $this->hasConfiguredProvider()
                         ? null
                         : __('No video provider is configured yet. A super admin can add one on Settings → Integrations → Video Providers.')),
@@ -242,6 +255,7 @@ class VideoGeneration extends Page
     protected function getHeaderActions(): array
     {
         return [
+            $this->enhancePromptAction(),
             Action::make('generate')
                 ->label('Generate')
                 ->icon(Heroicon::OutlinedSparkles)
@@ -249,6 +263,111 @@ class VideoGeneration extends Page
                 ->disabled(fn (): bool => ! $this->hasSelectedCompany() || ! $this->hasConfiguredProvider())
                 ->action('generate'),
         ];
+    }
+
+    /**
+     * The shared ✨ Enhance rewriter, same flow as Image Generation: shown only
+     * when a super admin has set the enhancer up and the picked provider
+     * actually sends the prompt. The modal shows the original next to the
+     * rewrite; accepting records the pre-enhancement text as
+     * `original_prompt` on the generation.
+     */
+    protected function enhancePromptAction(): Action
+    {
+        return Action::make('enhancePrompt')
+            ->label(__('✨ Enhance'))
+            ->icon(Heroicon::OutlinedSparkles)
+            ->color('gray')
+            ->visible(fn (): bool => $this->promptEnhancerAvailable() && $this->selectedProviderUsesPrompt())
+            ->disabled(fn (): bool => blank($this->data['prompt'] ?? null))
+            ->modalHeading(__('Enhance prompt'))
+            ->modalDescription(__('The rewrite describes camera and scene motion for the selected provider, in your brand style. Edit it if you like, then use it — or keep your original.'))
+            ->modalSubmitActionLabel(__('Use enhanced'))
+            ->modalCancelActionLabel(__('Keep original'))
+            ->fillForm(function (): array {
+                // Read the live state, not form->getState(): that validates the
+                // whole form, and the starting image is usually not picked yet.
+                $raw = trim((string) ($this->data['prompt'] ?? ''));
+
+                try {
+                    $enhanced = app(PromptEnhancementService::class)->enhance(
+                        $raw,
+                        $this->currentContextKey(),
+                        $this->selectedProviderApiFormat(),
+                        app(CompanyContext::class)->company(),
+                    );
+                } catch (\Throwable $exception) {
+                    Notification::make()
+                        ->title(__('Could not enhance the prompt'))
+                        ->body($exception->getMessage())
+                        ->danger()
+                        ->send();
+
+                    $enhanced = $raw;
+                }
+
+                return ['original' => $raw, 'enhanced' => $enhanced];
+            })
+            ->schema([
+                Textarea::make('original')
+                    ->label(__('Your prompt'))
+                    ->rows(3)
+                    ->disabled()
+                    ->dehydrated(false),
+                Textarea::make('enhanced')
+                    ->label(__('Enhanced'))
+                    ->rows(6)
+                    ->required()
+                    ->maxLength(2000),
+            ])
+            ->action(function (array $data): void {
+                $enhanced = trim((string) ($data['enhanced'] ?? ''));
+                $original = trim((string) ($this->data['prompt'] ?? ''));
+
+                if ($enhanced === '' || $enhanced === $original) {
+                    return;
+                }
+
+                $this->data['original_prompt'] = $original;
+                $this->data['prompt'] = $enhanced;
+                $this->form->fill($this->data);
+
+                Notification::make()->title(__('Prompt updated'))->success()->send();
+            });
+    }
+
+    public function promptEnhancerAvailable(): bool
+    {
+        return $this->hasSelectedCompany()
+            && app(PromptEnhancementService::class)->isAvailable(app(CompanyContext::class)->company());
+    }
+
+    protected function currentContextKey(): string
+    {
+        $context = array_key_exists($this->data['context'] ?? '', GeneratedVideo::CONTEXTS)
+            ? $this->data['context']
+            : 'general';
+
+        return GeneratedVideo::TOOL_VIDEO_GENERATION.'.'.$context;
+    }
+
+    /** The picked profile's api_format, or the default profile's. */
+    protected function selectedProviderApiFormat(): ?string
+    {
+        $profiles = collect($this->providerProfiles());
+        $profile = $profiles->firstWhere('id', $this->data['provider_profile_id'] ?? null)
+            ?? $profiles->firstWhere('id', $this->defaultProfileId());
+
+        return $profile['api_format'] ?? null;
+    }
+
+    /** False when the picked provider makes the video from the starting image alone (Stability). */
+    public function selectedProviderUsesPrompt(): bool
+    {
+        $format = $this->selectedProviderApiFormat();
+        $resolver = app(VideoProviderResolver::class);
+
+        return $format === null || ! $resolver->supports($format) || $resolver->byFormat($format)->usesTextPrompt();
     }
 
     public function generate(): void
@@ -291,6 +410,7 @@ class VideoGeneration extends Page
             ? $state['duration_preset']
             : GeneratedVideo::DEFAULT_DURATION_PRESET;
         $prompt = trim((string) $state['prompt']);
+        $originalPrompt = trim((string) ($state['original_prompt'] ?? ''));
 
         $record = GeneratedVideo::query()->create([
             'user_id' => Auth::id(),
@@ -298,6 +418,7 @@ class VideoGeneration extends Page
             'context' => $context,
             'operation' => GeneratedVideo::OPERATION_IMAGE_TO_VIDEO,
             'prompt' => $prompt,
+            'original_prompt' => ($originalPrompt !== '' && $originalPrompt !== $prompt) ? $originalPrompt : null,
             'source_image_path' => $sourcePath,
             'source_generated_image_id' => $state['source_generated_image_id'] ?: null,
             'provider_profile_id' => $profile['id'],

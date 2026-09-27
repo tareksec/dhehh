@@ -54,6 +54,21 @@ class PromptGuideRepositoryTest extends TestCase
         $this->assertNull($repo->providerStyle('nope'));
     }
 
+    public function test_video_contexts_and_video_provider_styles_are_available(): void
+    {
+        $repo = app(PromptGuideRepository::class);
+
+        foreach (['product_demo', 'ad_creative', 'landing_hero', 'general'] as $context) {
+            $this->assertContains("video_generation.{$context}", $repo->contextKeys());
+        }
+
+        $this->assertStringContainsString('camera movement', (string) $repo->providerStyle('custom', 'video'));
+        // Stability image-to-video never receives the prompt, so it has no video style.
+        $this->assertNull($repo->providerStyle('stability', 'video'));
+        // The image styles are unchanged.
+        $this->assertStringContainsString('comma-separated', (string) $repo->providerStyle('stability'));
+    }
+
     public function test_save_writes_and_clears_overrides_and_brand_note(): void
     {
         $repo = app(PromptGuideRepository::class);

@@ -1,6 +1,6 @@
 # 12 — AI Tool Menu: Video Generation (Module Plan)
 
-Status: **Phase 0 & Phase 1 built.** The tool is live on the Tool Menu: a user can pick a starting image (upload, Media Hub, or the video-reference quick-pick), submit a prompt, and get a queued, self-polling Stability/Custom async generation. Not yet wired: the Prompt Enhancer, attach-to-Product/Offer, the Video Library, and governance (Phases 2–5 below, unchanged from the original plan). Written as the pre-execution reference for phased implementation in Claude Code, mirroring how `11_AI_TOOL_MENU_IMAGE_GENERATION_PLAN.md` was used for Image Generation. Owner decisions already made (see §2) — provider breadth and the Product/Offer attach scope. Everything else below is the technical design.
+Status: **Phases 0–2 built.** The tool is live on the Tool Menu: a user can pick a starting image (upload, Media Hub, or the video-reference quick-pick), write a prompt (with ✨ Enhance for providers that use it), and get a queued, self-polling Stability/Custom async generation. Not yet wired: attach-to-Product/Offer, the Video Library, and governance (Phases 3–5 below). Written as the pre-execution reference for phased implementation in Claude Code, mirroring how `11_AI_TOOL_MENU_IMAGE_GENERATION_PLAN.md` was used for Image Generation. Owner decisions already made (see §2) — provider breadth and the Product/Offer attach scope. Everything else below is the technical design.
 
 ## 1. Overview
 
@@ -409,10 +409,13 @@ Per CLAUDE.md's rule that storefront-visible content must be admin-manageable vi
 - A real bug caught by testing, not by review: the video-reference quick-pick's `afterStateUpdated` originally wrote a bare path string into `source_image`'s live state via `$set()`. A Filament `FileUpload`'s validation rules assume array-shaped state unconditionally (`hydrateFiles()` normalizes to that shape on every *real* hydration, which a raw `$set()` bypasses) — clicking Generate after using the quick-pick would have thrown a `TypeError`. Fixed by wrapping the path (`[Str::uuid() => $path]`); `saveUploadedFiles()` passes a plain string entry through unchanged, so it is never mistaken for a fresh upload.
 - Stability's exact API shape was confirmed via web research at implementation time (per §8.2's honest caveat): image-to-video's three accepted input-frame sizes (1024x576, 768x768, 576x1024) map exactly to `GeneratedVideo::ASPECT_RATIOS`; it has no duration parameter and always returns one short fixed-length clip, which resolves open question §14(b) — the `duration_preset` selector is kept (for the Custom adapter and future named providers) with UI copy clarifying Stability ignores it.
 
-**Phase 2 — Prompt Enhancer integration**
-- New `video_generation.*` entries in `config/prompt_guides.php` (no `provider_styles` changes needed)
+**Phase 2 — Prompt Enhancer integration** ✅ done
+- New `video_generation.*` entries in `config/prompt_guides.php`
 - Wire the shared "✨ Enhance" action into `VideoGeneration`'s prompt field
 - Optional polish: parameterize `PromptEnhancementService::systemPrompt()`'s opening line so it doesn't say "image generation" for a video prompt
+- Deviation: the plan said "no `provider_styles` changes needed", but the existing `stability` style asks for comma-separated keyword tags, which suits images, not a motion prompt. Video gets its own `video_provider_styles` map (only `custom`). The medium is taken from the context key prefix instead of a new `$mediaNoun` parameter, so `enhance()`'s signature is unchanged.
+- Finding: Stability's `/v2beta/image-to-video` takes no text prompt at all (image + seed/cfg_scale/motion_bucket_id only). `VideoGenerationClient::usesTextPrompt()` was added; for Stability the Enhance button is hidden and the prompt field says the prompt is not sent. Enhancement matters for the Custom adapter and future text-capable providers.
+- The Prompt Enhancer settings page labels guides "Image — …" / "Video — …" (both tools have a "General" context).
 
 **Phase 3 — Attach & handoff integrations**
 - `GeneratedVideoAttacher` service

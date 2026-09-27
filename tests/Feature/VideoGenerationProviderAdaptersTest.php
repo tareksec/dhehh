@@ -253,6 +253,14 @@ class VideoGenerationProviderAdaptersTest extends TestCase
         );
     }
 
+    public function test_only_stability_ignores_the_text_prompt(): void
+    {
+        $resolver = app(VideoProviderResolver::class);
+
+        $this->assertFalse($resolver->byFormat('stability')->usesTextPrompt());
+        $this->assertTrue($resolver->byFormat('custom')->usesTextPrompt());
+    }
+
     public function test_video_poll_result_named_constructors(): void
     {
         $this->assertTrue(VideoPollResult::pending()->isPending());

@@ -225,5 +225,17 @@
     "More than one phone number was given. :used is used; the others were: :others": "More than one phone number was given. :used is used; the others were: :others",
     "More than one nominee phone number was given. :used is used; the others were: :others": "More than one nominee phone number was given. :used is used; the others were: :others",
     "Investment amount in the file: :amount. After confirming, add the investment under Investments.": "Investment amount in the file: :amount. After confirming, add the investment under Investments.",
-    "The NID :nid looks like a phone number. Check the NID column.": "The NID :nid looks like a phone number. Check the NID column."
+    "The NID :nid looks like a phone number. Check the NID column.": "The NID :nid looks like a phone number. Check the NID column.",
+    "The selected provider makes the video from the starting image only — this prompt is saved with the video but not sent to it.": "The selected provider makes the video from the starting image only — this prompt is saved with the video but not sent to it.",
+    "✨ Enhance": "✨ Enhance",
+    "Enhance prompt": "Enhance prompt",
+    "The rewrite describes camera and scene motion for the selected provider, in your brand style. Edit it if you like, then use it — or keep your original.": "The rewrite describes camera and scene motion for the selected provider, in your brand style. Edit it if you like, then use it — or keep your original.",
+    "Use enhanced": "Use enhanced",
+    "Keep original": "Keep original",
+    "Could not enhance the prompt": "Could not enhance the prompt",
+    "Your prompt": "Your prompt",
+    "Enhanced": "Enhanced",
+    "Prompt updated": "Prompt updated",
+    "Video — :context guide": "Video — :context guide",
+    "Image — :context guide": "Image — :context guide"
 }

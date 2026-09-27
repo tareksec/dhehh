@@ -38,6 +38,11 @@ abstract class AbstractVideoProvider implements VideoGenerationClient
         return in_array($operation, $this->operations(), true);
     }
 
+    public function usesTextPrompt(): bool
+    {
+        return true;
+    }
+
     protected function assertOperationSupported(VideoGenerationRequest $request): void
     {
         if (! $this->supportsOperation($request->operation)) {

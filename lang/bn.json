@@ -225,5 +225,17 @@
     "More than one phone number was given. :used is used; the others were: :others": "একাধিক ফোন নম্বর দেওয়া ছিল। :used নেওয়া হয়েছে; বাকিগুলো ছিল: :others",
     "More than one nominee phone number was given. :used is used; the others were: :others": "নমিনির একাধিক ফোন নম্বর দেওয়া ছিল। :used নেওয়া হয়েছে; বাকিগুলো ছিল: :others",
     "Investment amount in the file: :amount. After confirming, add the investment under Investments.": "ফাইলে বিনিয়োগের পরিমাণ: :amount। কনফার্মের পর Investments-এ গিয়ে বিনিয়োগটি যোগ করুন।",
-    "The NID :nid looks like a phone number. Check the NID column.": "এনআইডি :nid দেখতে ফোন নম্বরের মতো। এনআইডি কলামটি দেখে নিন।"
+    "The NID :nid looks like a phone number. Check the NID column.": "এনআইডি :nid দেখতে ফোন নম্বরের মতো। এনআইডি কলামটি দেখে নিন।",
+    "The selected provider makes the video from the starting image only — this prompt is saved with the video but not sent to it.": "বেছে নেওয়া প্রোভাইডার শুধু শুরুর ছবি থেকে ভিডিও বানায় — এই প্রম্পট ভিডিওর সাথে সেভ থাকে, কিন্তু প্রোভাইডারকে পাঠানো হয় না।",
+    "✨ Enhance": "✨ উন্নত করুন",
+    "Enhance prompt": "প্রম্পট উন্নত করুন",
+    "The rewrite describes camera and scene motion for the selected provider, in your brand style. Edit it if you like, then use it — or keep your original.": "নতুন লেখায় বেছে নেওয়া প্রোভাইডারের জন্য ক্যামেরা ও দৃশ্যের নড়াচড়া আপনার ব্র্যান্ড স্টাইলে বর্ণনা করা হয়। চাইলে এডিট করে ব্যবহার করুন — অথবা আপনার আগের লেখাটাই রাখুন।",
+    "Use enhanced": "উন্নত লেখাটি ব্যবহার করুন",
+    "Keep original": "আগেরটাই রাখুন",
+    "Could not enhance the prompt": "প্রম্পট উন্নত করা যায়নি",
+    "Your prompt": "আপনার প্রম্পট",
+    "Enhanced": "উন্নত লেখা",
+    "Prompt updated": "প্রম্পট আপডেট হয়েছে",
+    "Video — :context guide": "ভিডিও — :context গাইড",
+    "Image — :context guide": "ছবি — :context গাইড"
 }

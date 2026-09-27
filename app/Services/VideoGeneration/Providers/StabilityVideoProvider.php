@@ -37,6 +37,12 @@ class StabilityVideoProvider extends AbstractVideoProvider
         return 'Stability AI';
     }
 
+    /** Image-to-video takes only the starting image (plus seed/cfg/motion) — no prompt. */
+    public function usesTextPrompt(): bool
+    {
+        return false;
+    }
+
     public function submit(VideoGenerationRequest $request): VideoSubmissionResult
     {
         $this->assertOperationSupported($request);

@@ -2,6 +2,33 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-27 - Video Generation Phase 2: ✨ Enhance for video prompts (plan 12)
+
+Reason — owner: "Phase 2 (Prompt Enhancer) শুরু কর".
+
+What changed:
+- **Video Generation page:** ✨ Enhance header action, same flow as Image Generation (before/after modal, edit, Use enhanced / Keep original). Context key `video_generation.{context}`, target format = the picked provider's `api_format`. An accepted rewrite stores the pre-enhancement text as `generated_videos.original_prompt`. The Enhance modal reads the live prompt instead of `form->getState()`, because that validates the whole form and the starting image is usually not picked yet.
+- **Stability ignores the prompt.** Stability's image-to-video API takes only the image (seed / cfg_scale / motion_bucket_id); the adapter never sent the prompt. New `VideoGenerationClient::usesTextPrompt()` (false for Stability). With a Stability provider selected, the prompt field shows "…saved with the video but not sent to it" and Enhance is hidden, so no enhancer credit is spent for nothing. The provider select is now `live()` so this updates when the provider changes.
+- **Enhancer service:** the medium follows the context key (`video_generation.*` → video). Video system prompt: "You improve prompts for AI video generation from a starting image…" and "on-screen text" instead of "on-image text". `PromptGuideRepository::providerStyle($format, $medium)` reads the new `video_provider_styles` (only `custom`: camera move → scene motion → lighting/pace). Stability's image keyword-tag style is no longer applied to video prompts. Image behaviour is unchanged.
+- **Guides:** four new `video_generation.*` defaults in `config/prompt_guides.php` (product demo, ad creative, loopable landing hero, general). All describe motion from the starting image rather than a new scene. Admins can override them per company on the Prompt Enhancer page, which now labels guides "Image — X guide" / "Video — X guide".
+- Before this work, local `main` was fast-forwarded again to `origin/main` (v2.25.0, v2.25.1 and the INV investor-sheet import). Uncommitted work was stashed and re-applied. The `lang/*.json` conflicts (two appends at the end) were resolved by taking upstream and re-adding the 12 keys below. Backup stash `pre-pull backup 2 (video phase 2 session)` is kept.
+
+**Needs Bangla review:** 12 new `lang/bn.json` keys — "✨ Enhance", "Enhance prompt", the Enhance modal description, "Use enhanced", "Keep original", "Could not enhance the prompt", "Your prompt", "Enhanced", "Prompt updated", the Stability prompt note, "Image — :context guide", "Video — :context guide".
+
+Important changed files:
+- `config/prompt_guides.php`
+- `app/Services/PromptEnhancement/{PromptEnhancementService,PromptGuideRepository}.php`
+- `app/Services/VideoGeneration/{VideoGenerationClient,Providers/AbstractVideoProvider,Providers/StabilityVideoProvider}.php`
+- `app/Filament/Pages/{VideoGeneration,PromptEnhancerSettings}.php`
+- `lang/en.json`, `lang/bn.json`, `12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md`
+- tests: `VideoGenerationPageTest` (+4), `PromptEnhancementServiceTest` (+2), `PromptGuideRepositoryTest` (+1), `PromptEnhancerSettingsPageTest` (+1), `VideoGenerationProviderAdaptersTest` (+1)
+
+Verification:
+- Affected tests (Video*, GenerateVideoJob, PromptEnhance*, PromptGuide*, ImageGeneration*, TranslationParity, AiToolMenu): 120 passed.
+- Full `php artisan test` (plain, no `--env`): **1459 passed, 0 failed** (8350 assertions). Pint run on the changed files. No frontend assets changed.
+
+Commit status: committed and pushed to `main`.
+
 ## 2026-09-27 - Investor import reads the owner's INV sheet layout as it is
 
 Reason: the owner uploaded their real sheet `INV_1_10_04_2026.csv` and said: "csv format এইটা দেও। তুমি যেটা দিয়ে সেরকম করতে গেলে সবগুলো শীট এডিট করা লাগবে।" In short: use this CSV format, because the old sample would mean editing every sheet.

@@ -6,6 +6,7 @@ use App\Filament\Clusters\Settings;
 use App\Filament\Pages\Concerns\OpenedFromIntegrations;
 use App\Models\Company;
 use App\Models\GeneratedImage;
+use App\Models\GeneratedVideo;
 use App\Services\CompanyContext;
 use App\Services\PromptEnhancement\PromptEnhancerConfigService;
 use App\Services\PromptEnhancement\PromptGuideRepository;
@@ -194,7 +195,12 @@ class PromptEnhancerSettings extends Page
     {
         $context = Str::afterLast($contextKey, '.');
 
-        return (GeneratedImage::CONTEXTS[$context] ?? Str::headline($context)).' guide';
+        // Both tools have a "general" context, so the label names the tool.
+        if (str_starts_with($contextKey, 'video_generation.')) {
+            return __('Video — :context guide', ['context' => GeneratedVideo::CONTEXTS[$context] ?? Str::headline($context)]);
+        }
+
+        return __('Image — :context guide', ['context' => GeneratedImage::CONTEXTS[$context] ?? Str::headline($context)]);
     }
 
     protected function getHeaderActions(): array

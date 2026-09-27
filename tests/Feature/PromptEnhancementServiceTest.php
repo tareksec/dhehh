@@ -146,4 +146,44 @@ class PromptEnhancementServiceTest extends TestCase
 
         $this->assertSame('my original prompt', $out);
     }
+
+    public function test_a_video_context_gets_video_wording_and_the_video_provider_style(): void
+    {
+        $company = $this->company();
+        $this->configureEnhancer($company, 'openai');
+        $this->fakeChat('Slow push-in on the mug as steam rises.');
+
+        $out = app(PromptEnhancementService::class)->enhance(
+            'mug with steam',
+            'video_generation.product_demo',
+            'custom',
+            $company,
+        );
+
+        $this->assertSame('Slow push-in on the mug as steam rises.', $out);
+
+        Http::assertSent(function ($request): bool {
+            $system = (string) (collect($request->data()['messages'] ?? [])->firstWhere('role', 'system')['content'] ?? '');
+
+            return str_contains($system, 'AI video generation from a starting image')
+                && str_contains($system, 'PRODUCT DEMO')                  // video context guide
+                && str_contains($system, 'the camera movement first')     // video custom style
+                && str_contains($system, 'on-screen text')
+                && ! str_contains($system, 'AI image generation');
+        });
+    }
+
+    public function test_the_stability_image_style_is_not_used_for_a_video_prompt(): void
+    {
+        $company = $this->company();
+        $service = app(PromptEnhancementService::class);
+
+        $video = $service->systemPrompt('video_generation.general', 'stability', $company);
+        $image = $service->systemPrompt('image_generation.general', 'stability', $company);
+
+        $this->assertStringNotContainsString('comma-separated', $video);
+        $this->assertStringContainsString('comma-separated', $image);
+        $this->assertSame(PromptEnhancementService::MEDIUM_VIDEO, $service->medium('video_generation.ad_creative'));
+        $this->assertSame(PromptEnhancementService::MEDIUM_IMAGE, $service->medium('image_generation.ad_creative'));
+    }
 }

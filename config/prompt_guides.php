@@ -7,15 +7,16 @@
 |
 | Hard-coded, expert-written defaults for the shared Prompt Enhancer
 | (App\Services\PromptEnhancement\PromptEnhancementService). An admin can
-| override any `contexts` entry per company from AI Tools → Prompt Enhancer
+| override any `contexts` entry per company from Settings → Integrations → Prompt Enhancer
 | without a code change; that override is stored at
 | `companies.settings->prompt_guides->{key}` and takes precedence over the
 | value here (see App\Services\PromptEnhancement\PromptGuideRepository).
 |
-| `contexts` keys are "{tool}.{context}" so the same file can serve future
-| tools. `provider_styles` keys match a provider profile's `api_format`
-| (openai | google | stability | custom) — the enhancer adapts its phrasing
-| to whichever image model the user picked downstream.
+| `contexts` keys are "{tool}.{context}" so the same file serves every tool
+| (image_generation.*, video_generation.*). `provider_styles` keys match an
+| image provider profile's `api_format` (openai | google | stability |
+| custom) and `video_provider_styles` a video provider profile's — the
+| enhancer adapts its phrasing to whichever model the user picked downstream.
 |
 */
 
@@ -78,6 +79,46 @@ return [
         Keep it to two or three tight sentences. Do not pad with empty adjectives, and do not add text, logos, or watermarks unless asked.
         TXT,
 
+        'video_generation.product_demo' => <<<'TXT'
+        You are rewriting a prompt for an AI video model that animates a STARTING PRODUCT IMAGE into a short PRODUCT DEMO clip (a few seconds).
+        The starting image already fixes the product, setting, and colours — describe MOTION, not a new scene. Improve the prompt by making these explicit when the user did not:
+        - one slow, smooth camera move (gentle push-in, slow orbit, or subtle parallax) — never several moves in one clip
+        - small, realistic motion that shows the product off: light gliding across the surface, a slow turn, fabric settling, steam or a soft reflection
+        - the product stays sharp, centered, true to its real shape and colour, and fully in frame from first to last frame
+        - calm, steady pacing with no cuts, flashes, or sudden changes
+        Never morph, warp, or change the product, and never add people, hands, text, logos, or watermarks unless the user asked for them.
+        TXT,
+
+        'video_generation.ad_creative' => <<<'TXT'
+        You are rewriting a prompt for an AI video model that animates a STARTING IMAGE into a short SOCIAL / PAID AD clip (Facebook / Instagram, a few seconds).
+        The starting image already fixes the subject and look — describe MOTION and energy, not a new scene. Improve the prompt by making these explicit when the user did not:
+        - movement that grabs attention in the first second: a confident push-in, a quick reveal, or lively in-scene motion
+        - one clear focal subject that stays readable on a small phone screen throughout
+        - vibrant but believable lighting and colour; motion that feels natural, not glitchy or over-rendered
+        - space kept clear (usually top or one side) where ad copy can be added later
+        Do NOT render headline text, prices, badges, buttons, or logos in the video — the ads tool adds those. Keep it authentic, not deceptive.
+        TXT,
+
+        'video_generation.landing_hero' => <<<'TXT'
+        You are rewriting a prompt for an AI video model that animates a STARTING IMAGE into a short, LOOPABLE HERO BACKGROUND clip for a landing / offer page.
+        The starting image already fixes the subject and look — describe subtle MOTION, not a new scene. Improve the prompt by making these explicit when the user did not:
+        - very gentle, slow ambient motion (drifting light, soft bokeh, a slight camera drift) that loops smoothly
+        - the subject stays in the same place so text can sit over the calm side of the frame
+        - no fast moves, cuts, or flashing — it must not distract from the headline and button
+        - consistent lighting and colour across the whole clip
+        Do not render any text, price, or button in the video.
+        TXT,
+
+        'video_generation.general' => <<<'TXT'
+        You are rewriting a prompt for an AI video model that animates a STARTING IMAGE into a short clip (a few seconds).
+        Keep the user's subject and intent exactly. The starting image already sets the scene, so improve the prompt by describing, only where the user was vague:
+        - the camera movement (static, slow push-in, pan, orbit) — one move, not several
+        - what moves in the scene and how (speed, direction, a natural physical detail)
+        - lighting and atmosphere, kept consistent with the starting image
+        - the pace and mood of the clip
+        Keep it to two or three tight sentences. Do not describe a different scene from the image, and do not add text, logos, or watermarks unless asked.
+        TXT,
+
     ],
 
     'provider_styles' => [
@@ -89,6 +130,16 @@ return [
         'stability' => 'Target model: Stability AI. Prefer a compact, comma-separated stack of vivid descriptive phrases and quality tags (subject first, then setting, lighting, style, then quality terms). Front-load the most important elements.',
 
         'custom' => 'Write the enhanced prompt as clear natural descriptive language, one to three sentences.',
+
+    ],
+
+    // Style notes for the Video Generation tool's providers. Kept apart from
+    // `provider_styles`, whose entries describe the image models (Stability's
+    // image keyword-tag style does not suit a video motion prompt). Stability
+    // image-to-video has no entry: it never receives the prompt.
+    'video_provider_styles' => [
+
+        'custom' => 'Target: a text-and-image-to-video model. Write the enhanced prompt as one to three natural sentences: the camera movement first, then what moves in the scene, then lighting, atmosphere, and pace. No keyword lists, weights, or "--" flags.',
 
     ],
 

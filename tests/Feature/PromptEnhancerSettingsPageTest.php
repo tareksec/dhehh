@@ -42,6 +42,18 @@ class PromptEnhancerSettingsPageTest extends TestCase
         return $user;
     }
 
+    public function test_video_guides_are_listed_and_labelled_apart_from_image_guides(): void
+    {
+        $company = $this->company();
+
+        Livewire::actingAs($this->user($company, 'super_admin'))
+            ->test(PromptEnhancerSettings::class)
+            ->assertFormFieldExists('guide__video_generation__product_demo')
+            ->assertFormFieldExists('guide__video_generation__general')
+            ->assertSee(__('Video — :context guide', ['context' => 'General']))
+            ->assertSee(__('Image — :context guide', ['context' => 'General']));
+    }
+
     public function test_only_super_admin_can_open_the_page(): void
     {
         $company = $this->company();

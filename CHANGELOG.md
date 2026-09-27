@@ -4,6 +4,17 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **✨ Enhance button on Video Generation.** It works the same way as on Image Generation: write a rough idea, click **✨ Enhance**, compare your prompt with the rewrite, edit it if you like, then **Use enhanced** or **Keep original**. For video, the rewrite describes camera movement and what moves in the scene, starting from your starting image, instead of describing a new picture. It follows the **What is this for?** choice (Product Demo, Ad Creative, Landing / Offer Hero Video, General) and your brand style. The prompt you started with is saved with the video.
+  - The button shows only when a super admin has set up the Prompt Enhancer (**Settings → Integrations → Prompt Enhancer**).
+  - **Stability AI makes the video from the starting image only and does not use the prompt.** When a Stability provider is picked, the form says so under the prompt and the Enhance button is hidden, so no AI credit is spent on a prompt that is never sent. The prompt is still saved with the video.
+- **Video guides on the Prompt Enhancer page.** Settings → Integrations → Prompt Enhancer → **Context guides** now lists four video guides next to the image ones. Labels now start with "Image —" or "Video —", so the two "General" guides are easy to tell apart. As before, leave a guide blank to keep the built-in default.
+
+**Technical Notes:** `config/prompt_guides.php` gains four `video_generation.*` contexts and a separate `video_provider_styles` map (only `custom`). The image `provider_styles` entry for Stability asks for keyword tags, which suits images but not a video motion prompt. `PromptEnhancementService` picks the medium from the context key prefix (`video_generation.*` → video): the system prompt's first and last lines say video / on-screen text, and `PromptGuideRepository::providerStyle($format, $medium)` reads the matching style map. The `enhance()` signature is unchanged. `VideoGenerationClient` gains `usesTextPrompt()` (`StabilityVideoProvider` returns false). `VideoGeneration` stores `original_prompt` (the column already existed). No migrations. Plan: `12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md` Phase 2.
+
 ## [2.25.1] - 2026-09-27
 
 **Release type:** Patch/Fix Update

@@ -9,9 +9,11 @@ use App\Models\GeneratedImage;
 use App\Models\GeneratedVideo;
 use App\Models\User;
 use App\Services\CompanyContext;
+use App\Services\PromptEnhancement\PromptEnhancerConfigService;
 use App\Services\VideoGeneration\VideoProviderSettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
@@ -154,6 +156,98 @@ class VideoGenerationPageTest extends TestCase
         $row = GeneratedVideo::query()->firstOrFail();
         $this->assertSame($reference->getKey(), $row->source_generated_image_id);
         $this->assertSame($reference->output_paths[0], $row->source_image_path);
+    }
+
+    private function configureCustomProvider(Company $company): void
+    {
+        app(VideoProviderSettingsService::class)->save($company, [
+            [
+                'label' => 'Self-hosted',
+                'api_format' => 'custom',
+                'api_key' => 'custom-secret',
+                'base_url' => 'https://video.test/submit',
+                'poll_url_template' => 'https://video.test/jobs/{job_id}',
+                'is_default' => true,
+            ],
+        ]);
+    }
+
+    private function configureEnhancer(Company $company): void
+    {
+        app(PromptEnhancerConfigService::class)->save($company, [
+            'enabled' => true,
+            'api_format' => 'openai',
+            'provider' => 'Test',
+            'model' => 'test-mini',
+            'api_key' => 'sk-enh',
+        ]);
+    }
+
+    public function test_enhance_is_offered_for_a_provider_that_sends_the_prompt(): void
+    {
+        $company = $this->company();
+        $this->configureCustomProvider($company);
+        $this->configureEnhancer($company);
+
+        Livewire::actingAs($this->user($company, 'manager'))
+            ->test(VideoGeneration::class)
+            ->assertActionVisible('enhancePrompt');
+    }
+
+    public function test_enhance_is_hidden_and_the_prompt_is_flagged_unused_for_stability(): void
+    {
+        $company = $this->company();
+        $this->configureProvider($company);
+        $this->configureEnhancer($company);
+
+        Livewire::actingAs($this->user($company, 'manager'))
+            ->test(VideoGeneration::class)
+            ->assertActionHidden('enhancePrompt')
+            ->assertSee(__('The selected provider makes the video from the starting image only — this prompt is saved with the video but not sent to it.'));
+    }
+
+    public function test_enhance_is_hidden_when_the_enhancer_is_not_set_up(): void
+    {
+        $company = $this->company();
+        $this->configureCustomProvider($company);
+
+        Livewire::actingAs($this->user($company, 'manager'))
+            ->test(VideoGeneration::class)
+            ->assertActionHidden('enhancePrompt');
+    }
+
+    public function test_an_accepted_enhancement_is_generated_with_the_original_prompt_kept(): void
+    {
+        Queue::fake();
+        Storage::fake('public');
+        $company = $this->company();
+        $this->configureCustomProvider($company);
+        $this->configureEnhancer($company);
+        Http::fake([
+            'api.openai.com/*' => Http::response(['choices' => [['message' => ['content' => 'Slow orbit around the bottle as light glides across the steel.']]], 'usage' => []], 200),
+        ]);
+
+        Livewire::actingAs($this->user($company, 'manager'))
+            ->test(VideoGeneration::class)
+            ->fillForm(['prompt' => 'bottle spinning', 'context' => 'product_demo'])
+            ->mountAction('enhancePrompt')
+            ->assertActionDataSet(['enhanced' => 'Slow orbit around the bottle as light glides across the steel.'])
+            ->callMountedAction()
+            ->assertSet('data.prompt', 'Slow orbit around the bottle as light glides across the steel.')
+            ->assertSet('data.original_prompt', 'bottle spinning')
+            ->fillForm(['source_image' => UploadedFile::fake()->image('bottle.jpg', 900, 900)])
+            ->call('generate')
+            ->assertHasNoFormErrors();
+
+        Http::assertSent(function ($request): bool {
+            $system = (string) (collect($request->data()['messages'] ?? [])->firstWhere('role', 'system')['content'] ?? '');
+
+            return str_contains($system, 'PRODUCT DEMO') && str_contains($system, 'AI video generation');
+        });
+
+        $row = GeneratedVideo::query()->firstOrFail();
+        $this->assertSame('Slow orbit around the bottle as light glides across the steel.', $row->prompt);
+        $this->assertSame('bottle spinning', $row->original_prompt);
     }
 
     public function test_generate_requires_a_starting_image(): void

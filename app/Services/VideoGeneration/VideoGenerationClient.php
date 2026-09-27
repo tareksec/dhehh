@@ -35,4 +35,11 @@ interface VideoGenerationClient
 
     /** @param  VideoGenerationRequest::OP_*  $operation */
     public function supportsOperation(string $operation): bool;
+
+    /**
+     * Whether this provider sends the text prompt at all. Stability's
+     * image-to-video takes only the starting image, so its prompt is kept
+     * for the record but never reaches the model.
+     */
+    public function usesTextPrompt(): bool;
 }

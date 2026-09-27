@@ -59,13 +59,19 @@ class PromptGuideRepository
         return $default !== '' ? $default : $this->genericFallback();
     }
 
-    public function providerStyle(?string $apiFormat): ?string
+    /**
+     * The style note for the model that will receive the prompt. Video
+     * providers read `video_provider_styles`, not the image models' notes.
+     */
+    public function providerStyle(?string $apiFormat, string $medium = PromptEnhancementService::MEDIUM_IMAGE): ?string
     {
         if (blank($apiFormat)) {
             return null;
         }
 
-        $styles = (array) config('prompt_guides.provider_styles', []);
+        $styles = (array) config($medium === PromptEnhancementService::MEDIUM_VIDEO
+            ? 'prompt_guides.video_provider_styles'
+            : 'prompt_guides.provider_styles', []);
         $style = trim((string) ($styles[$apiFormat] ?? ''));
 
         return $style !== '' ? $style : null;
@@ -141,7 +147,7 @@ class PromptGuideRepository
     }
 
     /**
-     * @return array<string, string>  contextKey => override guide text
+     * @return array<string, string> contextKey => override guide text
      */
     protected function storedOverrides(Company $company): array
     {
