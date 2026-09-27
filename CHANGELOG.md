@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.24.0] - 2026-09-27
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -21,7 +23,6 @@ All notable production changes to Business Dashboard are documented here.
 - New migration `2026_09_26_100000_create_investor_drafts_table` (`investor_drafts`, company-owned; `nid_number` / `nominee_nid_or_passport` encrypted like on `investors`). Run `php artisan migrate --force`.
 - New `InvestorDraft` model (`BelongsToCompany` + `CompanyScope`), `App\Services\Investment\InvestorImportService` (reading with the existing `openspout/openspout` dependency), `InvestorDraftResource` in the Investments cluster. Column/label names live in `config/investor_import.php`.
 - Drafts need the `investments.manage` permission. Uploaded files are deleted right after they are read.
-
 ## [2.23.1] - 2026-09-26
 
 **Release type:** Patch/Fix Update
