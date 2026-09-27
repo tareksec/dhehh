@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.26.0] - 2026-09-27
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -14,7 +16,6 @@ All notable production changes to Business Dashboard are documented here.
 - **Video guides on the Prompt Enhancer page.** Settings → Integrations → Prompt Enhancer → **Context guides** now lists four video guides next to the image ones. Labels now start with "Image —" or "Video —", so the two "General" guides are easy to tell apart. As before, leave a guide blank to keep the built-in default.
 
 **Technical Notes:** `config/prompt_guides.php` gains four `video_generation.*` contexts and a separate `video_provider_styles` map (only `custom`). The image `provider_styles` entry for Stability asks for keyword tags, which suits images but not a video motion prompt. `PromptEnhancementService` picks the medium from the context key prefix (`video_generation.*` → video): the system prompt's first and last lines say video / on-screen text, and `PromptGuideRepository::providerStyle($format, $medium)` reads the matching style map. The `enhance()` signature is unchanged. `VideoGenerationClient` gains `usesTextPrompt()` (`StabilityVideoProvider` returns false). `VideoGeneration` stores `original_prompt` (the column already existed). No migrations. Plan: `12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md` Phase 2.
-
 ## [2.25.1] - 2026-09-27
 
 **Release type:** Patch/Fix Update
