@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.25.0] - 2026-09-27
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -23,7 +25,6 @@ All notable production changes to Business Dashboard are documented here.
 - **AI Expense Scan is renamed Smart Scan** everywhere it shows: the settings page, **Finance → Smart Scans**, and its messages.
 
 **Technical Notes:** `ImageProviderSettings`, `VideoProviderSettings`, `PromptEnhancerSettings` and `ExpenseScanSettings` moved from the `AiTools` to the `Settings` cluster and use the new `OpenedFromIntegrations` trait (hidden from navigation, breadcrumb to Integrations). Their URLs are now `/admin/settings/{slug}` (slugs unchanged); a `301` route redirects the old `/admin/ai-tools/{slug}`. `Integrations::aiToolProviderLinks()` builds the cards, showing each only to users who can open that page. `ImageGovernance` stays in `AiTools` with `$shouldRegisterNavigation = false`, linked from the `imageGovernance` header action on `ToolMenu`. New and renamed labels go through `__()` with keys in `lang/en.json` and `lang/bn.json`. No migrations.
-
 ## [2.24.0] - 2026-09-27
 
 **Release type:** Minor Feature Update
