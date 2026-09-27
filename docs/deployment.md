@@ -47,8 +47,8 @@ APP_DEBUG=false
 APP_URL=https://your-domain.com
 ASSET_URL=https://your-domain.com
 TRUSTED_PROXIES=*
-APP_VERSION=2.27.1
-APP_RELEASE_TYPE=maintenance
+APP_VERSION=2.28.0
+APP_RELEASE_TYPE=minor
 APP_RELEASE_DATE=2026-09-27
 
 DB_CONNECTION=mysql

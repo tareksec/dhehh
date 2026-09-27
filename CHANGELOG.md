@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.28.0] - 2026-09-27
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -30,7 +32,6 @@ All notable production changes to Business Dashboard are documented here.
   - Everything is off until a super admin sets values.
 
 **Technical Notes:** new `GeneratedVideoAttacher` (`attachToProduct()` / `attachToOffer()`) writes the stored clip path into `products.video_path` / `offers.video_path` (the columns came with the Phase 1 migrations) and sets the generation's `linked` morph. It refuses an unfinished row, a row whose clip is missing, a row awaiting or failing review, and a record from another company (`VideoAttachmentException`). `VideoGeneration` gains `attachToProduct` / `attachToOffer` actions, scoped to the user's own rows, and records `ai_video.attached` in the audit log. New read-only `AttachedVideoPreview` form field (never dehydrated, no upload) on `ProductForm` and `OfferForm`, with a `removeVideo` hint action. `storefront/products/show.blade.php` gains a `data-product-video` block; `storefront/offers/blocks/hero.blade.php` plays `video_path` over `cover_image` (`motion-reduce:hidden`). New strings go through `__()` with keys in `lang/en.json` and `lang/bn.json`. Plan: `12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md` Phases 3–4. Phase 4: new `VideoLibrary` page (AI Tools cluster, `ai_tools.video_generation`); `VideoGeneration` gains `toggleFavorite` / `saveToDrive` actions and `?from=<id>` prefill. New `SaveVideoToDriveJob` (queued, one try, sets/clears `CompanyContext`) → `VideoDriveExporter` → new `GoogleDriveBackupService::uploadStream()` (resumable upload, streamed from the public disk, `supportsAllDrives=true`); the backup `upload()` is unchanged. Per-company folder in `companies.settings->ai_tools->video_drive->folder_id`. **Migration:** `2026_09_27_100000_add_google_drive_columns_to_generated_videos_table` adds `drive_status`, `drive_file_id`, `drive_url`, `drive_saved_at`, `drive_error` to `generated_videos`. Audit event `ai_video.saved_to_drive`. Phase 5: new `VideoGovernanceService` (`companies.settings->ai_tools->video_governance`, cap = count of non-failed videos this month) and super-admin `VideoGovernance` page (hidden from the sidebar, linked from the Tool Menu header). `VideoGeneration::generate()` checks the cap before dehydrating the form and sets `review_status`; `VideoLibrary` gains `approveReview` / `rejectReview` (audit `ai_video.review_approved` / `ai_video.review_rejected`). `User::ROLE_PERMISSIONS['manager']` gains `ai_tools.video_generation.review`. **Migration:** `2026_09_28_100000_grant_video_review_permission_to_manager_role` appends that permission to the stored Manager role only if the row already has `ai_tools.video_generation`, leaving everything else unchanged.
-
 ## [2.27.1] - 2026-09-27
 
 **Release type:** Maintenance Update
