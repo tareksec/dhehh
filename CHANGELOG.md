@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.25.1] - 2026-09-27
+
 **Release type:** Patch/Fix Update
 
 ### Changed
@@ -21,7 +23,6 @@ All notable production changes to Business Dashboard are documented here.
 - **Sample CSV** now downloads in the same layout as your INV sheet.
 
 **Technical Notes:** `InvestorImportService` finds the header row below a title line, reads every Excel sheet, folds Bangla spelling variants when matching column names, and skips SL/total rows. The sample layout and new aliases live in `config/investor_import.php`. No migrations.
-
 ## [2.25.0] - 2026-09-27
 
 **Release type:** Minor Feature Update
