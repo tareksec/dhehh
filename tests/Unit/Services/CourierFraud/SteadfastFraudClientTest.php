@@ -8,114 +8,75 @@ use Tests\TestCase;
 
 class SteadfastFraudClientTest extends TestCase
 {
-    public function test_it_returns_null_when_credentials_are_missing(): void
-    {
-        $result = (new SteadfastFraudClient)->checkByPhone('01712345678', []);
+    protected const KEYS = ['api_key' => 'test-api-key', 'secret_key' => 'test-secret-key'];
 
-        $this->assertNull($result);
+    public function test_it_returns_null_without_api_keys_and_makes_no_request(): void
+    {
+        Http::fake();
+
+        $this->assertNull((new SteadfastFraudClient)->checkByPhone('01712345678', []));
+        $this->assertNull((new SteadfastFraudClient)->checkByPhone('01712345678', ['username' => 'owner@example.com', 'password' => 'secret']));
+
+        Http::assertNothingSent();
     }
 
-    public function test_it_returns_null_when_csrf_token_is_missing_from_login_page(): void
+    public function test_it_calls_the_official_fraud_check_endpoint_with_the_api_keys(): void
     {
         Http::fake([
-            'steadfast.com.bd/login' => Http::response('<html>no token here</html>'),
+            'portal.packzy.com/api/v1/fraud_check/score/01712345678' => Http::response([
+                'total_parcels' => 12,
+                'total_delivered' => 9,
+                'total_cancelled' => 3,
+            ]),
         ]);
 
-        $result = (new SteadfastFraudClient)->checkByPhone('01712345678', [
-            'username' => 'owner@example.com',
-            'password' => 'secret',
-        ]);
+        $result = (new SteadfastFraudClient)->checkByPhone('01712345678', self::KEYS);
 
-        $this->assertNull($result);
+        $this->assertSame(['success' => 9, 'cancel' => 3, 'total' => 12], $result);
+
+        Http::assertSent(fn ($request) => $request->hasHeader('Api-Key', 'test-api-key')
+            && $request->hasHeader('Secret-Key', 'test-secret-key'));
     }
 
-    public function test_it_returns_null_when_login_post_fails(): void
+    public function test_it_uses_the_providers_base_url_override(): void
     {
-        Http::fake($this->portal(loginPostStatus: 500));
+        Http::fake(['sandbox.example.test/*' => Http::response(['data' => ['delivered' => 1, 'cancelled' => 0]])]);
 
-        $result = (new SteadfastFraudClient)->checkByPhone('01712345678', [
-            'username' => 'owner@example.com',
-            'password' => 'secret',
-        ]);
+        $result = (new SteadfastFraudClient)->checkByPhone('01712345678', self::KEYS + ['base_url' => 'https://sandbox.example.test/api/v1']);
 
-        $this->assertNull($result);
+        $this->assertSame(['success' => 1, 'cancel' => 0, 'total' => 1], $result);
     }
 
-    public function test_it_returns_null_when_the_login_silently_fails(): void
+    public function test_it_reads_counts_nested_under_data_and_counts_merchant_reports(): void
     {
-        // A wrong/expired password still redirects (back to the login page)
-        // rather than erroring, so the login step "succeeds" but the session
-        // is never actually authenticated. The stats request then gets
-        // re-served the login page's HTML instead of JSON — this must not
-        // be read as a clean 0/0 delivery history.
-        Http::fake(function ($request) {
-            $url = $request->url();
-            $method = $request->method();
-
-            if (str_contains($url, '/user/frauds/check/')) {
-                return Http::response('<html>login required</html>');
-            }
-
-            if ($method === 'GET' && str_contains($url, '/login')) {
-                return Http::response('<input type="hidden" name="_token" value="tok">');
-            }
-
-            if ($method === 'POST' && str_contains($url, '/login')) {
-                return Http::response('', 302);
-            }
-
-            return Http::response('', 404);
-        });
-
-        $result = (new SteadfastFraudClient)->checkByPhone('01712345678', [
-            'username' => 'owner@example.com',
-            'password' => 'wrong-password',
+        $result = (new SteadfastFraudClient)->parseScore([
+            'status' => 200,
+            'data' => [
+                'success' => 46,
+                'cancel' => 3,
+                'fraud_reports' => [['note' => 'Refused parcel'], ['note' => 'Fake order']],
+            ],
         ]);
 
-        $this->assertNull($result);
+        $this->assertSame(['success' => 46, 'cancel' => 3, 'total' => 49, 'reports' => 2], $result);
     }
 
-    public function test_it_returns_delivery_stats_on_success_and_logs_out(): void
+    public function test_a_response_without_delivery_counts_is_not_read_as_a_clean_record(): void
     {
-        Http::fake($this->portal(delivered: 6, cancelled: 4));
+        Http::fake(['*' => Http::response(['message' => 'Something else'])]);
 
-        $result = (new SteadfastFraudClient)->checkByPhone('01712345678', [
-            'username' => 'owner@example.com',
-            'password' => 'secret',
-        ]);
-
-        $this->assertSame(['success' => 6, 'cancel' => 4, 'total' => 10], $result);
-
-        Http::assertSent(fn ($request) => str_contains($request->url(), '/logout'));
+        $this->assertNull((new SteadfastFraudClient)->checkByPhone('01712345678', self::KEYS));
     }
 
-    protected function portal(int $delivered = 0, int $cancelled = 0, int $loginPostStatus = 302): \Closure
+    public function test_a_401_is_not_retried_and_pauses_further_checks_with_the_same_keys(): void
     {
-        return function ($request) use ($delivered, $cancelled, $loginPostStatus) {
-            $url = $request->url();
-            $method = $request->method();
+        Http::fake(['*' => Http::response(['message' => 'Unauthenticated'], 401)]);
 
-            if (str_contains($url, '/user/frauds/check/')) {
-                return Http::response(['total_delivered' => $delivered, 'total_cancelled' => $cancelled]);
-            }
+        $this->assertNull((new SteadfastFraudClient)->checkByPhone('01712345678', self::KEYS));
+        $this->assertNull((new SteadfastFraudClient)->checkByPhone('01812345678', self::KEYS));
 
-            if (str_contains($url, '/user/frauds/check')) {
-                return Http::response('<meta name="csrf-token" content="tok">');
-            }
-
-            if (str_contains($url, '/logout')) {
-                return Http::response('');
-            }
-
-            if ($method === 'GET' && str_contains($url, '/login')) {
-                return Http::response('<input type="hidden" name="_token" value="tok">');
-            }
-
-            if ($method === 'POST' && str_contains($url, '/login')) {
-                return Http::response('', $loginPostStatus);
-            }
-
-            return Http::response('', 404);
-        };
+        // One request total: no retry loop, and the second lookup is skipped
+        // so wrong keys can't trip Steadfast's 10-failures lockout.
+        Http::assertSentCount(1);
     }
 }

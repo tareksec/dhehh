@@ -237,5 +237,20 @@
     "Enhanced": "উন্নত লেখা",
     "Prompt updated": "প্রম্পট আপডেট হয়েছে",
     "Video — :context guide": "ভিডিও — :context গাইড",
-    "Image — :context guide": "ছবি — :context গাইড"
+    "Image — :context guide": "ছবি — :context গাইড",
+    ":courier: :count fraud reports from other merchants": ":courier: অন্য মার্চেন্টদের :count টি ফ্রড রিপোর্ট",
+    "Ignored": "উপেক্ষিত",
+    "From Steadfast's merchant panel → API → Your API keys. Issue a separate key for this ERP so retiring another plugin never takes it down. A key only sees the profile (business) it was issued for. These same keys power the Courier Fraud Check — no merchant login needed.": "স্টিডফাস্টের মার্চেন্ট প্যানেল → API → Your API keys থেকে নিন। এই ERP-এর জন্য আলাদা একটি কী তৈরি করুন, যাতে অন্য কোনো প্লাগইন বন্ধ করলে এটি বন্ধ না হয়। একটি কী শুধু যে প্রোফাইলের (ব্যবসার) জন্য তৈরি, সেটিই দেখতে পারে। এই কী দিয়েই কুরিয়ার ফ্রড চেক চলে — মার্চেন্ট লগইন লাগবে না।",
+    "Webhook Callback URL": "ওয়েবহুক কলব্যাক URL",
+    "Webhook URL": "ওয়েবহুক URL",
+    "Save this provider first — the webhook URL appears here after saving.": "আগে এই প্রোভাইডার সেভ করুন — সেভ করার পর ওয়েবহুক URL এখানে দেখাবে।",
+    "Paste this into Steadfast's merchant panel → Webhook → Callback URL.": "এটি স্টিডফাস্টের মার্চেন্ট প্যানেল → Webhook → Callback URL-এ পেস্ট করুন।",
+    "Steadfast allows only letters, digits and - _ . = in the auth token.": "স্টিডফাস্টের অথ টোকেনে শুধু অক্ষর, সংখ্যা এবং - _ . = ব্যবহার করা যায়।",
+    "Generate": "তৈরি করুন",
+    "Generate a token here, then paste the exact same value into Steadfast's merchant panel → Webhook → Auth token. Steadfast sends it as Authorization: Bearer <token> and signs every request with it (X-Signature, HMAC-SHA256); both are checked.": "এখানে একটি টোকেন তৈরি করুন, তারপর হুবহু একই মান স্টিডফাস্টের মার্চেন্ট প্যানেল → Webhook → Auth token-এ পেস্ট করুন। স্টিডফাস্ট এটি Authorization: Bearer <token> হিসেবে পাঠায় এবং প্রতিটি রিকোয়েস্ট এটি দিয়ে সাইন করে (X-Signature, HMAC-SHA256); দুটোই যাচাই করা হয়।",
+    "Steadfast could not be reached. Check the Base URL and this server's internet connection.": "স্টিডফাস্টে সংযোগ করা যায়নি। Base URL এবং এই সার্ভারের ইন্টারনেট সংযোগ পরীক্ষা করুন।",
+    "Steadfast rejected the API key or secret key (or they belong to a different business profile). Fix the keys before trying again — repeated failures lock the key out for 60 minutes.": "স্টিডফাস্ট API কী বা সিক্রেট কী গ্রহণ করেনি (অথবা এগুলো অন্য কোনো ব্যবসার প্রোফাইলের)। আবার চেষ্টা করার আগে কী ঠিক করুন — বারবার ব্যর্থ হলে কী ৬০ মিনিটের জন্য লক হয়ে যায়।",
+    "Steadfast says this account is not allowed right now — it may be inactive or its ownership (KYC) details need resubmitting.": "স্টিডফাস্ট জানাচ্ছে এই অ্যাকাউন্ট এখন অনুমোদিত নয় — এটি নিষ্ক্রিয় হতে পারে অথবা মালিকানার (KYC) তথ্য আবার জমা দিতে হবে।",
+    "Too many requests or too many failed attempts — Steadfast has paused this key. Wait before trying again.": "অনেক বেশি রিকোয়েস্ট বা অনেকবার ব্যর্থ চেষ্টা — স্টিডফাস্ট এই কী সাময়িকভাবে বন্ধ রেখেছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।",
+    "Steadfast answered with error :status. Try again shortly.": "স্টিডফাস্ট :status ত্রুটি দিয়েছে। একটু পরে আবার চেষ্টা করুন।"
 }

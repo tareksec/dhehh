@@ -4,6 +4,24 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **Courier Fraud Check now works for Steadfast.** It uses the fraud-check endpoint in Steadfast's new API guide, with the same API key and secret key used for booking. You no longer need to save a Steadfast merchant email and password. The old check logged into Steadfast's website, and it stopped working when that login changed. When Steadfast says other merchants have reported a customer, the order form shows how many reports there are.
+
+### Changed
+
+- **Steadfast settings follow Steadfast's new API guide and Webhook page** (Courier → Providers → Steadfast):
+  - The page shows the **Webhook Callback URL** to paste into Steadfast's Webhook page. A **Generate** button fills in the auth token. The token may contain only letters, digits and `- _ . =`, as Steadfast requires.
+  - Incoming webhooks are checked two ways: the `Authorization: Bearer` token and Steadfast's new `X-Signature` (HMAC-SHA256 of the body). A retried event is handled once, using its `Idempotency-Key`.
+  - Account events (payouts, pickup, return or cancel requests, account changes) are logged as **Ignored**. Before, they were retried five times and then raised a failed-webhook alert.
+  - **Statuses ending in `_approval_pending` now stay In Transit.** Steadfast says these are only the rider's report, not confirmed. Before, `delivered_approval_pending` marked the order Delivered right away. An order now moves to Delivered or Cancelled only when Steadfast confirms it. `exception` (lost or damaged) is now Failed. `cancelled_return_received` is now Returned. `unknown` leaves the current status unchanged.
+  - The **Balance** button explains a failed call: wrong keys (401), account inactive or KYC needed (403), key paused for too many failures (429), or Steadfast unreachable.
+  - The "External Fraud Check (Merchant Panel Login)" section is no longer shown for Steadfast.
+
+**Technical Notes:** `SteadfastCourierClient` gains `ping()` and `fraudCheck()` (`GET /fraud_check/score/{phone}`), URL-encodes path values, and retries only connection errors and 5xx. It never retries a 4xx: the guide says 10 failed logins in 5 minutes lock the key for 60 minutes, booking included. `SteadfastFraudClient` now calls the API instead of scraping the portal (the portal code is removed). After a 401 it skips lookups with the same keys for 15 minutes. The guide does not name the response fields, so `parseScore()` accepts the common spellings, at the top level or under `data`. A response with no delivered or cancelled count is treated as a failed check, never as a clean 0/0. `ExternalCourierFraudService` passes a Steadfast provider's booking API keys and `base_url` to the client. `CourierProviderInterface` gains `verifyWebhookRequest()` and `webhookSkipReason()`, with defaults in `AbstractCourierAdapter`. `CourierWebhookController` uses them and reads `Idempotency-Key`. `ProcessCourierWebhook` marks skipped events `ignored`. `CourierService::normalizeSteadfastStatus()` now returns `?string`. New strings go through `__()` with keys in `lang/en.json` and `lang/bn.json`. No migrations.
+
 ## [2.26.0] - 2026-09-27
 
 **Release type:** Minor Feature Update

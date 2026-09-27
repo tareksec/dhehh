@@ -6,6 +6,7 @@ use App\Contracts\CourierProviderInterface;
 use App\Models\CourierBooking;
 use App\Models\CourierProvider;
 use App\Services\CourierService;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 abstract class AbstractCourierAdapter implements CourierProviderInterface
@@ -71,6 +72,18 @@ abstract class AbstractCourierAdapter implements CourierProviderInterface
     public function signatureHeaderDefault(): string
     {
         return 'X-Courier-Signature';
+    }
+
+    public function verifyWebhookRequest(CourierProvider $provider, Request $request): bool
+    {
+        $header = (string) ($provider->settings['signature_header'] ?? $this->signatureHeaderDefault());
+
+        return $this->verifyWebhook($provider, $request->getContent(), $request->header($header));
+    }
+
+    public function webhookSkipReason(array $payload): ?string
+    {
+        return null;
     }
 
     protected function unsupported(string $operation): never

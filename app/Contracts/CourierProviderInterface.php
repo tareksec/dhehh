@@ -5,6 +5,7 @@ namespace App\Contracts;
 use App\Models\CourierBooking;
 use App\Models\CourierProvider;
 use App\Models\Order;
+use Illuminate\Http\Request;
 
 interface CourierProviderInterface
 {
@@ -46,5 +47,20 @@ interface CourierProviderInterface
      */
     public function signatureHeaderDefault(): string;
 
+    /**
+     * Authenticates an incoming webhook request as a whole. The default
+     * reads the signature header and defers to verifyWebhook(); couriers
+     * that send more than one proof (e.g. a bearer token plus an HMAC
+     * signature) override this.
+     */
+    public function verifyWebhookRequest(CourierProvider $provider, Request $request): bool;
+
     public function webhookStatus(array $payload): ?string;
+
+    /**
+     * Why a verified webhook needs no status change (an account or payout
+     * event, or a status the courier itself can't name) — null when it
+     * should be processed as a delivery status update.
+     */
+    public function webhookSkipReason(array $payload): ?string;
 }

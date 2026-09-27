@@ -3,24 +3,26 @@
 namespace App\Services;
 
 use App\Models\CourierProvider;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 /**
- * Steadfast doesn't publish a canonical machine-readable spec for the
- * return/payment endpoints, so their paths were cross-checked against two
- * independent open-source Laravel wrapper packages (nayemuf/steadfast-courier
- * and sabitahmadumid/laravel-steadfast, both August 2026) which agree on the
- * same paths. Confirmed live against a real merchant account: on 2026-08-13
- * get_balance and payments() succeeded (the earlier /payment and /return/{id}
- * paths 404'd and were corrected to /payments and /get_return_request/{id}
- * below); on 2026-08-14, with API credentials connected locally, both
- * payments() and payment() were exercised end-to-end and returned real
- * settlement + consignment data — see the docblock on
- * `CourierPaymentHistory` for the confirmed response shape. returnStatus()
- * and returnRequests() are corrected by the same cross-check but not yet
- * exercised against a live return.
+ * Endpoint paths follow Steadfast's own merchant-portal "API guide"
+ * (portal.packzy.com, September 2026), which lists all 18 endpoints under
+ * the same base URL. Earlier paths were cross-checked against open-source
+ * wrappers and confirmed live (get_balance / payments / payments/{id} on
+ * 2026-08-13/14 — see `CourierPaymentHistory` for the response shape); the
+ * guide agrees with every one of them.
+ *
+ * Two rules from the guide shape request(): a 401 must never be retried in
+ * a loop (10 failures in 5 minutes from one address + key locks the key out
+ * with 429 for 60 minutes, correct keys included), and a 5xx is safe to
+ * retry because duplicate invoices are refused, so a retry can't double-book.
  */
 class SteadfastCourierClient
 {
@@ -34,10 +36,39 @@ class SteadfastCourierClient
             ->json();
     }
 
+    /**
+     * The one call that needs no credentials — if it answers, the base URL
+     * and network are fine and any later failure is the keys or the request.
+     */
+    public function ping(CourierProvider $provider): bool
+    {
+        try {
+            return Http::acceptJson()
+                ->timeout(10)
+                ->connectTimeout(5)
+                ->get($this->baseUrl($provider).'/ping')
+                ->successful();
+        } catch (ConnectionException) {
+            return false;
+        }
+    }
+
+    /**
+     * A customer's delivery record across Steadfast: how much arrived, how
+     * much came back, and what other merchants have reported. Returns the
+     * raw response — SteadfastFraudClient interprets it. Not ->throw()n so
+     * the caller can tell a 401 (bad keys, stop asking) from other failures.
+     */
+    public function fraudCheck(CourierProvider $provider, string $phone): Response
+    {
+        return $this->request($provider)
+            ->get($this->baseUrl($provider).'/fraud_check/score/'.rawurlencode($phone));
+    }
+
     public function statusByTrackingCode(CourierProvider $provider, string $trackingCode): array
     {
         return $this->request($provider)
-            ->get($this->baseUrl($provider).'/status_by_trackingcode/'.$trackingCode)
+            ->get($this->baseUrl($provider).'/status_by_trackingcode/'.rawurlencode($trackingCode))
             ->throw()
             ->json();
     }
@@ -45,7 +76,7 @@ class SteadfastCourierClient
     public function statusByInvoice(CourierProvider $provider, string $invoice): array
     {
         return $this->request($provider)
-            ->get($this->baseUrl($provider).'/status_by_invoice/'.$invoice)
+            ->get($this->baseUrl($provider).'/status_by_invoice/'.rawurlencode($invoice))
             ->throw()
             ->json();
     }
@@ -119,12 +150,26 @@ class SteadfastCourierClient
             ->asJson()
             ->timeout(20)
             ->connectTimeout(5)
-            ->retry(3, 500, throw: false)
+            ->retry(3, 500, fn (Throwable $exception): bool => $this->shouldRetry($exception), throw: false)
             ->withHeaders([
                 'Api-Key' => $apiKey,
                 'Secret-Key' => $secretKey,
                 'Content-Type' => 'application/json',
             ]);
+    }
+
+    /**
+     * Retry only what can succeed on a second try: dropped connections and
+     * Steadfast's own 5xx. Never a 4xx — a 401/403/422 answers the same
+     * every time, and repeated 401s lock the API key out for an hour.
+     */
+    protected function shouldRetry(Throwable $exception): bool
+    {
+        if ($exception instanceof ConnectionException) {
+            return true;
+        }
+
+        return $exception instanceof RequestException && $exception->response->serverError();
     }
 
     protected function baseUrl(CourierProvider $provider): string

@@ -34,13 +34,13 @@ class CourierWebhookLogResource extends Resource
             TextColumn::make('delivery_id')->label('Event ID')->searchable()->limit(28),
             TextColumn::make('event')->searchable(),
             TextColumn::make('status')->badge()->color(fn (string $state): string => match ($state) {
-                'processed' => 'success', 'failed' => 'danger', default => 'warning'
+                'processed' => 'success', 'failed' => 'danger', 'ignored' => 'gray', default => 'warning'
             }),
             TextColumn::make('attempts')->numeric(),
             TextColumn::make('error')->limit(60)->placeholder('-'),
             TextColumn::make('processed_at')->dateTime()->placeholder('-'),
             TextColumn::make('created_at')->dateTime()->sortable(),
-        ])->filters([SelectFilter::make('status')->options(['pending' => 'Pending', 'processed' => 'Processed', 'failed' => 'Failed'])]);
+        ])->filters([SelectFilter::make('status')->options(['pending' => 'Pending', 'processed' => 'Processed', 'ignored' => __('Ignored'), 'failed' => 'Failed'])]);
     }
 
     public static function canViewAny(): bool

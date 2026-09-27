@@ -15,18 +15,19 @@ class CourierWebhookController extends Controller
     {
         abort_unless($provider->is_active, 404);
         $adapter = $couriers->adapter($provider);
-        $signatureHeader = (string) ($provider->settings['signature_header'] ?? $adapter->signatureHeaderDefault());
-        abort_unless($adapter->verifyWebhook($provider, $request->getContent(), $request->header($signatureHeader)), 401);
+        abort_unless($adapter->verifyWebhookRequest($provider, $request), 401);
 
         $payload = $request->json()->all();
+        // Steadfast resends a retried event with the same Idempotency-Key.
         $deliveryId = (string) ($request->header('X-Webhook-Id')
+            ?: $request->header('Idempotency-Key')
             ?: ($payload['event_id'] ?? hash('sha256', $request->getContent())));
 
         $log = CourierWebhookLog::withoutGlobalScopes()->firstOrCreate(
             ['courier_provider_id' => $provider->getKey(), 'delivery_id' => $deliveryId],
             [
                 'company_id' => $provider->company_id,
-                'event' => $payload['event'] ?? $payload['status'] ?? null,
+                'event' => $payload['event'] ?? $payload['notification_type'] ?? $payload['status'] ?? null,
                 'payload' => $payload,
                 'status' => 'pending',
             ],

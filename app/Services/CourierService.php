@@ -163,7 +163,7 @@ class CourierService
             ]);
         }
 
-        $status = $this->normalizeSteadfastStatus($consignment['status'] ?? 'in_review');
+        $status = $this->normalizeSteadfastStatus((string) ($consignment['status'] ?? 'in_review')) ?? CourierBooking::STATUS_BOOKING_PENDING;
         $booking = CourierBooking::query()->create([
             'company_id' => $order->company_id,
             'courier_provider_id' => $provider->getKey(),
@@ -206,9 +206,16 @@ class CourierService
             ]);
         }
 
+        $status = $this->normalizeSteadfastStatus((string) $response['delivery_status']);
+
+        // "unknown" means Steadfast itself can't say — keep what we have.
+        if ($status === null) {
+            return $booking;
+        }
+
         return $this->updateStatus(
             $booking,
-            $this->normalizeSteadfastStatus($response['delivery_status']),
+            $status,
             'Synced from Steadfast: '.$response['delivery_status'],
         );
     }
@@ -707,15 +714,35 @@ class CourierService
         ], fn ($value): bool => $value !== null && $value !== '');
     }
 
-    public function normalizeSteadfastStatus(string $status): string
+    /**
+     * Maps Steadfast's statuses (merchant API guide, September 2026) onto
+     * ours. Anything ending `_approval_pending` is only the rider's word —
+     * the guide says not to settle books on it — so it stays In Transit
+     * until Steadfast confirms delivered / partial_delivered / cancelled.
+     * The `*_return_*` statuses come from status_with_return_status_by_cid
+     * for a parcel that didn't fully arrive. `unknown` ("not a state this
+     * API recognises — ask us") returns null: keep the current status.
+     */
+    public function normalizeSteadfastStatus(string $status): ?string
     {
-        return match ($status) {
-            'delivered', 'delivered_approval_pending' => CourierBooking::STATUS_DELIVERED,
-            'partial_delivered', 'partial_delivered_approval_pending' => CourierBooking::STATUS_PARTIAL_DELIVERED,
-            'cancelled', 'cancelled_approval_pending' => CourierBooking::STATUS_CANCELLED,
+        return match (strtolower(trim($status))) {
+            'delivered' => CourierBooking::STATUS_DELIVERED,
+            'partial_delivered',
+            'partial_delivered_return_processing',
+            'partial_delivered_return_rider_assigned',
+            'partial_delivered_return_received' => CourierBooking::STATUS_PARTIAL_DELIVERED,
+            'cancelled',
+            'cancelled_return_processing',
+            'cancelled_return_rider_assigned' => CourierBooking::STATUS_CANCELLED,
+            'cancelled_return_received' => CourierBooking::STATUS_RETURNED,
             'in_review' => CourierBooking::STATUS_BOOKING_PENDING,
-            'hold', 'pending' => CourierBooking::STATUS_IN_TRANSIT,
-            'unknown', 'unknown_approval_pending' => CourierBooking::STATUS_FAILED,
+            'pending', 'hold',
+            'delivered_approval_pending',
+            'partial_delivered_approval_pending',
+            'cancelled_approval_pending',
+            'unknown_approval_pending' => CourierBooking::STATUS_IN_TRANSIT,
+            'exception' => CourierBooking::STATUS_FAILED,
+            'unknown', '' => null,
             default => CourierBooking::STATUS_BOOKED,
         };
     }

@@ -13,7 +13,8 @@ use Throwable;
 
 /**
  * Looks up a phone number's delivery history across Pathao, Steadfast, and
- * RedX merchant panels via our own CourierFraud HTTP clients. Never throws:
+ * RedX via our own CourierFraud HTTP clients (Steadfast through its official
+ * API, the others through their merchant panels). Never throws:
  * a failed/unconfigured courier is simply omitted from the result, so this
  * can never block order creation or courier booking.
  */
@@ -104,9 +105,9 @@ class ExternalCourierFraudService
             ->where('is_active', true)
             ->first();
 
-        $credentials = $provider?->credentials['fraud_check'] ?? null;
+        $credentials = $provider ? $this->credentialsFor($provider) : [];
 
-        if (! is_array($credentials) || blank($credentials['username'] ?? null) || blank($credentials['password'] ?? null)) {
+        if (! $this->hasUsableCredentials($credentials)) {
             return null;
         }
 
@@ -125,11 +126,40 @@ class ExternalCourierFraudService
             return null;
         }
 
-        return [
+        return array_filter([
             'success' => (int) ($stats['success'] ?? 0),
             'cancel' => (int) ($stats['cancel'] ?? 0),
             'total' => (int) ($stats['total'] ?? 0),
-        ];
+            'reports' => is_numeric($stats['reports'] ?? null) ? (int) $stats['reports'] : null,
+        ], fn ($value): bool => $value !== null);
+    }
+
+    /**
+     * The merchant-panel login saved under `fraud_check`, plus — for
+     * Steadfast, whose official API now has a fraud-check endpoint — the
+     * booking API keys, so a Steadfast provider with only API keys is
+     * checked too.
+     */
+    protected function credentialsFor(CourierProvider $provider): array
+    {
+        $stored = $provider->credentials ?? [];
+        $credentials = is_array($stored['fraud_check'] ?? null) ? $stored['fraud_check'] : [];
+
+        if ($provider->driver === CourierProvider::DRIVER_STEADFAST) {
+            $credentials += array_filter([
+                'api_key' => $stored['api_key'] ?? null,
+                'secret_key' => $stored['secret_key'] ?? null,
+                'base_url' => $provider->settings['base_url'] ?? null,
+            ], fn ($value): bool => filled($value));
+        }
+
+        return $credentials;
+    }
+
+    protected function hasUsableCredentials(array $credentials): bool
+    {
+        return (filled($credentials['username'] ?? null) && filled($credentials['password'] ?? null))
+            || (filled($credentials['api_key'] ?? null) && filled($credentials['secret_key'] ?? null));
     }
 
     protected function logEvent(int $companyId, ?int $customerId, ?int $orderId, array $result): void

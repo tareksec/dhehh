@@ -10,6 +10,8 @@ use App\Models\CustomerRiskEvent;
 use App\Models\CustomerRiskReview;
 use App\Models\Order;
 use App\Services\CompanyContext;
+use App\Services\CustomerRiskService;
+use App\Services\CustomerRiskSettingsService;
 use App\Services\ExternalCourierFraudService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -18,6 +20,20 @@ use Tests\TestCase;
 class ExternalCourierFraudCheckTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_steadfast_fraud_check_uses_the_booking_api_keys_and_ignores_the_old_portal_login(): void
+    {
+        [$company] = $this->companyWithProvider(withCredentials: false);
+        CourierProvider::query()->where('company_id', $company->id)->firstOrFail()->update([
+            'credentials' => ['fraud_check' => ['username' => 'owner@example.com', 'password' => 'secret']],
+        ]);
+        Http::fake();
+
+        $result = app(ExternalCourierFraudService::class)->checkByPhone('01712345678', $company->id);
+
+        $this->assertArrayNotHasKey('steadfast', $result);
+        Http::assertNothingSent();
+    }
 
     public function test_check_by_phone_skips_couriers_without_fraud_check_credentials(): void
     {
@@ -33,7 +49,7 @@ class ExternalCourierFraudCheckTest extends TestCase
     {
         [$company] = $this->companyWithProvider(withCredentials: true);
 
-        Http::fake($this->fakeSteadfastPortal(delivered: 5, cancelled: 2));
+        Http::fake($this->fakeSteadfastApi(delivered: 5, cancelled: 2));
 
         $result = app(ExternalCourierFraudService::class)->checkByPhone('01712345678', $company->id);
 
@@ -50,19 +66,19 @@ class ExternalCourierFraudCheckTest extends TestCase
     {
         [$company] = $this->companyWithProvider(withCredentials: true);
 
-        Http::fake($this->fakeSteadfastPortal(delivered: 3, cancelled: 1));
+        Http::fake($this->fakeSteadfastApi(delivered: 3, cancelled: 1));
 
         $result = app(ExternalCourierFraudService::class)->checkByPhone('+8801712345678', $company->id);
 
         $this->assertSame(3, $result['steadfast']['success']);
-        Http::assertSent(fn ($request) => str_contains($request->url(), '/user/frauds/check/01712345678'));
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/fraud_check/score/01712345678'));
     }
 
     public function test_check_by_phone_caches_result_and_does_not_log_twice(): void
     {
         [$company] = $this->companyWithProvider(withCredentials: true);
 
-        Http::fake($this->fakeSteadfastPortal(delivered: 1, cancelled: 0));
+        Http::fake($this->fakeSteadfastApi(delivered: 1, cancelled: 0));
 
         $service = app(ExternalCourierFraudService::class);
         $service->checkByPhone('01712345678', $company->id);
@@ -75,15 +91,15 @@ class ExternalCourierFraudCheckTest extends TestCase
     {
         [$company] = $this->companyWithProvider(withCredentials: true);
 
-        Http::fake($this->fakeSteadfastPortal(delivered: 1, cancelled: 0));
+        Http::fake($this->fakeSteadfastApi(delivered: 1, cancelled: 0));
 
         $service = app(ExternalCourierFraudService::class);
         $service->checkByPhone('01712345678', $company->id);
         $service->checkByPhone('01712345678', $company->id, bypassCache: true);
 
-        // A cached call makes no request; bypassing it must re-hit the portal,
+        // A cached call makes no request; bypassing it must re-hit the API,
         // e.g. so newly added courier credentials take effect immediately.
-        Http::assertSentCount(2 * 5);
+        Http::assertSentCount(2);
     }
 
     public function test_low_external_success_ratio_requests_a_manager_review_without_blocking_checkout(): void
@@ -96,7 +112,7 @@ class ExternalCourierFraudCheckTest extends TestCase
             'name' => 'Steadfast',
             'slug' => 'steadfast',
             'driver' => CourierProvider::DRIVER_STEADFAST,
-            'credentials' => ['fraud_check' => ['username' => 'owner@example.com', 'password' => 'secret']],
+            'credentials' => ['api_key' => 'test-api-key', 'secret_key' => 'test-secret-key'],
             'settings' => [],
             'is_active' => true,
         ]);
@@ -107,12 +123,12 @@ class ExternalCourierFraudCheckTest extends TestCase
             'order_date' => now(), 'subtotal' => 500, 'total_amount' => 500, 'paid_amount' => 0, 'due_amount' => 500, 'discount' => 0, 'vat' => 0, 'status' => 'draft',
         ]));
 
-        Http::fake($this->fakeSteadfastPortal(delivered: 1, cancelled: 9));
+        Http::fake($this->fakeSteadfastApi(delivered: 1, cancelled: 9));
 
         (new CheckExternalCourierFraudJob($order->id))->handle(
             app(ExternalCourierFraudService::class),
-            app(\App\Services\CustomerRiskService::class),
-            app(\App\Services\CustomerRiskSettingsService::class),
+            app(CustomerRiskService::class),
+            app(CustomerRiskSettingsService::class),
         );
 
         $this->assertDatabaseHas('customer_risk_reviews', [
@@ -121,30 +137,11 @@ class ExternalCourierFraudCheckTest extends TestCase
         ]);
     }
 
-    protected function fakeSteadfastPortal(int $delivered, int $cancelled): \Closure
+    protected function fakeSteadfastApi(int $delivered, int $cancelled): \Closure
     {
         return function ($request) use ($delivered, $cancelled) {
-            $url = $request->url();
-            $method = $request->method();
-
-            if (str_contains($url, '/user/frauds/check/')) {
+            if (str_contains($request->url(), 'portal.packzy.com/api/v1/fraud_check/score/')) {
                 return Http::response(['total_delivered' => $delivered, 'total_cancelled' => $cancelled]);
-            }
-
-            if (str_contains($url, '/user/frauds/check')) {
-                return Http::response('<meta name="csrf-token" content="tok">');
-            }
-
-            if (str_contains($url, '/logout')) {
-                return Http::response('');
-            }
-
-            if ($method === 'GET' && str_contains($url, '/login')) {
-                return Http::response('<input type="hidden" name="_token" value="tok">');
-            }
-
-            if ($method === 'POST' && str_contains($url, '/login')) {
-                return Http::response('', 302);
             }
 
             return Http::response('', 404);
@@ -162,7 +159,7 @@ class ExternalCourierFraudCheckTest extends TestCase
             'slug' => 'steadfast',
             'driver' => CourierProvider::DRIVER_STEADFAST,
             'credentials' => $withCredentials
-                ? ['fraud_check' => ['username' => 'owner@example.com', 'password' => 'secret']]
+                ? ['api_key' => 'test-api-key', 'secret_key' => 'test-secret-key']
                 : [],
             'settings' => [],
             'is_active' => true,

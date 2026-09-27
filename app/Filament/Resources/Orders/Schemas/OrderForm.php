@@ -171,10 +171,21 @@ class OrderForm
                                         .'</div>'
                                     : '';
 
+                                // Steadfast's fraud-check API also says how many
+                                // other merchants have reported this customer.
+                                $reports = collect($result)
+                                    ->except('overall_success_ratio')
+                                    ->filter(fn (array $stats): bool => ($stats['reports'] ?? 0) > 0)
+                                    ->map(fn (array $stats, string $driver): string => '<span style="color:#ef4444;font-size:0.8125rem;">'
+                                        .e(__(':courier: :count fraud reports from other merchants', ['courier' => ucfirst($driver), 'count' => $stats['reports']]))
+                                        .'</span>')
+                                    ->implode('');
+
                                 return new HtmlString(
                                     '<div style="display:flex;flex-direction:column;gap:4px;font-size:0.875rem;min-width:0;max-width:100%;">'
                                     .'<span style="color:'.$color.';font-weight:600;">'.e($label).'</span>'
                                     .$table
+                                    .$reports
                                     .'</div>'
                                 );
                             }),

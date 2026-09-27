@@ -237,5 +237,20 @@
     "Enhanced": "Enhanced",
     "Prompt updated": "Prompt updated",
     "Video — :context guide": "Video — :context guide",
-    "Image — :context guide": "Image — :context guide"
+    "Image — :context guide": "Image — :context guide",
+    ":courier: :count fraud reports from other merchants": ":courier: :count fraud reports from other merchants",
+    "Ignored": "Ignored",
+    "From Steadfast's merchant panel → API → Your API keys. Issue a separate key for this ERP so retiring another plugin never takes it down. A key only sees the profile (business) it was issued for. These same keys power the Courier Fraud Check — no merchant login needed.": "From Steadfast's merchant panel → API → Your API keys. Issue a separate key for this ERP so retiring another plugin never takes it down. A key only sees the profile (business) it was issued for. These same keys power the Courier Fraud Check — no merchant login needed.",
+    "Webhook Callback URL": "Webhook Callback URL",
+    "Webhook URL": "Webhook URL",
+    "Save this provider first — the webhook URL appears here after saving.": "Save this provider first — the webhook URL appears here after saving.",
+    "Paste this into Steadfast's merchant panel → Webhook → Callback URL.": "Paste this into Steadfast's merchant panel → Webhook → Callback URL.",
+    "Steadfast allows only letters, digits and - _ . = in the auth token.": "Steadfast allows only letters, digits and - _ . = in the auth token.",
+    "Generate": "Generate",
+    "Generate a token here, then paste the exact same value into Steadfast's merchant panel → Webhook → Auth token. Steadfast sends it as Authorization: Bearer <token> and signs every request with it (X-Signature, HMAC-SHA256); both are checked.": "Generate a token here, then paste the exact same value into Steadfast's merchant panel → Webhook → Auth token. Steadfast sends it as Authorization: Bearer <token> and signs every request with it (X-Signature, HMAC-SHA256); both are checked.",
+    "Steadfast could not be reached. Check the Base URL and this server's internet connection.": "Steadfast could not be reached. Check the Base URL and this server's internet connection.",
+    "Steadfast rejected the API key or secret key (or they belong to a different business profile). Fix the keys before trying again — repeated failures lock the key out for 60 minutes.": "Steadfast rejected the API key or secret key (or they belong to a different business profile). Fix the keys before trying again — repeated failures lock the key out for 60 minutes.",
+    "Steadfast says this account is not allowed right now — it may be inactive or its ownership (KYC) details need resubmitting.": "Steadfast says this account is not allowed right now — it may be inactive or its ownership (KYC) details need resubmitting.",
+    "Too many requests or too many failed attempts — Steadfast has paused this key. Wait before trying again.": "Too many requests or too many failed attempts — Steadfast has paused this key. Wait before trying again.",
+    "Steadfast answered with error :status. Try again shortly.": "Steadfast answered with error :status. Try again shortly."
 }

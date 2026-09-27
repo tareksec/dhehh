@@ -2,6 +2,35 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-27 - Steadfast: new API guide + Webhook page, Courier Fraud Check fixed
+
+Reason — owner shared screenshots of Steadfast's updated merchant-portal API guide and Webhook page: "এইটার ওপর ভিত্তি করে আমাদের অ্যাপের স্টিডফাস্ট সেটিংস আপডেট কর, … ফ্রড চেকার টুল কাজ করে না সেটাও ঠিক করবে" (update our Steadfast settings from these docs, and fix the fraud checker, which doesn't work).
+
+What the guide changed for us:
+- **Fraud check is now an official endpoint:** `GET /fraud_check/score/{phone}` with the booking `Api-Key`/`Secret-Key`. The old `SteadfastFraudClient` logged into steadfast.com.bd with an email/password and scraped `/user/frauds/check/{phone}`. This was the fraud-checker failure first seen on 2026-09-12, when our ERP showed 0/0 and nuport showed 49/46/3. It now calls the API, and the portal scrape is removed. A Steadfast provider with API keys is checked automatically, with no merchant login. **The guide's screenshot doesn't show the response fields**, so `parseScore()` accepts `total_delivered`/`delivered`/`success`… and `total_cancelled`/`cancelled`/`cancel`…, at the top level or under `data`, plus a fraud-report count. Once a real response is seen, confirm the field names (see "Owner check" below).
+- **Auth rules:** a 401 must not be retried in a loop, because 10 failures in 5 minutes lock the key out with a 429 for 60 minutes. `SteadfastCourierClient::request()` used to retry every failure 3×, so it counted toward that lockout. It now retries only connection errors and 5xx. A 5xx is safe to retry because duplicate invoices are refused. After a 401, the fraud client pauses lookups with those keys for 15 minutes, since the order form runs it on every customer selection.
+- **Statuses:** `*_approval_pending` is "the rider's word, not ours yet — do not settle your books on it". These now map to In Transit (before: `delivered_approval_pending` → Delivered, which moved the order to Delivered early). New mappings: `exception` → Failed; the `*_return_*` statuses (partial → Partial Delivered, cancelled → Cancelled, `cancelled_return_received` → Returned); `unknown` → no change (was Failed).
+- **Webhook page:** each request carries `Authorization: Bearer <token>`, an `X-Signature` HMAC-SHA256 of the raw body keyed with the token, and an `Idempotency-Key` that stays the same on retries. It also sends 9 `notification_type`s, and only `delivery_status`/`tracking_update` carry a parcel status. We now check the signature whenever it's present (bearer still required), dedupe on `Idempotency-Key`, and mark non-status events `ignored` instead of throwing (they used to fail 5× and raise a webhook-failure alert).
+- **Settings form (Courier → Providers → Steadfast):** shows the Webhook Callback URL to paste into Steadfast, a Generate button for the auth token (validated to `A-Za-z0-9-_.=` per Steadfast), a note on where to get API keys (one key per integration; a key only sees its own business profile), and clearer Balance-failure messages from the guide's response-code table (401/403/429/unreachable via `/ping`). The merchant-login fraud section is hidden for Steadfast.
+
+Owner check after deploy:
+1. Steadfast merchant panel → Webhook: paste the Callback URL from our provider page, and use the same auth token on both sides (Generate on our side, then paste it there). Save, and check that Steadfast's "Delivery health" shows Working.
+2. Order form → Courier Fraud Check for a known customer (e.g. +8801819701516). If Steadfast still shows no history, send one raw response from `/fraud_check/score/{phone}` so the field names can be pinned down.
+
+**Needs Bangla review:** 15 new `lang/bn.json` keys — ":courier: :count fraud reports from other merchants", "Ignored", the Steadfast API-keys note, "Webhook Callback URL", "Webhook URL", "Save this provider first…", "Paste this into Steadfast's merchant panel…", the auth-token character rule, "Generate", the auth-token helper text, and the unreachable / 401 / 403 / 429 / ":status" Balance-failure messages.
+
+Important changed files:
+- `app/Services/SteadfastCourierClient.php`, `app/Services/CourierFraud/{SteadfastFraudClient,CourierFraudClient}.php`, `app/Services/ExternalCourierFraudService.php`
+- `app/Contracts/CourierProviderInterface.php`, `app/Services/Couriers/{AbstractCourierAdapter,SteadfastCourierAdapter}.php`, `app/Http/Controllers/CourierWebhookController.php`, `app/Jobs/ProcessCourierWebhook.php`
+- `app/Services/CourierService.php` (`normalizeSteadfastStatus()` → `?string`)
+- `app/Filament/Resources/CourierProviders/CourierProviderResource.php`, `app/Filament/Resources/CourierWebhookLogs/CourierWebhookLogResource.php`, `app/Filament/Resources/Orders/Schemas/OrderForm.php`
+- `lang/en.json`, `lang/bn.json`
+- tests: new `tests/Feature/SteadfastApiGuideTest.php` (6), rewritten `tests/Unit/Services/CourierFraud/SteadfastFraudClientTest.php` (6), `tests/Feature/ExternalCourierFraudCheckTest.php` (moved to API fakes, +1)
+
+Verification: affected files (SteadfastApiGuide, SteadfastFraudClient, ExternalCourierFraudCheck, CourierIntegration, LiveCourierAdapters, StorefrontRiskPaymentEligibility, CustomerRisk) all passed. Full `php artisan test` (plain, no `--env`): **1467 passed, 0 failed** (8447 assertions). Pint run on the changed files. No frontend assets changed.
+
+Commit status: committed and pushed to `main` (owner approved).
+
 ## 2026-09-27 - Video Generation Phase 2: ✨ Enhance for video prompts (plan 12)
 
 Reason — owner: "Phase 2 (Prompt Enhancer) শুরু কর".

@@ -20,6 +20,7 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -34,6 +35,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 use Illuminate\Support\Str;
@@ -211,6 +213,11 @@ class CourierProviderResource extends Resource
                         ->required(fn (Get $get): bool => $get('driver') === CourierProvider::DRIVER_STEADFAST)
                         ->visible(fn (Get $get): bool => $get('driver') === CourierProvider::DRIVER_STEADFAST)
                         ->maxLength(255),
+                    Placeholder::make('steadfast_api_keys_note')
+                        ->hiddenLabel()
+                        ->content(__('From Steadfast\'s merchant panel → API → Your API keys. Issue a separate key for this ERP so retiring another plugin never takes it down. A key only sees the profile (business) it was issued for. These same keys power the Courier Fraud Check — no merchant login needed.'))
+                        ->visible(fn (Get $get): bool => $get('driver') === CourierProvider::DRIVER_STEADFAST)
+                        ->columnSpanFull(),
                     TextInput::make('credentials.client_id')
                         ->label('Client ID')
                         ->required(fn (Get $get): bool => $get('driver') === CourierProvider::DRIVER_PATHAO)
@@ -263,13 +270,30 @@ class CourierProviderResource extends Resource
                         ->label('Default Package Code')
                         ->helperText('From E-Courier packages list. Used when the booking form does not override it.')
                         ->visible(fn (Get $get): bool => $get('driver') === CourierProvider::DRIVER_ECOURIER),
+                    Placeholder::make('webhook_callback_url')
+                        ->label(fn (Get $get): string => $get('driver') === CourierProvider::DRIVER_STEADFAST ? __('Webhook Callback URL') : __('Webhook URL'))
+                        ->content(fn (?CourierProvider $record): string => $record?->exists
+                            ? route('couriers.webhook', $record)
+                            : __('Save this provider first — the webhook URL appears here after saving.'))
+                        ->helperText(fn (Get $get): ?string => $get('driver') === CourierProvider::DRIVER_STEADFAST
+                            ? __('Paste this into Steadfast\'s merchant panel → Webhook → Callback URL.')
+                            : null)
+                        ->columnSpanFull(),
                     TextInput::make('credentials.webhook_secret')
                         ->label(fn (Get $get): string => $get('driver') === CourierProvider::DRIVER_STEADFAST ? 'Webhook Auth Token' : 'Webhook Signing Secret')
                         ->password()
                         ->revealable()
                         ->maxLength(255)
+                        ->regex(fn (Get $get): ?string => $get('driver') === CourierProvider::DRIVER_STEADFAST ? '/^[A-Za-z0-9\-_.=]+$/' : null)
+                        ->validationMessages(['regex' => __('Steadfast allows only letters, digits and - _ . = in the auth token.')])
+                        ->suffixAction(
+                            Action::make('generateWebhookSecret')
+                                ->icon(Heroicon::ArrowPath)
+                                ->tooltip(__('Generate'))
+                                ->action(fn (Set $set) => $set('credentials.webhook_secret', Str::random(40))),
+                        )
                         ->helperText(fn (Get $get): string => $get('driver') === CourierProvider::DRIVER_STEADFAST
-                            ? 'Make up any random token here, then paste this exact value into Steadfast\'s panel: Settings/Integration → Webhook Integration → "Auth Token (Bearer)".'
+                            ? __('Generate a token here, then paste the exact same value into Steadfast\'s merchant panel → Webhook → Auth token. Steadfast sends it as Authorization: Bearer <token> and signs every request with it (X-Signature, HMAC-SHA256); both are checked.')
                             : 'Used to verify the signature this courier sends with each webhook request.'),
                     TextInput::make('settings.signature_header')
                         ->label('Webhook Signature Header')
@@ -309,9 +333,10 @@ class CourierProviderResource extends Resource
                         ->maxLength(255),
                 ])
                 ->columns(2)
+                // Steadfast's fraud check uses its official API with the
+                // booking API keys above, so it needs no merchant login.
                 ->visible(fn (Get $get): bool => in_array($get('driver'), [
                     CourierProvider::DRIVER_PATHAO,
-                    CourierProvider::DRIVER_STEADFAST,
                     CourierProvider::DRIVER_REDX,
                 ], true))
                 ->collapsed(),
@@ -414,9 +439,7 @@ class CourierProviderResource extends Resource
                         } catch (\Throwable $exception) {
                             Notification::make()
                                 ->title('Balance check failed')
-                                ->body($exception instanceof ValidationException
-                                    ? collect($exception->errors())->flatten()->implode(' ')
-                                    : $exception->getMessage())
+                                ->body(self::steadfastFailureMessage($record, $exception))
                                 ->danger()
                                 ->send();
                         }
@@ -428,6 +451,30 @@ class CourierProviderResource extends Resource
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * Turns a failed Steadfast call into what to do about it, per the
+     * response-code table in Steadfast's API guide.
+     */
+    public static function steadfastFailureMessage(CourierProvider $record, \Throwable $exception): string
+    {
+        if ($exception instanceof ValidationException) {
+            return collect($exception->errors())->flatten()->implode(' ');
+        }
+
+        if (! $exception instanceof RequestException) {
+            return app(SteadfastCourierClient::class)->ping($record)
+                ? $exception->getMessage()
+                : __('Steadfast could not be reached. Check the Base URL and this server\'s internet connection.');
+        }
+
+        return match ($exception->response->status()) {
+            401 => __('Steadfast rejected the API key or secret key (or they belong to a different business profile). Fix the keys before trying again — repeated failures lock the key out for 60 minutes.'),
+            403 => __('Steadfast says this account is not allowed right now — it may be inactive or its ownership (KYC) details need resubmitting.'),
+            429 => __('Too many requests or too many failed attempts — Steadfast has paused this key. Wait before trying again.'),
+            default => __('Steadfast answered with error :status. Try again shortly.', ['status' => $exception->response->status()]),
+        };
     }
 
     public static function canViewAny(): bool

@@ -2,112 +2,136 @@
 
 namespace App\Services\CourierFraud;
 
-use Illuminate\Http\Client\Response;
-use Illuminate\Support\Facades\Http;
+use App\Models\CourierProvider;
+use App\Services\SteadfastCourierClient;
+use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 /**
- * Direct HTTP replacement for shahariar-ahmad/courier-fraud-checker-bd's
- * SteadfastService::steadfast(). Steadfast has no public fraud-check API,
- * so this replicates the package's approach of driving the merchant web
- * portal directly: fetch the login page for a CSRF token, log in with
- * cookies, read the fraud-check page for the phone number, then log out.
+ * Steadfast now publishes an official fraud-check endpoint in its merchant
+ * API guide — `GET /fraud_check/score/{phone}` — authenticated with the same
+ * Api-Key/Secret-Key as booking, so the courier's booking API keys are all
+ * this needs. That replaces the old approach of logging into the merchant
+ * web portal with an email/password and reading its fraud page, which broke
+ * silently (a wrong password redirected like a right one, and the portal
+ * has since moved) — the "fraud checker doesn't work" the owner reported.
  */
 class SteadfastFraudClient implements CourierFraudClient
 {
-    protected const BASE_URL = 'https://steadfast.com.bd';
+    /**
+     * After a 401 the keys are left alone for this long. Steadfast locks a
+     * key out for 60 minutes after 10 failures in 5 minutes — booking
+     * included — and the order form runs this check on every customer
+     * selection, so wrong keys must not be retried on each click.
+     */
+    protected const AUTH_FAILURE_PAUSE_MINUTES = 15;
 
     public function checkByPhone(string $phone, array $credentials): ?array
     {
-        $email = $credentials['username'] ?? null;
-        $password = $credentials['password'] ?? null;
-
-        if (blank($email) || blank($password)) {
+        if (blank($credentials['api_key'] ?? null) || blank($credentials['secret_key'] ?? null)) {
             return null;
         }
 
+        $pauseKey = 'steadfast-fraud-auth-failed:'.hash('sha256', $credentials['api_key'].'|'.$credentials['secret_key']);
+
+        if (Cache::has($pauseKey)) {
+            return null;
+        }
+
+        $provider = (new CourierProvider)->forceFill([
+            'driver' => CourierProvider::DRIVER_STEADFAST,
+            'credentials' => ['api_key' => $credentials['api_key'], 'secret_key' => $credentials['secret_key']],
+            'settings' => array_filter(['base_url' => $credentials['base_url'] ?? null]),
+        ]);
+
         try {
-            $loginPage = Http::get(self::BASE_URL.'/login');
-
-            if (! preg_match('/<input type="hidden" name="_token" value="(.*?)"/', $loginPage->body(), $matches)) {
-                return null;
-            }
-
-            $token = $matches[1];
-
-            $loginResponse = Http::withCookies($this->cookieArray($loginPage), 'steadfast.com.bd')
-                ->asForm()
-                ->post(self::BASE_URL.'/login', [
-                    '_token' => $token,
-                    'email' => $email,
-                    'password' => $password,
-                ]);
-
-            if (! $loginResponse->successful() && ! $loginResponse->redirect()) {
-                return null;
-            }
-
-            $sessionCookies = $this->cookieArray($loginResponse);
-
-            $statsResponse = Http::withCookies($sessionCookies, 'steadfast.com.bd')
-                ->get(self::BASE_URL."/user/frauds/check/{$phone}");
-
-            if (! $statsResponse->successful()) {
-                return null;
-            }
-
-            $stats = $statsResponse->json();
-
-            // The login POST redirects on both a correct and a wrong
-            // password, so a wrong/expired password still lands here as a
-            // "successful" request — just re-served Steadfast's login page
-            // (HTML, not JSON) because the session was never authenticated.
-            // Treat a response without the real keys as a failed check
-            // rather than defaulting to 0, which would misreport a clean
-            // delivery history for a phone number Steadfast never actually
-            // looked up.
-            if (! is_array($stats) || ! array_key_exists('total_delivered', $stats) || ! array_key_exists('total_cancelled', $stats)) {
-                return null;
-            }
-
-            $delivered = (int) $stats['total_delivered'];
-            $cancelled = (int) $stats['total_cancelled'];
-
-            $this->logout($sessionCookies);
+            $response = app(SteadfastCourierClient::class)->fraudCheck($provider, $phone);
         } catch (Throwable $exception) {
             report($exception);
 
             return null;
         }
 
-        return [
+        if ($response->status() === 401) {
+            Cache::put($pauseKey, true, now()->addMinutes(self::AUTH_FAILURE_PAUSE_MINUTES));
+
+            return null;
+        }
+
+        if (! $response->successful()) {
+            return null;
+        }
+
+        return $this->parseScore($response->json());
+    }
+
+    /**
+     * The guide describes the answer ("how much of it arrived, how much came
+     * back, and what other merchants have reported") but not its field
+     * names, so the known spellings are all accepted, at the top level or
+     * under `data`. A response with neither a delivered nor a cancelled
+     * count is treated as a failed check, never as a clean 0/0 record.
+     */
+    public function parseScore(mixed $body): ?array
+    {
+        if (! is_array($body)) {
+            return null;
+        }
+
+        $data = is_array($body['data'] ?? null) ? $body['data'] + $body : $body;
+
+        $delivered = $this->firstNumber($data, ['total_delivered', 'delivered', 'success', 'success_count', 'delivered_count', 'total_delivered_parcels']);
+        $cancelled = $this->firstNumber($data, ['total_cancelled', 'cancelled', 'cancel', 'returned', 'total_returned', 'cancelled_count', 'total_cancelled_parcels']);
+
+        if ($delivered === null && $cancelled === null) {
+            return null;
+        }
+
+        $delivered ??= 0;
+        $cancelled ??= 0;
+
+        // Total is delivered + came back, like the other couriers — a parcel
+        // still on the road says nothing yet about the customer.
+        $result = [
             'success' => $delivered,
             'cancel' => $cancelled,
             'total' => $delivered + $cancelled,
         ];
-    }
 
-    protected function cookieArray(Response $response): array
-    {
-        $cookies = [];
+        $reports = $this->reportCount($data);
 
-        foreach ($response->cookies()->toArray() as $cookie) {
-            $cookies[$cookie['Name']] = $cookie['Value'];
+        if ($reports !== null) {
+            $result['reports'] = $reports;
         }
 
-        return $cookies;
+        return $result;
     }
 
-    protected function logout(array $cookies): void
+    protected function firstNumber(array $data, array $keys): ?int
     {
-        $page = Http::withCookies($cookies, 'steadfast.com.bd')->get(self::BASE_URL.'/user/frauds/check');
-
-        if (! $page->successful() || ! preg_match('/<meta name="csrf-token" content="(.*?)"/', $page->body(), $matches)) {
-            return;
+        foreach ($keys as $key) {
+            if (is_numeric($data[$key] ?? null)) {
+                return (int) $data[$key];
+            }
         }
 
-        Http::withCookies($cookies, 'steadfast.com.bd')
-            ->asForm()
-            ->post(self::BASE_URL.'/logout', ['_token' => $matches[1]]);
+        return null;
+    }
+
+    protected function reportCount(array $data): ?int
+    {
+        foreach (['total_fraud_reports', 'fraud_report_count', 'report_count', 'reports_count'] as $key) {
+            if (is_numeric($data[$key] ?? null)) {
+                return (int) $data[$key];
+            }
+        }
+
+        foreach (['total_fraud_reports', 'fraud_reports', 'reports'] as $key) {
+            if (is_array($data[$key] ?? null)) {
+                return count($data[$key]);
+            }
+        }
+
+        return null;
     }
 }

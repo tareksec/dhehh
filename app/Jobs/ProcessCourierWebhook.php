@@ -30,6 +30,14 @@ class ProcessCourierWebhook implements ShouldQueue
 
         try {
             $payload = $log->payload;
+            $skipReason = $couriers->adapter($log->provider)->webhookSkipReason($payload);
+
+            if ($skipReason !== null) {
+                $log->forceFill(['status' => 'ignored', 'processed_at' => now(), 'error' => $skipReason])->save();
+
+                return;
+            }
+
             $trackingId = $payload['tracking_code'] ?? $payload['tracking_id'] ?? $payload['consignment_id'] ?? null;
             $booking = CourierBooking::query()
                 ->where('courier_provider_id', $log->courier_provider_id)
