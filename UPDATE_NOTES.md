@@ -39,7 +39,7 @@ Verification:
 - Full `php artisan test` (plain, no `--env`): **1368 passed, 0 failed** (7803 assertions).
 - Pint passes. No frontend assets changed.
 
-Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` (owner approved: "হ্যাঁ, কমিট করে পুশ করো").
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে পুশ করো", then "মেইন এ পুশ কর").
 
 ## 2026-09-26 - Order summary card is sent as an image; Download image works in the app
 
