@@ -17,7 +17,7 @@ class PromptEnhancerSettingsPageTest extends TestCase
 {
     use RefreshDatabase;
 
-    private string $url = '/admin/ai-tools/prompt-enhancer-settings';
+    private string $url = '/admin/settings/prompt-enhancer-settings';
 
     private function company(): Company
     {

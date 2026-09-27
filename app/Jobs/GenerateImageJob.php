@@ -66,7 +66,7 @@ class GenerateImageJob implements ShouldQueue
             $profile = $providerSettings->find($record->company, $record->provider_profile_id);
 
             if ($profile === null) {
-                throw new ImageGenerationException('The selected image provider profile no longer exists — reconfigure it on AI Tools → Image Providers.');
+                throw new ImageGenerationException(__('The selected image provider profile no longer exists — reconfigure it on Settings → Integrations → Image Providers.'));
             }
 
             if (! $providerSettings->isConfigured($profile)) {
@@ -77,10 +77,12 @@ class GenerateImageJob implements ShouldQueue
             $adapter = $resolver->byFormat($profile['api_format']);
 
             if (! $adapter->supportsOperation($operation)) {
-                throw new ImageGenerationException(sprintf(
-                    'The "%s" provider cannot do %s. Pick a provider that supports it on AI Tools → Image Providers.',
-                    $profile['label'],
-                    GeneratedImage::OPERATIONS[$operation] ?? $operation,
+                throw new ImageGenerationException(__(
+                    'The ":provider" provider cannot do :operation. Pick a provider that supports it on Settings → Integrations → Image Providers.',
+                    [
+                        'provider' => $profile['label'],
+                        'operation' => GeneratedImage::OPERATIONS[$operation] ?? $operation,
+                    ],
                 ));
             }
 

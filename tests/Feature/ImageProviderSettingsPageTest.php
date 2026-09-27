@@ -15,7 +15,7 @@ class ImageProviderSettingsPageTest extends TestCase
 {
     use RefreshDatabase;
 
-    private string $url = '/admin/ai-tools/image-provider-settings';
+    private string $url = '/admin/settings/image-provider-settings';
 
     private function company(): Company
     {

@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Filament\Clusters\AiTools;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Auth;
@@ -11,13 +12,13 @@ use Illuminate\Support\Facades\Auth;
 /**
  * The AI Tools hub: a card grid, one card per tool. A tool a user has no
  * permission for is hidden entirely (not just disabled) once it is built;
- * tools that are not built yet (Video Generation, Content Creation) show as
- * disabled "Coming soon" tiles for everyone who can reach the hub, so the
- * roadmap stays visible.
+ * a tool not yet built (Content Creation) shows as a disabled "Coming soon"
+ * tile for everyone who can reach the hub, so the roadmap stays visible.
  *
- * Each tool's provider/key configuration lives on its own super-admin page in
- * this same cluster (Image Providers, Prompt Enhancer, Image Governance); the
- * hub and the tools' working pages are the "used here" side.
+ * The AI Tools menu lists only the tools. Each tool's provider/key
+ * configuration (Image Providers, Video Providers, Prompt Enhancer, Smart
+ * Scan) is a super-admin page opened from Settings → Integrations; Image
+ * Governance is reached from this hub's header button.
  */
 class ToolMenu extends Page
 {
@@ -40,9 +41,8 @@ class ToolMenu extends Page
      *   never sees a built tool's card.
      * - `page`: the Filament page class a card links to. `null` renders the
      *   card as a disabled "Coming soon" tile (shown to everyone who can
-     *   reach the hub). Image Generation flips to `ImageGeneration::class`
-     *   in Phase 1; the two reserved keys keep `null` until their own
-     *   planning pass.
+     *   reach the hub). Image Generation and Video Generation are both live;
+     *   `content_creation` keeps `null` until its own planning pass.
      *
      * @var array<string, array{label: string, description: string, icon: string, permission: string, page: class-string|null}>
      */
@@ -59,7 +59,7 @@ class ToolMenu extends Page
             'description' => 'Turn product images and prompts into short marketing videos.',
             'icon' => 'heroicon-o-film',
             'permission' => 'ai_tools.video_generation',
-            'page' => null,
+            'page' => VideoGeneration::class,
         ],
         'content_creation' => [
             'label' => 'Content Creation',
@@ -86,6 +86,18 @@ class ToolMenu extends Page
             || collect(self::TOOLS)->contains(
                 fn (array $tool): bool => $user->hasPermission($tool['permission'])
             );
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('imageGovernance')
+                ->label(__('Image Governance'))
+                ->icon(Heroicon::OutlinedShieldCheck)
+                ->color('gray')
+                ->url(fn (): string => ImageGovernance::getUrl())
+                ->visible(fn (): bool => ImageGovernance::canAccess()),
+        ];
     }
 
     /**

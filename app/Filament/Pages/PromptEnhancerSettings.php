@@ -2,7 +2,8 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Clusters\AiTools;
+use App\Filament\Clusters\Settings;
+use App\Filament\Pages\Concerns\OpenedFromIntegrations;
 use App\Models\Company;
 use App\Models\GeneratedImage;
 use App\Services\CompanyContext;
@@ -34,14 +35,17 @@ use Illuminate\Support\Str;
  * - per-context guide overrides — blank means "use the built-in expert
  *   default" from config/prompt_guides.php.
  *
- * Kept super-admin-only, consistent with the other AI Tools configuration
- * pages (Image Providers, Image Governance).
+ * Kept super-admin-only, consistent with the other AI provider
+ * configuration pages (Image Providers, Image Governance). Opened from the
+ * "AI tool providers" cards on Settings → Integrations.
  */
 class PromptEnhancerSettings extends Page
 {
+    use OpenedFromIntegrations;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSparkles;
 
-    protected static ?string $cluster = AiTools::class;
+    protected static ?string $cluster = Settings::class;
 
     protected static ?int $navigationSort = 5;
 

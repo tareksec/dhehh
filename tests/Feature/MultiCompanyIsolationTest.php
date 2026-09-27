@@ -33,6 +33,7 @@ use App\Models\FraudCheck;
 use App\Models\FundSource;
 use App\Models\FundTransfer;
 use App\Models\GeneratedImage;
+use App\Models\GeneratedVideo;
 use App\Models\Investment;
 use App\Models\InvestmentDocument;
 use App\Models\InvestmentProject;
@@ -123,7 +124,7 @@ class MultiCompanyIsolationTest extends TestCase
             SettlementPayout::class, ChannelPartnerPayout::class,
             MetaAdAccount::class, MetaAdCampaign::class, MetaAdSet::class, MetaAd::class, MetaAdProposal::class, MetaAudience::class,
             Offer::class, OfferItem::class, ProductReview::class,
-            Broadcast::class, Media::class, GeneratedImage::class,
+            Broadcast::class, Media::class, GeneratedImage::class, GeneratedVideo::class,
             ExpenseScan::class, ExpenseScanItem::class,
         ];
 

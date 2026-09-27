@@ -47,7 +47,7 @@ class PromptEnhancementService
         $config = $this->config->all($company);
 
         if (! ($config['enabled'] ?? false) || blank($config['api_key'] ?? null)) {
-            throw new RuntimeException('The Prompt Enhancer is not set up. A super admin can configure it under AI Tools → Prompt Enhancer.');
+            throw new RuntimeException(__('The Prompt Enhancer is not set up. A super admin can configure it under Settings → Integrations → Prompt Enhancer.'));
         }
 
         $client = new AiLlmClient(

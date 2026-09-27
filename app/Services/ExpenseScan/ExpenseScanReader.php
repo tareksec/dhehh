@@ -43,7 +43,7 @@ class ExpenseScanReader
         $config = $this->config->all($company);
 
         if (! $this->config->isConfigured($company)) {
-            throw new RuntimeException('AI Expense Scan is not set up yet. Ask a super admin to add the model and API key on AI Tools → Expense Scan.');
+            throw new RuntimeException(__('Smart Scan is not set up yet. Ask a super admin to add the model and API key on Settings → Integrations → Smart Scan.'));
         }
 
         $images = [];
@@ -191,7 +191,7 @@ PROMPT;
             }
         }
 
-        throw new RuntimeException('The AI model did not return any expense lines. Try a clearer photo, or check the model on AI Tools → Expense Scan.');
+        throw new RuntimeException(__('The AI model did not return any expense lines. Try a clearer photo, or check the model on Settings → Integrations → Smart Scan.'));
     }
 
     /**

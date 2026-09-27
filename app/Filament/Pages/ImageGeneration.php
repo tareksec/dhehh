@@ -36,7 +36,7 @@ use Livewire\Attributes\Url;
 /**
  * The Image Generation tool. The prompt form + generation controls live
  * here; the chosen provider profile and its API key are configured on
- * AI Tools → Image Providers. Generation runs in
+ * Settings → Integrations → Image Providers. Generation runs in
  * GenerateImageJob (queued) and the results gallery polls itself until every
  * pending row is finished.
  *
@@ -211,7 +211,7 @@ class ImageGeneration extends Page
                     ->native(false)
                     ->helperText(fn (): ?string => $this->hasConfiguredProvider()
                         ? null
-                        : 'No image provider is configured yet. A super admin can add one on AI Tools → Image Providers.'),
+                        : __('No image provider is configured yet. A super admin can add one on Settings → Integrations → Image Providers.')),
 
                 FileUpload::make('reference_image')
                     ->label('Start from an image (optional)')
@@ -273,7 +273,7 @@ class ImageGeneration extends Page
 
     /**
      * The shared ✨ Enhance rewriter. Only shown when a super admin has set
-     * the enhancer up (AI Tools → Prompt Enhancer). Always explicit: the
+     * the enhancer up (Settings → Integrations → Prompt Enhancer). Always explicit: the
      * modal shows the original next to the rewrite; the user edits/accepts or
      * cancels. Accepting records the pre-enhancement text as
      * `original_prompt` on the generation.
@@ -385,7 +385,7 @@ class ImageGeneration extends Page
 
         if ($profile === null || ! $settings->isConfigured($profile)) {
             throw ValidationException::withMessages([
-                'data.provider_profile_id' => 'Pick a provider that has a model and API key configured on AI Tools → Image Providers.',
+                'data.provider_profile_id' => __('Pick a provider that has a model and API key configured on Settings → Integrations → Image Providers.'),
             ]);
         }
 
@@ -858,7 +858,7 @@ class ImageGeneration extends Page
 
         if ($profile === null) {
             throw ValidationException::withMessages([
-                'data.reference_operation' => 'No configured provider can do that. A super admin can add a supporting provider on AI Tools → Image Providers.',
+                'data.reference_operation' => __('No configured provider can do that. A super admin can add a supporting provider on Settings → Integrations → Image Providers.'),
             ]);
         }
 
@@ -959,7 +959,7 @@ class ImageGeneration extends Page
         if ($profile === null) {
             Notification::make()
                 ->title('No configured provider can do that')
-                ->body('A super admin can add a supporting provider on AI Tools → Image Providers.')
+                ->body(__('A super admin can add a supporting provider on Settings → Integrations → Image Providers.'))
                 ->danger()
                 ->send();
 

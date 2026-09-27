@@ -2,11 +2,13 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Clusters\AiTools;
+use App\Filament\Clusters\Settings;
+use App\Filament\Pages\Concerns\OpenedFromIntegrations;
 use App\Services\CompanyContext;
 use App\Services\ImageGeneration\ImageProviderSettingsService;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -25,17 +27,20 @@ use Illuminate\Support\Facades\Auth;
  * profile has its own model and **encrypted-per-company** API key; staff pick
  * one at generation time.
  *
- * Its own page in the AI Tools cluster (not a Settings → Integrations tab),
- * consistent with the Prompt Enhancer and Image Governance pages — all
- * Image-Generation configuration lives together under AI Tools.
+ * Its own page (not an inline Integrations form tab), hidden from the
+ * sidebar and opened from the "AI tool providers" cards on Settings →
+ * Integrations, alongside Video Providers, Prompt Enhancer and Smart Scan —
+ * the AI Tools menu itself lists only the tools.
  * ImageProviderSettingsService is the only thing that touches the underlying
  * `companies.settings->ai_tools->image_generation` list.
  */
 class ImageProviderSettings extends Page
 {
+    use OpenedFromIntegrations;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedKey;
 
-    protected static ?string $cluster = AiTools::class;
+    protected static ?string $cluster = Settings::class;
 
     protected static ?int $navigationSort = 4;
 
@@ -98,7 +103,7 @@ class ImageProviderSettings extends Page
      * profile by `id` to keep its stored (encrypted) key when the key field
      * is left blank.
      *
-     * @return array<int, \Filament\Forms\Components\Field>
+     * @return array<int, Field>
      */
     protected function providerFields(): array
     {

@@ -69,7 +69,7 @@ class ProcessExpenseScanJob implements ShouldQueue
             });
         } catch (Throwable $exception) {
             if (! $exception instanceof RuntimeException) {
-                Log::warning('AI Expense Scan failed.', ['expense_scan_id' => $scan->getKey(), 'error' => $exception->getMessage()]);
+                Log::warning('Smart Scan failed.', ['expense_scan_id' => $scan->getKey(), 'error' => $exception->getMessage()]);
             }
 
             $scan->forceFill([

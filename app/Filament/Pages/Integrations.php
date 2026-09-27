@@ -59,6 +59,8 @@ use Livewire\Attributes\Locked;
  * CRUD areas (many providers/ad accounts, dashboards, campaigns), so they
  * stay on their own pages; IntegrationStatusWidget below still surfaces them
  * as status-card links so this remains the one place staff check first.
+ * The AI tools' provider/key pages (Image Providers, Video Providers, Prompt
+ * Enhancer, Smart Scan) are likewise linked as cards (aiToolProviderLinks()).
  *
  * Two backing stores get combined into one Livewire form:
  * - AI fields live in `companies.settings->ai_tools->{tool}`, one entry per
@@ -133,6 +135,35 @@ class Integrations extends Page
         $company = $context->company();
 
         return (bool) ($company && $user->canAccessCompany((int) $company->getKey()));
+    }
+
+    /**
+     * Link cards for the AI tools' own provider/key pages (Image Providers,
+     * Video Providers, Prompt Enhancer, Smart Scan). Each is a multi-field
+     * page of its own, so it is linked from here rather than folded into
+     * this form; a card shows only to users who can open that page.
+     *
+     * @return list<array{label: string, description: string, icon: string, url: string}>
+     */
+    public function aiToolProviderLinks(): array
+    {
+        $pages = [
+            [ImageProviderSettings::class, __('Image providers and API keys for the Image Generation tool.')],
+            [VideoProviderSettings::class, __('Video providers and API keys for the Video Generation tool.')],
+            [PromptEnhancerSettings::class, __('Model, key and house style behind the ✨ Enhance prompt button.')],
+            [ExpenseScanSettings::class, __('Vision model and key that read expense photos and pasted text into draft expenses.')],
+        ];
+
+        return collect($pages)
+            ->filter(fn (array $page): bool => $page[0]::canAccess())
+            ->map(fn (array $page): array => [
+                'label' => $page[0]::getNavigationLabel(),
+                'description' => $page[1],
+                'icon' => $page[0]::getNavigationIcon(),
+                'url' => $page[0]::getUrl(),
+            ])
+            ->values()
+            ->all();
     }
 
     public function hasSelectedCompany(): bool
