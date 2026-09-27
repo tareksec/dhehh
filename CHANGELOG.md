@@ -4,6 +4,17 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Image Generation works with OpenRouter.** On **Settings → Integrations → Image Providers**, **Provider type** now has an **OpenRouter (unified image API)** option. Before, an OpenRouter key could only be added as **Custom**, and every image, including "Start from an image", failed with "Custom image provider rejected the request (HTTP 404): Not Found". To fix an existing profile, change its **Provider type** to **OpenRouter** and save. The Base URL (`https://openrouter.ai/api/v1`) and model can stay as they are.
+
+### Technical Notes
+
+- New `OpenRouterImageProvider` adapter, registered in `ImageProviderResolver` and `ImageProviderSettingsService::API_FORMATS`. It posts to OpenRouter's single `POST /api/v1/images` endpoint (appending `/images` when the Base URL is the bare API root), sends `aspect_ratio`/`resolution`/`n`, and for image-to-image adds the source photo as a base64 data URL in `input_references` on the same call. The generic "Custom" adapter assumes OpenAI's `/images/generations` + `/images/edits` routes, which OpenRouter does not have.
+- Production needs a running queue worker (`php artisan queue:work`) for Image Generation; without one, generations stay "Queued" forever.
+
 ## [2.28.0] - 2026-09-27
 
 **Release type:** Minor Feature Update

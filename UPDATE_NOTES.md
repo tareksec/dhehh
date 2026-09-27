@@ -493,6 +493,29 @@ Verification: `php artisan test --filter="WebsiteApi|WebsiteWebhookDispatchTest"
 
 Commit status: NOT committed. Awaiting owner approval.
 
+## 2026-09-18 - Image Generation: added an OpenRouter provider (Custom endpoint doesn't speak the OpenAI Images API)
+
+Reason — owner: "ইমেজ জেনারেশন টুলের জেনারেট ইমেজ এ ক্লিক করলে কিছুই আসেনা, ইমেজ জেনারেশন ফেইল্ড হচ্ছে, মডেল যুক্ত করেছি, সকল ফিল্ড ঠিকভাবে পূরণ করেছি কিন্তু ইমেজ জেনারেশন টুল ইমেজ তৈরি করতে পারছেনা। দুইবার চেষ্টা করেছি দুইবারই ফেইল করেছে।" (Clicking Generate produces nothing, generation fails, tried twice, both failed.) Two screenshots showed the provider profile "GPT Image 2.5 Sunburst (default)" and both failed generations with the same error: "Custom image provider rejected the request (HTTP 404): Not Found."
+
+Root cause: the provider's "Provider type" was set to "Custom" with Base URL `https://openrouter.ai/api/v1`. The "Custom" adapter (`CustomOpenAiCompatibleProvider`) is built specifically for endpoints that speak the real OpenAI Images API shape — it POSTs the Base URL verbatim for text-to-image, and derives an edits endpoint by swapping `/generations` → `/edits` (or appending `/edits`) for image-to-image. OpenRouter doesn't implement that API at all: confirmed via OpenRouter's own docs (https://openrouter.ai/blog/tutorials/image-generation-models/) that its actual "Unified Image API" is a single `POST https://openrouter.ai/api/v1/images` endpoint for *both* generation and image-to-image (an uploaded reference goes in as a base64 data URL under `input_references`, not a separate edits route or multipart upload), with request fields `aspect_ratio`/`resolution`/`n` instead of OpenAI's `size`. So every request from the "Custom" adapter — generate or image-to-image — hit a URL with no matching route on OpenRouter's server, hence the plain-text "Not Found" 404 body (a routing failure, not an API/auth error, which is why summarize() had no JSON error message to surface).
+
+What changed: added a proper first-class "OpenRouter" provider type, alongside the existing OpenAI/Google/Stability/Custom ones, instead of trying to force OpenRouter through "Custom":
+
+- `app/Services/ImageGeneration/Providers/OpenRouterImageProvider.php` (new) — posts to `https://openrouter.ai/api/v1/images` (default) with the correct OpenRouter request shape; for image-to-image, adds `input_references` with the uploaded photo as a base64 data URL on the same endpoint instead of a separate edits call; decodes the OpenAI-compatible `data[].b64_json` response (same envelope, so no parsing changes needed there). If the admin enters a Base URL override that's just the bare API root (no `/images` suffix — the common convention), `/images` is appended automatically rather than requiring the exact path.
+- `app/Services/ImageGeneration/ImageProviderResolver.php` — registered `'openrouter' => OpenRouterImageProvider::class`.
+- `app/Services/ImageGeneration/ImageProviderSettingsService.php` — added `'openrouter'` to `API_FORMATS` so it's selectable as a "Provider type".
+- `app/Filament/Pages/ImageProviderSettings.php` — added an OpenRouter model-name placeholder hint (`google/gemini-2.5-flash-image`).
+
+**What the owner needs to do:** on AI Tools → Image Providers, open the "GPT Image 2.5 Sunburst" profile and change **Provider type** from "Custom" to **"OpenRouter"**. The Base URL can be left as-is (`https://openrouter.ai/api/v1`) or cleared — either works now. No other field needs to change.
+
+Important changed/new files: `app/Services/ImageGeneration/Providers/OpenRouterImageProvider.php`, `app/Services/ImageGeneration/ImageProviderResolver.php`, `app/Services/ImageGeneration/ImageProviderSettingsService.php`, `app/Filament/Pages/ImageProviderSettings.php`, `tests/Feature/ImageGenerationProviderAdaptersTest.php`.
+
+2026-09-28 follow-up — owner reported generations spinning on "Queued" for hours on production. Cause: no queue worker was running on Coolify (jobs sat in Redis). Owner added a `zamzam-worker` Coolify app with Start Command `php artisan queue:work --sleep=1 --tries=3 --max-time=3600`; it needed **Force deploy (without cache)** because a plain Redeploy reused the old image (same commit SHA) with the web-server start command. Once the worker ran, the jobs failed with the 404 above — and the OpenRouter provider type was missing from production because this work had never been committed.
+
+Verification: `php artisan test --filter=ImageGenerationProviderAdaptersTest` — 20 passed (56 assertions). Full `php artisan test` (plain, no `--env`) — **1519 passed, 0 failed** (9153 assertions, ~740s). `npm run build` not run — PHP only.
+
+Commit status: Committed and pushed to `origin/main` (owner approved: "হ্যাঁ, commit করে push করো"). Committed alone — only the OpenRouter files plus this note and its CHANGELOG entry; other pending working-tree changes were left unstaged.
+
 ## 2026-09-17 - Orders: auto shipping fee ignored the real default courier when a company has more than one
 
 Reason — owner: after the previous shipping-zone fix (`4cef5b8a`) deployed, reported it was still broken live: "এখনো তো ম্যানুয়ালি শিপিং কস্ট যুক্ত করে সেভ করলাম কিন্তু সেইভ হচ্ছেনা, আর এড্রেস অনুযায়ী অটো কোন শিপিং চার্জ বসছেনা।" Checked the two obvious explanations first — deployment lag and unconfigured Shipping Zones — and the owner's screenshots ruled both out: commit `4cef5b8a` was live and healthy in Coolify, and ZamZam Gadget's Shipping Zones (Inside/Outside/Suburb) plus Steadfast's delivery fees (৳70/110/90) were already properly configured.
