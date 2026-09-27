@@ -2,6 +2,44 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-27 - Investor import reads the owner's INV sheet layout as it is
+
+Reason: the owner uploaded their real sheet `INV_1_10_04_2026.csv` and said: "csv format এইটা দেও। তুমি যেটা দিয়ে সেরকম করতে গেলে সবগুলো শীট এডিট করা লাগবে।" In short: use this CSV format, because the old sample would mean editing every sheet.
+
+What was wrong with that file before this change:
+- the title line above the header made the import fail
+- several Bangla headers were not recognised: ইনভেস্টরদের নাম, ফোন নাম্বার, নমিনী…, স্টাম্প নং.
+- the total row would have become a draft
+- two numbers in one phone cell were joined into one
+
+What changed (`InvestorImportService`, `config/investor_import.php`):
+- **Header row:** the header is the first row, within the first 15 filled rows, that names at least two known columns including name or phone. A title line above it is fine. The CSV/text separator is detected the same way.
+- **Skipped rows:** rows with no name, phone or NID are skipped (total row, blank-looking rows). SL / serial columns are known and skipped silently (`skip` list).
+- **Bangla spelling variants match:** ী/ি and ূ/ু are treated as the same, ্য (ya-phala) is dropped, and precomposed ড়/ঢ়/য় equal their decomposed form. So নমিনী = নমিনি, স্টাম্প = স্ট্যাম্প, and বিনিয়োগ matches however য় was typed. More aliases were added: ইনভেস্টরদের নাম, ফোন/মোবাইল নাম্বার, নমিনির NID/Passport, নমিনির ফোন নাম্বার, চেক নাম্বার.
+- **Excel:** every sheet is read, and sheets with no investor header (notes, totals) are skipped. `source_name` is "file · sheet" when there is more than one sheet.
+- **Phone cells with several numbers:** the Bangladeshi mobile (01…) is preferred, and the others go into an import note. Stamp and cheque numbers get Latin digits.
+- **Import notes:** the investment amount column (বিনিয়োগ (৳)) is kept as a note on the draft. No investment is created, because that needs a project. An NID that looks like a mobile number gets a note.
+- **Sample CSV** now matches the owner's layout: title line, SL, and the same 12 Bangla/English headings, from `config/investor_import.sample`. The sample row is placeholder text only.
+
+Checked against the owner's real file (not committed, because it holds real NIDs and phone numbers):
+- 19 of 19 investors were read correctly into drafts, and all 19 are "Ready to confirm".
+- No column was left unrecognised, and the total row was skipped.
+- Row 20: 01766718192 was used as the phone, 33748655665 went into a note, and the NID column was flagged because it holds a phone number.
+- Row 17: the nominee's second number went into a note.
+- Two foreign numbers (447…, 966…) were kept as written.
+
+**Needs Bangla review:** the 5 new or changed `lang/bn.json` keys: the upload helper text, two "more than one phone number" notes, the investment amount note, and the NID-looks-like-a-phone note. One unused key was removed from both files.
+
+Note on the Bangla rule: the sample CSV title/headings/row in `config/investor_import.php` are Bangla. They are the owner's file layout (import format data), not UI text, so they live next to the column aliases rather than in `lang/*.json`.
+
+Verification:
+- `php artisan test --filter=InvestorImportTest`: 17 passed. Three are new: the owner's INV layout, built from made-up data; every Excel sheet is read; the sample CSV uses the owner's layout and imports back cleanly.
+- `TranslationParityTest` passes.
+- Full `php artisan test` (plain, no `--env`): **1371 passed, 0 failed** (7838 assertions).
+- Pint passes.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে মেইন এ পুশ কর").
+
 ## 2026-09-26 - Investor import from Excel / CSV / pasted text, with a draft → review → confirm step
 
 Reason — owner: "inestor module এ এক্সেল, csv আপলোড দিলে ইনভেস্টর ফর্ম অটো ফিলাপ হয়ে যাবে … ফর্ম ফিলাপ করার পর রিভিউ করার জন্য ইনভেস্টর লিস্টকে ড্রাফটে স্ট্যাটাসে রাখবে। রিভিউ করে কনফার্ম করলে তবেই মেইন ইনভেস্টমেন্ট লিস্টে যাবে। সাথে টেক্সট বক্স এর অপশনও রাখবে …" In short: uploading Excel/CSV fills the investor form automatically; the result stays as a draft for review; only confirmed drafts go to the main list; a text box does the same with pasted text.

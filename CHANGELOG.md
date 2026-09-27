@@ -9,13 +9,27 @@ All notable production changes to Business Dashboard are documented here.
 ### Added
 
 - **Import investors from Excel, CSV or pasted text. Each one waits as a draft until you review and confirm it.** Go to Investments → **Investor Drafts**, or use **Import from Excel / CSV / text** on the Investors page.
-  - **Import Excel / CSV:** upload an `.xlsx`, `.csv` (or `.ods` / `.txt`) file. The first row holds the column names, in English or Bangla (Name / নাম, Phone / মোবাইল, Father's Name / পিতার নাম, NID / এনআইডি, Nominee / নমিনি, and so on). **Sample CSV** downloads a file with every column.
+  - **Import Excel / CSV:** upload an `.xlsx`, `.csv` (or `.ods` / `.txt`) file. Column names can be in English or Bangla (Name / নাম, Phone / মোবাইল, Father's Name / পিতার নাম, NID / এনআইডি, Nominee / নমিনি, and so on). **Sample CSV** downloads a file with every column.
   - **Paste text:** paste investor details as `Label: value` lines, with a blank line between investors, or paste a table copied from Excel.
   - Every investor found becomes an **investor draft**, with the investor form already filled in. Drafts are not investors yet: they do not appear in the investor list, pickers or reports.
   - Open a draft (**Review**) to check and correct it, then **Save & confirm**. You can also **Confirm** from the list, or select several and use **Confirm selected**. Only then is the investor added to the main investor list, and the draft is removed.
   - A draft with a missing name or phone, a phone that already belongs to an investor, a phone that repeats in another draft, or an invalid email shows **Needs fixing** and cannot be confirmed until it is fixed. Notes from the import (a date of birth that could not be read, an unknown channel partner, a line that was not understood, an NID that Excel may have rounded) are shown on the review page.
   - Phone numbers are cleaned automatically (`+880 1712-345678` → `01712345678`), and Bangla digits are read as numbers.
   - **Discard** removes a draft you do not want.
+
+### Changed
+
+- **Your own INV investor sheets import as they are, with no editing.** The importer now reads the layout you already use:
+  - a title line above the column names, like "… (INV 1 - 10/04/2026)"
+  - an SL column
+  - a total row at the bottom (মোট ইনভেস্টমেন্ট এমাউন্ট)
+  - Bangla column names with your own spellings: ইনভেস্টরদের নাম, ফোন নাম্বার, নমিনীর নাম, নমিনী NID/Passport, স্টাম্প নং., চেক নং.
+  - Bangla digits in phone, NID, stamp and cheque numbers
+- **Every sheet of an Excel file is read.** An Excel file with sheets INV 1, INV 2 and so on imports all of them in one go. Each draft shows which sheet and row it came from.
+- **Several numbers in one phone cell.** The Bangladeshi mobile (01…) is used, and the other numbers are shown to the reviewer as a note.
+- **Investment amount.** The **বিনিয়োগ (৳)** column is shown on each draft as a note, so you can add the investment after confirming.
+- **Extra NID check.** An NID that looks like a phone number is flagged for review.
+- **Sample CSV** now downloads in the same layout as your INV sheet.
 
 **Technical Notes:**
 - New migration `2026_09_26_100000_create_investor_drafts_table` (`investor_drafts`, company-owned; `nid_number` / `nominee_nid_or_passport` encrypted like on `investors`). Run `php artisan migrate --force`.

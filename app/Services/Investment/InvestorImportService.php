@@ -32,13 +32,19 @@ class InvestorImportService
 {
     public const SAMPLE_HEADINGS = ['name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'nid_number', 'address', 'stamp_number', 'cheque_number', 'is_channel_partner', 'channel_partner_phone', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
 
-    private const STRING_FIELDS = ['name', 'display_name', 'guardian_name', 'email', 'stamp_number', 'cheque_number', 'nominee_name', 'nominee_relation'];
+    private const STRING_FIELDS = ['name', 'display_name', 'guardian_name', 'email', 'nominee_name', 'nominee_relation'];
 
     private const TEXT_FIELDS = ['address', 'nominee_address'];
 
     private const NID_FIELDS = ['nid_number', 'nominee_nid_or_passport'];
 
     private const PHONE_FIELDS = ['phone', 'nominee_phone'];
+
+    /** Number-like text fields whose Bangla digits are turned into 0-9. */
+    private const DIGIT_FIELDS = ['stamp_number', 'cheque_number'];
+
+    /** Field name for known columns that are deliberately not imported (serial no.). */
+    private const SKIP = '_skip';
 
     /** Label-to-field lookup built from the config aliases. */
     private ?array $aliases = null;
@@ -55,9 +61,33 @@ class InvestorImportService
         }
 
         if (in_array($extension, ['xlsx', 'ods'], true)) {
-            $rows = $this->readSpreadsheet($path, $extension);
+            $sheets = $this->readSpreadsheet($path, $extension);
+            $records = [];
+            $ignored = [];
 
-            return $this->importTable($rows, InvestorDraft::SOURCE_EXCEL, $originalName);
+            // Every sheet with a recognisable header row is read (one sheet
+            // per investment batch is common); other sheets are skipped.
+            foreach ($sheets as $sheetName => $rows) {
+                $table = $this->tableRecords($rows);
+
+                if ($table === null) {
+                    continue;
+                }
+
+                $label = count($sheets) > 1 ? $originalName.' · '.$sheetName : $originalName;
+
+                foreach ($table['records'] as $record) {
+                    $records[] = [...$record, 'source_name' => $label];
+                }
+
+                $ignored = [...$ignored, ...$table['ignored']];
+            }
+
+            if ($records === [] && $ignored === []) {
+                throw ValidationException::withMessages(['file' => __('No name or phone column was found. Download the sample CSV to see the column names.')]);
+            }
+
+            return $this->storeDrafts($records, InvestorDraft::SOURCE_EXCEL, $originalName, $ignored);
         }
 
         if ($extension === 'csv') {
@@ -127,8 +157,17 @@ class InvestorImportService
         return response()->streamDownload(function (): void {
             $handle = fopen('php://output', 'w');
             fwrite($handle, "\xEF\xBB\xBF");
-            fputcsv($handle, self::SAMPLE_HEADINGS);
-            fputcsv($handle, ['Abdul Karim', '', 'Abdul Rahim', '1980-05-01', '01712345678', 'karim@example.com', '1990123456789', 'House 4, Road 2, Dhaka', '9363512', 'SBL-4457821', 'no', '', 'Karima Begum', '19901234567', '01812345678', 'Wife', 'House 4, Road 2, Dhaka']);
+            $sample = config('investor_import.sample', []);
+
+            if (filled($sample['title'] ?? null)) {
+                fputcsv($handle, [$sample['title']], ',', '"', '');
+            }
+
+            fputcsv($handle, $sample['headings'] ?? self::SAMPLE_HEADINGS, ',', '"', '');
+
+            foreach ($sample['rows'] ?? [] as $row) {
+                fputcsv($handle, $row, ',', '"', '');
+            }
             fclose($handle);
         }, 'investors-import-sample.csv', ['Content-Type' => 'text/csv']);
     }
@@ -139,54 +178,92 @@ class InvestorImportService
      */
     private function importTable(array $rows, string $source, ?string $sourceName): array
     {
+        $table = $this->tableRecords($rows);
+
+        if ($table === null) {
+            throw ValidationException::withMessages(['file' => __('No name or phone column was found. Download the sample CSV to see the column names.')]);
+        }
+
+        return $this->storeDrafts($table['records'], $source, $sourceName, $table['ignored']);
+    }
+
+    /**
+     * The header is the first row (among the first 15 filled rows) that
+     * names at least two known columns including name or phone, so a title
+     * line above it is fine. Rows without a name, phone or NID (a totals
+     * line, a blank-looking row) are skipped. Null when no header is found.
+     *
+     * @param  list<list<mixed>>  $rows
+     * @return array{records: list<array>, ignored: list<string>}|null
+     */
+    private function tableRecords(array $rows): ?array
+    {
         $headerIndex = null;
+        $columns = [];
+        $checked = 0;
 
         foreach ($rows as $index => $row) {
-            if (! $this->isEmptyRow($row)) {
+            if ($this->isEmptyRow($row)) {
+                continue;
+            }
+
+            $found = [];
+
+            foreach ($row as $position => $heading) {
+                $field = $this->fieldFor($this->cellToString($heading));
+
+                if ($field !== null && $field !== self::SKIP && ! in_array($field, $found, true)) {
+                    $found[$position] = $field;
+                }
+            }
+
+            if (count($found) >= 2 && (in_array('name', $found, true) || in_array('phone', $found, true))) {
                 $headerIndex = $index;
+                $columns = $found;
+                break;
+            }
+
+            if (++$checked >= 15) {
                 break;
             }
         }
 
         if ($headerIndex === null) {
-            throw ValidationException::withMessages(['file' => __('No investors were found. Check that the first row holds the column names.')]);
+            return null;
         }
 
-        $columns = [];
         $ignored = [];
 
         foreach ($rows[$headerIndex] as $position => $heading) {
             $label = trim($this->cellToString($heading));
-            $field = $this->fieldFor($label);
 
-            if ($field !== null && ! in_array($field, $columns, true)) {
-                $columns[$position] = $field;
-            } elseif ($label !== '') {
+            if ($label !== '' && ! isset($columns[$position]) && $this->fieldFor($label) !== self::SKIP) {
                 $ignored[] = $label;
             }
-        }
-
-        if (! in_array('name', $columns, true) && ! in_array('phone', $columns, true)) {
-            throw ValidationException::withMessages(['file' => __('No name or phone column was found. Download the sample CSV to see the column names.')]);
         }
 
         $records = [];
 
         foreach (array_slice($rows, $headerIndex + 1, null, true) as $index => $row) {
-            if ($this->isEmptyRow($row)) {
-                continue;
-            }
-
             $values = [];
 
             foreach ($columns as $position => $field) {
                 $values[$field] = $row[$position] ?? null;
             }
 
+            $identifying = array_filter(
+                [$values['name'] ?? null, $values['phone'] ?? null, $values['nid_number'] ?? null],
+                fn ($value): bool => trim($this->cellToString($value)) !== '',
+            );
+
+            if ($identifying === []) {
+                continue;
+            }
+
             $records[] = ['row' => $index + 1, 'values' => $values, 'notes' => []];
         }
 
-        return $this->storeDrafts($records, $source, $sourceName, $ignored);
+        return ['records' => $records, 'ignored' => $ignored];
     }
 
     /**
@@ -286,7 +363,7 @@ class InvestorImportService
                     'company_id' => $companyId,
                     'batch_id' => $batchId,
                     'source' => $source,
-                    'source_name' => $sourceName ? Str::limit($sourceName, 250, '') : null,
+                    'source_name' => ($record['source_name'] ?? $sourceName) ? Str::limit($record['source_name'] ?? $sourceName, 250, '') : null,
                     'source_row' => $source === InvestorDraft::SOURCE_TEXT && $sourceName === null ? null : $record['row'],
                     'created_by' => Auth::id(),
                 ]);
@@ -311,15 +388,36 @@ class InvestorImportService
                 continue;
             }
 
-            if (in_array($field, self::STRING_FIELDS, true)) {
+            if (in_array($field, self::DIGIT_FIELDS, true)) {
+                $attributes[$field] = Str::limit((string) preg_replace('/[ \t]+/u', ' ', $this->latinDigits($text)), 255, '');
+            } elseif (in_array($field, self::STRING_FIELDS, true)) {
                 $attributes[$field] = Str::limit((string) preg_replace('/[ \t]+/u', ' ', $text), 255, '');
             } elseif (in_array($field, self::TEXT_FIELDS, true)) {
                 $attributes[$field] = $text;
             } elseif (in_array($field, self::PHONE_FIELDS, true)) {
-                $attributes[$field] = Str::limit($this->normalizePhone($text), 255, '');
+                // A cell may hold several numbers ("017…, 016…"): the first
+                // is used, the rest are kept as a note for the reviewer.
+                // A Bangladeshi mobile (01…) is preferred over other numbers.
+                $numbers = array_values(array_filter(array_map(fn (string $number): string => $this->normalizePhone(trim($number)), preg_split('/[,;\/|\n]+/u', $text))));
+                $mobiles = array_values(array_filter($numbers, fn (string $number): bool => (bool) preg_match('/^01\d{9}$/', $number)));
+                $used = $mobiles[0] ?? $numbers[0] ?? $this->normalizePhone($text);
+                $attributes[$field] = Str::limit($used, 255, '');
+
+                if (count($numbers) > 1) {
+                    $attributes['import_notes'][] = [
+                        'message' => $field === 'phone'
+                            ? 'More than one phone number was given. :used is used; the others were: :others'
+                            : 'More than one nominee phone number was given. :used is used; the others were: :others',
+                        'params' => ['used' => $attributes[$field], 'others' => implode(', ', array_diff($numbers, [$used]))],
+                    ];
+                }
             } elseif (in_array($field, self::NID_FIELDS, true)) {
                 $nid = $this->latinDigits($text);
                 $attributes[$field] = $nid;
+
+                if (preg_match('/^01\d{9}$/', $nid)) {
+                    $attributes['import_notes'][] = ['message' => 'The NID :nid looks like a phone number. Check the NID column.', 'params' => ['nid' => $nid]];
+                }
 
                 if ((is_float($raw) && abs($raw) >= 1e15) || preg_match('/^\d(\.\d+)?e\+?\d+$/i', $nid)) {
                     $attributes['import_notes'][] = ['message' => 'The NID :nid looks rounded by Excel. Check it against the NID card.', 'params' => ['nid' => $nid]];
@@ -332,6 +430,8 @@ class InvestorImportService
                 } else {
                     $attributes['import_notes'][] = ['message' => 'Date of birth ":value" could not be read. Enter it by hand.', 'params' => ['value' => Str::limit($text, 40)]];
                 }
+            } elseif ($field === 'investment_amount') {
+                $attributes['import_notes'][] = ['message' => 'Investment amount in the file: :amount. After confirming, add the investment under Investments.', 'params' => ['amount' => $this->latinDigits($text)]];
             } elseif ($field === 'is_channel_partner') {
                 $attributes['is_channel_partner'] = in_array(Str::lower($text), array_map(Str::lower(...), config('investor_import.yes_values', [])), true);
             } elseif ($field === 'channel_partner') {
@@ -371,22 +471,24 @@ class InvestorImportService
     }
 
     /**
-     * @return list<list<mixed>>
+     * @return array<string, list<list<mixed>>> rows per sheet name
      */
     private function readSpreadsheet(string $path, string $extension): array
     {
         $reader = $extension === 'ods' ? new OdsReader : new XlsxReader;
-        $rows = [];
+        $sheets = [];
 
         try {
             $reader->open($path);
 
             foreach ($reader->getSheetIterator() as $sheet) {
+                $rows = [];
+
                 foreach ($sheet->getRowIterator() as $row) {
                     $rows[] = $row->toArray();
                 }
 
-                break;
+                $sheets[$sheet->getName()] = $rows;
             }
         } catch (Throwable) {
             throw ValidationException::withMessages(['file' => __('The file could not be read. Save it again as .xlsx or .csv and retry.')]);
@@ -394,7 +496,7 @@ class InvestorImportService
             $reader->close();
         }
 
-        return $rows;
+        return $sheets;
     }
 
     /**
@@ -422,9 +524,15 @@ class InvestorImportService
      */
     private function detectDelimiter(string $content): ?string
     {
+        $checked = 0;
+
         foreach (preg_split('/\R/u', $content) as $line) {
             if (trim($line) === '') {
                 continue;
+            }
+
+            if (++$checked > 15) {
+                return null;
             }
 
             $best = null;
@@ -439,7 +547,9 @@ class InvestorImportService
                 }
             }
 
-            return $best;
+            if ($best !== null) {
+                return $best;
+            }
         }
 
         return null;
@@ -458,6 +568,10 @@ class InvestorImportService
 
             // The sample CSV's own heading for the channel partner column.
             $this->aliases[$this->normalizeLabel('channel_partner_phone')] ??= 'channel_partner';
+
+            foreach (config('investor_import.skip', []) as $name) {
+                $this->aliases[$this->normalizeLabel($name)] ??= self::SKIP;
+            }
         }
 
         return $this->aliases[$this->normalizeLabel($label)] ?? null;
@@ -466,6 +580,13 @@ class InvestorImportService
     private function normalizeLabel(string $label): string
     {
         $label = mb_strtolower(str_replace(["\xEF\xBB\xBF", "'", "\u{2019}"], '', $label));
+
+        // Fold common Bangla spelling variants so "নমিনী"/"নমিনি" and
+        // "স্টাম্প"/"স্ট্যাম্প" match: long i/u signs -> short, drop ya-phala.
+        // Precomposed RRA/RHA/YYA are decomposed first so both encodings of
+        // the same letter compare equal.
+        $label = str_replace(["\u{09DC}", "\u{09DD}", "\u{09DF}"], ["\u{09A1}\u{09BC}", "\u{09A2}\u{09BC}", "\u{09AF}\u{09BC}"], $label);
+        $label = str_replace(["\u{09C0}", "\u{09C2}", "\u{09CD}\u{09AF}"], ["\u{09BF}", "\u{09C1}", ''], $label);
 
         return trim((string) preg_replace('/[^\p{L}\p{M}\p{N}]+/u', ' ', $label));
     }

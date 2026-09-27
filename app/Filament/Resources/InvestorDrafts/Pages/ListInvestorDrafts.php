@@ -45,7 +45,7 @@ class ListInvestorDrafts extends ListRecords
                         ])
                         ->maxSize(5120)
                         ->required()
-                        ->helperText(__('First row = column names (English or Bangla, e.g. Name, Phone, NID, Nominee). Format NID and phone columns as Text in Excel so long numbers are not rounded.')),
+                        ->helperText(__('Your usual INV sheet works as it is: a title line above the column names is fine, SL and total rows are skipped, and every sheet of an Excel file is read. Column names can be English or Bangla. Format NID and phone columns as Text in Excel so long numbers are not rounded.')),
                 ])
                 ->action(function (array $data, InvestorImportService $imports): void {
                     abort_unless(InvestorDraftResource::canImport(), 403);

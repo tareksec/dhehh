@@ -123,7 +123,6 @@
     "Upload an Excel (.xlsx), CSV or text file.": "Upload an Excel (.xlsx), CSV or text file.",
     "Paste the investor details first.": "Paste the investor details first.",
     "Phone :phone already belongs to another investor.": "Phone :phone already belongs to another investor.",
-    "No investors were found. Check that the first row holds the column names.": "No investors were found. Check that the first row holds the column names.",
     "No name or phone column was found. Download the sample CSV to see the column names.": "No name or phone column was found. Download the sample CSV to see the column names.",
     "Switch to a single company before importing investors.": "Switch to a single company before importing investors.",
     "No investors were found. Use one \"Label: value\" line per detail, or paste a table with a header row.": "No investors were found. Use one \"Label: value\" line per detail, or paste a table with a header row.",
@@ -174,7 +173,7 @@
     "Upload an Excel/CSV file or paste text to fill the investor form automatically. Review each draft, then confirm it to add it to the investor list.": "Upload an Excel/CSV file or paste text to fill the investor form automatically. Review each draft, then confirm it to add it to the investor list.",
     "Import Excel / CSV": "Import Excel / CSV",
     "Excel or CSV file": "Excel or CSV file",
-    "First row = column names (English or Bangla, e.g. Name, Phone, NID, Nominee). Format NID and phone columns as Text in Excel so long numbers are not rounded.": "First row = column names (English or Bangla, e.g. Name, Phone, NID, Nominee). Format NID and phone columns as Text in Excel so long numbers are not rounded.",
+    "Your usual INV sheet works as it is: a title line above the column names is fine, SL and total rows are skipped, and every sheet of an Excel file is read. Column names can be English or Bangla. Format NID and phone columns as Text in Excel so long numbers are not rounded.": "Your usual INV sheet works as it is: a title line above the column names is fine, SL and total rows are skipped, and every sheet of an Excel file is read. Column names can be English or Bangla. Format NID and phone columns as Text in Excel so long numbers are not rounded.",
     "Paste text": "Paste text",
     "Investor details as text": "Investor details as text",
     "Name: Abdul Karim\nFather's Name: Abdul Rahim\nPhone: 01712345678\nNID: 1990123456789\nAddress: House 4, Dhaka\nNominee: Karima Begum\nRelation: Wife\n\nName: Next investor\nPhone: ...": "Name: Abdul Karim\nFather's Name: Abdul Rahim\nPhone: 01712345678\nNID: 1990123456789\nAddress: House 4, Dhaka\nNominee: Karima Begum\nRelation: Wife\n\nName: Next investor\nPhone: ...",
@@ -192,5 +191,9 @@
     "Line :line was not understood and was left out: :text": "Line :line was not understood and was left out: :text",
     "The NID :nid looks rounded by Excel. Check it against the NID card.": "The NID :nid looks rounded by Excel. Check it against the NID card.",
     "Date of birth \":value\" could not be read. Enter it by hand.": "Date of birth \":value\" could not be read. Enter it by hand.",
-    "Channel partner \":value\" was not found among investors. Pick them by hand.": "Channel partner \":value\" was not found among investors. Pick them by hand."
+    "Channel partner \":value\" was not found among investors. Pick them by hand.": "Channel partner \":value\" was not found among investors. Pick them by hand.",
+    "More than one phone number was given. :used is used; the others were: :others": "More than one phone number was given. :used is used; the others were: :others",
+    "More than one nominee phone number was given. :used is used; the others were: :others": "More than one nominee phone number was given. :used is used; the others were: :others",
+    "Investment amount in the file: :amount. After confirming, add the investment under Investments.": "Investment amount in the file: :amount. After confirming, add the investment under Investments.",
+    "The NID :nid looks like a phone number. Check the NID column.": "The NID :nid looks like a phone number. Check the NID column."
 }

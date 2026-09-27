@@ -123,7 +123,6 @@
     "Upload an Excel (.xlsx), CSV or text file.": "এক্সেল (.xlsx), CSV বা টেক্সট ফাইল আপলোড করুন।",
     "Paste the investor details first.": "আগে ইনভেস্টরের তথ্য পেস্ট করুন।",
     "Phone :phone already belongs to another investor.": "ফোন :phone আগে থেকেই অন্য একজন ইনভেস্টরের নামে আছে।",
-    "No investors were found. Check that the first row holds the column names.": "কোনো ইনভেস্টর পাওয়া যায়নি। প্রথম সারিতে কলামের নাম আছে কি না দেখুন।",
     "No name or phone column was found. Download the sample CSV to see the column names.": "নাম বা ফোনের কলাম পাওয়া যায়নি। কলামের নাম দেখতে নমুনা CSV ডাউনলোড করুন।",
     "Switch to a single company before importing investors.": "ইনভেস্টর ইমপোর্টের আগে একটি নির্দিষ্ট কোম্পানি বেছে নিন।",
     "No investors were found. Use one \"Label: value\" line per detail, or paste a table with a header row.": "কোনো ইনভেস্টর পাওয়া যায়নি। প্রতিটি তথ্য আলাদা লাইনে \"লেবেল: মান\" আকারে লিখুন, অথবা হেডার সারিসহ একটি টেবিল পেস্ট করুন।",
@@ -174,7 +173,7 @@
     "Upload an Excel/CSV file or paste text to fill the investor form automatically. Review each draft, then confirm it to add it to the investor list.": "এক্সেল/CSV ফাইল আপলোড করুন বা টেক্সট পেস্ট করুন — ইনভেস্টর ফর্ম নিজে থেকেই পূরণ হবে। প্রতিটি ড্রাফট রিভিউ করে কনফার্ম করলে তবেই সেটি ইনভেস্টর লিস্টে যাবে।",
     "Import Excel / CSV": "এক্সেল / CSV ইমপোর্ট",
     "Excel or CSV file": "এক্সেল বা CSV ফাইল",
-    "First row = column names (English or Bangla, e.g. Name, Phone, NID, Nominee). Format NID and phone columns as Text in Excel so long numbers are not rounded.": "প্রথম সারিতে কলামের নাম থাকবে (ইংরেজি বা বাংলা, যেমন নাম, মোবাইল, এনআইডি, নমিনি)। লম্বা নম্বর যেন রাউন্ড না হয়, সেজন্য এক্সেলে এনআইডি ও ফোনের কলাম Text ফরম্যাটে রাখুন।",
+    "Your usual INV sheet works as it is: a title line above the column names is fine, SL and total rows are skipped, and every sheet of an Excel file is read. Column names can be English or Bangla. Format NID and phone columns as Text in Excel so long numbers are not rounded.": "আপনার সাধারণ INV শীট যেমন আছে তেমনই চলবে: কলামের নামের উপরে শিরোনামের লাইন থাকলেও সমস্যা নেই, SL আর মোট-এর সারি বাদ যায়, আর এক্সেল ফাইলের প্রতিটি শীট পড়া হয়। কলামের নাম ইংরেজি বা বাংলা যেকোনোটা হতে পারে। লম্বা নম্বর যেন রাউন্ড না হয়, সেজন্য এক্সেলে এনআইডি ও ফোনের কলাম Text ফরম্যাটে রাখুন।",
     "Paste text": "টেক্সট পেস্ট",
     "Investor details as text": "টেক্সট আকারে ইনভেস্টরের তথ্য",
     "Name: Abdul Karim\nFather's Name: Abdul Rahim\nPhone: 01712345678\nNID: 1990123456789\nAddress: House 4, Dhaka\nNominee: Karima Begum\nRelation: Wife\n\nName: Next investor\nPhone: ...": "নাম: আব্দুল করিম\nপিতার নাম: আব্দুর রহিম\nমোবাইল: 01712345678\nএনআইডি: 1990123456789\nঠিকানা: বাসা ৪, ঢাকা\nনমিনি: করিমা বেগম\nসম্পর্ক: স্ত্রী\n\nনাম: পরের ইনভেস্টর\nমোবাইল: ...",
@@ -192,5 +191,9 @@
     "Line :line was not understood and was left out: :text": "লাইন :line বোঝা যায়নি, তাই বাদ দেওয়া হয়েছে: :text",
     "The NID :nid looks rounded by Excel. Check it against the NID card.": "এনআইডি :nid এক্সেলে রাউন্ড হয়ে গেছে বলে মনে হচ্ছে। এনআইডি কার্ডের সাথে মিলিয়ে দেখুন।",
     "Date of birth \":value\" could not be read. Enter it by hand.": "জন্ম তারিখ \":value\" পড়া যায়নি। হাতে লিখে দিন।",
-    "Channel partner \":value\" was not found among investors. Pick them by hand.": "চ্যানেল পার্টনার \":value\" ইনভেস্টরদের মধ্যে পাওয়া যায়নি। হাতে বেছে নিন।"
+    "Channel partner \":value\" was not found among investors. Pick them by hand.": "চ্যানেল পার্টনার \":value\" ইনভেস্টরদের মধ্যে পাওয়া যায়নি। হাতে বেছে নিন।",
+    "More than one phone number was given. :used is used; the others were: :others": "একাধিক ফোন নম্বর দেওয়া ছিল। :used নেওয়া হয়েছে; বাকিগুলো ছিল: :others",
+    "More than one nominee phone number was given. :used is used; the others were: :others": "নমিনির একাধিক ফোন নম্বর দেওয়া ছিল। :used নেওয়া হয়েছে; বাকিগুলো ছিল: :others",
+    "Investment amount in the file: :amount. After confirming, add the investment under Investments.": "ফাইলে বিনিয়োগের পরিমাণ: :amount। কনফার্মের পর Investments-এ গিয়ে বিনিয়োগটি যোগ করুন।",
+    "The NID :nid looks like a phone number. Check the NID column.": "এনআইডি :nid দেখতে ফোন নম্বরের মতো। এনআইডি কলামটি দেখে নিন।"
 }

@@ -71,6 +71,82 @@ class InvestorImportTest extends TestCase
         $this->assertCount(1, $nurul->importNoteMessages());
     }
 
+    public function test_the_owners_inv_sheet_layout_imports_without_editing(): void
+    {
+        // Same layout as the owner's INV sheets: a title line, SL column,
+        // Bangla headers with their own spellings, Bangla digits, two numbers
+        // in one phone cell, and a totals line at the bottom.
+        $path = $this->tempFile(implode("\n", [
+            '"Project name (INV 1 - 10/04/2026)",,,,,,,,,,,',
+            'SL,ইনভেস্টরদের নাম,পিতার নাম,ঠিকানা,ফোন নাম্বার,NID/Passport,নমিনীর নাম,নমিনী NID/Passport,নমিনীর ফোন নাম্বার,বিনিয়োগ (৳),স্টাম্প নং.,চেক নং.',
+            '১,Investor One,Father One,"House 1, Dhaka",০১৯১১১১১১১১,১৪৭৯৯৩৯৬০৩,Nominee One,৪৬৪৭৫৬৩৯৯৬,,"200,000","৯৩৬৩৫১২, ৯৩৬৩৫১৩",BANK/CHQ-0011280',
+            '২,Investor Two,Father Two,"House 2, Dhaka","৩৩৭৪৮৬৫৫৬৬৫, ০১৭২২২২২২২২",১৯০১৬৮৮৪৫৫,Nominee Two,EM0162269,"০১৪০১৪০৬৬৪৯, ০১৬০৯৬৬৩০৬৬","1,000,000",৯৩৬৩৫১৫,BANK/CHQ-0011281',
+            'মোট ইনভেস্টমেন্ট এমাউন্ট,,,,,,,,,1200000,,',
+        ]), 'csv');
+
+        $result = app(InvestorImportService::class)->importFile($path, 'INV_1.csv');
+
+        $this->assertSame(2, $result['created']);
+        $this->assertSame([], $result['ignored_columns']);
+
+        $one = InvestorDraft::query()->where('name', 'Investor One')->sole();
+        $this->assertSame(3, $one->source_row);
+        $this->assertSame('Father One', $one->guardian_name);
+        $this->assertSame('01911111111', $one->phone);
+        $this->assertSame('1479939603', $one->nid_number);
+        $this->assertSame('Nominee One', $one->nominee_name);
+        $this->assertSame('4647563996', $one->nominee_nid_or_passport);
+        $this->assertSame('9363512, 9363513', $one->stamp_number);
+        $this->assertSame('BANK/CHQ-0011280', $one->cheque_number);
+        $this->assertSame([], $one->blockingIssues());
+        $this->assertStringContainsString('200,000', implode(' ', $one->importNoteMessages()));
+
+        $two = InvestorDraft::query()->where('name', 'Investor Two')->sole();
+        $this->assertSame('01722222222', $two->phone);
+        $this->assertSame('01401406649', $two->nominee_phone);
+        $this->assertSame('EM0162269', $two->nominee_nid_or_passport);
+        $this->assertStringContainsString('33748655665', implode(' ', $two->importNoteMessages()));
+        $this->assertStringContainsString('01609663066', implode(' ', $two->importNoteMessages()));
+    }
+
+    public function test_every_sheet_of_an_excel_file_is_read(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'inv').'.xlsx';
+        $writer = new Writer;
+        $writer->openToFile($path);
+        $writer->getCurrentSheet()->setName('INV 1');
+        $writer->addRow(Row::fromValues(['Title of batch one']));
+        $writer->addRow(Row::fromValues(['SL', 'ইনভেস্টরদের নাম', 'ফোন নাম্বার']));
+        $writer->addRow(Row::fromValues([1, 'Batch One Investor', '01711111111']));
+        $writer->addNewSheetAndMakeItCurrent()->setName('INV 2');
+        $writer->addRow(Row::fromValues(['SL', 'ইনভেস্টরদের নাম', 'ফোন নাম্বার']));
+        $writer->addRow(Row::fromValues([1, 'Batch Two Investor', 1722222222]));
+        $writer->addNewSheetAndMakeItCurrent()->setName('Notes');
+        $writer->addRow(Row::fromValues(['Just some notes']));
+        $writer->close();
+
+        $result = app(InvestorImportService::class)->importFile($path, 'investors.xlsx');
+
+        $this->assertSame(2, $result['created']);
+        $this->assertSame('investors.xlsx · INV 1', InvestorDraft::query()->where('name', 'Batch One Investor')->value('source_name'));
+        $this->assertSame('01722222222', InvestorDraft::query()->where('name', 'Batch Two Investor')->value('phone'));
+    }
+
+    public function test_the_sample_csv_uses_the_owners_layout_and_imports_back(): void
+    {
+        ob_start();
+        app(InvestorImportService::class)->sampleCsv()->sendContent();
+        $csv = (string) ob_get_clean();
+
+        $lines = preg_split('/\R/', trim($csv));
+        $this->assertSame(config('investor_import.sample.headings'), str_getcsv($lines[1], ',', '"', ''));
+
+        $result = app(InvestorImportService::class)->importFile($this->tempFile($csv, 'csv'), 'sample.csv');
+
+        $this->assertSame(1, $result['created']);
+        $this->assertSame([], $result['ignored_columns']);
+    }
+
     public function test_an_excel_file_becomes_drafts_and_reads_date_cells(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'inv').'.xlsx';
