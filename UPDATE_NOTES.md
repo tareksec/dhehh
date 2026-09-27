@@ -2,6 +2,16 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-27 - CI: GitHub Actions on Node.js 24
+
+Reason — the owner saw "Node.js 20 is deprecated" and "setup-java v4 is deprecated" warnings on CI run #159 and approved the fix: "হ্যাঁ, ঠিক করে মেইন এ পুশ কর" (yes, fix it and push to main). These were only warnings: the run succeeded and the APK was built. The workflow file had not been changed by the previous push.
+
+What changed: `.github/workflows/deploy.yml` now uses `actions/checkout@v5`, `actions/setup-node@v5`, `actions/setup-java@v5` and `actions/upload-artifact@v6`. The runtime of each was checked in its `action.yml`. `upload-artifact@v5` is still Node 20, which is why v6 is used. Every input the workflow passes still exists in the new versions. The project's own build Node version (20.19.0) is unchanged.
+
+Verification: the workflow YAML parses. The real check is the CI run on this push: it should be green with no Node.js 20 or setup-java deprecation warnings, and should still upload the APK artifact.
+
+Commit status: Committed and pushed to `claude/order-management-features-nafks7` and `main` (owner approved: "হ্যাঁ, ঠিক করে মেইন এ পুশ কর").
+
 ## 2026-09-27 - Steadfast: new API guide + Webhook page, Courier Fraud Check fixed
 
 Reason — owner shared screenshots of Steadfast's updated merchant-portal API guide and Webhook page: "এইটার ওপর ভিত্তি করে আমাদের অ্যাপের স্টিডফাস্ট সেটিংস আপডেট কর, … ফ্রড চেকার টুল কাজ করে না সেটাও ঠিক করবে" (update our Steadfast settings from these docs, and fix the fraud checker, which doesn't work).

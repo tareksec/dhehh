@@ -4,6 +4,11 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Maintenance Update
+
+**Technical Notes:**
+- CI workflow (`.github/workflows/deploy.yml`) moves to GitHub Action versions that run on Node.js 24: `actions/checkout@v5`, `actions/setup-node@v5`, `actions/setup-java@v5` and `actions/upload-artifact@v6`. GitHub is retiring the Node.js 20 runtime for actions, and the old v4 versions showed "Node.js 20 is deprecated" and "setup-java v4 is deprecated" warnings on every run. The runtime of each new version was checked in its `action.yml`: `upload-artifact@v5` still uses Node 20, so v6 is used. `shivammathur/setup-php@v2` already runs on Node 24. The Node version the project itself builds with (`node-version: 20.19.0`) is unchanged, and so are the tests, the release cut and the APK build steps.
+
 ## [2.27.0] - 2026-09-27
 
 **Release type:** Minor Feature Update
