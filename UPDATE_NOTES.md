@@ -2,6 +2,45 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-26 - Investor import from Excel / CSV / pasted text, with a draft → review → confirm step
+
+Reason — owner: "inestor module এ এক্সেল, csv আপলোড দিলে ইনভেস্টর ফর্ম অটো ফিলাপ হয়ে যাবে … ফর্ম ফিলাপ করার পর রিভিউ করার জন্য ইনভেস্টর লিস্টকে ড্রাফটে স্ট্যাটাসে রাখবে। রিভিউ করে কনফার্ম করলে তবেই মেইন ইনভেস্টমেন্ট লিস্টে যাবে। সাথে টেক্সট বক্স এর অপশনও রাখবে …" In short: uploading Excel/CSV fills the investor form automatically; the result stays as a draft for review; only confirmed drafts go to the main list; a text box does the same with pasted text.
+
+What changed:
+- **Drafts live in their own table (`investor_drafts`), not as a status on `investors`.** This keeps unreviewed imports out of every investor picker, report, payout and channel-partner list without touching those queries. Confirming a draft validates it, creates the `Investor` and deletes the draft in one transaction.
+- **Investments → Investor Drafts** page (`InvestorDraftResource`):
+  - header actions **Import Excel / CSV** (xlsx/ods/csv/txt, 5 MB, max 500 investors), **Paste text** (up to 50,000 characters), **Sample CSV**, and a link back to the investor list.
+  - table: name, phone, **Review** badge (Ready to confirm / Needs fixing, with the reasons in a tooltip), where it came from (file name + row), and row actions Review / Confirm / Discard, plus bulk Confirm selected / Discard selected. Bulk confirm adds the good drafts and leaves the rest, listing why.
+  - review page: the investor form pre-filled, with "Must be fixed before confirming" and "Notes from the import" at the top; **Save draft** and **Save & confirm**. Errors from confirming show on the matching fields.
+- **Investors page** gets an **Import from Excel / CSV / text** button (shows the draft count when drafts are waiting).
+- **Reading:**
+  - headers and labels match English or Bangla names (`config/investor_import.php`), ignoring case, spaces and punctuation. Unknown columns are listed in the success message.
+  - pasted text: `Label: value` lines, a blank line or a repeated label starts the next investor, a line that continues an address is joined to it, numbering like `1.` / `১.` is ignored. A tab/comma/semicolon/pipe table with a header row is read as a table.
+  - phone: `+880…` / `880…` / 10-digit → `01…`; Bangla digits → Latin. Date of birth: Excel date cells, Excel serial numbers, `Y-m-d`, `d/m/Y`, `d-m-Y`, `d.m.Y`, `1 May 1980`, etc. (day first).
+  - channel partner column: matched to an existing investor by phone, then by exact name.
+- Drafts need `investments.manage`; import must be done inside one company (not "All companies"). `InvestorDraft` is company-scoped and added to `MultiCompanyIsolationTest` and `User::MODEL_MODULES`.
+
+**Needs Bangla review:** the 80 new `lang/bn.json` keys for investor import (draft page labels, form labels, review/issue messages, import notes, and the paste-box example).
+
+Note on the Bangla rule: `config/investor_import.php` holds Bangla column/label names. They are input-matching data (what owners' sheets are headed with), not user-visible text, so they are not in `lang/*.json`.
+
+Important changed/new files:
+- `database/migrations/2026_09_26_100000_create_investor_drafts_table.php`
+- `app/Models/InvestorDraft.php`, `app/Models/User.php`
+- `app/Services/Investment/InvestorImportService.php`, `config/investor_import.php`
+- `app/Filament/Resources/InvestorDrafts/{InvestorDraftResource,Pages/ListInvestorDrafts,Pages/EditInvestorDraft}.php`
+- `app/Filament/Resources/Investors/Pages/ListInvestors.php`
+- `lang/en.json`, `lang/bn.json`
+- tests: `tests/Feature/InvestorImportTest.php` (new, 14 tests), `tests/Feature/MultiCompanyIsolationTest.php`
+
+Verification:
+- `php artisan test --filter=InvestorImportTest`: 14 passed (CSV, Excel with a date cell and Bangla headers, labelled text with Bangla labels/digits, a pasted tab table, rejecting unreadable text, confirm, blocked confirm, paste action, file upload action, row confirm, bulk confirm with one bad draft, review-form save & confirm, company isolation, permissions).
+- `InvestorFormTest`, `MultiCompanyIsolationTest`, `TranslationParityTest` pass.
+- Full `php artisan test` (plain, no `--env`): **1368 passed, 0 failed** (7803 assertions).
+- Pint passes. No frontend assets changed.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` (owner approved: "হ্যাঁ, কমিট করে পুশ করো").
+
 ## 2026-09-26 - Order summary card is sent as an image; Download image works in the app
 
 Reason — owner (with a screenshot of the text message that WhatsApp received): "এরকম অর্ডার কার্ড চাইনি, আমি চেয়েছি whatsapp, wechat, messenger, telegram বাটনে চাপলে অর্ডার ডিটেইল কার্ড ইমেজ সেন্ড হবে। আর … ডাউনলোড ইমেজ বাটন … চাপলে ইমেজ ডাউনলোড হয় না। কপি টেক্সট বাটন কাজ করে।" In short: the buttons should send the card as an image, not text; Download image did nothing; Copy text works.

@@ -4,6 +4,24 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Import investors from Excel, CSV or pasted text. Each one waits as a draft until you review and confirm it.** Go to Investments → **Investor Drafts**, or use **Import from Excel / CSV / text** on the Investors page.
+  - **Import Excel / CSV:** upload an `.xlsx`, `.csv` (or `.ods` / `.txt`) file. The first row holds the column names, in English or Bangla (Name / নাম, Phone / মোবাইল, Father's Name / পিতার নাম, NID / এনআইডি, Nominee / নমিনি, and so on). **Sample CSV** downloads a file with every column.
+  - **Paste text:** paste investor details as `Label: value` lines, with a blank line between investors, or paste a table copied from Excel.
+  - Every investor found becomes an **investor draft**, with the investor form already filled in. Drafts are not investors yet: they do not appear in the investor list, pickers or reports.
+  - Open a draft (**Review**) to check and correct it, then **Save & confirm**. You can also **Confirm** from the list, or select several and use **Confirm selected**. Only then is the investor added to the main investor list, and the draft is removed.
+  - A draft with a missing name or phone, a phone that already belongs to an investor, a phone that repeats in another draft, or an invalid email shows **Needs fixing** and cannot be confirmed until it is fixed. Notes from the import (a date of birth that could not be read, an unknown channel partner, a line that was not understood, an NID that Excel may have rounded) are shown on the review page.
+  - Phone numbers are cleaned automatically (`+880 1712-345678` → `01712345678`), and Bangla digits are read as numbers.
+  - **Discard** removes a draft you do not want.
+
+**Technical Notes:**
+- New migration `2026_09_26_100000_create_investor_drafts_table` (`investor_drafts`, company-owned; `nid_number` / `nominee_nid_or_passport` encrypted like on `investors`). Run `php artisan migrate --force`.
+- New `InvestorDraft` model (`BelongsToCompany` + `CompanyScope`), `App\Services\Investment\InvestorImportService` (reading with the existing `openspout/openspout` dependency), `InvestorDraftResource` in the Investments cluster. Column/label names live in `config/investor_import.php`.
+- Drafts need the `investments.manage` permission. Uploaded files are deleted right after they are read.
+
 ## [2.23.1] - 2026-09-26
 
 **Release type:** Patch/Fix Update
