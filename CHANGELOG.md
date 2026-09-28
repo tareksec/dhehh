@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.33.0] - 2026-09-28
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -21,7 +23,6 @@ All notable production changes to Business Dashboard are documented here.
 - `InvestorResource::PAPER_COPY_UPLOADS`, `splitPaperCopies()`, `attachPaperCopies()`; `CreateInvestor::handleRecordCreation()` and `EditInvestor::handleRecordUpdate()` save the uploads as `InvestmentDocument` rows in the same transaction as the investor.
 - `InvestorImportService::investmentDefaults()` also accepts `channel_partner_id` (checked against the current company).
 - Deleted `InvestorDocumentUploadService` and the `document_keywords` config. No migration.
-
 ## [2.32.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
