@@ -4,6 +4,25 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.33.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Filter the investor list by project.** The investor list has a **Project** filter (pick one or more projects) and a **Projects** column showing which projects each investor has invested in. There is also a **Channel Partner** filter.
+- **Select many investors at once.** The investor list now has checkboxes. **Assign channel partner** sets the channel partner for all selected investors who don't have one yet. Investors who already have a channel partner are left unchanged and counted in the message; change those one by one from their edit page (that still needs the channel-partner permission and a reason).
+- **Channel partner when importing.** The **Import Excel / CSV** and **Paste text** dialogs have a **Channel partner for this import (optional)** section. The chosen partner is set on every new investor in that import. A row that names its own channel partner keeps it, and investors who already exist are not changed. The drafts bulk action is now **Set project / payment / channel partner**.
+- **Upload NID, nominee NID, signed contract (stamp paper) and cheque copies on the investor form.** The create and edit forms have a **Paper copies** section with one upload box for each. The files go to the investor's Documents tab in private storage. Only users with `investments.manage` see this section.
+
+### Changed
+
+- **Removed the "Upload documents by NID" button** from the investor list. It matched files to investors by the file name only, with no way to pick the investor or the document type. Use the upload boxes on the investor form instead.
+
+**Technical Notes:**
+- `InvestorResource::PAPER_COPY_UPLOADS`, `splitPaperCopies()`, `attachPaperCopies()`; `CreateInvestor::handleRecordCreation()` and `EditInvestor::handleRecordUpdate()` save the uploads as `InvestmentDocument` rows in the same transaction as the investor.
+- `InvestorImportService::investmentDefaults()` also accepts `channel_partner_id` (checked against the current company).
+- Deleted `InvestorDocumentUploadService` and the `document_keywords` config. No migration.
 ## [2.32.0] - 2026-09-28
 
 **Release type:** Minor Feature Update

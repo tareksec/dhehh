@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\InvestmentProjects\RelationManagers\DocumentsRelationManager;
 use App\Filament\Resources\Investors\Pages\CreateInvestor;
+use App\Filament\Resources\Investors\Pages\EditInvestor;
 use App\Filament\Resources\Investors\Pages\ListInvestors;
 use App\Filament\Resources\Investors\Pages\ViewInvestor;
 use App\Models\Company;
@@ -15,7 +16,6 @@ use App\Models\InvestorDraft;
 use App\Models\User;
 use App\Services\CompanyContext;
 use App\Services\CompanyStorageService;
-use App\Services\Investment\InvestorDocumentUploadService;
 use App\Services\Investment\InvestorImportService;
 use App\Support\InvestorIdentity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -97,45 +97,6 @@ class InvestorIdentityAndDocumentsTest extends TestCase
         $this->assertTrue(Investor::query()->whereNid('১৪৭৯৯৩৯৬০৩')->first()->is($karim));
     }
 
-    public function test_bulk_upload_attaches_each_file_to_the_investor_with_that_nid(): void
-    {
-        Storage::fake('local');
-        $karim = $this->investor('Karim', '01711111111', '1479939603');
-        $sourav = $this->investor('Sourav', '01722222222', 'EM0162269');
-
-        $result = app(InvestorDocumentUploadService::class)->attach([
-            $this->tempUpload('1479939603_nid.jpg'),
-            $this->tempUpload('1479939603_nominee.jpg'),
-            $this->tempUpload('১৪৭৯৯৩৯৬০৩ contract.pdf'),
-            $this->tempUpload('EM0162269-cheque.jpg'),
-            $this->tempUpload('9999999999_nid.jpg'),
-        ], $this->company);
-
-        $this->assertSame(4, $result['attached']);
-        $this->assertSame(['9999999999_nid.jpg'], $result['unmatched']);
-        $this->assertEqualsCanonicalizing(
-            [InvestmentDocument::CATEGORY_INVESTOR_NID, InvestmentDocument::CATEGORY_NOMINEE_NID, 'signed_contract'],
-            $karim->documents()->pluck('category')->all(),
-        );
-        $this->assertSame(['cheque_copy'], $sourav->documents()->pluck('category')->all());
-
-        $path = $karim->documents()->where('category', InvestmentDocument::CATEGORY_INVESTOR_NID)->value('file_path');
-        $this->assertStringStartsWith($this->company->storageRoot().'/private/', $path);
-    }
-
-    public function test_the_bulk_upload_action_on_the_investor_list_works(): void
-    {
-        Storage::fake('local');
-        $karim = $this->investor('Karim', '01711111111', '1479939603');
-
-        Livewire::test(ListInvestors::class)
-            ->callAction('uploadDocumentsByNid', ['files' => [UploadedFile::fake()->create('1479939603_nid.jpg', 10, 'image/jpeg')]])
-            ->assertHasNoActionErrors();
-
-        $this->assertSame([InvestmentDocument::CATEGORY_INVESTOR_NID], $karim->documents()->pluck('category')->all());
-        $this->assertSame([], Storage::disk('local')->allFiles('imports/investor-documents'));
-    }
-
     public function test_the_checklist_needs_nid_nominee_nid_and_one_contract_per_project(): void
     {
         Storage::fake('local');
@@ -207,17 +168,107 @@ class InvestorIdentityAndDocumentsTest extends TestCase
         $this->assertSame(InvestorIdentity::hash('1479939603'), $karim->fresh()->nid_hash);
     }
 
+    public function test_the_investor_form_saves_uploaded_paper_copies_as_documents(): void
+    {
+        Storage::fake('local');
+
+        Livewire::test(CreateInvestor::class)
+            ->fillForm([
+                'name' => 'Karim',
+                'phone' => '01711111111',
+                'nid_number' => '1479939603',
+                'paper_investor_nid' => [UploadedFile::fake()->create('nid.jpg', 10, 'image/jpeg')],
+                'paper_nominee_nid' => [UploadedFile::fake()->create('nominee.jpg', 10, 'image/jpeg')],
+                'paper_signed_contract' => [UploadedFile::fake()->create('contract.pdf', 10, 'application/pdf')],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $karim = Investor::query()->whereNid('1479939603')->firstOrFail();
+        $this->assertEqualsCanonicalizing(
+            [InvestmentDocument::CATEGORY_INVESTOR_NID, InvestmentDocument::CATEGORY_NOMINEE_NID, 'signed_contract'],
+            $karim->documents()->pluck('category')->all(),
+        );
+        $this->assertStringStartsWith($this->company->storageRoot().'/private/investment-documents/', $karim->documents()->value('file_path'));
+
+        Livewire::test(EditInvestor::class, ['record' => $karim->getRouteKey()])
+            ->fillForm(['paper_cheque_copy' => [UploadedFile::fake()->create('cheque.jpg', 10, 'image/jpeg')]])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame(4, $karim->documents()->count());
+        $this->assertSame(1, $karim->documents()->where('category', 'cheque_copy')->count());
+    }
+
+    public function test_the_investor_list_can_be_filtered_by_project(): void
+    {
+        $inv1 = $this->project('INV-1');
+        $inv2 = $this->project('INV-2');
+        $karim = $this->investor('Karim', '01711111111', '1479939603');
+        $rahim = $this->investor('Rahim', '01722222222', '1901688455');
+        $both = $this->investor('Both', '01733333333', '2852404322');
+        $this->invest($karim, $inv1);
+        $this->invest($rahim, $inv2);
+        $this->invest($both, $inv1);
+        $this->invest($both, $inv2);
+
+        Livewire::test(ListInvestors::class)
+            ->filterTable('project', [$inv1->id])
+            ->assertCanSeeTableRecords([$karim, $both])
+            ->assertCanNotSeeTableRecords([$rahim]);
+
+        Livewire::test(ListInvestors::class)
+            ->filterTable('project', [$inv2->id])
+            ->assertCanSeeTableRecords([$rahim, $both])
+            ->assertCanNotSeeTableRecords([$karim]);
+    }
+
+    public function test_many_investors_can_be_given_a_channel_partner_at_once(): void
+    {
+        $partner = $this->investor('Partner', '01799999999', '9999999999', ['is_channel_partner' => true]);
+        $other = $this->investor('Other partner', '01788888888', '8888888888', ['is_channel_partner' => true]);
+        $karim = $this->investor('Karim', '01711111111', '1479939603');
+        $rahim = $this->investor('Rahim', '01722222222', '1901688455');
+        $taken = $this->investor('Taken', '01733333333', '2852404322', ['channel_partner_id' => $other->id]);
+
+        Livewire::test(ListInvestors::class)
+            ->callTableBulkAction('assignChannelPartner', [$karim, $rahim, $taken, $partner], ['channel_partner_id' => $partner->id])
+            ->assertHasNoTableBulkActionErrors();
+
+        $this->assertSame($partner->id, $karim->fresh()->channel_partner_id);
+        $this->assertSame($partner->id, $rahim->fresh()->channel_partner_id);
+        $this->assertSame($other->id, $taken->fresh()->channel_partner_id);
+        $this->assertNull($partner->fresh()->channel_partner_id);
+    }
+
+    public function test_an_import_can_set_the_channel_partner_for_its_new_investors(): void
+    {
+        $partner = $this->investor('Partner', '01799999999', '9999999999', ['is_channel_partner' => true]);
+
+        app(InvestorImportService::class)->importText(
+            "Name: Karim\nPhone: 01711111111\nNID: 1479939603\n\nName: Rahim\nPhone: 01722222222\nNID: 1901688455",
+            investment: ['channel_partner_id' => $partner->id],
+        );
+
+        $drafts = InvestorDraft::query()->get();
+        $this->assertCount(2, $drafts);
+        $this->assertSame([$partner->id, $partner->id], $drafts->pluck('channel_partner_id')->all());
+
+        $karim = app(InvestorImportService::class)->confirm($drafts->first());
+        $this->assertSame($partner->id, $karim->channel_partner_id);
+    }
+
     private function investor(string $name, string $phone, string $nid, array $extra = []): Investor
     {
         return Investor::query()->create(['company_id' => $this->company->id, 'name' => $name, 'phone' => $phone, 'nid_number' => $nid, ...$extra]);
     }
 
-    private function project(): InvestmentProject
+    private function project(string $code = 'INV-1'): InvestmentProject
     {
         return InvestmentProject::query()->create([
             'company_id' => $this->company->id,
-            'project_code' => 'INV-1',
-            'name' => 'Sharing machine',
+            'project_code' => $code,
+            'name' => 'Sharing machine '.$code,
             'duration_type' => 'custom_days',
             'trade_cycle_days' => 60,
             'start_date' => now()->toDateString(),
@@ -228,6 +279,11 @@ class InvestorIdentityAndDocumentsTest extends TestCase
         ]);
     }
 
+    private function invest(Investor $investor, InvestmentProject $project): Investment
+    {
+        return Investment::query()->create(['company_id' => $this->company->id, 'project_id' => $project->id, 'investor_id' => $investor->id, 'amount' => 200000, 'payment_method' => 'bank', 'invested_at' => now()->toDateString()]);
+    }
+
     private function document(Investor|InvestmentProject $owner, string $category): InvestmentDocument
     {
         return $owner->documents()->create([
@@ -235,14 +291,5 @@ class InvestorIdentityAndDocumentsTest extends TestCase
             'category' => $category,
             'file_path' => app(CompanyStorageService::class)->putPrivate($this->company, 'investment-documents', $category.'.pdf', 'copy'),
         ]);
-    }
-
-    /** @return array{path: string, name: string} */
-    private function tempUpload(string $name): array
-    {
-        $path = tempnam(sys_get_temp_dir(), 'doc');
-        file_put_contents($path, 'scan');
-
-        return ['path' => $path, 'name' => $name];
     }
 }

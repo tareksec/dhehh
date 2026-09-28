@@ -235,9 +235,9 @@ class InvestorDraftResource extends Resource
                         })
                         ->deselectRecordsAfterCompletion(),
                     BulkAction::make('setInvestment')
-                        ->label(__('Set project / payment'))
+                        ->label(__('Set project / payment / channel partner'))
                         ->icon(Heroicon::OutlinedBanknotes)
-                        ->schema(static::investmentFields(withAmount: false))
+                        ->schema([...static::investmentFields(withAmount: false), static::channelPartnerField()])
                         ->action(function (Collection $records, array $data): void {
                             $changes = array_filter($data, fn ($value): bool => filled($value));
 
@@ -278,6 +278,16 @@ class InvestorDraftResource extends Resource
                 ->options(collect(Investment::PAYMENT_METHODS)->map(fn (string $label): string => __($label))->all()),
             DatePicker::make('invested_at')->label(__('Investment date'))->maxDate(now()),
         ]));
+    }
+
+    /** Channel partner picker shared by the import dialogs and the bulk action. */
+    public static function channelPartnerField(): Select
+    {
+        return Select::make('channel_partner_id')
+            ->label(__('Channel Partner'))
+            ->options(fn (): array => Investor::query()->orderByDesc('is_channel_partner')->orderBy('name')->pluck('name', 'id')->all())
+            ->searchable()
+            ->helperText(__('Applied to the new investors in this import. A row with its own channel partner column keeps that one; investors who already exist are not changed.'));
     }
 
     /**

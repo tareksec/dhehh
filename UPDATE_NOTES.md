@@ -14,6 +14,44 @@ Not code — no migration, no test changes, no `lang/` changes.
 
 Commit status: not committed — waiting for owner approval.
 
+## 2026-09-28 - Investor list: project filter, multi-select, channel partner on import, paper-copy uploads on the form
+
+Reason — owner, after using the investor list with the real INV-1 sheet:
+- "ইনভেস্টর শীট জখন আপলোড করি তখন পার্টনার চ্যানেল সিলেক্ট করার কোন অপশন আসেনা" — no way to pick the channel partner when importing.
+- "মূল লিস্টে মাল্টিপল লিস্ট সিলেক্ট করার অপশন নাই" — no multi-select on the investor list.
+- "nid upload এর জন্য একটা বাটন যুক্ত করেছ এটা কাজের মনে হচ্ছে না … ইনভেস্টর তৈরির ফর্মে nid, stamp -চুক্তিপত্র, check আপলোডের ঘর থাকার কথা" — the NID bulk-upload button is not useful; the investor form should have upload boxes for NID, the stamp-paper contract and the cheque.
+- "ইনভেস্টর লিস্ট প্রজেক্ট বাই প্রজেক্ট ফিল্টার করার অপশন থাকতে হবে। এটা মেন্ডাটরি।" — the investor list must filter by project.
+
+What changed:
+- **Project filter:** `SelectFilter('project')` (multiple, searchable) on the investor list, matching investors with an investment in any chosen project. New **Projects** badge column (project codes; `investments.project` is eager-loaded). A **Channel Partner** filter was added too.
+- **Multi-select:** bulk action **Assign channel partner** (manage only). It sets the partner only on selected investors with none, and skips investors who already have a partner or are the chosen partner. Changing an existing partner stays a one-by-one edit, because the model requires `investments.manage_channel_partner` and a reason for that.
+- **Channel partner on import:** a **Channel partner for this import (optional)** section in both import dialogs, and the same field in the drafts bulk action (renamed **Set project / payment / channel partner**). `InvestorImportService::investmentDefaults()` takes `channel_partner_id`. A row's own channel-partner column still wins. Linked existing investors are unchanged, as before.
+- **Paper copies on the investor form:** four upload boxes (investor NID copy, nominee NID copy, signed contract / stamp paper, cheque copy). They are multiple, PDF/JPG/PNG/WEBP, 10 MB each, stored in the company's private storage, and visible only with manage. On create or save they become `InvestmentDocument` rows on the investor in the same transaction. Edit clears the boxes after saving so a second save does not add the files again.
+- **Removed** the "Upload documents by NID" header action, `InvestorDocumentUploadService`, the `document_keywords` config and its 2 tests.
+
+Not done — waiting for the owner's answers: investors who withdrew their investment with profit (keep the record, only change the status). See the questions in the conversation.
+
+Noticed in the owner's screenshot (not changed):
+- Two investors (সৌরভ আহমেদ, আবীর ওয়াদুদ মজুমদার) have their phone saved in Bangla digits. Import matching by phone uses 0-9, so a re-import would not match them by phone. The NID still matches them.
+- মোঃ মিছবাহুর রাশিদ জাহিদ has NID `01766718192`, the same as the phone. It is probably wrong in the sheet.
+
+**Needs Bangla review:** 10 new `lang/bn.json` keys (the channel-partner and paper-copy texts). 7 keys used only by the removed button were deleted from both files.
+
+Important changed files:
+- `app/Filament/Resources/Investors/InvestorResource.php`, `Pages/{CreateInvestor,EditInvestor,ListInvestors}.php`
+- `app/Filament/Resources/InvestorDrafts/InvestorDraftResource.php`, `Pages/ListInvestorDrafts.php`
+- `app/Services/Investment/InvestorImportService.php`, `config/investor_import.php`
+- deleted `app/Services/Investment/InvestorDocumentUploadService.php`
+- `lang/en.json`, `lang/bn.json`, `tests/Feature/InvestorIdentityAndDocumentsTest.php`
+
+Verification:
+- `InvestorIdentityAndDocumentsTest`: 11 passed. There are 4 new tests: form uploads become documents on create and edit, the project filter, bulk assign channel partner (skips an investor who already has one), and an import with a channel partner. The 2 bulk-upload tests were removed.
+- `InvestorImportTest`, `InvestorFormTest` and `TranslationParityTest` pass. Pint passes.
+- Full `php artisan test` (plain, no `--env`): 1519 passed, 1 failed. The failure is `ReleaseNotesTest`: `CHANGELOG.md` was rebuilt on `main`'s copy, which already has v2.32.0, while this branch's `config/release.php` still says 2.30.0. It clears when `main` is merged in before the commit, and the suite is re-run then.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
 ## 2026-09-28 - Quote status webhook for connected websites (lead.status_updated)
 
 Reason — owner: "কোটেশন স্ট্যাটাস webhook ERP-তে যোগ করো". Two website teams (Tasneem Knit, Noor Solar — noorsolaren.com is a separate company in the ERP) need the status of a quote they sent to come back to their site.

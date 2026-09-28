@@ -136,6 +136,9 @@ class ListInvestorDrafts extends ListRecords
                 ->schema(InvestorDraftResource::investmentFields(withAmount: false))
                 ->columns(3)
                 ->collapsible(),
+            Section::make(__('Channel partner for this import (optional)'))
+                ->schema([InvestorDraftResource::channelPartnerField()])
+                ->collapsible(),
         ];
     }
 

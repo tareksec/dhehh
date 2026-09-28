@@ -258,6 +258,9 @@ class InvestorImportService
             'project_id' => filled($investment['project_id'] ?? null) ? (int) $investment['project_id'] : null,
             'payment_method' => array_key_exists((string) ($investment['payment_method'] ?? ''), Investment::PAYMENT_METHODS) ? $investment['payment_method'] : null,
             'invested_at' => filled($investment['invested_at'] ?? null) ? (string) $investment['invested_at'] : null,
+            'channel_partner_id' => filled($investment['channel_partner_id'] ?? null)
+                ? Investor::query()->whereKey((int) $investment['channel_partner_id'])->value('id')
+                : null,
         ], fn ($value): bool => $value !== null);
     }
 
