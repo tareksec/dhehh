@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.32.0] - 2026-09-28
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -18,7 +20,6 @@ All notable production changes to Business Dashboard are documented here.
 - **Webhook:** new `lead.status_updated` event (`id`, `external_reference`, `status`, `updated_at`) via `WebsiteWebhookDispatcher::dispatchLeadStatusUpdated()`, fired from `Lead::updated` when `status` changes and `external_reference` is set. Same signing, queue job and per-company settings as the existing events.
 - **Docs:** `docs/api/website-integration.md` and `website-integration.openapi.yaml` updated.
 - No new user-visible strings, so no `lang/` changes.
-
 ## [2.31.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
