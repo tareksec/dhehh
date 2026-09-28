@@ -17,6 +17,9 @@ webhook signature verification.
   Order in ZamZam ERP.
 - **Inquiries — website → ERP.** A contact/inquiry form submission creates a
   CRM lead ("query list") in ZamZam ERP.
+- **Inquiry/quote status — ERP → website, one-way.** When staff move a lead
+  your website submitted to another status, you receive a
+  `lead.status_updated` webhook.
 - **Order status — ERP → website, one-way.** Status is only ever changed
   from inside the ERP (production/shipping updates). Your website receives
   those changes via webhook and displays them; it never sets status itself.
@@ -75,8 +78,15 @@ X-ZamZam-Signature: <hex-encoded HMAC-SHA256 of the raw request body>
 }
 ```
 
-Events sent: `order.status_updated`, `product.updated`, and `ping` (test
-webhook only).
+Events sent: `order.status_updated`, `product.updated`,
+`lead.status_updated`, and `ping` (test webhook only).
+
+`lead.status_updated` is sent only for leads you created with an
+`external_reference` (your own quote id) on `POST /leads` — that is how you
+match it to your quote. Its `data` is `id`, `external_reference`, `status`
+(`new`, `contacted`, `quoted`, `won`, `lost`) and `updated_at`. Re-posting
+the same `external_reference` returns the existing lead instead of creating
+a duplicate, so a lead submission is safe to retry.
 
 **Verify the signature before trusting the payload** — compute the same HMAC
 over the exact raw bytes you received and compare with a constant-time
