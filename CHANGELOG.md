@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.29.0] - 2026-09-28
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -17,7 +19,6 @@ All notable production changes to Business Dashboard are documented here.
 **Technical Notes:**
 - New migration `2026_09_28_100000_add_investment_fields_to_investor_drafts_table` (`existing_investor_id`, `project_id`, `investment_amount`, `payment_method`, `invested_at`). Run `php artisan migrate --force`.
 - `InvestorImportService::confirm()` creates the `Investment` (+ `InvestorSecurityInstrument` when stamp/cheque numbers exist) in the same transaction as the investor, then calls `InvestmentLedgerService::recordInvestmentReceived()`. The `Investment` model's own rules (investment window, one channel partner per project) still apply and block the confirm with their message.
-
 ## [2.28.1] - 2026-09-27
 
 **Release type:** Patch/Fix Update
