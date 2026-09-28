@@ -26,7 +26,43 @@ Verification:
 - Pint: passed. `npm run build`: succeeded.
 - Not verified in a browser.
 
-Commit status: not committed — this is a fix to PR #10, which I opened and am driving myself; waiting for the owner's go-ahead to push, per this repo's commit/push approval rule.
+Commit status: Committed and pushed to `claude/friendly-feynman-w4twzx` (owner approved: "হ্যাঁ, commit আর push কর") — updates PR bhd4232/Business-Dashboard#10.
+
+## 2026-09-28 - Trashed payout vouchers make the payout unpaid; rejected/cancelled withdrawal vouchers make the investment active
+
+Reason — owner, answering the three open questions: "১। ঠিক আছে ২। হ্যাঁ ৩। হ্যাঁ, সক্রিয় হবে"
+1. Approved vouchers can't go to trash — confirmed, no change.
+2. A reseller or settlement payout whose pending voucher goes to trash becomes unpaid again — yes.
+3. A rejected or cancelled withdrawal voucher makes the investment active again — yes.
+
+What changed:
+- **`VoucherLinkedPayoutsService` (new):**
+  - `voucherTrashed()` sets `SettlementPayout` / `ChannelPartnerPayout` rows linked to the voucher from `paid` to `pending` and clears `paid_at`. Their settlement goes from `paid_out` to `confirmed`. `ResellerPayoutRequest` goes from `paid` to `approved` and `paid_at` is cleared; the available balance is unchanged, because approved requests are already held.
+  - `voucherRestored()` does the reverse. `paid_at` becomes the voucher's created date, and the settlement goes back to `paid_out` when nothing is pending.
+  - The voucher link is kept so a restore can find the payout. "Mark paid" again creates a new voucher and replaces the link.
+- **`VoucherTrashService`** calls it on trash and restore, next to the withdrawal hooks.
+- **Withdrawal:** `VoucherService::reject()` and `cancel()` call `InvestmentWithdrawalService::voucherVoided()` (renamed from `voucherTrashed()`; trash uses it too). The new `Voucher::isVoid()` means rejected or cancelled. Restoring a void voucher from trash re-marks nothing, for investments and for payouts.
+- **Model rules:**
+  - `Investment` accepts "withdrawn" only while its voucher exists and is not void, and allows withdrawn → active when the voucher is trashed or void.
+  - `ProjectSettlement` allows `paid_out` → `confirmed` only while one of its payouts is pending again; every other status change still moves forward only.
+
+Scope: owner's answer 2 was about trashed vouchers, so a *rejected or cancelled* payout voucher still leaves the payout paid. The investment capital-in voucher (`investments.voucher_id`) is not linked to any status.
+
+**Needs Bangla review:** the trash confirmation text changed. It is 1 key, replacing the old one.
+
+Important changed/new files:
+- `app/Services/VoucherLinkedPayoutsService.php` (new), `app/Services/{VoucherTrashService,VoucherService}.php`, `app/Services/Investment/InvestmentWithdrawalService.php`
+- `app/Models/{Voucher,Investment,ProjectSettlement}.php`, `app/Filament/Resources/Vouchers/VoucherResource.php`
+- `lang/en.json`, `lang/bn.json`, `tests/Feature/{VoucherTrashTest,InvestmentWithdrawalTest}.php`
+
+Verification:
+- `VoucherTrashTest`: 6 passed. New tests: a settlement payout goes unpaid and the settlement goes back to confirmed on trash, and both return to paid / paid_out on restore; a reseller request goes paid → approved → paid.
+- `InvestmentWithdrawalTest`: 8 passed. New test: rejected → active, cancelled → active, restoring a trashed cancelled voucher keeps it active, and it can be withdrawn again with a new voucher.
+- Full `php artisan test` (plain, no `--env`): **1539 passed, 0 failed**.
+- Pint passes on the changed files. It also re-ordered imports and fixed spacing on a few older lines in `VoucherService.php`.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, আগে পুশ কর").
 
 ## 2026-09-28 - Settlements leave withdrawn investments out; voucher trash (move to trash, restore, delete permanently)
 

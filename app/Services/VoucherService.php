@@ -10,6 +10,7 @@ use App\Models\SupplierPayment;
 use App\Models\TransactionLedger;
 use App\Models\User;
 use App\Models\Voucher;
+use App\Services\Investment\InvestmentWithdrawalService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -211,6 +212,7 @@ class VoucherService
                 'approved_by' => $user->getKey(),
                 'approved_at' => now(),
             ]);
+            app(InvestmentWithdrawalService::class)->voucherVoided($lockedVoucher);
 
             $voucher->setRawAttributes($lockedVoucher->getAttributes());
         });
@@ -228,6 +230,7 @@ class VoucherService
             }
 
             $lockedVoucher->update(['status' => Voucher::STATUS_CANCELLED]);
+            app(InvestmentWithdrawalService::class)->voucherVoided($lockedVoucher);
 
             $voucher->setRawAttributes($lockedVoucher->getAttributes());
         });

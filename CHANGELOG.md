@@ -6,6 +6,22 @@ All notable production changes to Business Dashboard are documented here.
 
 **Release type:** Minor Feature Update
 
+### Changed
+
+- **Moving a payout voucher to trash makes the payout unpaid again.** This covers investor settlement payouts, channel-partner payouts and reseller withdrawal requests. If the voucher that was created when the payout was marked paid goes to **Trash**, the payout goes back to **pending**, or **approved** for reseller requests, and can be paid again. Restoring the voucher marks it paid again. A settlement that was fully paid out goes back to **confirmed** while any payout is unpaid.
+- **A rejected or cancelled principal-withdrawal voucher makes the investment Active again.** Until now, only moving that voucher to trash did this. The withdrawal date, voucher link and note stay as history, and the investment can be withdrawn again with a new voucher.
+- Confirmed with the owner: an **approved** voucher still can't be moved to trash.
+
+**Technical Notes:**
+- New `VoucherLinkedPayoutsService` (`voucherTrashed()` / `voucherRestored()`), called by `VoucherTrashService`. The voucher link on the payout is kept so a restore can find it. A restore does nothing if the voucher was rejected or cancelled.
+- `VoucherService::reject()` and `cancel()` call `InvestmentWithdrawalService::voucherVoided()` (renamed from `voucherTrashed()`). New `Voucher::isVoid()` (rejected or cancelled). The `Investment` model counts "withdrawn" only while its voucher exists and isn't void.
+- `ProjectSettlement` allows one step back, from `paid_out` to `confirmed`, and only while one of its payouts is unpaid again. Otherwise its status still only moves forward.
+- No migration.
+
+## [2.35.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
 ### Added
 
 - **In-app Documentation.** A new **Documentation** menu (visible to everyone signed in) is a step-by-step guide hub for the app itself, browsable by category with a search box. Admins with the Settings permission write and organize the guides from **Settings → Documentation** — a rich-text editor per article, grouped into categories, with a Published toggle so drafts stay hidden until ready.
@@ -28,7 +44,6 @@ All notable production changes to Business Dashboard are documented here.
 - New `VoucherTrashService` (`trash` / `restore` / `deletePermanently`), new `User::canDeleteVoucher()`, and a new page `TrashedVouchers` at `/vouchers/trash`. `VoucherResource::canDelete()` stays `false`.
 - `InvestmentWithdrawalService::voucherTrashed()` / `voucherRestored()`. The `Investment` model allows withdrawn → active only while the withdrawal voucher is in trash, and counts "withdrawn" only while that voucher exists. An investment that has ever had a withdrawal voucher cannot be deleted.
 - `SettlementService::calculateAndSettle()` uses `investments()->active()`.
-
 ## [2.34.0] - 2026-09-28
 
 **Release type:** Minor Feature Update

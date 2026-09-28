@@ -153,6 +153,12 @@ class Voucher extends Model
         return $this->type === self::TYPE_DEBIT;
     }
 
+    /** Rejected or cancelled: it will never move money. */
+    public function isVoid(): bool
+    {
+        return in_array($this->status, [self::STATUS_REJECTED, self::STATUS_CANCELLED], true);
+    }
+
     public function isPending(): bool
     {
         return $this->status === self::STATUS_PENDING;
