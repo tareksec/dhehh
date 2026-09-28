@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.35.0] - 2026-09-28
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -22,7 +24,6 @@ All notable production changes to Business Dashboard are documented here.
 - New `VoucherTrashService` (`trash` / `restore` / `deletePermanently`), new `User::canDeleteVoucher()`, and a new page `TrashedVouchers` at `/vouchers/trash`. `VoucherResource::canDelete()` stays `false`.
 - `InvestmentWithdrawalService::voucherTrashed()` / `voucherRestored()`. The `Investment` model allows withdrawn → active only while the withdrawal voucher is in trash, and counts "withdrawn" only while that voucher exists. An investment that has ever had a withdrawal voucher cannot be deleted.
 - `SettlementService::calculateAndSettle()` uses `investments()->active()`.
-
 ## [2.34.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
