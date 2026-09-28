@@ -1307,6 +1307,32 @@ AI auto-reply (grounded-only assistant):
 - AI messages saved with `generated_by = 'ai'`, `ai_confidence`, and `ai_meta` (tool trace + token usage); `'phone_app'` marks a message the owner sent from the WhatsApp Business App itself (Coexistence echo, see above). LLM calls are always `Http::fake()`d in tests.
 - Quick Replies (`QuickReply` model, mirrors `CompanyFaq`) are saved text snippets managed from **CRM → Quick Replies** and inserted into the Inbox composer via the bookmark icon — no Meta API involved, works regardless of connection type.
 
+### Documentation Module
+
+An in-app, step-by-step guide hub for the application itself (not business data). Not company-scoped — the same guides show for every company.
+
+- **`Settings → Documentation`** (`DocumentationArticleResource`, gated by `canManageSettings()`): admins write and edit articles with a rich-text editor, grouped into categories. A new category can be created inline from the article's Create/Edit form. A **Published** toggle hides drafts from the public browsing page.
+- **`Documentation`** (`App\Filament\Pages\Documentation`, standalone top-level nav item, route `/admin/documentation`): open to every signed-in user (`Auth::check()`). Lists published articles grouped by category with a live search box; content is rendered with Filament's `RichContentRenderer`.
+- Access model: writing is admin-only (same gate as other Settings pages); reading is open to any authenticated user, by design — everyone needs the guides.
+
+Important files:
+
+```text
+database/migrations/2026_09_28_140000_create_documentation_tables.php
+app/Models/DocumentationCategory.php
+app/Models/DocumentationArticle.php
+app/Filament/Resources/DocumentationArticles/
+app/Filament/Pages/Documentation.php
+resources/views/filament/pages/documentation.blade.php
+tests/Feature/DocumentationModuleTest.php
+```
+
+Focused verification:
+
+```bash
+php artisan test --compact tests/Feature/DocumentationModuleTest.php
+```
+
 ## 4. Admin Panel
 
 Filament admin panel is configured in:

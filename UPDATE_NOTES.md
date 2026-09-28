@@ -2,6 +2,32 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-28 - Documentation module: fixes from automated PR review (Codex)
+
+Reason — an automated review bot (`chatgpt-codex-connector[bot]`) left 5 findings on PR bhd4232/Business-Dashboard#10 (the Documentation module committed earlier today), each citing a real `AGENTS.md` rule. Verified each and fixed all of them; this is a follow-up to the earlier "In-app Documentation module" entry, not a new feature.
+
+What changed:
+- **CHANGELOG.md:** moved the Documentation entry from the already-dated `[2.34.0]` section back into `[Unreleased]` — the release cutter only reads `[Unreleased]`, so it would otherwise never ship in a generated release.
+- **PROJECT_GUIDE.md:** added a "Documentation Module" subsection under "3. Current Core Modules" (route, access model, important files, focused test command) — this had been left only in chat/CHANGELOG.
+- **Filament-only UI:** rewrote `resources/views/filament/pages/documentation.blade.php` to use `x-filament::section`, `x-filament::input.wrapper`/`x-filament::input`, and `x-filament::button` instead of raw `<input>`/`<button>` and hand-styled Tailwind cards, matching the pattern used elsewhere (e.g. Inbox).
+- **Bilingual strings:** every new visible string in `Documentation.php`, `DocumentationArticleResource.php`, and the Blade view now goes through `__()`, with matching `lang/en.json` and `lang/bn.json` keys (reusing existing `Category`/`Name` keys where they already existed).
+- **Bug fix:** searching with no matches now clears `activeArticleId` instead of leaving a stale, non-matching article rendered in the content pane while the sidebar says "no guides match."
+
+Important changed/new files:
+- `CHANGELOG.md`, `PROJECT_GUIDE.md`, `lang/en.json`, `lang/bn.json`
+- `app/Filament/Pages/Documentation.php`, `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `resources/views/filament/pages/documentation.blade.php`
+- `tests/Feature/DocumentationModuleTest.php` (+1 regression test for the search-clears-selection fix)
+
+Verification:
+- `DocumentationModuleTest`: 5 passed (added the no-match-clears-selection test).
+- `TranslationParityTest`: passed.
+- Full `php artisan test` (plain, no `--env`): **1541 passed, 0 failed** (10178 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/friendly-feynman-w4twzx` (owner approved: "হ্যাঁ, commit আর push কর") — updates PR bhd4232/Business-Dashboard#10.
+
 ## 2026-09-28 - Trashed payout vouchers make the payout unpaid; rejected/cancelled withdrawal vouchers make the investment active
 
 Reason — owner, answering the three open questions: "১। ঠিক আছে ২। হ্যাঁ ৩। হ্যাঁ, সক্রিয় হবে"
@@ -96,6 +122,32 @@ What changed:
 - `docs/api/website-integration.md` links to it right after the intro, so anyone starting from the main guide finds it.
 
 Not code — no migration, no test changes, no `lang/` changes.
+
+Commit status: Committed and merged into `main` via PR bhd4232/Business-Dashboard#9 (owner approved: "PR খুলে দাও").
+
+## 2026-09-28 - In-app Documentation module: step-by-step guides, editable from Filament
+
+Reason — owner: "আমাদের অ্যাপের মধ্যে ডকুমেন্টেশন মডিউল যুক্ত করতে বলেছিলাম যেখানে আমাদের অ্যাপের সকল দিকনির্দেশনা গুলো স্টেপ বাই স্টেপ লিখা থাকবে।" A documentation module inside the app itself, where all of the app's own instructions are written step by step. Scope, confirmed with the owner: a general documentation hub (not only the API docs), content editable from Filament (not a static file).
+
+What changed:
+- New tables `documentation_categories` (name, slug, icon, sort order) and `documentation_articles` (category, title, slug, rich-text content, sort order, published toggle). Not company-scoped — the guides are about the app itself, so every company sees the same ones.
+- **Settings → Documentation** (admin only, same `settings.manage`/super-admin gate as the other Settings pages): create/edit articles with a rich-text editor; a new category can be added right from the article form.
+- **Documentation** — a new top-level menu open to every signed-in user: categories down the side, a search box, and the selected article's content on the right. Only published articles show. This is the step-by-step guide hub itself.
+
+Not yet done: no content has been written into it yet — the module is the tool for the owner/admins to start writing the app's own guides (order flow, inventory, investments, etc.) inside Filament.
+
+Important changed/new files:
+- `database/migrations/2026_09_28_140000_create_documentation_tables.php`
+- `app/Models/{DocumentationCategory,DocumentationArticle}.php`
+- `app/Filament/Resources/DocumentationArticles/**`
+- `app/Filament/Pages/Documentation.php`, `resources/views/filament/pages/documentation.blade.php`
+- `tests/Feature/DocumentationModuleTest.php` (new)
+
+Verification:
+- `DocumentationModuleTest`: 4 passed (published-only listing, search filtering, permission gate for a manager without `settings.manage`, access granted for a super admin).
+- Full `php artisan test` (plain, no `--env`): **1534 passed, 0 failed** (9975 assertions).
+- `npm run build`: succeeded.
+- Not verified in a browser.
 
 Commit status: not committed — waiting for owner approval.
 
