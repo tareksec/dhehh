@@ -102,7 +102,7 @@ class ResellerResource extends Resource
         return static::resellerModuleEnabledForCurrentContext() ? $query : $query->whereRaw('1 = 0');
     }
 
-    protected static function resellerModuleEnabledForCurrentContext(): bool
+    public static function resellerModuleEnabledForCurrentContext(): bool
     {
         $context = app(CompanyContext::class);
 

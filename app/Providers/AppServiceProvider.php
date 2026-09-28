@@ -47,6 +47,7 @@ use App\Observers\CompanyNotificationObserver;
 use App\Observers\OrderNotificationObserver;
 use App\Services\CompanyContext;
 use App\Services\CompanyStorageService;
+use App\Services\ResellerPricing;
 use App\Services\StorageSettingsService;
 use App\Support\DefaultTableSort;
 use App\Support\FileUploadClearAction;
@@ -73,6 +74,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->alias(CompanyContext::class, 'company.context');
         $this->app->singleton(StorageSettingsService::class);
         $this->app->singleton(CompanyStorageService::class);
+        $this->app->scoped(ResellerPricing::class);
     }
 
     public function boot(): void

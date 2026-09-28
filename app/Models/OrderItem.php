@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Services\ResellerCommissionService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -19,6 +20,7 @@ class OrderItem extends Model
         'quantity',
         'unit_price',
         'unit_cost',
+        'reseller_base_price',
         'subtotal',
     ];
 
@@ -26,6 +28,7 @@ class OrderItem extends Model
         'quantity' => 'integer',
         'unit_price' => 'decimal:2',
         'unit_cost' => 'decimal:2',
+        'reseller_base_price' => 'decimal:2',
         'subtotal' => 'decimal:2',
     ];
 
@@ -45,10 +48,18 @@ class OrderItem extends Model
 
         static::saved(function (OrderItem $item): void {
             $item->order?->syncTotalsStockAndCustomerBalance();
+
+            if ($item->order) {
+                app(ResellerCommissionService::class)->sync($item->order);
+            }
         });
 
         static::deleted(function (OrderItem $item): void {
             $item->order?->syncTotalsStockAndCustomerBalance();
+
+            if ($item->order) {
+                app(ResellerCommissionService::class)->sync($item->order);
+            }
         });
     }
 

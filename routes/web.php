@@ -200,6 +200,10 @@ Route::prefix('/storefront/{company:slug}')->group(function (): void {
         ->name('storefront.preview.account.reseller.slug');
     Route::post('/account/reseller/products/{product}', [ResellerStoreController::class, 'toggleProductPreview'])
         ->name('storefront.preview.account.reseller.products.toggle');
+    Route::patch('/account/reseller/products/{product}/price', [ResellerStoreController::class, 'updatePricePreview'])
+        ->name('storefront.preview.account.reseller.products.price');
+    Route::post('/account/reseller/payouts', [ResellerStoreController::class, 'requestPayoutPreview'])
+        ->name('storefront.preview.account.reseller.payouts.store');
 
     Route::get('/reseller', [ResellerController::class, 'showPreview'])
         ->name('storefront.preview.reseller.show');
@@ -347,6 +351,10 @@ Route::middleware(ResolveCompanyFromDomain::class)->group(function (): void {
         ->name('storefront.account.reseller.slug');
     Route::post('/account/reseller/products/{product}', [ResellerStoreController::class, 'toggleProduct'])
         ->name('storefront.account.reseller.products.toggle');
+    Route::patch('/account/reseller/products/{product}/price', [ResellerStoreController::class, 'updatePrice'])
+        ->name('storefront.account.reseller.products.price');
+    Route::post('/account/reseller/payouts', [ResellerStoreController::class, 'requestPayout'])
+        ->name('storefront.account.reseller.payouts.store');
 
     Route::get('/reseller', [ResellerController::class, 'show'])
         ->name('storefront.reseller.show');

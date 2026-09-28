@@ -7,12 +7,14 @@ use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\GeneratesSequentialNumber;
 use App\Services\CustomerRiskService;
 use App\Services\OrderWorkflowService;
+use App\Services\ResellerCommissionService;
 use App\Services\ShippingFeeService;
 use App\Services\WebsiteWebhookDispatcher;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
@@ -292,6 +294,7 @@ class Order extends Model
 
         static::saved(function (Order $order): void {
             $order->syncTotalsStockAndCustomerBalance();
+            app(ResellerCommissionService::class)->sync($order);
             app(OrderWorkflowService::class)->syncPreviousCustomerBalance($order);
             if ($order->wasChanged('status') && $order->isAccounted() && Schema::hasTable('fraud_checks')) {
                 app(CustomerRiskService::class)->evaluateOrder($order);
@@ -401,6 +404,11 @@ class Order extends Model
     public function riskReviews(): HasMany
     {
         return $this->hasMany(CustomerRiskReview::class);
+    }
+
+    public function resellerCommission(): HasOne
+    {
+        return $this->hasOne(ResellerCommission::class);
     }
 
     public function statusTransitions(): HasMany

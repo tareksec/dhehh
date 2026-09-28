@@ -456,6 +456,8 @@ class StorefrontSetting extends Model
         'footer_menu',
         'footer_blocks',
         'reseller_program_enabled',
+        'reseller_cost_per_unit',
+        'reseller_min_withdrawal',
         'social_links',
         'is_published',
     ];
@@ -529,6 +531,8 @@ class StorefrontSetting extends Model
         'footer_menu' => 'array',
         'footer_blocks' => 'array',
         'reseller_program_enabled' => 'boolean',
+        'reseller_cost_per_unit' => 'decimal:2',
+        'reseller_min_withdrawal' => 'decimal:2',
         'social_links' => 'array',
         'typography_base_size' => 'integer',
         'typography_heading_weight' => 'integer',

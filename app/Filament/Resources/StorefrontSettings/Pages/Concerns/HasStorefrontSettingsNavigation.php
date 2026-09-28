@@ -55,6 +55,7 @@ trait HasStorefrontSettingsNavigation
             ['key' => 'integrations', 'label' => 'Payments & Integrations', 'icon' => 'heroicon-o-credit-card'],
             ['key' => 'notifications', 'label' => 'Notifications', 'icon' => 'heroicon-o-bell-alert'],
             ['key' => 'navigation_seo', 'label' => 'Navigation & SEO', 'icon' => 'heroicon-o-bars-3-bottom-left'],
+            ['key' => 'reseller', 'label' => __('Reseller Settings'), 'icon' => 'heroicon-o-user-group'],
         ];
     }
 

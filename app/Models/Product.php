@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Services\ResellerPricing;
 use App\Services\WebsiteWebhookDispatcher;
 use App\Support\StorefrontListingCache;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class Product extends Model
@@ -124,7 +126,7 @@ class Product extends Model
         return $this->hasMany(StockMovement::class);
     }
 
-    public function stockPool(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function stockPool(): BelongsTo
     {
         return $this->belongsTo(StockPool::class);
     }
@@ -148,7 +150,32 @@ class Product extends Model
 
     public function getSellingPriceAttribute(): float
     {
+        // A storefront visitor shopping through a reseller sees that
+        // reseller's price for their catalog products (see ResellerPricing);
+        // everywhere else — admin, reports, jobs — this is never active.
+        return app(ResellerPricing::class)->priceFor($this) ?? $this->baseSellingPrice();
+    }
+
+    /** The product's own selling price, ignoring any reseller price. */
+    public function baseSellingPrice(): float
+    {
         return (float) ($this->sale_price ?? $this->price ?? 0);
+    }
+
+    /**
+     * A reseller's wholesale buying rate: the lowest wholesale tier price.
+     * Null when the product has no tiers or has variants (variant lines
+     * keep their own variant price, so they aren't reseller-priced).
+     */
+    public function resellerWholesaleRate(): ?float
+    {
+        if ($this->has_variants) {
+            return null;
+        }
+
+        $tiers = $this->rawNormalizedTiers();
+
+        return $tiers === [] ? null : (float) min(array_column($tiers, 'price'));
     }
 
     /**
@@ -176,6 +203,17 @@ class Product extends Model
      * ['min_qty' => int, 'price' => float] rows. Invalid rows are dropped.
      */
     public function normalizedTiers(): array
+    {
+        // Hidden while a reseller price applies: the lowest tier is the
+        // reseller's own buying rate, not something their customers see.
+        if (app(ResellerPricing::class)->priceFor($this) !== null) {
+            return [];
+        }
+
+        return $this->rawNormalizedTiers();
+    }
+
+    protected function rawNormalizedTiers(): array
     {
         return collect($this->tier_prices ?? [])
             ->map(fn ($tier): ?array => is_array($tier) && (int) ($tier['min_qty'] ?? 0) > 0 && is_numeric($tier['price'] ?? null)

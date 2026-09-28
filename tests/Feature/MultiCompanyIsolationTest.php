@@ -67,6 +67,8 @@ use App\Models\PurchaseItem;
 use App\Models\QuickReply;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
+use App\Models\ResellerCommission;
+use App\Models\ResellerPayoutRequest;
 use App\Models\SettlementPayout;
 use App\Models\Shipment;
 use App\Models\StockMovement;
@@ -126,6 +128,7 @@ class MultiCompanyIsolationTest extends TestCase
             Offer::class, OfferItem::class, ProductReview::class,
             Broadcast::class, Media::class, GeneratedImage::class, GeneratedVideo::class,
             ExpenseScan::class, ExpenseScanItem::class,
+            ResellerCommission::class, ResellerPayoutRequest::class,
         ];
 
         foreach ($models as $modelClass) {
