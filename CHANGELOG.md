@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.31.0] - 2026-09-28
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -32,7 +34,6 @@ All notable production changes to Business Dashboard are documented here.
 - New migration `2026_09_28_110000_add_nid_hash_to_investors_and_investor_drafts`: adds `nid_hash` (keyed HMAC of the normalised number, since `nid_number` is encrypted), with an index on `(company_id, nid_hash)`. Existing rows are backfilled. Run `php artisan migrate --force`. Uniqueness is enforced by the models, not a DB unique index, so the deploy never fails on old duplicate data.
 - `App\Support\InvestorIdentity` (normalize/hash), `InvestorDocumentUploadService`, `InvestmentDocument::SENSITIVE_CATEGORIES`, `Investor::documentChecklist()` / `scopeMissingDocuments()` / `scopeWhereNid()`. The file-name keywords live in `config/investor_import.php`.
 - Existing investors without an NID keep working, but saving them from the edit form now requires one.
-
 ## [2.30.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
