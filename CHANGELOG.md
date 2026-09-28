@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.37.0] - 2026-09-28
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -12,7 +14,6 @@ All notable production changes to Business Dashboard are documented here.
 
 **Technical Notes:**
 - **Documentation Markdown import:** `DocumentationArticleResource::markdownToHtml()` uses `league/commonmark`'s `GithubFlavoredMarkdownConverter` (was already a transitive dependency; now declared directly in `composer.json`). Wired to the Content field's `hintAction`.
-
 ## [2.36.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
