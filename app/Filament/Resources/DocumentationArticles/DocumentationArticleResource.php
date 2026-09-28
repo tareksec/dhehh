@@ -33,53 +33,61 @@ class DocumentationArticleResource extends Resource
 
     protected static ?string $cluster = Settings::class;
 
-    protected static ?string $navigationLabel = 'Documentation';
-
     protected static ?int $navigationSort = 7;
 
     protected static ?string $recordTitleAttribute = 'title';
 
+    public static function getNavigationLabel(): string
+    {
+        return __('Documentation');
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->columns(1)->components([
-            Section::make('Article')
+            Section::make(__('Article'))
                 ->columnSpanFull()
-                ->description('Step-by-step guidance shown to everyone in the app\'s Documentation menu.')
+                ->description(__('Step-by-step guidance shown to everyone in the app\'s Documentation menu.'))
                 ->schema([
                     Select::make('documentation_category_id')
-                        ->label('Category')
+                        ->label(__('Category'))
                         ->relationship('category', 'name')
                         ->required()
                         ->searchable()
                         ->preload()
                         ->createOptionForm([
-                            TextInput::make('name')->required()->maxLength(120),
+                            TextInput::make('name')->label(__('Name'))->required()->maxLength(120),
                             TextInput::make('icon')
-                                ->helperText('Heroicon name, e.g. heroicon-o-truck. Leave blank for the default.')
+                                ->label(__('Icon'))
+                                ->helperText(__('Heroicon name, e.g. heroicon-o-truck. Leave blank for the default.'))
                                 ->maxLength(60),
-                            TextInput::make('sort_order')->numeric()->default(0),
+                            TextInput::make('sort_order')->label(__('Sort order'))->numeric()->default(0),
                         ]),
                     Toggle::make('is_published')
-                        ->label('Published')
+                        ->label(__('Published'))
                         ->default(true)
-                        ->helperText('Unpublished articles are hidden from the Documentation menu.'),
+                        ->helperText(__('Unpublished articles are hidden from the Documentation menu.')),
                     TextInput::make('title')
+                        ->label(__('Title'))
                         ->required()
                         ->maxLength(255)
                         ->live(onBlur: true),
                     TextInput::make('slug')
+                        ->label(__('Slug'))
                         ->required()
                         ->maxLength(120)
                         ->alphaDash()
                         ->unique(table: 'documentation_articles', column: 'slug', ignoreRecord: true, modifyRuleUsing: fn ($rule, $get) => $rule->where('documentation_category_id', $get('documentation_category_id'))),
                     TextInput::make('sort_order')
+                        ->label(__('Sort order'))
                         ->numeric()
                         ->default(0)
                         ->minValue(0),
                     RichEditor::make('content')
+                        ->label(__('Content'))
                         ->required()
                         ->columnSpanFull()
-                        ->helperText('Write the guide as numbered steps — this is what staff will follow.'),
+                        ->helperText(__('Write the guide as numbered steps — this is what staff will follow.')),
                 ])
                 ->columns(2),
         ]);
@@ -90,20 +98,23 @@ class DocumentationArticleResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('title')
+                    ->label(__('Title'))
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('category.name')
-                    ->label('Category')
+                    ->label(__('Category'))
                     ->badge()
                     ->searchable()
                     ->sortable(),
                 IconColumn::make('is_published')
-                    ->label('Published')
+                    ->label(__('Published'))
                     ->boolean()
                     ->sortable(),
                 TextColumn::make('sort_order')
+                    ->label(__('Sort order'))
                     ->sortable(),
                 TextColumn::make('updated_at')
+                    ->label(__('Updated at'))
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),

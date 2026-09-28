@@ -21,7 +21,17 @@ class Documentation extends Page
 
     protected static ?int $navigationSort = -2;
 
-    protected static ?string $title = 'Documentation';
+    protected static ?string $title = null;
+
+    public static function getNavigationLabel(): string
+    {
+        return __('Documentation');
+    }
+
+    public function getTitle(): string
+    {
+        return __('Documentation');
+    }
 
     protected string $view = 'filament.pages.documentation';
 
@@ -81,8 +91,6 @@ class Documentation extends Page
             ->flatMap(fn (DocumentationCategory $category): iterable => $category->articles)
             ->first();
 
-        if ($firstMatch) {
-            $this->activeArticleId = $firstMatch->getKey();
-        }
+        $this->activeArticleId = $firstMatch?->getKey();
     }
 }

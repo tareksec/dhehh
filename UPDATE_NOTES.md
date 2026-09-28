@@ -2,6 +2,32 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-28 - Documentation module: fixes from automated PR review (Codex)
+
+Reason — an automated review bot (`chatgpt-codex-connector[bot]`) left 5 findings on PR bhd4232/Business-Dashboard#10 (the Documentation module committed earlier today), each citing a real `AGENTS.md` rule. Verified each and fixed all of them; this is a follow-up to the earlier "In-app Documentation module" entry, not a new feature.
+
+What changed:
+- **CHANGELOG.md:** moved the Documentation entry from the already-dated `[2.34.0]` section back into `[Unreleased]` — the release cutter only reads `[Unreleased]`, so it would otherwise never ship in a generated release.
+- **PROJECT_GUIDE.md:** added a "Documentation Module" subsection under "3. Current Core Modules" (route, access model, important files, focused test command) — this had been left only in chat/CHANGELOG.
+- **Filament-only UI:** rewrote `resources/views/filament/pages/documentation.blade.php` to use `x-filament::section`, `x-filament::input.wrapper`/`x-filament::input`, and `x-filament::button` instead of raw `<input>`/`<button>` and hand-styled Tailwind cards, matching the pattern used elsewhere (e.g. Inbox).
+- **Bilingual strings:** every new visible string in `Documentation.php`, `DocumentationArticleResource.php`, and the Blade view now goes through `__()`, with matching `lang/en.json` and `lang/bn.json` keys (reusing existing `Category`/`Name` keys where they already existed).
+- **Bug fix:** searching with no matches now clears `activeArticleId` instead of leaving a stale, non-matching article rendered in the content pane while the sidebar says "no guides match."
+
+Important changed/new files:
+- `CHANGELOG.md`, `PROJECT_GUIDE.md`, `lang/en.json`, `lang/bn.json`
+- `app/Filament/Pages/Documentation.php`, `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `resources/views/filament/pages/documentation.blade.php`
+- `tests/Feature/DocumentationModuleTest.php` (+1 regression test for the search-clears-selection fix)
+
+Verification:
+- `DocumentationModuleTest`: 5 passed (added the no-match-clears-selection test).
+- `TranslationParityTest`: passed.
+- Full `php artisan test` (plain, no `--env`): **1541 passed, 0 failed** (10178 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: not committed — this is a fix to PR #10, which I opened and am driving myself; waiting for the owner's go-ahead to push, per this repo's commit/push approval rule.
+
 ## 2026-09-28 - Settlements leave withdrawn investments out; voucher trash (move to trash, restore, delete permanently)
 
 Reason — owner, answering the two open questions:

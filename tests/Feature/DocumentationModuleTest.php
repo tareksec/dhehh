@@ -72,6 +72,28 @@ class DocumentationModuleTest extends TestCase
             ->assertSet('activeArticleId', $stockArticle->getKey());
     }
 
+    public function test_a_search_with_no_match_clears_the_selected_article(): void
+    {
+        $user = User::factory()->create(['role' => 'manager', 'is_active' => true]);
+
+        $category = DocumentationCategory::query()->create(['name' => 'Inventory', 'sort_order' => 1]);
+
+        DocumentationArticle::query()->create([
+            'documentation_category_id' => $category->getKey(),
+            'title' => 'Adjust stock levels',
+            'content' => '<p>...</p>',
+            'is_published' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(Documentation::class)
+            ->assertSet('activeArticleId', fn (?int $id): bool => $id !== null)
+            ->set('search', 'no such guide exists')
+            ->assertSet('activeArticleId', null)
+            ->assertDontSee('Adjust stock levels');
+    }
+
     public function test_a_manager_without_settings_permission_cannot_manage_documentation(): void
     {
         $user = User::factory()->create(['role' => 'manager', 'is_active' => true]);
