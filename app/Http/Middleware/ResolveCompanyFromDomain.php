@@ -4,13 +4,14 @@ namespace App\Http\Middleware;
 
 use App\Models\Company;
 use App\Services\CompanyContext;
+use App\Services\ResellerPricing;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 class ResolveCompanyFromDomain
 {
-    public function __construct(protected CompanyContext $context) {}
+    public function __construct(protected CompanyContext $context, protected ResellerPricing $resellerPricing) {}
 
     public function handle(Request $request, Closure $next, string $mode = 'required'): Response
     {
@@ -26,6 +27,13 @@ class ResolveCompanyFromDomain
         if ($company) {
             $this->context->set($company);
             $request->attributes->set('storefront_company', $company);
+
+            // A visitor who arrived through a reseller's store keeps that
+            // reseller's pricing/attribution across the whole storefront.
+            $this->resellerPricing->clear();
+            if ($request->hasSession()) {
+                $this->resellerPricing->restoreFromSession($request->session(), $company);
+            }
 
             return $next($request);
         }

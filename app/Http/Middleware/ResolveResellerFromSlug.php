@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Company;
 use App\Models\Customer;
+use App\Services\ResellerPricing;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -36,6 +37,7 @@ class ResolveResellerFromSlug
         abort_unless($reseller, 404);
 
         $request->attributes->set('storefront_reseller', $reseller);
+        app(ResellerPricing::class)->remember($request->session(), $company, $reseller);
 
         return $next($request);
     }

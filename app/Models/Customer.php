@@ -135,6 +135,16 @@ class Customer extends Model implements AuthenticatableContract
             ->withTimestamps();
     }
 
+    public function resellerCommissions(): HasMany
+    {
+        return $this->hasMany(ResellerCommission::class);
+    }
+
+    public function resellerPayoutRequests(): HasMany
+    {
+        return $this->hasMany(ResellerPayoutRequest::class);
+    }
+
     public function isApprovedReseller(): bool
     {
         return $this->reseller_status === 'approved';

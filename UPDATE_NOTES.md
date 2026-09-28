@@ -69,7 +69,44 @@ Verification:
 - Pint passes on the changed files. Pint also re-formatted a few older lines in `InvestorResource.php`.
 - Not verified in a browser.
 
-Commit status: Not committed — waiting for owner approval.
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main দুই জায়গাতেই পুশ কর").
+
+## 2026-09-28 - Reseller preview security fix + reseller prices, commission and withdrawals
+
+Reason — owner asked for the reseller module's status, then: "নিরাপত্তার ফাঁকটা আগে ঠিক করে দাও, আর কমিশন/পেয়াউট এড কর" (fix the security gap first, then add commission/payout).
+
+Business rules (owner's answers, 2026-09-28):
+- The reseller raises the price themselves. Their cost = the "wholesale rate" plus costs.
+- Wholesale rate = the product's existing tier price, taking the lowest tier.
+- Costs: one amount, the same for every product (owner confirmed), in Storefront Settings → **Reseller Settings**. It stays out of Footer Builder, and the footer shows only the reseller program link.
+- Suggested price = the product's normal selling price. The reseller may price anywhere at or above their cost.
+- Commission is payable when the order is delivered.
+- Payout: the reseller requests it, and the admin sets the minimum withdrawal.
+
+What changed:
+- **Security:** `ResellerController::previewStorefront()` now checks `canAccessCompany()`, the same as `PreviewController`. Before, any signed-in staff member of any company could preview, and submit applications on, another company's `/storefront/{slug}/reseller`. The regression test is in `StorefrontResellerAndAbandonedCartTest`. It fails without the fix (200 instead of 404).
+- **Pre-existing gap found and worked around:** every storefront link (product cards, product page add-to-cart, cart, checkout) points at main-store routes, never `/store/{slug}/...`. So a customer who clicked anything in a reseller's store left it, and the order was never credited to the reseller. Instead of rewriting 13 views, `ResellerPricing` remembers the reseller in the session when `/store/{slug}` is opened. `ResolveCompanyFromDomain` restores it on each storefront request, and `CartController` credits session-reseller catalog products.
+- **Pricing:** `app/Services/ResellerPricing.php` (new, request-scoped). `Product::selling_price` and `normalizedTiers()` use it, so every theme and view shows the reseller price and hides the tier table with no view changes. `Product::baseSellingPrice()` and `resellerWholesaleRate()` are new.
+- **Commission:** `app/Services/ResellerCommissionService.php` (new) and `app/Models/ResellerCommission.php` (new). They are synced from `Order::saved` and `OrderItem::saved`/`deleted`. `order_items.reseller_base_price` is frozen at checkout (`CheckoutController`, `StorefrontOrderPlacementService`, `StorefrontCart`).
+- **Withdrawals:** `app/Models/ResellerPayoutRequest.php` (new). Reseller side: `ResellerStoreController::updatePrice()` and `requestPayout()`, new routes (domain + preview), and a rewritten `storefront/account/reseller.blade.php` (all strings now `__()`). Admin side: `ResellerCommissionResource` and `ResellerPayoutRequestResource` (new, Resellers cluster), plus a new **Reseller Settings** section and sidebar tab (`reseller` key in `HasStorefrontSettingsNavigation`) with the two money fields. The page maps sections to tabs by position (`$sectionKeys`), so `'reseller'` is inserted at its index; `PhaseFourAdminPagesTest` now also checks that SEO stays under Navigation & SEO. Owner: keep them out of Footer Builder; the footer shows only the "Become a reseller" link, no numbers.
+- **Finance voucher on payout** (owner: "এটা এখনই যুক্ত কর"): `app/Services/ResellerPayoutService.php` (new). **Mark paid** now requires a fund source and an expense category (pre-filled from the last paid request) and creates a pending `business_expense` debit voucher. Finance approves it in the normal Voucher workflow, which books the Expense and debits the account. The voucher and the paid status are created in one transaction, so a failure leaves the request unpaid. `reseller_payout_requests.voucher_id` is added. I used `business_expense` and not `investor_payout` because commission is a selling cost: it should reduce profit, and the owner picks the expense category.
+- **Migrations:** `2026_09_28_110000_add_reseller_pricing_columns`, `..._110100_create_reseller_commissions_table`, `..._110200_create_reseller_payout_requests_table`. All are additive. They have **not** been run on the demo DB.
+- `User::MODEL_MODULES`: both new models → `sales`. `MultiCompanyIsolationTest`: both new models registered. `lang/en.json` + `lang/bn.json`: 71 new keys.
+
+Tests:
+- New `tests/Feature/ResellerCommissionTest.php` (10 tests): price floor, reseller price and credit across main-store routes, main store unaffected, blank = suggested price, no tiers = no commission, delivered → payable, returned → cancelled, withdrawal minimum/balance/double-request, admin mark paid (voucher fields, Finance approval → Expense) / reject, settings tab + footer shows no numbers, company scope.
+- `StorefrontResellerAndAbandonedCartTest` gains 1 security test. Its `createStore()` gets an optional invoice prefix.
+
+Needs owner confirmation (not guessed silently):
+- Products with variants and products without wholesale tiers get no reseller price or commission, because they have no wholesale rate.
+- "Delivered" also counts an order marked **Completed** without a courier delivery. A **partial delivered** order stays pending.
+
+Needs Bangla review:
+- "Mark paid" → "পরিশোধিত হিসেবে চিহ্নিত করুন"
+- "Reseller cost per unit" → "প্রতি পিসে রিসেলার খরচ"
+- "Withdrawal requests" → "উত্তোলনের অনুরোধসমূহ"
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` (owner approved: "হ্যাঁ, commit আর push কর").
 
 ## 2026-09-28 - Investor drafts record the investment; returning investors are linked, not duplicated
 

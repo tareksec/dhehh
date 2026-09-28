@@ -33,6 +33,49 @@ All notable production changes to Business Dashboard are documented here.
 - `App\Support\InvestorIdentity` (normalize/hash), `InvestorDocumentUploadService`, `InvestmentDocument::SENSITIVE_CATEGORIES`, `Investor::documentChecklist()` / `scopeMissingDocuments()` / `scopeWhereNid()`. The file-name keywords live in `config/investor_import.php`.
 - Existing investors without an NID keep working, but saving them from the edit form now requires one.
 
+## [2.30.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller prices and commission.** An approved reseller now sets their own selling price for each product in their store (**My Account → Your Store**):
+  - **Your cost** = the product's lowest wholesale tier price + one **Reseller cost per unit** the store sets once, the same for every product (**Storefront Settings → Reseller Settings**, a new tab in the settings sidebar).
+  - **Suggested price** = the product's normal selling price. Leaving the price blank sells at the suggested price.
+  - Any price at or above **Your cost** is allowed. The difference is the reseller's commission.
+  - Products without wholesale tiers, and products with variants, sell at the normal price and earn no commission.
+- **Customers of a reseller pay the reseller's price.** Once a visitor opens a reseller's store link (`/store/{slug}`), they see that reseller's prices for the reseller's products on the whole storefront until their session ends, and the order is credited to that reseller. The wholesale price table is hidden from them, because it shows the reseller's own buying rate.
+- **Commission becomes payable when the order is delivered.** If the order is cancelled, returned or refunded, the commission is cancelled. Resellers see money available to withdraw, money waiting for delivery, money being paid out, their total withdrawn, and recent commissions on their store page.
+- **Withdrawal requests.** A reseller asks for a withdrawal (bKash / Nagad / Rocket / bank, with their account number). They cannot ask for more than they have available, or less than the **Minimum reseller withdrawal** set in **Storefront Settings → Reseller Settings**. Staff handle requests under **Resellers → Withdrawal requests**: **Approve**, **Mark paid**, or **Reject** (with a reason).
+- **Paying a withdrawal books it in Finance automatically.** **Mark paid** asks for the transaction ID, which fund source the money was paid from, and an expense category (both are pre-filled with the ones used last time). It creates a pending debit voucher in **Finance → Vouchers**. Once the voucher is approved there, the payout is recorded as an expense and deducted from that account. If the voucher can't be created (for example, the fund source has no linked account), the request is not marked paid. The voucher number shows on the withdrawal request. A rejected request returns the money to the reseller's available balance. **Resellers → Commissions** lists every commission.
+
+### Security
+
+- **Reseller application preview is limited to your own company.** A signed-in staff member could open another company's reseller application page in preview (`/storefront/{company}/reseller`), and could even submit an application there. The preview now returns "not found" unless the staff member belongs to that company. Super admins are not affected. This uses the same check as the storefront preview.
+
+### Technical Notes
+
+- **Migrations:**
+  - `2026_09_28_110000_add_reseller_pricing_columns` adds nullable `reseller_products.price`, nullable `order_items.reseller_base_price`, and `storefront_settings.reseller_cost_per_unit` / `reseller_min_withdrawal` (default 0).
+  - `2026_09_28_110100_create_reseller_commissions_table` (one row per order).
+  - `2026_09_28_110200_create_reseller_payout_requests_table`.
+  - All are additive. Existing orders get no commission rows.
+- **Pricing:** new request-scoped `ResellerPricing` (registered with `scoped()`).
+  - `ResolveResellerFromSlug` remembers the reseller in the session, and `ResolveCompanyFromDomain` restores it on every storefront request. The storefront's own links point at main-store routes, so the URL alone could not carry the reseller.
+  - `Product::selling_price` / `normalizedTiers()` ask it; `baseSellingPrice()` returns the raw price. Nothing outside a storefront request activates it.
+  - The sale price is never below the base price, even if tier prices rise after the reseller set their price.
+- **Orders and commissions:**
+  - The cart freezes `reseller_base_price` onto each reseller-priced order item (COD path and the online-payment snapshot).
+  - `StorefrontCart::orderResellerId()` credits the order to the reseller who priced it.
+  - `ResellerCommissionService::sync()` runs from `Order::saved` and `OrderItem::saved` / `deleted`. Payable = `delivery_status = delivered` or `status = completed`; cancelled = cancelled/returned/refunded.
+  - Available balance = payable commission − paid − open requests. It can go below zero if a delivered order is later returned after a withdrawal, and later earnings cover it.
+  - Withdrawal requests take a per-reseller cache lock.
+  - New `ResellerPayoutService::markPaid()` locks the request, submits a `business_expense` debit voucher through `VoucherService::submit()` (fund source's account, chosen expense category, reseller's method as `payment_method`, transaction ID as `transaction_id`), then marks the request paid with `voucher_id`. It all happens in one transaction, and unlike the investment payouts a voucher failure is not swallowed. `reseller_payout_requests.voucher_id` (nullable FK, `nullOnDelete`) is part of the new table's migration.
+- **Models and permissions:** new `ResellerCommission` and `ResellerPayoutRequest` models (`BelongsToCompany`, added to `MultiCompanyIsolationTest`, `User::MODEL_MODULES` → `sales`). New Filament resources `ResellerCommissionResource` (read-only) and `ResellerPayoutRequestResource`, in the Resellers cluster, gated like `ResellerResource`.
+- **Security fix:** `ResellerController::previewStorefront()` gains the `canAccessCompany()` gate. `ResellerStoreController`'s preview is already limited to the signed-in reseller customer's own company.
+- **Settings page:** new `reseller` tab in `HasStorefrontSettingsNavigation`, with `'reseller'` inserted into `StorefrontSettingResource::$sectionKeys` (sections are mapped to tabs by position).
+- **Translations:** new strings go through `__()`; 71 keys added to `lang/en.json` + `lang/bn.json`.
+
 ## [2.29.0] - 2026-09-28
 
 **Release type:** Minor Feature Update

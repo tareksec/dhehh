@@ -17,6 +17,7 @@ class ResellerProduct extends Model
     protected $fillable = [
         'customer_id',
         'product_id',
+        'price',
         'is_active',
     ];
 
@@ -24,6 +25,7 @@ class ResellerProduct extends Model
     {
         return [
             'is_active' => 'boolean',
+            'price' => 'decimal:2',
         ];
     }
 

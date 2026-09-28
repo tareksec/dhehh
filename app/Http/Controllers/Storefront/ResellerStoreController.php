@@ -6,12 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Product;
+use App\Models\ResellerCommission;
+use App\Models\ResellerPayoutRequest;
 use App\Models\ResellerProduct;
 use App\Services\CompanyContext;
+use App\Services\ResellerCommissionService;
+use App\Services\ResellerPricing;
+use App\Support\MoneyFormatter;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -23,7 +29,10 @@ use Illuminate\View\View;
  */
 class ResellerStoreController extends Controller
 {
-    public function __construct(protected CompanyContext $context) {}
+    public function __construct(
+        protected CompanyContext $context,
+        protected ResellerCommissionService $commissions,
+    ) {}
 
     public function editPreview(Request $request, Company $company): View|RedirectResponse
     {
@@ -46,6 +55,20 @@ class ResellerStoreController extends Controller
         return $this->toggleProduct($request, $product);
     }
 
+    public function updatePricePreview(Request $request, Company $company, Product $product): RedirectResponse
+    {
+        $this->preparePreview($request, $company);
+
+        return $this->updatePrice($request, $product);
+    }
+
+    public function requestPayoutPreview(Request $request, Company $company): RedirectResponse
+    {
+        $this->preparePreview($request, $company);
+
+        return $this->requestPayout($request);
+    }
+
     public function edit(Request $request): View|RedirectResponse
     {
         $company = $this->domainStorefront($request);
@@ -66,6 +89,11 @@ class ResellerStoreController extends Controller
             ->withQueryString();
 
         $pickedProductIds = $reseller->resellerCatalog()->pluck('products.id')->all();
+        $pickedPrices = ResellerProduct::query()
+            ->where('customer_id', $reseller->getKey())
+            ->pluck('price', 'product_id')
+            ->all();
+        $costPerUnit = (float) ($company->storefrontSetting?->reseller_cost_per_unit ?? 0);
 
         return StorefrontThemeRegistry::page('account.reseller', [
             'company' => $company,
@@ -73,9 +101,25 @@ class ResellerStoreController extends Controller
             'customer' => $reseller,
             'products' => $products,
             'pickedProductIds' => $pickedProductIds,
+            'pickedPrices' => $pickedPrices,
+            'costPerUnit' => $costPerUnit,
             'search' => $search,
             'storeUrl' => $this->storeUrl($company, $reseller),
             'previewSlug' => $this->previewSlug($request),
+            'balances' => $this->commissions->balances($reseller),
+            'minWithdrawal' => (float) ($company->storefrontSetting?->reseller_min_withdrawal ?? 0),
+            'payoutMethods' => ResellerPayoutRequest::METHODS,
+            'commissions' => ResellerCommission::query()
+                ->with('order:id,order_number,order_date')
+                ->where('customer_id', $reseller->getKey())
+                ->latest()
+                ->limit(20)
+                ->get(),
+            'payoutRequests' => ResellerPayoutRequest::query()
+                ->where('customer_id', $reseller->getKey())
+                ->latest()
+                ->limit(20)
+                ->get(),
         ]);
     }
 
@@ -139,6 +183,94 @@ class ResellerStoreController extends Controller
         return redirect()
             ->to($this->editUrl($request))
             ->with('storefront_status', $existing ? "Removed \"{$product->name}\" from your store." : "Added \"{$product->name}\" to your store.");
+    }
+
+    /**
+     * Sets the reseller's own selling price for a product in their store.
+     * Owner's rule: any price at or above the base price (lowest wholesale
+     * tier + the company's reseller cost per unit); blank = suggested price.
+     */
+    public function updatePrice(Request $request, Product $product): RedirectResponse
+    {
+        $company = $this->domainStorefront($request);
+        $reseller = $this->approvedReseller($request);
+
+        if ($reseller instanceof RedirectResponse) {
+            return $reseller;
+        }
+
+        abort_unless((int) $product->company_id === (int) $company->getKey(), 404);
+
+        $pick = ResellerProduct::query()
+            ->where('customer_id', $reseller->getKey())
+            ->where('product_id', $product->getKey())
+            ->firstOrFail();
+
+        $base = ResellerPricing::basePrice($product, (float) ($company->storefrontSetting?->reseller_cost_per_unit ?? 0));
+
+        abort_if($base === null, 422, __('This product has no wholesale rate, so it sells at the normal price.'));
+
+        $data = $request->validate([
+            'price' => ['nullable', 'numeric', 'min:'.$base, 'max:99999999'],
+        ], [
+            'price.min' => __('Your price must be at least :amount.', ['amount' => MoneyFormatter::number($base)]),
+        ]);
+
+        $pick->update(['price' => filled($data['price'] ?? null) ? round((float) $data['price'], 2) : null]);
+
+        return redirect()
+            ->to($this->editUrl($request))
+            ->with('storefront_status', __('Price updated for ":product".', ['product' => $product->name]));
+    }
+
+    /** A withdrawal request against the reseller's available (delivered-order) commission. */
+    public function requestPayout(Request $request): RedirectResponse
+    {
+        $company = $this->domainStorefront($request);
+        $reseller = $this->approvedReseller($request);
+
+        if ($reseller instanceof RedirectResponse) {
+            return $reseller;
+        }
+
+        $minimum = max(0.01, (float) ($company->storefrontSetting?->reseller_min_withdrawal ?? 0));
+
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:'.$minimum],
+            'method' => ['required', Rule::in(array_keys(ResellerPayoutRequest::METHODS))],
+            'account_details' => ['required', 'string', 'max:500'],
+        ], [
+            'amount.min' => __('The minimum withdrawal is :amount.', ['amount' => MoneyFormatter::number($minimum)]),
+        ]);
+
+        // Serialised per reseller so two quick submissions can't both
+        // pass the balance check against the same money.
+        $created = Cache::lock('reseller-payout:'.$reseller->getKey(), 10)->block(5, function () use ($reseller, $data): bool {
+            if ((float) $data['amount'] > $this->commissions->balances($reseller)['available']) {
+                return false;
+            }
+
+            ResellerPayoutRequest::query()->create([
+                'customer_id' => $reseller->getKey(),
+                'amount' => round((float) $data['amount'], 2),
+                'method' => $data['method'],
+                'account_details' => $data['account_details'],
+                'status' => ResellerPayoutRequest::STATUS_REQUESTED,
+            ]);
+
+            return true;
+        });
+
+        if (! $created) {
+            return redirect()
+                ->to($this->editUrl($request))
+                ->withErrors(['amount' => __('The amount is more than your available balance.')])
+                ->withInput();
+        }
+
+        return redirect()
+            ->to($this->editUrl($request))
+            ->with('storefront_status', __('Your withdrawal request has been sent. The store will review it.'));
     }
 
     protected function approvedReseller(Request $request): Customer|RedirectResponse

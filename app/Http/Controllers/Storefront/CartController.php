@@ -11,6 +11,7 @@ use App\Models\ResellerProduct;
 use App\Models\StorefrontCartRecord;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
+use App\Services\ResellerPricing;
 use App\Services\StorefrontCart;
 use App\Services\StorefrontMetaTrackingService;
 use App\Support\StorefrontThemeRegistry;
@@ -136,7 +137,18 @@ class CartController extends Controller
         $reseller = $request->attributes->get('storefront_reseller');
 
         if (! $reseller instanceof Customer) {
-            return null;
+            // Not under /store/{slug}: a visitor who came through a
+            // reseller's store (remembered in their session) is still
+            // attributed to that reseller for products in their catalog.
+            $sessionReseller = app(ResellerPricing::class)->reseller();
+
+            return $sessionReseller && ResellerProduct::query()
+                ->where('customer_id', $sessionReseller->getKey())
+                ->where('product_id', $product->getKey())
+                ->where('is_active', true)
+                ->exists()
+                ? $sessionReseller
+                : null;
         }
 
         $inCatalog = ResellerProduct::query()

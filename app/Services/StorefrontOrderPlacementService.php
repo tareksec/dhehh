@@ -109,6 +109,7 @@ class StorefrontOrderPlacementService
                     'quantity' => (int) $snapshot['quantity'],
                     'unit_price' => (float) $snapshot['unit_price'],
                     'unit_cost' => (float) $snapshot['unit_cost'],
+                    'reseller_base_price' => isset($snapshot['reseller_base_price']) ? (float) $snapshot['reseller_base_price'] : null,
                 ]);
             }
 
