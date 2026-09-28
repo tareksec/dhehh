@@ -4,6 +4,21 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Quote status updates for connected websites.** When staff change the status of an inquiry that a connected website sent in (for example Tasneem Knit or Noor Solar), the website is notified straight away, so its customers can see where their quote stands. Only inquiries the website itself sent are reported.
+- **No more duplicate inquiries from website retries.** A website can now send its own quote number with an inquiry. If the same inquiry is sent again (for example after a timeout), the ERP returns the one it already has instead of adding a second lead.
+
+### Technical Notes
+
+- **Migration:** `2026_09_28_120000_add_external_reference_to_leads_table` adds nullable `leads.external_reference` with a unique `(company_id, external_reference)` index. It is additive.
+- **API:** `POST /api/v1/leads` accepts optional `external_reference` (max 190). A repeat returns the existing lead with `200`; the response now includes `external_reference`.
+- **Webhook:** new `lead.status_updated` event (`id`, `external_reference`, `status`, `updated_at`) via `WebsiteWebhookDispatcher::dispatchLeadStatusUpdated()`, fired from `Lead::updated` when `status` changes and `external_reference` is set. Same signing, queue job and per-company settings as the existing events.
+- **Docs:** `docs/api/website-integration.md` and `website-integration.openapi.yaml` updated.
+- No new user-visible strings, so no `lang/` changes.
+
 ## [2.30.0] - 2026-09-28
 
 **Release type:** Minor Feature Update

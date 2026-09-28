@@ -2,6 +2,30 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-28 - Quote status webhook for connected websites (lead.status_updated)
+
+Reason — owner: "কোটেশন স্ট্যাটাস webhook ERP-তে যোগ করো". Two website teams (Tasneem Knit, Noor Solar — noorsolaren.com is a separate company in the ERP) need the status of a quote they sent to come back to their site.
+
+What changed:
+- **Migration** `2026_09_28_120000_add_external_reference_to_leads_table`: nullable `leads.external_reference`, unique per company. Not run on the demo DB.
+- `POST /api/v1/leads` (`LeadController`): optional `external_reference`; a repeat returns the existing lead (200) instead of a duplicate. The response adds `external_reference`.
+- `Lead::booted()`: on `updated`, when `status` changed and `external_reference` is set → `WebsiteWebhookDispatcher::dispatchLeadStatusUpdated()` → event `lead.status_updated` with `id`, `external_reference`, `status`, `updated_at`.
+- Status values are the existing Lead statuses (`new`, `contacted`, `quoted`, `won`, `lost`); no new statuses were invented.
+- Docs: `docs/api/website-integration.md`, `docs/api/website-integration.openapi.yaml`.
+
+Tests:
+- `WebsiteApiLeadTest`: +2 (retry returns the same lead; the same reference in two companies stays two leads).
+- `WebsiteWebhookDispatchTest`: +3 (status change dispatches; lead without a website reference does not; edit without a status change does not).
+
+Needs owner decision (not built, not guessed):
+- `tracking_status` / `tracking_number` the website teams asked for: what steps to show customers.
+- Whether the website should see the internal status names (`won`/`lost`) as they are, or mapped to customer-facing labels on the website side.
+
+Found, not changed:
+- The `staging` branch (last commit 2026-08-23) does not contain the website API at all, so https://staging-app.zamzamint.com/api/v1/* returns 404. The staging server also shows full Laravel stack traces (`APP_DEBUG` is on).
+
+Commit status: not committed — waiting for owner approval.
+
 ## 2026-09-28 - Reseller preview security fix + reseller prices, commission and withdrawals
 
 Reason — owner asked for the reseller module's status, then: "নিরাপত্তার ফাঁকটা আগে ঠিক করে দাও, আর কমিশন/পেয়াউট এড কর" (fix the security gap first, then add commission/payout).

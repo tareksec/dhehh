@@ -133,7 +133,11 @@ paths:
   /leads:
     post:
       summary: Submit a website inquiry
-      description: Lands in the ERP CRM's lead/query list with source "website".
+      description: >
+        Lands in the ERP CRM's lead/query list with source "website". Send
+        your own quote id as `external_reference`: re-posting the same value
+        returns the existing lead (200) instead of creating a duplicate, and
+        the `lead.status_updated` webhook echoes it back.
       requestBody:
         required: true
         content:
@@ -142,12 +146,19 @@ paths:
               type: object
               required: [name, phone]
               properties:
+                external_reference:
+                  type: string
+                  nullable: true
+                  maxLength: 190
+                  description: Your own quote/inquiry id — used for idempotency and status webhooks.
                 name: { type: string }
                 phone: { type: string }
                 email: { type: string, format: email, nullable: true }
                 interest: { type: string, nullable: true }
                 note: { type: string, nullable: true }
       responses:
+        "200":
+          description: A lead with this external_reference already exists — returned unchanged.
         "201":
           description: Created
           content:
@@ -159,7 +170,10 @@ paths:
                     type: object
                     properties:
                       id: { type: integer }
-                      status: { type: string, example: new }
+                      external_reference: { type: string, nullable: true }
+                      status:
+                        type: string
+                        enum: [new, contacted, quoted, won, lost]
                       created_at: { type: string, format: date-time }
         "422": { description: Validation failed }
 
@@ -245,7 +259,9 @@ x-webhooks-note: >
   Integrations → Website API → Webhook delivery URL). Events: "order.status_updated"
   (fired whenever an order's status or delivery status changes — one-way,
   ERP to website only) and "product.updated" (price, sale price, or stock
-  changed). Every delivery is a POST with header
+  changed), and "lead.status_updated" (a lead you submitted with an
+  external_reference changed status — data: id, external_reference, status,
+  updated_at). Every delivery is a POST with header
   "X-ZamZam-Signature: hash_hmac('sha256', <raw request body>, <your webhook secret>)"
   and a JSON body of {"event": "...", "data": {...}, "timestamp": "..."}. See
   website-integration.md for a verification code sample.
