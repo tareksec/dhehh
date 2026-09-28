@@ -7,6 +7,13 @@ is in [`website-integration.openapi.yaml`](website-integration.openapi.yaml)
 covers the two things a spec file doesn't explain well: authentication and
 webhook signature verification.
 
+If a website team wrote their integration against a different, assumed API
+shape (paths, field names, headers, event names) before seeing this guide,
+see [`website-mapping-tasneem-noor.md`](website-mapping-tasneem-noor.md) —
+a path-by-path, field-by-field mapping note written for Tasneem Knit
+(tasneemknitindustry.com) and Noor Solar (noorsolaren.com), two separate
+companies in this ERP.
+
 ## What this integration does
 
 - **Products & stock — two-way, real-time.** Your website can read current

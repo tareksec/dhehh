@@ -2,6 +2,18 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-28 - API mapping note for Tasneem Knit / Noor Solar added to repo docs
+
+Reason — owner: "api mapping টা তুমি আমাদের অ্যাপের api Documentation এ যুক্ত করে দেও এবং তার পাথ বলে দেও।" The mapping note drafted earlier as a Claude Docs artifact (comparing each website team's assumed API to the real one) is now also in the repo, so it ships with the code and isn't only reachable through a chat link.
+
+What changed:
+- New `docs/api/website-mapping-tasneem-noor.md`: the same content as the artifact — `.env` values, a path-by-path table (their assumed endpoint → the real `/api/v1/...` one), field-by-field tables for leads/products/orders and for each outbound webhook event (including the new `lead.status_updated`), what ZamZam ERP doesn't have yet, a test checklist and cURL examples. Kept in Bangla, matching the artifact and the owner's own notes to these two teams.
+- `docs/api/website-integration.md` links to it right after the intro, so anyone starting from the main guide finds it.
+
+Not code — no migration, no test changes, no `lang/` changes.
+
+Commit status: not committed — waiting for owner approval.
+
 ## 2026-09-28 - Investment withdrawal: voucher first, then the status turns "Withdrawn"; the record is kept
 
 Reason — owner:
