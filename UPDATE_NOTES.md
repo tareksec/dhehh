@@ -22,7 +22,7 @@ What changed:
 - **Withdrawals:** `app/Models/ResellerPayoutRequest.php` (new). Reseller side: `ResellerStoreController::updatePrice()` and `requestPayout()`, new routes (domain + preview), and a rewritten `storefront/account/reseller.blade.php` (all strings now `__()`). Admin side: `ResellerCommissionResource` and `ResellerPayoutRequestResource` (new, Resellers cluster), plus a new **Reseller Settings** section and sidebar tab (`reseller` key in `HasStorefrontSettingsNavigation`) with the two money fields. The page maps sections to tabs by position (`$sectionKeys`), so `'reseller'` is inserted at its index; `PhaseFourAdminPagesTest` now also checks that SEO stays under Navigation & SEO. Owner: keep them out of Footer Builder; the footer shows only the "Become a reseller" link, no numbers.
 - **Finance voucher on payout** (owner: "এটা এখনই যুক্ত কর"): `app/Services/ResellerPayoutService.php` (new). **Mark paid** now requires a fund source and an expense category (pre-filled from the last paid request) and creates a pending `business_expense` debit voucher. Finance approves it in the normal Voucher workflow, which books the Expense and debits the account. The voucher and the paid status are created in one transaction, so a failure leaves the request unpaid. `reseller_payout_requests.voucher_id` is added. I used `business_expense` and not `investor_payout` because commission is a selling cost: it should reduce profit, and the owner picks the expense category.
 - **Migrations:** `2026_09_28_110000_add_reseller_pricing_columns`, `..._110100_create_reseller_commissions_table`, `..._110200_create_reseller_payout_requests_table`. All are additive. They have **not** been run on the demo DB.
-- `User::MODEL_MODULES`: both new models → `sales`. `MultiCompanyIsolationTest`: both new models registered. `lang/en.json` + `lang/bn.json`: 72 new keys.
+- `User::MODEL_MODULES`: both new models → `sales`. `MultiCompanyIsolationTest`: both new models registered. `lang/en.json` + `lang/bn.json`: 71 new keys.
 
 Tests:
 - New `tests/Feature/ResellerCommissionTest.php` (10 tests): price floor, reseller price and credit across main-store routes, main store unaffected, blank = suggested price, no tiers = no commission, delivered → payable, returned → cancelled, withdrawal minimum/balance/double-request, admin mark paid (voucher fields, Finance approval → Expense) / reject, settings tab + footer shows no numbers, company scope.
@@ -38,6 +38,62 @@ Needs Bangla review:
 - "Withdrawal requests" → "উত্তোলনের অনুরোধসমূহ"
 
 Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` (owner approved: "হ্যাঁ, commit আর push কর").
+
+## 2026-09-28 - Investor drafts record the investment; returning investors are linked, not duplicated
+
+Reason — owner: "১ আর ২ দুটোই করে দেও". The two follow-ups were: (1) when a draft is confirmed, also create the investment in a project, with the stamp and cheque numbers; (2) when the investor already exists, add the new investment to them instead of blocking or duplicating.
+
+What changed:
+- **Migration** `2026_09_28_100000`: `investor_drafts` gains `existing_investor_id` (FK investors), `project_id` (FK investment_projects), `investment_amount`, `payment_method` and `invested_at`.
+- **Import:**
+  - both dialogs (file and pasted text) have an optional "Investment for this import" section: project (open/running only), payment method and date, applied to every draft.
+  - the amount column (বিনিয়োগ (৳) / Investment / Amount) is read into `investment_amount`. It used to be only a note.
+  - a row whose phone matches an existing investor is linked automatically (`existing_investor_id`), with a note.
+- **Review:**
+  - a new "Add to an existing investor" select. When it is set, the identity and nominee sections are hidden, because they are not used.
+  - an Investment section with project, amount, payment method and date.
+  - table columns for existing investor, project and investment.
+  - a "Set project / payment" bulk action.
+- **Blocking rules** (`InvestorDraft::blockingIssues()`):
+  - linked draft: the investor must exist, and a project + amount are required. Nothing is created otherwise.
+  - new investor: same rules as before. The "phone already belongs to" message now says to link the draft.
+  - investment: an amount without a project → pick a project or clear the amount. With a project, it must be open/running, and a payment method and date are required.
+- **Confirm** (`InvestorImportService::confirm()`), in one transaction:
+  - creates the new investor, or uses the linked one, whose details are never changed.
+  - creates the `Investment` with `received_by` = the confirming user.
+  - creates an `InvestorSecurityInstrument` with `stamp_serial_numbers` (split on commas) and `cheque_number` when present.
+  - deletes the draft.
+  - after the commit, `InvestmentLedgerService::recordInvestmentReceived()` books the same pending capital voucher as the project's Investments tab. `Investment`'s own saving rules still apply: the investment window and one channel partner per project.
+- Success messages say what happened: investor added, investor added with an investment of X, or new investment of X added for Y.
+
+Checked with the owner's real `INV_1_10_04_2026.csv` (not committed):
+- imported with a project → 19 of 19 drafts ready.
+- Confirm selected → 19 investors, 19 investments totalling ৳5,300,000 (matches the sheet's total row), and 19 security instruments.
+- importing the same file again → all 19 linked to the existing investors, and confirming added 19 investments with no new investors.
+
+**Needs Bangla review:** 36 new `lang/bn.json` keys: the investment section and field labels, blocking messages, linked-investor texts, success messages, and project status and payment method labels (Open/Running/Closed/Settled, Cash/bKash/Bank/Other). 3 unused keys were removed from both files.
+
+Important changed/new files:
+- `database/migrations/2026_09_28_100000_add_investment_fields_to_investor_drafts_table.php`
+- `app/Models/InvestorDraft.php`
+- `app/Services/Investment/InvestorImportService.php`
+- `app/Filament/Resources/InvestorDrafts/{InvestorDraftResource,Pages/ListInvestorDrafts,Pages/EditInvestorDraft}.php`
+- `lang/en.json`, `lang/bn.json`
+- `tests/Feature/InvestorImportTest.php`
+
+Verification:
+- `php artisan test --filter=InvestorImportTest`: 22 passed. 5 are new:
+  - an import with a project creates the investment and security instrument on confirm.
+  - a returning investor is linked and gets only the investment, with their details unchanged.
+  - three blocked cases: linked with no project, amount with no project, closed project.
+  - the Set project / payment bulk action.
+  - linking an existing investor from the review form.
+- `TranslationParityTest` passes.
+- Full `php artisan test` (plain, no `--env`): **1498 passed, 0 failed** (9215 assertions).
+- Pint passes on the changed files.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "জি পুশ কর").
 
 ## 2026-09-28 - Video Generation Phase 5: Video Governance (plan 12 complete)
 

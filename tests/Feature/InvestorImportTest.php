@@ -6,6 +6,8 @@ use App\Filament\Resources\InvestorDrafts\InvestorDraftResource;
 use App\Filament\Resources\InvestorDrafts\Pages\EditInvestorDraft;
 use App\Filament\Resources\InvestorDrafts\Pages\ListInvestorDrafts;
 use App\Models\Company;
+use App\Models\Investment;
+use App\Models\InvestmentProject;
 use App\Models\Investor;
 use App\Models\InvestorDraft;
 use App\Models\User;
@@ -98,8 +100,9 @@ class InvestorImportTest extends TestCase
         $this->assertSame('4647563996', $one->nominee_nid_or_passport);
         $this->assertSame('9363512, 9363513', $one->stamp_number);
         $this->assertSame('BANK/CHQ-0011280', $one->cheque_number);
-        $this->assertSame([], $one->blockingIssues());
-        $this->assertStringContainsString('200,000', implode(' ', $one->importNoteMessages()));
+        $this->assertSame('200000.00', $one->investment_amount);
+        // An amount with no project chosen must be resolved before confirming.
+        $this->assertSame([__('Pick a project for the investment amount, or clear the amount.')], $one->blockingIssues());
 
         $two = InvestorDraft::query()->where('name', 'Investor Two')->sole();
         $this->assertSame('01722222222', $two->phone);
@@ -345,6 +348,113 @@ class InvestorImportTest extends TestCase
         $this->assertFalse(InvestorDraftResource::canImport());
     }
 
+    public function test_an_import_with_a_project_turns_sheet_amounts_into_investments_on_confirm(): void
+    {
+        $project = $this->project();
+        $path = $this->tempFile(implode("\n", [
+            'SL,ইনভেস্টরদের নাম,ফোন নাম্বার,বিনিয়োগ (৳),স্টাম্প নং.,চেক নং.',
+            '১,Investor One,01911111111,"200,000","৯৩৬৩৫১২, ৯৩৬৩৫১৩",BANK/CHQ-1',
+        ]), 'csv');
+
+        app(InvestorImportService::class)->importFile($path, 'INV_1.csv', ['project_id' => $project->id, 'payment_method' => 'bank', 'invested_at' => '2026-04-10']);
+
+        $draft = InvestorDraft::query()->sole();
+        $this->assertSame($project->id, $draft->project_id);
+        $this->assertSame('200000.00', $draft->investment_amount);
+        $this->assertSame('bank', $draft->payment_method);
+        $this->assertSame('2026-04-10', $draft->invested_at->toDateString());
+        $this->assertSame([], $draft->blockingIssues());
+
+        $investor = app(InvestorImportService::class)->confirm($draft);
+
+        $investment = Investment::query()->sole();
+        $this->assertSame($investor->id, $investment->investor_id);
+        $this->assertSame($project->id, $investment->project_id);
+        $this->assertSame('200000.00', $investment->amount);
+        $this->assertSame('bank', $investment->payment_method);
+        $this->assertSame('2026-04-10', $investment->invested_at->toDateString());
+        $this->assertSame(Auth::id(), $investment->received_by);
+
+        $instrument = $investment->securityInstruments()->sole();
+        $this->assertSame(['9363512', '9363513'], $instrument->stamp_serial_numbers);
+        $this->assertSame('BANK/CHQ-1', $instrument->cheque_number);
+        $this->assertSame(0, InvestorDraft::query()->count());
+    }
+
+    public function test_a_returning_investor_is_linked_and_only_gets_the_new_investment(): void
+    {
+        $project = $this->project();
+        $existing = Investor::query()->create(['company_id' => $this->company->id, 'name' => 'Returning Investor', 'phone' => '01911111111', 'address' => 'Old address']);
+
+        app(InvestorImportService::class)->importText(
+            "Name,Phone,Address,Investment\nSomeone Else,01911111111,New address,300000",
+            investment: ['project_id' => $project->id, 'payment_method' => 'cash', 'invested_at' => now()->toDateString()],
+        );
+
+        $draft = InvestorDraft::query()->sole();
+        $this->assertSame($existing->id, $draft->existing_investor_id);
+        $this->assertSame([], $draft->blockingIssues());
+
+        $this->assertSame($existing->id, app(InvestorImportService::class)->confirm($draft)->id);
+
+        $this->assertSame(1, Investor::query()->count());
+        $this->assertSame('Returning Investor', $existing->fresh()->name);
+        $this->assertSame('Old address', $existing->fresh()->address);
+        $this->assertSame('300000.00', Investment::query()->where('investor_id', $existing->id)->sole()->amount);
+    }
+
+    public function test_a_linked_draft_without_a_project_or_an_amount_without_a_project_cannot_be_confirmed(): void
+    {
+        $existing = Investor::query()->create(['company_id' => $this->company->id, 'name' => 'Returning Investor', 'phone' => '01911111111']);
+        $linked = $this->draft(['existing_investor_id' => $existing->id, 'phone' => '01911111111']);
+        $amountOnly = $this->draft(['name' => 'New', 'phone' => '01822222222', 'investment_amount' => 5000]);
+        $closed = $this->draft(['name' => 'Late', 'phone' => '01833333333', 'investment_amount' => 5000, 'project_id' => $this->project(['status' => 'closed'])->id, 'payment_method' => 'cash', 'invested_at' => now()->toDateString()]);
+
+        foreach ([$linked, $amountOnly, $closed] as $draft) {
+            $this->assertNotEmpty($draft->blockingIssues());
+
+            try {
+                app(InvestorImportService::class)->confirm($draft);
+                $this->fail('A draft with problems was confirmed.');
+            } catch (ValidationException) {
+                $this->assertTrue(InvestorDraft::query()->whereKey($draft->id)->exists());
+            }
+        }
+
+        $this->assertSame(1, Investor::query()->count());
+        $this->assertSame(0, Investment::query()->count());
+    }
+
+    public function test_set_project_bulk_action_fills_the_investment_details(): void
+    {
+        $project = $this->project();
+        $draft = $this->draft(['name' => 'Investor One', 'phone' => '01911111111', 'investment_amount' => 100000]);
+
+        Livewire::test(ListInvestorDrafts::class)
+            ->callTableBulkAction('setInvestment', [$draft], data: ['project_id' => $project->id, 'payment_method' => 'bkash', 'invested_at' => '2026-04-10']);
+
+        $draft->refresh();
+        $this->assertSame($project->id, $draft->project_id);
+        $this->assertSame('bkash', $draft->payment_method);
+        $this->assertSame('2026-04-10', $draft->invested_at->toDateString());
+        $this->assertSame([], $draft->blockingIssues());
+    }
+
+    public function test_the_review_form_can_link_an_existing_investor_and_confirm_the_investment(): void
+    {
+        $project = $this->project();
+        $existing = Investor::query()->create(['company_id' => $this->company->id, 'name' => 'Returning Investor', 'phone' => '01911111111']);
+        $draft = $this->draft(['name' => 'Returning Investor', 'phone' => '01700000000', 'investment_amount' => 50000]);
+
+        Livewire::test(EditInvestorDraft::class, ['record' => $draft->getRouteKey()])
+            ->fillForm(['existing_investor_id' => $existing->id, 'project_id' => $project->id, 'payment_method' => 'cash', 'invested_at' => '2026-04-10'])
+            ->call('saveAndConfirm')
+            ->assertHasNoErrors();
+
+        $this->assertSame(1, Investor::query()->count());
+        $this->assertSame($existing->id, Investment::query()->sole()->investor_id);
+    }
+
     private function draft(array $attributes): InvestorDraft
     {
         return InvestorDraft::query()->create([
@@ -352,6 +462,23 @@ class InvestorImportTest extends TestCase
             'batch_id' => 'test-batch',
             'source' => InvestorDraft::SOURCE_TEXT,
             ...$attributes,
+        ]);
+    }
+
+    private function project(array $overrides = []): InvestmentProject
+    {
+        return InvestmentProject::query()->create([
+            'company_id' => $this->company->id,
+            'project_code' => 'INV-1',
+            'name' => 'Shearing machine',
+            'duration_type' => 'custom_days',
+            'trade_cycle_days' => 60,
+            'start_date' => now()->toDateString(),
+            'investor_share_percent' => 40,
+            'channel_partner_share_percent' => 10,
+            'company_share_percent' => 50,
+            'status' => 'open',
+            ...$overrides,
         ]);
     }
 
