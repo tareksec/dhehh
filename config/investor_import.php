@@ -54,15 +54,6 @@ return [
         ],
     ],
 
-    // "Upload documents by NID": a word in the file name picks the kind of
-    // copy (checked in this order). No match = the investor's own NID copy.
-    'document_keywords' => [
-        'nominee_nid' => ['nominee', 'নমিনি', 'নমিনী'],
-        'signed_contract' => ['contract', 'agreement', 'deed', 'চুক্তি'],
-        'cheque_copy' => ['cheque', 'check', 'চেক'],
-        'stamp_copy' => ['stamp', 'স্ট্যাম্প', 'স্টাম্প'],
-    ],
-
     // One import may hold at most this many investors.
     'max_rows' => 500,
 ];

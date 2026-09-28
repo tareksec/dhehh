@@ -8,6 +8,42 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Added
 
+- **Filter the investor list by project.** The investor list has a **Project** filter (pick one or more projects) and a **Projects** column showing which projects each investor has invested in. There is also a **Channel Partner** filter.
+- **Select many investors at once.** The investor list now has checkboxes. **Assign channel partner** sets the channel partner for all selected investors who don't have one yet. Investors who already have a channel partner are left unchanged and counted in the message; change those one by one from their edit page (that still needs the channel-partner permission and a reason).
+- **Channel partner when importing.** The **Import Excel / CSV** and **Paste text** dialogs have a **Channel partner for this import (optional)** section. The chosen partner is set on every new investor in that import. A row that names its own channel partner keeps it, and investors who already exist are not changed. The drafts bulk action is now **Set project / payment / channel partner**.
+- **Upload NID, nominee NID, signed contract (stamp paper) and cheque copies on the investor form.** The create and edit forms have a **Paper copies** section with one upload box for each. The files go to the investor's Documents tab in private storage. Only users with `investments.manage` see this section.
+
+### Changed
+
+- **Removed the "Upload documents by NID" button** from the investor list. It matched files to investors by the file name only, with no way to pick the investor or the document type. Use the upload boxes on the investor form instead.
+
+**Technical Notes:**
+- `InvestorResource::PAPER_COPY_UPLOADS`, `splitPaperCopies()`, `attachPaperCopies()`; `CreateInvestor::handleRecordCreation()` and `EditInvestor::handleRecordUpdate()` save the uploads as `InvestmentDocument` rows in the same transaction as the investor.
+- `InvestorImportService::investmentDefaults()` also accepts `channel_partner_id` (checked against the current company).
+- Deleted `InvestorDocumentUploadService` and the `document_keywords` config. No migration.
+
+## [2.32.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Quote status updates for connected websites.** When staff change the status of an inquiry that a connected website sent in (for example Tasneem Knit or Noor Solar), the website is notified straight away, so its customers can see where their quote stands. Only inquiries the website itself sent are reported.
+- **No more duplicate inquiries from website retries.** A website can now send its own quote number with an inquiry. If the same inquiry is sent again (for example after a timeout), the ERP returns the one it already has instead of adding a second lead.
+
+### Technical Notes
+
+- **Migration:** `2026_09_28_120000_add_external_reference_to_leads_table` adds nullable `leads.external_reference` with a unique `(company_id, external_reference)` index. It is additive.
+- **API:** `POST /api/v1/leads` accepts optional `external_reference` (max 190). A repeat returns the existing lead with `200`; the response now includes `external_reference`.
+- **Webhook:** new `lead.status_updated` event (`id`, `external_reference`, `status`, `updated_at`) via `WebsiteWebhookDispatcher::dispatchLeadStatusUpdated()`, fired from `Lead::updated` when `status` changes and `external_reference` is set. Same signing, queue job and per-company settings as the existing events.
+- **Docs:** `docs/api/website-integration.md` and `website-integration.openapi.yaml` updated.
+- No new user-visible strings, so no `lang/` changes.
+## [2.31.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
 - **The NID / passport number is now the investor ID.** A phone number can change; the NID does not, so every investor is tracked by their NID / passport number:
   - It is required when adding an investor, and one number can belong to only one investor. Spaces, dashes and Bangla digits don't matter: `1990 1234-56789` and `১৯৯০১২৩৪৫৬৭৮৯` are the same number.
   - The investor list shows it as **Investor ID (NID / Passport)**, and you can search the list by it.
