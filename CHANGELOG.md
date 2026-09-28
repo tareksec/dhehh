@@ -4,7 +4,9 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Minor Feature Update (includes a security fix)
+## [2.30.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
 
 ### Added
 
@@ -44,7 +46,6 @@ All notable production changes to Business Dashboard are documented here.
 - **Security fix:** `ResellerController::previewStorefront()` gains the `canAccessCompany()` gate. `ResellerStoreController`'s preview is already limited to the signed-in reseller customer's own company.
 - **Settings page:** new `reseller` tab in `HasStorefrontSettingsNavigation`, with `'reseller'` inserted into `StorefrontSettingResource::$sectionKeys` (sections are mapped to tabs by position).
 - **Translations:** new strings go through `__()`; 71 keys added to `lang/en.json` + `lang/bn.json`.
-
 ## [2.29.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
