@@ -25,6 +25,15 @@ class InvestmentsRelationManager extends RelationManager
             TextColumn::make('project.name')->label('Project Name'),
             TextColumn::make('amount')->moneyWithoutTrailingZeroes('BDT'),
             TextColumn::make('invested_at')->date(),
-        ])->recordActions([ViewAction::make()->url(fn ($record): string => InvestmentRecordResource::getUrl('view', ['record' => $record]))]);
+            TextColumn::make('status')
+                ->label(__('Status'))
+                ->badge()
+                ->formatStateUsing(fn (?string $state): string => InvestmentRecordResource::statusLabel($state))
+                ->color(fn (?string $state): string => InvestmentRecordResource::statusColor($state)),
+            TextColumn::make('withdrawn_at')->label(__('Withdrawn on'))->date()->placeholder('-'),
+        ])->recordActions([
+            ViewAction::make()->url(fn ($record): string => InvestmentRecordResource::getUrl('view', ['record' => $record])),
+            InvestmentRecordResource::withdrawAction(),
+        ]);
     }
 }

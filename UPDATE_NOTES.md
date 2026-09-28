@@ -2,6 +2,60 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-28 - Investment withdrawal: voucher first, then the status turns "Withdrawn"; the record is kept
+
+Reason — owner:
+- "কয়েকজন ইনভেস্টর তাদের ইনভেস্টমেন্ট উত্তলন করে নিয়েছেন তাদের লভ্যাংশ সহ … তাদের একটা রেকর্ড থাকবে ডিলিট/ট্রাশ হবে না, শুধু স্ট্যাটাস পরিবর্তন হবে।" Some investors took their investment back with profit. Keep their record, never delete or trash it, and only change the status.
+- Answers:
+  1. "প্রজেক্ট এর ২ মাস শেষে তাদের লভ্যাংশ তাদেরকে পরিশোধ করা হয়েছে এরপর তাদের সিদ্বান্ত অনুযায়ী তারা তাদের বিনিয়োগের মূল টাকা উত্তলন করেছে।" Profit was paid at the end of the 2-month cycle, and afterwards they withdrew the principal.
+  2. The status goes on each investment, and the investor shows "Withdrawn" once all their investments are: "ওকে".
+  3. "টাকা আগেই উত্তলন হয়ে গেছে … একটা ভাউচার তৈরি হতে হবে। একটা জিনিস ফিক্সড রুল করে দেও, যদি কোন ইনভেস্টর তাদের টাকা উত্তলন করে তাহলে ভাউচার তৈরি হবে এবং ভাউচার তৈরি হলেই কেবল স্ট্যাটাস পরিবর্তন হবে।" The money is already paid out, and a voucher must be created. Fixed rule: a withdrawal creates a voucher, and only a created voucher changes the status.
+
+What changed:
+- **Migration** `2026_09_28_130000`: `investments.status` (`active` / `withdrawn`, default `active`), `withdrawn_at`, `withdrawal_voucher_id` (FK vouchers, `nullOnDelete`) and `withdrawal_note`.
+- **`Investment` model:**
+  - refuses `status = withdrawn` without `withdrawal_voucher_id` (the fixed rule, enforced in the model and not only in the UI).
+  - refuses to change status/amount/project/investor/voucher of a withdrawn investment, and refuses to delete it.
+  - adds `withdrawalVoucher()`, `isWithdrawn()` and `scopeActive()`.
+- **`InvestmentWithdrawalService::withdraw()`:** one transaction with a row lock.
+  - It submits a debit `investor_payout` voucher for the full principal through `VoucherService::submit()`. The voucher uses the fund source's account, the payment method and the reference as `transaction_id`, and the purpose includes the investor, the project and the withdrawal date, because vouchers have no date field of their own.
+  - Then it sets the status. A voucher failure rolls everything back.
+  - The voucher is **pending**. The status changes when the voucher is *created*, as the owner said, not when Finance approves it.
+- **UI:**
+  - **Withdraw principal** action (manage only) on the investment page and in the Investments tabs of both the investor and the project. It asks for the date (past or today), fund source (defaults to the project's payout fund source), payment method, reference and note.
+  - Status column in both tabs. The project tab hides Edit/Delete for withdrawn rows.
+  - The investment page has a "Withdrawal" section with the date, a voucher link, the voucher status and the note.
+- **Investor status:** `Investor::investmentStatus()` works it out from the investments: active if any investment is active, withdrawn if all are, otherwise none. It shows as a Status column on the investor list, with a Status filter.
+
+Deliberately not changed; needs the owner's decision:
+- `SettlementService` still counts withdrawn investments. A project has only one settlement. If a withdrawal is recorded *before* that project's settlement is entered (for example, INV-1's cycle-1 settlement not yet in the system), excluding them would drop the profit they were actually paid. So they stay in until the owner says otherwise.
+- The profit paid at the end of the cycle is not part of this voucher. It belongs to the settlement payout, which has its own voucher.
+- If Finance rejects or deletes the withdrawal voucher, the investment stays "withdrawn". With `nullOnDelete`, a deleted voucher leaves the link empty.
+
+**Needs Bangla review:** 16 new `lang/bn.json` keys, for example "Withdraw principal" → "মূল টাকা উত্তোলন" and "Withdrawn" → "উত্তোলিত".
+
+Important changed/new files:
+- `database/migrations/2026_09_28_130000_add_withdrawal_status_to_investments_table.php`
+- `app/Models/{Investment,Investor}.php`, `app/Services/Investment/InvestmentWithdrawalService.php` (new)
+- `app/Filament/Resources/InvestmentRecords/{InvestmentRecordResource,Pages/ViewInvestmentRecord}.php`
+- `app/Filament/Resources/Investors/{InvestorResource,RelationManagers/InvestmentsRelationManager}.php`
+- `app/Filament/Resources/InvestmentProjects/RelationManagers/InvestmentsRelationManager.php`
+- `lang/en.json`, `lang/bn.json`, `tests/Feature/InvestmentWithdrawalTest.php` (new)
+
+Verification:
+- `InvestmentWithdrawalTest`: 5 passed:
+  - the voucher (debit, `investor_payout`, full amount, fund source's account) is created, then the status changes and the voucher is linked
+  - a fund source without an account creates no voucher and changes no status, and setting `withdrawn` directly is refused
+  - a withdrawn investment can't be deleted, edited or withdrawn twice
+  - the page action works for a super admin and is hidden for an accountant (view only)
+  - the investor status and filter (active while one investment is active)
+- `--filter='Invest|TranslationParity|MultiCompany'`: 111 passed.
+- Full `php artisan test` (plain, no `--env`): **1530 passed, 0 failed** (9967 assertions).
+- Pint passes. It also re-ordered the existing imports in `InvestmentRecordResource.php`.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
 ## 2026-09-28 - Investor list: project filter, multi-select, channel partner on import, paper-copy uploads on the form
 
 Reason — owner, after using the investor list with the real INV-1 sheet:
@@ -35,7 +89,7 @@ Important changed files:
 Verification:
 - `InvestorIdentityAndDocumentsTest`: 11 passed. There are 4 new tests: form uploads become documents on create and edit, the project filter, bulk assign channel partner (skips an investor who already has one), and an import with a channel partner. The 2 bulk-upload tests were removed.
 - `InvestorImportTest`, `InvestorFormTest` and `TranslationParityTest` pass. Pint passes.
-- Full `php artisan test` (plain, no `--env`): 1519 passed, 1 failed. The failure is `ReleaseNotesTest`: `CHANGELOG.md` was rebuilt on `main`'s copy, which already has v2.32.0, while this branch's `config/release.php` still says 2.30.0. It clears when `main` is merged in before the commit, and the suite is re-run then.
+- Full `php artisan test` (plain, no `--env`): 1519 passed, 1 failed before merging `main`, all from `ReleaseNotesTest` (config/release.php behind the CHANGELOG). After merging `main`: **1525 passed, 0 failed**.
 - Not verified in a browser.
 
 Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").

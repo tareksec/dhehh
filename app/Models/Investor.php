@@ -13,6 +13,10 @@ class Investor extends Model
 {
     use BelongsToCompany;
 
+    public const STATUS_ACTIVE = 'active';
+
+    public const STATUS_WITHDRAWN = 'withdrawn';
+
     protected $fillable = ['company_id', 'name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'is_channel_partner', 'channel_partner_change_reason', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
 
     // nid_number / nominee_nid_or_passport are encrypted at rest (v3 P3) --
@@ -106,6 +110,24 @@ class Investor extends Model
     public function withdrawalNotices()
     {
         return $this->hasMany(InvestmentWithdrawalNotice::class);
+    }
+
+    /**
+     * Active while any investment is active; withdrawn once every investment
+     * has been withdrawn (owner, 2026-09-28); null with no investments. The
+     * investor record itself is always kept.
+     */
+    public function investmentStatus(): ?string
+    {
+        $statuses = $this->relationLoaded('investments')
+            ? $this->investments->pluck('status')
+            : $this->investments()->pluck('status');
+
+        if ($statuses->isEmpty()) {
+            return null;
+        }
+
+        return $statuses->contains(Investment::STATUS_ACTIVE) ? self::STATUS_ACTIVE : self::STATUS_WITHDRAWN;
     }
 
     /** Investors whose NID / passport number matches, whatever its formatting. */

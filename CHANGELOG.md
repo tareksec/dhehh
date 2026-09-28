@@ -8,6 +8,23 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Added
 
+- **Investors who take their principal back are kept on record as "Withdrawn".** Each investment has a **Status**: **Active** or **Withdrawn**. Use **Withdraw principal** on the investment page, or in the investor's or project's Investments tab, after the investor has taken their money back. Enter the date, the fund source it was paid from, the payment method and reference, and an optional note.
+  - **Fixed rule:** every withdrawal creates a pending **Investor Payout** debit voucher in **Finance → Vouchers** for the full amount, and the investment turns **Withdrawn** only once that voucher exists. If the voucher can't be created, for example because the fund source has no linked account, nothing changes.
+  - A withdrawn investment can't be deleted or edited, and can't be withdrawn twice. Its page shows the withdrawal date, the voucher (with a link) and its status.
+  - The investor list shows each investor's **Status**: **Active** while any investment is active, **Withdrawn** once all of them are withdrawn. There is a **Status** filter, and investors are never deleted.
+
+**Technical Notes:**
+- New migration `2026_09_28_130000_add_withdrawal_status_to_investments_table` adds `status` (default `active`, indexed), `withdrawn_at`, `withdrawal_voucher_id` (FK `vouchers`, `nullOnDelete`) and `withdrawal_note`. Existing investments become `active`. Run `php artisan migrate --force`.
+- New `InvestmentWithdrawalService::withdraw()` locks the investment, calls `VoucherService::submit()` (debit, `investor_payout`, fund source's account), then sets the status, all in one transaction. The `Investment` model refuses `status = withdrawn` without a withdrawal voucher, and refuses to change or delete a withdrawn investment.
+- `Investor::investmentStatus()` works it out from the investments. Nothing is stored on the investor.
+- Settlement calculations are unchanged: withdrawn investments are still counted if the project is settled later. This is left for the owner to decide.
+
+## [2.33.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
 - **Filter the investor list by project.** The investor list has a **Project** filter (pick one or more projects) and a **Projects** column showing which projects each investor has invested in. There is also a **Channel Partner** filter.
 - **Select many investors at once.** The investor list now has checkboxes. **Assign channel partner** sets the channel partner for all selected investors who don't have one yet. Investors who already have a channel partner are left unchanged and counted in the message; change those one by one from their edit page (that still needs the channel-partner permission and a reason).
 - **Channel partner when importing.** The **Import Excel / CSV** and **Paste text** dialogs have a **Channel partner for this import (optional)** section. The chosen partner is set on every new investor in that import. A row that names its own channel partner keeps it, and investors who already exist are not changed. The drafts bulk action is now **Set project / payment / channel partner**.
@@ -21,7 +38,6 @@ All notable production changes to Business Dashboard are documented here.
 - `InvestorResource::PAPER_COPY_UPLOADS`, `splitPaperCopies()`, `attachPaperCopies()`; `CreateInvestor::handleRecordCreation()` and `EditInvestor::handleRecordUpdate()` save the uploads as `InvestmentDocument` rows in the same transaction as the investor.
 - `InvestorImportService::investmentDefaults()` also accepts `channel_partner_id` (checked against the current company).
 - Deleted `InvestorDocumentUploadService` and the `document_keywords` config. No migration.
-
 ## [2.32.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
