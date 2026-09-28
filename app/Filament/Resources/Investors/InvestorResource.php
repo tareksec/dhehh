@@ -12,6 +12,7 @@ use App\Filament\Resources\Investors\RelationManagers\InvestmentsRelationManager
 use App\Filament\Resources\Investors\RelationManagers\PartnerPayoutsRelationManager;
 use App\Filament\Resources\Investors\RelationManagers\WithdrawalNoticesRelationManager;
 use App\Models\Company;
+use App\Models\Investment;
 use App\Models\InvestmentDocument;
 use App\Models\InvestmentProject;
 use App\Models\Investor;
@@ -253,6 +254,19 @@ class InvestorResource extends Resource
                         ->filter()->unique()->values()->all())
                     ->placeholder('-'),
                 TextColumn::make('investments_sum_amount')->label('Lifetime Invested')->moneyWithoutTrailingZeroes('BDT'),
+                TextColumn::make('investment_status')
+                    ->label(__('Status'))
+                    ->badge()
+                    ->state(fn (Investor $record): string => match ($record->investmentStatus()) {
+                        Investor::STATUS_WITHDRAWN => __('Withdrawn'),
+                        Investor::STATUS_ACTIVE => __('Active'),
+                        default => __('No investment'),
+                    })
+                    ->color(fn (Investor $record): string => match ($record->investmentStatus()) {
+                        Investor::STATUS_WITHDRAWN => 'gray',
+                        Investor::STATUS_ACTIVE => 'success',
+                        default => 'warning',
+                    }),
                 TextColumn::make('documents_status')
                     ->label(__('Paper copies'))
                     ->badge()
@@ -279,6 +293,14 @@ class InvestorResource extends Resource
                         filled($data['values'] ?? null),
                         fn (Builder $query): Builder => $query->whereHas('investments', fn (Builder $investments) => $investments->whereIn('project_id', $data['values'])),
                     )),
+                SelectFilter::make('investment_status')
+                    ->label(__('Status'))
+                    ->options([Investor::STATUS_ACTIVE => __('Active'), Investor::STATUS_WITHDRAWN => __('Withdrawn')])
+                    ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
+                        Investor::STATUS_ACTIVE => $query->whereHas('investments', fn (Builder $investments) => $investments->where('status', Investment::STATUS_ACTIVE)),
+                        Investor::STATUS_WITHDRAWN => $query->whereHas('investments')->whereDoesntHave('investments', fn (Builder $investments) => $investments->where('status', Investment::STATUS_ACTIVE)),
+                        default => $query,
+                    }),
                 SelectFilter::make('channel_partner_id')
                     ->label('Channel Partner')
                     ->relationship('channelPartner', 'name')
