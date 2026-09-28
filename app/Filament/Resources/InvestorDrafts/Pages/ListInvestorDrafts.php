@@ -6,10 +6,13 @@ use App\Filament\Resources\InvestorDrafts\InvestorDraftResource;
 use App\Filament\Resources\Investors\InvestorResource;
 use App\Services\Investment\InvestorImportService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Field;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Section;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -46,6 +49,7 @@ class ListInvestorDrafts extends ListRecords
                         ->maxSize(5120)
                         ->required()
                         ->helperText(__('Your usual INV sheet works as it is: a title line above the column names is fine, SL and total rows are skipped, and every sheet of an Excel file is read. Column names can be English or Bangla. Format NID and phone columns as Text in Excel so long numbers are not rounded.')),
+                    ...$this->importInvestmentFields(),
                 ])
                 ->action(function (array $data, InvestorImportService $imports): void {
                     abort_unless(InvestorDraftResource::canImport(), 403);
@@ -61,7 +65,7 @@ class ListInvestorDrafts extends ListRecords
                     $name ??= $file instanceof TemporaryUploadedFile ? $file->getClientOriginalName() : basename((string) $file);
 
                     try {
-                        $result = $imports->importFile(Storage::disk('local')->path($file), (string) $name);
+                        $result = $imports->importFile(Storage::disk('local')->path($file), (string) $name, $data);
                     } catch (ValidationException $exception) {
                         $this->notifyFailed($exception);
 
@@ -86,12 +90,13 @@ class ListInvestorDrafts extends ListRecords
                         ->required()
                         ->placeholder(__("Name: Abdul Karim\nFather's Name: Abdul Rahim\nPhone: 01712345678\nNID: 1990123456789\nAddress: House 4, Dhaka\nNominee: Karima Begum\nRelation: Wife\n\nName: Next investor\nPhone: ..."))
                         ->helperText(__('One detail per line as "Label: value", with a blank line between investors. A table copied from Excel (with its header row) also works.')),
+                    ...$this->importInvestmentFields(),
                 ])
                 ->action(function (array $data, InvestorImportService $imports): void {
                     abort_unless(InvestorDraftResource::canImport(), 403);
 
                     try {
-                        $result = $imports->importText((string) ($data['text'] ?? ''));
+                        $result = $imports->importText((string) ($data['text'] ?? ''), investment: $data);
                     } catch (ValidationException $exception) {
                         $this->notifyFailed($exception);
 
@@ -113,6 +118,24 @@ class ListInvestorDrafts extends ListRecords
                 ->icon(Heroicon::OutlinedUserGroup)
                 ->color('gray')
                 ->url(InvestorResource::getUrl('index')),
+        ];
+    }
+
+    /**
+     * Optional project / payment method / date applied to every draft of
+     * the import, so the sheet's investment amounts become investments on
+     * confirm. Each draft can still be changed on review.
+     *
+     * @return list<Component|Field>
+     */
+    private function importInvestmentFields(): array
+    {
+        return [
+            Section::make(__('Investment for this import (optional)'))
+                ->description(__('Pick the project the sheet belongs to. Each row\'s investment amount is then added to that project when its draft is confirmed.'))
+                ->schema(InvestorDraftResource::investmentFields(withAmount: false))
+                ->columns(3)
+                ->collapsible(),
         ];
     }
 

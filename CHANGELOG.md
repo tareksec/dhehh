@@ -4,6 +4,20 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investor drafts can now record the investment too.** When importing an Excel/CSV file or pasted text, open **Investment for this import (optional)** and pick the **project**, **payment method** and **investment date**. The **বিনিয়োগ (৳)** amount of each row is read into its draft. When the draft is confirmed, the investment is added to that project, and the stamp and cheque numbers are saved as its security instrument. If the project receives money into a fund source, the pending capital voucher is created too, the same as when an investment is added by hand.
+  - Each draft's review page has an **Investment** section, where project, amount, payment method and date can be changed.
+  - **Set project / payment** sets these for many selected drafts at once.
+  - A draft with an amount but no project shows **Needs fixing** until a project is picked or the amount is cleared. A closed or settled project cannot take new investments.
+- **Returning investors get only the new investment, not a duplicate.** When a row's phone number matches an investor who already exists, the draft is linked to that investor automatically, and a note says so. Confirming adds only the new investment to them. Their name, NID, nominee and other details are not changed. On the review page, **Add to an existing investor** links or unlinks a draft by hand.
+
+**Technical Notes:**
+- New migration `2026_09_28_100000_add_investment_fields_to_investor_drafts_table` (`existing_investor_id`, `project_id`, `investment_amount`, `payment_method`, `invested_at`). Run `php artisan migrate --force`.
+- `InvestorImportService::confirm()` creates the `Investment` (+ `InvestorSecurityInstrument` when stamp/cheque numbers exist) in the same transaction as the investor, then calls `InvestmentLedgerService::recordInvestmentReceived()`. The `Investment` model's own rules (investment window, one channel partner per project) still apply and block the confirm with their message.
+
 ## [2.28.1] - 2026-09-27
 
 **Release type:** Patch/Fix Update
