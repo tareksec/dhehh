@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.34.0] - 2026-09-28
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -18,7 +20,6 @@ All notable production changes to Business Dashboard are documented here.
 - New `InvestmentWithdrawalService::withdraw()` locks the investment, calls `VoucherService::submit()` (debit, `investor_payout`, fund source's account), then sets the status, all in one transaction. The `Investment` model refuses `status = withdrawn` without a withdrawal voucher, and refuses to change or delete a withdrawn investment.
 - `Investor::investmentStatus()` works it out from the investments. Nothing is stored on the investor.
 - Settlement calculations are unchanged: withdrawn investments are still counted if the project is settled later. This is left for the owner to decide.
-
 ## [2.33.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
