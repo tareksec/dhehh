@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.36.0] - 2026-09-28
+
 **Release type:** Minor Feature Update
 
 ### Changed
@@ -17,7 +19,6 @@ All notable production changes to Business Dashboard are documented here.
 - `VoucherService::reject()` and `cancel()` call `InvestmentWithdrawalService::voucherVoided()` (renamed from `voucherTrashed()`). New `Voucher::isVoid()` (rejected or cancelled). The `Investment` model counts "withdrawn" only while its voucher exists and isn't void.
 - `ProjectSettlement` allows one step back, from `paid_out` to `confirmed`, and only while one of its payouts is unpaid again. Otherwise its status still only moves forward.
 - No migration.
-
 ## [2.35.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
