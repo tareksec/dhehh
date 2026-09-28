@@ -70,4 +70,28 @@ class InvestmentWithdrawalService
             return $voucher;
         });
     }
+
+    /**
+     * The withdrawal voucher went to Trash, so the withdrawal is no longer
+     * backed by a voucher: its investments go back to active (the withdrawal
+     * date, voucher link and note are kept as history).
+     */
+    public function voucherTrashed(Voucher $voucher): void
+    {
+        Investment::query()
+            ->where('withdrawal_voucher_id', $voucher->getKey())
+            ->where('status', Investment::STATUS_WITHDRAWN)
+            ->get()
+            ->each(fn (Investment $investment) => $investment->update(['status' => Investment::STATUS_ACTIVE]));
+    }
+
+    /** The withdrawal voucher came back from Trash: its investments are withdrawn again. */
+    public function voucherRestored(Voucher $voucher): void
+    {
+        Investment::query()
+            ->where('withdrawal_voucher_id', $voucher->getKey())
+            ->where('status', Investment::STATUS_ACTIVE)
+            ->get()
+            ->each(fn (Investment $investment) => $investment->update(['status' => Investment::STATUS_WITHDRAWN]));
+    }
 }

@@ -4,6 +4,25 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Voucher trash.** A voucher is never deleted directly. **Move to trash** (on the voucher list and the voucher page) moves it to **Finance → Vouchers → Trash**. From there it can be **restored** or **deleted permanently**. Only users with the new **Voucher: Move to Trash, Restore and Delete Permanently** (`voucher.delete`) permission can do any of this. Super admins have it automatically; give it to other roles in user settings. The trash shows who moved each voucher and when.
+  - An **approved** voucher can't be moved to trash, because its money has already been booked (expense, payment or account transaction).
+  - If a principal-withdrawal voucher goes to trash, its investment becomes **Active** again. Restoring the voucher marks it **Withdrawn** again, and a permanent delete leaves it **Active**. The withdrawal date and note are kept.
+
+### Changed
+
+- **Settlements leave withdrawn investments out.** A settlement calculated after an investor withdrew their principal no longer includes that investment, so it gets no profit share and its principal isn't paid out again. Settlements made before the withdrawal are not changed.
+
+**Technical Notes:**
+- New migration `2026_09_28_140000_add_soft_deletes_to_vouchers_table` adds `deleted_at` (indexed) and `deleted_by` (FK users, `nullOnDelete`). Run `php artisan migrate --force`. Existing vouchers are unaffected.
+- `Voucher` uses `SoftDeletes`, so all Eloquent queries (lists, reports, sums) skip trashed vouchers. `nextVoucherNumber()` also checks trashed vouchers, so a number is never reused. Every FK to `vouchers` is `nullOnDelete` or `cascadeOnDelete`, so a permanent delete is safe. Attachment rows cascade; their files are left in storage.
+- New `VoucherTrashService` (`trash` / `restore` / `deletePermanently`), new `User::canDeleteVoucher()`, and a new page `TrashedVouchers` at `/vouchers/trash`. `VoucherResource::canDelete()` stays `false`.
+- `InvestmentWithdrawalService::voucherTrashed()` / `voucherRestored()`. The `Investment` model allows withdrawn → active only while the withdrawal voucher is in trash, and counts "withdrawn" only while that voucher exists. An investment that has ever had a withdrawal voucher cannot be deleted.
+- `SettlementService::calculateAndSettle()` uses `investments()->active()`.
+
 ## [2.34.0] - 2026-09-28
 
 **Release type:** Minor Feature Update

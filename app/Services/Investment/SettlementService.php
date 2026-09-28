@@ -15,9 +15,9 @@ class SettlementService
 {
     /**
      * @param  string  $outcome  profit | loss_investor_borne | loss_manager_borne
-     *                            (v3 P1.3 — deed clause 4 / channel-partner
-     *                            agreement clause 4). Ignored when net profit is
-     *                            positive.
+     *                           (v3 P1.3 — deed clause 4 / channel-partner
+     *                           agreement clause 4). Ignored when net profit is
+     *                           positive.
      */
     public function calculateAndSettle(
         InvestmentProject $project,
@@ -61,7 +61,9 @@ class SettlementService
                 }
             }
 
-            $investments = $lockedProject->investments()->with('investor')->get();
+            // Owner (2026-09-28): an investment leaves the settlement from the
+            // moment its principal is withdrawn.
+            $investments = $lockedProject->investments()->active()->with('investor')->get();
             $externalInvested = round((float) $investments->sum('amount'), 2);
 
             if ($externalInvested <= 0) {
@@ -214,8 +216,8 @@ class SettlementService
         float $externalInvested,
         float $capitalBase,
         float $companyContribution,
-        \Illuminate\Support\Collection $investments,
-        \Illuminate\Support\Collection $grouped,
+        Collection $investments,
+        Collection $grouped,
     ): array {
         $investorPool = round($netProfit * ((float) $project->investor_share_percent / 100), 2);
         $configuredChannelPool = round($netProfit * ((float) $project->channel_partner_share_percent / 100), 2);
@@ -285,7 +287,7 @@ class SettlementService
         string $outcome,
         float $netProfit,
         float $capitalBase,
-        \Illuminate\Support\Collection $grouped,
+        Collection $grouped,
     ): array {
         $loss = round(-$netProfit, 2); // positive
         $payoutRows = [];
