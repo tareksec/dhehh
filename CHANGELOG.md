@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.35.0] - 2026-09-28
+
 **Release type:** Minor Feature Update
 
 ### Changed
