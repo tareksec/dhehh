@@ -8,6 +8,12 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Added
 
+- **In-app Documentation.** A new **Documentation** menu (visible to everyone signed in) is a step-by-step guide hub for the app itself, browsable by category with a search box. Admins with the Settings permission write and organize the guides from **Settings → Documentation** — a rich-text editor per article, grouped into categories, with a Published toggle so drafts stay hidden until ready.
+
+**Technical Notes:**
+- New tables `documentation_categories` (`name`, `slug`, `icon`, `sort_order`) and `documentation_articles` (`documentation_category_id`, `title`, `slug`, `content`, `sort_order`, `is_published`) — migration `2026_09_28_140000_create_documentation_tables`. Not company-scoped: the same guides show for every company, since they document the app, not business data.
+- `DocumentationArticleResource` (Settings cluster, `canManageSettings()` gated) manages articles; categories are created inline from the article form. `Documentation` page (standalone, top-level nav, open to any signed-in user) lists published articles by category and renders content with `RichContentRenderer`.
+
 - **Investors who take their principal back are kept on record as "Withdrawn".** Each investment has a **Status**: **Active** or **Withdrawn**. Use **Withdraw principal** on the investment page, or in the investor's or project's Investments tab, after the investor has taken their money back. Enter the date, the fund source it was paid from, the payment method and reference, and an optional note.
   - **Fixed rule:** every withdrawal creates a pending **Investor Payout** debit voucher in **Finance → Vouchers** for the full amount, and the investment turns **Withdrawn** only once that voucher exists. If the voucher can't be created, for example because the fund source has no linked account, nothing changes.
   - A withdrawn investment can't be deleted or edited, and can't be withdrawn twice. Its page shows the withdrawal date, the voucher (with a link) and its status.

@@ -12,6 +12,32 @@ What changed:
 
 Not code — no migration, no test changes, no `lang/` changes.
 
+Commit status: Committed and merged into `main` via PR bhd4232/Business-Dashboard#9 (owner approved: "PR খুলে দাও").
+
+## 2026-09-28 - In-app Documentation module: step-by-step guides, editable from Filament
+
+Reason — owner: "আমাদের অ্যাপের মধ্যে ডকুমেন্টেশন মডিউল যুক্ত করতে বলেছিলাম যেখানে আমাদের অ্যাপের সকল দিকনির্দেশনা গুলো স্টেপ বাই স্টেপ লিখা থাকবে।" A documentation module inside the app itself, where all of the app's own instructions are written step by step. Scope, confirmed with the owner: a general documentation hub (not only the API docs), content editable from Filament (not a static file).
+
+What changed:
+- New tables `documentation_categories` (name, slug, icon, sort order) and `documentation_articles` (category, title, slug, rich-text content, sort order, published toggle). Not company-scoped — the guides are about the app itself, so every company sees the same ones.
+- **Settings → Documentation** (admin only, same `settings.manage`/super-admin gate as the other Settings pages): create/edit articles with a rich-text editor; a new category can be added right from the article form.
+- **Documentation** — a new top-level menu open to every signed-in user: categories down the side, a search box, and the selected article's content on the right. Only published articles show. This is the step-by-step guide hub itself.
+
+Not yet done: no content has been written into it yet — the module is the tool for the owner/admins to start writing the app's own guides (order flow, inventory, investments, etc.) inside Filament.
+
+Important changed/new files:
+- `database/migrations/2026_09_28_140000_create_documentation_tables.php`
+- `app/Models/{DocumentationCategory,DocumentationArticle}.php`
+- `app/Filament/Resources/DocumentationArticles/**`
+- `app/Filament/Pages/Documentation.php`, `resources/views/filament/pages/documentation.blade.php`
+- `tests/Feature/DocumentationModuleTest.php` (new)
+
+Verification:
+- `DocumentationModuleTest`: 4 passed (published-only listing, search filtering, permission gate for a manager without `settings.manage`, access granted for a super admin).
+- Full `php artisan test` (plain, no `--env`): **1534 passed, 0 failed** (9975 assertions).
+- `npm run build`: succeeded.
+- Not verified in a browser.
+
 Commit status: not committed — waiting for owner approval.
 
 ## 2026-09-28 - Investment withdrawal: voucher first, then the status turns "Withdrawn"; the record is kept
