@@ -34,7 +34,7 @@ class ProjectSettlement extends Model
                 throw ValidationException::withMessages(['settlement' => 'Settlement figures are immutable. Void the settlement and recalculate instead.']);
             }
 
-            // Status only moves forward: draft → confirmed → paid_out.
+            // Status moves forward: draft → confirmed → paid_out.
             if ($settlement->isDirty('status')) {
                 $allowed = [
                     'draft' => ['confirmed'],
@@ -43,7 +43,13 @@ class ProjectSettlement extends Model
                 ];
                 $from = $settlement->getOriginal('status');
 
-                if (! in_array($settlement->status, $allowed[$from] ?? [], true)) {
+                // The one step back (owner, 2026-09-28): a payout's voucher went
+                // to Trash, so that payout is unpaid again.
+                $payoutUnpaidAgain = $from === 'paid_out' && $settlement->status === 'confirmed'
+                    && ($settlement->payouts()->where('payment_status', 'pending')->exists()
+                        || $settlement->channelPartnerPayouts()->where('payment_status', 'pending')->exists());
+
+                if (! $payoutUnpaidAgain && ! in_array($settlement->status, $allowed[$from] ?? [], true)) {
                     throw ValidationException::withMessages(['status' => "A settlement cannot move from {$from} to {$settlement->status}."]);
                 }
             }

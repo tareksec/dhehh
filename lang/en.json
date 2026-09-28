@@ -190,7 +190,7 @@
     "Investor details as text": "Investor details as text",
     "Investor list": "Investor list",
     "Invoice": "Invoice",
-    "It leaves the voucher list and stays in Trash until someone with the delete permission restores it or deletes it permanently. If it is an investment withdrawal voucher, that investment becomes active again until the voucher is restored.": "It leaves the voucher list and stays in Trash until someone with the delete permission restores it or deletes it permanently. If it is an investment withdrawal voucher, that investment becomes active again until the voucher is restored.",
+    "It leaves the voucher list and stays in Trash until someone with the delete permission restores it or deletes it permanently. Until it is restored, a payout marked paid with this voucher is unpaid again, and an investment withdrawn with it is active again.": "It leaves the voucher list and stays in Trash until someone with the delete permission restores it or deletes it permanently. Until it is restored, a payout marked paid with this voucher is unpaid again, and an investment withdrawn with it is active again.",
     "It stops playing on the storefront. The clip itself stays in Video Generation, so you can attach it again later.": "It stops playing on the storefront. The clip itself stays in Video Generation, so you can attach it again later.",
     "Item": "Item",
     "Items": "Items",

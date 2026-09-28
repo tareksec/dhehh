@@ -190,7 +190,7 @@
     "Investor details as text": "টেক্সট আকারে ইনভেস্টরের তথ্য",
     "Investor list": "ইনভেস্টর লিস্ট",
     "Invoice": "ইনভয়েস",
-    "It leaves the voucher list and stays in Trash until someone with the delete permission restores it or deletes it permanently. If it is an investment withdrawal voucher, that investment becomes active again until the voucher is restored.": "এটি ভাউচার তালিকা থেকে সরে যাবে এবং ডিলিট পারমিশন আছে এমন কেউ ফিরিয়ে না আনা বা স্থায়ীভাবে ডিলিট না করা পর্যন্ত ট্র্যাশে থাকবে। এটি ইনভেস্টমেন্ট উত্তোলনের ভাউচার হলে, ভাউচার ফিরিয়ে না আনা পর্যন্ত সেই ইনভেস্টমেন্ট আবার সক্রিয় হয়ে যাবে।",
+    "It leaves the voucher list and stays in Trash until someone with the delete permission restores it or deletes it permanently. Until it is restored, a payout marked paid with this voucher is unpaid again, and an investment withdrawn with it is active again.": "এটি ভাউচার তালিকা থেকে সরে যাবে এবং ডিলিট পারমিশন আছে এমন কেউ ফিরিয়ে না আনা বা স্থায়ীভাবে ডিলিট না করা পর্যন্ত ট্র্যাশে থাকবে। ফিরিয়ে না আনা পর্যন্ত, এই ভাউচার দিয়ে পরিশোধিত পেআউট আবার অপরিশোধিত হবে এবং এই ভাউচার দিয়ে উত্তোলিত ইনভেস্টমেন্ট আবার সক্রিয় হবে।",
     "It stops playing on the storefront. The clip itself stays in Video Generation, so you can attach it again later.": "স্টোরফ্রন্টে এটি আর চলবে না। ক্লিপটি Video Generation-এ থেকে যাবে, তাই পরে আবার যুক্ত করতে পারবেন।",
     "Item": "পণ্য",
     "Items": "পণ্যসমূহ",

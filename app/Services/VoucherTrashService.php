@@ -19,7 +19,7 @@ use Illuminate\Validation\ValidationException;
  */
 class VoucherTrashService
 {
-    public function __construct(private InvestmentWithdrawalService $withdrawals) {}
+    public function __construct(private InvestmentWithdrawalService $withdrawals, private VoucherLinkedPayoutsService $payouts) {}
 
     public function trash(Voucher $voucher, User $user): void
     {
@@ -34,7 +34,8 @@ class VoucherTrashService
 
             $locked->forceFill(['deleted_by' => $user->getKey()])->saveQuietly();
             $locked->delete();
-            $this->withdrawals->voucherTrashed($locked);
+            $this->withdrawals->voucherVoided($locked);
+            $this->payouts->voucherTrashed($locked);
 
             $voucher->setRawAttributes($locked->getAttributes(), true);
         });
@@ -49,6 +50,7 @@ class VoucherTrashService
             $locked->restore();
             $locked->forceFill(['deleted_by' => null])->saveQuietly();
             $this->withdrawals->voucherRestored($locked);
+            $this->payouts->voucherRestored($locked);
 
             $voucher->setRawAttributes($locked->getAttributes(), true);
         });

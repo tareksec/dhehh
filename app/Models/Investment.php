@@ -28,22 +28,25 @@ class Investment extends Model
     protected static function booted(): void
     {
         // Owner's fixed rules (2026-09-28): a withdrawal always gets a voucher,
-        // and the status is "withdrawn" only while that voucher exists (not in
-        // Trash). A withdrawn investment is history: never deleted, money never
-        // edited. Trashing the voucher sends it back to active; restoring the
-        // voucher marks it withdrawn again (InvestmentWithdrawalService).
+        // and the status is "withdrawn" only while that voucher stands (not in
+        // Trash, not rejected, not cancelled). A withdrawn investment is
+        // history: never deleted, money never edited. A voided voucher sends it
+        // back to active; restoring a trashed one marks it withdrawn again
+        // (InvestmentWithdrawalService).
         static::saving(function (self $investment): void {
             if ($investment->status === self::STATUS_WITHDRAWN
-                && (blank($investment->withdrawal_voucher_id) || ! Voucher::query()->whereKey($investment->withdrawal_voucher_id)->exists())) {
+                && ! Voucher::query()->whereKey($investment->withdrawal_voucher_id ?? 0)->whereNotIn('status', [Voucher::STATUS_REJECTED, Voucher::STATUS_CANCELLED])->exists()) {
                 throw ValidationException::withMessages(['status' => __('An investment can be marked withdrawn only after its withdrawal voucher is created.')]);
             }
 
             if ($investment->exists && $investment->getOriginal('status') === self::STATUS_WITHDRAWN) {
-                $revertedByTrash = $investment->status === self::STATUS_ACTIVE
+                $withdrawalVoucher = Voucher::withTrashed()->find($investment->withdrawal_voucher_id);
+                $voucherVoided = $withdrawalVoucher && ($withdrawalVoucher->trashed() || $withdrawalVoucher->isVoid());
+                $revertedByVoidedVoucher = $investment->status === self::STATUS_ACTIVE
                     && ! $investment->isDirty(['amount', 'project_id', 'investor_id', 'withdrawal_voucher_id'])
-                    && Voucher::onlyTrashed()->whereKey($investment->withdrawal_voucher_id)->exists();
+                    && $voucherVoided;
 
-                if (! $revertedByTrash && $investment->isDirty(['status', 'amount', 'project_id', 'investor_id', 'withdrawal_voucher_id'])) {
+                if (! $revertedByVoidedVoucher && $investment->isDirty(['status', 'amount', 'project_id', 'investor_id', 'withdrawal_voucher_id'])) {
                     throw ValidationException::withMessages(['amount' => __('A withdrawn investment is kept as a record and cannot be changed.')]);
                 }
             }

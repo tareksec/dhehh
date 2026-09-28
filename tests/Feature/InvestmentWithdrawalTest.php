@@ -15,6 +15,7 @@ use App\Models\Voucher;
 use App\Services\CompanyContext;
 use App\Services\Investment\InvestmentWithdrawalService;
 use App\Services\Investment\SettlementService;
+use App\Services\VoucherService;
 use App\Services\VoucherTrashService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
@@ -186,6 +187,29 @@ class InvestmentWithdrawalTest extends TestCase
         app(VoucherTrashService::class)->deletePermanently($voucher, $this->admin);
         $this->assertSame(Investment::STATUS_ACTIVE, $investment->fresh()->status);
         $this->assertSame(1, Investment::query()->count());
+    }
+
+    public function test_a_rejected_or_cancelled_withdrawal_voucher_makes_the_investment_active_again(): void
+    {
+        $rejected = $this->investment('01711111111', '1479939603');
+        $voucher = app(InvestmentWithdrawalService::class)->withdraw($rejected, $this->data(), $this->admin);
+        app(VoucherService::class)->reject($voucher, 'Wrong amount', $this->admin);
+        $this->assertSame(Investment::STATUS_ACTIVE, $rejected->fresh()->status);
+
+        $cancelled = $this->investment('01722222222', '1901688455');
+        $voucher = app(InvestmentWithdrawalService::class)->withdraw($cancelled, $this->data(), $this->admin);
+        app(VoucherService::class)->cancel($voucher);
+        $this->assertSame(Investment::STATUS_ACTIVE, $cancelled->fresh()->status);
+
+        // Restoring a trashed cancelled voucher does not bring the withdrawal back.
+        app(VoucherTrashService::class)->trash($voucher, $this->admin);
+        app(VoucherTrashService::class)->restore($voucher, $this->admin);
+        $this->assertSame(Investment::STATUS_ACTIVE, $cancelled->fresh()->status);
+
+        // The investment can be withdrawn again with a new voucher.
+        $again = app(InvestmentWithdrawalService::class)->withdraw($rejected->fresh(), $this->data(), $this->admin);
+        $this->assertSame($again->id, $rejected->fresh()->withdrawal_voucher_id);
+        $this->assertTrue($rejected->fresh()->isWithdrawn());
     }
 
     private function data(): array

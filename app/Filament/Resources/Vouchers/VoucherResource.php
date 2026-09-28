@@ -321,7 +321,7 @@ class VoucherResource extends Resource
             ->visible(fn (Voucher $record): bool => $record->status !== Voucher::STATUS_APPROVED && (Auth::user()?->canDeleteVoucher() ?? false))
             ->requiresConfirmation()
             ->modalHeading(__('Move this voucher to trash?'))
-            ->modalDescription(__('It leaves the voucher list and stays in Trash until someone with the delete permission restores it or deletes it permanently. If it is an investment withdrawal voucher, that investment becomes active again until the voucher is restored.'))
+            ->modalDescription(__('It leaves the voucher list and stays in Trash until someone with the delete permission restores it or deletes it permanently. Until it is restored, a payout marked paid with this voucher is unpaid again, and an investment withdrawn with it is active again.'))
             ->action(function (Voucher $record): void {
                 try {
                     app(VoucherTrashService::class)->trash($record, Auth::user());
