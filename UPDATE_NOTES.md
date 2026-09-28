@@ -2,6 +2,29 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-28 - Documentation module: "Import Markdown" button
+
+Reason — owner: pasted the API integration guide (Markdown) into a Documentation article's Content field, and it came in as one plain paragraph, not the original headings/bold/tables. Filament's Rich Editor is a WYSIWYG editor — it doesn't parse pasted Markdown syntax, it just inserts the raw characters as text. Owner picked adding an "Import Markdown" button over the alternatives (render to HTML and copy from a browser tab, or reformat manually).
+
+What changed:
+- **Content field → Import Markdown button** (`Settings → Documentation → article → Content`, hint icon): opens a modal with a textarea for raw Markdown; converts it with `league/commonmark`'s GitHub-Flavored Markdown converter (tables, headings, bold, lists, code blocks, autolinks) and replaces the Content field with the resulting rich text.
+- `league/commonmark` was already installed as a transitive dependency (via another package); added it directly to `composer.json` `require` since the app now calls it by name.
+- Also answered the owner's other question in chat: the Documentation module is **not** company-scoped — one setup applies to every company, same as this session's earlier CHANGELOG/PROJECT_GUIDE note already said.
+
+Important changed/new files:
+- `composer.json` (new direct dependency, no vendor change — already resolved in `composer.lock` at the same version)
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `lang/en.json`, `lang/bn.json`, `CHANGELOG.md`
+- `tests/Feature/DocumentationModuleTest.php` (+1 test: headings/bold/lists/tables convert correctly)
+
+Verification:
+- `DocumentationModuleTest`: 6 passed. `TranslationParityTest`: passed.
+- Full `php artisan test` (plain, no `--env`): **1545 passed, 0 failed** (10208 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser — the owner should re-paste the API guide through the new button and confirm the formatting looks right before relying on it for other documents.
+
+Commit status: not committed — waiting for owner approval.
+
 ## 2026-09-28 - Documentation module: fixes from automated PR review (Codex)
 
 Reason — an automated review bot (`chatgpt-codex-connector[bot]`) left 5 findings on PR bhd4232/Business-Dashboard#10 (the Documentation module committed earlier today), each citing a real `AGENTS.md` rule. Verified each and fixed all of them; this is a follow-up to the earlier "In-app Documentation module" entry, not a new feature.

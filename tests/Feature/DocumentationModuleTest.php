@@ -109,4 +109,28 @@ class DocumentationModuleTest extends TestCase
 
         $this->assertTrue(DocumentationArticleResource::canViewAny());
     }
+
+    public function test_markdown_import_converts_headings_bold_lists_and_tables_to_rich_html(): void
+    {
+        $markdown = <<<'MARKDOWN'
+            ## Step 1
+
+            Mark the order as **shipped**.
+
+            - First
+            - Second
+
+            | Field | Value |
+            | --- | --- |
+            | SKU | ABC-1 |
+            MARKDOWN;
+
+        $html = DocumentationArticleResource::markdownToHtml($markdown);
+
+        $this->assertStringContainsString('<h2>Step 1</h2>', $html);
+        $this->assertStringContainsString('<strong>shipped</strong>', $html);
+        $this->assertStringContainsString('<li>First</li>', $html);
+        $this->assertStringContainsString('<table>', $html);
+        $this->assertStringContainsString('<td>ABC-1</td>', $html);
+    }
 }

@@ -6,6 +6,10 @@ All notable production changes to Business Dashboard are documented here.
 
 **Release type:** Minor Feature Update
 
+### Added
+
+- **Import Markdown into Documentation articles.** The article editor (**Settings → Documentation**) has an **Import Markdown** button next to the Content field. Paste raw Markdown (headings, bold, lists, tables, code blocks) and it converts to properly formatted rich text — pasting Markdown directly into the editor only produced a plain paragraph.
+
 ### Changed
 
 - **Moving a payout voucher to trash makes the payout unpaid again.** This covers investor settlement payouts, channel-partner payouts and reseller withdrawal requests. If the voucher that was created when the payout was marked paid goes to **Trash**, the payout goes back to **pending**, or **approved** for reseller requests, and can be paid again. Restoring the voucher marks it paid again. A settlement that was fully paid out goes back to **confirmed** while any payout is unpaid.
@@ -17,6 +21,7 @@ All notable production changes to Business Dashboard are documented here.
 - `VoucherService::reject()` and `cancel()` call `InvestmentWithdrawalService::voucherVoided()` (renamed from `voucherTrashed()`). New `Voucher::isVoid()` (rejected or cancelled). The `Investment` model counts "withdrawn" only while its voucher exists and isn't void.
 - `ProjectSettlement` allows one step back, from `paid_out` to `confirmed`, and only while one of its payouts is unpaid again. Otherwise its status still only moves forward.
 - No migration.
+- **Documentation Markdown import:** `DocumentationArticleResource::markdownToHtml()` uses `league/commonmark`'s `GithubFlavoredMarkdownConverter` (was already a transitive dependency; now declared directly in `composer.json`). Wired to the Content field's `hintAction`.
 
 ## [2.35.0] - 2026-09-28
 
