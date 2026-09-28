@@ -17,7 +17,18 @@ class InvestmentDocument extends Model
 {
     use BelongsToCompany;
 
+    public const CATEGORY_INVESTOR_NID = 'investor_nid';
+
+    public const CATEGORY_NOMINEE_NID = 'nominee_nid';
+
+    public const CATEGORY_PROJECT_CONTRACT = 'project_contract';
+
     public const CATEGORIES = [
+        self::CATEGORY_INVESTOR_NID => 'Investor NID / Passport copy',
+        self::CATEGORY_NOMINEE_NID => 'Nominee NID / Passport copy',
+        self::CATEGORY_PROJECT_CONTRACT => 'Project contract (same for all investors)',
+        'cheque_copy' => 'Cheque copy',
+        'stamp_copy' => 'Stamp copy',
         'settlement_sheet' => 'Settlement Sheet',
         'investor_report' => 'Investor Report',
         'cost_receipt' => 'Cost Receipt / Invoice',
@@ -26,6 +37,12 @@ class InvestmentDocument extends Model
         'signed_contract' => 'Signed Contract',
         'other' => 'Other',
     ];
+
+    /**
+     * Identity papers and contracts: only users with `investments.manage`
+     * may list or download them (owner's rule).
+     */
+    public const SENSITIVE_CATEGORIES = [self::CATEGORY_INVESTOR_NID, self::CATEGORY_NOMINEE_NID, self::CATEGORY_PROJECT_CONTRACT, 'signed_contract', 'cheque_copy', 'stamp_copy'];
 
     protected $fillable = ['company_id', 'documentable_type', 'documentable_id', 'file_path', 'file_type', 'category', 'label', 'uploaded_by'];
 
@@ -50,6 +67,22 @@ class InvestmentDocument extends Model
                 throw new LogicException('Investment documents must use the owning company private storage path.');
             }
         });
+    }
+
+    public function isSensitive(): bool
+    {
+        return in_array($this->category, self::SENSITIVE_CATEGORIES, true) || $this->documentable_type === (new Investor)->getMorphClass();
+    }
+
+    public static function categoryLabel(?string $category): string
+    {
+        return __(self::CATEGORIES[$category] ?? (string) $category);
+    }
+
+    /** @return array<string, string> */
+    public static function categoryOptions(): array
+    {
+        return collect(self::CATEGORIES)->map(fn (string $label): string => __($label))->all();
     }
 
     public function documentable(): MorphTo

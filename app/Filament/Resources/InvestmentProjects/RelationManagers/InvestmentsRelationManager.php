@@ -42,7 +42,7 @@ class InvestmentsRelationManager extends RelationManager
                 ->createOptionForm([
                     TextInput::make('name')->required(),
                     TextInput::make('phone')->required(),
-                    TextInput::make('nid_number')->label('NID Number'),
+                    TextInput::make('nid_number')->label(__('NID / Passport (Investor ID)'))->required(),
                 ])->createOptionUsing(fn (array $data): int => Investor::query()->create($data)->getKey())->required(),
             TextInput::make('amount')->numeric()->prefix('৳')->minValue(0.01)->required(),
             Select::make('payment_method')->options(Investment::PAYMENT_METHODS)->required(),

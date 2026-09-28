@@ -7,6 +7,7 @@ use App\Models\Investor;
 use App\Models\InvestorDraft;
 use App\Models\InvestorSecurityInstrument;
 use App\Services\CompanyContext;
+use App\Support\InvestorIdentity;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Illuminate\Support\Facades\Auth;
@@ -226,12 +227,20 @@ class InvestorImportService
 
         Validator::make($data, [
             'name' => ['required', 'string', 'max:255'],
+            'nid_number' => ['required', function (string $attribute, mixed $value, \Closure $fail) use ($companyId): void {
+                $owner = Investor::query()->where('company_id', $companyId)->where('nid_hash', InvestorIdentity::hash((string) $value) ?? '-')->first();
+
+                if ($owner) {
+                    $fail(__('This NID / passport number already belongs to investor :name.', ['name' => $owner->name]));
+                }
+            }],
             'phone' => ['required', 'string', 'max:255', Rule::unique('investors', 'phone')->where('company_id', $companyId)],
             'email' => ['nullable', 'email', 'max:255'],
             'date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
             'channel_partner_id' => ['nullable', Rule::exists('investors', 'id')->where('company_id', $companyId)],
         ], [
             'name.required' => __('Name is missing.'),
+            'nid_number.required' => __('NID / passport number is missing. It is the investor ID, so it is required.'),
             'phone.required' => __('Phone is missing.'),
             'phone.unique' => __('Phone :phone already belongs to another investor.', ['phone' => (string) $draft->phone]),
             'email.email' => __('Email :email is not valid.', ['email' => (string) $draft->email]),
@@ -556,14 +565,22 @@ class InvestorImportService
             $attributes['email'] = Str::lower($attributes['email']);
         }
 
-        // Someone who already invested before (same phone) gets this row's
-        // investment added to their record instead of a duplicate investor.
-        if (filled($attributes['phone'] ?? null)) {
-            $existing = Investor::query()->where('company_id', $companyId)->where('phone', $attributes['phone'])->first();
+        // Someone who already invested before (same NID / passport number —
+        // the investor ID, owner's rule) gets this row's investment added to
+        // their record instead of a duplicate investor, even if their phone
+        // number has changed since.
+        $nidHash = InvestorIdentity::hash($attributes['nid_number'] ?? null);
+
+        if ($nidHash !== null) {
+            $existing = Investor::query()->where('company_id', $companyId)->where('nid_hash', $nidHash)->first();
 
             if ($existing) {
                 $attributes['existing_investor_id'] = $existing->getKey();
-                $attributes['import_notes'][] = ['message' => 'Phone matches existing investor :name. Confirming adds the investment to them; their details are not changed.', 'params' => ['name' => $existing->name]];
+                $attributes['import_notes'][] = ['message' => 'NID matches existing investor :name. Confirming adds the investment to them; their details are not changed.', 'params' => ['name' => $existing->name]];
+
+                if (filled($attributes['phone'] ?? null) && $attributes['phone'] !== $existing->phone) {
+                    $attributes['import_notes'][] = ['message' => 'The phone in the file (:new) differs from the saved phone (:old). Update it on the investor if it has changed.', 'params' => ['new' => $attributes['phone'], 'old' => (string) $existing->phone]];
+                }
             }
         }
 

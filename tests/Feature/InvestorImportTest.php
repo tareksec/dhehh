@@ -239,9 +239,9 @@ class InvestorImportTest extends TestCase
 
     public function test_a_draft_with_a_missing_name_or_taken_phone_cannot_be_confirmed(): void
     {
-        Investor::query()->create(['company_id' => $this->company->id, 'name' => 'Existing', 'phone' => '01712345678']);
-        $taken = $this->draft(['name' => 'Duplicate', 'phone' => '01712345678']);
-        $nameless = $this->draft(['phone' => '01812345678']);
+        Investor::query()->create(['company_id' => $this->company->id, 'name' => 'Existing', 'phone' => '01712345678', 'nid_number' => '1111111111']);
+        $taken = $this->draft(['name' => 'Duplicate', 'phone' => '01799999999', 'nid_number' => '1111 111 111']);
+        $nameless = $this->draft(['phone' => '01812345678', 'nid_number' => '2222222222']);
 
         $this->assertNotEmpty($taken->blockingIssues());
         $this->assertNotEmpty($nameless->blockingIssues());
@@ -286,7 +286,7 @@ class InvestorImportTest extends TestCase
 
     public function test_the_confirm_row_action_moves_a_draft_to_the_investor_list(): void
     {
-        $draft = $this->draft(['name' => 'Abdul Karim', 'phone' => '01712345678']);
+        $draft = $this->draft(['name' => 'Abdul Karim', 'phone' => '01712345678', 'nid_number' => '1990123456789']);
 
         Livewire::test(ListInvestorDrafts::class)
             ->assertCanSeeTableRecords([$draft])
@@ -298,7 +298,7 @@ class InvestorImportTest extends TestCase
 
     public function test_confirm_selected_keeps_drafts_that_still_need_fixing(): void
     {
-        $ready = $this->draft(['name' => 'Ready', 'phone' => '01712345678']);
+        $ready = $this->draft(['name' => 'Ready', 'phone' => '01712345678', 'nid_number' => '1990123456789']);
         $broken = $this->draft(['phone' => '01812345678']);
 
         Livewire::test(ListInvestorDrafts::class)
@@ -310,7 +310,7 @@ class InvestorImportTest extends TestCase
 
     public function test_reviewing_the_prefilled_form_and_confirming_creates_the_investor(): void
     {
-        $draft = $this->draft(['phone' => '01712345678', 'guardian_name' => 'Abdul Rahim', 'import_notes' => [['message' => 'Line :line was not understood and was left out: :text', 'params' => ['line' => 3, 'text' => 'x']]]]);
+        $draft = $this->draft(['phone' => '01712345678', 'nid_number' => '1990123456789', 'guardian_name' => 'Abdul Rahim', 'import_notes' => [['message' => 'Line :line was not understood and was left out: :text', 'params' => ['line' => 3, 'text' => 'x']]]]);
 
         Livewire::test(EditInvestorDraft::class, ['record' => $draft->getRouteKey()])
             ->assertSchemaStateSet(['phone' => '01712345678', 'guardian_name' => 'Abdul Rahim'])
@@ -352,8 +352,8 @@ class InvestorImportTest extends TestCase
     {
         $project = $this->project();
         $path = $this->tempFile(implode("\n", [
-            'SL,ইনভেস্টরদের নাম,ফোন নাম্বার,বিনিয়োগ (৳),স্টাম্প নং.,চেক নং.',
-            '১,Investor One,01911111111,"200,000","৯৩৬৩৫১২, ৯৩৬৩৫১৩",BANK/CHQ-1',
+            'SL,ইনভেস্টরদের নাম,ফোন নাম্বার,NID/Passport,বিনিয়োগ (৳),স্টাম্প নং.,চেক নং.',
+            '১,Investor One,01911111111,১৪৭৯৯৩৯৬০৩,"200,000","৯৩৬৩৫১২, ৯৩৬৩৫১৩",BANK/CHQ-1',
         ]), 'csv');
 
         app(InvestorImportService::class)->importFile($path, 'INV_1.csv', ['project_id' => $project->id, 'payment_method' => 'bank', 'invested_at' => '2026-04-10']);
@@ -384,16 +384,18 @@ class InvestorImportTest extends TestCase
     public function test_a_returning_investor_is_linked_and_only_gets_the_new_investment(): void
     {
         $project = $this->project();
-        $existing = Investor::query()->create(['company_id' => $this->company->id, 'name' => 'Returning Investor', 'phone' => '01911111111', 'address' => 'Old address']);
+        $existing = Investor::query()->create(['company_id' => $this->company->id, 'name' => 'Returning Investor', 'phone' => '01911111111', 'nid_number' => '5555555555', 'address' => 'Old address']);
 
+        // Same NID, new phone number: still the same investor (owner's rule).
         app(InvestorImportService::class)->importText(
-            "Name,Phone,Address,Investment\nSomeone Else,01911111111,New address,300000",
+            "Name,Phone,NID,Address,Investment\nSomeone Else,01922222222,৫৫৫৫৫৫৫৫৫৫,New address,300000",
             investment: ['project_id' => $project->id, 'payment_method' => 'cash', 'invested_at' => now()->toDateString()],
         );
 
         $draft = InvestorDraft::query()->sole();
         $this->assertSame($existing->id, $draft->existing_investor_id);
         $this->assertSame([], $draft->blockingIssues());
+        $this->assertStringContainsString('01922222222', implode(' ', $draft->importNoteMessages()));
 
         $this->assertSame($existing->id, app(InvestorImportService::class)->confirm($draft)->id);
 
@@ -405,10 +407,10 @@ class InvestorImportTest extends TestCase
 
     public function test_a_linked_draft_without_a_project_or_an_amount_without_a_project_cannot_be_confirmed(): void
     {
-        $existing = Investor::query()->create(['company_id' => $this->company->id, 'name' => 'Returning Investor', 'phone' => '01911111111']);
+        $existing = Investor::query()->create(['company_id' => $this->company->id, 'name' => 'Returning Investor', 'phone' => '01911111111', 'nid_number' => '5555555555']);
         $linked = $this->draft(['existing_investor_id' => $existing->id, 'phone' => '01911111111']);
-        $amountOnly = $this->draft(['name' => 'New', 'phone' => '01822222222', 'investment_amount' => 5000]);
-        $closed = $this->draft(['name' => 'Late', 'phone' => '01833333333', 'investment_amount' => 5000, 'project_id' => $this->project(['status' => 'closed'])->id, 'payment_method' => 'cash', 'invested_at' => now()->toDateString()]);
+        $amountOnly = $this->draft(['name' => 'New', 'phone' => '01822222222', 'nid_number' => '6666666666', 'investment_amount' => 5000]);
+        $closed = $this->draft(['name' => 'Late', 'phone' => '01833333333', 'nid_number' => '7777777777', 'investment_amount' => 5000, 'project_id' => $this->project(['status' => 'closed'])->id, 'payment_method' => 'cash', 'invested_at' => now()->toDateString()]);
 
         foreach ([$linked, $amountOnly, $closed] as $draft) {
             $this->assertNotEmpty($draft->blockingIssues());
@@ -428,7 +430,7 @@ class InvestorImportTest extends TestCase
     public function test_set_project_bulk_action_fills_the_investment_details(): void
     {
         $project = $this->project();
-        $draft = $this->draft(['name' => 'Investor One', 'phone' => '01911111111', 'investment_amount' => 100000]);
+        $draft = $this->draft(['name' => 'Investor One', 'phone' => '01911111111', 'nid_number' => '1479939603', 'investment_amount' => 100000]);
 
         Livewire::test(ListInvestorDrafts::class)
             ->callTableBulkAction('setInvestment', [$draft], data: ['project_id' => $project->id, 'payment_method' => 'bkash', 'invested_at' => '2026-04-10']);

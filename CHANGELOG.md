@@ -4,6 +4,35 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **The NID / passport number is now the investor ID.** A phone number can change; the NID does not, so every investor is tracked by their NID / passport number:
+  - It is required when adding an investor, and one number can belong to only one investor. Spaces, dashes and Bangla digits don't matter: `1990 1234-56789` and `১৯৯০১২৩৪৫৬৭৮৯` are the same number.
+  - The investor list shows it as **Investor ID (NID / Passport)**, and you can search the list by it.
+  - Excel/CSV/text import recognises returning investors by NID, even if their phone number has changed. The draft says when the phone in the file differs from the saved one.
+  - A new **NID missing** filter lists older investors who don't have an NID yet.
+- **Paper copies of NID cards and contracts.**
+  - New document types: investor's NID / passport copy, nominee's NID / passport copy, project contract (same for all investors), cheque copy and stamp copy.
+  - Upload them on the investor's **Documents** tab.
+  - A project's contract is uploaded **once on the project**, and it covers every investor in that project.
+  - **Upload documents by NID** on the investor list takes many scans at once. Name each file with the investor's NID and what it is, for example `1479939603_nid.jpg`, `1479939603_nominee.jpg`, `1479939603_contract.pdf`, `1479939603_cheque.jpg`, `1479939603_stamp.jpg`. Each file is attached to the investor with that NID. Files whose NID matches no investor are listed.
+  - Each investor has a **Paper copies** checklist, shown on their page and as a column in the list: NID copy, nominee's NID copy (when there is a nominee), and a contract for every project they invested in. The **Paper copies missing** filter shows who still has something missing.
+
+### Fixed
+
+- **Investor Drafts list now shows NID, address, nominee NID, nominee phone, stamp no. and cheque no.** These were already being read from the uploaded file and saved on the draft, but the list table had no columns for them, so an import looked like it had skipped those fields. NID is shown next to Phone by default; the other five are available via the column-toggle button (hidden by default, same as the existing Father/Spouse and Nominee Name columns).
+
+### Security
+
+- **Only users with the `investments.manage` permission can see or download NID copies, contracts, and cheque and stamp copies.** Users who can only view investments no longer see these files in any Documents tab, and the download link refuses them. This also covers the contract file on an investment's security instrument. Other investment documents, such as settlement sheets and receipts, stay visible with `investments.view`.
+
+**Technical Notes:**
+- New migration `2026_09_28_110000_add_nid_hash_to_investors_and_investor_drafts`: adds `nid_hash` (keyed HMAC of the normalised number, since `nid_number` is encrypted), with an index on `(company_id, nid_hash)`. Existing rows are backfilled. Run `php artisan migrate --force`. Uniqueness is enforced by the models, not a DB unique index, so the deploy never fails on old duplicate data.
+- `App\Support\InvestorIdentity` (normalize/hash), `InvestorDocumentUploadService`, `InvestmentDocument::SENSITIVE_CATEGORIES`, `Investor::documentChecklist()` / `scopeMissingDocuments()` / `scopeWhereNid()`. The file-name keywords live in `config/investor_import.php`.
+- Existing investors without an NID keep working, but saving them from the edit form now requires one.
+
 ## [2.29.0] - 2026-09-28
 
 **Release type:** Minor Feature Update

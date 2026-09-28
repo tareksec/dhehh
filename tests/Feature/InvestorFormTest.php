@@ -78,6 +78,7 @@ class InvestorFormTest extends TestCase
             'company_id' => $this->company->id,
             'name' => 'Nurul Islam',
             'phone' => '01999888777',
+            'nid_number' => '1985111222333',
         ]);
 
         Livewire::test(EditInvestor::class, ['record' => $investor->getKey()])
