@@ -8,6 +8,27 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Added
 
+- **Voucher trash.** A voucher is never deleted directly. **Move to trash** (on the voucher list and the voucher page) moves it to **Finance → Vouchers → Trash**. From there it can be **restored** or **deleted permanently**. Only users with the new **Voucher: Move to Trash, Restore and Delete Permanently** (`voucher.delete`) permission can do any of this. Super admins have it automatically; give it to other roles in user settings. The trash shows who moved each voucher and when.
+  - An **approved** voucher can't be moved to trash, because its money has already been booked (expense, payment or account transaction).
+  - If a principal-withdrawal voucher goes to trash, its investment becomes **Active** again. Restoring the voucher marks it **Withdrawn** again, and a permanent delete leaves it **Active**. The withdrawal date and note are kept.
+
+### Changed
+
+- **Settlements leave withdrawn investments out.** A settlement calculated after an investor withdrew their principal no longer includes that investment, so it gets no profit share and its principal isn't paid out again. Settlements made before the withdrawal are not changed.
+
+**Technical Notes:**
+- New migration `2026_09_28_140000_add_soft_deletes_to_vouchers_table` adds `deleted_at` (indexed) and `deleted_by` (FK users, `nullOnDelete`). Run `php artisan migrate --force`. Existing vouchers are unaffected.
+- `Voucher` uses `SoftDeletes`, so all Eloquent queries (lists, reports, sums) skip trashed vouchers. `nextVoucherNumber()` also checks trashed vouchers, so a number is never reused. Every FK to `vouchers` is `nullOnDelete` or `cascadeOnDelete`, so a permanent delete is safe. Attachment rows cascade; their files are left in storage.
+- New `VoucherTrashService` (`trash` / `restore` / `deletePermanently`), new `User::canDeleteVoucher()`, and a new page `TrashedVouchers` at `/vouchers/trash`. `VoucherResource::canDelete()` stays `false`.
+- `InvestmentWithdrawalService::voucherTrashed()` / `voucherRestored()`. The `Investment` model allows withdrawn → active only while the withdrawal voucher is in trash, and counts "withdrawn" only while that voucher exists. An investment that has ever had a withdrawal voucher cannot be deleted.
+- `SettlementService::calculateAndSettle()` uses `investments()->active()`.
+
+## [2.34.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
 - **Investors who take their principal back are kept on record as "Withdrawn".** Each investment has a **Status**: **Active** or **Withdrawn**. Use **Withdraw principal** on the investment page, or in the investor's or project's Investments tab, after the investor has taken their money back. Enter the date, the fund source it was paid from, the payment method and reference, and an optional note.
   - **Fixed rule:** every withdrawal creates a pending **Investor Payout** debit voucher in **Finance → Vouchers** for the full amount, and the investment turns **Withdrawn** only once that voucher exists. If the voucher can't be created, for example because the fund source has no linked account, nothing changes.
   - A withdrawn investment can't be deleted or edited, and can't be withdrawn twice. Its page shows the withdrawal date, the voucher (with a link) and its status.
@@ -18,7 +39,6 @@ All notable production changes to Business Dashboard are documented here.
 - New `InvestmentWithdrawalService::withdraw()` locks the investment, calls `VoucherService::submit()` (debit, `investor_payout`, fund source's account), then sets the status, all in one transaction. The `Investment` model refuses `status = withdrawn` without a withdrawal voucher, and refuses to change or delete a withdrawn investment.
 - `Investor::investmentStatus()` works it out from the investments. Nothing is stored on the investor.
 - Settlement calculations are unchanged: withdrawn investments are still counted if the project is settled later. This is left for the owner to decide.
-
 ## [2.33.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
@@ -52,7 +72,7 @@ All notable production changes to Business Dashboard are documented here.
 - **Migration:** `2026_09_28_120000_add_external_reference_to_leads_table` adds nullable `leads.external_reference` with a unique `(company_id, external_reference)` index. It is additive.
 - **API:** `POST /api/v1/leads` accepts optional `external_reference` (max 190). A repeat returns the existing lead with `200`; the response now includes `external_reference`.
 - **Webhook:** new `lead.status_updated` event (`id`, `external_reference`, `status`, `updated_at`) via `WebsiteWebhookDispatcher::dispatchLeadStatusUpdated()`, fired from `Lead::updated` when `status` changes and `external_reference` is set. Same signing, queue job and per-company settings as the existing events.
-- **Docs:** `docs/api/website-integration.md` and `website-integration.openapi.yaml` updated.
+- **Docs:** `docs/api/website-integration.md` and `website-integration.openapi.yaml` updated. New `docs/api/website-mapping-tasneem-noor.md`: a path-by-path, field-by-field mapping from each website team's own (incorrect) integration doc to the real API, linked from `website-integration.md`.
 - No new user-visible strings, so no `lang/` changes.
 ## [2.31.0] - 2026-09-28
 

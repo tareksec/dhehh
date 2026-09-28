@@ -5,9 +5,13 @@ namespace App\Filament\Resources\Vouchers\Pages;
 use App\Filament\Resources\Vouchers\VoucherResource;
 use App\Filament\Resources\Vouchers\Widgets\FundTransfersWidget;
 use App\Filament\Resources\Vouchers\Widgets\VoucherSummaryWidget;
+use App\Models\Voucher;
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 
 class ListVouchers extends ListRecords
@@ -28,7 +32,15 @@ class ListVouchers extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [CreateAction::make()];
+        return [
+            Action::make('trash')
+                ->label(fn (): string => __('Trash (:count)', ['count' => Voucher::onlyTrashed()->count()]))
+                ->icon(Heroicon::OutlinedTrash)
+                ->color('gray')
+                ->visible(fn (): bool => Auth::user()?->canDeleteVoucher() ?? false)
+                ->url(fn (): string => VoucherResource::getUrl('trash')),
+            CreateAction::make(),
+        ];
     }
 
     protected function getHeaderWidgets(): array

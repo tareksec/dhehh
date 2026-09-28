@@ -27,22 +27,30 @@ class Investment extends Model
 
     protected static function booted(): void
     {
-        // Owner's fixed rule (2026-09-28): a withdrawal always gets a voucher,
-        // and the status changes only once that voucher exists. A withdrawn
-        // investment is history: it is never deleted and its money is not edited.
+        // Owner's fixed rules (2026-09-28): a withdrawal always gets a voucher,
+        // and the status is "withdrawn" only while that voucher exists (not in
+        // Trash). A withdrawn investment is history: never deleted, money never
+        // edited. Trashing the voucher sends it back to active; restoring the
+        // voucher marks it withdrawn again (InvestmentWithdrawalService).
         static::saving(function (self $investment): void {
-            if ($investment->status === self::STATUS_WITHDRAWN && blank($investment->withdrawal_voucher_id)) {
+            if ($investment->status === self::STATUS_WITHDRAWN
+                && (blank($investment->withdrawal_voucher_id) || ! Voucher::query()->whereKey($investment->withdrawal_voucher_id)->exists())) {
                 throw ValidationException::withMessages(['status' => __('An investment can be marked withdrawn only after its withdrawal voucher is created.')]);
             }
 
-            if ($investment->exists && $investment->getOriginal('status') === self::STATUS_WITHDRAWN
-                && $investment->isDirty(['status', 'amount', 'project_id', 'investor_id', 'withdrawal_voucher_id'])) {
-                throw ValidationException::withMessages(['amount' => __('A withdrawn investment is kept as a record and cannot be changed.')]);
+            if ($investment->exists && $investment->getOriginal('status') === self::STATUS_WITHDRAWN) {
+                $revertedByTrash = $investment->status === self::STATUS_ACTIVE
+                    && ! $investment->isDirty(['amount', 'project_id', 'investor_id', 'withdrawal_voucher_id'])
+                    && Voucher::onlyTrashed()->whereKey($investment->withdrawal_voucher_id)->exists();
+
+                if (! $revertedByTrash && $investment->isDirty(['status', 'amount', 'project_id', 'investor_id', 'withdrawal_voucher_id'])) {
+                    throw ValidationException::withMessages(['amount' => __('A withdrawn investment is kept as a record and cannot be changed.')]);
+                }
             }
         });
 
         static::deleting(function (self $investment): void {
-            if ($investment->status === self::STATUS_WITHDRAWN) {
+            if ($investment->status === self::STATUS_WITHDRAWN || filled($investment->withdrawal_voucher_id)) {
                 throw ValidationException::withMessages(['status' => __('A withdrawn investment is kept as a record and cannot be deleted.')]);
             }
         });

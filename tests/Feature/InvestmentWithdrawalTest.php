@@ -14,6 +14,8 @@ use App\Models\User;
 use App\Models\Voucher;
 use App\Services\CompanyContext;
 use App\Services\Investment\InvestmentWithdrawalService;
+use App\Services\Investment\SettlementService;
+use App\Services\VoucherTrashService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -152,6 +154,38 @@ class InvestmentWithdrawalTest extends TestCase
             ->filterTable('investment_status', Investor::STATUS_ACTIVE)
             ->assertCanSeeTableRecords([$rahim])
             ->assertCanNotSeeTableRecords([$karim]);
+    }
+
+    public function test_a_settlement_made_after_a_withdrawal_leaves_the_withdrawn_investment_out(): void
+    {
+        $withdrawn = $this->investment('01711111111', '1479939603');
+        $staying = $this->investment('01722222222', '1901688455');
+        app(InvestmentWithdrawalService::class)->withdraw($withdrawn, $this->data(), $this->admin);
+
+        $withdrawn->project->update(['status' => 'closed']);
+
+        $settlement = app(SettlementService::class)->calculateAndSettle($withdrawn->project->fresh(), 300000, $this->admin->id, acknowledgeUnprovenCosts: true);
+
+        $this->assertSame([$staying->investor_id], $settlement->payouts()->pluck('investor_id')->all());
+        $this->assertSame(200000.0, (float) $settlement->payouts()->sum('investment_amount'));
+    }
+
+    public function test_trashing_the_withdrawal_voucher_makes_the_investment_active_and_restoring_it_withdrawn_again(): void
+    {
+        $investment = $this->investment('01711111111', '1479939603');
+        $voucher = app(InvestmentWithdrawalService::class)->withdraw($investment, $this->data(), $this->admin);
+
+        app(VoucherTrashService::class)->trash($voucher, $this->admin);
+        $this->assertSame(Investment::STATUS_ACTIVE, $investment->fresh()->status);
+        $this->assertSame('2026-09-20', $investment->fresh()->withdrawn_at->toDateString());
+
+        app(VoucherTrashService::class)->restore($voucher, $this->admin);
+        $this->assertSame(Investment::STATUS_WITHDRAWN, $investment->fresh()->status);
+
+        app(VoucherTrashService::class)->trash($voucher, $this->admin);
+        app(VoucherTrashService::class)->deletePermanently($voucher, $this->admin);
+        $this->assertSame(Investment::STATUS_ACTIVE, $investment->fresh()->status);
+        $this->assertSame(1, Investment::query()->count());
     }
 
     private function data(): array

@@ -2,6 +2,67 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-28 - Settlements leave withdrawn investments out; voucher trash (move to trash, restore, delete permanently)
+
+Reason — owner, answering the two open questions:
+1. "যখন উত্তলন হবে তখন থেকেই সেটেলমেন্ট থেকে বাদ যাবে" — from the moment of withdrawal, the investment is out of settlements.
+2. "ভাইচার কখনই সরাসরি ডিলিট করা যাবেনা, প্রথমে মুভ টু ট্রাশ এ যাবে এরপর ট্রাশ পেজ থেকে পার্মানেন্টলি ডিলিট হবে, তবে ডিলিট পারমিশন যার কাছে থাকবে শুধু সেই করতে পারবে।" — a voucher is never deleted directly: first move to trash, then permanent delete from a trash page, and only someone with the delete permission can do it.
+
+What changed:
+- **Settlement:** `SettlementService::calculateAndSettle()` reads `investments()->active()`. Settlements that already exist are untouched.
+- **Voucher trash:**
+  - Migration `2026_09_28_140000` adds `deleted_at` (indexed) and `deleted_by`. `Voucher` uses `SoftDeletes`. `nextVoucherNumber()` checks `withTrashed()` so a number is never reused.
+  - New permission `voucher.delete` ("Voucher: Move to Trash, Restore and Delete Permanently") and `User::canDeleteVoucher()` (super admin or the permission). It is not added to any role's defaults; the owner assigns it.
+  - `VoucherTrashService`: `trash()` refuses approved vouchers and stores `deleted_by`; `restore()`; `deletePermanently()` works only on trashed vouchers. All three need the permission.
+  - UI: **Move to trash** row action on the voucher list and header action on the voucher page. A **Trash (n)** button on the list opens the new `TrashedVouchers` page (`/vouchers/trash`, 403 without the permission), with **Restore** and **Delete permanently**. `VoucherResource::canDelete()` stays `false`, so there is no direct delete anywhere.
+- **Withdrawal link:**
+  - trashing a withdrawal voucher sets its investments back to `active`, keeping `withdrawn_at`, the voucher id and the note.
+  - restoring it sets them `withdrawn` again.
+  - a permanent delete leaves them `active`, and the FK nulls the voucher id.
+  - the `Investment` model allows withdrawn → active only while that voucher is in trash, and "withdrawn" needs a voucher that exists and is not in trash.
+
+My decision, which the owner should confirm:
+- **An approved voucher can't go to trash.** Approving has already booked the money (Expense / CustomerPayment / SupplierPayment / account transaction). Trashing it would leave that money on the books with no voucher behind it. A mistaken approved voucher needs a reversing entry instead.
+
+Not changed, for the owner to decide later:
+- Other records linked to a trashed *pending* voucher keep their state: a reseller payout marked paid, a settlement payout marked paid, or an investment's capital-in voucher. Only principal withdrawals are rolled back, because only they have the owner's "status only while a voucher exists" rule.
+- A **rejected** or **cancelled** withdrawal voucher does not reactivate the investment.
+- Attachment files of a permanently deleted voucher stay in storage; the database rows are removed.
+
+**Needs Bangla review:** 26 new `lang/bn.json` keys (trash texts).
+
+Important changed/new files:
+- `database/migrations/2026_09_28_140000_add_soft_deletes_to_vouchers_table.php`
+- `app/Models/{Voucher,Investment,User}.php`
+- `app/Services/VoucherTrashService.php` (new), `app/Services/Investment/{InvestmentWithdrawalService,SettlementService}.php`
+- `app/Filament/Resources/Vouchers/{VoucherResource,Pages/ListVouchers,Pages/ViewVoucher,Pages/TrashedVouchers}.php` (`TrashedVouchers` is new)
+- `lang/en.json`, `lang/bn.json`, `tests/Feature/VoucherTrashTest.php` (new), `tests/Feature/InvestmentWithdrawalTest.php`
+
+Verification:
+- `VoucherTrashTest`: 4 passed:
+  - no direct delete: trash → trash page → restore → trash → permanent delete
+  - approved can't be trashed
+  - an accountant without the permission can't trash and gets 403 on the trash page
+  - trashed voucher numbers are still reserved
+- `InvestmentWithdrawalTest`: 7 passed. New tests: a settlement after a withdrawal leaves it out; trash → active, restore → withdrawn, permanent delete → active.
+- Full `php artisan test` (plain, no `--env`): **1536 passed, 0 failed**.
+- Pint passes. It also re-formatted a few older lines in `SettlementService.php`.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
+## 2026-09-28 - API mapping note for Tasneem Knit / Noor Solar added to repo docs
+
+Reason — owner: "api mapping টা তুমি আমাদের অ্যাপের api Documentation এ যুক্ত করে দেও এবং তার পাথ বলে দেও।" The mapping note drafted earlier as a Claude Docs artifact (comparing each website team's assumed API to the real one) is now also in the repo, so it ships with the code and isn't only reachable through a chat link.
+
+What changed:
+- New `docs/api/website-mapping-tasneem-noor.md`: the same content as the artifact — `.env` values, a path-by-path table (their assumed endpoint → the real `/api/v1/...` one), field-by-field tables for leads/products/orders and for each outbound webhook event (including the new `lead.status_updated`), what ZamZam ERP doesn't have yet, a test checklist and cURL examples. Kept in Bangla, matching the artifact and the owner's own notes to these two teams.
+- `docs/api/website-integration.md` links to it right after the intro, so anyone starting from the main guide finds it.
+
+Not code — no migration, no test changes, no `lang/` changes.
+
+Commit status: not committed — waiting for owner approval.
+
 ## 2026-09-28 - Investment withdrawal: voucher first, then the status turns "Withdrawn"; the record is kept
 
 Reason — owner:
