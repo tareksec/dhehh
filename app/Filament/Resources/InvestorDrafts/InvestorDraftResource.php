@@ -10,6 +10,7 @@ use App\Models\InvestmentProject;
 use App\Models\Investor;
 use App\Models\InvestorDraft;
 use App\Services\Investment\InvestorImportService;
+use App\Support\InvestorIdentity;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -104,6 +105,14 @@ class InvestorDraftResource extends Resource
                         ->label(__('Add to an existing investor'))
                         ->relationship('existingInvestor', 'name')
                         ->searchable(['name', 'phone'])
+                        ->getSearchResultsUsing(fn (string $search): array => Investor::query()
+                            ->where(fn ($query) => $query
+                                ->where('name', 'like', "%{$search}%")
+                                ->orWhere('phone', 'like', "%{$search}%")
+                                ->orWhere('nid_hash', InvestorIdentity::hash($search) ?? '-'))
+                            ->limit(50)->get()
+                            ->mapWithKeys(fn (Investor $investor): array => [$investor->getKey() => "{$investor->name} ({$investor->phone})"])
+                            ->all())
                         ->getOptionLabelFromRecordUsing(fn (Investor $record): string => "{$record->name} ({$record->phone})")
                         ->live()
                         ->helperText(__('Pick an investor who already exists to add only the investment below to them. Their details are not changed. Leave empty to create a new investor.')),
@@ -149,8 +158,22 @@ class InvestorDraftResource extends Resource
             ->columns([
                 TextColumn::make('name')->label(__('Name'))->placeholder(__('Missing'))->searchable()->sortable(),
                 TextColumn::make('phone')->label(__('Phone'))->placeholder(__('Missing'))->searchable(),
+                TextColumn::make('nid_number')
+                    ->label(__('NID / Passport'))
+                    ->formatStateUsing(fn (?string $state): ?string => InvestorIdentity::normalize($state))
+                    ->placeholder(__('Missing'))
+                    ->toggleable(),
+                TextColumn::make('address')->label(__('Address'))->placeholder('-')->toggleable(isToggledHiddenByDefault: true)->wrap(),
                 TextColumn::make('guardian_name')->label(__('Father / Spouse Name'))->placeholder('-')->toggleable(),
                 TextColumn::make('nominee_name')->label(__('Nominee Name'))->placeholder('-')->toggleable(),
+                TextColumn::make('nominee_nid_or_passport')
+                    ->label(__('Nominee NID / Passport'))
+                    ->formatStateUsing(fn (?string $state): ?string => InvestorIdentity::normalize($state))
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('nominee_phone')->label(__('Nominee Phone'))->placeholder('-')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('stamp_number')->label(__('Stamp No.'))->placeholder('-')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('cheque_number')->label(__('Cheque No.'))->placeholder('-')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('existingInvestor.name')
                     ->label(__('Existing investor'))
                     ->badge()->color('info')

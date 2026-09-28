@@ -24,7 +24,76 @@ Needs owner decision (not built, not guessed):
 Found, not changed:
 - The `staging` branch (last commit 2026-08-23) does not contain the website API at all, so https://staging-app.zamzamint.com/api/v1/* returns 404. The staging server also shows full Laravel stack traces (`APP_DEBUG` is on).
 
-Commit status: not committed — waiting for owner approval.
+Commit status: committed and pushed to `claude/friendly-feynman-w4twzx`, then merged into `main` (owner approved: "ওকে মেইন এ পুশ কর").
+
+## 2026-09-28 - NID / passport number is the investor ID; NID and contract copies (manage only)
+
+Reason — owner, answering the design questions:
+1. "Investment.manage পারমিশন যাদের কাছে আছে তারাই দেখতে পারবে।" Only users with investments.manage may see the copies.
+2. "প্রতিটা প্রজেক্টে চুক্তি আলাদা। তবে ওই প্রজেক্ট এর সকল ইনভেস্টরের চুক্তিপত্র একই।" Each project has its own contract, and it is the same for every investor in that project.
+3. "…ইনভেস্টরের ক্ষেত্রে শুধু এনআইডি কার্ড দিয়েই তার ইনভেস্টর আইডি তৈরি করবে। এবং ইনভেস্টরের সকল কার্যক্রম এই এনআইডি দিয়েই ট্র্যাক করা হবে।" The NID alone makes the investor ID, and everything about an investor is tracked by it, because a phone number can change.
+
+What changed:
+- **Identity:**
+  - `App\Support\InvestorIdentity` normalises a number (uppercase, Bangla digits → 0-9, only letters and digits kept) and hashes it with HMAC-SHA256 keyed by `app.key`.
+  - New `nid_hash` column on `investors` and `investor_drafts` (migration `2026_09_28_110000`, backfills existing rows by decrypting `nid_number`).
+  - `Investor` keeps the hash in sync and refuses a second investor with the same NID in the company.
+  - Investor form: NID required plus a duplicate check. The quick "create investor" inside a project's Investments tab also requires NID.
+  - Investor list: "Investor ID (NID / Passport)" column, searchable by the exact number through the hash (search terms not split, so spaces work), and an "NID missing" filter.
+- **Import:**
+  - a returning investor is matched by NID (it was phone), even with a new phone number, and a note shows the phone difference.
+  - a new-investor draft needs an NID, and an NID that already exists asks to link the draft.
+  - twin drafts are detected by NID.
+  - the "phone already saved" message now says to link the draft or use another number (the DB still keeps phone unique per company).
+- **Document types:** investor NID copy, nominee NID copy, project contract (same for all investors), cheque copy, stamp copy. Document category labels are now translated.
+- **Access:**
+  - the six identity/contract categories, and any document attached to an investor, are hidden from Documents tabs and refused by the download controller without `investments.manage`.
+  - the investor's Documents tab is visible only with manage.
+  - the security-instrument contract download now needs manage.
+- **Checklist:**
+  - `Investor::documentChecklist()` covers the NID copy, the nominee NID copy (when there is a nominee), and a contract for every project invested in: a project contract on the project, or a signed copy on the investor.
+  - it shows as a "Paper copies" section on the investor page and a column in the list (manage only), with a "Paper copies missing" filter (`scopeMissingDocuments`).
+- **Bulk upload:**
+  - "Upload documents by NID" on the investor list takes up to 200 PDF/JPG/PNG/WEBP files of 10 MB each.
+  - `InvestorDocumentUploadService` finds the investor from a 6+-digit token in the file name (Bangla digits work).
+  - a keyword picks the category (nominee / contract / cheque / stamp, in English or Bangla; no keyword means the investor's own NID copy).
+  - files go to the company's private storage, temp uploads are deleted, and unmatched file names are listed.
+
+Checked with the owner's real `INV_1_10_04_2026.csv` (not committed): 19 of 19 drafts ready. Confirming gave 19 investors, all with an NID hash, and investments totalling ৳5,300,000. Importing it again linked all 19 by NID.
+
+**Follow-up (same day):** the owner uploaded that sheet again and pointed out the Investor Drafts list only showed Name / Phone / Father-Spouse / Nominee Name — NID, address, nominee NID, nominee phone, stamp no. and cheque no. were not visible, so it looked like the columns had not been read. They were being read and stored on the draft correctly (unchanged from above); the list table simply never had columns for them. Added `nid_number` (normalised, shown by default), `address`, `nominee_nid_or_passport`, `nominee_phone`, `stamp_number` and `cheque_number` as columns on the Investor Drafts table — `nid_number` visible by default next to Phone, the other five toggleable (hidden by default, same as the existing Father/Spouse and Nominee Name columns) via the column-toggle button. No new translation keys were needed; all six labels already existed in `lang/en.json`/`lang/bn.json`.
+
+**Needs Bangla review:** 44 new `lang/bn.json` keys, including 11 document category labels. 2 unused keys were removed from both files.
+
+Important changed/new files:
+- `database/migrations/2026_09_28_110000_add_nid_hash_to_investors_and_investor_drafts.php`
+- `app/Support/InvestorIdentity.php`, `app/Services/Investment/InvestorDocumentUploadService.php`
+- `app/Models/{Investor,InvestorDraft,InvestmentDocument}.php`
+- `app/Services/Investment/InvestorImportService.php`, `config/investor_import.php`
+- `app/Filament/Resources/Investors/{InvestorResource,Pages/ListInvestors}.php`
+- `app/Filament/Resources/InvestmentProjects/RelationManagers/{DocumentsRelationManager,InvestmentsRelationManager}.php`
+- `app/Filament/Resources/InvestorDrafts/InvestorDraftResource.php` (also the follow-up: new table columns)
+- `app/Http/Controllers/Admin/{InvestmentDocumentDownloadController,InvestorContractDownloadController}.php`
+- `lang/en.json`, `lang/bn.json`
+- tests: `tests/Feature/InvestorIdentityAndDocumentsTest.php` (new, 9 tests), `InvestorImportTest.php`, `InvestorFormTest.php` (test data now carries NIDs)
+
+Verification:
+- `InvestorIdentityAndDocumentsTest`: 9 passed:
+  - duplicate NID in any format is refused
+  - the form requires a unique NID
+  - search by NID works
+  - bulk upload by NID: categories and unmatched files
+  - the upload action works and cleans up its temp files
+  - the checklist, with one project contract covering all investors
+  - an accountant (view only) gets 403 on NID and contract copies but can still download a settlement sheet
+  - a draft without an NID is blocked
+  - the migration backfills the hash
+- `InvestorImportTest` 22, `InvestorFormTest`, `InvestmentSettlementTest` and `TranslationParityTest` pass.
+- Full `php artisan test` (plain, no `--env`): **1507 passed, 0 failed** (9426 assertions), re-verified after the follow-up column fix.
+- Pint passes on the changed files. Pint also re-formatted a few older lines in `InvestorResource.php`.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main দুই জায়গাতেই পুশ কর").
 
 ## 2026-09-28 - Reseller preview security fix + reseller prices, commission and withdrawals
 

@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Support\InvestorIdentity;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -21,6 +23,24 @@ class Investor extends Model
     protected static function booted(): void
     {
         static::saving(function (self $investor): void {
+            // The NID / passport number is the investor's identity (owner's
+            // rule), so it may belong to only one investor per company.
+            if ($investor->isDirty('nid_number') || ($investor->nid_number && ! $investor->nid_hash)) {
+                $investor->nid_hash = InvestorIdentity::hash($investor->nid_number);
+            }
+
+            if ($investor->nid_hash) {
+                $owner = self::query()
+                    ->where('company_id', $investor->company_id)
+                    ->where('nid_hash', $investor->nid_hash)
+                    ->when($investor->exists, fn ($query) => $query->whereKeyNot($investor->getKey()))
+                    ->first();
+
+                if ($owner) {
+                    throw ValidationException::withMessages(['nid_number' => __('This NID / passport number already belongs to investor :name.', ['name' => $owner->name])]);
+                }
+            }
+
             if ($investor->channel_partner_id && $investor->exists && (int) $investor->channel_partner_id === (int) $investor->getKey()) {
                 throw ValidationException::withMessages(['channel_partner_id' => 'An investor cannot be their own channel partner.']);
             }
@@ -86,6 +106,56 @@ class Investor extends Model
     public function withdrawalNotices()
     {
         return $this->hasMany(InvestmentWithdrawalNotice::class);
+    }
+
+    /** Investors whose NID / passport number matches, whatever its formatting. */
+    public function scopeWhereNid(Builder $query, ?string $number): Builder
+    {
+        return $query->where('nid_hash', InvestorIdentity::hash($number) ?? '-');
+    }
+
+    /** The NID / passport number shown as the investor ID. */
+    public function investorId(): ?string
+    {
+        return InvestorIdentity::normalize($this->nid_number);
+    }
+
+    /**
+     * Which required paper copies are on file (owner's rule: NID copy,
+     * nominee's NID copy when there is a nominee, and a contract for every
+     * project they invested in — the project's own contract or a signed
+     * copy on the investor).
+     *
+     * @return array<string, bool> label => on file
+     */
+    public function documentChecklist(): array
+    {
+        $categories = $this->documents()->pluck('category')->all();
+        $checklist = [__('NID / passport copy') => in_array(InvestmentDocument::CATEGORY_INVESTOR_NID, $categories, true)];
+
+        if (filled($this->nominee_name)) {
+            $checklist[__('Nominee NID / passport copy')] = in_array(InvestmentDocument::CATEGORY_NOMINEE_NID, $categories, true);
+        }
+
+        if ($this->investments()->exists()) {
+            $checklist[__('Contract')] = in_array('signed_contract', $categories, true)
+                || $this->investments()->whereDoesntHave('project.documents', fn ($query) => $query->where('category', InvestmentDocument::CATEGORY_PROJECT_CONTRACT))->doesntExist();
+        }
+
+        return $checklist;
+    }
+
+    /** Investors missing at least one paper copy from documentChecklist(). */
+    public function scopeMissingDocuments(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $query) => $query
+            ->whereDoesntHave('documents', fn ($documents) => $documents->where('category', InvestmentDocument::CATEGORY_INVESTOR_NID))
+            ->orWhere(fn (Builder $query) => $query
+                ->whereNotNull('nominee_name')->where('nominee_name', '!=', '')
+                ->whereDoesntHave('documents', fn ($documents) => $documents->where('category', InvestmentDocument::CATEGORY_NOMINEE_NID)))
+            ->orWhere(fn (Builder $query) => $query
+                ->whereDoesntHave('documents', fn ($documents) => $documents->where('category', 'signed_contract'))
+                ->whereHas('investments', fn ($investments) => $investments->whereDoesntHave('project.documents', fn ($documents) => $documents->where('category', InvestmentDocument::CATEGORY_PROJECT_CONTRACT)))));
     }
 
     /**
