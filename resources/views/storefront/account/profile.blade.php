@@ -5,7 +5,10 @@
     $accountRoute = static fn (string $name) => isset($previewSlug)
         ? route('storefront.preview.account.'.$name, $previewSlug)
         : route('storefront.account.'.$name);
-    $resellerUrl = isset($previewSlug) ? route('storefront.preview.reseller.show', $previewSlug) : route('storefront.reseller.show');
+    $resellerPortalHost = isset($previewSlug) ? null : $company->resellerPortalHost();
+    $resellerUrl = $resellerPortalHost
+        ? request()->getScheme().'://'.$resellerPortalHost.'/portal/register'
+        : \App\Support\StorefrontUrl::route('reseller.show', [], $previewSlug ?? null);
 @endphp
 
 @section('account-content')

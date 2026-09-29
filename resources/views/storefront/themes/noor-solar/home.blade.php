@@ -5,14 +5,10 @@
         $heroProduct = $products->first();
         $heroSlide = ($slides ?? collect())->first();
         $heroImageUrl = \App\Support\CompanyMedia::publicUrl($heroSlide?->image ?: $heroProduct?->image, $company);
-        $catalogUrl = isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index');
-        $contactUrl = isset($previewSlug) ? route('storefront.preview.contact', $previewSlug) : route('storefront.contact');
-        $categoryUrl = fn ($category) => isset($previewSlug)
-            ? route('storefront.preview.categories.show', [$previewSlug, $category->slug])
-            : route('storefront.categories.show', $category->slug);
-        $productUrl = fn ($product) => isset($previewSlug)
-            ? route('storefront.preview.products.show', [$previewSlug, $product->slug])
-            : route('storefront.products.show', $product->slug);
+        $catalogUrl = \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null);
+        $contactUrl = \App\Support\StorefrontUrl::route('contact', [], $previewSlug ?? null);
+        $categoryUrl = fn ($category) => \App\Support\StorefrontUrl::route('categories.show', [$category->slug], $previewSlug ?? null);
+        $productUrl = fn ($product) => \App\Support\StorefrontUrl::route('products.show', [$product->slug], $previewSlug ?? null);
         $featuredProducts = $products->take(6);
         $featuredCategories = $categories->take(4);
         $heroHeading = $setting->hero_heading ?: 'Solar buying, re-engineered.';

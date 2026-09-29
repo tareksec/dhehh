@@ -505,6 +505,19 @@ get the FAQ/delivery-charge caching speed-up (that one is Redis-only; the
 storefront listing cache above works on any `CACHE_STORE`), and sessions add
 one extra database read/write per request instead of hitting Redis.
 
+## Reseller Portal Domain
+
+Each company that uses the reseller module (**Company Management → Reseller module**) gets its own reseller dashboard at `https://reseller.<company-domain>/portal` (for example `reseller.zamzamint.com`), or at a fully custom domain set in **Company Management → Reseller portal domain**. The portal has its own login, separate from the shop and the admin panel (`SESSION_DOMAIN` stays empty, so the sessions never mix). No new environment variables.
+
+For each company:
+
+1. **DNS:** add an `A` (or `CNAME`) record `reseller` pointing to the same server as the company's main domain. For a separate reseller domain, point that whole domain at the server.
+2. **Coolify:** add `https://reseller.<domain>` (or the custom domain) to the application's **Domains** list so Traefik issues its SSL certificate. A wildcard `*.domain` certificate needs a DNS challenge, so listing each host explicitly is simpler.
+3. **Admin:** only for a custom domain, fill **Company Management → Reseller portal domain**. The `reseller.<domain>` form needs nothing.
+4. **Build assets:** the portal has its own Filament theme (`resources/css/filament/reseller/theme.css`), so `npm run build` must run on deploy, as for the admin theme.
+
+Behaviour to expect: on the portal host every non-portal path redirects to the portal, and `/portal` returns 404 on every other host. Resellers who open the old **My Account → Your Store** page are redirected to the portal (they sign in again there — it is a separate login on a different host). Applications now go through the portal's own **Become a reseller** form. Store links (`{company-domain}/store/{slug}`) do not change.
+
 ## Production Checklist
 
 - `APP_ENV=production`
@@ -519,3 +532,4 @@ one extra database read/write per request instead of hitting Redis.
 - File permissions set for `storage/` and `bootstrap/cache/`
 - Admin users reviewed
 - GitHub deploy secrets configured
+- Reseller portal DNS record and Coolify domain added (if the reseller module is used)

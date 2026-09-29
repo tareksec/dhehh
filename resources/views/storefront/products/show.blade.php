@@ -23,9 +23,9 @@
 
         $isHtmlDescription = str_contains((string) $product->description, '<');
         $categoryUrl = $product->category
-            ? (isset($previewSlug) ? route('storefront.preview.categories.show', [$previewSlug, $product->category->slug]) : route('storefront.categories.show', $product->category->slug))
+            ? (\App\Support\StorefrontUrl::route('categories.show', [$product->category->slug], $previewSlug ?? null))
             : null;
-        $productsUrl = isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index');
+        $productsUrl = \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null);
 
         $galleryImages = collect([$product->image])
             ->merge($product->gallery_images ?? [])
@@ -187,7 +187,7 @@
                 </ul>
             @endif
 
-            <form id="product-purchase-form" class="mt-4" method="POST" action="{{ isset($previewSlug) ? route('storefront.preview.cart.add', [$previewSlug, $product->slug]) : route('storefront.cart.add', $product->slug) }}" data-purchase-form>
+            <form id="product-purchase-form" class="mt-4" method="POST" action="{{ \App\Support\StorefrontUrl::route('cart.add', [$product->slug], $previewSlug ?? null) }}" data-purchase-form>
                 @csrf
 
                 @if ($isVariableProduct)

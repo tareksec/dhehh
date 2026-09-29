@@ -6,11 +6,12 @@
         $productLimit = $setting->marketplaceProductLimit();
         $visibleProducts = $products->take($productLimit);
         $slides = $slides ?? collect();
-        $productsUrl = isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index');
-        $categoryUrl = fn ($category) => isset($previewSlug)
-            ? route('storefront.preview.categories.show', [$previewSlug, $category->slug])
-            : route('storefront.categories.show', $category->slug);
-        $resellerUrl = isset($previewSlug) ? route('storefront.preview.reseller.show', $previewSlug) : route('storefront.reseller.show');
+        $productsUrl = \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null);
+        $categoryUrl = fn ($category) => \App\Support\StorefrontUrl::route('categories.show', [$category->slug], $previewSlug ?? null);
+        $resellerPortalHost = isset($previewSlug) ? null : $company->resellerPortalHost();
+        $resellerUrl = $resellerPortalHost
+            ? request()->getScheme().'://'.$resellerPortalHost.'/portal/register'
+            : \App\Support\StorefrontUrl::route('reseller.show', [], $previewSlug ?? null);
         $whatsappDigits = preg_replace('/\D+/', '', (string) $setting->whatsapp_number);
         $quoteUrl = $whatsappDigits !== '' ? 'https://wa.me/'.$whatsappDigits : $productsUrl;
         // Campaign copy is owner-entered only (Storefront Settings →

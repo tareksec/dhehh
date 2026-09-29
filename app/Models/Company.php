@@ -60,6 +60,7 @@ class Company extends Model
         'settings',
         'dashboard_color',
         'reseller_module_enabled',
+        'reseller_portal_domain',
     ];
 
     protected $casts = [
@@ -89,6 +90,7 @@ class Company extends Model
             $company->timezone = $company->timezone ?: config('app.timezone', 'Asia/Dhaka');
             $company->invoice_prefix = static::normalizeInvoicePrefix($company->invoice_prefix, $company->name);
             $company->domain = static::normalizeDomain($company->domain);
+            $company->reseller_portal_domain = static::normalizeDomain($company->reseller_portal_domain);
         });
 
         static::created(function (Company $company): void {
@@ -130,6 +132,60 @@ class Company extends Model
         $domain = preg_replace('/:\d+$/', '', $domain) ?: $domain;
 
         return str_starts_with($domain, 'www.') ? substr($domain, 4) : $domain;
+    }
+
+    /**
+     * The company whose reseller portal is reached at $host: either its own
+     * custom reseller_portal_domain, or "reseller." + its ordinary domain
+     * when no custom one is set. Used by ResolveCompanyFromResellerPortalDomain
+     * and RestrictResellerPortalHost -- both must agree on this exact rule.
+     */
+    public static function forResellerPortalHost(?string $host): ?self
+    {
+        $host = static::normalizeDomain($host);
+
+        if ($host === null || ! Schema::hasTable('companies')) {
+            return null;
+        }
+
+        $company = static::query()
+            ->where('reseller_module_enabled', true)
+            ->where('is_active', true)
+            ->where('reseller_portal_domain', $host)
+            ->first();
+
+        if ($company) {
+            return $company;
+        }
+
+        if (! str_starts_with($host, 'reseller.')) {
+            return null;
+        }
+
+        return static::query()
+            ->where('reseller_module_enabled', true)
+            ->where('is_active', true)
+            ->whereNull('reseller_portal_domain')
+            ->where('domain', substr($host, strlen('reseller.')))
+            ->first();
+    }
+
+    /**
+     * The host this company's reseller portal is reached at, or null when
+     * the reseller module isn't enabled or this company has no domain yet.
+     * The exact inverse of forResellerPortalHost().
+     */
+    public function resellerPortalHost(): ?string
+    {
+        if (! $this->reseller_module_enabled) {
+            return null;
+        }
+
+        if (filled($this->reseller_portal_domain)) {
+            return $this->reseller_portal_domain;
+        }
+
+        return filled($this->domain) ? 'reseller.'.$this->domain : null;
     }
 
     public static function normalizeInvoicePrefix(?string $prefix, ?string $companyName = null): string

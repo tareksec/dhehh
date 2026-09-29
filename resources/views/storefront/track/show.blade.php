@@ -2,7 +2,7 @@
 
 @php
     $currency = $company->currency ?: 'BDT';
-    $trackIndexUrl = isset($previewSlug) ? route('storefront.preview.track.index', $previewSlug) : route('storefront.track.index');
+    $trackIndexUrl = \App\Support\StorefrontUrl::route('track.index', [], $previewSlug ?? null);
     $booking = $order?->latestCourierBooking;
     $orderStatusLabel = $order ? (App\Models\Order::STATUSES[$order->status] ?? ucfirst((string) $order->status)) : null;
     $deliveryStatus = $order?->delivery_status ?? App\Models\CourierBooking::STATUS_NOT_BOOKED;

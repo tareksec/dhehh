@@ -40,13 +40,9 @@
         $trackUrl = isset($previewSlug)
             ? route('storefront.preview.track.show', ['company' => $previewSlug, 'orderNo' => $order->order_number, 'phone' => $order->customer?->phone])
             : Illuminate\Support\Facades\URL::temporarySignedRoute('storefront.track.show', now()->addDays(7), ['orderNo' => $order->order_number]);
-        $orderHistoryUrl = isset($previewSlug)
-            ? route('storefront.preview.account.orders', ['company' => $previewSlug, 'phone' => $order->customer?->phone])
-            : route('storefront.account.orders');
+        $orderHistoryUrl = \App\Support\StorefrontUrl::route('account.orders', [], $previewSlug ?? null);
         $showOrderHistoryLink = isset($previewSlug) || (bool) ($setting->customer_accounts_enabled ?? true);
-        $complaintUrl = isset($previewSlug)
-            ? route('storefront.preview.complaints.show', ['company' => $previewSlug, 'order' => $order->order_number])
-            : route('storefront.complaints.show', ['order' => $order->order_number]);
+        $complaintUrl = \App\Support\StorefrontUrl::route('complaints.show', ['order' => $order->order_number], $previewSlug ?? null);
     @endphp
 
     <section class="mx-auto w-full max-w-5xl px-4 py-8 text-center sm:px-5 lg:px-6">
@@ -114,7 +110,7 @@
 
         <div class="mt-8 flex flex-wrap justify-center gap-3">
             <a class="inline-flex min-h-11 items-center rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90" href="{{ $trackUrl }}">Track this order</a>
-            <a class="inline-flex min-h-11 items-center rounded-lg border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition hover:border-[var(--storefront-brand)] dark:border-white/10 dark:text-white" href="{{ isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index') }}">Continue shopping</a>
+            <a class="inline-flex min-h-11 items-center rounded-lg border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition hover:border-[var(--storefront-brand)] dark:border-white/10 dark:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">Continue shopping</a>
         </div>
         @if ($showOrderHistoryLink)<p class="mt-5 text-sm text-gray-500 dark:text-gray-400">Want to see all your storefront orders? Visit <a class="font-medium text-[var(--storefront-brand)]" href="{{ $orderHistoryUrl }}">order history</a>.</p>@endif
     </section>

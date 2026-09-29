@@ -2,8 +2,8 @@
 
 @section('content')
     @php
-        $offersUrl = isset($previewSlug) ? route('storefront.preview.offers.index', $previewSlug) : route('storefront.offers.index');
-        $loginUrl = isset($previewSlug) ? route('storefront.preview.account.login', $previewSlug) : route('storefront.account.login');
+        $offersUrl = \App\Support\StorefrontUrl::route('offers.index', [], $previewSlug ?? null);
+        $loginUrl = \App\Support\StorefrontUrl::route('account.login', [], $previewSlug ?? null);
     @endphp
 
     <section class="mx-auto w-full max-w-3xl px-4 py-8 text-center sm:px-5 lg:px-6">
@@ -48,7 +48,7 @@
 
         <div class="mt-8 flex flex-wrap justify-center gap-3">
             <a class="inline-flex min-h-11 items-center rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90" href="{{ $offersUrl }}">Browse more offers</a>
-            <a class="inline-flex min-h-11 items-center rounded-lg border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition hover:border-[var(--storefront-brand)] dark:border-white/10 dark:text-white" href="{{ isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index') }}">Continue shopping</a>
+            <a class="inline-flex min-h-11 items-center rounded-lg border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition hover:border-[var(--storefront-brand)] dark:border-white/10 dark:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">Continue shopping</a>
         </div>
     </section>
 @endsection

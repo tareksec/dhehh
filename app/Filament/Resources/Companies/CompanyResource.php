@@ -88,6 +88,14 @@ class CompanyResource extends Resource
                         ->default(false)
                         ->visible(fn (): bool => Auth::user()?->isSuperAdmin() ?? false)
                         ->dehydrated(fn (): bool => Auth::user()?->isSuperAdmin() ?? false),
+                    TextInput::make('reseller_portal_domain')
+                        ->label('Reseller portal domain')
+                        ->helperText('Leave blank to use "reseller." + this company\'s own domain. Set this only for a fully separate domain (e.g. a dedicated reseller-only website). Super Admin only.')
+                        ->maxLength(255)
+                        ->unique(ignoreRecord: true)
+                        ->dehydrateStateUsing(fn (?string $state): ?string => Company::normalizeDomain($state))
+                        ->visible(fn (): bool => Auth::user()?->isSuperAdmin() ?? false)
+                        ->dehydrated(fn (): bool => Auth::user()?->isSuperAdmin() ?? false),
                 ])
                 ->columns(2),
 

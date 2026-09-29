@@ -4,7 +4,7 @@
     $accountRoute = static fn (string $name) => isset($previewSlug)
         ? route('storefront.preview.account.'.$name, $previewSlug)
         : route('storefront.account.'.$name);
-    $productsUrl = isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index');
+    $productsUrl = \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null);
 @endphp
 
 @section('account-content')
@@ -45,7 +45,7 @@
             @else
                 <div class="mt-4 divide-y divide-gray-200 dark:divide-gray-800">
                     @foreach ($recentOrders as $order)
-                        <a class="flex min-h-16 items-center justify-between gap-4 py-3 transition hover:text-[var(--storefront-brand)]" href="{{ isset($previewSlug) ? route('storefront.preview.track.show', [$previewSlug, $order->order_number]) : route('storefront.track.show', $order->order_number) }}">
+                        <a class="flex min-h-16 items-center justify-between gap-4 py-3 transition hover:text-[var(--storefront-brand)]" href="{{ \App\Support\StorefrontUrl::route('track.show', [$order->order_number], $previewSlug ?? null) }}">
                             <div class="min-w-0">
                                 <p class="truncate text-sm font-semibold">{{ $order->order_number }}</p>
                                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ optional($order->order_date)->format('d M Y') }} &middot; {{ $order->items->sum('quantity') }} items</p>

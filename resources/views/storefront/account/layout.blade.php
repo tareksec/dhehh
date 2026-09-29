@@ -12,7 +12,9 @@
     ];
 
     if ($customer->isApprovedReseller()) {
-        $accountLinks[] = ['url' => $accountRoute('reseller'), 'active' => ['storefront.account.reseller', 'storefront.preview.account.reseller'], 'label' => 'Your Store', 'icon' => 'store'];
+        // The reseller dashboard lives in the portal (preview has none, so it keeps the old page).
+        $resellerPortalHost = isset($previewSlug) ? null : $company->resellerPortalHost();
+        $accountLinks[] = ['url' => $resellerPortalHost ? request()->getScheme().'://'.$resellerPortalHost.'/portal' : $accountRoute('reseller'), 'active' => ['storefront.account.reseller', 'storefront.preview.account.reseller'], 'label' => 'Your Store', 'icon' => 'store'];
     }
 @endphp
 

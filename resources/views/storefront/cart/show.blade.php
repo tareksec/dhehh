@@ -40,9 +40,9 @@
                         : max(1, $lineStock);
                     $lineMin = min($product->effectiveMoq(), $lineMax);
                     $lineImage = $variant && filled($variant->images) ? collect($variant->images)->first() : $product->image;
-                    $updateUrl = isset($previewSlug) ? route('storefront.preview.cart.update', [$previewSlug, $product->slug]) : route('storefront.cart.update', $product->slug);
-                    $removeUrl = isset($previewSlug) ? route('storefront.preview.cart.remove', [$previewSlug, $product->slug]) : route('storefront.cart.remove', $product->slug);
-                    $productUrl = isset($previewSlug) ? route('storefront.preview.products.show', [$previewSlug, $product->slug]) : route('storefront.products.show', $product->slug);
+                    $updateUrl = \App\Support\StorefrontUrl::route('cart.update', [$product->slug], $previewSlug ?? null);
+                    $removeUrl = \App\Support\StorefrontUrl::route('cart.remove', [$product->slug], $previewSlug ?? null);
+                    $productUrl = \App\Support\StorefrontUrl::route('products.show', [$product->slug], $previewSlug ?? null);
                 @endphp
                 <article class="grid grid-cols-[80px_minmax(0,1fr)] gap-3 rounded-lg border border-gray-200 bg-white p-3 sm:grid-cols-[96px_minmax(0,1fr)] sm:gap-4 sm:p-4 dark:border-gray-800 dark:bg-gray-900">
                     <a href="{{ $productUrl }}" class="h-20 w-20 overflow-hidden rounded-lg bg-gray-100 sm:h-24 sm:w-24 dark:bg-white/5">
@@ -106,7 +106,7 @@
                 <div class="rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center dark:border-gray-800 dark:bg-gray-900">
                     <h2 class="text-xl font-semibold">Your cart is empty</h2>
                     <p class="mt-2 text-gray-500 dark:text-gray-400">Add products from the catalog to start a storefront order.</p>
-                    <a class="mt-6 inline-flex rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90" href="{{ isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index') }}">Browse products</a>
+                    <a class="mt-6 inline-flex rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">Browse products</a>
                 </div>
             @endforelse
         </div>
@@ -133,7 +133,7 @@
                     <span>BDT {{ \App\Support\MoneyFormatter::number($subtotal) }}</span>
                 </div>
                 @if ($items->isNotEmpty())
-                    <a class="mt-5 flex w-full justify-center rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90" href="{{ isset($previewSlug) ? route('storefront.preview.checkout.show', $previewSlug) : route('storefront.checkout.show') }}">
+                    <a class="mt-5 flex w-full justify-center rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90" href="{{ \App\Support\StorefrontUrl::route('checkout.show', [], $previewSlug ?? null) }}">
                         Continue to checkout
                     </a>
                 @else

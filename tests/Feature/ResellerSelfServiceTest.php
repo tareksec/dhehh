@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Product;
-use App\Models\ResellerProduct;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -45,9 +44,10 @@ class ResellerSelfServiceTest extends TestCase
             ->get('http://access.example.test/account/reseller')
             ->assertForbidden();
 
+        // Approved resellers are sent to the portal (§2.1 Q5).
         $this->actingAsCustomer($approved)
             ->get('http://access.example.test/account/reseller')
-            ->assertOk();
+            ->assertRedirect('http://reseller.access.example.test/portal');
     }
 
     public function test_toggling_a_product_adds_and_then_removes_it_from_the_catalog(): void
@@ -107,9 +107,9 @@ class ResellerSelfServiceTest extends TestCase
         $reseller = $this->customer($company, 'approved');
 
         $this->actingAsCustomer($reseller)
-            ->from("http://slug-unique.example.test/account/reseller")
+            ->from('http://slug-unique.example.test/account/reseller')
             ->patch('http://slug-unique.example.test/account/reseller', ['reseller_slug' => 'taken-slug'])
-            ->assertRedirect("http://slug-unique.example.test/account/reseller");
+            ->assertRedirect('http://slug-unique.example.test/account/reseller');
 
         $this->assertNull($reseller->fresh()->reseller_slug);
 

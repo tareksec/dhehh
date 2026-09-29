@@ -169,12 +169,8 @@
                     $basePrice = \App\Services\ResellerPricing::basePrice($product, $costPerUnit);
                     $suggestedPrice = $product->baseSellingPrice();
                     $ownPrice = $pickedPrices[$product->id] ?? null;
-                    $toggleUrl = isset($previewSlug)
-                        ? route('storefront.preview.account.reseller.products.toggle', [$previewSlug, $product->id])
-                        : route('storefront.account.reseller.products.toggle', $product->id);
-                    $priceUrl = isset($previewSlug)
-                        ? route('storefront.preview.account.reseller.products.price', [$previewSlug, $product->id])
-                        : route('storefront.account.reseller.products.price', $product->id);
+                    $toggleUrl = \App\Support\StorefrontUrl::route('account.reseller.products.toggle', [$product->id], $previewSlug ?? null);
+                    $priceUrl = \App\Support\StorefrontUrl::route('account.reseller.products.price', [$product->id], $previewSlug ?? null);
                 @endphp
                 <div class="flex flex-col rounded-xl border border-gray-200 p-3 dark:border-gray-800">
                     <p class="text-sm font-semibold text-gray-950 dark:text-white">{{ $product->name }}</p>

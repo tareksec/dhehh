@@ -187,9 +187,7 @@ class ResellerCommissionTest extends TestCase
 
         $this->actingAsCustomer($reseller)
             ->get('http://payout.example.test/account/reseller')
-            ->assertOk()
-            ->assertSee(__('Request withdrawal'))
-            ->assertSee(__('Withdrawal requests'));
+            ->assertRedirect('http://reseller.payout.example.test/portal');
     }
 
     public function test_staff_can_mark_paid_or_reject_and_rejection_releases_the_balance(): void

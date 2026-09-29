@@ -1,17 +1,17 @@
 <header class="storefront-header sticky top-0 z-40 border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
     <div class="mx-auto flex min-h-[60px] w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-5 lg:px-6">
         <a class="flex min-h-10 min-w-0 items-center gap-2.5" href="{{ $homeUrl }}">
-            @if ($logoUrl)
-                <img class="h-9 w-auto max-w-[200px] shrink-0 object-contain sm:max-w-[240px] {{ $logoDarkUrl ? 'dark:hidden' : '' }}" src="{{ $logoUrl }}" alt="{{ $company->name }} logo" width="800" height="281">
-                @if ($logoDarkUrl)
-                    <img class="hidden h-9 w-auto max-w-[200px] shrink-0 object-contain sm:max-w-[240px] dark:block" src="{{ $logoDarkUrl }}" alt="{{ $company->name }} logo" width="800" height="281">
+            @if ($brandLogoUrl)
+                <img class="h-9 w-auto max-w-[200px] shrink-0 object-contain sm:max-w-[240px] {{ $brandLogoDarkUrl ? 'dark:hidden' : '' }}" src="{{ $brandLogoUrl }}" alt="{{ $brandName }} logo" width="800" height="281">
+                @if ($brandLogoDarkUrl)
+                    <img class="hidden h-9 w-auto max-w-[200px] shrink-0 object-contain sm:max-w-[240px] dark:block" src="{{ $brandLogoDarkUrl }}" alt="{{ $brandName }} logo" width="800" height="281">
                 @endif
-                <span class="sr-only">{{ $company->name }}</span>
+                <span class="sr-only">{{ $brandName }}</span>
             @else
                 <span class="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[var(--storefront-brand)] text-sm font-semibold text-white">
-                    {{ mb_substr($company->name, 0, 1) }}
+                    {{ mb_substr($brandName, 0, 1) }}
                 </span>
-                <span class="min-w-0 truncate text-base font-bold">{{ $company->name }}</span>
+                <span class="min-w-0 truncate text-base font-bold">{{ $brandName }}</span>
             @endif
         </a>
 

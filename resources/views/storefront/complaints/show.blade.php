@@ -18,7 +18,7 @@
                 </div>
             @endif
 
-            <form class="rounded-xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-white/5" method="POST" action="{{ isset($previewSlug) ? route('storefront.preview.complaints.store', $previewSlug) : route('storefront.complaints.store') }}" @if ($errors->any()) aria-describedby="complaint-errors" @endif>
+            <form class="rounded-xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-white/5" method="POST" action="{{ \App\Support\StorefrontUrl::route('complaints.store', [], $previewSlug ?? null) }}" @if ($errors->any()) aria-describedby="complaint-errors" @endif>
                 @csrf
 
                 @if ($errors->any())

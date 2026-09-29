@@ -1,0 +1,90 @@
+<?php
+
+namespace App\Providers\Filament;
+
+use App\Filament\Reseller\Pages\Auth\Apply;
+use App\Filament\Reseller\Pages\Auth\Login;
+use App\Filament\Reseller\Pages\Dashboard;
+use App\Filament\Reseller\Pages\Earnings;
+use App\Filament\Reseller\Pages\MyStore;
+use App\Filament\Reseller\Pages\Orders;
+use App\Filament\Reseller\Pages\PayoutAccounts;
+use App\Filament\Reseller\Pages\Products;
+use App\Filament\Reseller\Pages\Profile;
+use App\Filament\Reseller\Pages\Withdrawals;
+use App\Http\Middleware\ResolveCompanyFromResellerPortalDomain;
+use App\Http\Middleware\RestrictResellerPortalHost;
+use App\Models\Company;
+use App\Services\CompanyContext;
+use App\Services\CompanySettingsService;
+use Filament\Http\Middleware\Authenticate;
+use Filament\Http\Middleware\AuthenticateSession;
+use Filament\Http\Middleware\DisableBladeIconComponents;
+use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Panel;
+use Filament\PanelProvider;
+use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Session\Middleware\StartSession;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
+
+/**
+ * The reseller portal (13_RESELLER_PORTAL_PLAN.md). Reachable at
+ * "reseller.<company-domain>" or a company's own custom
+ * reseller_portal_domain, both resolved by ResolveCompanyFromResellerPortalDomain
+ * -- never by Filament's own ->domain(), which only matches one fixed host
+ * and can't express "any company's domain, prefixed with reseller.". The
+ * panel is path-scoped ("/portal") instead, on every host; RestrictResellerPortalHost
+ * (registered here AND globally in bootstrap/app.php) is what actually keeps
+ * it off the shop/admin hosts and keeps everything else off the portal host.
+ */
+class ResellerPanelProvider extends PanelProvider
+{
+    public function panel(Panel $panel): Panel
+    {
+        return $panel
+            ->id('reseller')
+            ->path('portal')
+            ->authGuard('customer')
+            ->login(Login::class)
+            ->registration(Apply::class)
+            ->brandName(fn (): string => app(CompanySettingsService::class)->name($this->portalCompany()))
+            ->brandLogo(fn (): ?string => app(CompanySettingsService::class)->logoUrl($this->portalCompany()))
+            ->darkModeBrandLogo(fn (): ?string => app(CompanySettingsService::class)->darkLogoUrl(company: $this->portalCompany()))
+            ->pages([
+                Dashboard::class,
+                Orders::class,
+                Products::class,
+                Earnings::class,
+                Withdrawals::class,
+                PayoutAccounts::class,
+                MyStore::class,
+                Profile::class,
+            ])
+            ->homeUrl(Dashboard::class)
+            ->viteTheme('resources/css/filament/reseller/theme.css')
+            ->middleware([
+                RestrictResellerPortalHost::class,
+                ResolveCompanyFromResellerPortalDomain::class,
+                EncryptCookies::class,
+                AddQueuedCookiesToResponse::class,
+                StartSession::class,
+                AuthenticateSession::class,
+                ShareErrorsFromSession::class,
+                PreventRequestForgery::class,
+                SubstituteBindings::class,
+                DisableBladeIconComponents::class,
+                DispatchServingFilamentEvent::class,
+            ])
+            ->authMiddleware([
+                Authenticate::class,
+            ]);
+    }
+
+    protected function portalCompany(): ?Company
+    {
+        return app(CompanyContext::class)->company();
+    }
+}

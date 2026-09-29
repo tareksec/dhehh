@@ -1,6 +1,6 @@
 @php
-    $productUrl = isset($previewSlug) ? route('storefront.preview.products.show', [$previewSlug, $product->slug]) : route('storefront.products.show', $product->slug);
-    $cartAddUrl = isset($previewSlug) ? route('storefront.preview.cart.add', [$previewSlug, $product->slug]) : route('storefront.cart.add', $product->slug);
+    $productUrl = \App\Support\StorefrontUrl::route('products.show', [$product->slug], $previewSlug ?? null);
+    $cartAddUrl = \App\Support\StorefrontUrl::route('cart.add', [$product->slug], $previewSlug ?? null);
     $comparePrice = (float) ($product->price ?? 0);
     $sellingPrice = (float) $product->selling_price;
     $discountPercent = $comparePrice > 0 && $sellingPrice > 0 && $sellingPrice < $comparePrice

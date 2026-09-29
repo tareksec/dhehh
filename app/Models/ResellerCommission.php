@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 
 /**
  * One reseller's margin on one order: (reseller selling price - reseller
@@ -47,6 +48,20 @@ class ResellerCommission extends Model
             'amount' => 'decimal:2',
             'payable_at' => 'datetime',
         ];
+    }
+
+    /**
+     * SQL expression turning a datetime column into a "YYYY-MM" bucket, for
+     * the portal's monthly totals -- DB-portable because the test suite runs
+     * on sqlite while production is MySQL/Postgres.
+     */
+    public static function monthExpression(string $column = 'created_at'): string
+    {
+        return match (DB::connection()->getDriverName()) {
+            'mysql', 'mariadb' => "date_format({$column}, '%Y-%m')",
+            'pgsql' => "to_char({$column}, 'YYYY-MM')",
+            default => "strftime('%Y-%m', {$column})",
+        };
     }
 
     public function order(): BelongsTo

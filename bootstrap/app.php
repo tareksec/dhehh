@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\PreventDemoModeWrites;
+use App\Http\Middleware\RestrictResellerPortalHost;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetCurrentCompany;
 use App\Support\StorefrontErrorPages;
@@ -59,6 +60,12 @@ return Application::configure(basePath: dirname(__DIR__))
             headers: SymfonyRequest::HEADER_X_FORWARDED_TRAEFIK,
         );
         $middleware->validateCsrfTokens(except: ['webhooks/couriers/*', 'webhooks/zinipay/*', 'webhooks/woocommerce/*', 'webhooks/meta', 'webhooks/mobile-crash-reports']);
+        // Must run before anything else in the group: on a reseller-portal
+        // host it redirects every non-portal path to the portal, and on any
+        // other host it 404s the portal path -- see 13_RESELLER_PORTAL_PLAN.md
+        // §6. Also appended to the admin panel's own middleware stack (it
+        // doesn't route through the "web" group) in AdminPanelProvider.
+        $middleware->appendToGroup('web', RestrictResellerPortalHost::class);
         $middleware->appendToGroup('web', PreventDemoModeWrites::class);
         $middleware->appendToGroup('web', SetCurrentCompany::class);
         $middleware->appendToGroup('web', SecurityHeaders::class);

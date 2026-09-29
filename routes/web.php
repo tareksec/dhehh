@@ -26,6 +26,7 @@ use App\Http\Controllers\MetaWebhookController;
 use App\Http\Controllers\MobileCrashReportController;
 use App\Http\Controllers\PayStationWebhookController;
 use App\Http\Controllers\QuotationPublicController;
+use App\Http\Controllers\Reseller\ResellerProductPhotosController;
 use App\Http\Controllers\Storefront\AccountAuthController as StorefrontAccountAuthController;
 use App\Http\Controllers\Storefront\AccountController as StorefrontAccountController;
 use App\Http\Controllers\Storefront\AccountOrdersController as StorefrontAccountOrdersController;
@@ -49,6 +50,7 @@ use App\Http\Controllers\Storefront\ResellerStoreController;
 use App\Http\Controllers\WooCommerceWebhookController;
 use App\Http\Controllers\ZiniPayWebhookController;
 use App\Http\Middleware\ResolveCompanyFromDomain;
+use App\Http\Middleware\ResolveCompanyFromResellerPortalDomain;
 use App\Http\Middleware\ResolveResellerFromSlug;
 use App\Models\Order;
 use App\Models\User;
@@ -388,6 +390,9 @@ Route::middleware(ResolveCompanyFromDomain::class)->group(function (): void {
 Route::middleware([ResolveCompanyFromDomain::class, ResolveResellerFromSlug::class])
     ->prefix('/store/{resellerSlug}')
     ->group(function (): void {
+        Route::get('/', StorefrontProductIndexController::class)
+            ->name('storefront.reseller_store.show');
+
         Route::get('/products', StorefrontProductIndexController::class)
             ->name('storefront.reseller_store.products.index');
 
@@ -415,6 +420,16 @@ Route::middleware([ResolveCompanyFromDomain::class, ResolveResellerFromSlug::cla
         Route::post('/checkout', [StorefrontCheckoutController::class, 'store'])
             ->name('storefront.reseller_store.checkout.store');
     });
+
+// The reseller portal's own product-photos download (Phase 4 of
+// 13_RESELLER_PORTAL_PLAN.md). Path-prefixed with "portal" so
+// RestrictResellerPortalHost's allow-list lets it through on the portal
+// host; it needs the portal's own company resolution and login, which the
+// Filament panel's middleware stack normally provides, so both are applied
+// explicitly here since this is a plain route, not a panel page.
+Route::get('/portal/products/{product}/photos', ResellerProductPhotosController::class)
+    ->middleware([ResolveCompanyFromResellerPortalDomain::class, 'auth:customer'])
+    ->name('reseller.portal.products.photos');
 
 Route::view('/pricing', 'marketing.pricing')->name('marketing.pricing');
 

@@ -2,7 +2,7 @@
 
 @php
     $currency = $company->currency ?: 'BDT';
-    $ordersUrl = isset($previewSlug) ? route('storefront.preview.account.orders', $previewSlug) : route('storefront.account.orders');
+    $ordersUrl = \App\Support\StorefrontUrl::route('account.orders', [], $previewSlug ?? null);
     $isPreview = isset($previewSlug) && ! isset($customer);
 @endphp
 
@@ -88,15 +88,11 @@
                                 $trackUrl = isset($previewSlug)
                                     ? route('storefront.preview.track.show', array_filter(['company' => $previewSlug, 'orderNo' => $order->order_number, 'phone' => $isPreview ? $phone : null]))
                                     : route('storefront.track.show', ['orderNo' => $order->order_number]);
-                                $reorderUrl = isset($previewSlug)
-                                    ? route('storefront.preview.account.reorder', [$previewSlug, $order->order_number])
-                                    : route('storefront.account.reorder', $order->order_number);
+                                $reorderUrl = \App\Support\StorefrontUrl::route('account.reorder', [$order->order_number], $previewSlug ?? null);
                                 $statusLabel = App\Models\Order::STATUSES[$order->status] ?? str($order->status)->headline();
                                 $itemCount = $order->items->sum('quantity');
                                 $reviewUrl = ! $isPreview && $order->status === App\Models\Order::STATUS_COMPLETED
-                                    ? (isset($previewSlug)
-                                        ? route('storefront.preview.account.reviews.create', [$previewSlug, $order->order_number])
-                                        : route('storefront.account.reviews.create', $order->order_number))
+                                    ? (\App\Support\StorefrontUrl::route('account.reviews.create', [$order->order_number], $previewSlug ?? null))
                                     : null;
                             @endphp
 

@@ -2,6 +2,133 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-29 - Reseller portal Phase 6: switch-over
+
+Reason — owner said "ফেজ ৬ শুরু কর". Owner's answer to §2.1 Q5 (asked via `AskUserQuestion`): **redirect** the old My Account → Your Store page to the portal.
+
+What changed:
+- An approved reseller opening `/account/reseller` (or the sidebar's **Your Store**) is redirected to `reseller.<domain>/portal`. Staff preview keeps the old page. Guests, pending and rejected users behave exactly as before (login redirect / 403).
+- New **Reseller Portal Domain** section in `docs/deployment.md` (DNS, Coolify domain, custom domain, `npm run build`), a checklist line, and a portal paragraph in `PROJECT_GUIDE.md`.
+
+Things to know: the portal login is separate (different host), so a redirected reseller signs in again once. The old page's POST/PATCH endpoints still exist but are no longer reachable from any page — say if you want them removed. No new strings.
+
+Tests: two existing tests updated to expect the redirect. Full suite: 1554 passed (`php artisan test`, no `--env`).
+
+Commit status: not committed — waiting for owner approval, together with Phases 1–5 and the plan file.
+
+## 2026-09-29 - Reseller portal Phase 5: Earnings, Withdrawals, My Store, Profile
+
+Reason — owner said "Phase 5 শুরু কর" (start Phase 5). Its only open dependency (§2.1 Q3 — whose name is on a reseller's store) was already answered on 2026-09-28: the reseller's own name/brand only, no company name or logo. No new business question was needed.
+
+What changed:
+- **Earnings** page: every commission with status and date filters, search by order number, and monthly totals for the last 12 months (cancelled/returned orders not counted).
+- **Withdrawals** page: balance cards, the **Request withdrawal** form (same rules as the old "Your Store" page: the store's minimum, no more than the available balance), and the full history with status and transaction reference (or the store's reason on a rejection — the admin's internal note is never shown on any other status).
+- **Saved payout accounts** page: bKash / Nagad / Rocket / bank details saved once and picked on the withdrawal form; one default account; the first one saved becomes the default; a **Save this account for next time** switch on the withdrawal form. Editing or deleting a saved account never changes a request already sent (the request keeps its own copy of the details).
+- **My Store** page: the store's URL name (same rules as before: letters/numbers/dashes/underscores, unique within the company; a warning says shared links break if it changes) and the **Store name** shown at the top of the store.
+- **Store header:** inside a reseller's store (`/store/{slug}`) the header now shows only the reseller's Store name (falling back to business name, then their name) — no company name or logo (owner's Q3 answer). Both header partials (default and Marketplace Pro; Noor Solar uses the default). The company's own store is unchanged.
+- **Profile** page: name, email, password change (needs the current password; phone is read-only because it is the login).
+- Withdrawal-request logic moved into `ResellerCommissionService::requestPayout()` so the storefront page and the portal share one implementation.
+
+Business rules used: none invented. Minimum withdrawal, balance check, slug rules and email rules are the existing ones from the storefront pages; the store-name rule is the owner's Q3 answer. Small UX details I chose (not business rules, easy to change — please glance at them): the shop name falls back to business name; only the store header changed (the footer's brand block and the browser tab title still use the company's — say if those should change too); the slug-change warning text; a wrong current password is throttled to 5 tries per 15 minutes; a pending or rejected reseller sees only the Dashboard status page, not these pages.
+
+Also fixed while building this (all in still-uncommitted work):
+- **Audit log actor.** On the portal Filament switches the default guard to `customer`, so `AuditLogService` stored a reseller's id in `audit_logs.user_id` (a staff foreign key). It now attributes only staff users. Found because saving a `Customer` from the portal threw an FK error in tests. Portal changes are logged with no staff user.
+- **Portal styling.** Filament's precompiled CSS does not contain the generic Tailwind classes the portal's Blade views use (`grid-cols-*`, `justify-between`, `text-right`, …) and only the admin panel had a theme that scanned those views. Added `resources/css/filament/reseller/theme.css`, registered in `vite.config.js` and on the panel. **`npm run build` is required at deploy** (`public/build` is not in git); I ran it here and confirmed the built stylesheet contains those classes. I did not open the portal in a browser — pages are covered by HTTP render tests, not by eye.
+- **Commission chart** on the Dashboard counted cancelled commissions; it no longer does.
+- **Missing translation keys from Phase 3** (`From`, `Until`, `Orders`, `Commission (last 6 months)`) were used but never added; added now. Navigation labels for Dashboard / Orders / Products are now translated and the sidebar order is fixed.
+
+Needs Bangla review: the 39 new keys added to `lang/bn.json` this phase (Earnings, Withdrawals, saved accounts, My Store, Profile, plus the four Phase 3 keys above) — machine-reasonable translations, not owner-reviewed. I used "উত্তোলন" for withdrawal to match the keys already there.
+
+Tests: new `ResellerPortalAccountTest` (25 tests). I broke the code on purpose in four places (header branding, chart cancelled filter, audit actor, balance check) and confirmed the matching test fails each time. Full suite after the last code change: 1554 passed (`php artisan test`, no `--env`); `npm run build` succeeded.
+
+Not done / still open: portal-internal password reset (a reseller can still reset from the storefront's forgot-password page); §2.1 Q5 (what happens to the old **My Account → Your Store** page) — needed before Phase 6.
+
+Commit status: not committed — waiting for owner approval, together with the plan file and Phases 1–4 (all still pending).
+
+## 2026-09-28 - Reseller portal Phase 3: Overview + Orders
+
+Reason — owner said "পরবর্তি কাজ কর" (do the next work). Phase 3 needed §2.1 Q2 (how much of a buyer's info a reseller sees) answered first; asked it via `AskUserQuestion` alongside Q3 (needed for the still-pending Phase 5), rather than guessing, per CLAUDE.md's "never invent business rules" rule.
+
+Owner's answers (2026-09-28):
+- Customer info on orders: **full** name, phone, and address — not masked. Recorded in `13_RESELLER_PORTAL_PLAN.md` §2.1 Q2, replacing the plan's own masking recommendation.
+- Store page branding (feeds Phase 5, not used yet): the reseller's **own name/brand only** — no company name or logo on their store's header. Recorded in §2.1 Q3.
+
+What changed:
+- The **Dashboard** page's "coming soon" placeholder (approved resellers only — pending/rejected status pages are unchanged) is now the real overview: available-to-withdraw / waiting-for-delivery / this month's orders, sales, and commission stat cards; a 6-month commission chart; the last 5 orders; and a store-link card (Copy link / Share on WhatsApp / Share on Facebook), or a warning banner if the reseller has no store slug yet.
+- New **Orders** page: every order credited to the reseller, with full customer info, items, sale amount, status, and commission — filterable by status and date range, searchable by order number, with a read-only detail view (items, totals, commission, status timeline). Resellers cannot edit an order here.
+
+Business rules used (owner-confirmed, not invented): the two §2.1 answers above. Everything else (which existing balances/commission logic to reuse, how "waiting for delivery" and "this month" are computed, which order fields to show) is a technical implementation detail, built directly on the pricing/commission rules the owner already set in the earlier reseller-commission release.
+
+Needs Bangla review: the 14 new keys added to `lang/bn.json` this phase (dashboard/orders strings) — machine-reasonable translations, not owner-reviewed.
+
+Tests: new `ResellerPortalDashboardTest` (4 tests — dashboard renders end-to-end including the embedded chart widget, Orders page company-scoping, full customer info + commission sync, pending/rejected access denial). Full suite: 1529 passed (`php artisan test`, no `--env`). (Frontend build: see the Phase 5 note above — the portal gets its own Vite theme, which is also what makes these pages' layout classes compile.)
+
+Commit status: not committed — waiting for owner approval, together with Phase 1, the plan file, Phase 2, and Phase 4 (all still pending from before this phase).
+
+## 2026-09-28 - Reseller portal Phase 4: Products & pricing
+
+Reason — owner said "পরবর্তি কাজ সেরে ফেল" (finish the next work). Per the plan's phase-dependency table, Phase 4 (Products & pricing) only depends on Phase 2 (already built), not on any of the still-open §2.1 questions — so it could start without asking the owner anything new.
+
+What changed:
+- New **Products** page in the reseller portal (`reseller.<domain>/portal/products`): the company catalog with an **In my store** switch, **Suggested price**, **Your cost**, an editable **Your price**, and **Commission per unit**. Category / in-store / not-in-store / no-wholesale-rate filters.
+- Bulk actions: **Add to store**, **Remove from store**, **Set price = suggested + %** (skips anything not already picked, or with no wholesale rate, and says how many were skipped).
+- Per product: **Copy link**, **Share on WhatsApp**, **Download photos** (zips the product's own image + gallery for posting).
+- Every business rule reused, not reinvented, from the existing storefront reseller-price page: the "in store" toggle and the price floor are the exact same rules `ResellerStoreController` already enforces (`ResellerPricing::basePrice()`), just wired into the portal's own Filament table.
+
+Business rules used: none invented — everything here was already decided in the earlier reseller-pricing/commission release (owner's rule: price at or above wholesale-tier + per-unit cost) and in `13_RESELLER_PORTAL_PLAN.md` §3 row 3's own spec for this page.
+
+Needs Bangla review: the 16 new keys added to `lang/bn.json` this phase (Products page strings) — machine-reasonable translations, not owner-reviewed.
+
+Tests: new `ResellerPortalProductsTest` (6 tests — company scoping, in-store toggle create/delete, price-floor enforcement, bulk add/remove, bulk set-price-from-suggested skip logic, cross-company photo-download 404). Full suite: 1525 passed (`php artisan test`, no `--env`). (Frontend build: see the Phase 5 note above — the portal gets its own Vite theme, which is also what makes these pages' layout classes compile.)
+
+Commit status: not committed — waiting for owner approval, together with Phase 1, the plan file, and Phase 2 (all still pending from before this phase).
+
+## 2026-09-28 - Reseller portal Phase 2: portal foundation
+
+Reason — owner said "phase 2 এর কাজ শুরু কর" (start Phase 2's work). Phase 2 needed two of the five §2.1 questions answered first (domain approach, and how apply/account-creation works); asked both via AskUserQuestion rather than guessing, per CLAUDE.md's "never invent business rules" rule.
+
+Owner's answers (2026-09-28):
+- Domain: `reseller.<company-domain>` by default, plus an optional custom-domain field in Company Management (the plan's recommended option).
+- Apply + account: applying in the portal also sets the password — approval alone is enough to log in, no separate storefront registration. Same account can also log in as a shop customer (recommended option).
+
+What changed:
+- A second Filament panel (`reseller`) at `/portal`, reachable only at `reseller.<company-domain>` or a company's own custom portal domain — nowhere else. Off that host, `/portal` is a 404; on that host, everything else (including `/admin`) redirects to `/portal`.
+- **Become a reseller** (footer/menu, and the storefront account page) now points at the portal's apply form. Applying sets a password immediately, so approval alone is enough to log in.
+- Login is phone-or-email + password, the same rule and rate limiting the storefront already uses (not Filament's own email-only lookup).
+- After logging in: pending sees "under review", rejected is kept out (403, with the admin's note if there is one), approved sees a "dashboard coming soon" placeholder — the real dashboard (orders, products, earnings, withdrawals) is Phase 3–5.
+- Password reset inside the portal itself is deliberately not in this phase — the storefront's own forgot-password page still works for the same account. Small follow-up, not forgotten.
+
+Business rules used (owner-confirmed, not invented): the two §2.1 answers above. Everything else in this phase is a technical implementation detail already laid out in `13_RESELLER_PORTAL_PLAN.md` §2.2 (second panel, `customer` guard, middleware-based host resolution instead of Filament's own domain matching, since each company's domain is arbitrary — not a subdomain of one shared root).
+
+Needs owner confirmation: still open — §2.1 Q2 (how much of a buyer's info a reseller sees on an order) and Q3 (branding shown on the reseller's own store page), both needed before Phase 3 and Phase 5 respectively. Q5 (redirecting the old "Your Store" page) is Phase 6, not needed yet.
+
+Needs Bangla review: the 12 new keys added to `lang/bn.json` this phase (portal/apply strings) — machine-reasonable translations, not owner-reviewed.
+
+Tests: new `ResellerPortalTest` (9 tests — host isolation both directions, disabled-module 404, custom domain override, cross-company 403, pending/rejected/approved status pages, apply creates a pending login). Full suite: 1519 passed (`php artisan test`, no `--env`). No frontend assets changed, so `npm run build` was not needed.
+
+Commit status: not committed — waiting for owner approval, together with Phase 1 and the plan file (both still pending from before this phase).
+
+## 2026-09-28 - Reseller portal Phase 1: store-link fix
+
+Reason — owner asked for a reseller dashboard and the store-link fix; the plan (`13_RESELLER_PORTAL_PLAN.md`) splits the work into 6 phases, each its own commit. This is Phase 1, which needs none of the owner's still-open §2.1 answers (domain, customer PII, store branding, apply flow, old page redirect) — those gate Phase 2 onward.
+
+What changed:
+- New `App\Support\StorefrontUrl` helper picks the right route name (staff preview → reseller's mini-store → main store) for every storefront link, instead of the old two-way `isset($previewSlug) ? preview : main-store` check that never considered "inside a reseller's store."
+- Replaced that old pattern at all 57 call sites across the shared layout, every theme's homepage (Built-in, Marketplace Pro, Noor Solar), and the product/category/cart/checkout/account/offer/page views.
+- Added `GET /store/{resellerSlug}` as the reseller store's own home page.
+- Fixed `CartController::redirectToCheckout()`, which always redirected "buy now" to the main-store checkout even from inside a reseller's store.
+- Checkout, order tracking, account and offer pages intentionally still use the main-store URL — no reseller-store route exists for them yet, and the session (`ResellerPricing`) already keeps the price/commission correct there. Nothing about pricing or commission changed in this phase.
+
+No user-visible text changed (this is route-resolution only), so no new `lang/*.json` keys.
+
+Tests: `StorefrontResellerLinkScopeTest` (new) renders every reseller-store page across all 3 registered themes and asserts every product/category/cart/checkout link in the HTML stays under `/store/{slug}`. Full suite: 1510 passed (`php artisan test`, no `--env`). No frontend assets changed, so `npm run build` was not needed.
+
+Needs owner confirmation: none for this phase — Phase 2 (the portal itself) is blocked on the 5 questions in `13_RESELLER_PORTAL_PLAN.md` §2.1.
+
+Needs Bangla review: none (no new strings).
+
+Commit status: not committed — waiting for owner approval. The plan file `13_RESELLER_PORTAL_PLAN.md` itself (sent earlier, still untracked) would be committed together with this.
+
 ## 2026-09-28 - Reseller preview security fix + reseller prices, commission and withdrawals
 
 Reason — owner asked for the reseller module's status, then: "নিরাপত্তার ফাঁকটা আগে ঠিক করে দাও, আর কমিশন/পেয়াউট এড কর" (fix the security gap first, then add commission/payout).

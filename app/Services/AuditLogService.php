@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AuditLog;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -23,7 +24,7 @@ class AuditLogService
 
         AuditLog::query()->create([
             'company_id' => $companyId,
-            'user_id' => Auth::id(),
+            'user_id' => $this->actorId(),
             'action' => $action,
             'auditable_type' => $auditableType,
             'auditable_id' => $auditableId,
@@ -32,6 +33,20 @@ class AuditLogService
             'ip_address' => $request?->ip(),
             'user_agent' => $request?->userAgent(),
         ]);
+    }
+
+    /**
+     * audit_logs.user_id points at staff users. On the reseller portal the
+     * default guard is switched to "customer" (Filament's Authenticate
+     * middleware), so Auth::id() there is a reseller's id -- which is not a
+     * user id and must never be stored as one (a foreign-key error at best,
+     * another person's name on the log at worst). Only staff are attributed.
+     */
+    protected function actorId(): ?int
+    {
+        $actor = Auth::user();
+
+        return $actor instanceof User ? $actor->getKey() : null;
     }
 
     protected function companyIdFor(string|Model $auditable): ?int
