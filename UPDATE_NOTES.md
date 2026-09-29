@@ -2,6 +2,28 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-29 - Documentation articles list: a View button to open the public page
+
+Reason — owner (screenshot of the articles list): "লিস্টে আর্টিকেল পেজের সোয়া করার জন্য কোন লিংক নেই। আর্টিক্যাল শো বাড়ানোর জন্য একটা লিঙ্ক বাটন যুক্ত কর।" (There's no link in the list to view the article page. Add a link button for it.)
+
+What changed:
+- **Settings → Documentation → articles list:** a **View** button (opens in a new tab) next to Edit, linking straight to the article's `/guides/{category}/{article}` page. Only shown when the article is both Published and Publicly shareable — for anything else, that page doesn't exist (404s), so the button is hidden rather than shown and broken.
+- Table query now eager-loads the `category` relationship (needed to build the URL; also removes an existing N+1 on the Category column).
+
+Important changed/new files:
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `lang/en.json`, `lang/bn.json`
+- `tests/Feature/DocumentationModuleTest.php` (+1 test: the View action is visible with the right URL for a published+public article, hidden for a published-but-internal one)
+- `CHANGELOG.md`
+
+Verification:
+- `DocumentationModuleTest`: 9 passed.
+- Full `php artisan test` (plain, no `--env`): **1552 passed, 0 failed** (10249 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: not committed — waiting for owner approval.
+
 ## 2026-09-29 - Documentation article: "Publicly shareable" toggle
 
 Reason — owner: "internal only" বনাম "publicly shareable" এই ধরনের ফ্ল্যাগ যুক্ত করে দাও। (Add a flag for "internal only" vs "publicly shareable".) This was the gap flagged as "Not done" in the Public Guides entry below: every published article was visible at `/guides` with no way to keep some staff-only.

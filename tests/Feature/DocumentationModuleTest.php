@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Pages\Documentation;
 use App\Filament\Resources\DocumentationArticles\DocumentationArticleResource;
 use App\Filament\Resources\DocumentationArticles\Pages\CreateDocumentationArticle;
+use App\Filament\Resources\DocumentationArticles\Pages\ListDocumentationArticles;
 use App\Models\DocumentationArticle;
 use App\Models\DocumentationCategory;
 use App\Models\User;
@@ -130,6 +131,37 @@ class DocumentationModuleTest extends TestCase
             ->set('data.slug', 'custom-slug')
             ->set('data.title', 'How To Track Orders')
             ->assertSet('data.slug', 'custom-slug');
+    }
+
+    public function test_the_view_action_opens_the_public_guide_page_only_for_published_public_articles(): void
+    {
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($user);
+
+        $category = DocumentationCategory::query()->create(['name' => 'Orders', 'slug' => 'orders', 'sort_order' => 1]);
+
+        $publicArticle = DocumentationArticle::query()->create([
+            'documentation_category_id' => $category->getKey(),
+            'title' => 'How to create an order',
+            'slug' => 'how-to-create-an-order',
+            'content' => '<p>...</p>',
+            'is_published' => true,
+            'is_public' => true,
+        ]);
+
+        $internalArticle = DocumentationArticle::query()->create([
+            'documentation_category_id' => $category->getKey(),
+            'title' => 'Approve a voucher',
+            'slug' => 'approve-a-voucher',
+            'content' => '<p>...</p>',
+            'is_published' => true,
+            'is_public' => false,
+        ]);
+
+        Livewire::test(ListDocumentationArticles::class)
+            ->assertTableActionVisible('viewGuidePage', $publicArticle)
+            ->assertTableActionHidden('viewGuidePage', $internalArticle)
+            ->assertTableActionHasUrl('viewGuidePage', route('guides.show', ['orders', 'how-to-create-an-order']), record: $publicArticle);
     }
 
     public function test_markdown_import_converts_headings_bold_lists_and_tables_to_rich_html(): void

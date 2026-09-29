@@ -144,6 +144,7 @@ class DocumentationArticleResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn ($query) => $query->with('category'))
             ->columns([
                 TextColumn::make('title')
                     ->label(__('Title'))
@@ -173,6 +174,13 @@ class DocumentationArticleResource extends Resource
             ])
             ->defaultSort('sort_order')
             ->recordActions([
+                Action::make('viewGuidePage')
+                    ->label(__('View'))
+                    ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
+                    ->color('gray')
+                    ->url(fn (DocumentationArticle $record): string => route('guides.show', [$record->category->slug, $record->slug]))
+                    ->openUrlInNewTab()
+                    ->visible(fn (DocumentationArticle $record): bool => $record->is_published && $record->is_public),
                 EditAction::make(),
             ])
             ->toolbarActions([

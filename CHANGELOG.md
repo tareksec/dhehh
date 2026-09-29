@@ -11,10 +11,12 @@ All notable production changes to Business Dashboard are documented here.
 - **Documentation article slug auto-fills from the title.** Type a Title and the Slug fills in on its own — no need to type it manually. Editing the Slug yourself is still possible; once it has a value, typing in Title no longer overwrites it.
 - **Public Guides page for sharing Documentation with people outside the admin panel.** `/guides` lists every published *and* publicly-shareable Documentation article by category, and `/guides/{category}/{article}` shows one — no login required. Meant for people who need to read the guides (e.g. an external developer team) but should not get an admin panel account: Dashboard and other admin pages show business data to any signed-in user regardless of permissions, so a limited account is not a safe way to share this.
 - **Documentation article: "Publicly shareable" toggle.** Off by default, so nothing is exposed at `/guides` unless deliberately turned on. An article stays visible to signed-in staff in the Documentation menu either way — the toggle only controls whether it also shows up at the public, no-login `/guides` page.
+- **View button on the Documentation articles list.** Opens the article's public `/guides` page in a new tab. Only shown for articles that are both Published and Publicly shareable — otherwise the page wouldn't exist to view.
 
 **Technical Notes:**
 - Title's `afterStateUpdated` sets `slug` to `Str::slug($title)` only while `slug` is still empty — same pattern as `OfferForm`.
 - New `DocumentationGuideController` (`index`, `show`) + `resources/views/guides/*` + `resources/views/components/layouts/guides.blade.php`. Only articles that are both `is_published` and `is_public` are queryable there; anything else 404s (unpublished, or published-but-internal). The internal Documentation page and its `is_published`-only filter are unchanged. New migration `2026_09_29_090000_add_is_public_to_documentation_articles_table` (default `false`). `/docs` was already taken by the existing product marketing page, so this uses `/guides`.
+- `DocumentationArticleResource` table: `viewGuidePage` action, visible only when `is_published && is_public`; table query eager-loads `category` to avoid an N+1 for both this action and the existing Category column.
 
 ## [2.38.0] - 2026-09-29
 

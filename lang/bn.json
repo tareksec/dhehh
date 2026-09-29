@@ -538,6 +538,7 @@
     "Videos generated": "তৈরি ভিডিও",
     "Videos made by these roles land as “pending review”. The video is still generated, but it cannot be put on a product or offer until someone with the “approve others’ videos” permission approves it in the Video Library.": "এই রোলগুলোর বানানো ভিডিও “রিভিউয়ের অপেক্ষায়” অবস্থায় থাকবে। ভিডিও তৈরি হবে, কিন্তু “অন্যদের ভিডিও অনুমোদন” পারমিশন থাকা কেউ Video Library-তে অনুমোদন না দেওয়া পর্যন্ত এটি কোনো প্রোডাক্ট বা অফারে দেওয়া যাবে না।",
     "Videos you create in the Video Generation tool are collected here.": "Video Generation টুলে তৈরি ভিডিওগুলো এখানে জমা হয়।",
+    "View": "দেখুন",
     "View all": "সব দেখুন",
     "View all products": "সব পণ্য দেখুন",
     "Vision model and key that read expense photos and pasted text into draft expenses.": "যে ভিশন মডেল ও কী খরচের ছবি ও পেস্ট করা লেখা পড়ে ড্রাফট খরচ বানায়।",
