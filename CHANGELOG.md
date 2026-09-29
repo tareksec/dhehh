@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.39.0] - 2026-09-29
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -15,7 +17,6 @@ All notable production changes to Business Dashboard are documented here.
 **Technical Notes:**
 - Title's `afterStateUpdated` sets `slug` to `Str::slug($title)` only while `slug` is still empty — same pattern as `OfferForm`.
 - New `DocumentationGuideController` (`index`, `show`) + `resources/views/guides/*` + `resources/views/components/layouts/guides.blade.php`. Only articles that are both `is_published` and `is_public` are queryable there; anything else 404s (unpublished, or published-but-internal). The internal Documentation page and its `is_published`-only filter are unchanged. New migration `2026_09_29_090000_add_is_public_to_documentation_articles_table` (default `false`). `/docs` was already taken by the existing product marketing page, so this uses `/guides`.
-
 ## [2.38.0] - 2026-09-29
 
 **Release type:** Minor Feature Update
