@@ -20,6 +20,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -28,6 +29,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
+use Illuminate\Support\Str;
 use League\CommonMark\GithubFlavoredMarkdownConverter;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
@@ -73,11 +75,16 @@ class DocumentationArticleResource extends Resource
                         ->label(__('Published'))
                         ->default(true)
                         ->helperText(__('Unpublished articles are hidden from the Documentation menu.')),
+                    Toggle::make('is_public')
+                        ->label(__('Publicly shareable'))
+                        ->default(false)
+                        ->helperText(__('Off by default: visible only to signed-in staff. Turn on to also show this article at /guides — a read-only page anyone with the link can open without logging in.')),
                     TextInput::make('title')
                         ->label(__('Title'))
                         ->required()
                         ->maxLength(255)
-                        ->live(onBlur: true),
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(fn (Get $get, Set $set, ?string $state) => $get('slug') ? null : $set('slug', Str::slug($state ?? ''))),
                     TextInput::make('slug')
                         ->label(__('Slug'))
                         ->required()
@@ -149,6 +156,10 @@ class DocumentationArticleResource extends Resource
                     ->sortable(),
                 IconColumn::make('is_published')
                     ->label(__('Published'))
+                    ->boolean()
+                    ->sortable(),
+                IconColumn::make('is_public')
+                    ->label(__('Public'))
                     ->boolean()
                     ->sortable(),
                 TextColumn::make('sort_order')

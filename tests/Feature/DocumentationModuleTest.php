@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\Documentation;
 use App\Filament\Resources\DocumentationArticles\DocumentationArticleResource;
+use App\Filament\Resources\DocumentationArticles\Pages\CreateDocumentationArticle;
 use App\Models\DocumentationArticle;
 use App\Models\DocumentationCategory;
 use App\Models\User;
@@ -108,6 +109,27 @@ class DocumentationModuleTest extends TestCase
         $this->actingAs($user);
 
         $this->assertTrue(DocumentationArticleResource::canViewAny());
+    }
+
+    public function test_typing_a_title_auto_fills_an_empty_slug(): void
+    {
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($user);
+
+        Livewire::test(CreateDocumentationArticle::class)
+            ->set('data.title', 'How To Track Orders')
+            ->assertSet('data.slug', 'how-to-track-orders');
+    }
+
+    public function test_typing_a_title_never_overwrites_an_already_filled_slug(): void
+    {
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($user);
+
+        Livewire::test(CreateDocumentationArticle::class)
+            ->set('data.slug', 'custom-slug')
+            ->set('data.title', 'How To Track Orders')
+            ->assertSet('data.slug', 'custom-slug');
     }
 
     public function test_markdown_import_converts_headings_bold_lists_and_tables_to_rich_html(): void

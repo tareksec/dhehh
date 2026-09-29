@@ -8,9 +8,9 @@ use Illuminate\Support\Str;
 
 class DocumentationArticle extends Model
 {
-    protected $fillable = ['documentation_category_id', 'title', 'slug', 'content', 'sort_order', 'is_published'];
+    protected $fillable = ['documentation_category_id', 'title', 'slug', 'content', 'sort_order', 'is_published', 'is_public'];
 
-    protected $casts = ['is_published' => 'boolean'];
+    protected $casts = ['is_published' => 'boolean', 'is_public' => 'boolean'];
 
     protected static function booted(): void
     {

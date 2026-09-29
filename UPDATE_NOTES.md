@@ -2,6 +2,77 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-29 - Documentation article: "Publicly shareable" toggle
+
+Reason — owner: "internal only" বনাম "publicly shareable" এই ধরনের ফ্ল্যাগ যুক্ত করে দাও। (Add a flag for "internal only" vs "publicly shareable".) This was the gap flagged as "Not done" in the Public Guides entry below: every published article was visible at `/guides` with no way to keep some staff-only.
+
+What changed:
+- New `is_public` column on `documentation_articles` (boolean, default `false` — nothing already published becomes public by accident).
+- **Settings → Documentation → article form:** a **Publicly shareable** toggle, off by default, next to Published.
+- `/guides` and `/guides/{category}/{article}` now require both `is_published` **and** `is_public` — a published-but-internal article 404s there, same as an unpublished one.
+- The internal Documentation menu (signed-in staff) is unchanged: it still shows every published article regardless of this flag, since staff should see everything.
+
+Important changed/new files:
+- `database/migrations/2026_09_29_090000_add_is_public_to_documentation_articles_table.php` (new)
+- `app/Models/DocumentationArticle.php`, `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`, `app/Http/Controllers/DocumentationGuideController.php`
+- `lang/en.json`, `lang/bn.json`
+- `tests/Feature/PublicGuidesTest.php` (+1 test: a published-but-not-public article isn't listed and 404s directly; existing tests updated to mark their articles `is_public`)
+- `CHANGELOG.md`
+
+Verification:
+- `PublicGuidesTest`: 4 passed. `DocumentationModuleTest`: 8 passed (confirms the internal page is unaffected).
+- Full `php artisan test` (plain, no `--env`): **1551 passed, 0 failed** (10239 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: not committed — waiting for owner approval.
+
+## 2026-09-29 - Documentation article: slug auto-fills from title
+
+Reason — owner: "ডকুমেন্টেশনের টাইটেল লেখার পর স্লাগে ক্লিক করলে অটো টাইটেল থেকে স্ল্যাগ জেনারেট হয়ে যাবে ম্যানুয়ালে যেন লিখতে না হয়।" (After typing the title, clicking into the slug field should auto-generate the slug from the title, so it never has to be typed by hand.)
+
+What changed:
+- **Settings → Documentation → article form:** the Title field now sets Slug to `Str::slug(title)` automatically, the same pattern already used on `ExpenseCategoryResource`. It only fills Slug while it's still empty — matching `OfferForm`'s convention — so fixing a typo in an existing article's title never silently changes an already-saved slug.
+
+Important changed/new files:
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `tests/Feature/DocumentationModuleTest.php` (+2 tests: auto-fill on an empty slug, and no overwrite once slug already has a value)
+- `CHANGELOG.md`
+
+Verification:
+- `DocumentationModuleTest`: 8 passed.
+- Full `php artisan test` (plain, no `--env`): **1547 passed, 0 failed** (10218 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: not committed — waiting for owner approval (bundled with the public Guides page below in the same commit).
+
+## 2026-09-29 - Public Guides page: share Documentation with people outside the admin panel
+
+Reason — owner: "এই ডকুমেন্টেশন ডেভলপার টিমের সাথে কিভাবে শেয়ার করব?" (How do I share this documentation with the developer team?) Clarified the developer team is external and would need it from the Documentation module being written in Filament, not the separate `docs/api/` files already shared. Flagged first: the in-app Documentation page requires only `Auth::check()`, so giving them a limited admin account would still expose Dashboard business data — `BusinessOverview`, `SalesPurchaseTrend` and `TopBusinessPerformers` widgets have no `canView()` permission gate at all, they render for any signed-in user. Owner picked building a public page over granting a login or exporting a static file.
+
+What changed:
+- **`/guides`** (list, by category) and **`/guides/{category-slug}/{article-slug}`** (one article) — public, no login, read-only mirror of the Documentation module. Only `is_published` articles are ever queryable; an unpublished or unknown slug 404s, same as an unpublished `StorefrontPage`.
+- `/docs` was already in use (the existing static product-marketing page, `resources/views/marketing/docs.blade.php` — install/branding/backups instructions for whoever runs this ERP software, unrelated to what an owner writes in the Documentation module), so this uses `/guides` instead.
+- Minimal standalone layout (`resources/views/components/layouts/guides.blade.php`) — no admin branding, `noindex, nofollow` meta tag since this isn't meant to be a public marketing surface, just a link to hand to whoever needs it.
+
+Not done: no way yet to mark a category/article "internal only" vs "safe to share publicly" — every published article is visible at `/guides` to anyone with the link. If some guides should stay admin-only, that needs a separate flag before writing anything sensitive into the module.
+
+Important changed/new files:
+- `app/Http/Controllers/DocumentationGuideController.php` (new)
+- `resources/views/guides/{index,show}.blade.php`, `resources/views/components/layouts/guides.blade.php` (new)
+- `routes/web.php`
+- `tests/Feature/PublicGuidesTest.php` (new: published articles listed and rendered without auth; unpublished 404s both from the index and directly)
+- `CHANGELOG.md`
+
+Verification:
+- `PublicGuidesTest`: 3 passed.
+- Full `php artisan test` (plain, no `--env`): **1550 passed, 0 failed** (10225 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: not committed — waiting for owner approval.
+
 ## 2026-09-28 - Documentation "Import Markdown": add file upload
 
 Reason — owner, after seeing the Import Markdown modal (screenshot): "এইটা কি এড করছ? ফাইল ইমপোর্ট এর অপশন কই?" (asked where the file-import option was — the modal only had a paste box, no file picker). Confirmed and added it: pasting a long document on mobile is painful.
