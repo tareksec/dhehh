@@ -17,12 +17,12 @@ class Investor extends Model
 
     public const STATUS_WITHDRAWN = 'withdrawn';
 
-    protected $fillable = ['company_id', 'name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'is_channel_partner', 'channel_partner_change_reason', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
+    protected $fillable = ['company_id', 'name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'channel_partner_change_reason', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
 
     // nid_number / nominee_nid_or_passport are encrypted at rest (v3 P3) --
     // same `encrypted` cast this app already uses for other sensitive
     // columns (ConversationChannel tokens, StorefrontCartRecord email).
-    protected $casts = ['date_of_birth' => 'date', 'is_channel_partner' => 'boolean', 'nid_number' => 'encrypted', 'nominee_nid_or_passport' => 'encrypted'];
+    protected $casts = ['date_of_birth' => 'date', 'nid_number' => 'encrypted', 'nominee_nid_or_passport' => 'encrypted'];
 
     protected static function booted(): void
     {
@@ -45,12 +45,8 @@ class Investor extends Model
                 }
             }
 
-            if ($investor->channel_partner_id && $investor->exists && (int) $investor->channel_partner_id === (int) $investor->getKey()) {
-                throw ValidationException::withMessages(['channel_partner_id' => 'An investor cannot be their own channel partner.']);
-            }
-
             if ($investor->channel_partner_id) {
-                $partner = self::query()->find($investor->channel_partner_id);
+                $partner = ChannelPartner::query()->withoutGlobalScopes()->find($investor->channel_partner_id);
 
                 if (! $partner || (int) $partner->company_id !== (int) $investor->company_id) {
                     throw ValidationException::withMessages(['channel_partner_id' => 'The channel partner must belong to the same company.']);
@@ -75,14 +71,10 @@ class Investor extends Model
         });
     }
 
+    /** The channel partner who brought this investor in (a separate record, not an investor). */
     public function channelPartner()
     {
-        return $this->belongsTo(self::class, 'channel_partner_id');
-    }
-
-    public function referredInvestors()
-    {
-        return $this->hasMany(self::class, 'channel_partner_id');
+        return $this->belongsTo(ChannelPartner::class, 'channel_partner_id');
     }
 
     public function investments()
@@ -93,12 +85,6 @@ class Investor extends Model
     public function settlementPayouts()
     {
         return $this->hasMany(SettlementPayout::class);
-    }
-
-    /** Payouts this investor has received as a channel partner (v3 P2.1). */
-    public function channelPartnerPayouts()
-    {
-        return $this->hasMany(ChannelPartnerPayout::class);
     }
 
     public function documents()
@@ -197,10 +183,5 @@ class Investor extends Model
     public function totalProfitReceivedLifetime(): float
     {
         return (float) $this->settlementPayouts()->where('payment_status', 'paid')->sum('profit_share_amount');
-    }
-
-    public function totalChannelPartnerPayoutsPaidLifetime(): float
-    {
-        return (float) $this->channelPartnerPayouts()->where('payment_status', 'paid')->sum('amount');
     }
 }

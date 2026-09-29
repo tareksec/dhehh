@@ -22,11 +22,11 @@ class InvestorDraft extends Model
     public const SOURCE_TEXT = 'text';
 
     /** Columns copied onto the Investor when the draft is confirmed. */
-    public const INVESTOR_FIELDS = ['name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'is_channel_partner', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
+    public const INVESTOR_FIELDS = ['name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
 
-    protected $fillable = ['company_id', 'batch_id', 'source', 'source_name', 'source_row', 'name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'is_channel_partner', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address', 'existing_investor_id', 'project_id', 'investment_amount', 'payment_method', 'invested_at', 'import_notes', 'created_by'];
+    protected $fillable = ['company_id', 'batch_id', 'source', 'source_name', 'source_row', 'name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address', 'existing_investor_id', 'project_id', 'investment_amount', 'payment_method', 'invested_at', 'import_notes', 'created_by'];
 
-    protected $casts = ['date_of_birth' => 'date', 'is_channel_partner' => 'boolean', 'nid_number' => 'encrypted', 'nominee_nid_or_passport' => 'encrypted', 'import_notes' => 'array', 'investment_amount' => 'decimal:2', 'invested_at' => 'date'];
+    protected $casts = ['date_of_birth' => 'date', 'nid_number' => 'encrypted', 'nominee_nid_or_passport' => 'encrypted', 'import_notes' => 'array', 'investment_amount' => 'decimal:2', 'invested_at' => 'date'];
 
     /** Project statuses that still accept new investments. */
     public const OPEN_PROJECT_STATUSES = ['open', 'running'];
@@ -42,7 +42,7 @@ class InvestorDraft extends Model
 
     public function channelPartner()
     {
-        return $this->belongsTo(Investor::class, 'channel_partner_id');
+        return $this->belongsTo(ChannelPartner::class, 'channel_partner_id');
     }
 
     /** The investor this draft adds a new investment to, instead of creating a new investor. */

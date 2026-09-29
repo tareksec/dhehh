@@ -80,16 +80,6 @@ class Investment extends Model
                     throw ValidationException::withMessages(['override_reason' => 'A reason is required to add an investment after the window has closed.']);
                 }
             }
-
-            $otherPartnerId = $project->investments()
-                ->when($investment->exists, fn ($query) => $query->whereKeyNot($investment->getKey()))
-                ->join('investors', 'investors.id', '=', 'investments.investor_id')
-                ->whereNotNull('investors.channel_partner_id')
-                ->value('investors.channel_partner_id');
-
-            if ($otherPartnerId && $investor->channel_partner_id && (int) $otherPartnerId !== (int) $investor->channel_partner_id) {
-                throw ValidationException::withMessages(['investor_id' => 'A project currently supports only one channel partner.']);
-            }
         });
     }
 

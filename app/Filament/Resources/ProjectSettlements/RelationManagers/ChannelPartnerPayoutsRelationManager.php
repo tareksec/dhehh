@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ProjectSettlements\RelationManagers;
 
+use App\Filament\Resources\ChannelPartners\ChannelPartnerResource;
 use App\Filament\Resources\Vouchers\VoucherResource;
 use App\Models\ChannelPartnerPayout;
 use App\Services\Investment\InvestmentLedgerService;
@@ -31,7 +32,7 @@ class ChannelPartnerPayoutsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table->columns([
-            TextColumn::make('investor.name')->label('Channel Partner'),
+            TextColumn::make('channelPartner.name')->label('Channel Partner')->url(fn (ChannelPartnerPayout $record): ?string => $record->channel_partner_id ? ChannelPartnerResource::getUrl('view', ['record' => $record->channel_partner_id]) : null),
             TextColumn::make('amount')->moneyWithoutTrailingZeroes('BDT'),
             TextColumn::make('payment_status')->badge(),
             TextColumn::make('paid_at')->date()->placeholder('-'),

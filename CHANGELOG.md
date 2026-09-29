@@ -9,10 +9,46 @@ All notable production changes to Business Dashboard are documented here.
 ### Added
 
 - **Remove link button in the Documentation article editor.** Click inside a link and press the new "Remove link" (broken-chain) button in the toolbar to remove the link and keep the text — no need to retype it.
-- **View button on the Documentation articles list.** Opens the article's public `/guides` page in a new tab. Only shown for articles that are both Published and Publicly shareable — otherwise the page wouldn't exist to view.
 
 **Technical Notes:**
 - Filament's `RichEditor` has no built-in unlink tool, so `DocumentationArticleResource` registers a custom `unlink` `RichEditorTool` (`extendMarkRange('link').unsetLink()`) and lists it in `toolbarButtons()` next to `link`.
+
+## [2.41.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Channel partners are now separate from investors.** A new **Investments → Channel Partners** section keeps each partner's own record: name, phone, address, **NID / passport as the partner ID** (it can't repeat, and Bangla digits and spaces don't matter), a payment account (bKash / Nagad / Rocket / bank / cash, with account number, account name, bank and branch), notes, and an active switch.
+  - **Accounts on the partner page:** how many investors they brought in, those investors' active capital, and the commission earned, paid and due. There are tabs for the investors they brought in, their commission (one row per settlement, with a link to the voucher), and their documents.
+  - **Documents:** new types for the channel partner's **NID / passport copy** and **agreement**. Like investor NID copies, only users with `investments.manage` can see or download them.
+  - A partner who has investors or payouts can't be deleted.
+
+### Changed
+
+- **Channel partners no longer come from the investor list.** On the investor form, in the import dialogs, in the draft review and in **Assign channel partner**, the channel partner is picked from the Channel Partners list. The investor form's "This investor is also a Channel Partner" switch, the "Partner" column, the "Channel Partners" filter and the partner payout tab on investors are gone. Each investor still shows the partner who brought them, and the **Channel Partner** filter on the investor list still works.
+- **A project can have several channel partners.** The settlement pays each partner separately: the project's channel-partner share, in proportion to the capital of the investors that partner brought in. Investors without a partner still add to the company's share, as before. The old rule "a project currently supports only one channel partner" is removed.
+- **Import:** a row's channel-partner column is matched against Channel Partners by partner ID (NID), phone or exact name. The "is channel partner" column is no longer read.
+
+**Technical Notes:**
+- New migration `2026_09_28_150000_create_channel_partners_table`. Run `php artisan migrate --force`. It is not reversible. What it does:
+  - creates `channel_partners`.
+  - copies every investor who acted as a partner (flagged, named as someone's partner, or paid a partner payout) into it, keeping `legacy_investor_id`.
+  - repoints `investors.channel_partner_id` and `investor_drafts.channel_partner_id` to `channel_partners`.
+  - moves `channel_partner_payouts.investor_id` to `channel_partner_id`, with one payout per partner per settlement.
+  - drops `is_channel_partner` from `investors` and `investor_drafts`.
+  - the old investor rows are kept because they may have their own investments. A row that was only a partner still appears in the investor list and can be deleted there if it has no investments.
+- New `ChannelPartner` model (`BelongsToCompany`, `User::MODEL_MODULES` → `investments`, audited, added to `MultiCompanyIsolationTest`) and `ChannelPartnerResource`, with `ReferredInvestorsRelationManager`, `PayoutsRelationManager` and the shared `DocumentsRelationManager`. `PartnerPayoutsRelationManager` on investors is deleted.
+- `SettlementService::allocateProfit()` returns `partner_rows` (partner id => amount), and one `ChannelPartnerPayout` is created per partner. `Investment` no longer rejects a second partner in a project.
+## [2.40.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **View button on the Documentation articles list.** Opens the article's public `/guides` page in a new tab. Only shown for articles that are both Published and Publicly shareable — otherwise the page wouldn't exist to view.
+
+**Technical Notes:**
 - `DocumentationArticleResource` table: `viewGuidePage` action, visible only when `is_published && is_public`; table query eager-loads `category` to avoid an N+1 for both this action and the existing Category column.
 
 ## [2.39.0] - 2026-09-29

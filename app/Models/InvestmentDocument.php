@@ -23,10 +23,16 @@ class InvestmentDocument extends Model
 
     public const CATEGORY_PROJECT_CONTRACT = 'project_contract';
 
+    public const CATEGORY_PARTNER_NID = 'partner_nid';
+
+    public const CATEGORY_PARTNER_AGREEMENT = 'partner_agreement';
+
     public const CATEGORIES = [
         self::CATEGORY_INVESTOR_NID => 'Investor NID / Passport copy',
         self::CATEGORY_NOMINEE_NID => 'Nominee NID / Passport copy',
         self::CATEGORY_PROJECT_CONTRACT => 'Project contract (same for all investors)',
+        self::CATEGORY_PARTNER_NID => 'Channel partner NID / Passport copy',
+        self::CATEGORY_PARTNER_AGREEMENT => 'Channel partner agreement',
         'cheque_copy' => 'Cheque copy',
         'stamp_copy' => 'Stamp copy',
         'settlement_sheet' => 'Settlement Sheet',
@@ -42,7 +48,7 @@ class InvestmentDocument extends Model
      * Identity papers and contracts: only users with `investments.manage`
      * may list or download them (owner's rule).
      */
-    public const SENSITIVE_CATEGORIES = [self::CATEGORY_INVESTOR_NID, self::CATEGORY_NOMINEE_NID, self::CATEGORY_PROJECT_CONTRACT, 'signed_contract', 'cheque_copy', 'stamp_copy'];
+    public const SENSITIVE_CATEGORIES = [self::CATEGORY_INVESTOR_NID, self::CATEGORY_NOMINEE_NID, self::CATEGORY_PROJECT_CONTRACT, self::CATEGORY_PARTNER_NID, self::CATEGORY_PARTNER_AGREEMENT, 'signed_contract', 'cheque_copy', 'stamp_copy'];
 
     protected $fillable = ['company_id', 'documentable_type', 'documentable_id', 'file_path', 'file_type', 'category', 'label', 'uploaded_by'];
 
@@ -71,7 +77,8 @@ class InvestmentDocument extends Model
 
     public function isSensitive(): bool
     {
-        return in_array($this->category, self::SENSITIVE_CATEGORIES, true) || $this->documentable_type === (new Investor)->getMorphClass();
+        return in_array($this->category, self::SENSITIVE_CATEGORIES, true)
+            || in_array($this->documentable_type, [(new Investor)->getMorphClass(), (new ChannelPartner)->getMorphClass()], true);
     }
 
     public static function categoryLabel(?string $category): string

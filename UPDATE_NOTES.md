@@ -12,9 +12,78 @@ What changed:
 
 Files: `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`, `lang/en.json`, `lang/bn.json`, `tests/Feature/DocumentationModuleTest.php` (+1 test), `CHANGELOG.md`.
 
-Verification: `DocumentationModuleTest` 10 passed; full suite result below; Pint passed. Not verified in a browser (button behavior in the live editor not clicked through).
+Verification: `DocumentationModuleTest` 10 passed; full suite 1553 passed before merging main (re-run after merge below); Pint passed. Not verified in a browser (button behavior in the live editor not clicked through).
 
-Commit status: not committed — waiting for owner approval.
+Commit status: Committed and pushed to `claude/friendly-feynman-w4twzx` and `main` (owner approved: "হ্যাঁ, commit আর push কর").
+
+## 2026-09-28 - Channel partners separated from investors (own record, own accounts, several per project)
+
+Reason — owner: "চেনেল পার্টনার তো ইনভেস্টর লিস্ট থেকে আসবেনা। চেনেল পার্টনার সম্পূর্ণ আলাদা থাকবে তার হিসাব ও আলাদা হবে, ইনভেস্টরদের সাথে চ্যানেল পার্টনার কে মিশানো যাবেনা।" — channel partners must not come from the investor list, must be completely separate with their own accounts, and must not be mixed with investors.
+Answers to the follow-up questions:
+- The link stays per investor, as now: a partner earns only on the capital of the investors they brought in.
+- **Several partners per project.**
+- Fields to keep: name, phone, address, NID / passport (partner ID), payment account, and agreement and NID copies.
+
+What changed:
+- **Migration** `2026_09_28_150000` (irreversible; `down()` throws):
+  - creates `channel_partners` (company, name, phone, address, encrypted `nid_number` + `nid_hash`, payment_method, account_name/number, bank_name/branch, notes, is_active, legacy_investor_id).
+  - copies partner investors into it: flagged, referenced by investors or drafts, or paid a partner payout.
+  - drops and re-adds the FKs of `investors.channel_partner_id` and `investor_drafts.channel_partner_id` so they point at the copies.
+  - `channel_partner_payouts`: adds `channel_partner_id`, adds a unique index on (settlement_id, channel_partner_id), drops the old one-per-settlement unique index (looked up by its columns, because the name differs by driver) and drops `investor_id`.
+  - drops `is_channel_partner` from `investors` and `investor_drafts`.
+  - Verified on a scratch SQLite database migrated to just before this migration and seeded with a flagged partner investor, a referred investor and a paid ৳500 partner payout: the partner was copied with its name, phone, address, NID and a correct hash; the referred investor and the payout point at the new partner, and the payout is still ৳500 and paid.
+- **Models:**
+  - `ChannelPartner` (new): NID uniqueness per company like investors; `investors()`, `payouts()`, `documents()`, `referredCapital()`, `totalEarned/Paid/Due()`.
+  - `Investor::channelPartner()` now points at `ChannelPartner`. Removed from `Investor`: `referredInvestors()`, `channelPartnerPayouts()`, `totalChannelPartnerPayoutsPaidLifetime()`, the self-partner check and `is_channel_partner`.
+  - `InvestorDraft` points at `ChannelPartner`. `ChannelPartnerPayout` has `channelPartner()` instead of `investor()`.
+  - `InvestmentDocument` gets the categories `partner_nid` and `partner_agreement` (sensitive), and any document on a ChannelPartner is sensitive.
+- **Settlement:**
+  - `allocateProfit()` groups referred investments by partner and gives each partner `pool × their referred capital ÷ external capital`. `channel_payout` is the sum of those amounts.
+  - one `ChannelPartnerPayout` is created per partner.
+  - the "only one channel partner" checks are removed from `Investment` and `SettlementService`.
+  - the voucher purpose uses the partner's name.
+- **UI:**
+  - new `ChannelPartnerResource` (Investments cluster, sort 4). Its list shows the partner ID, investors brought in, commission earned and commission due; it has an Active filter.
+  - the view page has an Accounts section (investors, active capital, earned, paid, due), the payment account, and three tabs: investors brought in, commission (with voucher and settlement links) and documents.
+  - view needs `investments.view`; create/edit needs `investments.manage`; delete only when the partner has no investors and no payouts.
+  - the settlement's partner tab links to the partner.
+- **Investor side:**
+  - the partner switch, "Partner" column, "Channel Partners" filter, infolist lines and payout tab are removed.
+  - the channel partner select, the import/draft pickers and "Assign channel partner" list active `ChannelPartner`s.
+  - import finds the partner by NID, phone or exact name, and no longer reads `is_channel_partner` (`yes_values` config removed).
+
+Not changed, noted for the owner:
+- Old investor rows that only acted as partners stay in the investor list, because they may have investments. They can be deleted there once they have no investments.
+- Documents that were attached to those old investor rows were not moved to the partner. They are still on the investor record.
+
+Process note: while checking the migration I ran a one-off script whose "use an in-memory database" override did not take effect. It migrated this container's own git-ignored local dev database (`database/database.sqlite`, which had 1 company and no investors or vouchers) and the new migration stopped halfway. I made the migration re-runnable and finished it with `php artisan migrate` on that same local database. No demo, test or production data was involved. The migration check was then repeated on a separate scratch file, after confirming the connection pointed at it, and the file was deleted afterwards.
+
+**Needs Bangla review:** 22 new `lang/bn.json` keys (Channel Partners section and accounts), plus 2 changed texts (the import note for a partner not found, and the skipped-investor message of the bulk action).
+
+Important changed/new files:
+- `database/migrations/2026_09_28_150000_create_channel_partners_table.php`
+- `app/Models/{ChannelPartner (new),ChannelPartnerPayout,Investor,InvestorDraft,Investment,InvestmentDocument,User}.php`, `app/Providers/AppServiceProvider.php`
+- `app/Services/Investment/{SettlementService,InvestmentLedgerService,InvestorImportService}.php`, `config/investor_import.php`
+- `app/Filament/Resources/ChannelPartners/**` (new), `app/Filament/Resources/Investors/InvestorResource.php`, deleted `Investors/RelationManagers/PartnerPayoutsRelationManager.php`, `InvestorDrafts/InvestorDraftResource.php`, `ProjectSettlements/RelationManagers/ChannelPartnerPayoutsRelationManager.php`, `InvestmentProjects/RelationManagers/DocumentsRelationManager.php`
+- `lang/en.json`, `lang/bn.json`
+- tests: `ChannelPartnerTest.php` (new, 4 tests), `InvestmentSettlementTest.php`, `InvestorIdentityAndDocumentsTest.php`, `InvestorImportTest.php`, `MultiCompanyIsolationTest.php`
+
+Verification:
+- `ChannelPartnerTest`: 4 passed:
+  - created on its own page; never an investor row; filters investors; view page and "investors brought in" tab
+  - the NID partner ID is unique in any format
+  - partner agreement and NID copies are hidden and refused for an accountant (view only)
+  - an import row names its partner by the Bangla-digit NID
+- `InvestmentSettlementTest`: 60 passed, with rewritten tests:
+  - **two partners in one project are paid ৳6,000 and ৳4,000** (60/40 of the 10% pool on ৳100,000 profit), replacing the old "only one partner" test
+  - a partner with investors can't be deleted
+  - partner accounts (earned, paid, due) are on the partner, and the investor page has no partner tab
+  - the existing change-permission, audit, voucher and mark-paid tests now use `ChannelPartner`
+- Full `php artisan test` (plain, no `--env`): **1543 passed, 0 failed** (10231 assertions).
+- Pint passes on the changed files.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
 
 ## 2026-09-29 - Documentation articles list: a View button to open the public page
 

@@ -7,6 +7,7 @@ use App\Filament\Resources\Investors\Pages\CreateInvestor;
 use App\Filament\Resources\Investors\Pages\EditInvestor;
 use App\Filament\Resources\Investors\Pages\ListInvestors;
 use App\Filament\Resources\Investors\Pages\ViewInvestor;
+use App\Models\ChannelPartner;
 use App\Models\Company;
 use App\Models\Investment;
 use App\Models\InvestmentDocument;
@@ -225,25 +226,24 @@ class InvestorIdentityAndDocumentsTest extends TestCase
 
     public function test_many_investors_can_be_given_a_channel_partner_at_once(): void
     {
-        $partner = $this->investor('Partner', '01799999999', '9999999999', ['is_channel_partner' => true]);
-        $other = $this->investor('Other partner', '01788888888', '8888888888', ['is_channel_partner' => true]);
+        $partner = ChannelPartner::query()->create(['company_id' => $this->company->id, 'name' => 'Partner', 'phone' => '01799999999']);
+        $other = ChannelPartner::query()->create(['company_id' => $this->company->id, 'name' => 'Other partner', 'phone' => '01788888888']);
         $karim = $this->investor('Karim', '01711111111', '1479939603');
         $rahim = $this->investor('Rahim', '01722222222', '1901688455');
         $taken = $this->investor('Taken', '01733333333', '2852404322', ['channel_partner_id' => $other->id]);
 
         Livewire::test(ListInvestors::class)
-            ->callTableBulkAction('assignChannelPartner', [$karim, $rahim, $taken, $partner], ['channel_partner_id' => $partner->id])
+            ->callTableBulkAction('assignChannelPartner', [$karim, $rahim, $taken], ['channel_partner_id' => $partner->id])
             ->assertHasNoTableBulkActionErrors();
 
         $this->assertSame($partner->id, $karim->fresh()->channel_partner_id);
         $this->assertSame($partner->id, $rahim->fresh()->channel_partner_id);
         $this->assertSame($other->id, $taken->fresh()->channel_partner_id);
-        $this->assertNull($partner->fresh()->channel_partner_id);
     }
 
     public function test_an_import_can_set_the_channel_partner_for_its_new_investors(): void
     {
-        $partner = $this->investor('Partner', '01799999999', '9999999999', ['is_channel_partner' => true]);
+        $partner = ChannelPartner::query()->create(['company_id' => $this->company->id, 'name' => 'Partner', 'phone' => '01799999999']);
 
         app(InvestorImportService::class)->importText(
             "Name: Karim\nPhone: 01711111111\nNID: 1479939603\n\nName: Rahim\nPhone: 01722222222\nNID: 1901688455",

@@ -9,8 +9,8 @@ use App\Filament\Resources\Investors\Pages\EditInvestor;
 use App\Filament\Resources\Investors\Pages\ListInvestors;
 use App\Filament\Resources\Investors\Pages\ViewInvestor;
 use App\Filament\Resources\Investors\RelationManagers\InvestmentsRelationManager;
-use App\Filament\Resources\Investors\RelationManagers\PartnerPayoutsRelationManager;
 use App\Filament\Resources\Investors\RelationManagers\WithdrawalNoticesRelationManager;
+use App\Models\ChannelPartner;
 use App\Models\Company;
 use App\Models\Investment;
 use App\Models\InvestmentDocument;
@@ -31,18 +31,15 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -85,7 +82,7 @@ class InvestorResource extends Resource
                     }),
                 Select::make('channel_partner_id')
                     ->label('Channel Partner')
-                    ->relationship('channelPartner', 'name', fn ($query, ?Investor $record) => $query->when($record, fn ($q) => $q->whereKeyNot($record->getKey())))
+                    ->relationship('channelPartner', 'name')
                     ->searchable()->preload()
                     ->disabled(fn (?Investor $record): bool => filled($record?->getOriginal('channel_partner_id')) && ! (auth()->user()?->hasPermission('investments.manage_channel_partner') ?? false))
                     ->dehydrated(),
@@ -93,10 +90,6 @@ class InvestorResource extends Resource
                     ->helperText('শুধু বিদ্যমান একজন channel partner-কে বদলানোর সময় লাগবে — প্রথমবার assign করলে দরকার নেই।')
                     ->required(fn (?Investor $record): bool => filled($record?->getOriginal('channel_partner_id')) && (auth()->user()?->hasPermission('investments.manage_channel_partner') ?? false))
                     ->visible(fn (?Investor $record): bool => filled($record?->getOriginal('channel_partner_id')) && (auth()->user()?->hasPermission('investments.manage_channel_partner') ?? false))
-                    ->columnSpanFull(),
-                Toggle::make('is_channel_partner')
-                    ->label('This investor is also a Channel Partner')
-                    ->helperText('অন্য investor-দের রেফার করেন এমন একজনকে চিহ্নিত করুন — তালিকায় আলাদা দেখাবে ও চুক্তির নথি/পেআউট হিস্ট্রি ট্যাব চালু হবে।')
                     ->columnSpanFull(),
                 Textarea::make('address')->columnSpanFull(),
             ])->columns(2),
@@ -198,10 +191,8 @@ class InvestorResource extends Resource
                 TextEntry::make('email')->placeholder('-'),
                 TextEntry::make('nid_number')->label(__('NID / Passport (Investor ID)'))->formatStateUsing(fn (?string $state): string => InvestorIdentity::normalize($state) ?? '-')->placeholder('-'),
                 TextEntry::make('channelPartner.name')->label('Channel Partner')->placeholder('Direct investor'),
-                TextEntry::make('is_channel_partner')->label('Is a Channel Partner')->formatStateUsing(fn (bool $state): string => $state ? 'Yes' : 'No')->badge()->color(fn (bool $state): string => $state ? 'success' : 'gray'),
                 TextEntry::make('lifetime_invested')->state(fn (Investor $record): float => $record->totalInvestedLifetime())->moneyWithoutTrailingZeroes('BDT'),
                 TextEntry::make('lifetime_profit')->state(fn (Investor $record): float => $record->totalProfitReceivedLifetime())->moneyWithoutTrailingZeroes('BDT'),
-                TextEntry::make('lifetime_partner_payouts')->label('Lifetime Channel Partner Earnings')->visible(fn (Investor $record): bool => $record->is_channel_partner)->state(fn (Investor $record): float => $record->totalChannelPartnerPayoutsPaidLifetime())->moneyWithoutTrailingZeroes('BDT'),
                 TextEntry::make('address')->columnSpanFull()->placeholder('-'),
             ])->columns(2),
             Section::make('Nominee')->schema([
@@ -236,7 +227,6 @@ class InvestorResource extends Resource
             ->splitSearchTerms(false)
             ->columns([
                 TextColumn::make('name')->searchable()->sortable(),
-                IconColumn::make('is_channel_partner')->label('Partner')->boolean()->trueColor('success')->tooltip(fn (bool $state): string => $state ? 'Channel Partner' : 'Direct investor'),
                 TextColumn::make('phone')->searchable(),
                 // nid_number is encrypted at rest (v3 P3), so search goes through
                 // the keyed nid_hash of the exact (normalised) number instead.
@@ -305,7 +295,6 @@ class InvestorResource extends Resource
                     ->label('Channel Partner')
                     ->relationship('channelPartner', 'name')
                     ->searchable()->preload(),
-                TernaryFilter::make('is_channel_partner')->label('Channel Partners'),
                 Filter::make('nid_missing')->label(__('NID missing'))->query(fn (Builder $query): Builder => $query->whereNull('nid_hash')),
                 Filter::make('documents_missing')
                     ->label(__('Paper copies missing'))
@@ -322,7 +311,7 @@ class InvestorResource extends Resource
                         ->schema([
                             Select::make('channel_partner_id')
                                 ->label('Channel Partner')
-                                ->options(fn (): array => Investor::query()->orderByDesc('is_channel_partner')->orderBy('name')->pluck('name', 'id')->all())
+                                ->options(fn (): array => ChannelPartner::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
                                 ->searchable()
                                 ->required(),
                         ])
@@ -334,7 +323,7 @@ class InvestorResource extends Resource
                             $skipped = 0;
 
                             foreach ($records as $investor) {
-                                if (filled($investor->channel_partner_id) || (int) $investor->getKey() === $partnerId) {
+                                if (filled($investor->channel_partner_id)) {
                                     $skipped++;
 
                                     continue;
@@ -346,7 +335,7 @@ class InvestorResource extends Resource
 
                             Notification::make()
                                 ->title(__('Channel partner set for :count investors', ['count' => $assigned]))
-                                ->body($skipped > 0 ? __(':count investors were left unchanged because they already have a channel partner (or are the partner).', ['count' => $skipped]) : null)
+                                ->body($skipped > 0 ? __(':count investors were left unchanged because they already have a channel partner.', ['count' => $skipped]) : null)
                                 ->status($skipped > 0 ? 'warning' : 'success')
                                 ->send();
                         })
@@ -369,13 +358,12 @@ class InvestorResource extends Resource
     {
         return $record instanceof Investor
             && ! $record->investments()->exists()
-            && ! $record->referredInvestors()->exists()
             && (auth()->user()?->hasPermission('investments.manage') ?? false);
     }
 
     public static function getRelations(): array
     {
-        return [InvestmentsRelationManager::class, DocumentsRelationManager::class, PartnerPayoutsRelationManager::class, WithdrawalNoticesRelationManager::class];
+        return [InvestmentsRelationManager::class, DocumentsRelationManager::class, WithdrawalNoticesRelationManager::class];
     }
 
     public static function getPages(): array
