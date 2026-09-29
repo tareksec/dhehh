@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Resources\InvestorDrafts\InvestorDraftResource;
 use App\Filament\Resources\InvestorDrafts\Pages\EditInvestorDraft;
 use App\Filament\Resources\InvestorDrafts\Pages\ListInvestorDrafts;
+use App\Models\ChannelPartner;
 use App\Models\Company;
 use App\Models\Investment;
 use App\Models\InvestmentProject;
@@ -159,7 +160,7 @@ class InvestorImportTest extends TestCase
         $writer->addRow(Row::fromValues(['Rahima Khatun', '01911222333', new DateTimeImmutable('1990-02-03'), 'Mirpur, Dhaka', '01700000000']));
         $writer->close();
 
-        $partner = Investor::query()->create(['company_id' => $this->company->id, 'name' => 'Partner', 'phone' => '01700000000', 'is_channel_partner' => true]);
+        $partner = ChannelPartner::query()->create(['company_id' => $this->company->id, 'name' => 'Partner', 'phone' => '01700000000']);
 
         $result = app(InvestorImportService::class)->importFile($path, 'investors.xlsx');
 

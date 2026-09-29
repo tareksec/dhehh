@@ -5,6 +5,7 @@ namespace App\Filament\Resources\InvestorDrafts;
 use App\Filament\Clusters\Investments;
 use App\Filament\Resources\InvestorDrafts\Pages\EditInvestorDraft;
 use App\Filament\Resources\InvestorDrafts\Pages\ListInvestorDrafts;
+use App\Models\ChannelPartner;
 use App\Models\Investment;
 use App\Models\InvestmentProject;
 use App\Models\Investor;
@@ -23,7 +24,6 @@ use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -133,9 +133,6 @@ class InvestorDraftResource extends Resource
                     ->label(__('Channel Partner'))
                     ->relationship('channelPartner', 'name')
                     ->searchable()->preload(),
-                Toggle::make('is_channel_partner')
-                    ->label(__('This investor is also a Channel Partner'))
-                    ->columnSpanFull(),
                 Textarea::make('address')->label(__('Address'))->columnSpanFull(),
             ])->columns(2),
             Section::make(__('Nominee'))->visible(fn (Get $get): bool => blank($get('existing_investor_id')))->schema([
@@ -285,7 +282,7 @@ class InvestorDraftResource extends Resource
     {
         return Select::make('channel_partner_id')
             ->label(__('Channel Partner'))
-            ->options(fn (): array => Investor::query()->orderByDesc('is_channel_partner')->orderBy('name')->pluck('name', 'id')->all())
+            ->options(fn (): array => ChannelPartner::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
             ->searchable()
             ->helperText(__('Applied to the new investors in this import. A row with its own channel partner column keeps that one; investors who already exist are not changed.'));
     }

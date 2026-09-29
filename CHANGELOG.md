@@ -6,6 +6,34 @@ All notable production changes to Business Dashboard are documented here.
 
 **Release type:** Minor Feature Update
 
+### Added
+
+- **Channel partners are now separate from investors.** A new **Investments → Channel Partners** section keeps each partner's own record: name, phone, address, **NID / passport as the partner ID** (it can't repeat, and Bangla digits and spaces don't matter), a payment account (bKash / Nagad / Rocket / bank / cash, with account number, account name, bank and branch), notes, and an active switch.
+  - **Accounts on the partner page:** how many investors they brought in, those investors' active capital, and the commission earned, paid and due. There are tabs for the investors they brought in, their commission (one row per settlement, with a link to the voucher), and their documents.
+  - **Documents:** new types for the channel partner's **NID / passport copy** and **agreement**. Like investor NID copies, only users with `investments.manage` can see or download them.
+  - A partner who has investors or payouts can't be deleted.
+
+### Changed
+
+- **Channel partners no longer come from the investor list.** On the investor form, in the import dialogs, in the draft review and in **Assign channel partner**, the channel partner is picked from the Channel Partners list. The investor form's "This investor is also a Channel Partner" switch, the "Partner" column, the "Channel Partners" filter and the partner payout tab on investors are gone. Each investor still shows the partner who brought them, and the **Channel Partner** filter on the investor list still works.
+- **A project can have several channel partners.** The settlement pays each partner separately: the project's channel-partner share, in proportion to the capital of the investors that partner brought in. Investors without a partner still add to the company's share, as before. The old rule "a project currently supports only one channel partner" is removed.
+- **Import:** a row's channel-partner column is matched against Channel Partners by partner ID (NID), phone or exact name. The "is channel partner" column is no longer read.
+
+**Technical Notes:**
+- New migration `2026_09_28_150000_create_channel_partners_table`. Run `php artisan migrate --force`. It is not reversible. What it does:
+  - creates `channel_partners`.
+  - copies every investor who acted as a partner (flagged, named as someone's partner, or paid a partner payout) into it, keeping `legacy_investor_id`.
+  - repoints `investors.channel_partner_id` and `investor_drafts.channel_partner_id` to `channel_partners`.
+  - moves `channel_partner_payouts.investor_id` to `channel_partner_id`, with one payout per partner per settlement.
+  - drops `is_channel_partner` from `investors` and `investor_drafts`.
+  - the old investor rows are kept because they may have their own investments. A row that was only a partner still appears in the investor list and can be deleted there if it has no investments.
+- New `ChannelPartner` model (`BelongsToCompany`, `User::MODEL_MODULES` → `investments`, audited, added to `MultiCompanyIsolationTest`) and `ChannelPartnerResource`, with `ReferredInvestorsRelationManager`, `PayoutsRelationManager` and the shared `DocumentsRelationManager`. `PartnerPayoutsRelationManager` on investors is deleted.
+- `SettlementService::allocateProfit()` returns `partner_rows` (partner id => amount), and one `ChannelPartnerPayout` is created per partner. `Investment` no longer rejects a second partner in a project.
+
+## [2.36.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
 ### Changed
 
 - **Moving a payout voucher to trash makes the payout unpaid again.** This covers investor settlement payouts, channel-partner payouts and reseller withdrawal requests. If the voucher that was created when the payout was marked paid goes to **Trash**, the payout goes back to **pending**, or **approved** for reseller requests, and can be paid again. Restoring the voucher marks it paid again. A settlement that was fully paid out goes back to **confirmed** while any payout is unpaid.
@@ -17,12 +45,17 @@ All notable production changes to Business Dashboard are documented here.
 - `VoucherService::reject()` and `cancel()` call `InvestmentWithdrawalService::voucherVoided()` (renamed from `voucherTrashed()`). New `Voucher::isVoid()` (rejected or cancelled). The `Investment` model counts "withdrawn" only while its voucher exists and isn't void.
 - `ProjectSettlement` allows one step back, from `paid_out` to `confirmed`, and only while one of its payouts is unpaid again. Otherwise its status still only moves forward.
 - No migration.
-
 ## [2.35.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
 
 ### Added
+
+- **In-app Documentation.** A new **Documentation** menu (visible to everyone signed in) is a step-by-step guide hub for the app itself, browsable by category with a search box. Admins with the Settings permission write and organize the guides from **Settings → Documentation** — a rich-text editor per article, grouped into categories, with a Published toggle so drafts stay hidden until ready.
+
+**Technical Notes:**
+- New tables `documentation_categories` (`name`, `slug`, `icon`, `sort_order`) and `documentation_articles` (`documentation_category_id`, `title`, `slug`, `content`, `sort_order`, `is_published`) — migration `2026_09_28_140000_create_documentation_tables`. Not company-scoped: the same guides show for every company, since they document the app, not business data.
+- `DocumentationArticleResource` (Settings cluster, `canManageSettings()` gated) manages articles; categories are created inline from the article form. `Documentation` page (standalone, top-level nav, open to any signed-in user) lists published articles by category and renders content with `RichContentRenderer`.
 
 - **Voucher trash.** A voucher is never deleted directly. **Move to trash** (on the voucher list and the voucher page) moves it to **Finance → Vouchers → Trash**. From there it can be **restored** or **deleted permanently**. Only users with the new **Voucher: Move to Trash, Restore and Delete Permanently** (`voucher.delete`) permission can do any of this. Super admins have it automatically; give it to other roles in user settings. The trash shows who moved each voucher and when.
   - An **approved** voucher can't be moved to trash, because its money has already been booked (expense, payment or account transaction).

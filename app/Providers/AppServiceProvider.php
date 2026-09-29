@@ -10,6 +10,7 @@ use App\Filament\Resources\Products\Pages\EditProduct;
 use App\Filament\Resources\Products\Pages\ListProducts;
 use App\Models\Account;
 use App\Models\Category;
+use App\Models\ChannelPartner;
 use App\Models\ChannelPartnerPayout;
 use App\Models\Company;
 use App\Models\Customer;
@@ -228,6 +229,7 @@ class AppServiceProvider extends ServiceProvider
             InvestmentWithdrawalNotice::class,
             ProjectSettlement::class,
             SettlementPayout::class,
+            ChannelPartner::class,
             ChannelPartnerPayout::class,
             Order::class,
             OrderItem::class,

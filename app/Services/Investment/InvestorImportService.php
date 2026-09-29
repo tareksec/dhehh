@@ -2,6 +2,7 @@
 
 namespace App\Services\Investment;
 
+use App\Models\ChannelPartner;
 use App\Models\Investment;
 use App\Models\Investor;
 use App\Models\InvestorDraft;
@@ -33,7 +34,7 @@ use Throwable;
  */
 class InvestorImportService
 {
-    public const SAMPLE_HEADINGS = ['name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'nid_number', 'address', 'stamp_number', 'cheque_number', 'is_channel_partner', 'channel_partner_phone', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
+    public const SAMPLE_HEADINGS = ['name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'nid_number', 'address', 'stamp_number', 'cheque_number', 'channel_partner_phone', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
 
     private const STRING_FIELDS = ['name', 'display_name', 'guardian_name', 'email', 'nominee_name', 'nominee_relation'];
 
@@ -177,7 +178,7 @@ class InvestorImportService
         }
 
         [$investor, $investment] = DB::transaction(function () use ($draft, $data, $companyId, $existing, $createsInvestment): array {
-            $investor = $existing ?? Investor::query()->create([...$data, 'company_id' => $companyId, 'is_channel_partner' => (bool) $data['is_channel_partner']]);
+            $investor = $existing ?? Investor::query()->create([...$data, 'company_id' => $companyId]);
             $investment = null;
 
             if ($createsInvestment) {
@@ -237,7 +238,7 @@ class InvestorImportService
             'phone' => ['required', 'string', 'max:255', Rule::unique('investors', 'phone')->where('company_id', $companyId)],
             'email' => ['nullable', 'email', 'max:255'],
             'date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
-            'channel_partner_id' => ['nullable', Rule::exists('investors', 'id')->where('company_id', $companyId)],
+            'channel_partner_id' => ['nullable', Rule::exists('channel_partners', 'id')->where('company_id', $companyId)],
         ], [
             'name.required' => __('Name is missing.'),
             'nid_number.required' => __('NID / passport number is missing. It is the investor ID, so it is required.'),
@@ -259,7 +260,7 @@ class InvestorImportService
             'payment_method' => array_key_exists((string) ($investment['payment_method'] ?? ''), Investment::PAYMENT_METHODS) ? $investment['payment_method'] : null,
             'invested_at' => filled($investment['invested_at'] ?? null) ? (string) $investment['invested_at'] : null,
             'channel_partner_id' => filled($investment['channel_partner_id'] ?? null)
-                ? Investor::query()->whereKey((int) $investment['channel_partner_id'])->value('id')
+                ? ChannelPartner::query()->whereKey((int) $investment['channel_partner_id'])->value('id')
                 : null,
         ], fn ($value): bool => $value !== null);
     }
@@ -551,15 +552,13 @@ class InvestorImportService
                 } else {
                     $attributes['import_notes'][] = ['message' => 'Investment amount ":value" could not be read. Enter it by hand.', 'params' => ['value' => Str::limit($text, 40)]];
                 }
-            } elseif ($field === 'is_channel_partner') {
-                $attributes['is_channel_partner'] = in_array(Str::lower($text), array_map(Str::lower(...), config('investor_import.yes_values', [])), true);
             } elseif ($field === 'channel_partner') {
                 $partner = $this->findChannelPartner($text, $companyId);
 
                 if ($partner) {
                     $attributes['channel_partner_id'] = $partner->getKey();
                 } else {
-                    $attributes['import_notes'][] = ['message' => 'Channel partner ":value" was not found among investors. Pick them by hand.', 'params' => ['value' => Str::limit($text, 60)]];
+                    $attributes['import_notes'][] = ['message' => 'Channel partner ":value" was not found among channel partners. Add them under Channel Partners, then pick them here.', 'params' => ['value' => Str::limit($text, 60)]];
                 }
             }
         }
@@ -590,13 +589,14 @@ class InvestorImportService
         return $attributes;
     }
 
-    private function findChannelPartner(string $value, int $companyId): ?Investor
+    /** The channel partner named in a row: by NID / partner ID, phone, or exact name. */
+    private function findChannelPartner(string $value, int $companyId): ?ChannelPartner
     {
-        $query = fn () => Investor::query()->where('company_id', $companyId);
+        $query = fn () => ChannelPartner::query()->where('company_id', $companyId);
         $phone = $this->normalizePhone($value);
 
         if (preg_match('/\d{6,}/', $phone)) {
-            $partner = $query()->where('phone', $phone)->first();
+            $partner = $query()->whereNid($value)->first() ?? $query()->where('phone', $phone)->first();
 
             if ($partner) {
                 return $partner;

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\ChannelPartners\ChannelPartnerResource;
+use App\Filament\Resources\ChannelPartners\Pages\ViewChannelPartner;
 use App\Filament\Resources\InvestmentProjects\Pages\CreateInvestmentProject;
 use App\Filament\Resources\InvestmentProjects\Pages\EditInvestmentProject;
 use App\Filament\Resources\InvestmentProjects\Pages\ViewInvestmentProject;
@@ -12,8 +14,6 @@ use App\Filament\Resources\InvestmentRecords\Pages\ViewInvestmentRecord;
 use App\Filament\Resources\InvestmentRecords\RelationManagers\SecurityInstrumentsRelationManager;
 use App\Filament\Resources\Investors\InvestorResource;
 use App\Filament\Resources\Investors\Pages\EditInvestor;
-use App\Filament\Resources\Investors\Pages\ViewInvestor;
-use App\Filament\Resources\Investors\RelationManagers\PartnerPayoutsRelationManager;
 use App\Filament\Resources\Investors\RelationManagers\WithdrawalNoticesRelationManager;
 use App\Filament\Resources\ProjectSettlements\Pages\ViewProjectSettlement;
 use App\Filament\Resources\ProjectSettlements\ProjectSettlementResource;
@@ -21,6 +21,7 @@ use App\Filament\Resources\ProjectSettlements\RelationManagers\ChannelPartnerPay
 use App\Filament\Resources\ProjectSettlements\RelationManagers\PayoutsRelationManager;
 use App\Models\Account;
 use App\Models\AuditLog;
+use App\Models\ChannelPartner;
 use App\Models\Company;
 use App\Models\FundSource;
 use App\Models\Investment;
@@ -157,7 +158,7 @@ class InvestmentSettlementTest extends TestCase
 
     public function test_channel_share_is_paid_for_referred_capital_and_unallocated_share_goes_to_company(): void
     {
-        $partner = $this->investor('Channel Partner', '01710000000');
+        $partner = $this->partner('Channel Partner', '01710000000');
         $referred = $this->investor('Referred Investor', '01710000001', $partner);
         $direct = $this->investor('Direct Investor', '01710000002');
         $project = $this->project();
@@ -169,7 +170,7 @@ class InvestmentSettlementTest extends TestCase
 
         $this->assertEquals(6000, $settlement->channel_partner_amount);
         $this->assertEquals(54000, $settlement->company_net_amount);
-        $this->assertEquals(6000, $settlement->channelPartnerPayouts()->where('investor_id', $partner->id)->value('amount'));
+        $this->assertEquals(6000, $settlement->channelPartnerPayouts()->where('channel_partner_id', $partner->id)->value('amount'));
     }
 
     public function test_custom_project_percentages_are_used_instead_of_hardcoded_defaults(): void
@@ -381,23 +382,28 @@ class InvestmentSettlementTest extends TestCase
         $service->voidSettlement($settlement->fresh(), 'Too late', $this->user->id);
     }
 
-    public function test_project_supports_only_one_channel_partner(): void
+    public function test_a_project_can_have_several_channel_partners_each_paid_for_their_own_investors(): void
     {
-        $firstPartner = $this->investor('First Partner', '01740000000');
-        $secondPartner = $this->investor('Second Partner', '01740000001');
-        $firstInvestor = $this->investor('First Investor', '01740000002', $firstPartner);
-        $secondInvestor = $this->investor('Second Investor', '01740000003', $secondPartner);
+        $firstPartner = $this->partner('First Partner', '01740000000');
+        $secondPartner = $this->partner('Second Partner', '01740000001');
         $project = $this->project(['status' => 'open']);
-        $this->investment($project, $firstInvestor, 50000);
+        $this->investment($project, $this->investor('First Investor', '01740000002', $firstPartner), 60000);
+        $this->investment($project, $this->investor('Second Investor', '01740000003', $secondPartner), 40000);
+        ProjectCostItem::query()->create(['project_id' => $project->id, 'category' => 'landed_cost', 'label' => 'Direct cost', 'amount' => 100000]);
+        $project->update(['status' => 'closed']);
 
-        $this->expectException(ValidationException::class);
-        $this->investment($project, $secondInvestor, 50000);
+        $settlement = app(SettlementService::class)->calculateAndSettle($project->fresh(), 200000, $this->user->id, acknowledgeUnprovenCosts: true);
+
+        // 10% of the ৳100,000 profit, split by the capital each partner brought in.
+        $this->assertEquals(10000, $settlement->channel_partner_amount);
+        $this->assertEquals(6000, $settlement->channelPartnerPayouts()->where('channel_partner_id', $firstPartner->id)->value('amount'));
+        $this->assertEquals(4000, $settlement->channelPartnerPayouts()->where('channel_partner_id', $secondPartner->id)->value('amount'));
     }
 
     public function test_channel_partner_change_requires_super_admin_permission_and_reason_and_is_audited(): void
     {
-        $firstPartner = $this->investor('First Partner', '01750000000');
-        $secondPartner = $this->investor('Second Partner', '01750000001');
+        $firstPartner = $this->partner('First Partner', '01750000000');
+        $secondPartner = $this->partner('Second Partner', '01750000001');
         $investor = $this->investor('Investor', '01750000002', $firstPartner);
         $manager = User::factory()->create(['role' => 'manager']);
         Auth::login($manager);
@@ -418,7 +424,7 @@ class InvestmentSettlementTest extends TestCase
 
     public function test_first_time_channel_partner_assignment_does_not_require_permission_or_reason(): void
     {
-        $partner = $this->investor('First Partner', '01750000010');
+        $partner = $this->partner('First Partner', '01750000010');
         $investor = $this->investor('Investor Without A Partner Yet', '01750000011');
         $manager = User::factory()->create(['role' => 'manager']);
         Auth::login($manager);
@@ -428,19 +434,18 @@ class InvestmentSettlementTest extends TestCase
         $this->assertSame($partner->id, $investor->fresh()->channel_partner_id);
     }
 
-    public function test_investor_delete_is_blocked_while_they_have_referred_investors(): void
+    public function test_a_channel_partner_cannot_be_deleted_while_they_have_investors(): void
     {
         $manager = User::factory()->create(['role' => 'manager']);
         Auth::login($manager);
 
-        $partner = $this->investor('Referring Partner', '01750000012');
-        $partner->update(['is_channel_partner' => true]);
-        $this->investor('Referred Investor', '01750000013', $partner);
+        $partner = $this->partner('Referring Partner', '01750000012');
+        $referred = $this->investor('Referred Investor', '01750000013', $partner);
 
-        $this->assertFalse(InvestorResource::canDelete($partner->fresh()));
+        $this->assertFalse(ChannelPartnerResource::canDelete($partner->fresh()));
 
-        $partner->referredInvestors()->update(['channel_partner_id' => null]);
-        $this->assertTrue(InvestorResource::canDelete($partner->fresh()));
+        $referred->forceFill(['channel_partner_id' => null])->saveQuietly();
+        $this->assertTrue(ChannelPartnerResource::canDelete($partner->fresh()));
     }
 
     public function test_investor_delete_is_blocked_while_they_have_investments(): void
@@ -480,14 +485,25 @@ class InvestmentSettlementTest extends TestCase
         $this->assertTrue($closedComponent->instance()->isReadOnly());
     }
 
-    public function test_channel_partner_payout_history_tab_only_shows_for_flagged_partners(): void
+    public function test_channel_partner_accounts_are_kept_on_the_partner_not_the_investors(): void
     {
-        $partner = $this->investor('Flagged Partner', '01750000016');
+        $partner = $this->partner('Account Partner', '01750000016');
+        $project = $this->project();
+        $this->investment($project, $this->investor('Referred', '01750000017', $partner), 100000);
+        ProjectCostItem::query()->create(['project_id' => $project->id, 'category' => 'landed_cost', 'label' => 'Cost', 'amount' => 50000]);
+        $service = app(SettlementService::class);
+        $settlement = $service->calculateAndSettle($project, 200000, $this->user->id, acknowledgeUnprovenCosts: true);
+        $service->confirmSettlement($settlement, $this->user->id);
 
-        $this->assertFalse(PartnerPayoutsRelationManager::canViewForRecord($partner->fresh(), ViewInvestor::class));
+        $this->assertEquals(15000, $partner->totalEarned());
+        $this->assertEquals(15000, $partner->totalDue());
 
-        $partner->update(['is_channel_partner' => true]);
-        $this->assertTrue(PartnerPayoutsRelationManager::canViewForRecord($partner->fresh(), ViewInvestor::class));
+        $settlement->channelPartnerPayouts()->first()->update(['payment_status' => 'paid', 'paid_at' => now()->toDateString()]);
+        $this->assertEquals(15000, $partner->totalPaid());
+        $this->assertEquals(0, $partner->totalDue());
+
+        $this->assertNotContains('App\\Filament\\Resources\\Investors\\RelationManagers\\PartnerPayoutsRelationManager', InvestorResource::getRelations());
+        Livewire::test(ViewChannelPartner::class, ['record' => $partner->getRouteKey()])->assertOk()->assertSee('Account Partner');
     }
 
     public function test_a_project_with_no_configured_window_never_restricts_new_investments(): void
@@ -775,7 +791,7 @@ class InvestmentSettlementTest extends TestCase
     {
         $account = Account::query()->create(['name' => 'Bank', 'type' => 'bank', 'opening_balance' => 0]);
         $payoutFundSource = FundSource::query()->create(['name' => 'Payout Pool', 'type' => 'partner_investment', 'account_id' => $account->id]);
-        $partner = $this->investor('Ledger Channel Partner', '01750000053');
+        $partner = $this->partner('Ledger Channel Partner', '01750000053');
         $referred = $this->investor('Ledger Referred Investor', '01750000054', $partner);
         $project = $this->project(['payout_fund_source_id' => $payoutFundSource->id]);
         $this->investment($project, $referred, 100000);
@@ -1004,7 +1020,7 @@ class InvestmentSettlementTest extends TestCase
 
     public function test_channel_partner_payout_can_be_marked_paid_through_the_relation_manager_ui(): void
     {
-        $partner = $this->investor('UI Channel Partner', '01890000040');
+        $partner = $this->partner('UI Channel Partner', '01890000040');
         $referred = $this->investor('UI Referred Investor', '01890000041', $partner);
         $project = $this->project();
         $this->investment($project, $referred, 100000);
@@ -1166,7 +1182,12 @@ class InvestmentSettlementTest extends TestCase
         ], $overrides));
     }
 
-    private function investor(string $name, string $phone, ?Investor $partner = null): Investor
+    private function partner(string $name, string $phone): ChannelPartner
+    {
+        return ChannelPartner::query()->create(['company_id' => $this->company->id, 'name' => $name, 'phone' => $phone]);
+    }
+
+    private function investor(string $name, string $phone, ?ChannelPartner $partner = null): Investor
     {
         return Investor::query()->create(['company_id' => $this->company->id, 'name' => $name, 'phone' => $phone, 'channel_partner_id' => $partner?->id]);
     }

@@ -2,6 +2,101 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-28 - Channel partners separated from investors (own record, own accounts, several per project)
+
+Reason — owner: "চেনেল পার্টনার তো ইনভেস্টর লিস্ট থেকে আসবেনা। চেনেল পার্টনার সম্পূর্ণ আলাদা থাকবে তার হিসাব ও আলাদা হবে, ইনভেস্টরদের সাথে চ্যানেল পার্টনার কে মিশানো যাবেনা।" — channel partners must not come from the investor list, must be completely separate with their own accounts, and must not be mixed with investors.
+Answers to the follow-up questions:
+- The link stays per investor, as now: a partner earns only on the capital of the investors they brought in.
+- **Several partners per project.**
+- Fields to keep: name, phone, address, NID / passport (partner ID), payment account, and agreement and NID copies.
+
+What changed:
+- **Migration** `2026_09_28_150000` (irreversible; `down()` throws):
+  - creates `channel_partners` (company, name, phone, address, encrypted `nid_number` + `nid_hash`, payment_method, account_name/number, bank_name/branch, notes, is_active, legacy_investor_id).
+  - copies partner investors into it: flagged, referenced by investors or drafts, or paid a partner payout.
+  - drops and re-adds the FKs of `investors.channel_partner_id` and `investor_drafts.channel_partner_id` so they point at the copies.
+  - `channel_partner_payouts`: adds `channel_partner_id`, adds a unique index on (settlement_id, channel_partner_id), drops the old one-per-settlement unique index (looked up by its columns, because the name differs by driver) and drops `investor_id`.
+  - drops `is_channel_partner` from `investors` and `investor_drafts`.
+  - Verified on a scratch SQLite database migrated to just before this migration and seeded with a flagged partner investor, a referred investor and a paid ৳500 partner payout: the partner was copied with its name, phone, address, NID and a correct hash; the referred investor and the payout point at the new partner, and the payout is still ৳500 and paid.
+- **Models:**
+  - `ChannelPartner` (new): NID uniqueness per company like investors; `investors()`, `payouts()`, `documents()`, `referredCapital()`, `totalEarned/Paid/Due()`.
+  - `Investor::channelPartner()` now points at `ChannelPartner`. Removed from `Investor`: `referredInvestors()`, `channelPartnerPayouts()`, `totalChannelPartnerPayoutsPaidLifetime()`, the self-partner check and `is_channel_partner`.
+  - `InvestorDraft` points at `ChannelPartner`. `ChannelPartnerPayout` has `channelPartner()` instead of `investor()`.
+  - `InvestmentDocument` gets the categories `partner_nid` and `partner_agreement` (sensitive), and any document on a ChannelPartner is sensitive.
+- **Settlement:**
+  - `allocateProfit()` groups referred investments by partner and gives each partner `pool × their referred capital ÷ external capital`. `channel_payout` is the sum of those amounts.
+  - one `ChannelPartnerPayout` is created per partner.
+  - the "only one channel partner" checks are removed from `Investment` and `SettlementService`.
+  - the voucher purpose uses the partner's name.
+- **UI:**
+  - new `ChannelPartnerResource` (Investments cluster, sort 4). Its list shows the partner ID, investors brought in, commission earned and commission due; it has an Active filter.
+  - the view page has an Accounts section (investors, active capital, earned, paid, due), the payment account, and three tabs: investors brought in, commission (with voucher and settlement links) and documents.
+  - view needs `investments.view`; create/edit needs `investments.manage`; delete only when the partner has no investors and no payouts.
+  - the settlement's partner tab links to the partner.
+- **Investor side:**
+  - the partner switch, "Partner" column, "Channel Partners" filter, infolist lines and payout tab are removed.
+  - the channel partner select, the import/draft pickers and "Assign channel partner" list active `ChannelPartner`s.
+  - import finds the partner by NID, phone or exact name, and no longer reads `is_channel_partner` (`yes_values` config removed).
+
+Not changed, noted for the owner:
+- Old investor rows that only acted as partners stay in the investor list, because they may have investments. They can be deleted there once they have no investments.
+- Documents that were attached to those old investor rows were not moved to the partner. They are still on the investor record.
+
+Process note: while checking the migration I ran a one-off script whose "use an in-memory database" override did not take effect. It migrated this container's own git-ignored local dev database (`database/database.sqlite`, which had 1 company and no investors or vouchers) and the new migration stopped halfway. I made the migration re-runnable and finished it with `php artisan migrate` on that same local database. No demo, test or production data was involved. The migration check was then repeated on a separate scratch file, after confirming the connection pointed at it, and the file was deleted afterwards.
+
+**Needs Bangla review:** 22 new `lang/bn.json` keys (Channel Partners section and accounts), plus 2 changed texts (the import note for a partner not found, and the skipped-investor message of the bulk action).
+
+Important changed/new files:
+- `database/migrations/2026_09_28_150000_create_channel_partners_table.php`
+- `app/Models/{ChannelPartner (new),ChannelPartnerPayout,Investor,InvestorDraft,Investment,InvestmentDocument,User}.php`, `app/Providers/AppServiceProvider.php`
+- `app/Services/Investment/{SettlementService,InvestmentLedgerService,InvestorImportService}.php`, `config/investor_import.php`
+- `app/Filament/Resources/ChannelPartners/**` (new), `app/Filament/Resources/Investors/InvestorResource.php`, deleted `Investors/RelationManagers/PartnerPayoutsRelationManager.php`, `InvestorDrafts/InvestorDraftResource.php`, `ProjectSettlements/RelationManagers/ChannelPartnerPayoutsRelationManager.php`, `InvestmentProjects/RelationManagers/DocumentsRelationManager.php`
+- `lang/en.json`, `lang/bn.json`
+- tests: `ChannelPartnerTest.php` (new, 4 tests), `InvestmentSettlementTest.php`, `InvestorIdentityAndDocumentsTest.php`, `InvestorImportTest.php`, `MultiCompanyIsolationTest.php`
+
+Verification:
+- `ChannelPartnerTest`: 4 passed:
+  - created on its own page; never an investor row; filters investors; view page and "investors brought in" tab
+  - the NID partner ID is unique in any format
+  - partner agreement and NID copies are hidden and refused for an accountant (view only)
+  - an import row names its partner by the Bangla-digit NID
+- `InvestmentSettlementTest`: 60 passed, with rewritten tests:
+  - **two partners in one project are paid ৳6,000 and ৳4,000** (60/40 of the 10% pool on ৳100,000 profit), replacing the old "only one partner" test
+  - a partner with investors can't be deleted
+  - partner accounts (earned, paid, due) are on the partner, and the investor page has no partner tab
+  - the existing change-permission, audit, voucher and mark-paid tests now use `ChannelPartner`
+- Full `php artisan test` (plain, no `--env`): **1543 passed, 0 failed** (10231 assertions).
+- Pint passes on the changed files.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
+## 2026-09-28 - Documentation module: fixes from automated PR review (Codex)
+
+Reason — an automated review bot (`chatgpt-codex-connector[bot]`) left 5 findings on PR bhd4232/Business-Dashboard#10 (the Documentation module committed earlier today), each citing a real `AGENTS.md` rule. Verified each and fixed all of them; this is a follow-up to the earlier "In-app Documentation module" entry, not a new feature.
+
+What changed:
+- **CHANGELOG.md:** moved the Documentation entry from the already-dated `[2.34.0]` section back into `[Unreleased]` — the release cutter only reads `[Unreleased]`, so it would otherwise never ship in a generated release.
+- **PROJECT_GUIDE.md:** added a "Documentation Module" subsection under "3. Current Core Modules" (route, access model, important files, focused test command) — this had been left only in chat/CHANGELOG.
+- **Filament-only UI:** rewrote `resources/views/filament/pages/documentation.blade.php` to use `x-filament::section`, `x-filament::input.wrapper`/`x-filament::input`, and `x-filament::button` instead of raw `<input>`/`<button>` and hand-styled Tailwind cards, matching the pattern used elsewhere (e.g. Inbox).
+- **Bilingual strings:** every new visible string in `Documentation.php`, `DocumentationArticleResource.php`, and the Blade view now goes through `__()`, with matching `lang/en.json` and `lang/bn.json` keys (reusing existing `Category`/`Name` keys where they already existed).
+- **Bug fix:** searching with no matches now clears `activeArticleId` instead of leaving a stale, non-matching article rendered in the content pane while the sidebar says "no guides match."
+
+Important changed/new files:
+- `CHANGELOG.md`, `PROJECT_GUIDE.md`, `lang/en.json`, `lang/bn.json`
+- `app/Filament/Pages/Documentation.php`, `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `resources/views/filament/pages/documentation.blade.php`
+- `tests/Feature/DocumentationModuleTest.php` (+1 regression test for the search-clears-selection fix)
+
+Verification:
+- `DocumentationModuleTest`: 5 passed (added the no-match-clears-selection test).
+- `TranslationParityTest`: passed.
+- Full `php artisan test` (plain, no `--env`): **1541 passed, 0 failed** (10178 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/friendly-feynman-w4twzx` (owner approved: "হ্যাঁ, commit আর push কর") — updates PR bhd4232/Business-Dashboard#10.
+
 ## 2026-09-28 - Trashed payout vouchers make the payout unpaid; rejected/cancelled withdrawal vouchers make the investment active
 
 Reason — owner, answering the three open questions: "১। ঠিক আছে ২। হ্যাঁ ৩। হ্যাঁ, সক্রিয় হবে"
@@ -96,6 +191,32 @@ What changed:
 - `docs/api/website-integration.md` links to it right after the intro, so anyone starting from the main guide finds it.
 
 Not code — no migration, no test changes, no `lang/` changes.
+
+Commit status: Committed and merged into `main` via PR bhd4232/Business-Dashboard#9 (owner approved: "PR খুলে দাও").
+
+## 2026-09-28 - In-app Documentation module: step-by-step guides, editable from Filament
+
+Reason — owner: "আমাদের অ্যাপের মধ্যে ডকুমেন্টেশন মডিউল যুক্ত করতে বলেছিলাম যেখানে আমাদের অ্যাপের সকল দিকনির্দেশনা গুলো স্টেপ বাই স্টেপ লিখা থাকবে।" A documentation module inside the app itself, where all of the app's own instructions are written step by step. Scope, confirmed with the owner: a general documentation hub (not only the API docs), content editable from Filament (not a static file).
+
+What changed:
+- New tables `documentation_categories` (name, slug, icon, sort order) and `documentation_articles` (category, title, slug, rich-text content, sort order, published toggle). Not company-scoped — the guides are about the app itself, so every company sees the same ones.
+- **Settings → Documentation** (admin only, same `settings.manage`/super-admin gate as the other Settings pages): create/edit articles with a rich-text editor; a new category can be added right from the article form.
+- **Documentation** — a new top-level menu open to every signed-in user: categories down the side, a search box, and the selected article's content on the right. Only published articles show. This is the step-by-step guide hub itself.
+
+Not yet done: no content has been written into it yet — the module is the tool for the owner/admins to start writing the app's own guides (order flow, inventory, investments, etc.) inside Filament.
+
+Important changed/new files:
+- `database/migrations/2026_09_28_140000_create_documentation_tables.php`
+- `app/Models/{DocumentationCategory,DocumentationArticle}.php`
+- `app/Filament/Resources/DocumentationArticles/**`
+- `app/Filament/Pages/Documentation.php`, `resources/views/filament/pages/documentation.blade.php`
+- `tests/Feature/DocumentationModuleTest.php` (new)
+
+Verification:
+- `DocumentationModuleTest`: 4 passed (published-only listing, search filtering, permission gate for a manager without `settings.manage`, access granted for a super admin).
+- Full `php artisan test` (plain, no `--env`): **1534 passed, 0 failed** (9975 assertions).
+- `npm run build`: succeeded.
+- Not verified in a browser.
 
 Commit status: not committed — waiting for owner approval.
 

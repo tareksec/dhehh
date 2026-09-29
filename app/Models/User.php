@@ -317,6 +317,7 @@ class User extends Authenticatable implements FilamentUser
         InvestmentWithdrawalNotice::class => 'investments',
         ProjectSettlement::class => 'investments',
         SettlementPayout::class => 'investments',
+        ChannelPartner::class => 'investments',
         ChannelPartnerPayout::class => 'investments',
         MetaAdAccount::class => 'marketing',
         MetaAdCampaign::class => 'marketing',

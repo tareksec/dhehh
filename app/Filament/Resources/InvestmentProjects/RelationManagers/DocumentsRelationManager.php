@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\InvestmentProjects\RelationManagers;
 
+use App\Models\ChannelPartner;
 use App\Models\Company;
 use App\Models\InvestmentDocument;
 use App\Models\Investor;
@@ -44,10 +45,10 @@ class DocumentsRelationManager extends RelationManager
         return false;
     }
 
-    /** Investor documents are NID copies and contracts: investments.manage only. */
+    /** Investor and channel partner documents are NID copies and contracts: investments.manage only. */
     public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
     {
-        if ($ownerRecord instanceof Investor) {
+        if ($ownerRecord instanceof Investor || $ownerRecord instanceof ChannelPartner) {
             return auth()->user()?->hasPermission('investments.manage') ?? false;
         }
 
