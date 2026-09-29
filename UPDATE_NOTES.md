@@ -2,6 +2,27 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-28 - Documentation "Import Markdown": add file upload
+
+Reason — owner, after seeing the Import Markdown modal (screenshot): "এইটা কি এড করছ? ফাইল ইমপোর্ট এর অপশন কই?" (asked where the file-import option was — the modal only had a paste box, no file picker). Confirmed and added it: pasting a long document on mobile is painful.
+
+What changed:
+- **Settings → Documentation → article → Content → Import Markdown modal** now has a **Markdown file** upload field (`.md`/`.txt`) above the paste box. Either one works; at least one is required. The file is never written to disk — `FileUpload::storeFiles(false)` keeps it as a raw `TemporaryUploadedFile`, its content is read directly (`->get()`) and thrown away once converted.
+- Same conversion as before (`DocumentationArticleResource::markdownToHtml()`, already tested) — this only adds a second way to get text into that function.
+
+Important changed/new files:
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `lang/en.json`, `lang/bn.json` (also removed 2 keys the old modal-only text left orphaned)
+- `CHANGELOG.md`
+
+Verification:
+- `DocumentationModuleTest` (existing `markdownToHtml` conversion test still covers the shared conversion logic): 6 passed. `TranslationParityTest`: passed.
+- Full `php artisan test` (plain, no `--env`): **1545 passed, 0 failed** (10216 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not covered by an automated test: the file-upload wiring itself (Filament `FileUpload` → `TemporaryUploadedFile::get()`) — only the conversion function it feeds is tested. Not verified in a browser; the owner should try uploading the API guide `.md` file through the new file picker and confirm the formatting comes through correctly.
+
+Commit status: not committed — waiting for owner approval.
+
 ## 2026-09-28 - Documentation module: "Import Markdown" button
 
 Reason — owner: pasted the API integration guide (Markdown) into a Documentation article's Content field, and it came in as one plain paragraph, not the original headings/bold/tables. Filament's Rich Editor is a WYSIWYG editor — it doesn't parse pasted Markdown syntax, it just inserts the raw characters as text. Owner picked adding an "Import Markdown" button over the alternatives (render to HTML and copy from a browser tab, or reformat manually).

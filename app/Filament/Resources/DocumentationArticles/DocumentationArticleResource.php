@@ -12,6 +12,7 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -28,6 +29,7 @@ use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 use League\CommonMark\GithubFlavoredMarkdownConverter;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class DocumentationArticleResource extends Resource
 {
@@ -104,15 +106,26 @@ class DocumentationArticleResource extends Resource
             ->label(__('Import Markdown'))
             ->icon(Heroicon::OutlinedArrowUpTray)
             ->modalHeading(__('Import Markdown'))
-            ->modalDescription(__('Paste raw Markdown (headings, bold, lists, tables, code blocks). It replaces the content above, converted to rich text.'))
+            ->modalDescription(__('Upload a .md file, or paste raw Markdown below (headings, bold, lists, tables, code blocks). It replaces the content above, converted to rich text.'))
             ->schema([
+                FileUpload::make('markdown_file')
+                    ->label(__('Markdown file'))
+                    ->helperText(__('.md or .txt file. Browsers report inconsistent MIME types for .md files, so any file type is accepted here — only its text content is read.'))
+                    ->storeFiles(false)
+                    ->maxSize(2048),
                 Textarea::make('markdown')
-                    ->label(__('Markdown source'))
-                    ->required()
-                    ->rows(16),
+                    ->label(__('Or paste Markdown source'))
+                    ->rows(14)
+                    ->requiredWithout('markdown_file'),
             ])
             ->action(function (array $data, Set $set): void {
-                $set('content', static::markdownToHtml($data['markdown']));
+                $file = $data['markdown_file'] ?? null;
+
+                $markdown = $file instanceof TemporaryUploadedFile
+                    ? $file->get()
+                    : (string) ($data['markdown'] ?? '');
+
+                $set('content', static::markdownToHtml($markdown));
             });
     }
 

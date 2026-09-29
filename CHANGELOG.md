@@ -8,10 +8,10 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Added
 
-- **Import Markdown into Documentation articles.** The article editor (**Settings → Documentation**) has an **Import Markdown** button next to the Content field. Paste raw Markdown (headings, bold, lists, tables, code blocks) and it converts to properly formatted rich text — pasting Markdown directly into the editor only produced a plain paragraph.
+- **Import Markdown into Documentation articles.** The article editor (**Settings → Documentation**) has an **Import Markdown** button next to the Content field. Upload a `.md`/`.txt` file, or paste raw Markdown directly (headings, bold, lists, tables, code blocks), and it converts to properly formatted rich text — pasting Markdown directly into the editor only produced a plain paragraph.
 
 **Technical Notes:**
-- **Documentation Markdown import:** `DocumentationArticleResource::markdownToHtml()` uses `league/commonmark`'s `GithubFlavoredMarkdownConverter` (was already a transitive dependency; now declared directly in `composer.json`). Wired to the Content field's `hintAction`.
+- **Documentation Markdown import:** `DocumentationArticleResource::markdownToHtml()` uses `league/commonmark`'s `GithubFlavoredMarkdownConverter` (was already a transitive dependency; now declared directly in `composer.json`). Wired to the Content field's `hintAction`, which offers a `FileUpload` (`storeFiles(false)`, reads the raw `TemporaryUploadedFile` — nothing is written to disk) and a `Textarea` fallback.
 
 ## [2.36.0] - 2026-09-28
 
