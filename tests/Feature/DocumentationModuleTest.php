@@ -1,0 +1,190 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Filament\Pages\Documentation;
+use App\Filament\Resources\DocumentationArticles\DocumentationArticleResource;
+use App\Filament\Resources\DocumentationArticles\Pages\CreateDocumentationArticle;
+use App\Filament\Resources\DocumentationArticles\Pages\ListDocumentationArticles;
+use App\Models\DocumentationArticle;
+use App\Models\DocumentationCategory;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+class DocumentationModuleTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_the_documentation_page_shows_only_published_articles(): void
+    {
+        $user = User::factory()->create(['role' => 'manager', 'is_active' => true]);
+
+        $category = DocumentationCategory::query()->create(['name' => 'Orders', 'sort_order' => 1]);
+
+        $published = DocumentationArticle::query()->create([
+            'documentation_category_id' => $category->getKey(),
+            'title' => 'How to create an order',
+            'content' => '<p>Step one...</p>',
+            'is_published' => true,
+        ]);
+
+        DocumentationArticle::query()->create([
+            'documentation_category_id' => $category->getKey(),
+            'title' => 'Draft guide',
+            'content' => '<p>Not ready yet.</p>',
+            'is_published' => false,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(Documentation::class)
+            ->assertSet('activeArticleId', $published->getKey())
+            ->assertSee('How to create an order')
+            ->assertDontSee('Draft guide');
+    }
+
+    public function test_searching_filters_articles_by_title(): void
+    {
+        $user = User::factory()->create(['role' => 'manager', 'is_active' => true]);
+
+        $category = DocumentationCategory::query()->create(['name' => 'Inventory', 'sort_order' => 1]);
+
+        $stockArticle = DocumentationArticle::query()->create([
+            'documentation_category_id' => $category->getKey(),
+            'title' => 'Adjust stock levels',
+            'content' => '<p>...</p>',
+            'is_published' => true,
+        ]);
+
+        DocumentationArticle::query()->create([
+            'documentation_category_id' => $category->getKey(),
+            'title' => 'Create a purchase order',
+            'content' => '<p>...</p>',
+            'is_published' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(Documentation::class)
+            ->set('search', 'stock')
+            ->assertSee('Adjust stock levels')
+            ->assertDontSee('Create a purchase order')
+            ->assertSet('activeArticleId', $stockArticle->getKey());
+    }
+
+    public function test_a_search_with_no_match_clears_the_selected_article(): void
+    {
+        $user = User::factory()->create(['role' => 'manager', 'is_active' => true]);
+
+        $category = DocumentationCategory::query()->create(['name' => 'Inventory', 'sort_order' => 1]);
+
+        DocumentationArticle::query()->create([
+            'documentation_category_id' => $category->getKey(),
+            'title' => 'Adjust stock levels',
+            'content' => '<p>...</p>',
+            'is_published' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test(Documentation::class)
+            ->assertSet('activeArticleId', fn (?int $id): bool => $id !== null)
+            ->set('search', 'no such guide exists')
+            ->assertSet('activeArticleId', null)
+            ->assertDontSee('Adjust stock levels');
+    }
+
+    public function test_a_manager_without_settings_permission_cannot_manage_documentation(): void
+    {
+        $user = User::factory()->create(['role' => 'manager', 'is_active' => true]);
+        $this->actingAs($user);
+
+        $this->assertFalse(DocumentationArticleResource::canViewAny());
+    }
+
+    public function test_a_super_admin_can_manage_documentation(): void
+    {
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($user);
+
+        $this->assertTrue(DocumentationArticleResource::canViewAny());
+    }
+
+    public function test_typing_a_title_auto_fills_an_empty_slug(): void
+    {
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($user);
+
+        Livewire::test(CreateDocumentationArticle::class)
+            ->set('data.title', 'How To Track Orders')
+            ->assertSet('data.slug', 'how-to-track-orders');
+    }
+
+    public function test_typing_a_title_never_overwrites_an_already_filled_slug(): void
+    {
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($user);
+
+        Livewire::test(CreateDocumentationArticle::class)
+            ->set('data.slug', 'custom-slug')
+            ->set('data.title', 'How To Track Orders')
+            ->assertSet('data.slug', 'custom-slug');
+    }
+
+    public function test_the_view_action_opens_the_public_guide_page_only_for_published_public_articles(): void
+    {
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($user);
+
+        $category = DocumentationCategory::query()->create(['name' => 'Orders', 'slug' => 'orders', 'sort_order' => 1]);
+
+        $publicArticle = DocumentationArticle::query()->create([
+            'documentation_category_id' => $category->getKey(),
+            'title' => 'How to create an order',
+            'slug' => 'how-to-create-an-order',
+            'content' => '<p>...</p>',
+            'is_published' => true,
+            'is_public' => true,
+        ]);
+
+        $internalArticle = DocumentationArticle::query()->create([
+            'documentation_category_id' => $category->getKey(),
+            'title' => 'Approve a voucher',
+            'slug' => 'approve-a-voucher',
+            'content' => '<p>...</p>',
+            'is_published' => true,
+            'is_public' => false,
+        ]);
+
+        Livewire::test(ListDocumentationArticles::class)
+            ->assertTableActionVisible('viewGuidePage', $publicArticle)
+            ->assertTableActionHidden('viewGuidePage', $internalArticle)
+            ->assertTableActionHasUrl('viewGuidePage', route('guides.show', ['orders', 'how-to-create-an-order']), record: $publicArticle);
+    }
+
+    public function test_markdown_import_converts_headings_bold_lists_and_tables_to_rich_html(): void
+    {
+        $markdown = <<<'MARKDOWN'
+            ## Step 1
+
+            Mark the order as **shipped**.
+
+            - First
+            - Second
+
+            | Field | Value |
+            | --- | --- |
+            | SKU | ABC-1 |
+            MARKDOWN;
+
+        $html = DocumentationArticleResource::markdownToHtml($markdown);
+
+        $this->assertStringContainsString('<h2>Step 1</h2>', $html);
+        $this->assertStringContainsString('<strong>shipped</strong>', $html);
+        $this->assertStringContainsString('<li>First</li>', $html);
+        $this->assertStringContainsString('<table>', $html);
+        $this->assertStringContainsString('<td>ABC-1</td>', $html);
+    }
+}

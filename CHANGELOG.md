@@ -30,6 +30,52 @@ All notable production changes to Business Dashboard are documented here.
 - New `ChannelPartner` model (`BelongsToCompany`, `User::MODEL_MODULES` → `investments`, audited, added to `MultiCompanyIsolationTest`) and `ChannelPartnerResource`, with `ReferredInvestorsRelationManager`, `PayoutsRelationManager` and the shared `DocumentsRelationManager`. `PartnerPayoutsRelationManager` on investors is deleted.
 - `SettlementService::allocateProfit()` returns `partner_rows` (partner id => amount), and one `ChannelPartnerPayout` is created per partner. `Investment` no longer rejects a second partner in a project.
 
+## [2.40.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **View button on the Documentation articles list.** Opens the article's public `/guides` page in a new tab. Only shown for articles that are both Published and Publicly shareable — otherwise the page wouldn't exist to view.
+
+**Technical Notes:**
+- `DocumentationArticleResource` table: `viewGuidePage` action, visible only when `is_published && is_public`; table query eager-loads `category` to avoid an N+1 for both this action and the existing Category column.
+## [2.39.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Documentation article slug auto-fills from the title.** Type a Title and the Slug fills in on its own — no need to type it manually. Editing the Slug yourself is still possible; once it has a value, typing in Title no longer overwrites it.
+- **Public Guides page for sharing Documentation with people outside the admin panel.** `/guides` lists every published *and* publicly-shareable Documentation article by category, and `/guides/{category}/{article}` shows one — no login required. Meant for people who need to read the guides (e.g. an external developer team) but should not get an admin panel account: Dashboard and other admin pages show business data to any signed-in user regardless of permissions, so a limited account is not a safe way to share this.
+- **Documentation article: "Publicly shareable" toggle.** Off by default, so nothing is exposed at `/guides` unless deliberately turned on. An article stays visible to signed-in staff in the Documentation menu either way — the toggle only controls whether it also shows up at the public, no-login `/guides` page.
+
+**Technical Notes:**
+- Title's `afterStateUpdated` sets `slug` to `Str::slug($title)` only while `slug` is still empty — same pattern as `OfferForm`.
+- New `DocumentationGuideController` (`index`, `show`) + `resources/views/guides/*` + `resources/views/components/layouts/guides.blade.php`. Only articles that are both `is_published` and `is_public` are queryable there; anything else 404s (unpublished, or published-but-internal). The internal Documentation page and its `is_published`-only filter are unchanged. New migration `2026_09_29_090000_add_is_public_to_documentation_articles_table` (default `false`). `/docs` was already taken by the existing product marketing page, so this uses `/guides`.
+
+## [2.38.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Upload a file to import Markdown into a Documentation article.** The **Import Markdown** modal (**Settings → Documentation → article → Content**) now also accepts a `.md`/`.txt` file upload, alongside the existing paste box — either works.
+
+**Technical Notes:**
+- The upload uses `FileUpload::storeFiles(false)`, so the file is never written to disk: its raw `TemporaryUploadedFile` content is read directly and discarded once converted through the same `DocumentationArticleResource::markdownToHtml()` used by the paste box.
+
+## [2.37.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Import Markdown into Documentation articles.** The article editor (**Settings → Documentation**) has an **Import Markdown** button next to the Content field. Paste raw Markdown (headings, bold, lists, tables, code blocks) and it converts to properly formatted rich text — pasting Markdown directly into the editor only produced a plain paragraph.
+
+**Technical Notes:**
+- **Documentation Markdown import:** `DocumentationArticleResource::markdownToHtml()` uses `league/commonmark`'s `GithubFlavoredMarkdownConverter` (was already a transitive dependency; now declared directly in `composer.json`). Wired to the Content field's `hintAction`.
+
 ## [2.36.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
@@ -45,6 +91,7 @@ All notable production changes to Business Dashboard are documented here.
 - `VoucherService::reject()` and `cancel()` call `InvestmentWithdrawalService::voucherVoided()` (renamed from `voucherTrashed()`). New `Voucher::isVoid()` (rejected or cancelled). The `Investment` model counts "withdrawn" only while its voucher exists and isn't void.
 - `ProjectSettlement` allows one step back, from `paid_out` to `confirmed`, and only while one of its payouts is unpaid again. Otherwise its status still only moves forward.
 - No migration.
+
 ## [2.35.0] - 2026-09-28
 
 **Release type:** Minor Feature Update

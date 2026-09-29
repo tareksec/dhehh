@@ -71,6 +71,143 @@ Verification:
 
 Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
 
+## 2026-09-29 - Documentation articles list: a View button to open the public page
+
+Reason — owner (screenshot of the articles list): "লিস্টে আর্টিকেল পেজের সোয়া করার জন্য কোন লিংক নেই। আর্টিক্যাল শো বাড়ানোর জন্য একটা লিঙ্ক বাটন যুক্ত কর।" (There's no link in the list to view the article page. Add a link button for it.)
+
+What changed:
+- **Settings → Documentation → articles list:** a **View** button (opens in a new tab) next to Edit, linking straight to the article's `/guides/{category}/{article}` page. Only shown when the article is both Published and Publicly shareable — for anything else, that page doesn't exist (404s), so the button is hidden rather than shown and broken.
+- Table query now eager-loads the `category` relationship (needed to build the URL; also removes an existing N+1 on the Category column).
+
+Important changed/new files:
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `lang/en.json`, `lang/bn.json`
+- `tests/Feature/DocumentationModuleTest.php` (+1 test: the View action is visible with the right URL for a published+public article, hidden for a published-but-internal one)
+- `CHANGELOG.md`
+
+Verification:
+- `DocumentationModuleTest`: 9 passed.
+- Full `php artisan test` (plain, no `--env`): **1552 passed, 0 failed** (10249 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: not committed — waiting for owner approval.
+
+## 2026-09-29 - Documentation article: "Publicly shareable" toggle
+
+Reason — owner: "internal only" বনাম "publicly shareable" এই ধরনের ফ্ল্যাগ যুক্ত করে দাও। (Add a flag for "internal only" vs "publicly shareable".) This was the gap flagged as "Not done" in the Public Guides entry below: every published article was visible at `/guides` with no way to keep some staff-only.
+
+What changed:
+- New `is_public` column on `documentation_articles` (boolean, default `false` — nothing already published becomes public by accident).
+- **Settings → Documentation → article form:** a **Publicly shareable** toggle, off by default, next to Published.
+- `/guides` and `/guides/{category}/{article}` now require both `is_published` **and** `is_public` — a published-but-internal article 404s there, same as an unpublished one.
+- The internal Documentation menu (signed-in staff) is unchanged: it still shows every published article regardless of this flag, since staff should see everything.
+
+Important changed/new files:
+- `database/migrations/2026_09_29_090000_add_is_public_to_documentation_articles_table.php` (new)
+- `app/Models/DocumentationArticle.php`, `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`, `app/Http/Controllers/DocumentationGuideController.php`
+- `lang/en.json`, `lang/bn.json`
+- `tests/Feature/PublicGuidesTest.php` (+1 test: a published-but-not-public article isn't listed and 404s directly; existing tests updated to mark their articles `is_public`)
+- `CHANGELOG.md`
+
+Verification:
+- `PublicGuidesTest`: 4 passed. `DocumentationModuleTest`: 8 passed (confirms the internal page is unaffected).
+- Full `php artisan test` (plain, no `--env`): **1551 passed, 0 failed** (10239 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: not committed — waiting for owner approval.
+
+## 2026-09-29 - Documentation article: slug auto-fills from title
+
+Reason — owner: "ডকুমেন্টেশনের টাইটেল লেখার পর স্লাগে ক্লিক করলে অটো টাইটেল থেকে স্ল্যাগ জেনারেট হয়ে যাবে ম্যানুয়ালে যেন লিখতে না হয়।" (After typing the title, clicking into the slug field should auto-generate the slug from the title, so it never has to be typed by hand.)
+
+What changed:
+- **Settings → Documentation → article form:** the Title field now sets Slug to `Str::slug(title)` automatically, the same pattern already used on `ExpenseCategoryResource`. It only fills Slug while it's still empty — matching `OfferForm`'s convention — so fixing a typo in an existing article's title never silently changes an already-saved slug.
+
+Important changed/new files:
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `tests/Feature/DocumentationModuleTest.php` (+2 tests: auto-fill on an empty slug, and no overwrite once slug already has a value)
+- `CHANGELOG.md`
+
+Verification:
+- `DocumentationModuleTest`: 8 passed.
+- Full `php artisan test` (plain, no `--env`): **1547 passed, 0 failed** (10218 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: not committed — waiting for owner approval (bundled with the public Guides page below in the same commit).
+
+## 2026-09-29 - Public Guides page: share Documentation with people outside the admin panel
+
+Reason — owner: "এই ডকুমেন্টেশন ডেভলপার টিমের সাথে কিভাবে শেয়ার করব?" (How do I share this documentation with the developer team?) Clarified the developer team is external and would need it from the Documentation module being written in Filament, not the separate `docs/api/` files already shared. Flagged first: the in-app Documentation page requires only `Auth::check()`, so giving them a limited admin account would still expose Dashboard business data — `BusinessOverview`, `SalesPurchaseTrend` and `TopBusinessPerformers` widgets have no `canView()` permission gate at all, they render for any signed-in user. Owner picked building a public page over granting a login or exporting a static file.
+
+What changed:
+- **`/guides`** (list, by category) and **`/guides/{category-slug}/{article-slug}`** (one article) — public, no login, read-only mirror of the Documentation module. Only `is_published` articles are ever queryable; an unpublished or unknown slug 404s, same as an unpublished `StorefrontPage`.
+- `/docs` was already in use (the existing static product-marketing page, `resources/views/marketing/docs.blade.php` — install/branding/backups instructions for whoever runs this ERP software, unrelated to what an owner writes in the Documentation module), so this uses `/guides` instead.
+- Minimal standalone layout (`resources/views/components/layouts/guides.blade.php`) — no admin branding, `noindex, nofollow` meta tag since this isn't meant to be a public marketing surface, just a link to hand to whoever needs it.
+
+Not done: no way yet to mark a category/article "internal only" vs "safe to share publicly" — every published article is visible at `/guides` to anyone with the link. If some guides should stay admin-only, that needs a separate flag before writing anything sensitive into the module.
+
+Important changed/new files:
+- `app/Http/Controllers/DocumentationGuideController.php` (new)
+- `resources/views/guides/{index,show}.blade.php`, `resources/views/components/layouts/guides.blade.php` (new)
+- `routes/web.php`
+- `tests/Feature/PublicGuidesTest.php` (new: published articles listed and rendered without auth; unpublished 404s both from the index and directly)
+- `CHANGELOG.md`
+
+Verification:
+- `PublicGuidesTest`: 3 passed.
+- Full `php artisan test` (plain, no `--env`): **1550 passed, 0 failed** (10225 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: not committed — waiting for owner approval.
+
+## 2026-09-28 - Documentation "Import Markdown": add file upload
+
+Reason — owner, after seeing the Import Markdown modal (screenshot): "এইটা কি এড করছ? ফাইল ইমপোর্ট এর অপশন কই?" (asked where the file-import option was — the modal only had a paste box, no file picker). Confirmed and added it: pasting a long document on mobile is painful.
+
+What changed:
+- **Settings → Documentation → article → Content → Import Markdown modal** now has a **Markdown file** upload field (`.md`/`.txt`) above the paste box. Either one works; at least one is required. The file is never written to disk — `FileUpload::storeFiles(false)` keeps it as a raw `TemporaryUploadedFile`, its content is read directly (`->get()`) and thrown away once converted.
+- Same conversion as before (`DocumentationArticleResource::markdownToHtml()`, already tested) — this only adds a second way to get text into that function.
+
+Important changed/new files:
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `lang/en.json`, `lang/bn.json` (also removed 2 keys the old modal-only text left orphaned)
+- `CHANGELOG.md`
+
+Verification:
+- `DocumentationModuleTest` (existing `markdownToHtml` conversion test still covers the shared conversion logic): 6 passed. `TranslationParityTest`: passed.
+- Full `php artisan test` (plain, no `--env`): **1545 passed, 0 failed** (10216 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not covered by an automated test: the file-upload wiring itself (Filament `FileUpload` → `TemporaryUploadedFile::get()`) — only the conversion function it feeds is tested. Not verified in a browser; the owner should try uploading the API guide `.md` file through the new file picker and confirm the formatting comes through correctly.
+
+Commit status: not committed — waiting for owner approval.
+
+## 2026-09-28 - Documentation module: "Import Markdown" button
+
+Reason — owner: pasted the API integration guide (Markdown) into a Documentation article's Content field, and it came in as one plain paragraph, not the original headings/bold/tables. Filament's Rich Editor is a WYSIWYG editor — it doesn't parse pasted Markdown syntax, it just inserts the raw characters as text. Owner picked adding an "Import Markdown" button over the alternatives (render to HTML and copy from a browser tab, or reformat manually).
+
+What changed:
+- **Content field → Import Markdown button** (`Settings → Documentation → article → Content`, hint icon): opens a modal with a textarea for raw Markdown; converts it with `league/commonmark`'s GitHub-Flavored Markdown converter (tables, headings, bold, lists, code blocks, autolinks) and replaces the Content field with the resulting rich text.
+- `league/commonmark` was already installed as a transitive dependency (via another package); added it directly to `composer.json` `require` since the app now calls it by name.
+- Also answered the owner's other question in chat: the Documentation module is **not** company-scoped — one setup applies to every company, same as this session's earlier CHANGELOG/PROJECT_GUIDE note already said.
+
+Important changed/new files:
+- `composer.json` (new direct dependency, no vendor change — already resolved in `composer.lock` at the same version)
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `lang/en.json`, `lang/bn.json`, `CHANGELOG.md`
+- `tests/Feature/DocumentationModuleTest.php` (+1 test: headings/bold/lists/tables convert correctly)
+
+Verification:
+- `DocumentationModuleTest`: 6 passed. `TranslationParityTest`: passed.
+- Full `php artisan test` (plain, no `--env`): **1545 passed, 0 failed** (10208 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser — the owner should re-paste the API guide through the new button and confirm the formatting looks right before relying on it for other documents.
+
+Commit status: not committed — waiting for owner approval.
+
 ## 2026-09-28 - Documentation module: fixes from automated PR review (Codex)
 
 Reason — an automated review bot (`chatgpt-codex-connector[bot]`) left 5 findings on PR bhd4232/Business-Dashboard#10 (the Documentation module committed earlier today), each citing a real `AGENTS.md` rule. Verified each and fixed all of them; this is a follow-up to the earlier "In-app Documentation module" entry, not a new feature.
