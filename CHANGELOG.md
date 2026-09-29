@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.40.0] - 2026-09-29
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -12,7 +14,6 @@ All notable production changes to Business Dashboard are documented here.
 
 **Technical Notes:**
 - `DocumentationArticleResource` table: `viewGuidePage` action, visible only when `is_published && is_public`; table query eager-loads `category` to avoid an N+1 for both this action and the existing Category column.
-
 ## [2.39.0] - 2026-09-29
 
 **Release type:** Minor Feature Update
