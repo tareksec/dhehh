@@ -164,6 +164,15 @@ class DocumentationModuleTest extends TestCase
             ->assertTableActionHasUrl('viewGuidePage', route('guides.show', ['orders', 'how-to-create-an-order']), record: $publicArticle);
     }
 
+    public function test_the_article_editor_toolbar_has_a_remove_link_button(): void
+    {
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($user);
+
+        Livewire::test(CreateDocumentationArticle::class)
+            ->assertSeeHtml('unsetLink()');
+    }
+
     public function test_markdown_import_converts_headings_bold_lists_and_tables_to_rich_html(): void
     {
         $markdown = <<<'MARKDOWN'

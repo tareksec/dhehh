@@ -2,6 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-29 - Documentation editor: "Remove link" toolbar button
+
+Reason — owner: "প্রিভিয়াস লিংক রিমুভ করার অপশন যুক্ত কর।" (Add an option to remove the previous link.) Follows the report that changing an existing link's URL in the editor didn't take effect.
+
+What changed:
+- The Content editor toolbar (Settings → Documentation → article) has a new **Remove link** button next to Link. Click inside a link, press it, and the link is removed while the text stays. Filament's editor had no unlink tool, so it is a custom `RichEditorTool`.
+- Not changed: the underlying "URL edit does nothing" behavior — Filament's `setLink` silently ignores URLs that look like an unknown scheme (e.g. `host:8080/x`); waiting on the owner's exact URL to confirm.
+
+Files: `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`, `lang/en.json`, `lang/bn.json`, `tests/Feature/DocumentationModuleTest.php` (+1 test), `CHANGELOG.md`.
+
+Verification: `DocumentationModuleTest` 10 passed; full suite result below; Pint passed. Not verified in a browser (button behavior in the live editor not clicked through).
+
+Commit status: not committed — waiting for owner approval.
+
 ## 2026-09-29 - Documentation articles list: a View button to open the public page
 
 Reason — owner (screenshot of the articles list): "লিস্টে আর্টিকেল পেজের সোয়া করার জন্য কোন লিংক নেই। আর্টিক্যাল শো বাড়ানোর জন্য একটা লিঙ্ক বাটন যুক্ত কর।" (There's no link in the list to view the article page. Add a link button for it.)
