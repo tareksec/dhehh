@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.38.0] - 2026-09-29
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -12,7 +14,6 @@ All notable production changes to Business Dashboard are documented here.
 
 **Technical Notes:**
 - The upload uses `FileUpload::storeFiles(false)`, so the file is never written to disk: its raw `TemporaryUploadedFile` content is read directly and discarded once converted through the same `DocumentationArticleResource::markdownToHtml()` used by the paste box.
-
 ## [2.37.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
