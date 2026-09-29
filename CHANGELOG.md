@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.42.0] - 2026-09-29
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -12,7 +14,6 @@ All notable production changes to Business Dashboard are documented here.
 
 **Technical Notes:**
 - Filament's `RichEditor` has no built-in unlink tool, so `DocumentationArticleResource` registers a custom `unlink` `RichEditorTool` (`extendMarkRange('link').unsetLink()`) and lists it in `toolbarButtons()` next to `link`.
-
 ## [2.41.0] - 2026-09-29
 
 **Release type:** Minor Feature Update
