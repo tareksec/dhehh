@@ -4,6 +4,8 @@ namespace App\Filament\Reseller\Pages;
 
 use App\Filament\Reseller\Concerns\ForApprovedResellers;
 use App\Models\Company;
+use App\Models\Customer;
+use App\Services\ResellerDomainDnsChecker;
 use BackedEnum;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -51,6 +53,7 @@ class MyStore extends Page
         $this->form->fill([
             'reseller_slug' => $reseller->reseller_slug,
             'reseller_subdomain' => $reseller->reseller_subdomain,
+            'reseller_custom_domain' => $reseller->reseller_custom_domain,
             'reseller_store_name' => $reseller->reseller_store_name,
         ]);
     }
@@ -94,6 +97,30 @@ class MyStore extends Page
                             ->suffix(fn (): string => '.'.$this->company()?->domain)
                             ->helperText(__('Your store opens at this address. Leave it empty to keep using the long link. If you change it, links you already shared will stop working.')),
 
+                        TextInput::make('reseller_custom_domain')
+                            ->label(__('Your own domain'))
+                            ->visible(fn (): bool => (bool) $this->company()?->reseller_custom_domains_enabled)
+                            ->maxLength(190)
+                            ->placeholder('myshop.com')
+                            ->rules([
+                                fn (): \Closure => function (string $attribute, mixed $value, \Closure $fail) use ($reseller): void {
+                                    $domain = Company::normalizeDomain((string) $value);
+
+                                    if ($domain === null) {
+                                        return;
+                                    }
+
+                                    if (! preg_match('/^(?=.{4,190}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/', $domain)) {
+                                        $fail(__('Enter a domain like myshop.com.'));
+                                    } elseif (Company::hostIsTakenByThePlatform($domain)) {
+                                        $fail(__('This domain cannot be used.'));
+                                    } elseif (Customer::withoutGlobalScopes()->where('reseller_custom_domain', $domain)->whereKeyNot($reseller->getKey())->exists()) {
+                                        $fail(__('This domain is already used by another store.'));
+                                    }
+                                },
+                            ])
+                            ->helperText(__('Optional. A domain you own, for example myshop.com. Save it, then point it to us as shown below and press Check DNS.')),
+
                         TextInput::make('reseller_store_name')
                             ->label(__('Store name'))
                             ->maxLength(255)
@@ -108,8 +135,16 @@ class MyStore extends Page
         $data = $this->form->getState();
         $reseller = $this->reseller();
 
+        $customDomain = $this->company()?->reseller_custom_domains_enabled
+            ? Company::normalizeDomain($data['reseller_custom_domain'] ?? null)
+            : $reseller->reseller_custom_domain;
+        $domainChanged = $customDomain !== $reseller->reseller_custom_domain;
+
         $reseller->update([
             'reseller_slug' => $data['reseller_slug'],
+            'reseller_custom_domain' => $customDomain,
+            // A new or changed domain has to be checked again before it goes live.
+            'reseller_custom_domain_verified_at' => $domainChanged ? null : $reseller->reseller_custom_domain_verified_at,
             'reseller_subdomain' => $this->company()?->reseller_subdomains_enabled
                 ? (filled($data['reseller_subdomain'] ?? null) ? strtolower(trim($data['reseller_subdomain'])) : null)
                 : $reseller->reseller_subdomain,
@@ -120,6 +155,46 @@ class MyStore extends Page
             ->title(__('Your store settings have been saved.'))
             ->success()
             ->send();
+    }
+
+    /** Re-checks the saved custom domain's DNS and, if it points to us, makes it live. */
+    public function verifyDomain(): void
+    {
+        $reseller = $this->reseller()->fresh();
+        $company = $this->company();
+
+        if (! $company?->reseller_custom_domains_enabled || blank($reseller->reseller_custom_domain)) {
+            return;
+        }
+
+        if (app(ResellerDomainDnsChecker::class)->pointsToUs($reseller->reseller_custom_domain, $company)) {
+            $reseller->forceFill(['reseller_custom_domain_verified_at' => now()])->save();
+
+            Notification::make()->title(__('Your domain is verified. Your store is now live there.'))->success()->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title(__('We could not see your domain pointing to us yet. DNS changes can take a few hours -- try again later.'))
+            ->warning()
+            ->send();
+    }
+
+    public function customDomainStatus(): ?array
+    {
+        $reseller = $this->reseller()->fresh();
+        $company = $this->company();
+
+        if (! $company?->reseller_custom_domains_enabled || blank($reseller->reseller_custom_domain)) {
+            return null;
+        }
+
+        return [
+            'domain' => $reseller->reseller_custom_domain,
+            'verified' => $reseller->reseller_custom_domain_verified_at !== null,
+            'target' => $company->domain,
+        ];
     }
 
     public function storeUrl(): ?string

@@ -2,6 +2,27 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-01 - Reseller portal Phase 7b: reseller custom domains (app side)
+
+Reason — owner said "কাস্টম ডোমেইনের কাজ শুরু কর". Built everything the app can do; the server-side SSL proxy (Caddy vs Coolify API) is still an open decision, so the company switch stays off until that is set up.
+
+What changed:
+- Migration: `companies.reseller_custom_domains_enabled` (default off); `customers.reseller_custom_domain` (unique across all companies) and `reseller_custom_domain_verified_at`.
+- `Company::forResellerCustomDomainHost()` / `hostIsTakenByThePlatform()`; `ResolveCompanyFromDomain` resolves a verified custom domain to the reseller (same store scoping as subdomains). `ResellerDomainDnsChecker` (swappable in tests) compares the domain's IPs with the company domain's.
+- Portal **My Store**: **Your own domain** field, DNS instructions and **Check DNS**. A new/changed domain starts unverified.
+- `GET /internal/tls-ask` (throttled) for Caddy's on-demand TLS: 200 only for verified reseller domains.
+- Admin: **Reseller custom domains enabled** toggle (Super Admin only). `docs/deployment.md`: Caddy example and the Traefik-port caveat.
+
+My decisions (say if you want different): verification is a DNS-points-to-us check (no TXT token); a reseller can hold both a subdomain and their own domain; the toggle is separate from the subdomain one.
+
+Not done: nothing issues certificates yet — that is the proxy (server task). Without it a custom domain opens with a certificate error even after "verified".
+
+Needs Bangla review: 12 new keys in `lang/bn.json` (the "Your own domain" / Check DNS texts).
+
+Tests: `ResellerCustomDomainTest` (15); mutation check confirmed the unverified-domain and tls-ask tests fail without the verification filter. Full suite: 1585 passed (`php artisan test`, no `--env`); `npm run build` OK.
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-01).
+
 ## 2026-10-01 - Reseller portal Phase 7a: reseller store subdomains
 
 Reason — owner asked whether resellers can add a subdomain/custom domain from their dashboard and have it go live automatically; then said "সাবডোমেইন দিয়ে শুরু কর". Owner's answers (asked via `AskUserQuestion`): subdomain **and** custom domain eventually; the domain shows **only the reseller's store**; a **company-level switch**, then all approved resellers. This phase is the subdomain half (7a); custom domains (7b) wait for the Caddy / Coolify-API decision.

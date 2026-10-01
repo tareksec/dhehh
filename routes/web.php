@@ -71,6 +71,10 @@ Route::middleware('signed')
     ->get('/quotation/{quotationNumber}', [QuotationPublicController::class, 'show'])
     ->name('quotation.public');
 
+Route::get('/internal/tls-ask', \App\Http\Controllers\TlsAskController::class)
+    ->middleware('throttle:60,1')
+    ->name('internal.tls-ask');
+
 Route::get('/webhooks/meta', [MetaWebhookController::class, 'verify'])
     ->name('webhooks.meta.verify');
 Route::post('/webhooks/meta', [MetaWebhookController::class, 'handle'])

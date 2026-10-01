@@ -527,6 +527,27 @@ Optional, per company. Needs two things on the server before **Company Managemen
 
 No environment variables, no per-reseller server work: once both are in place a reseller's chosen subdomain is live the moment they save it. Custom domains of their own (e.g. `myshop.com`) are a separate, later step.
 
+### Reseller custom domains (`myshop.com`)
+
+Optional, per company (**Reseller custom domains enabled**). The app side is finished: it verifies DNS, resolves the domain to the reseller's store, and answers `GET /internal/tls-ask?domain=<host>` with `200` only for a verified reseller domain (otherwise `404`). What the server needs is a proxy that gets an SSL certificate **on demand** and asks that endpoint first. Caddy does this:
+
+```
+{
+    on_demand_tls {
+        ask http://<app-internal-address>/internal/tls-ask
+    }
+}
+
+https:// {
+    tls {
+        on_demand
+    }
+    reverse_proxy <app-internal-address>
+}
+```
+
+It needs no account (Let's Encrypt certificates are free and automatic). It has to receive the traffic for reseller domains on ports 80/443, which Coolify's own Traefik already uses, so how to place it (in front of Traefik, or on its own IP for custom domains) depends on the live server and has to be decided there. Until then, leave **Reseller custom domains enabled** off. The DNS check compares the reseller's domain IPs with the company domain's IPs, so the company domain must resolve to this server.
+
 ## Production Checklist
 
 - `APP_ENV=production`

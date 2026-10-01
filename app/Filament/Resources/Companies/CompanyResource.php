@@ -94,6 +94,12 @@ class CompanyResource extends Resource
                         ->default(false)
                         ->visible(fn (): bool => Auth::user()?->isSuperAdmin() ?? false)
                         ->dehydrated(fn (): bool => Auth::user()?->isSuperAdmin() ?? false),
+                    Toggle::make('reseller_custom_domains_enabled')
+                        ->label('Reseller custom domains enabled')
+                        ->helperText('Lets every approved reseller connect their own domain (e.g. myshop.com) to their store. The server must issue SSL certificates on demand first (a Caddy proxy using /internal/tls-ask) -- see docs/deployment.md. Super Admin only.')
+                        ->default(false)
+                        ->visible(fn (): bool => Auth::user()?->isSuperAdmin() ?? false)
+                        ->dehydrated(fn (): bool => Auth::user()?->isSuperAdmin() ?? false),
                     TextInput::make('reseller_portal_domain')
                         ->label('Reseller portal domain')
                         ->helperText('Leave blank to use "reseller." + this company\'s own domain. Set this only for a fully separate domain (e.g. a dedicated reseller-only website). Super Admin only.')

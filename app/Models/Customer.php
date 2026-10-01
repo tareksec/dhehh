@@ -61,6 +61,8 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
         'reseller_note',
         'reseller_slug',
         'reseller_subdomain',
+        'reseller_custom_domain',
+        'reseller_custom_domain_verified_at',
         'reseller_store_name',
         'opening_balance',
         'current_balance',
@@ -91,6 +93,7 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
         'login_otp_sent_at' => 'datetime',
         'login_otp_attempts' => 'integer',
         'opted_out_at' => 'datetime',
+        'reseller_custom_domain_verified_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -173,6 +176,10 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
      */
     public function resellerStoreUrl(): ?string
     {
+        if ($this->hasLiveCustomDomain()) {
+            return 'https://'.$this->reseller_custom_domain;
+        }
+
         $subdomainHost = $this->company?->resellerSubdomainHost($this->reseller_subdomain);
 
         if ($subdomainHost) {
@@ -186,6 +193,15 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
         }
 
         return 'https://'.$domain.route('storefront.reseller_store.products.index', $this->reseller_slug, false);
+    }
+
+    /** Their own domain is saved, verified, and the company still allows custom domains. */
+    public function hasLiveCustomDomain(): bool
+    {
+        return filled($this->reseller_custom_domain)
+            && $this->reseller_custom_domain_verified_at !== null
+            && (bool) $this->company?->reseller_custom_domains_enabled
+            && (bool) $this->company?->reseller_module_enabled;
     }
 
     /**

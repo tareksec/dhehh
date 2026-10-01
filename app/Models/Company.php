@@ -62,6 +62,7 @@ class Company extends Model
         'reseller_module_enabled',
         'reseller_portal_domain',
         'reseller_subdomains_enabled',
+        'reseller_custom_domains_enabled',
     ];
 
     protected $casts = [
@@ -69,6 +70,7 @@ class Company extends Model
         'domain_verified' => 'boolean',
         'reseller_module_enabled' => 'boolean',
         'reseller_subdomains_enabled' => 'boolean',
+        'reseller_custom_domains_enabled' => 'boolean',
         'settings' => 'array',
     ];
 
@@ -211,6 +213,65 @@ class Company extends Model
             ->first();
 
         return $company ? [$company, $label] : null;
+    }
+
+    /**
+     * The verified reseller whose own domain is $host, and their company, when
+     * that company has custom domains switched on. Looked up without the
+     * company scope because the company is exactly what is being resolved.
+     *
+     * @return array{0: self, 1: Customer}|null
+     */
+    public static function forResellerCustomDomainHost(?string $host): ?array
+    {
+        $host = static::normalizeDomain($host);
+
+        if ($host === null || ! Schema::hasTable('companies')) {
+            return null;
+        }
+
+        $reseller = Customer::withoutGlobalScopes()
+            ->where('reseller_custom_domain', $host)
+            ->whereNotNull('reseller_custom_domain_verified_at')
+            ->where('reseller_status', 'approved')
+            ->first();
+
+        if (! $reseller) {
+            return null;
+        }
+
+        $company = static::query()
+            ->whereKey($reseller->company_id)
+            ->where('is_active', true)
+            ->where('reseller_module_enabled', true)
+            ->where('reseller_custom_domains_enabled', true)
+            ->first();
+
+        return $company ? [$company, $reseller] : null;
+    }
+
+    /**
+     * Whether $host is already spoken for by the platform: a company domain,
+     * a portal host, or a store subdomain label under a company domain. A
+     * reseller may not claim any of these as their own domain.
+     */
+    public static function hostIsTakenByThePlatform(string $host): bool
+    {
+        $host = static::normalizeDomain($host) ?? '';
+
+        if ($host === '') {
+            return true;
+        }
+
+        if (static::query()->where('domain', $host)->orWhere('reseller_portal_domain', $host)->exists()) {
+            return true;
+        }
+
+        // Anything underneath a company's domain ("x.<company domain>") is the
+        // company's namespace -- subdomain stores and "reseller." live there.
+        $parent = str_contains($host, '.') ? explode('.', $host, 2)[1] : '';
+
+        return $parent !== '' && static::query()->where('domain', $parent)->exists();
     }
 
     /** "<label>.<domain>" for a reseller's chosen subdomain, or null when subdomains are off. */

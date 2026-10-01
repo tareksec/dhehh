@@ -557,5 +557,17 @@
     "Save the numbers you get paid on once, then pick one when you request a withdrawal. A saved account can be changed or removed at any time — requests you already sent are not affected.": "যে নম্বরে টাকা নেন সেগুলো একবার সংরক্ষণ করুন, তারপর উত্তোলনের অনুরোধের সময় তালিকা থেকে বেছে নিন। সংরক্ষিত অ্যাকাউন্ট যেকোনো সময় বদলানো বা মুছে ফেলা যাবে — আগে পাঠানো অনুরোধে এর কোনো প্রভাব পড়বে না।",
     "Store subdomain": "স্টোর সাবডোমেইন",
     "Use lowercase letters, numbers and dashes only, and do not start or end with a dash.": "শুধু ছোট হাতের ইংরেজি অক্ষর, সংখ্যা ও ড্যাশ ব্যবহার করুন; ড্যাশ দিয়ে শুরু বা শেষ করবেন না।",
-    "Your store opens at this address. Leave it empty to keep using the long link. If you change it, links you already shared will stop working.": "আপনার স্টোর এই ঠিকানায় খুলবে। খালি রাখলে বড় লিংকটাই চলবে। বদলালে আগে শেয়ার করা লিংক আর কাজ করবে না।"
+    "Your store opens at this address. Leave it empty to keep using the long link. If you change it, links you already shared will stop working.": "আপনার স্টোর এই ঠিকানায় খুলবে। খালি রাখলে বড় লিংকটাই চলবে। বদলালে আগে শেয়ার করা লিংক আর কাজ করবে না।",
+    "Your own domain": "আপনার নিজের ডোমেইন",
+    "Enter a domain like myshop.com.": "myshop.com-এর মতো একটি ডোমেইন লিখুন।",
+    "This domain cannot be used.": "এই ডোমেইনটি ব্যবহার করা যাবে না।",
+    "This domain is already used by another store.": "এই ডোমেইন আরেকটি স্টোর আগেই ব্যবহার করছে।",
+    "Optional. A domain you own, for example myshop.com. Save it, then point it to us as shown below and press Check DNS.": "ঐচ্ছিক। আপনার নিজের ডোমেইন, যেমন myshop.com। সেভ করুন, তারপর নিচের নির্দেশ অনুযায়ী আমাদের সার্ভারে পয়েন্ট করে \"Check DNS\" চাপুন।",
+    "Your domain is verified. Your store is now live there.": "আপনার ডোমেইন যাচাই হয়েছে। আপনার স্টোর এখন সেখানে চালু।",
+    "We could not see your domain pointing to us yet. DNS changes can take a few hours -- try again later.": "আপনার ডোমেইন এখনো আমাদের দিকে পয়েন্ট করছে দেখা যাচ্ছে না। DNS বদল হতে কয়েক ঘণ্টা লাগতে পারে — পরে আবার চেষ্টা করুন।",
+    "Verified: :domain is live.": "যাচাই হয়েছে: :domain চালু আছে।",
+    "Point :domain to us:": ":domain আমাদের দিকে পয়েন্ট করুন:",
+    "At your domain provider, add a CNAME record for :domain pointing to :target (or an A record with the same IP address).": "আপনার ডোমেইন প্রোভাইডারে :domain-এর জন্য :target-এর দিকে একটি CNAME রেকর্ড যোগ করুন (অথবা একই IP ঠিকানার একটি A রেকর্ড)।",
+    "Then press Check DNS. It can take a few hours for the change to spread.": "তারপর \"Check DNS\" চাপুন। পরিবর্তন ছড়াতে কয়েক ঘণ্টা লাগতে পারে।",
+    "Check DNS": "DNS যাচাই করুন"
 }

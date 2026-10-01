@@ -31,6 +31,15 @@ class ResolveCompanyFromDomain
         $hostReseller = null;
 
         if (! $company) {
+            $custom = Company::forResellerCustomDomainHost($host);
+
+            if ($custom) {
+                [$company, $hostReseller] = $custom;
+                $this->context->set($company);
+            }
+        }
+
+        if (! $company) {
             $subdomain = Company::forResellerSubdomainHost($host);
 
             if ($subdomain) {

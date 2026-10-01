@@ -30,7 +30,7 @@ class RestrictResellerPortalHost
      * Always allowed regardless of host: framework/infra routes no page can
      * function without.
      */
-    protected const PASSTHROUGH_PREFIXES = ['livewire', 'up', 'health', 'build', 'storage', 'vendor', 'broadcasting'];
+    protected const PASSTHROUGH_PREFIXES = ['livewire', 'internal', 'up', 'health', 'build', 'storage', 'vendor', 'broadcasting'];
 
     public function handle(Request $request, Closure $next): Response
     {

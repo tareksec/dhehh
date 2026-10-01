@@ -557,5 +557,17 @@
     "Save the numbers you get paid on once, then pick one when you request a withdrawal. A saved account can be changed or removed at any time — requests you already sent are not affected.": "Save the numbers you get paid on once, then pick one when you request a withdrawal. A saved account can be changed or removed at any time — requests you already sent are not affected.",
     "Store subdomain": "Store subdomain",
     "Use lowercase letters, numbers and dashes only, and do not start or end with a dash.": "Use lowercase letters, numbers and dashes only, and do not start or end with a dash.",
-    "Your store opens at this address. Leave it empty to keep using the long link. If you change it, links you already shared will stop working.": "Your store opens at this address. Leave it empty to keep using the long link. If you change it, links you already shared will stop working."
+    "Your store opens at this address. Leave it empty to keep using the long link. If you change it, links you already shared will stop working.": "Your store opens at this address. Leave it empty to keep using the long link. If you change it, links you already shared will stop working.",
+    "Your own domain": "Your own domain",
+    "Enter a domain like myshop.com.": "Enter a domain like myshop.com.",
+    "This domain cannot be used.": "This domain cannot be used.",
+    "This domain is already used by another store.": "This domain is already used by another store.",
+    "Optional. A domain you own, for example myshop.com. Save it, then point it to us as shown below and press Check DNS.": "Optional. A domain you own, for example myshop.com. Save it, then point it to us as shown below and press Check DNS.",
+    "Your domain is verified. Your store is now live there.": "Your domain is verified. Your store is now live there.",
+    "We could not see your domain pointing to us yet. DNS changes can take a few hours -- try again later.": "We could not see your domain pointing to us yet. DNS changes can take a few hours -- try again later.",
+    "Verified: :domain is live.": "Verified: :domain is live.",
+    "Point :domain to us:": "Point :domain to us:",
+    "At your domain provider, add a CNAME record for :domain pointing to :target (or an A record with the same IP address).": "At your domain provider, add a CNAME record for :domain pointing to :target (or an A record with the same IP address).",
+    "Then press Check DNS. It can take a few hours for the change to spread.": "Then press Check DNS. It can take a few hours for the change to spread.",
+    "Check DNS": "Check DNS"
 }
