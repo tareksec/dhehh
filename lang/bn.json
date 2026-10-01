@@ -554,5 +554,8 @@
     "Monthly totals": "মাসভিত্তিক মোট",
     "Month": "মাস",
     "Save changes": "পরিবর্তন সংরক্ষণ করুন",
-    "Save the numbers you get paid on once, then pick one when you request a withdrawal. A saved account can be changed or removed at any time — requests you already sent are not affected.": "যে নম্বরে টাকা নেন সেগুলো একবার সংরক্ষণ করুন, তারপর উত্তোলনের অনুরোধের সময় তালিকা থেকে বেছে নিন। সংরক্ষিত অ্যাকাউন্ট যেকোনো সময় বদলানো বা মুছে ফেলা যাবে — আগে পাঠানো অনুরোধে এর কোনো প্রভাব পড়বে না।"
+    "Save the numbers you get paid on once, then pick one when you request a withdrawal. A saved account can be changed or removed at any time — requests you already sent are not affected.": "যে নম্বরে টাকা নেন সেগুলো একবার সংরক্ষণ করুন, তারপর উত্তোলনের অনুরোধের সময় তালিকা থেকে বেছে নিন। সংরক্ষিত অ্যাকাউন্ট যেকোনো সময় বদলানো বা মুছে ফেলা যাবে — আগে পাঠানো অনুরোধে এর কোনো প্রভাব পড়বে না।",
+    "Store subdomain": "স্টোর সাবডোমেইন",
+    "Use lowercase letters, numbers and dashes only, and do not start or end with a dash.": "শুধু ছোট হাতের ইংরেজি অক্ষর, সংখ্যা ও ড্যাশ ব্যবহার করুন; ড্যাশ দিয়ে শুরু বা শেষ করবেন না।",
+    "Your store opens at this address. Leave it empty to keep using the long link. If you change it, links you already shared will stop working.": "আপনার স্টোর এই ঠিকানায় খুলবে। খালি রাখলে বড় লিংকটাই চলবে। বদলালে আগে শেয়ার করা লিংক আর কাজ করবে না।"
 }

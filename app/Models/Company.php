@@ -61,12 +61,14 @@ class Company extends Model
         'dashboard_color',
         'reseller_module_enabled',
         'reseller_portal_domain',
+        'reseller_subdomains_enabled',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'domain_verified' => 'boolean',
         'reseller_module_enabled' => 'boolean',
+        'reseller_subdomains_enabled' => 'boolean',
         'settings' => 'array',
     ];
 
@@ -168,6 +170,57 @@ class Company extends Model
             ->whereNull('reseller_portal_domain')
             ->where('domain', substr($host, strlen('reseller.')))
             ->first();
+    }
+
+    /**
+     * Labels a reseller may never take as a store subdomain: they either serve
+     * the reseller portal / admin / mail or would look like official pages.
+     */
+    public const RESERVED_RESELLER_SUBDOMAINS = [
+        'www', 'reseller', 'resellers', 'portal', 'admin', 'app', 'api', 'mail', 'smtp', 'ftp',
+        'cdn', 'static', 'assets', 'shop', 'store', 'dashboard', 'login', 'support', 'help',
+        'billing', 'staging', 'dev', 'test', 'demo',
+    ];
+
+    /**
+     * The company + subdomain label when $host is "<label>.<company domain>"
+     * for a company that has reseller subdomains switched on. The caller still
+     * has to find the reseller with that label. Reserved labels never match.
+     *
+     * @return array{0: self, 1: string}|null
+     */
+    public static function forResellerSubdomainHost(?string $host): ?array
+    {
+        $host = static::normalizeDomain($host);
+
+        if ($host === null || ! str_contains($host, '.') || ! Schema::hasTable('companies')) {
+            return null;
+        }
+
+        [$label, $parent] = explode('.', $host, 2);
+
+        if (in_array($label, self::RESERVED_RESELLER_SUBDOMAINS, true)) {
+            return null;
+        }
+
+        $company = static::query()
+            ->where('domain', $parent)
+            ->where('is_active', true)
+            ->where('reseller_module_enabled', true)
+            ->where('reseller_subdomains_enabled', true)
+            ->first();
+
+        return $company ? [$company, $label] : null;
+    }
+
+    /** "<label>.<domain>" for a reseller's chosen subdomain, or null when subdomains are off. */
+    public function resellerSubdomainHost(?string $label): ?string
+    {
+        if (blank($label) || blank($this->domain) || ! $this->reseller_module_enabled || ! $this->reseller_subdomains_enabled) {
+            return null;
+        }
+
+        return $label.'.'.$this->domain;
     }
 
     /**

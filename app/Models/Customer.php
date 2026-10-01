@@ -60,6 +60,7 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
         'business_name',
         'reseller_note',
         'reseller_slug',
+        'reseller_subdomain',
         'reseller_store_name',
         'opening_balance',
         'current_balance',
@@ -172,6 +173,12 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
      */
     public function resellerStoreUrl(): ?string
     {
+        $subdomainHost = $this->company?->resellerSubdomainHost($this->reseller_subdomain);
+
+        if ($subdomainHost) {
+            return 'https://'.$subdomainHost;
+        }
+
         $domain = $this->company?->domain;
 
         if (blank($this->reseller_slug) || blank($domain)) {

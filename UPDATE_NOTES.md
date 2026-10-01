@@ -2,6 +2,25 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-01 - Reseller portal Phase 7a: reseller store subdomains
+
+Reason — owner asked whether resellers can add a subdomain/custom domain from their dashboard and have it go live automatically; then said "সাবডোমেইন দিয়ে শুরু কর". Owner's answers (asked via `AskUserQuestion`): subdomain **and** custom domain eventually; the domain shows **only the reseller's store**; a **company-level switch**, then all approved resellers. This phase is the subdomain half (7a); custom domains (7b) wait for the Caddy / Coolify-API decision.
+
+What changed:
+- Migration: `companies.reseller_subdomains_enabled` (default off) and `customers.reseller_subdomain` (unique per company).
+- `Company::forResellerSubdomainHost()` resolves `<label>.<company domain>`; `ResolveCompanyFromDomain` then scopes the request to that reseller like `/store/{slug}` does (`/` goes to `/products`). `StorefrontUrl` builds plain URLs on that host; `ResolveResellerFromSlug` only allows the host's own reseller there.
+- Portal **My Store**: a **Store subdomain** field (only when the company switch is on; validated, reserved names refused, clearable). `Customer::resellerStoreUrl()` returns the subdomain URL while the switch is on.
+- Admin: **Reseller subdomains enabled** toggle (Super Admin only, like the portal domain, because it needs server DNS/SSL work first).
+- `docs/deployment.md`: wildcard DNS + wildcard SSL steps.
+
+My decisions (say if you want different): reseller picks the label themselves, effective immediately (no admin approval); 3–40 characters; reserved list in `Company::RESERVED_RESELLER_SUBDOMAINS`; the company switch is Super Admin only.
+
+Needs Bangla review: 3 new keys in `lang/bn.json` ("Store subdomain", the format message, the helper text).
+
+Tests: `ResellerSubdomainTest` (16). Full suite: 1570 passed (`php artisan test`, no `--env`). No frontend change, so no `npm run build` needed.
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-01), together with the Phase 7 plan edit.
+
 ## 2026-09-29 - Reseller portal Phase 6: switch-over
 
 Reason — owner said "ফেজ ৬ শুরু কর". Owner's answer to §2.1 Q5 (asked via `AskUserQuestion`): **redirect** the old My Account → Your Store page to the portal.

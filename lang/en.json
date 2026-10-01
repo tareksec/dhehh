@@ -554,5 +554,8 @@
     "Monthly totals": "Monthly totals",
     "Month": "Month",
     "Save changes": "Save changes",
-    "Save the numbers you get paid on once, then pick one when you request a withdrawal. A saved account can be changed or removed at any time — requests you already sent are not affected.": "Save the numbers you get paid on once, then pick one when you request a withdrawal. A saved account can be changed or removed at any time — requests you already sent are not affected."
+    "Save the numbers you get paid on once, then pick one when you request a withdrawal. A saved account can be changed or removed at any time — requests you already sent are not affected.": "Save the numbers you get paid on once, then pick one when you request a withdrawal. A saved account can be changed or removed at any time — requests you already sent are not affected.",
+    "Store subdomain": "Store subdomain",
+    "Use lowercase letters, numbers and dashes only, and do not start or end with a dash.": "Use lowercase letters, numbers and dashes only, and do not start or end with a dash.",
+    "Your store opens at this address. Leave it empty to keep using the long link. If you change it, links you already shared will stop working.": "Your store opens at this address. Leave it empty to keep using the long link. If you change it, links you already shared will stop working."
 }

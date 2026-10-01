@@ -518,6 +518,15 @@ For each company:
 
 Behaviour to expect: on the portal host every non-portal path redirects to the portal, and `/portal` returns 404 on every other host. Resellers who open the old **My Account → Your Store** page are redirected to the portal (they sign in again there — it is a separate login on a different host). Applications now go through the portal's own **Become a reseller** form. Store links (`{company-domain}/store/{slug}`) do not change.
 
+### Reseller store subdomains (`name.<company-domain>`)
+
+Optional, per company. Needs two things on the server before **Company Management → Reseller subdomains enabled** is switched on:
+
+1. **Wildcard DNS:** an `A` record `*.<company-domain>` pointing at the same server. Explicit records (`reseller`, `www`) keep working because they are more specific.
+2. **Wildcard SSL:** a `*.<company-domain>` certificate. Let's Encrypt only issues wildcards through a DNS challenge, so Traefik/Coolify needs your DNS provider's API token for that domain. Without it, subdomains open with a certificate warning.
+
+No environment variables, no per-reseller server work: once both are in place a reseller's chosen subdomain is live the moment they save it. Custom domains of their own (e.g. `myshop.com`) are a separate, later step.
+
 ## Production Checklist
 
 - `APP_ENV=production`

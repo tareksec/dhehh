@@ -43,11 +43,24 @@ class StorefrontUrl
 
         $resellerSlug = self::currentResellerSlug();
 
-        if ($resellerSlug && in_array($family, self::RESELLER_STORE_FAMILIES, true)) {
+        // On the reseller's own subdomain the host already names the store, so
+        // the plain routes ("/products", "/cart", ...) are the right URLs.
+        if ($resellerSlug && ! self::onResellerHost() && in_array($family, self::RESELLER_STORE_FAMILIES, true)) {
             return route('storefront.reseller_store.'.$family, self::prepend($resellerSlug, $parameters));
         }
 
+        // The reseller's store front page is the product list ("show" only
+        // exists under /store/{slug}).
+        if ($family === 'show' && $resellerSlug && self::onResellerHost()) {
+            return route('storefront.products.index');
+        }
+
         return route('storefront.'.$family, $parameters);
+    }
+
+    public static function onResellerHost(): bool
+    {
+        return (bool) request()?->attributes->get('storefront_reseller_host');
     }
 
     public static function currentPreviewSlug(): ?string

@@ -3,6 +3,7 @@
 namespace App\Filament\Reseller\Pages;
 
 use App\Filament\Reseller\Concerns\ForApprovedResellers;
+use App\Models\Company;
 use BackedEnum;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -49,6 +50,7 @@ class MyStore extends Page
 
         $this->form->fill([
             'reseller_slug' => $reseller->reseller_slug,
+            'reseller_subdomain' => $reseller->reseller_subdomain,
             'reseller_store_name' => $reseller->reseller_store_name,
         ]);
     }
@@ -75,6 +77,23 @@ class MyStore extends Page
                             )
                             ->helperText(__('Only letters, numbers, dashes and underscores. If you change this, links you already shared will stop working.')),
 
+                        TextInput::make('reseller_subdomain')
+                            ->label(__('Store subdomain'))
+                            ->visible(fn (): bool => (bool) $this->company()?->reseller_subdomains_enabled)
+                            ->minLength(3)
+                            ->maxLength(40)
+                            ->regex('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/')
+                            ->validationMessages(['regex' => __('Use lowercase letters, numbers and dashes only, and do not start or end with a dash.')])
+                            ->notIn(Company::RESERVED_RESELLER_SUBDOMAINS)
+                            ->unique(
+                                table: 'customers',
+                                column: 'reseller_subdomain',
+                                ignorable: $reseller,
+                                modifyRuleUsing: fn (Unique $rule): Unique => $rule->where('company_id', $reseller->company_id),
+                            )
+                            ->suffix(fn (): string => '.'.$this->company()?->domain)
+                            ->helperText(__('Your store opens at this address. Leave it empty to keep using the long link. If you change it, links you already shared will stop working.')),
+
                         TextInput::make('reseller_store_name')
                             ->label(__('Store name'))
                             ->maxLength(255)
@@ -91,6 +110,9 @@ class MyStore extends Page
 
         $reseller->update([
             'reseller_slug' => $data['reseller_slug'],
+            'reseller_subdomain' => $this->company()?->reseller_subdomains_enabled
+                ? (filled($data['reseller_subdomain'] ?? null) ? strtolower(trim($data['reseller_subdomain'])) : null)
+                : $reseller->reseller_subdomain,
             'reseller_store_name' => filled($data['reseller_store_name'] ?? null) ? trim($data['reseller_store_name']) : null,
         ]);
 

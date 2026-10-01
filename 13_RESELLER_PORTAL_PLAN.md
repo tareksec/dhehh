@@ -102,6 +102,7 @@ Each phase is its own commit, deployable on its own, with tests, CHANGELOG, UPDA
 | **4. Products & pricing** | Page 3: inline price edit, bulk actions, share and photo download. | 2 |
 | **5. Earnings, withdrawals, store settings, profile** | Pages 4–7 and saved payout accounts. | 2, §2.1 Q3 |
 | **6. Switch-over** | Replace "My Account → Your Store" with a link to the portal (§2.1 Q5), update `PROJECT_GUIDE.md` and `docs/deployment.md` (DNS/Coolify steps below), and write owner-facing notes. | 3–5 |
+| **7. Reseller own domains** | A reseller adds a subdomain (`name.<company domain>`) or their own custom domain from the portal. The domain shows only that reseller's store (not the portal). Needs a per-company on/off switch (off by default; when on, every approved reseller can use it). DNS ownership check before a custom domain goes live. Server side: wildcard DNS + wildcard SSL for subdomains; on-demand SSL for custom domains (Caddy in front, or the Coolify API; to be confirmed against the live setup). | 6 |
 
 ## 8. What the owner has to do on the server (Phase 2 go-live)
 
@@ -121,3 +122,10 @@ No new environment variables. `SESSION_DOMAIN` stays empty, so the portal login 
 | The host middleware blocking something needed (Livewire, assets, health checks) | An explicit allow-list plus a test that walks the portal pages on the portal host |
 | Missing a storefront link in some theme | The crawler-style test in §4.5 runs over every theme in `StorefrontThemeRegistry` |
 | Resellers with bookmarks to `/account/reseller` | Phase 6 redirects the old page to the portal instead of deleting it |
+
+## 10. Phase 7 owner decisions (2026-10-01)
+
+- Domain types: subdomain **and** custom domain.
+- What the domain shows: the reseller's store only; the portal stays on its own host.
+- Who gets it: a company-level switch; when on, all approved resellers.
+- Open (technical, to confirm before building): Caddy on-demand TLS vs Coolify API for custom-domain SSL.

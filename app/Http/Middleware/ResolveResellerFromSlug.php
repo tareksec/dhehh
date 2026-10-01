@@ -28,6 +28,11 @@ class ResolveResellerFromSlug
 
         $slug = $request->route('resellerSlug');
 
+        // On a reseller's own subdomain the host already picked the store, so
+        // /store/{slug} may only name that same reseller.
+        $hostReseller = $request->attributes->get('storefront_reseller');
+        abort_if($hostReseller instanceof Customer && $hostReseller->reseller_slug !== $slug, 404);
+
         $reseller = Customer::query()
             ->where('company_id', $company->getKey())
             ->where('reseller_slug', $slug)

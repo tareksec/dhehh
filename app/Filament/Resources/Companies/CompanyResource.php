@@ -88,6 +88,12 @@ class CompanyResource extends Resource
                         ->default(false)
                         ->visible(fn (): bool => Auth::user()?->isSuperAdmin() ?? false)
                         ->dehydrated(fn (): bool => Auth::user()?->isSuperAdmin() ?? false),
+                    Toggle::make('reseller_subdomains_enabled')
+                        ->label('Reseller subdomains enabled')
+                        ->helperText('Lets every approved reseller choose "name.<this company\'s domain>" for their store. Needs a wildcard DNS record (*.domain) and a wildcard SSL certificate on the server first -- see docs/deployment.md. Super Admin only.')
+                        ->default(false)
+                        ->visible(fn (): bool => Auth::user()?->isSuperAdmin() ?? false)
+                        ->dehydrated(fn (): bool => Auth::user()?->isSuperAdmin() ?? false),
                     TextInput::make('reseller_portal_domain')
                         ->label('Reseller portal domain')
                         ->helperText('Leave blank to use "reseller." + this company\'s own domain. Set this only for a fully separate domain (e.g. a dedicated reseller-only website). Super Admin only.')
