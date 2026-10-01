@@ -2,11 +2,13 @@
 
 namespace App\Services\Investment;
 
+use App\Models\ChannelPartner;
 use App\Models\Investment;
 use App\Models\Investor;
 use App\Models\InvestorDraft;
 use App\Models\InvestorSecurityInstrument;
 use App\Services\CompanyContext;
+use App\Support\InvestorIdentity;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Illuminate\Support\Facades\Auth;
@@ -32,7 +34,7 @@ use Throwable;
  */
 class InvestorImportService
 {
-    public const SAMPLE_HEADINGS = ['name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'nid_number', 'address', 'stamp_number', 'cheque_number', 'is_channel_partner', 'channel_partner_phone', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
+    public const SAMPLE_HEADINGS = ['name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'nid_number', 'address', 'stamp_number', 'cheque_number', 'channel_partner_phone', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
 
     private const STRING_FIELDS = ['name', 'display_name', 'guardian_name', 'email', 'nominee_name', 'nominee_relation'];
 
@@ -176,7 +178,7 @@ class InvestorImportService
         }
 
         [$investor, $investment] = DB::transaction(function () use ($draft, $data, $companyId, $existing, $createsInvestment): array {
-            $investor = $existing ?? Investor::query()->create([...$data, 'company_id' => $companyId, 'is_channel_partner' => (bool) $data['is_channel_partner']]);
+            $investor = $existing ?? Investor::query()->create([...$data, 'company_id' => $companyId]);
             $investment = null;
 
             if ($createsInvestment) {
@@ -226,12 +228,20 @@ class InvestorImportService
 
         Validator::make($data, [
             'name' => ['required', 'string', 'max:255'],
+            'nid_number' => ['required', function (string $attribute, mixed $value, \Closure $fail) use ($companyId): void {
+                $owner = Investor::query()->where('company_id', $companyId)->where('nid_hash', InvestorIdentity::hash((string) $value) ?? '-')->first();
+
+                if ($owner) {
+                    $fail(__('This NID / passport number already belongs to investor :name.', ['name' => $owner->name]));
+                }
+            }],
             'phone' => ['required', 'string', 'max:255', Rule::unique('investors', 'phone')->where('company_id', $companyId)],
             'email' => ['nullable', 'email', 'max:255'],
             'date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
-            'channel_partner_id' => ['nullable', Rule::exists('investors', 'id')->where('company_id', $companyId)],
+            'channel_partner_id' => ['nullable', Rule::exists('channel_partners', 'id')->where('company_id', $companyId)],
         ], [
             'name.required' => __('Name is missing.'),
+            'nid_number.required' => __('NID / passport number is missing. It is the investor ID, so it is required.'),
             'phone.required' => __('Phone is missing.'),
             'phone.unique' => __('Phone :phone already belongs to another investor.', ['phone' => (string) $draft->phone]),
             'email.email' => __('Email :email is not valid.', ['email' => (string) $draft->email]),
@@ -249,6 +259,9 @@ class InvestorImportService
             'project_id' => filled($investment['project_id'] ?? null) ? (int) $investment['project_id'] : null,
             'payment_method' => array_key_exists((string) ($investment['payment_method'] ?? ''), Investment::PAYMENT_METHODS) ? $investment['payment_method'] : null,
             'invested_at' => filled($investment['invested_at'] ?? null) ? (string) $investment['invested_at'] : null,
+            'channel_partner_id' => filled($investment['channel_partner_id'] ?? null)
+                ? ChannelPartner::query()->whereKey((int) $investment['channel_partner_id'])->value('id')
+                : null,
         ], fn ($value): bool => $value !== null);
     }
 
@@ -539,15 +552,13 @@ class InvestorImportService
                 } else {
                     $attributes['import_notes'][] = ['message' => 'Investment amount ":value" could not be read. Enter it by hand.', 'params' => ['value' => Str::limit($text, 40)]];
                 }
-            } elseif ($field === 'is_channel_partner') {
-                $attributes['is_channel_partner'] = in_array(Str::lower($text), array_map(Str::lower(...), config('investor_import.yes_values', [])), true);
             } elseif ($field === 'channel_partner') {
                 $partner = $this->findChannelPartner($text, $companyId);
 
                 if ($partner) {
                     $attributes['channel_partner_id'] = $partner->getKey();
                 } else {
-                    $attributes['import_notes'][] = ['message' => 'Channel partner ":value" was not found among investors. Pick them by hand.', 'params' => ['value' => Str::limit($text, 60)]];
+                    $attributes['import_notes'][] = ['message' => 'Channel partner ":value" was not found among channel partners. Add them under Channel Partners, then pick them here.', 'params' => ['value' => Str::limit($text, 60)]];
                 }
             }
         }
@@ -556,27 +567,36 @@ class InvestorImportService
             $attributes['email'] = Str::lower($attributes['email']);
         }
 
-        // Someone who already invested before (same phone) gets this row's
-        // investment added to their record instead of a duplicate investor.
-        if (filled($attributes['phone'] ?? null)) {
-            $existing = Investor::query()->where('company_id', $companyId)->where('phone', $attributes['phone'])->first();
+        // Someone who already invested before (same NID / passport number —
+        // the investor ID, owner's rule) gets this row's investment added to
+        // their record instead of a duplicate investor, even if their phone
+        // number has changed since.
+        $nidHash = InvestorIdentity::hash($attributes['nid_number'] ?? null);
+
+        if ($nidHash !== null) {
+            $existing = Investor::query()->where('company_id', $companyId)->where('nid_hash', $nidHash)->first();
 
             if ($existing) {
                 $attributes['existing_investor_id'] = $existing->getKey();
-                $attributes['import_notes'][] = ['message' => 'Phone matches existing investor :name. Confirming adds the investment to them; their details are not changed.', 'params' => ['name' => $existing->name]];
+                $attributes['import_notes'][] = ['message' => 'NID matches existing investor :name. Confirming adds the investment to them; their details are not changed.', 'params' => ['name' => $existing->name]];
+
+                if (filled($attributes['phone'] ?? null) && $attributes['phone'] !== $existing->phone) {
+                    $attributes['import_notes'][] = ['message' => 'The phone in the file (:new) differs from the saved phone (:old). Update it on the investor if it has changed.', 'params' => ['new' => $attributes['phone'], 'old' => (string) $existing->phone]];
+                }
             }
         }
 
         return $attributes;
     }
 
-    private function findChannelPartner(string $value, int $companyId): ?Investor
+    /** The channel partner named in a row: by NID / partner ID, phone, or exact name. */
+    private function findChannelPartner(string $value, int $companyId): ?ChannelPartner
     {
-        $query = fn () => Investor::query()->where('company_id', $companyId);
+        $query = fn () => ChannelPartner::query()->where('company_id', $companyId);
         $phone = $this->normalizePhone($value);
 
         if (preg_match('/\d{6,}/', $phone)) {
-            $partner = $query()->where('phone', $phone)->first();
+            $partner = $query()->whereNid($value)->first() ?? $query()->where('phone', $phone)->first();
 
             if ($partner) {
                 return $partner;

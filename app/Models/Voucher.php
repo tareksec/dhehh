@@ -8,11 +8,15 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class Voucher extends Model
 {
-    use BelongsToCompany, GeneratesSequentialNumber;
+    // Owner (2026-09-28): a voucher is never deleted directly. It goes to
+    // Trash first, and only a user with `voucher.delete` may delete it
+    // permanently from the Trash page (VoucherTrashService).
+    use BelongsToCompany, GeneratesSequentialNumber, SoftDeletes;
 
     public const TYPE_CREDIT = 'credit';
 
@@ -107,6 +111,7 @@ class Voucher extends Model
         'rejection_reason',
         'resulting_model_type',
         'resulting_model_id',
+        'deleted_by',
     ];
 
     protected $casts = [
@@ -130,6 +135,7 @@ class Voucher extends Model
         do {
             $number = "{$prefix}-{$companyPrefix}-".now()->format('Ymd').'-'.Str::upper(Str::random(5));
         } while (self::query()
+            ->withTrashed()
             ->when($company, fn ($query) => $query->where('company_id', $company->getKey()))
             ->where('voucher_number', $number)
             ->exists());
@@ -145,6 +151,12 @@ class Voucher extends Model
     public function isDebit(): bool
     {
         return $this->type === self::TYPE_DEBIT;
+    }
+
+    /** Rejected or cancelled: it will never move money. */
+    public function isVoid(): bool
+    {
+        return in_array($this->status, [self::STATUS_REJECTED, self::STATUS_CANCELLED], true);
     }
 
     public function isPending(): bool
@@ -205,6 +217,11 @@ class Voucher extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function deleter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deleted_by');
     }
 
     public function attachments(): HasMany

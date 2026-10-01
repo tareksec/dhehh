@@ -4,7 +4,217 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Minor Feature Update (includes a security fix)
+## [2.42.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Remove link button in the Documentation article editor.** Click inside a link and press the new "Remove link" (broken-chain) button in the toolbar to remove the link and keep the text — no need to retype it.
+
+**Technical Notes:**
+- Filament's `RichEditor` has no built-in unlink tool, so `DocumentationArticleResource` registers a custom `unlink` `RichEditorTool` (`extendMarkRange('link').unsetLink()`) and lists it in `toolbarButtons()` next to `link`.
+## [2.41.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Channel partners are now separate from investors.** A new **Investments → Channel Partners** section keeps each partner's own record: name, phone, address, **NID / passport as the partner ID** (it can't repeat, and Bangla digits and spaces don't matter), a payment account (bKash / Nagad / Rocket / bank / cash, with account number, account name, bank and branch), notes, and an active switch.
+  - **Accounts on the partner page:** how many investors they brought in, those investors' active capital, and the commission earned, paid and due. There are tabs for the investors they brought in, their commission (one row per settlement, with a link to the voucher), and their documents.
+  - **Documents:** new types for the channel partner's **NID / passport copy** and **agreement**. Like investor NID copies, only users with `investments.manage` can see or download them.
+  - A partner who has investors or payouts can't be deleted.
+
+### Changed
+
+- **Channel partners no longer come from the investor list.** On the investor form, in the import dialogs, in the draft review and in **Assign channel partner**, the channel partner is picked from the Channel Partners list. The investor form's "This investor is also a Channel Partner" switch, the "Partner" column, the "Channel Partners" filter and the partner payout tab on investors are gone. Each investor still shows the partner who brought them, and the **Channel Partner** filter on the investor list still works.
+- **A project can have several channel partners.** The settlement pays each partner separately: the project's channel-partner share, in proportion to the capital of the investors that partner brought in. Investors without a partner still add to the company's share, as before. The old rule "a project currently supports only one channel partner" is removed.
+- **Import:** a row's channel-partner column is matched against Channel Partners by partner ID (NID), phone or exact name. The "is channel partner" column is no longer read.
+
+**Technical Notes:**
+- New migration `2026_09_28_150000_create_channel_partners_table`. Run `php artisan migrate --force`. It is not reversible. What it does:
+  - creates `channel_partners`.
+  - copies every investor who acted as a partner (flagged, named as someone's partner, or paid a partner payout) into it, keeping `legacy_investor_id`.
+  - repoints `investors.channel_partner_id` and `investor_drafts.channel_partner_id` to `channel_partners`.
+  - moves `channel_partner_payouts.investor_id` to `channel_partner_id`, with one payout per partner per settlement.
+  - drops `is_channel_partner` from `investors` and `investor_drafts`.
+  - the old investor rows are kept because they may have their own investments. A row that was only a partner still appears in the investor list and can be deleted there if it has no investments.
+- New `ChannelPartner` model (`BelongsToCompany`, `User::MODEL_MODULES` → `investments`, audited, added to `MultiCompanyIsolationTest`) and `ChannelPartnerResource`, with `ReferredInvestorsRelationManager`, `PayoutsRelationManager` and the shared `DocumentsRelationManager`. `PartnerPayoutsRelationManager` on investors is deleted.
+- `SettlementService::allocateProfit()` returns `partner_rows` (partner id => amount), and one `ChannelPartnerPayout` is created per partner. `Investment` no longer rejects a second partner in a project.
+## [2.40.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **View button on the Documentation articles list.** Opens the article's public `/guides` page in a new tab. Only shown for articles that are both Published and Publicly shareable — otherwise the page wouldn't exist to view.
+
+**Technical Notes:**
+- `DocumentationArticleResource` table: `viewGuidePage` action, visible only when `is_published && is_public`; table query eager-loads `category` to avoid an N+1 for both this action and the existing Category column.
+
+## [2.39.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Documentation article slug auto-fills from the title.** Type a Title and the Slug fills in on its own — no need to type it manually. Editing the Slug yourself is still possible; once it has a value, typing in Title no longer overwrites it.
+- **Public Guides page for sharing Documentation with people outside the admin panel.** `/guides` lists every published *and* publicly-shareable Documentation article by category, and `/guides/{category}/{article}` shows one — no login required. Meant for people who need to read the guides (e.g. an external developer team) but should not get an admin panel account: Dashboard and other admin pages show business data to any signed-in user regardless of permissions, so a limited account is not a safe way to share this.
+- **Documentation article: "Publicly shareable" toggle.** Off by default, so nothing is exposed at `/guides` unless deliberately turned on. An article stays visible to signed-in staff in the Documentation menu either way — the toggle only controls whether it also shows up at the public, no-login `/guides` page.
+
+**Technical Notes:**
+- Title's `afterStateUpdated` sets `slug` to `Str::slug($title)` only while `slug` is still empty — same pattern as `OfferForm`.
+- New `DocumentationGuideController` (`index`, `show`) + `resources/views/guides/*` + `resources/views/components/layouts/guides.blade.php`. Only articles that are both `is_published` and `is_public` are queryable there; anything else 404s (unpublished, or published-but-internal). The internal Documentation page and its `is_published`-only filter are unchanged. New migration `2026_09_29_090000_add_is_public_to_documentation_articles_table` (default `false`). `/docs` was already taken by the existing product marketing page, so this uses `/guides`.
+
+## [2.38.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Upload a file to import Markdown into a Documentation article.** The **Import Markdown** modal (**Settings → Documentation → article → Content**) now also accepts a `.md`/`.txt` file upload, alongside the existing paste box — either works.
+
+**Technical Notes:**
+- The upload uses `FileUpload::storeFiles(false)`, so the file is never written to disk: its raw `TemporaryUploadedFile` content is read directly and discarded once converted through the same `DocumentationArticleResource::markdownToHtml()` used by the paste box.
+
+## [2.37.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Import Markdown into Documentation articles.** The article editor (**Settings → Documentation**) has an **Import Markdown** button next to the Content field. Paste raw Markdown (headings, bold, lists, tables, code blocks) and it converts to properly formatted rich text — pasting Markdown directly into the editor only produced a plain paragraph.
+
+**Technical Notes:**
+- **Documentation Markdown import:** `DocumentationArticleResource::markdownToHtml()` uses `league/commonmark`'s `GithubFlavoredMarkdownConverter` (was already a transitive dependency; now declared directly in `composer.json`). Wired to the Content field's `hintAction`.
+
+## [2.36.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Changed
+
+- **Moving a payout voucher to trash makes the payout unpaid again.** This covers investor settlement payouts, channel-partner payouts and reseller withdrawal requests. If the voucher that was created when the payout was marked paid goes to **Trash**, the payout goes back to **pending**, or **approved** for reseller requests, and can be paid again. Restoring the voucher marks it paid again. A settlement that was fully paid out goes back to **confirmed** while any payout is unpaid.
+- **A rejected or cancelled principal-withdrawal voucher makes the investment Active again.** Until now, only moving that voucher to trash did this. The withdrawal date, voucher link and note stay as history, and the investment can be withdrawn again with a new voucher.
+- Confirmed with the owner: an **approved** voucher still can't be moved to trash.
+
+**Technical Notes:**
+- New `VoucherLinkedPayoutsService` (`voucherTrashed()` / `voucherRestored()`), called by `VoucherTrashService`. The voucher link on the payout is kept so a restore can find it. A restore does nothing if the voucher was rejected or cancelled.
+- `VoucherService::reject()` and `cancel()` call `InvestmentWithdrawalService::voucherVoided()` (renamed from `voucherTrashed()`). New `Voucher::isVoid()` (rejected or cancelled). The `Investment` model counts "withdrawn" only while its voucher exists and isn't void.
+- `ProjectSettlement` allows one step back, from `paid_out` to `confirmed`, and only while one of its payouts is unpaid again. Otherwise its status still only moves forward.
+- No migration.
+
+## [2.35.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **In-app Documentation.** A new **Documentation** menu (visible to everyone signed in) is a step-by-step guide hub for the app itself, browsable by category with a search box. Admins with the Settings permission write and organize the guides from **Settings → Documentation** — a rich-text editor per article, grouped into categories, with a Published toggle so drafts stay hidden until ready.
+
+**Technical Notes:**
+- New tables `documentation_categories` (`name`, `slug`, `icon`, `sort_order`) and `documentation_articles` (`documentation_category_id`, `title`, `slug`, `content`, `sort_order`, `is_published`) — migration `2026_09_28_140000_create_documentation_tables`. Not company-scoped: the same guides show for every company, since they document the app, not business data.
+- `DocumentationArticleResource` (Settings cluster, `canManageSettings()` gated) manages articles; categories are created inline from the article form. `Documentation` page (standalone, top-level nav, open to any signed-in user) lists published articles by category and renders content with `RichContentRenderer`.
+
+- **Voucher trash.** A voucher is never deleted directly. **Move to trash** (on the voucher list and the voucher page) moves it to **Finance → Vouchers → Trash**. From there it can be **restored** or **deleted permanently**. Only users with the new **Voucher: Move to Trash, Restore and Delete Permanently** (`voucher.delete`) permission can do any of this. Super admins have it automatically; give it to other roles in user settings. The trash shows who moved each voucher and when.
+  - An **approved** voucher can't be moved to trash, because its money has already been booked (expense, payment or account transaction).
+  - If a principal-withdrawal voucher goes to trash, its investment becomes **Active** again. Restoring the voucher marks it **Withdrawn** again, and a permanent delete leaves it **Active**. The withdrawal date and note are kept.
+
+### Changed
+
+- **Settlements leave withdrawn investments out.** A settlement calculated after an investor withdrew their principal no longer includes that investment, so it gets no profit share and its principal isn't paid out again. Settlements made before the withdrawal are not changed.
+
+**Technical Notes:**
+- New migration `2026_09_28_140000_add_soft_deletes_to_vouchers_table` adds `deleted_at` (indexed) and `deleted_by` (FK users, `nullOnDelete`). Run `php artisan migrate --force`. Existing vouchers are unaffected.
+- `Voucher` uses `SoftDeletes`, so all Eloquent queries (lists, reports, sums) skip trashed vouchers. `nextVoucherNumber()` also checks trashed vouchers, so a number is never reused. Every FK to `vouchers` is `nullOnDelete` or `cascadeOnDelete`, so a permanent delete is safe. Attachment rows cascade; their files are left in storage.
+- New `VoucherTrashService` (`trash` / `restore` / `deletePermanently`), new `User::canDeleteVoucher()`, and a new page `TrashedVouchers` at `/vouchers/trash`. `VoucherResource::canDelete()` stays `false`.
+- `InvestmentWithdrawalService::voucherTrashed()` / `voucherRestored()`. The `Investment` model allows withdrawn → active only while the withdrawal voucher is in trash, and counts "withdrawn" only while that voucher exists. An investment that has ever had a withdrawal voucher cannot be deleted.
+- `SettlementService::calculateAndSettle()` uses `investments()->active()`.
+## [2.34.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investors who take their principal back are kept on record as "Withdrawn".** Each investment has a **Status**: **Active** or **Withdrawn**. Use **Withdraw principal** on the investment page, or in the investor's or project's Investments tab, after the investor has taken their money back. Enter the date, the fund source it was paid from, the payment method and reference, and an optional note.
+  - **Fixed rule:** every withdrawal creates a pending **Investor Payout** debit voucher in **Finance → Vouchers** for the full amount, and the investment turns **Withdrawn** only once that voucher exists. If the voucher can't be created, for example because the fund source has no linked account, nothing changes.
+  - A withdrawn investment can't be deleted or edited, and can't be withdrawn twice. Its page shows the withdrawal date, the voucher (with a link) and its status.
+  - The investor list shows each investor's **Status**: **Active** while any investment is active, **Withdrawn** once all of them are withdrawn. There is a **Status** filter, and investors are never deleted.
+
+**Technical Notes:**
+- New migration `2026_09_28_130000_add_withdrawal_status_to_investments_table` adds `status` (default `active`, indexed), `withdrawn_at`, `withdrawal_voucher_id` (FK `vouchers`, `nullOnDelete`) and `withdrawal_note`. Existing investments become `active`. Run `php artisan migrate --force`.
+- New `InvestmentWithdrawalService::withdraw()` locks the investment, calls `VoucherService::submit()` (debit, `investor_payout`, fund source's account), then sets the status, all in one transaction. The `Investment` model refuses `status = withdrawn` without a withdrawal voucher, and refuses to change or delete a withdrawn investment.
+- `Investor::investmentStatus()` works it out from the investments. Nothing is stored on the investor.
+- Settlement calculations are unchanged: withdrawn investments are still counted if the project is settled later. This is left for the owner to decide.
+## [2.33.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Filter the investor list by project.** The investor list has a **Project** filter (pick one or more projects) and a **Projects** column showing which projects each investor has invested in. There is also a **Channel Partner** filter.
+- **Select many investors at once.** The investor list now has checkboxes. **Assign channel partner** sets the channel partner for all selected investors who don't have one yet. Investors who already have a channel partner are left unchanged and counted in the message; change those one by one from their edit page (that still needs the channel-partner permission and a reason).
+- **Channel partner when importing.** The **Import Excel / CSV** and **Paste text** dialogs have a **Channel partner for this import (optional)** section. The chosen partner is set on every new investor in that import. A row that names its own channel partner keeps it, and investors who already exist are not changed. The drafts bulk action is now **Set project / payment / channel partner**.
+- **Upload NID, nominee NID, signed contract (stamp paper) and cheque copies on the investor form.** The create and edit forms have a **Paper copies** section with one upload box for each. The files go to the investor's Documents tab in private storage. Only users with `investments.manage` see this section.
+
+### Changed
+
+- **Removed the "Upload documents by NID" button** from the investor list. It matched files to investors by the file name only, with no way to pick the investor or the document type. Use the upload boxes on the investor form instead.
+
+**Technical Notes:**
+- `InvestorResource::PAPER_COPY_UPLOADS`, `splitPaperCopies()`, `attachPaperCopies()`; `CreateInvestor::handleRecordCreation()` and `EditInvestor::handleRecordUpdate()` save the uploads as `InvestmentDocument` rows in the same transaction as the investor.
+- `InvestorImportService::investmentDefaults()` also accepts `channel_partner_id` (checked against the current company).
+- Deleted `InvestorDocumentUploadService` and the `document_keywords` config. No migration.
+## [2.32.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Quote status updates for connected websites.** When staff change the status of an inquiry that a connected website sent in (for example Tasneem Knit or Noor Solar), the website is notified straight away, so its customers can see where their quote stands. Only inquiries the website itself sent are reported.
+- **No more duplicate inquiries from website retries.** A website can now send its own quote number with an inquiry. If the same inquiry is sent again (for example after a timeout), the ERP returns the one it already has instead of adding a second lead.
+
+### Technical Notes
+
+- **Migration:** `2026_09_28_120000_add_external_reference_to_leads_table` adds nullable `leads.external_reference` with a unique `(company_id, external_reference)` index. It is additive.
+- **API:** `POST /api/v1/leads` accepts optional `external_reference` (max 190). A repeat returns the existing lead with `200`; the response now includes `external_reference`.
+- **Webhook:** new `lead.status_updated` event (`id`, `external_reference`, `status`, `updated_at`) via `WebsiteWebhookDispatcher::dispatchLeadStatusUpdated()`, fired from `Lead::updated` when `status` changes and `external_reference` is set. Same signing, queue job and per-company settings as the existing events.
+- **Docs:** `docs/api/website-integration.md` and `website-integration.openapi.yaml` updated. New `docs/api/website-mapping-tasneem-noor.md`: a path-by-path, field-by-field mapping from each website team's own (incorrect) integration doc to the real API, linked from `website-integration.md`.
+- No new user-visible strings, so no `lang/` changes.
+## [2.31.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **The NID / passport number is now the investor ID.** A phone number can change; the NID does not, so every investor is tracked by their NID / passport number:
+  - It is required when adding an investor, and one number can belong to only one investor. Spaces, dashes and Bangla digits don't matter: `1990 1234-56789` and `১৯৯০১২৩৪৫৬৭৮৯` are the same number.
+  - The investor list shows it as **Investor ID (NID / Passport)**, and you can search the list by it.
+  - Excel/CSV/text import recognises returning investors by NID, even if their phone number has changed. The draft says when the phone in the file differs from the saved one.
+  - A new **NID missing** filter lists older investors who don't have an NID yet.
+- **Paper copies of NID cards and contracts.**
+  - New document types: investor's NID / passport copy, nominee's NID / passport copy, project contract (same for all investors), cheque copy and stamp copy.
+  - Upload them on the investor's **Documents** tab.
+  - A project's contract is uploaded **once on the project**, and it covers every investor in that project.
+  - **Upload documents by NID** on the investor list takes many scans at once. Name each file with the investor's NID and what it is, for example `1479939603_nid.jpg`, `1479939603_nominee.jpg`, `1479939603_contract.pdf`, `1479939603_cheque.jpg`, `1479939603_stamp.jpg`. Each file is attached to the investor with that NID. Files whose NID matches no investor are listed.
+  - Each investor has a **Paper copies** checklist, shown on their page and as a column in the list: NID copy, nominee's NID copy (when there is a nominee), and a contract for every project they invested in. The **Paper copies missing** filter shows who still has something missing.
+
+### Fixed
+
+- **Investor Drafts list now shows NID, address, nominee NID, nominee phone, stamp no. and cheque no.** These were already being read from the uploaded file and saved on the draft, but the list table had no columns for them, so an import looked like it had skipped those fields. NID is shown next to Phone by default; the other five are available via the column-toggle button (hidden by default, same as the existing Father/Spouse and Nominee Name columns).
+
+### Security
+
+- **Only users with the `investments.manage` permission can see or download NID copies, contracts, and cheque and stamp copies.** Users who can only view investments no longer see these files in any Documents tab, and the download link refuses them. This also covers the contract file on an investment's security instrument. Other investment documents, such as settlement sheets and receipts, stay visible with `investments.view`.
+
+**Technical Notes:**
+- New migration `2026_09_28_110000_add_nid_hash_to_investors_and_investor_drafts`: adds `nid_hash` (keyed HMAC of the normalised number, since `nid_number` is encrypted), with an index on `(company_id, nid_hash)`. Existing rows are backfilled. Run `php artisan migrate --force`. Uniqueness is enforced by the models, not a DB unique index, so the deploy never fails on old duplicate data.
+- `App\Support\InvestorIdentity` (normalize/hash), `InvestorDocumentUploadService`, `InvestmentDocument::SENSITIVE_CATEGORIES`, `Investor::documentChecklist()` / `scopeMissingDocuments()` / `scopeWhereNid()`. The file-name keywords live in `config/investor_import.php`.
+- Existing investors without an NID keep working, but saving them from the edit form now requires one.
+
+## [2.30.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
 
 ### Added
 

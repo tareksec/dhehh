@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Support\InvestorIdentity;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -21,18 +22,27 @@ class InvestorDraft extends Model
     public const SOURCE_TEXT = 'text';
 
     /** Columns copied onto the Investor when the draft is confirmed. */
-    public const INVESTOR_FIELDS = ['name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'is_channel_partner', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
+    public const INVESTOR_FIELDS = ['name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
 
-    protected $fillable = ['company_id', 'batch_id', 'source', 'source_name', 'source_row', 'name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'is_channel_partner', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address', 'existing_investor_id', 'project_id', 'investment_amount', 'payment_method', 'invested_at', 'import_notes', 'created_by'];
+    protected $fillable = ['company_id', 'batch_id', 'source', 'source_name', 'source_row', 'name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address', 'existing_investor_id', 'project_id', 'investment_amount', 'payment_method', 'invested_at', 'import_notes', 'created_by'];
 
-    protected $casts = ['date_of_birth' => 'date', 'is_channel_partner' => 'boolean', 'nid_number' => 'encrypted', 'nominee_nid_or_passport' => 'encrypted', 'import_notes' => 'array', 'investment_amount' => 'decimal:2', 'invested_at' => 'date'];
+    protected $casts = ['date_of_birth' => 'date', 'nid_number' => 'encrypted', 'nominee_nid_or_passport' => 'encrypted', 'import_notes' => 'array', 'investment_amount' => 'decimal:2', 'invested_at' => 'date'];
 
     /** Project statuses that still accept new investments. */
     public const OPEN_PROJECT_STATUSES = ['open', 'running'];
 
+    protected static function booted(): void
+    {
+        static::saving(function (self $draft): void {
+            if ($draft->isDirty('nid_number') || ($draft->nid_number && ! $draft->nid_hash)) {
+                $draft->nid_hash = InvestorIdentity::hash($draft->nid_number);
+            }
+        });
+    }
+
     public function channelPartner()
     {
-        return $this->belongsTo(Investor::class, 'channel_partner_id');
+        return $this->belongsTo(ChannelPartner::class, 'channel_partner_id');
     }
 
     /** The investor this draft adds a new investment to, instead of creating a new investor. */
@@ -91,6 +101,30 @@ class InvestorDraft extends Model
             $issues[] = __('Name is missing.');
         }
 
+        // The NID / passport number is the investor ID (owner's rule).
+        $nidHash = InvestorIdentity::hash($this->nid_number);
+
+        if ($nidHash === null) {
+            $issues[] = __('NID / passport number is missing. It is the investor ID, so it is required.');
+        } else {
+            $owner = Investor::query()->where('company_id', $this->company_id)->where('nid_hash', $nidHash)->first();
+
+            if ($owner) {
+                $issues[] = __('NID :nid already belongs to investor :name. Link this draft to that investor to add a new investment for them.', ['nid' => InvestorIdentity::normalize($this->nid_number), 'name' => $owner->name]);
+            }
+
+            $twin = self::query()
+                ->where('company_id', $this->company_id)
+                ->where('nid_hash', $nidHash)
+                ->whereNull('existing_investor_id')
+                ->when($this->exists, fn ($query) => $query->whereKeyNot($this->getKey()))
+                ->exists();
+
+            if ($twin) {
+                $issues[] = __('Another draft has the same NID :nid. Keep only one of them.', ['nid' => InvestorIdentity::normalize($this->nid_number)]);
+            }
+        }
+
         if (blank($this->phone)) {
             $issues[] = __('Phone is missing.');
         } else {
@@ -100,7 +134,7 @@ class InvestorDraft extends Model
                 ->first();
 
             if ($existing) {
-                $issues[] = __('Phone :phone already belongs to investor :name. Link this draft to that investor to add a new investment for them.', ['phone' => $this->phone, 'name' => $existing->name]);
+                $issues[] = __('Phone :phone is already saved for investor :name. If this is the same person, link this draft to them; otherwise use a different phone number.', ['phone' => $this->phone, 'name' => $existing->name]);
             }
 
             $twin = self::query()

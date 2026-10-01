@@ -168,6 +168,559 @@ Needs owner confirmation: none for this phase — Phase 2 (the portal itself) is
 Needs Bangla review: none (no new strings).
 
 Commit status: not committed — waiting for owner approval. The plan file `13_RESELLER_PORTAL_PLAN.md` itself (sent earlier, still untracked) would be committed together with this.
+## 2026-09-29 - Documentation editor: "Remove link" toolbar button
+
+Reason — owner: "প্রিভিয়াস লিংক রিমুভ করার অপশন যুক্ত কর।" (Add an option to remove the previous link.) Follows the report that changing an existing link's URL in the editor didn't take effect.
+
+What changed:
+- The Content editor toolbar (Settings → Documentation → article) has a new **Remove link** button next to Link. Click inside a link, press it, and the link is removed while the text stays. Filament's editor had no unlink tool, so it is a custom `RichEditorTool`.
+- Not changed: the underlying "URL edit does nothing" behavior — Filament's `setLink` silently ignores URLs that look like an unknown scheme (e.g. `host:8080/x`); waiting on the owner's exact URL to confirm.
+
+Files: `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`, `lang/en.json`, `lang/bn.json`, `tests/Feature/DocumentationModuleTest.php` (+1 test), `CHANGELOG.md`.
+
+Verification: `DocumentationModuleTest` 10 passed; full suite 1553 passed before merging main (re-run after merge below); Pint passed. Not verified in a browser (button behavior in the live editor not clicked through).
+
+Commit status: Committed and pushed to `claude/friendly-feynman-w4twzx` and `main` (owner approved: "হ্যাঁ, commit আর push কর").
+
+## 2026-09-28 - Channel partners separated from investors (own record, own accounts, several per project)
+
+Reason — owner: "চেনেল পার্টনার তো ইনভেস্টর লিস্ট থেকে আসবেনা। চেনেল পার্টনার সম্পূর্ণ আলাদা থাকবে তার হিসাব ও আলাদা হবে, ইনভেস্টরদের সাথে চ্যানেল পার্টনার কে মিশানো যাবেনা।" — channel partners must not come from the investor list, must be completely separate with their own accounts, and must not be mixed with investors.
+Answers to the follow-up questions:
+- The link stays per investor, as now: a partner earns only on the capital of the investors they brought in.
+- **Several partners per project.**
+- Fields to keep: name, phone, address, NID / passport (partner ID), payment account, and agreement and NID copies.
+
+What changed:
+- **Migration** `2026_09_28_150000` (irreversible; `down()` throws):
+  - creates `channel_partners` (company, name, phone, address, encrypted `nid_number` + `nid_hash`, payment_method, account_name/number, bank_name/branch, notes, is_active, legacy_investor_id).
+  - copies partner investors into it: flagged, referenced by investors or drafts, or paid a partner payout.
+  - drops and re-adds the FKs of `investors.channel_partner_id` and `investor_drafts.channel_partner_id` so they point at the copies.
+  - `channel_partner_payouts`: adds `channel_partner_id`, adds a unique index on (settlement_id, channel_partner_id), drops the old one-per-settlement unique index (looked up by its columns, because the name differs by driver) and drops `investor_id`.
+  - drops `is_channel_partner` from `investors` and `investor_drafts`.
+  - Verified on a scratch SQLite database migrated to just before this migration and seeded with a flagged partner investor, a referred investor and a paid ৳500 partner payout: the partner was copied with its name, phone, address, NID and a correct hash; the referred investor and the payout point at the new partner, and the payout is still ৳500 and paid.
+- **Models:**
+  - `ChannelPartner` (new): NID uniqueness per company like investors; `investors()`, `payouts()`, `documents()`, `referredCapital()`, `totalEarned/Paid/Due()`.
+  - `Investor::channelPartner()` now points at `ChannelPartner`. Removed from `Investor`: `referredInvestors()`, `channelPartnerPayouts()`, `totalChannelPartnerPayoutsPaidLifetime()`, the self-partner check and `is_channel_partner`.
+  - `InvestorDraft` points at `ChannelPartner`. `ChannelPartnerPayout` has `channelPartner()` instead of `investor()`.
+  - `InvestmentDocument` gets the categories `partner_nid` and `partner_agreement` (sensitive), and any document on a ChannelPartner is sensitive.
+- **Settlement:**
+  - `allocateProfit()` groups referred investments by partner and gives each partner `pool × their referred capital ÷ external capital`. `channel_payout` is the sum of those amounts.
+  - one `ChannelPartnerPayout` is created per partner.
+  - the "only one channel partner" checks are removed from `Investment` and `SettlementService`.
+  - the voucher purpose uses the partner's name.
+- **UI:**
+  - new `ChannelPartnerResource` (Investments cluster, sort 4). Its list shows the partner ID, investors brought in, commission earned and commission due; it has an Active filter.
+  - the view page has an Accounts section (investors, active capital, earned, paid, due), the payment account, and three tabs: investors brought in, commission (with voucher and settlement links) and documents.
+  - view needs `investments.view`; create/edit needs `investments.manage`; delete only when the partner has no investors and no payouts.
+  - the settlement's partner tab links to the partner.
+- **Investor side:**
+  - the partner switch, "Partner" column, "Channel Partners" filter, infolist lines and payout tab are removed.
+  - the channel partner select, the import/draft pickers and "Assign channel partner" list active `ChannelPartner`s.
+  - import finds the partner by NID, phone or exact name, and no longer reads `is_channel_partner` (`yes_values` config removed).
+
+Not changed, noted for the owner:
+- Old investor rows that only acted as partners stay in the investor list, because they may have investments. They can be deleted there once they have no investments.
+- Documents that were attached to those old investor rows were not moved to the partner. They are still on the investor record.
+
+Process note: while checking the migration I ran a one-off script whose "use an in-memory database" override did not take effect. It migrated this container's own git-ignored local dev database (`database/database.sqlite`, which had 1 company and no investors or vouchers) and the new migration stopped halfway. I made the migration re-runnable and finished it with `php artisan migrate` on that same local database. No demo, test or production data was involved. The migration check was then repeated on a separate scratch file, after confirming the connection pointed at it, and the file was deleted afterwards.
+
+**Needs Bangla review:** 22 new `lang/bn.json` keys (Channel Partners section and accounts), plus 2 changed texts (the import note for a partner not found, and the skipped-investor message of the bulk action).
+
+Important changed/new files:
+- `database/migrations/2026_09_28_150000_create_channel_partners_table.php`
+- `app/Models/{ChannelPartner (new),ChannelPartnerPayout,Investor,InvestorDraft,Investment,InvestmentDocument,User}.php`, `app/Providers/AppServiceProvider.php`
+- `app/Services/Investment/{SettlementService,InvestmentLedgerService,InvestorImportService}.php`, `config/investor_import.php`
+- `app/Filament/Resources/ChannelPartners/**` (new), `app/Filament/Resources/Investors/InvestorResource.php`, deleted `Investors/RelationManagers/PartnerPayoutsRelationManager.php`, `InvestorDrafts/InvestorDraftResource.php`, `ProjectSettlements/RelationManagers/ChannelPartnerPayoutsRelationManager.php`, `InvestmentProjects/RelationManagers/DocumentsRelationManager.php`
+- `lang/en.json`, `lang/bn.json`
+- tests: `ChannelPartnerTest.php` (new, 4 tests), `InvestmentSettlementTest.php`, `InvestorIdentityAndDocumentsTest.php`, `InvestorImportTest.php`, `MultiCompanyIsolationTest.php`
+
+Verification:
+- `ChannelPartnerTest`: 4 passed:
+  - created on its own page; never an investor row; filters investors; view page and "investors brought in" tab
+  - the NID partner ID is unique in any format
+  - partner agreement and NID copies are hidden and refused for an accountant (view only)
+  - an import row names its partner by the Bangla-digit NID
+- `InvestmentSettlementTest`: 60 passed, with rewritten tests:
+  - **two partners in one project are paid ৳6,000 and ৳4,000** (60/40 of the 10% pool on ৳100,000 profit), replacing the old "only one partner" test
+  - a partner with investors can't be deleted
+  - partner accounts (earned, paid, due) are on the partner, and the investor page has no partner tab
+  - the existing change-permission, audit, voucher and mark-paid tests now use `ChannelPartner`
+- Full `php artisan test` (plain, no `--env`): **1543 passed, 0 failed** (10231 assertions).
+- Pint passes on the changed files.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
+## 2026-09-29 - Documentation articles list: a View button to open the public page
+
+Reason — owner (screenshot of the articles list): "লিস্টে আর্টিকেল পেজের সোয়া করার জন্য কোন লিংক নেই। আর্টিক্যাল শো বাড়ানোর জন্য একটা লিঙ্ক বাটন যুক্ত কর।" (There's no link in the list to view the article page. Add a link button for it.)
+
+What changed:
+- **Settings → Documentation → articles list:** a **View** button (opens in a new tab) next to Edit, linking straight to the article's `/guides/{category}/{article}` page. Only shown when the article is both Published and Publicly shareable — for anything else, that page doesn't exist (404s), so the button is hidden rather than shown and broken.
+- Table query now eager-loads the `category` relationship (needed to build the URL; also removes an existing N+1 on the Category column).
+
+Important changed/new files:
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `lang/en.json`, `lang/bn.json`
+- `tests/Feature/DocumentationModuleTest.php` (+1 test: the View action is visible with the right URL for a published+public article, hidden for a published-but-internal one)
+- `CHANGELOG.md`
+
+Verification:
+- `DocumentationModuleTest`: 9 passed.
+- Full `php artisan test` (plain, no `--env`): **1552 passed, 0 failed** (10249 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: not committed — waiting for owner approval.
+
+## 2026-09-29 - Documentation article: "Publicly shareable" toggle
+
+Reason — owner: "internal only" বনাম "publicly shareable" এই ধরনের ফ্ল্যাগ যুক্ত করে দাও। (Add a flag for "internal only" vs "publicly shareable".) This was the gap flagged as "Not done" in the Public Guides entry below: every published article was visible at `/guides` with no way to keep some staff-only.
+
+What changed:
+- New `is_public` column on `documentation_articles` (boolean, default `false` — nothing already published becomes public by accident).
+- **Settings → Documentation → article form:** a **Publicly shareable** toggle, off by default, next to Published.
+- `/guides` and `/guides/{category}/{article}` now require both `is_published` **and** `is_public` — a published-but-internal article 404s there, same as an unpublished one.
+- The internal Documentation menu (signed-in staff) is unchanged: it still shows every published article regardless of this flag, since staff should see everything.
+
+Important changed/new files:
+- `database/migrations/2026_09_29_090000_add_is_public_to_documentation_articles_table.php` (new)
+- `app/Models/DocumentationArticle.php`, `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`, `app/Http/Controllers/DocumentationGuideController.php`
+- `lang/en.json`, `lang/bn.json`
+- `tests/Feature/PublicGuidesTest.php` (+1 test: a published-but-not-public article isn't listed and 404s directly; existing tests updated to mark their articles `is_public`)
+- `CHANGELOG.md`
+
+Verification:
+- `PublicGuidesTest`: 4 passed. `DocumentationModuleTest`: 8 passed (confirms the internal page is unaffected).
+- Full `php artisan test` (plain, no `--env`): **1551 passed, 0 failed** (10239 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: not committed — waiting for owner approval.
+
+## 2026-09-29 - Documentation article: slug auto-fills from title
+
+Reason — owner: "ডকুমেন্টেশনের টাইটেল লেখার পর স্লাগে ক্লিক করলে অটো টাইটেল থেকে স্ল্যাগ জেনারেট হয়ে যাবে ম্যানুয়ালে যেন লিখতে না হয়।" (After typing the title, clicking into the slug field should auto-generate the slug from the title, so it never has to be typed by hand.)
+
+What changed:
+- **Settings → Documentation → article form:** the Title field now sets Slug to `Str::slug(title)` automatically, the same pattern already used on `ExpenseCategoryResource`. It only fills Slug while it's still empty — matching `OfferForm`'s convention — so fixing a typo in an existing article's title never silently changes an already-saved slug.
+
+Important changed/new files:
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `tests/Feature/DocumentationModuleTest.php` (+2 tests: auto-fill on an empty slug, and no overwrite once slug already has a value)
+- `CHANGELOG.md`
+
+Verification:
+- `DocumentationModuleTest`: 8 passed.
+- Full `php artisan test` (plain, no `--env`): **1547 passed, 0 failed** (10218 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: not committed — waiting for owner approval (bundled with the public Guides page below in the same commit).
+
+## 2026-09-29 - Public Guides page: share Documentation with people outside the admin panel
+
+Reason — owner: "এই ডকুমেন্টেশন ডেভলপার টিমের সাথে কিভাবে শেয়ার করব?" (How do I share this documentation with the developer team?) Clarified the developer team is external and would need it from the Documentation module being written in Filament, not the separate `docs/api/` files already shared. Flagged first: the in-app Documentation page requires only `Auth::check()`, so giving them a limited admin account would still expose Dashboard business data — `BusinessOverview`, `SalesPurchaseTrend` and `TopBusinessPerformers` widgets have no `canView()` permission gate at all, they render for any signed-in user. Owner picked building a public page over granting a login or exporting a static file.
+
+What changed:
+- **`/guides`** (list, by category) and **`/guides/{category-slug}/{article-slug}`** (one article) — public, no login, read-only mirror of the Documentation module. Only `is_published` articles are ever queryable; an unpublished or unknown slug 404s, same as an unpublished `StorefrontPage`.
+- `/docs` was already in use (the existing static product-marketing page, `resources/views/marketing/docs.blade.php` — install/branding/backups instructions for whoever runs this ERP software, unrelated to what an owner writes in the Documentation module), so this uses `/guides` instead.
+- Minimal standalone layout (`resources/views/components/layouts/guides.blade.php`) — no admin branding, `noindex, nofollow` meta tag since this isn't meant to be a public marketing surface, just a link to hand to whoever needs it.
+
+Not done: no way yet to mark a category/article "internal only" vs "safe to share publicly" — every published article is visible at `/guides` to anyone with the link. If some guides should stay admin-only, that needs a separate flag before writing anything sensitive into the module.
+
+Important changed/new files:
+- `app/Http/Controllers/DocumentationGuideController.php` (new)
+- `resources/views/guides/{index,show}.blade.php`, `resources/views/components/layouts/guides.blade.php` (new)
+- `routes/web.php`
+- `tests/Feature/PublicGuidesTest.php` (new: published articles listed and rendered without auth; unpublished 404s both from the index and directly)
+- `CHANGELOG.md`
+
+Verification:
+- `PublicGuidesTest`: 3 passed.
+- Full `php artisan test` (plain, no `--env`): **1550 passed, 0 failed** (10225 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: not committed — waiting for owner approval.
+
+## 2026-09-28 - Documentation "Import Markdown": add file upload
+
+Reason — owner, after seeing the Import Markdown modal (screenshot): "এইটা কি এড করছ? ফাইল ইমপোর্ট এর অপশন কই?" (asked where the file-import option was — the modal only had a paste box, no file picker). Confirmed and added it: pasting a long document on mobile is painful.
+
+What changed:
+- **Settings → Documentation → article → Content → Import Markdown modal** now has a **Markdown file** upload field (`.md`/`.txt`) above the paste box. Either one works; at least one is required. The file is never written to disk — `FileUpload::storeFiles(false)` keeps it as a raw `TemporaryUploadedFile`, its content is read directly (`->get()`) and thrown away once converted.
+- Same conversion as before (`DocumentationArticleResource::markdownToHtml()`, already tested) — this only adds a second way to get text into that function.
+
+Important changed/new files:
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `lang/en.json`, `lang/bn.json` (also removed 2 keys the old modal-only text left orphaned)
+- `CHANGELOG.md`
+
+Verification:
+- `DocumentationModuleTest` (existing `markdownToHtml` conversion test still covers the shared conversion logic): 6 passed. `TranslationParityTest`: passed.
+- Full `php artisan test` (plain, no `--env`): **1545 passed, 0 failed** (10216 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not covered by an automated test: the file-upload wiring itself (Filament `FileUpload` → `TemporaryUploadedFile::get()`) — only the conversion function it feeds is tested. Not verified in a browser; the owner should try uploading the API guide `.md` file through the new file picker and confirm the formatting comes through correctly.
+
+Commit status: not committed — waiting for owner approval.
+
+## 2026-09-28 - Documentation module: "Import Markdown" button
+
+Reason — owner: pasted the API integration guide (Markdown) into a Documentation article's Content field, and it came in as one plain paragraph, not the original headings/bold/tables. Filament's Rich Editor is a WYSIWYG editor — it doesn't parse pasted Markdown syntax, it just inserts the raw characters as text. Owner picked adding an "Import Markdown" button over the alternatives (render to HTML and copy from a browser tab, or reformat manually).
+
+What changed:
+- **Content field → Import Markdown button** (`Settings → Documentation → article → Content`, hint icon): opens a modal with a textarea for raw Markdown; converts it with `league/commonmark`'s GitHub-Flavored Markdown converter (tables, headings, bold, lists, code blocks, autolinks) and replaces the Content field with the resulting rich text.
+- `league/commonmark` was already installed as a transitive dependency (via another package); added it directly to `composer.json` `require` since the app now calls it by name.
+- Also answered the owner's other question in chat: the Documentation module is **not** company-scoped — one setup applies to every company, same as this session's earlier CHANGELOG/PROJECT_GUIDE note already said.
+
+Important changed/new files:
+- `composer.json` (new direct dependency, no vendor change — already resolved in `composer.lock` at the same version)
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `lang/en.json`, `lang/bn.json`, `CHANGELOG.md`
+- `tests/Feature/DocumentationModuleTest.php` (+1 test: headings/bold/lists/tables convert correctly)
+
+Verification:
+- `DocumentationModuleTest`: 6 passed. `TranslationParityTest`: passed.
+- Full `php artisan test` (plain, no `--env`): **1545 passed, 0 failed** (10208 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser — the owner should re-paste the API guide through the new button and confirm the formatting looks right before relying on it for other documents.
+
+Commit status: not committed — waiting for owner approval.
+
+## 2026-09-28 - Documentation module: fixes from automated PR review (Codex)
+
+Reason — an automated review bot (`chatgpt-codex-connector[bot]`) left 5 findings on PR bhd4232/Business-Dashboard#10 (the Documentation module committed earlier today), each citing a real `AGENTS.md` rule. Verified each and fixed all of them; this is a follow-up to the earlier "In-app Documentation module" entry, not a new feature.
+
+What changed:
+- **CHANGELOG.md:** moved the Documentation entry from the already-dated `[2.34.0]` section back into `[Unreleased]` — the release cutter only reads `[Unreleased]`, so it would otherwise never ship in a generated release.
+- **PROJECT_GUIDE.md:** added a "Documentation Module" subsection under "3. Current Core Modules" (route, access model, important files, focused test command) — this had been left only in chat/CHANGELOG.
+- **Filament-only UI:** rewrote `resources/views/filament/pages/documentation.blade.php` to use `x-filament::section`, `x-filament::input.wrapper`/`x-filament::input`, and `x-filament::button` instead of raw `<input>`/`<button>` and hand-styled Tailwind cards, matching the pattern used elsewhere (e.g. Inbox).
+- **Bilingual strings:** every new visible string in `Documentation.php`, `DocumentationArticleResource.php`, and the Blade view now goes through `__()`, with matching `lang/en.json` and `lang/bn.json` keys (reusing existing `Category`/`Name` keys where they already existed).
+- **Bug fix:** searching with no matches now clears `activeArticleId` instead of leaving a stale, non-matching article rendered in the content pane while the sidebar says "no guides match."
+
+Important changed/new files:
+- `CHANGELOG.md`, `PROJECT_GUIDE.md`, `lang/en.json`, `lang/bn.json`
+- `app/Filament/Pages/Documentation.php`, `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `resources/views/filament/pages/documentation.blade.php`
+- `tests/Feature/DocumentationModuleTest.php` (+1 regression test for the search-clears-selection fix)
+
+Verification:
+- `DocumentationModuleTest`: 5 passed (added the no-match-clears-selection test).
+- `TranslationParityTest`: passed.
+- Full `php artisan test` (plain, no `--env`): **1541 passed, 0 failed** (10178 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/friendly-feynman-w4twzx` (owner approved: "হ্যাঁ, commit আর push কর") — updates PR bhd4232/Business-Dashboard#10.
+
+## 2026-09-28 - Trashed payout vouchers make the payout unpaid; rejected/cancelled withdrawal vouchers make the investment active
+
+Reason — owner, answering the three open questions: "১। ঠিক আছে ২। হ্যাঁ ৩। হ্যাঁ, সক্রিয় হবে"
+1. Approved vouchers can't go to trash — confirmed, no change.
+2. A reseller or settlement payout whose pending voucher goes to trash becomes unpaid again — yes.
+3. A rejected or cancelled withdrawal voucher makes the investment active again — yes.
+
+What changed:
+- **`VoucherLinkedPayoutsService` (new):**
+  - `voucherTrashed()` sets `SettlementPayout` / `ChannelPartnerPayout` rows linked to the voucher from `paid` to `pending` and clears `paid_at`. Their settlement goes from `paid_out` to `confirmed`. `ResellerPayoutRequest` goes from `paid` to `approved` and `paid_at` is cleared; the available balance is unchanged, because approved requests are already held.
+  - `voucherRestored()` does the reverse. `paid_at` becomes the voucher's created date, and the settlement goes back to `paid_out` when nothing is pending.
+  - The voucher link is kept so a restore can find the payout. "Mark paid" again creates a new voucher and replaces the link.
+- **`VoucherTrashService`** calls it on trash and restore, next to the withdrawal hooks.
+- **Withdrawal:** `VoucherService::reject()` and `cancel()` call `InvestmentWithdrawalService::voucherVoided()` (renamed from `voucherTrashed()`; trash uses it too). The new `Voucher::isVoid()` means rejected or cancelled. Restoring a void voucher from trash re-marks nothing, for investments and for payouts.
+- **Model rules:**
+  - `Investment` accepts "withdrawn" only while its voucher exists and is not void, and allows withdrawn → active when the voucher is trashed or void.
+  - `ProjectSettlement` allows `paid_out` → `confirmed` only while one of its payouts is pending again; every other status change still moves forward only.
+
+Scope: owner's answer 2 was about trashed vouchers, so a *rejected or cancelled* payout voucher still leaves the payout paid. The investment capital-in voucher (`investments.voucher_id`) is not linked to any status.
+
+**Needs Bangla review:** the trash confirmation text changed. It is 1 key, replacing the old one.
+
+Important changed/new files:
+- `app/Services/VoucherLinkedPayoutsService.php` (new), `app/Services/{VoucherTrashService,VoucherService}.php`, `app/Services/Investment/InvestmentWithdrawalService.php`
+- `app/Models/{Voucher,Investment,ProjectSettlement}.php`, `app/Filament/Resources/Vouchers/VoucherResource.php`
+- `lang/en.json`, `lang/bn.json`, `tests/Feature/{VoucherTrashTest,InvestmentWithdrawalTest}.php`
+
+Verification:
+- `VoucherTrashTest`: 6 passed. New tests: a settlement payout goes unpaid and the settlement goes back to confirmed on trash, and both return to paid / paid_out on restore; a reseller request goes paid → approved → paid.
+- `InvestmentWithdrawalTest`: 8 passed. New test: rejected → active, cancelled → active, restoring a trashed cancelled voucher keeps it active, and it can be withdrawn again with a new voucher.
+- Full `php artisan test` (plain, no `--env`): **1539 passed, 0 failed**.
+- Pint passes on the changed files. It also re-ordered imports and fixed spacing on a few older lines in `VoucherService.php`.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, আগে পুশ কর").
+
+## 2026-09-28 - Settlements leave withdrawn investments out; voucher trash (move to trash, restore, delete permanently)
+
+Reason — owner, answering the two open questions:
+1. "যখন উত্তলন হবে তখন থেকেই সেটেলমেন্ট থেকে বাদ যাবে" — from the moment of withdrawal, the investment is out of settlements.
+2. "ভাইচার কখনই সরাসরি ডিলিট করা যাবেনা, প্রথমে মুভ টু ট্রাশ এ যাবে এরপর ট্রাশ পেজ থেকে পার্মানেন্টলি ডিলিট হবে, তবে ডিলিট পারমিশন যার কাছে থাকবে শুধু সেই করতে পারবে।" — a voucher is never deleted directly: first move to trash, then permanent delete from a trash page, and only someone with the delete permission can do it.
+
+What changed:
+- **Settlement:** `SettlementService::calculateAndSettle()` reads `investments()->active()`. Settlements that already exist are untouched.
+- **Voucher trash:**
+  - Migration `2026_09_28_140000` adds `deleted_at` (indexed) and `deleted_by`. `Voucher` uses `SoftDeletes`. `nextVoucherNumber()` checks `withTrashed()` so a number is never reused.
+  - New permission `voucher.delete` ("Voucher: Move to Trash, Restore and Delete Permanently") and `User::canDeleteVoucher()` (super admin or the permission). It is not added to any role's defaults; the owner assigns it.
+  - `VoucherTrashService`: `trash()` refuses approved vouchers and stores `deleted_by`; `restore()`; `deletePermanently()` works only on trashed vouchers. All three need the permission.
+  - UI: **Move to trash** row action on the voucher list and header action on the voucher page. A **Trash (n)** button on the list opens the new `TrashedVouchers` page (`/vouchers/trash`, 403 without the permission), with **Restore** and **Delete permanently**. `VoucherResource::canDelete()` stays `false`, so there is no direct delete anywhere.
+- **Withdrawal link:**
+  - trashing a withdrawal voucher sets its investments back to `active`, keeping `withdrawn_at`, the voucher id and the note.
+  - restoring it sets them `withdrawn` again.
+  - a permanent delete leaves them `active`, and the FK nulls the voucher id.
+  - the `Investment` model allows withdrawn → active only while that voucher is in trash, and "withdrawn" needs a voucher that exists and is not in trash.
+
+My decision, which the owner should confirm:
+- **An approved voucher can't go to trash.** Approving has already booked the money (Expense / CustomerPayment / SupplierPayment / account transaction). Trashing it would leave that money on the books with no voucher behind it. A mistaken approved voucher needs a reversing entry instead.
+
+Not changed, for the owner to decide later:
+- Other records linked to a trashed *pending* voucher keep their state: a reseller payout marked paid, a settlement payout marked paid, or an investment's capital-in voucher. Only principal withdrawals are rolled back, because only they have the owner's "status only while a voucher exists" rule.
+- A **rejected** or **cancelled** withdrawal voucher does not reactivate the investment.
+- Attachment files of a permanently deleted voucher stay in storage; the database rows are removed.
+
+**Needs Bangla review:** 26 new `lang/bn.json` keys (trash texts).
+
+Important changed/new files:
+- `database/migrations/2026_09_28_140000_add_soft_deletes_to_vouchers_table.php`
+- `app/Models/{Voucher,Investment,User}.php`
+- `app/Services/VoucherTrashService.php` (new), `app/Services/Investment/{InvestmentWithdrawalService,SettlementService}.php`
+- `app/Filament/Resources/Vouchers/{VoucherResource,Pages/ListVouchers,Pages/ViewVoucher,Pages/TrashedVouchers}.php` (`TrashedVouchers` is new)
+- `lang/en.json`, `lang/bn.json`, `tests/Feature/VoucherTrashTest.php` (new), `tests/Feature/InvestmentWithdrawalTest.php`
+
+Verification:
+- `VoucherTrashTest`: 4 passed:
+  - no direct delete: trash → trash page → restore → trash → permanent delete
+  - approved can't be trashed
+  - an accountant without the permission can't trash and gets 403 on the trash page
+  - trashed voucher numbers are still reserved
+- `InvestmentWithdrawalTest`: 7 passed. New tests: a settlement after a withdrawal leaves it out; trash → active, restore → withdrawn, permanent delete → active.
+- Full `php artisan test` (plain, no `--env`): **1536 passed, 0 failed**.
+- Pint passes. It also re-formatted a few older lines in `SettlementService.php`.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
+## 2026-09-28 - API mapping note for Tasneem Knit / Noor Solar added to repo docs
+
+Reason — owner: "api mapping টা তুমি আমাদের অ্যাপের api Documentation এ যুক্ত করে দেও এবং তার পাথ বলে দেও।" The mapping note drafted earlier as a Claude Docs artifact (comparing each website team's assumed API to the real one) is now also in the repo, so it ships with the code and isn't only reachable through a chat link.
+
+What changed:
+- New `docs/api/website-mapping-tasneem-noor.md`: the same content as the artifact — `.env` values, a path-by-path table (their assumed endpoint → the real `/api/v1/...` one), field-by-field tables for leads/products/orders and for each outbound webhook event (including the new `lead.status_updated`), what ZamZam ERP doesn't have yet, a test checklist and cURL examples. Kept in Bangla, matching the artifact and the owner's own notes to these two teams.
+- `docs/api/website-integration.md` links to it right after the intro, so anyone starting from the main guide finds it.
+
+Not code — no migration, no test changes, no `lang/` changes.
+
+Commit status: Committed and merged into `main` via PR bhd4232/Business-Dashboard#9 (owner approved: "PR খুলে দাও").
+
+## 2026-09-28 - In-app Documentation module: step-by-step guides, editable from Filament
+
+Reason — owner: "আমাদের অ্যাপের মধ্যে ডকুমেন্টেশন মডিউল যুক্ত করতে বলেছিলাম যেখানে আমাদের অ্যাপের সকল দিকনির্দেশনা গুলো স্টেপ বাই স্টেপ লিখা থাকবে।" A documentation module inside the app itself, where all of the app's own instructions are written step by step. Scope, confirmed with the owner: a general documentation hub (not only the API docs), content editable from Filament (not a static file).
+
+What changed:
+- New tables `documentation_categories` (name, slug, icon, sort order) and `documentation_articles` (category, title, slug, rich-text content, sort order, published toggle). Not company-scoped — the guides are about the app itself, so every company sees the same ones.
+- **Settings → Documentation** (admin only, same `settings.manage`/super-admin gate as the other Settings pages): create/edit articles with a rich-text editor; a new category can be added right from the article form.
+- **Documentation** — a new top-level menu open to every signed-in user: categories down the side, a search box, and the selected article's content on the right. Only published articles show. This is the step-by-step guide hub itself.
+
+Not yet done: no content has been written into it yet — the module is the tool for the owner/admins to start writing the app's own guides (order flow, inventory, investments, etc.) inside Filament.
+
+Important changed/new files:
+- `database/migrations/2026_09_28_140000_create_documentation_tables.php`
+- `app/Models/{DocumentationCategory,DocumentationArticle}.php`
+- `app/Filament/Resources/DocumentationArticles/**`
+- `app/Filament/Pages/Documentation.php`, `resources/views/filament/pages/documentation.blade.php`
+- `tests/Feature/DocumentationModuleTest.php` (new)
+
+Verification:
+- `DocumentationModuleTest`: 4 passed (published-only listing, search filtering, permission gate for a manager without `settings.manage`, access granted for a super admin).
+- Full `php artisan test` (plain, no `--env`): **1534 passed, 0 failed** (9975 assertions).
+- `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: not committed — waiting for owner approval.
+
+## 2026-09-28 - Investment withdrawal: voucher first, then the status turns "Withdrawn"; the record is kept
+
+Reason — owner:
+- "কয়েকজন ইনভেস্টর তাদের ইনভেস্টমেন্ট উত্তলন করে নিয়েছেন তাদের লভ্যাংশ সহ … তাদের একটা রেকর্ড থাকবে ডিলিট/ট্রাশ হবে না, শুধু স্ট্যাটাস পরিবর্তন হবে।" Some investors took their investment back with profit. Keep their record, never delete or trash it, and only change the status.
+- Answers:
+  1. "প্রজেক্ট এর ২ মাস শেষে তাদের লভ্যাংশ তাদেরকে পরিশোধ করা হয়েছে এরপর তাদের সিদ্বান্ত অনুযায়ী তারা তাদের বিনিয়োগের মূল টাকা উত্তলন করেছে।" Profit was paid at the end of the 2-month cycle, and afterwards they withdrew the principal.
+  2. The status goes on each investment, and the investor shows "Withdrawn" once all their investments are: "ওকে".
+  3. "টাকা আগেই উত্তলন হয়ে গেছে … একটা ভাউচার তৈরি হতে হবে। একটা জিনিস ফিক্সড রুল করে দেও, যদি কোন ইনভেস্টর তাদের টাকা উত্তলন করে তাহলে ভাউচার তৈরি হবে এবং ভাউচার তৈরি হলেই কেবল স্ট্যাটাস পরিবর্তন হবে।" The money is already paid out, and a voucher must be created. Fixed rule: a withdrawal creates a voucher, and only a created voucher changes the status.
+
+What changed:
+- **Migration** `2026_09_28_130000`: `investments.status` (`active` / `withdrawn`, default `active`), `withdrawn_at`, `withdrawal_voucher_id` (FK vouchers, `nullOnDelete`) and `withdrawal_note`.
+- **`Investment` model:**
+  - refuses `status = withdrawn` without `withdrawal_voucher_id` (the fixed rule, enforced in the model and not only in the UI).
+  - refuses to change status/amount/project/investor/voucher of a withdrawn investment, and refuses to delete it.
+  - adds `withdrawalVoucher()`, `isWithdrawn()` and `scopeActive()`.
+- **`InvestmentWithdrawalService::withdraw()`:** one transaction with a row lock.
+  - It submits a debit `investor_payout` voucher for the full principal through `VoucherService::submit()`. The voucher uses the fund source's account, the payment method and the reference as `transaction_id`, and the purpose includes the investor, the project and the withdrawal date, because vouchers have no date field of their own.
+  - Then it sets the status. A voucher failure rolls everything back.
+  - The voucher is **pending**. The status changes when the voucher is *created*, as the owner said, not when Finance approves it.
+- **UI:**
+  - **Withdraw principal** action (manage only) on the investment page and in the Investments tabs of both the investor and the project. It asks for the date (past or today), fund source (defaults to the project's payout fund source), payment method, reference and note.
+  - Status column in both tabs. The project tab hides Edit/Delete for withdrawn rows.
+  - The investment page has a "Withdrawal" section with the date, a voucher link, the voucher status and the note.
+- **Investor status:** `Investor::investmentStatus()` works it out from the investments: active if any investment is active, withdrawn if all are, otherwise none. It shows as a Status column on the investor list, with a Status filter.
+
+Deliberately not changed; needs the owner's decision:
+- `SettlementService` still counts withdrawn investments. A project has only one settlement. If a withdrawal is recorded *before* that project's settlement is entered (for example, INV-1's cycle-1 settlement not yet in the system), excluding them would drop the profit they were actually paid. So they stay in until the owner says otherwise.
+- The profit paid at the end of the cycle is not part of this voucher. It belongs to the settlement payout, which has its own voucher.
+- If Finance rejects or deletes the withdrawal voucher, the investment stays "withdrawn". With `nullOnDelete`, a deleted voucher leaves the link empty.
+
+**Needs Bangla review:** 16 new `lang/bn.json` keys, for example "Withdraw principal" → "মূল টাকা উত্তোলন" and "Withdrawn" → "উত্তোলিত".
+
+Important changed/new files:
+- `database/migrations/2026_09_28_130000_add_withdrawal_status_to_investments_table.php`
+- `app/Models/{Investment,Investor}.php`, `app/Services/Investment/InvestmentWithdrawalService.php` (new)
+- `app/Filament/Resources/InvestmentRecords/{InvestmentRecordResource,Pages/ViewInvestmentRecord}.php`
+- `app/Filament/Resources/Investors/{InvestorResource,RelationManagers/InvestmentsRelationManager}.php`
+- `app/Filament/Resources/InvestmentProjects/RelationManagers/InvestmentsRelationManager.php`
+- `lang/en.json`, `lang/bn.json`, `tests/Feature/InvestmentWithdrawalTest.php` (new)
+
+Verification:
+- `InvestmentWithdrawalTest`: 5 passed:
+  - the voucher (debit, `investor_payout`, full amount, fund source's account) is created, then the status changes and the voucher is linked
+  - a fund source without an account creates no voucher and changes no status, and setting `withdrawn` directly is refused
+  - a withdrawn investment can't be deleted, edited or withdrawn twice
+  - the page action works for a super admin and is hidden for an accountant (view only)
+  - the investor status and filter (active while one investment is active)
+- `--filter='Invest|TranslationParity|MultiCompany'`: 111 passed.
+- Full `php artisan test` (plain, no `--env`): **1530 passed, 0 failed** (9967 assertions).
+- Pint passes. It also re-ordered the existing imports in `InvestmentRecordResource.php`.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
+## 2026-09-28 - Investor list: project filter, multi-select, channel partner on import, paper-copy uploads on the form
+
+Reason — owner, after using the investor list with the real INV-1 sheet:
+- "ইনভেস্টর শীট জখন আপলোড করি তখন পার্টনার চ্যানেল সিলেক্ট করার কোন অপশন আসেনা" — no way to pick the channel partner when importing.
+- "মূল লিস্টে মাল্টিপল লিস্ট সিলেক্ট করার অপশন নাই" — no multi-select on the investor list.
+- "nid upload এর জন্য একটা বাটন যুক্ত করেছ এটা কাজের মনে হচ্ছে না … ইনভেস্টর তৈরির ফর্মে nid, stamp -চুক্তিপত্র, check আপলোডের ঘর থাকার কথা" — the NID bulk-upload button is not useful; the investor form should have upload boxes for NID, the stamp-paper contract and the cheque.
+- "ইনভেস্টর লিস্ট প্রজেক্ট বাই প্রজেক্ট ফিল্টার করার অপশন থাকতে হবে। এটা মেন্ডাটরি।" — the investor list must filter by project.
+
+What changed:
+- **Project filter:** `SelectFilter('project')` (multiple, searchable) on the investor list, matching investors with an investment in any chosen project. New **Projects** badge column (project codes; `investments.project` is eager-loaded). A **Channel Partner** filter was added too.
+- **Multi-select:** bulk action **Assign channel partner** (manage only). It sets the partner only on selected investors with none, and skips investors who already have a partner or are the chosen partner. Changing an existing partner stays a one-by-one edit, because the model requires `investments.manage_channel_partner` and a reason for that.
+- **Channel partner on import:** a **Channel partner for this import (optional)** section in both import dialogs, and the same field in the drafts bulk action (renamed **Set project / payment / channel partner**). `InvestorImportService::investmentDefaults()` takes `channel_partner_id`. A row's own channel-partner column still wins. Linked existing investors are unchanged, as before.
+- **Paper copies on the investor form:** four upload boxes (investor NID copy, nominee NID copy, signed contract / stamp paper, cheque copy). They are multiple, PDF/JPG/PNG/WEBP, 10 MB each, stored in the company's private storage, and visible only with manage. On create or save they become `InvestmentDocument` rows on the investor in the same transaction. Edit clears the boxes after saving so a second save does not add the files again.
+- **Removed** the "Upload documents by NID" header action, `InvestorDocumentUploadService`, the `document_keywords` config and its 2 tests.
+
+Not done — waiting for the owner's answers: investors who withdrew their investment with profit (keep the record, only change the status). See the questions in the conversation.
+
+Noticed in the owner's screenshot (not changed):
+- Two investors (সৌরভ আহমেদ, আবীর ওয়াদুদ মজুমদার) have their phone saved in Bangla digits. Import matching by phone uses 0-9, so a re-import would not match them by phone. The NID still matches them.
+- মোঃ মিছবাহুর রাশিদ জাহিদ has NID `01766718192`, the same as the phone. It is probably wrong in the sheet.
+
+**Needs Bangla review:** 10 new `lang/bn.json` keys (the channel-partner and paper-copy texts). 7 keys used only by the removed button were deleted from both files.
+
+Important changed files:
+- `app/Filament/Resources/Investors/InvestorResource.php`, `Pages/{CreateInvestor,EditInvestor,ListInvestors}.php`
+- `app/Filament/Resources/InvestorDrafts/InvestorDraftResource.php`, `Pages/ListInvestorDrafts.php`
+- `app/Services/Investment/InvestorImportService.php`, `config/investor_import.php`
+- deleted `app/Services/Investment/InvestorDocumentUploadService.php`
+- `lang/en.json`, `lang/bn.json`, `tests/Feature/InvestorIdentityAndDocumentsTest.php`
+
+Verification:
+- `InvestorIdentityAndDocumentsTest`: 11 passed. There are 4 new tests: form uploads become documents on create and edit, the project filter, bulk assign channel partner (skips an investor who already has one), and an import with a channel partner. The 2 bulk-upload tests were removed.
+- `InvestorImportTest`, `InvestorFormTest` and `TranslationParityTest` pass. Pint passes.
+- Full `php artisan test` (plain, no `--env`): 1519 passed, 1 failed before merging `main`, all from `ReleaseNotesTest` (config/release.php behind the CHANGELOG). After merging `main`: **1525 passed, 0 failed**.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
+## 2026-09-28 - Quote status webhook for connected websites (lead.status_updated)
+
+Reason — owner: "কোটেশন স্ট্যাটাস webhook ERP-তে যোগ করো". Two website teams (Tasneem Knit, Noor Solar — noorsolaren.com is a separate company in the ERP) need the status of a quote they sent to come back to their site.
+
+What changed:
+- **Migration** `2026_09_28_120000_add_external_reference_to_leads_table`: nullable `leads.external_reference`, unique per company. Not run on the demo DB.
+- `POST /api/v1/leads` (`LeadController`): optional `external_reference`; a repeat returns the existing lead (200) instead of a duplicate. The response adds `external_reference`.
+- `Lead::booted()`: on `updated`, when `status` changed and `external_reference` is set → `WebsiteWebhookDispatcher::dispatchLeadStatusUpdated()` → event `lead.status_updated` with `id`, `external_reference`, `status`, `updated_at`.
+- Status values are the existing Lead statuses (`new`, `contacted`, `quoted`, `won`, `lost`); no new statuses were invented.
+- Docs: `docs/api/website-integration.md`, `docs/api/website-integration.openapi.yaml`.
+
+Tests:
+- `WebsiteApiLeadTest`: +2 (retry returns the same lead; the same reference in two companies stays two leads).
+- `WebsiteWebhookDispatchTest`: +3 (status change dispatches; lead without a website reference does not; edit without a status change does not).
+
+Needs owner decision (not built, not guessed):
+- `tracking_status` / `tracking_number` the website teams asked for: what steps to show customers.
+- Whether the website should see the internal status names (`won`/`lost`) as they are, or mapped to customer-facing labels on the website side.
+
+Found, not changed:
+- The `staging` branch (last commit 2026-08-23) does not contain the website API at all, so https://staging-app.zamzamint.com/api/v1/* returns 404. The staging server also shows full Laravel stack traces (`APP_DEBUG` is on).
+
+Commit status: committed and pushed to `claude/friendly-feynman-w4twzx`, then merged into `main` (owner approved: "ওকে মেইন এ পুশ কর").
+
+## 2026-09-28 - NID / passport number is the investor ID; NID and contract copies (manage only)
+
+Reason — owner, answering the design questions:
+1. "Investment.manage পারমিশন যাদের কাছে আছে তারাই দেখতে পারবে।" Only users with investments.manage may see the copies.
+2. "প্রতিটা প্রজেক্টে চুক্তি আলাদা। তবে ওই প্রজেক্ট এর সকল ইনভেস্টরের চুক্তিপত্র একই।" Each project has its own contract, and it is the same for every investor in that project.
+3. "…ইনভেস্টরের ক্ষেত্রে শুধু এনআইডি কার্ড দিয়েই তার ইনভেস্টর আইডি তৈরি করবে। এবং ইনভেস্টরের সকল কার্যক্রম এই এনআইডি দিয়েই ট্র্যাক করা হবে।" The NID alone makes the investor ID, and everything about an investor is tracked by it, because a phone number can change.
+
+What changed:
+- **Identity:**
+  - `App\Support\InvestorIdentity` normalises a number (uppercase, Bangla digits → 0-9, only letters and digits kept) and hashes it with HMAC-SHA256 keyed by `app.key`.
+  - New `nid_hash` column on `investors` and `investor_drafts` (migration `2026_09_28_110000`, backfills existing rows by decrypting `nid_number`).
+  - `Investor` keeps the hash in sync and refuses a second investor with the same NID in the company.
+  - Investor form: NID required plus a duplicate check. The quick "create investor" inside a project's Investments tab also requires NID.
+  - Investor list: "Investor ID (NID / Passport)" column, searchable by the exact number through the hash (search terms not split, so spaces work), and an "NID missing" filter.
+- **Import:**
+  - a returning investor is matched by NID (it was phone), even with a new phone number, and a note shows the phone difference.
+  - a new-investor draft needs an NID, and an NID that already exists asks to link the draft.
+  - twin drafts are detected by NID.
+  - the "phone already saved" message now says to link the draft or use another number (the DB still keeps phone unique per company).
+- **Document types:** investor NID copy, nominee NID copy, project contract (same for all investors), cheque copy, stamp copy. Document category labels are now translated.
+- **Access:**
+  - the six identity/contract categories, and any document attached to an investor, are hidden from Documents tabs and refused by the download controller without `investments.manage`.
+  - the investor's Documents tab is visible only with manage.
+  - the security-instrument contract download now needs manage.
+- **Checklist:**
+  - `Investor::documentChecklist()` covers the NID copy, the nominee NID copy (when there is a nominee), and a contract for every project invested in: a project contract on the project, or a signed copy on the investor.
+  - it shows as a "Paper copies" section on the investor page and a column in the list (manage only), with a "Paper copies missing" filter (`scopeMissingDocuments`).
+- **Bulk upload:**
+  - "Upload documents by NID" on the investor list takes up to 200 PDF/JPG/PNG/WEBP files of 10 MB each.
+  - `InvestorDocumentUploadService` finds the investor from a 6+-digit token in the file name (Bangla digits work).
+  - a keyword picks the category (nominee / contract / cheque / stamp, in English or Bangla; no keyword means the investor's own NID copy).
+  - files go to the company's private storage, temp uploads are deleted, and unmatched file names are listed.
+
+Checked with the owner's real `INV_1_10_04_2026.csv` (not committed): 19 of 19 drafts ready. Confirming gave 19 investors, all with an NID hash, and investments totalling ৳5,300,000. Importing it again linked all 19 by NID.
+
+**Follow-up (same day):** the owner uploaded that sheet again and pointed out the Investor Drafts list only showed Name / Phone / Father-Spouse / Nominee Name — NID, address, nominee NID, nominee phone, stamp no. and cheque no. were not visible, so it looked like the columns had not been read. They were being read and stored on the draft correctly (unchanged from above); the list table simply never had columns for them. Added `nid_number` (normalised, shown by default), `address`, `nominee_nid_or_passport`, `nominee_phone`, `stamp_number` and `cheque_number` as columns on the Investor Drafts table — `nid_number` visible by default next to Phone, the other five toggleable (hidden by default, same as the existing Father/Spouse and Nominee Name columns) via the column-toggle button. No new translation keys were needed; all six labels already existed in `lang/en.json`/`lang/bn.json`.
+
+**Needs Bangla review:** 44 new `lang/bn.json` keys, including 11 document category labels. 2 unused keys were removed from both files.
+
+Important changed/new files:
+- `database/migrations/2026_09_28_110000_add_nid_hash_to_investors_and_investor_drafts.php`
+- `app/Support/InvestorIdentity.php`, `app/Services/Investment/InvestorDocumentUploadService.php`
+- `app/Models/{Investor,InvestorDraft,InvestmentDocument}.php`
+- `app/Services/Investment/InvestorImportService.php`, `config/investor_import.php`
+- `app/Filament/Resources/Investors/{InvestorResource,Pages/ListInvestors}.php`
+- `app/Filament/Resources/InvestmentProjects/RelationManagers/{DocumentsRelationManager,InvestmentsRelationManager}.php`
+- `app/Filament/Resources/InvestorDrafts/InvestorDraftResource.php` (also the follow-up: new table columns)
+- `app/Http/Controllers/Admin/{InvestmentDocumentDownloadController,InvestorContractDownloadController}.php`
+- `lang/en.json`, `lang/bn.json`
+- tests: `tests/Feature/InvestorIdentityAndDocumentsTest.php` (new, 9 tests), `InvestorImportTest.php`, `InvestorFormTest.php` (test data now carries NIDs)
+
+Verification:
+- `InvestorIdentityAndDocumentsTest`: 9 passed:
+  - duplicate NID in any format is refused
+  - the form requires a unique NID
+  - search by NID works
+  - bulk upload by NID: categories and unmatched files
+  - the upload action works and cleans up its temp files
+  - the checklist, with one project contract covering all investors
+  - an accountant (view only) gets 403 on NID and contract copies but can still download a settlement sheet
+  - a draft without an NID is blocked
+  - the migration backfills the hash
+- `InvestorImportTest` 22, `InvestorFormTest`, `InvestmentSettlementTest` and `TranslationParityTest` pass.
+- Full `php artisan test` (plain, no `--env`): **1507 passed, 0 failed** (9426 assertions), re-verified after the follow-up column fix.
+- Pint passes on the changed files. Pint also re-formatted a few older lines in `InvestorResource.php`.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main দুই জায়গাতেই পুশ কর").
 
 ## 2026-09-28 - Reseller preview security fix + reseller prices, commission and withdrawals
 

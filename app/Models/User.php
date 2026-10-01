@@ -263,6 +263,7 @@ class User extends Authenticatable implements FilamentUser
         'voucher.approve' => 'Voucher: Approve',
         'voucher.reject' => 'Voucher: Reject',
         'voucher.cancel' => 'Voucher: Cancel',
+        'voucher.delete' => 'Voucher: Move to Trash, Restore and Delete Permanently',
         'fund_source.manage' => 'Fund Source: Manage',
         'fund_transfer.create' => 'Fund Transfer: Create',
         'fund_transfer.approve' => 'Fund Transfer: Approve',
@@ -316,6 +317,7 @@ class User extends Authenticatable implements FilamentUser
         InvestmentWithdrawalNotice::class => 'investments',
         ProjectSettlement::class => 'investments',
         SettlementPayout::class => 'investments',
+        ChannelPartner::class => 'investments',
         ChannelPartnerPayout::class => 'investments',
         MetaAdAccount::class => 'marketing',
         MetaAdCampaign::class => 'marketing',
@@ -448,6 +450,12 @@ class User extends Authenticatable implements FilamentUser
     public function canCreateVoucher(): bool
     {
         return $this->isSuperAdmin() || $this->hasPermission('voucher.create');
+    }
+
+    /** Trash, restore and permanently delete vouchers (owner, 2026-09-28). */
+    public function canDeleteVoucher(): bool
+    {
+        return $this->isSuperAdmin() || $this->hasPermission('voucher.delete');
     }
 
     public function canViewAllVouchers(): bool

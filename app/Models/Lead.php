@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Services\WebsiteWebhookDispatcher;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -30,7 +31,7 @@ class Lead extends Model
     ];
 
     protected $fillable = [
-        'company_id', 'name', 'phone', 'email', 'source', 'status',
+        'company_id', 'name', 'phone', 'email', 'source', 'external_reference', 'status',
         'interest', 'estimated_value', 'assigned_to', 'next_follow_up_at',
         'follow_up_reminded_at', 'opted_out_at', 'converted_customer_id', 'converted_order_id',
         'note', 'created_by',
@@ -55,6 +56,16 @@ class Lead extends Model
             // a stale reminded_at from the old date suppress the new one.
             if ($lead->isDirty('next_follow_up_at') && ! $lead->isDirty('follow_up_reminded_at')) {
                 $lead->follow_up_reminded_at = null;
+            }
+        });
+
+        // One-way ERP -> website quote status tracking, same as
+        // Order::booted()'s order.status_updated. Only leads the website
+        // itself submitted (they carry its external_reference) are sent —
+        // the website has no record of any other lead.
+        static::updated(function (Lead $lead): void {
+            if ($lead->wasChanged('status') && filled($lead->external_reference)) {
+                app(WebsiteWebhookDispatcher::class)->dispatchLeadStatusUpdated($lead);
             }
         });
     }

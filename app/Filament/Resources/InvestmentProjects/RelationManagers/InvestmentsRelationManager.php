@@ -42,7 +42,7 @@ class InvestmentsRelationManager extends RelationManager
                 ->createOptionForm([
                     TextInput::make('name')->required(),
                     TextInput::make('phone')->required(),
-                    TextInput::make('nid_number')->label('NID Number'),
+                    TextInput::make('nid_number')->label(__('NID / Passport (Investor ID)'))->required(),
                 ])->createOptionUsing(fn (array $data): int => Investor::query()->create($data)->getKey())->required(),
             TextInput::make('amount')->numeric()->prefix('৳')->minValue(0.01)->required(),
             Select::make('payment_method')->options(Investment::PAYMENT_METHODS)->required(),
@@ -73,6 +73,11 @@ class InvestmentsRelationManager extends RelationManager
             TextColumn::make('amount')->moneyWithoutTrailingZeroes('BDT')->summarize(Sum::make()->moneyWithoutTrailingZeroes('BDT')),
             TextColumn::make('payment_method')->badge(),
             TextColumn::make('invested_at')->date(),
+            TextColumn::make('status')
+                ->label(__('Status'))
+                ->badge()
+                ->formatStateUsing(fn (?string $state): string => InvestmentRecordResource::statusLabel($state))
+                ->color(fn (?string $state): string => InvestmentRecordResource::statusColor($state)),
             // Inline cheque number straight off the investment row (v3 P3) --
             // previously only visible by opening the separate
             // SecurityInstrumentsRelationManager on the investment's own view.
@@ -94,8 +99,9 @@ class InvestmentsRelationManager extends RelationManager
         ])
             ->recordActions([
                 ViewAction::make()->url(fn (Investment $record): string => InvestmentRecordResource::getUrl('view', ['record' => $record])),
-                EditAction::make(),
-                DeleteAction::make(),
+                InvestmentRecordResource::withdrawAction(),
+                EditAction::make()->hidden(fn (Investment $record): bool => $record->isWithdrawn()),
+                DeleteAction::make()->hidden(fn (Investment $record): bool => $record->isWithdrawn()),
             ]);
     }
 }

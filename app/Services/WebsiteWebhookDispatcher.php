@@ -3,15 +3,17 @@
 namespace App\Services;
 
 use App\Jobs\DispatchWebsiteWebhookJob;
+use App\Models\Lead;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\StorefrontSetting;
 
 /**
  * Queues an outbound webhook to an external website whenever something it
- * needs to know about changes on the ERP side — a product's price/stock, or
- * an order's status. Configured per company on StorefrontSetting's
- * `website_api_credentials` (webhook_url, webhook_secret, is_enabled), the
+ * needs to know about changes on the ERP side — a product's price/stock, an
+ * order's status, or the status of a quote/inquiry it submitted as a lead.
+ * Configured per company on StorefrontSetting's `website_api_credentials`
+ * (webhook_url, webhook_secret, is_enabled), the
  * same "one encrypted JSON column per integration" convention as
  * `woocommerce_credentials`. A silent no-op when nothing is configured or
  * enabled — this is a best-effort notification, never something that should
@@ -41,6 +43,16 @@ class WebsiteWebhookDispatcher
             'delivery_status' => $order->delivery_status,
             'workflow_stage' => $order->workflowStage(),
             'updated_at' => $order->updated_at?->toIso8601String(),
+        ]);
+    }
+
+    public function dispatchLeadStatusUpdated(Lead $lead): void
+    {
+        $this->dispatch($lead->company_id, 'lead.status_updated', [
+            'id' => $lead->getKey(),
+            'external_reference' => $lead->external_reference,
+            'status' => $lead->status,
+            'updated_at' => $lead->updated_at?->toIso8601String(),
         ]);
     }
 

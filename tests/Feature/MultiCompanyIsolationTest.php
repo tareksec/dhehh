@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Broadcast;
 use App\Models\Category;
+use App\Models\ChannelPartner;
 use App\Models\ChannelPartnerPayout;
 use App\Models\ChatOrderLink;
 use App\Models\Company;
@@ -124,7 +125,7 @@ class MultiCompanyIsolationTest extends TestCase
             Investment::class, ProjectCostItem::class,
             InvestorSecurityInstrument::class, InvestmentWitness::class, InvestmentDocument::class,
             InvestorCycleElection::class, InvestmentWithdrawalNotice::class, ProjectSettlement::class,
-            SettlementPayout::class, ChannelPartnerPayout::class,
+            SettlementPayout::class, ChannelPartner::class, ChannelPartnerPayout::class,
             MetaAdAccount::class, MetaAdCampaign::class, MetaAdSet::class, MetaAd::class, MetaAdProposal::class, MetaAudience::class,
             Offer::class, OfferItem::class, ProductReview::class,
             Broadcast::class, Media::class, GeneratedImage::class, GeneratedVideo::class,

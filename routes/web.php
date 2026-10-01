@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\VoucherAttachmentDownloadController;
 use App\Http\Controllers\Admin\VoucherReceiptController;
 use App\Http\Controllers\ChatOrderController;
 use App\Http\Controllers\CourierWebhookController;
+use App\Http\Controllers\DocumentationGuideController;
 use App\Http\Controllers\FirebaseServiceWorkerController;
 use App\Http\Controllers\InstallController;
 use App\Http\Controllers\MetaWebhookController;
@@ -438,6 +439,12 @@ Route::get('/portal/products/{product}/photos', ResellerProductPhotosController:
 Route::view('/pricing', 'marketing.pricing')->name('marketing.pricing');
 
 Route::view('/docs', 'marketing.docs')->name('marketing.docs');
+
+// The in-app "Documentation" module's public read-only mirror — for sharing
+// step-by-step guides with people who don't have an admin panel login (e.g.
+// an external developer team), without exposing anything else in the app.
+Route::get('/guides', [DocumentationGuideController::class, 'index'])->name('guides.index');
+Route::get('/guides/{category}/{article}', [DocumentationGuideController::class, 'show'])->name('guides.show');
 
 Route::get('/health/version', function () {
     $roleOptions = User::roleOptions();

@@ -31,6 +31,8 @@ class InvestmentDocumentDownloadController extends Controller
             404,
         );
         abort_unless($user->hasPermission('investments.view'), 403);
+        // NID copies and contracts: investments.manage only (owner's rule).
+        abort_if($record->isSensitive() && ! $user->hasPermission('investments.manage'), 403);
         abort_if(blank($record->file_path), 404);
 
         try {

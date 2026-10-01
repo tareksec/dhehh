@@ -5,11 +5,13 @@ namespace App\Filament\Resources\InvestorDrafts;
 use App\Filament\Clusters\Investments;
 use App\Filament\Resources\InvestorDrafts\Pages\EditInvestorDraft;
 use App\Filament\Resources\InvestorDrafts\Pages\ListInvestorDrafts;
+use App\Models\ChannelPartner;
 use App\Models\Investment;
 use App\Models\InvestmentProject;
 use App\Models\Investor;
 use App\Models\InvestorDraft;
 use App\Services\Investment\InvestorImportService;
+use App\Support\InvestorIdentity;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -22,7 +24,6 @@ use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -104,6 +105,14 @@ class InvestorDraftResource extends Resource
                         ->label(__('Add to an existing investor'))
                         ->relationship('existingInvestor', 'name')
                         ->searchable(['name', 'phone'])
+                        ->getSearchResultsUsing(fn (string $search): array => Investor::query()
+                            ->where(fn ($query) => $query
+                                ->where('name', 'like', "%{$search}%")
+                                ->orWhere('phone', 'like', "%{$search}%")
+                                ->orWhere('nid_hash', InvestorIdentity::hash($search) ?? '-'))
+                            ->limit(50)->get()
+                            ->mapWithKeys(fn (Investor $investor): array => [$investor->getKey() => "{$investor->name} ({$investor->phone})"])
+                            ->all())
                         ->getOptionLabelFromRecordUsing(fn (Investor $record): string => "{$record->name} ({$record->phone})")
                         ->live()
                         ->helperText(__('Pick an investor who already exists to add only the investment below to them. Their details are not changed. Leave empty to create a new investor.')),
@@ -124,9 +133,6 @@ class InvestorDraftResource extends Resource
                     ->label(__('Channel Partner'))
                     ->relationship('channelPartner', 'name')
                     ->searchable()->preload(),
-                Toggle::make('is_channel_partner')
-                    ->label(__('This investor is also a Channel Partner'))
-                    ->columnSpanFull(),
                 Textarea::make('address')->label(__('Address'))->columnSpanFull(),
             ])->columns(2),
             Section::make(__('Nominee'))->visible(fn (Get $get): bool => blank($get('existing_investor_id')))->schema([
@@ -149,8 +155,22 @@ class InvestorDraftResource extends Resource
             ->columns([
                 TextColumn::make('name')->label(__('Name'))->placeholder(__('Missing'))->searchable()->sortable(),
                 TextColumn::make('phone')->label(__('Phone'))->placeholder(__('Missing'))->searchable(),
+                TextColumn::make('nid_number')
+                    ->label(__('NID / Passport'))
+                    ->formatStateUsing(fn (?string $state): ?string => InvestorIdentity::normalize($state))
+                    ->placeholder(__('Missing'))
+                    ->toggleable(),
+                TextColumn::make('address')->label(__('Address'))->placeholder('-')->toggleable(isToggledHiddenByDefault: true)->wrap(),
                 TextColumn::make('guardian_name')->label(__('Father / Spouse Name'))->placeholder('-')->toggleable(),
                 TextColumn::make('nominee_name')->label(__('Nominee Name'))->placeholder('-')->toggleable(),
+                TextColumn::make('nominee_nid_or_passport')
+                    ->label(__('Nominee NID / Passport'))
+                    ->formatStateUsing(fn (?string $state): ?string => InvestorIdentity::normalize($state))
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('nominee_phone')->label(__('Nominee Phone'))->placeholder('-')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('stamp_number')->label(__('Stamp No.'))->placeholder('-')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('cheque_number')->label(__('Cheque No.'))->placeholder('-')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('existingInvestor.name')
                     ->label(__('Existing investor'))
                     ->badge()->color('info')
@@ -212,9 +232,9 @@ class InvestorDraftResource extends Resource
                         })
                         ->deselectRecordsAfterCompletion(),
                     BulkAction::make('setInvestment')
-                        ->label(__('Set project / payment'))
+                        ->label(__('Set project / payment / channel partner'))
                         ->icon(Heroicon::OutlinedBanknotes)
-                        ->schema(static::investmentFields(withAmount: false))
+                        ->schema([...static::investmentFields(withAmount: false), static::channelPartnerField()])
                         ->action(function (Collection $records, array $data): void {
                             $changes = array_filter($data, fn ($value): bool => filled($value));
 
@@ -255,6 +275,16 @@ class InvestorDraftResource extends Resource
                 ->options(collect(Investment::PAYMENT_METHODS)->map(fn (string $label): string => __($label))->all()),
             DatePicker::make('invested_at')->label(__('Investment date'))->maxDate(now()),
         ]));
+    }
+
+    /** Channel partner picker shared by the import dialogs and the bulk action. */
+    public static function channelPartnerField(): Select
+    {
+        return Select::make('channel_partner_id')
+            ->label(__('Channel Partner'))
+            ->options(fn (): array => ChannelPartner::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
+            ->searchable()
+            ->helperText(__('Applied to the new investors in this import. A row with its own channel partner column keeps that one; investors who already exist are not changed.'));
     }
 
     /**

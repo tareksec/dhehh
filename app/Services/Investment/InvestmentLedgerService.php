@@ -99,7 +99,7 @@ class InvestmentLedgerService
                 'account_id' => $fundSource->account_id,
                 'payment_method' => $payout->payment_method,
                 'confirmation_source' => 'manual',
-                'purpose' => "Mudarabah channel-partner payout — {$payout->investor?->name}",
+                'purpose' => "Mudarabah channel-partner payout — {$payout->channelPartner?->name}",
             ], $submitter);
         });
     }

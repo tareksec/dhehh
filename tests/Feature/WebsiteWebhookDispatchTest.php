@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Jobs\DispatchWebsiteWebhookJob;
 use App\Models\Company;
 use App\Models\CompanyApiKey;
+use App\Models\Lead;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\StorefrontSetting;
@@ -157,6 +158,50 @@ class WebsiteWebhookDispatchTest extends TestCase
 
         Queue::fake();
         $product->update(['price' => 999]);
+
+        Queue::assertNotPushed(DispatchWebsiteWebhookJob::class);
+    }
+
+    public function test_website_lead_status_change_dispatches_a_webhook(): void
+    {
+        app(CompanyContext::class)->set($this->company);
+        $lead = Lead::query()->create([
+            'name' => 'Karim Traders', 'phone' => '01811223344', 'source' => 'website',
+            'external_reference' => 'TK-QUOTE-123456', 'status' => 'new',
+        ]);
+
+        Queue::fake();
+        $lead->update(['status' => 'quoted']);
+
+        Queue::assertPushed(DispatchWebsiteWebhookJob::class, fn (DispatchWebsiteWebhookJob $job): bool => $job->event === 'lead.status_updated'
+            && $job->data['external_reference'] === 'TK-QUOTE-123456'
+            && $job->data['status'] === 'quoted'
+            && $job->data['id'] === $lead->getKey());
+    }
+
+    public function test_lead_without_a_website_reference_never_dispatches(): void
+    {
+        app(CompanyContext::class)->set($this->company);
+        $lead = Lead::query()->create([
+            'name' => 'Walk-in buyer', 'phone' => '01811223344', 'source' => 'walk_in', 'status' => 'new',
+        ]);
+
+        Queue::fake();
+        $lead->update(['status' => 'contacted']);
+
+        Queue::assertNotPushed(DispatchWebsiteWebhookJob::class);
+    }
+
+    public function test_lead_edit_without_a_status_change_never_dispatches(): void
+    {
+        app(CompanyContext::class)->set($this->company);
+        $lead = Lead::query()->create([
+            'name' => 'Karim Traders', 'phone' => '01811223344', 'source' => 'website',
+            'external_reference' => 'TK-QUOTE-123456', 'status' => 'new',
+        ]);
+
+        Queue::fake();
+        $lead->update(['note' => 'Called, will send catalog']);
 
         Queue::assertNotPushed(DispatchWebsiteWebhookJob::class);
     }
