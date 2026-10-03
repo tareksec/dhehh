@@ -640,6 +640,11 @@ class StorefrontSettingResource extends Resource
                                 ->ignore($companyId)
                                 ->whereNotNull('domain');
                         })
+                        ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                            if (StorefrontSetting::nextjsDomainTaken((string) $value)) {
+                                $fail(__('This domain is already used by a Next.js site.'));
+                            }
+                        })
                         ->helperText('Example: zamzamgadgetbd.com. Do not include https:// or paths.')
                         ->afterStateUpdated(fn (Set $set): mixed => $set('company_domain_verified', false))
                         ->afterStateHydrated(function (TextInput $component, ?StorefrontSetting $record): void {
@@ -1255,6 +1260,40 @@ class StorefrontSettingResource extends Resource
                 ])
                 ->columns(2)
                 ->collapsible(),
+
+            Section::make(__('Next.js Site'))
+                ->columnSpanFull()
+                ->description(__('The headless Next.js storefront reads this same storefront configuration through the ERP API. The Blade storefront above keeps working unchanged.'))
+                ->schema([
+                    Toggle::make('nextjs_site_enabled')
+                        ->label(__('Enable Next.js site API'))
+                        ->default(false)
+                        ->helperText(__('When off, the Next.js site receives a 403 from /api/v1/storefront/*.')),
+                    TextInput::make('nextjs_site_domain')
+                        ->label(__('Next.js site domain'))
+                        ->maxLength(255)
+                        ->live(onBlur: true)
+                        ->dehydrateStateUsing(fn (?string $state): ?string => Company::normalizeDomain($state))
+                        ->rule(fn (Get $get, ?StorefrontSetting $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get, $record): void {
+                            $conflict = StorefrontSetting::nextjsDomainConflict(
+                                (string) $value,
+                                $get('company_id') ?: $record?->company_id,
+                            );
+
+                            if ($conflict) {
+                                $fail($conflict);
+                            }
+                        })
+                        ->helperText(__('Example: zamzamint.com. Do not include https:// or paths.'))
+                        ->afterStateUpdated(fn (Set $set): mixed => $set('nextjs_site_domain_verified', false)),
+                    Toggle::make('nextjs_site_domain_verified')
+                        ->label(__('Domain verified'))
+                        ->helperText(__('Changing the domain resets this status. Save the new domain, point DNS to the Coolify app, then turn this on in a second save.')),
+                    Text::make(__('Create the API key and the cache-refresh webhook under Settings → Integrations → Website API. Keep the key in the Next.js server environment only, never in browser code.'))
+                        ->columnSpanFull(),
+                ])
+                ->columns(2)
+                ->collapsible(),
         ];
 
         $sectionKeys = [
@@ -1279,6 +1318,7 @@ class StorefrontSettingResource extends Resource
             'reseller',
             'navigation_seo',
             'navigation_seo',
+            'nextjs_site',
         ];
 
         foreach ($components as $index => $component) {
@@ -1374,6 +1414,12 @@ class StorefrontSettingResource extends Resource
                     ->label('Domain')
                     ->searchable()
                     ->placeholder('-'),
+                TextColumn::make('sites')
+                    ->label(__('Sites'))
+                    ->state(fn (StorefrontSetting $record): array => self::siteBadges($record))
+                    ->badge()
+                    ->color(fn (string $state): string => str_starts_with($state, 'Next.js') ? 'success' : 'info')
+                    ->wrap(),
                 IconColumn::make('company.domain_verified')
                     ->label('Domain Verified')
                     ->boolean()
@@ -1436,6 +1482,12 @@ class StorefrontSettingResource extends Resource
                     ->url(fn (StorefrontSetting $record): string => self::publicUrl($record))
                     ->openUrlInNewTab()
                     ->visible(fn (StorefrontSetting $record): bool => filled($record->company?->domain)),
+                Action::make('openNextjsSite')
+                    ->label(__('Open Next.js site'))
+                    ->icon('heroicon-o-computer-desktop')
+                    ->url(fn (StorefrontSetting $record): string => 'https://'.$record->nextjs_site_domain)
+                    ->openUrlInNewTab()
+                    ->visible(fn (StorefrontSetting $record): bool => filled($record->nextjs_site_domain)),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -1537,6 +1589,25 @@ class StorefrontSettingResource extends Resource
     public static function publicUrl(StorefrontSetting $record): string
     {
         return 'https://'.$record->company->domain;
+    }
+
+    /**
+     * The storefronts one company runs, for the list's "Sites" column: the
+     * Blade storefront always exists; the Next.js site shows once it has a
+     * domain or is switched on, and says "off" while the API is disabled.
+     *
+     * @return array<int, string>
+     */
+    public static function siteBadges(StorefrontSetting $record): array
+    {
+        $badges = ['Blade · '.($record->company?->domain ?: '—')];
+
+        if ($record->nextjs_site_enabled || filled($record->nextjs_site_domain)) {
+            $badges[] = 'Next.js · '.($record->nextjs_site_domain ?: '—')
+                .($record->nextjs_site_enabled ? '' : ' ('.__('off').')');
+        }
+
+        return $badges;
     }
 
     protected static function contrastRule(Get $get, string $backgroundField, float $minimum, string $backgroundLabel): Closure

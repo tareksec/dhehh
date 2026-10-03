@@ -4,6 +4,22 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Next.js site in Site → Storefront Settings.** A new **Next.js Site** section lets you switch the headless Next.js website (for example zamzamint.com) on or off, enter its domain and mark the domain verified. The settings list has a new **Sites** column that shows each company's Blade storefront and its Next.js site side by side. Both sites keep reading the same storefront settings (theme colours, fonts, contact details, menus, footer, banners, payment and delivery rules), so nothing is configured twice. A domain can't be reused by another company, a reseller's store or another Next.js site.
+- **Collections in Offers.** **Offers** now has a third type, **Collection**, for **Flash Sale**, **Trending** and **New Arrivals**. Pick the products in display order, set when the collection starts and ends (a Flash Sale needs an end time, which runs its countdown) and optionally a **deal price** per product. Collections are only product lists for the Next.js site: they never appear as offer landing pages, in the `/offers` list or in the offer checkout, and aren't offered when generating AI images or videos.
+- **Storefront API for the Next.js website** (`/api/v1/storefront/…`). The website, which has no backend of its own, reads site settings, categories, products (with images, variations, ratings, minimum order quantity and wholesale quantity prices), hero slides, live collections and content pages from the ERP. It uses the company's existing API key and works only while *Enable Next.js site API* is on. See `docs/api/storefront-api.md`.
+
+**Technical Notes:**
+- `CLAUDE.md` (agent memory) now records that zamzamint.com is the wholesale ZamZam International site and zamzamgadgetbd.com the retail ZamZam Gadget site, and the owner's decisions for the Next.js website. `Company::CORE_COMPANIES` and `docs/storefront-go-live.md` still carry the old "Gift Items / Gadget Items" labels (not changed here).
+- New migrations (run `php artisan migrate --force`; both only add columns, existing rows are unchanged): `2026_10_03_100000_add_nextjs_site_to_storefront_settings_table` (`nextjs_site_enabled` default off, unique `nextjs_site_domain`, `nextjs_site_domain_verified`) and `2026_10_03_110000_add_collection_fields_to_offers_tables` (`offers.collection_kind`, `starts_at`, `ends_at`; `offer_items.deal_price`).
+- `Offer::TYPE_COLLECTION`; scopes `landingPages()`, `collections()`, `liveCollections()`. `OfferController`, `OfferCheckoutController` and the image/video generation offer pickers now use `landingPages()`. Switching an offer away from *Collection* clears its kind and schedule.
+- `StorefrontSetting::nextjsDomainConflict()` / `nextjsDomainTaken()`; `Company::hostIsTakenByThePlatform()` also treats a Next.js domain as taken. Server-side checks live in `HandlesNextjsSiteDomain` (Create/Edit pages) in addition to the form rules.
+- New `EnsureNextjsSiteEnabled` middleware (403 `nextjs_site_disabled`), the `storefront-api` rate limiter (600/min per API token + 3000/min per IP; defined in `AppServiceProvider`), `StorefrontController`, `StorefrontCatalogService` and `StorefrontSiteConfigService`. `Product::reviews()` relation added. No new company-owned model, so `MultiCompanyIsolationTest` is unchanged; `StorefrontApiTest` covers isolation between two companies.
+- The existing server-to-server `/api/v1` routes are untouched and are not gated by the Next.js switch.
+- 32 new translation keys in `lang/en.json` and `lang/bn.json`.
+
+
 ## [2.42.0] - 2026-09-29
 
 **Release type:** Minor Feature Update

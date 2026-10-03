@@ -2,6 +2,51 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-03 - Headless Next.js storefront, phase 1 (read-only catalog API + website wiring)
+
+Reason — owner asked to connect the rebuilt zamzamint.com website (Next.js, no backend) to this ERP, then answered the design questions: both Blade and Next.js sites stay in the **Site → Storefront Settings** list and share its settings; Flash Sale / Trending / New Arrivals are managed as an option in **Offers**; the checkout must follow every Blade rule; Bangla + English; Coolify hosting; the frontend becomes the wholesale site. "ক) আর খ) দুটোতেই প্রস্তাবিতটা, ধাপ ১ শুরু কর".
+
+What changed (ERP, this repo):
+- **Next.js Site** section in Storefront Settings + **Sites** list column + "Open Next.js site" action. Migration `2026_10_03_100000_add_nextjs_site_to_storefront_settings_table` (off by default). Domain rules in `StorefrontSetting::nextjsDomainConflict()`, `Company::hostIsTakenByThePlatform()`, `HandlesNextjsSiteDomain`.
+- **Offers → type Collection** (Flash Sale / Trending / New Arrivals, schedule, per-product deal price). Migration `2026_10_03_110000_add_collection_fields_to_offers_tables`. Blade `/offers`, offer show/checkout and the AI image/video offer pickers exclude collections (`Offer::scopeLandingPages`).
+- **Storefront API** `routes/api.php` → `v1/storefront/*`: `StorefrontController`, `StorefrontCatalogService`, `StorefrontSiteConfigService`, `EnsureNextjsSiteEnabled`, `storefront-api` rate limiter (`AppServiceProvider`), `Product::reviews()`, `app/Support/StorefrontApi/{Media,RichText}`.
+- Docs: `docs/api/storefront-api.md`, `PROJECT_GUIDE.md`, `CHANGELOG.md`, `CLAUDE.md` (memory).
+- Tests: `NextjsSiteSettingsTest` (7), `OfferCollectionTest` (5), `StorefrontApiTest` (21); `PhaseFourAdminPagesTest` updated for the new `nextjs_site` section key.
+
+What changed (website repo `bhd4232/zamzamint-new-website-theme`, same branch name): mock catalog/dashboard/inventory-sync removed; server-only ERP client (`src/lib/erp.ts`, key never `NEXT_PUBLIC_`), cached + tagged data layer, ERP-driven theme/fonts/logo/menus/footer/contact/slides/collections/pages, Bangla + English UI (`src/i18n`), wholesale MOQ + tier prices, variations, reviews, JSON-LD, signed webhook `/api/erp/webhook`, `/api/catalog/products` for cart/wishlist refresh. Routes mirror the Blade ones (`/products`, `/category/x`, `/product/x`, `/pages/x`). Next.js bumped 14.2.18 → 14.2.35 (the old version carries a security advisory).
+
+Verification:
+- ERP: full `php artisan test` (no `--env`) — **1666 passed, 0 failed** (12,280 assertions). `TranslationParityTest` passes (740 keys in both files). `npm run build` for the ERP assets passes.
+- End to end against a **disposable** SQLite database (outside the repo; no seeder, `demo:refresh` or `migrate:fresh` used): ERP `artisan serve` + `next start`. Checked over real HTTP and in headless Chromium: API auth/403/rate limit, home/listing/category/product/page render with ERP data server-side, Bangla (browser language, cookie priority, switcher), wholesale tier pricing in the cart (12 pcs → ৳750, 50 pcs → ৳700), variation selection, wishlist refresh, header search, signed webhook (bad/missing signature 403, ping no-op, `product.updated` refreshes), ERP key absent from every browser asset and the rendered HTML. 19 scripted browser checks pass.
+- Website: `npm run typecheck`, `npm run build` (needs no ERP) pass.
+
+My decisions (say if you want different):
+- The Next.js site is the same settings row as Blade (one row per company), not a second row — `storefront_settings.company_id` is unique and used everywhere.
+- API key stays in the Next.js server only (no CORS, no browser calls). Rate limit 600 req/min per key.
+- Language: visitor's choice (cookie) → browser language → `DEFAULT_LOCALE` (default English). Same URLs for both languages (no `/bn` prefix) for now.
+- Display price on the website: live deal price, else the reached wholesale tier price, else the ERP selling price — **needs your confirmation**, and checkout must re-price on the server.
+- "Proceed to checkout" is disabled with an explanatory note until phase 2.
+
+Not done / needs a decision: checkout, payment, customer login, order tracking (phase 2–3); admin content translation (i18n plan Phase 4); the Blade "Flash deals" section still shows the first products, not Collections; full palette parity (background/surface/text colours) with the Blade theme; OpenAPI file not updated for the storefront endpoints; the API key has read **and** write power (no read-only scope yet).
+
+Needs Bangla review: 32 new keys in `lang/bn.json` (Next.js Site section, domain errors, Collection form, Flash Sale/Trending/New Arrivals wording) and the website's whole `src/i18n/messages.ts` Bangla dictionary (≈110 interface strings).
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03) — both repos, branch `claude/loving-mendel-adxwam`.
+
+## 2026-10-03 - Agent memory: company/domain map and headless Next.js storefront decisions
+
+Reason — owner asked to update the agent's memory after correcting a mix-up (zamzamint.com is the wholesale site, zamzamgadgetbd.com the retail site) and answering the open questions on connecting the rebuilt Next.js website to the ERP.
+
+What changed:
+- `CLAUDE.md` only: new sections "Companies and sites" and "Headless Next.js storefront" recording the owner-confirmed domain ↔ business map, that the Blade storefront stays alongside the Next.js site (both driven by the existing per-company settings), Coolify hosting, Offers-section options for Flash Sale/Trending/New, full checkout-rule parity via a shared service, Bangla + English, and the phase order.
+- No application code, migrations, translations or tests touched; no `CHANGELOG.md` entry (agent-instruction edit only, per `AGENTS.md`).
+
+Follow-up the same day: owner confirmed the frontend becomes the wholesale site and that the "site list" is Site → Storefront Settings; recorded the one-row-per-company / one-domain-per-company constraint and that the Blade storefront currently runs on offer.zamzamint.com.
+
+Open item: `Company::CORE_COMPANIES` and `docs/storefront-go-live.md` still call zamzamint.com "Gift Items" and zamzamgadgetbd.com "Gadget Items" — flagged in `CLAUDE.md` as stale, not changed here.
+
+Commit status: committed and pushed together with the entry above, on owner approval (2026-10-03).
+
 ## 2026-10-01 - Reseller portal Phase 7b: reseller custom domains (app side)
 
 Reason — owner said "কাস্টম ডোমেইনের কাজ শুরু কর". Built everything the app can do; the server-side SSL proxy (Caddy vs Coolify API) is still an open decision, so the company switch stays off until that is set up.
