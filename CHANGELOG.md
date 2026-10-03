@@ -4,7 +4,9 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Hotfix
+## [2.42.1] - 2026-10-03
+
+**Release type:** Hotfix Update
 
 ### Fixed
 
@@ -13,7 +15,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `bootstrap/app.php`: the production error-page render hook now skips `AuthenticationException`, `ValidationException` and `HttpResponseException`. New `ProductionErrorPagesTest` runs as the production environment.
-
 ## [2.42.0] - 2026-09-29
 
 **Release type:** Minor Feature Update
