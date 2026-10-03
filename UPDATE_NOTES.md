@@ -2,6 +2,26 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-03 - Content Creation (plan 14) Phase 0: Bangla rendering check, Imagick, bundled font
+
+Reason — owner asked for an AdBreezy-style ad creative builder, then said "কাজ শুরু কর" (start the work), and later "ডায়াগনস্টিক কমান্ড বানিয়ে শুরু কর" (start by building the diagnostic command) and "দুটোই কর, ফন্ট আর Imagick যোগ কর" (do both: add the font and Imagick).
+
+What changed:
+- Phase 0 spike: GD breaks Bangla shaping; Imagick (PECL 3.8.1 Windows build, ImageMagick 7.1.1-46 with raqm) renders it correctly; a browser canvas also does and stays the fallback. Results are in plan 14 §9.
+- New `app/Services/AdCreative/TextRenderingCapability.php` + `app/Console/Commands/CheckAdCreativeRendering.php` (`ad-creative:check-rendering [--font=] [--render]`).
+- `resources/fonts/ad-creative/HindSiliguri-{Regular,Bold}.ttf` + `OFL.txt` (Google Fonts repo, OFL).
+- `composer.json` / `composer.lock`: `ext-imagick` required (Nixpacks reads extensions only from here). `.github/workflows/deploy.yml`: `imagick` added to setup-php.
+- New `14_AI_TOOL_MENU_CONTENT_CREATION_PLAN.md` (numbered 14 because `13_RESELLER_PORTAL_PLAN.md` already exists upstream).
+- No user-visible UI strings (console output only), so no lang keys.
+
+Tests:
+- New `tests/Feature/CheckAdCreativeRenderingCommandTest.php` (4; the Imagick-only case is skipped locally because local PHP has no imagick).
+- Full `php artisan test` (plain, no `--env`): 1639 passed, 1 skipped (11341 assertions), run on top of `origin/main` (v2.42.1). `npm run build` clean; no frontend assets changed.
+
+Still open: after deploy, run `php artisan ad-creative:check-rendering --render` in the Coolify terminal. If `raqm` or shaping FAILs on the Nix ImageMagick build, switch the renderer to the browser-canvas fallback.
+
+Commit status: committed and pushed to `main` (owner approved: "কমিট + পুশ"). Only the Phase 0 files plus these notes; other sessions' pending changes were left unstaged.
+
 ## 2026-10-03 - Hotfix 2: portal apply/login did nothing
 
 Reason — owner reported that after the first hotfix the portal login page opens, but signing up and logging in does nothing (no error), and admin shows no applicants.

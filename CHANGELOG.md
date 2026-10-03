@@ -4,6 +4,19 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Server check for Bangla ad images** (groundwork for the AI Tools → Content Creation ad builder). An admin can run `php artisan ad-creative:check-rendering --render` on the server to see whether it can put Bangla text on an image correctly. The image library already in the app (GD) breaks Bangla: conjuncts like স্বাস্থ্য don't join, and ি / ে land on the wrong side of the letter. The check reports OK or FAIL for each requirement and, with `--render`, saves a sample picture to look at.
+
+### Technical Notes
+
+- New `App\Services\AdCreative\TextRenderingCapability` and `ad-creative:check-rendering` command. Checks: GD, the `imagick` extension, the ImageMagick `raqm` delegate (HarfBuzz/FriBidi shaping), and a probe: ক্ষ drawn shaped must be at most 0.60 of its three code points' combined width (measured: Imagick + raqm 0.51, GD 0.81). Exits non-zero when not ready.
+- **Deploy change:** `ext-imagick` added to `composer.json` `require`, the only way Nixpacks installs a PHP extension; `composer.lock` changes only its content-hash and platform list. CI (`.github/workflows/deploy.yml`) now installs `imagick`. Local machines without imagick: `composer install --ignore-platform-req=ext-imagick` (the app itself still boots).
+- Bundled font: Hind Siliguri Regular/Bold (SIL OFL 1.1, Indian Type Foundry) in `resources/fonts/ad-creative/` with `OFL.txt`.
+- Plan: `14_AI_TOOL_MENU_CONTENT_CREATION_PLAN.md` (Phase 0 results).
+
 ## [2.42.2] - 2026-10-03
 
 **Release type:** Hotfix Update
