@@ -4,7 +4,9 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Hotfix
+## [2.42.2] - 2026-10-03
+
+**Release type:** Hotfix Update
 
 ### Fixed
 
@@ -13,7 +15,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `RestrictResellerPortalHost` lets every `livewire`/`livewire-<hash>` path through; `ResellerPanelProvider` marks `ResolveCompanyFromResellerPortalDomain` as persistent middleware. New `ResellerPortalLivewireHttpTest` posts the real Livewire update request (apply, wrong password, login).
-
 ## [2.42.1] - 2026-10-03
 
 **Release type:** Hotfix Update
