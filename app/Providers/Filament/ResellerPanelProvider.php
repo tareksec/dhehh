@@ -78,6 +78,14 @@ class ResellerPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
+            // Livewire re-runs only "persistent" middleware on its own update
+            // requests (every form submit and table action on the portal).
+            // Without this the company is not resolved from the host there, so
+            // an application would be saved to the default company and a
+            // login could not find the reseller's company.
+            ->persistentMiddleware([
+                ResolveCompanyFromResellerPortalDomain::class,
+            ])
             ->authMiddleware([
                 Authenticate::class,
             ]);

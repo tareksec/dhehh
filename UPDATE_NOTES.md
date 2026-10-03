@@ -2,6 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-03 - Hotfix 2: portal apply/login did nothing
+
+Reason — owner reported that after the first hotfix the portal login page opens, but signing up and logging in does nothing (no error), and admin shows no applicants.
+
+Root causes (both reproduced by posting the real Livewire request in a test before fixing):
+1. `RestrictResellerPortalHost` only let `livewire/...` through, but this app's Livewire update URL is the randomised `livewire-<hash>/update`, so on the portal host every form submit was redirected back to `/portal` (302) — nothing was saved or logged in. The earlier Phase tests used `Livewire::test()`, which skips HTTP middleware entirely, so they could not see this.
+2. Even with that fixed, Livewire only re-runs "persistent" middleware on update requests; `ResolveCompanyFromResellerPortalDomain` wasn't one, so the company was unresolved on submits and an application was saved to the default company (id 1) instead of the portal's. Now persistent.
+
+New `tests/Feature/ResellerPortalLivewireHttpTest.php` (4 tests, real HTTP Livewire endpoint): update URL not redirected, apply saves to the portal company as pending, wrong password returns the error, approved reseller logs in. Mutation check: dropping either fix fails the tests.
+
+Owner note: nothing was saved while it was broken, so applicants must apply again; no data to repair. Same fixes make the portal's tables/actions (Orders, Products, Withdrawals…) work after login.
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-03).
+
 ## 2026-10-03 - Hotfix: portal "500" for guests (and failed storefront forms)
 
 Reason — owner reported `reseller.zamzamint.com/portal` showing "500 Something went wrong". The owner ran a read-only debug command in the production terminal; it showed the real exception was `AuthenticationException` ("Unauthenticated") — a normal "send to login" signal, not a crash.

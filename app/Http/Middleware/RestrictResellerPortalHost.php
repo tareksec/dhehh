@@ -30,7 +30,7 @@ class RestrictResellerPortalHost
      * Always allowed regardless of host: framework/infra routes no page can
      * function without.
      */
-    protected const PASSTHROUGH_PREFIXES = ['livewire', 'internal', 'up', 'health', 'build', 'storage', 'vendor', 'broadcasting'];
+    protected const PASSTHROUGH_PREFIXES = ['internal', 'up', 'health', 'build', 'storage', 'vendor', 'broadcasting'];
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -58,6 +58,14 @@ class RestrictResellerPortalHost
     {
         if ($path === '') {
             return false;
+        }
+
+        // Livewire's own endpoints ("livewire/update", but also the
+        // randomised "livewire-<hash>/update" and ".../livewire.js" this app
+        // uses): every form on the portal -- login, apply, tables, actions --
+        // posts there, so blocking them silently breaks the whole portal.
+        if (preg_match('#^livewire(-[A-Za-z0-9]+)?(/|$)#', $path) === 1) {
+            return true;
         }
 
         foreach (self::PASSTHROUGH_PREFIXES as $prefix) {
