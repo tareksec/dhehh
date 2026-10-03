@@ -4,19 +4,28 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Hotfix
+
+### Fixed
+
+- **Reseller portal: "Become a reseller" and sign-in did nothing.** Submitting either form on `reseller.<domain>` neither saved the application nor signed anyone in, and showed no error (so admin never saw the applicants). Two causes: the portal host sent the app's own form-submit address back to the portal page (the app uses a randomised `livewire-<code>/update` address, which the host rule did not recognise), and, once that passes, the company was not resolved from the portal address on those submits, so an application would have been saved under the default company. Both fixed; wrong passwords now show the error message again. Applications that were attempted while this was broken were never saved — applicants need to apply again.
+
+### Technical Notes
+
+- `RestrictResellerPortalHost` lets every `livewire`/`livewire-<hash>` path through; `ResellerPanelProvider` marks `ResolveCompanyFromResellerPortalDomain` as persistent middleware. New `ResellerPortalLivewireHttpTest` posts the real Livewire update request (apply, wrong password, login).
+
 ## [2.42.1] - 2026-10-03
 
 **Release type:** Hotfix Update
 
 ### Fixed
 
-- **Reseller portal: "Become a reseller" and sign-in did nothing.** Submitting either form on `reseller.<domain>` neither saved the application nor signed anyone in, and showed no error (so admin never saw the applicants). Two causes: the portal host sent the app's own form-submit address back to the portal page (the app uses a randomised `livewire-<code>/update` address, which the host rule did not recognise), and, once that passes, the company was not resolved from the portal address on those submits, so an application would have been saved under the default company. Both fixed; wrong passwords now show the error message again. Applications that were attempted while this was broken were never saved — applicants need to apply again.
 - **Reseller portal showed "500 Something went wrong" to everyone not logged in, and failed storefront forms showed the same page.** In production the app swaps unexpected errors for a plain error page, but it also did that for two things that are not errors: "you need to log in" and "a form field is invalid". So opening `reseller.<domain>/portal` as a guest (instead of being sent to the sign-in page) and, outside the admin panel, a wrong password or an invalid storefront form (instead of coming back with the message) ended on the 500 page. Both now behave normally. Real errors still show the plain error page. Local and test runs never showed this, because the swap is off there.
 
 ### Technical Notes
 
-- `RestrictResellerPortalHost` lets every `livewire`/`livewire-<hash>` path through; `ResellerPanelProvider` marks `ResolveCompanyFromResellerPortalDomain` as persistent middleware. New `ResellerPortalLivewireHttpTest` posts the real Livewire update request (apply, wrong password, login).
 - `bootstrap/app.php`: the production error-page render hook now skips `AuthenticationException`, `ValidationException` and `HttpResponseException`. New `ProductionErrorPagesTest` runs as the production environment.
+
 ## [2.42.0] - 2026-09-29
 
 **Release type:** Minor Feature Update
