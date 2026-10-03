@@ -2,6 +2,16 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-03 - Hotfix: portal "500" for guests (and failed storefront forms)
+
+Reason — owner reported `reseller.zamzamint.com/portal` showing "500 Something went wrong". The owner ran a read-only debug command in the production terminal; it showed the real exception was `AuthenticationException` ("Unauthenticated") — a normal "send to login" signal, not a crash.
+
+Root cause: the production-only error-page hook in `bootstrap/app.php` (added for the security plan) caught every exception, including `AuthenticationException` and `ValidationException`, and replaced Laravel's login redirect / back-with-errors with the branded 500 page. Tests never saw it because the hook is off in `local`/`testing`. This is older than the reseller work: any guest hitting a login-protected page or any failed validation outside `/admin` got the 500 page in production.
+
+What changed: the hook now returns null for `AuthenticationException`, `ValidationException` and `HttpResponseException`. New `tests/Feature/ProductionErrorPagesTest.php` (3 tests) switches the app to the production environment: guest `/portal` redirects to `/portal/login`, a failed storefront validation redirects back with errors, and a real 404 still renders. I reproduced the 500 in the same test before fixing it.
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
+
 ## 2026-10-01 - Reseller portal Phase 7b: reseller custom domains (app side)
 
 Reason — owner said "কাস্টম ডোমেইনের কাজ শুরু কর". Built everything the app can do; the server-side SSL proxy (Caddy vs Coolify API) is still an open decision, so the company switch stays off until that is set up.
@@ -271,7 +281,7 @@ Verification:
 - Pint: passed. `npm run build`: succeeded.
 - Not verified in a browser.
 
-Commit status: not committed — waiting for owner approval.
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
 
 ## 2026-09-29 - Documentation article: "Publicly shareable" toggle
 
@@ -296,7 +306,7 @@ Verification:
 - Pint: passed. `npm run build`: succeeded.
 - Not verified in a browser.
 
-Commit status: not committed — waiting for owner approval.
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
 
 ## 2026-09-29 - Documentation article: slug auto-fills from title
 
@@ -342,7 +352,7 @@ Verification:
 - Pint: passed. `npm run build`: succeeded.
 - Not verified in a browser.
 
-Commit status: not committed — waiting for owner approval.
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
 
 ## 2026-09-28 - Documentation "Import Markdown": add file upload
 
@@ -363,7 +373,7 @@ Verification:
 - Pint: passed. `npm run build`: succeeded.
 - Not covered by an automated test: the file-upload wiring itself (Filament `FileUpload` → `TemporaryUploadedFile::get()`) — only the conversion function it feeds is tested. Not verified in a browser; the owner should try uploading the API guide `.md` file through the new file picker and confirm the formatting comes through correctly.
 
-Commit status: not committed — waiting for owner approval.
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
 
 ## 2026-09-28 - Documentation module: "Import Markdown" button
 
@@ -386,7 +396,7 @@ Verification:
 - Pint: passed. `npm run build`: succeeded.
 - Not verified in a browser — the owner should re-paste the API guide through the new button and confirm the formatting looks right before relying on it for other documents.
 
-Commit status: not committed — waiting for owner approval.
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
 
 ## 2026-09-28 - Documentation module: fixes from automated PR review (Codex)
 
@@ -535,7 +545,7 @@ Verification:
 - `npm run build`: succeeded.
 - Not verified in a browser.
 
-Commit status: not committed — waiting for owner approval.
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
 
 ## 2026-09-28 - Investment withdrawal: voucher first, then the status turns "Withdrawn"; the record is kept
 

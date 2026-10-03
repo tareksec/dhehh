@@ -4,6 +4,16 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Hotfix
+
+### Fixed
+
+- **Reseller portal showed "500 Something went wrong" to everyone not logged in, and failed storefront forms showed the same page.** In production the app swaps unexpected errors for a plain error page, but it also did that for two things that are not errors: "you need to log in" and "a form field is invalid". So opening `reseller.<domain>/portal` as a guest (instead of being sent to the sign-in page) and, outside the admin panel, a wrong password or an invalid storefront form (instead of coming back with the message) ended on the 500 page. Both now behave normally. Real errors still show the plain error page. Local and test runs never showed this, because the swap is off there.
+
+### Technical Notes
+
+- `bootstrap/app.php`: the production error-page render hook now skips `AuthenticationException`, `ValidationException` and `HttpResponseException`. New `ProductionErrorPagesTest` runs as the production environment.
+
 ## [2.42.0] - 2026-09-29
 
 **Release type:** Minor Feature Update
