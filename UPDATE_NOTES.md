@@ -2,6 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-03 - Portal polish: Become a reseller link, Visit store, dashboard order, store logos
+
+Reason — owner's screenshots and requests: (1) sign-in page link "Become a reseller" instead of "sign up…", (2) **Visit store** button where **Copy link** was on My Store (Copy link removed there), (3) **Recent orders** above the commission chart on the dashboard, (4) reseller can set their business logo on My Store, light and dark.
+
+What changed: `Login::registerAction()` label; `my-store.blade.php` button; `dashboard.blade.php` order; new `customers.reseller_logo` / `reseller_logo_dark` (migration), `Customer::resellerLogoUrl()/resellerLogoDarkUrl()`; `MyStore` has two logo uploads (stored under the company's public `reseller-logos` folder; they do not use the admin `CompanyMedia` write check, which needs a staff user, and record nothing in the Media Hub); `storefront/layout.blade.php` feeds the reseller logos to every theme's header (a light-only logo is used in both modes; none = store name as before).
+
+My decisions: the dashboard's own Copy link / WhatsApp / Facebook buttons were left (only the marked My Store button changed); the always-dark marketplace-pro header shows the dark logo when there is one; 1 MB size limit like the admin logo fields; old logo files are not deleted when replaced.
+
+Needs Bangla review: 5 new keys ("Visit store", the two logo labels and their helper texts).
+
+Tests: 6 new in `ResellerPortalAccountTest`.
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-03).
+
 ## 2026-10-03 - Hotfix 2: portal apply/login did nothing
 
 Reason — owner reported that after the first hotfix the portal login page opens, but signing up and logging in does nothing (no error), and admin shows no applicants.

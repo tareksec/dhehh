@@ -706,5 +706,10 @@
     "Point :domain to us:": ":domain আমাদের দিকে পয়েন্ট করুন:",
     "At your domain provider, add a CNAME record for :domain pointing to :target (or an A record with the same IP address).": "আপনার ডোমেইন প্রোভাইডারে :domain-এর জন্য :target-এর দিকে একটি CNAME রেকর্ড যোগ করুন (অথবা একই IP ঠিকানার একটি A রেকর্ড)।",
     "Then press Check DNS. It can take a few hours for the change to spread.": "তারপর \"Check DNS\" চাপুন। পরিবর্তন ছড়াতে কয়েক ঘণ্টা লাগতে পারে।",
-    "Check DNS": "DNS যাচাই করুন"
+    "Check DNS": "DNS যাচাই করুন",
+    "Visit store": "স্টোর দেখুন",
+    "Logo (light mode)": "লোগো (লাইট মোড)",
+    "Logo (dark mode)": "লোগো (ডার্ক মোড)",
+    "Shown at the top of your store instead of the store name. A wide logo on a transparent background works best (about 400 x 100 px).": "স্টোর নামের বদলে আপনার স্টোরের একদম ওপরে দেখানো হবে। স্বচ্ছ ব্যাকগ্রাউন্ডের চওড়া লোগো (প্রায় ৪০০ × ১০০ পিক্সেল) সবচেয়ে ভালো দেখায়।",
+    "Optional. A light-coloured version of your logo for visitors using dark mode. If empty, the light-mode logo is used.": "ঐচ্ছিক। ডার্ক মোড ব্যবহারকারী ভিজিটরদের জন্য আপনার লোগোর হালকা রঙের সংস্করণ। খালি রাখলে লাইট মোডের লোগোই দেখানো হবে।"
 }

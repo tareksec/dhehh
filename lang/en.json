@@ -706,5 +706,10 @@
     "Point :domain to us:": "Point :domain to us:",
     "At your domain provider, add a CNAME record for :domain pointing to :target (or an A record with the same IP address).": "At your domain provider, add a CNAME record for :domain pointing to :target (or an A record with the same IP address).",
     "Then press Check DNS. It can take a few hours for the change to spread.": "Then press Check DNS. It can take a few hours for the change to spread.",
-    "Check DNS": "Check DNS"
+    "Check DNS": "Check DNS",
+    "Visit store": "Visit store",
+    "Logo (light mode)": "Logo (light mode)",
+    "Logo (dark mode)": "Logo (dark mode)",
+    "Shown at the top of your store instead of the store name. A wide logo on a transparent background works best (about 400 x 100 px).": "Shown at the top of your store instead of the store name. A wide logo on a transparent background works best (about 400 x 100 px).",
+    "Optional. A light-coloured version of your logo for visitors using dark mode. If empty, the light-mode logo is used.": "Optional. A light-coloured version of your logo for visitors using dark mode. If empty, the light-mode logo is used."
 }

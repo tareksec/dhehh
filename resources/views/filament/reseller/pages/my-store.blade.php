@@ -7,11 +7,14 @@
                     <div class="break-all font-medium">{{ $storeUrl }}</div>
                 </div>
                 <x-filament::button
+                    tag="a"
                     size="sm"
-                    color="gray"
-                    x-on:click="window.navigator.clipboard.writeText({{ \Illuminate\Support\Js::from($storeUrl) }}); $tooltip({{ \Illuminate\Support\Js::from(__('Copied to clipboard')) }}, { theme: $store.theme, timeout: 1500 })"
+                    icon="heroicon-m-arrow-top-right-on-square"
+                    :href="$storeUrl"
+                    target="_blank"
+                    rel="noopener"
                 >
-                    {{ __('Copy link') }}
+                    {{ __('Visit store') }}
                 </x-filament::button>
             </div>
         </x-filament::section>

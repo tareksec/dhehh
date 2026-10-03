@@ -4,7 +4,15 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Hotfix
+**Release type:** Minor Feature Update (with a hotfix)
+
+### Added
+
+- **Reseller store logos.** On the portal's **My Store** page a reseller can upload their own logo — one for light mode and an optional one for dark mode. It replaces the store name at the top of their store (the company's own logo is never shown there); with no logo the store name is shown as before. Uploads are compressed to WebP like other logos. The always-dark marketplace theme header shows the dark logo.
+
+### Changed
+
+- **Reseller portal wording and layout.** The link under the sign-in form now reads **Become a reseller** (it said "sign up for an account"). **My Store** has a **Visit store** button that opens the store, in place of **Copy link**. On the dashboard, **Recent orders** now sits above the commission chart.
 
 ### Fixed
 

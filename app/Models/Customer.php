@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\ValidatesEmailAddress;
 use App\Services\CompanyContext;
+use App\Support\CompanyMedia;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasName;
 use Filament\Panel;
@@ -64,6 +65,8 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
         'reseller_custom_domain',
         'reseller_custom_domain_verified_at',
         'reseller_store_name',
+        'reseller_logo',
+        'reseller_logo_dark',
         'opening_balance',
         'current_balance',
         'is_active',
@@ -193,6 +196,23 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
         }
 
         return 'https://'.$domain.route('storefront.reseller_store.products.index', $this->reseller_slug, false);
+    }
+
+    /** Public URL of the store-header logo for light mode (falls back to the dark one if only that was uploaded). */
+    public function resellerLogoUrl(): ?string
+    {
+        return $this->logoUrl($this->reseller_logo) ?? $this->logoUrl($this->reseller_logo_dark);
+    }
+
+    /** Dark-mode logo; only set when there is a light one too, so the header can switch between them. */
+    public function resellerLogoDarkUrl(): ?string
+    {
+        return filled($this->reseller_logo) ? $this->logoUrl($this->reseller_logo_dark) : null;
+    }
+
+    protected function logoUrl(?string $path): ?string
+    {
+        return filled($path) ? CompanyMedia::publicUrl($path, $this->company) : null;
     }
 
     /** Their own domain is saved, verified, and the company still allows custom domains. */

@@ -5,6 +5,7 @@ namespace App\Filament\Reseller\Pages\Auth;
 use App\Models\Customer;
 use App\Services\CustomerAccountService;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
+use Filament\Actions\Action;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Auth\Pages\Login as BaseLogin;
 use Filament\Facades\Filament;
@@ -31,6 +32,12 @@ class Login extends BaseLogin
             ->required()
             ->autocomplete()
             ->autofocus();
+    }
+
+    /** The link under the form: "Become a reseller" instead of Filament's "sign up for an account". */
+    public function registerAction(): Action
+    {
+        return parent::registerAction()->label(__('Become a reseller'));
     }
 
     public function authenticate(): ?LoginResponse
