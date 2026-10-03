@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.43.0] - 2026-10-03
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -16,7 +18,6 @@ All notable production changes to Business Dashboard are documented here.
 - **Deploy change:** `ext-imagick` added to `composer.json` `require`, the only way Nixpacks installs a PHP extension; `composer.lock` changes only its content-hash and platform list. CI (`.github/workflows/deploy.yml`) now installs `imagick`. Local machines without imagick: `composer install --ignore-platform-req=ext-imagick` (the app itself still boots).
 - Bundled font: Hind Siliguri Regular/Bold (SIL OFL 1.1, Indian Type Foundry) in `resources/fonts/ad-creative/` with `OFL.txt`.
 - Plan: `14_AI_TOOL_MENU_CONTENT_CREATION_PLAN.md` (Phase 0 results).
-
 ## [2.42.2] - 2026-10-03
 
 **Release type:** Hotfix Update
