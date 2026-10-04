@@ -4,18 +4,28 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller portal: Create order.** An approved reseller can now place an order for their own customer from the portal (new **Create order** page, second in the menu). They enter the customer's name, phone, delivery address and optional note, then add products from their own store with a quantity and their own selling price (never below the base price; a product with no wholesale rate sells at the normal price and earns no commission). The page shows the live subtotal, the store's delivery charge for that address, VAT, what the customer pays (cash on delivery) and the reseller's commission. The order arrives as a draft for the store to review and confirm, like a storefront order, shows up in the reseller's **Orders** list with its status, and the commission is credited as usual. A customer is matched by phone; a phone that belongs to another reseller's account only receives the order (that reseller's own details are not overwritten). Orders from the portal are labelled **Reseller portal** in the admin.
+
+### Fixed
+
+- **New-order alert link.** The "New order received" alert (and the status-change alert) now always links to the admin order page. It used the current panel's order page, which does not exist when the order is created from the reseller portal.
+
 ## [2.44.0] - 2026-10-03
 
 **Release type:** Minor Feature Update
 
 ### Added
 
-- **Reseller portal: Create order.** An approved reseller can now place an order for their own customer from the portal (new **Create order** page, second in the menu). They enter the customer's name, phone, delivery address and optional note, then add products from their own store with a quantity and their own selling price (never below the base price; a product with no wholesale rate sells at the normal price and earns no commission). The page shows the live subtotal, the store's delivery charge for that address, VAT, what the customer pays (cash on delivery) and the reseller's commission. The order arrives as a draft for the store to review and confirm, like a storefront order, shows up in the reseller's **Orders** list with its status, and the commission is credited as usual. A customer is matched by phone; a phone that belongs to another reseller's account only receives the order (that reseller's own details are not overwritten). Orders from the portal are labelled **Reseller portal** in the admin.
 - **Reseller store logos.** On the portal's **My Store** page a reseller can upload their own logo — one for light mode and an optional one for dark mode. It replaces the store name at the top of their store (the company's own logo is never shown there); with no logo the store name is shown as before. Uploads are compressed to WebP like other logos. The always-dark marketplace theme header shows the dark logo.
 
 ### Changed
 
 - **Reseller portal wording and layout.** The link under the sign-in form now reads **Become a reseller** (it said "sign up for an account"). **My Store** has a **Visit store** button that opens the store, in place of **Copy link**. On the dashboard, **Recent orders** now sits above the commission chart.
+
 ## [2.43.0] - 2026-10-03
 
 **Release type:** Minor Feature Update
@@ -37,7 +47,6 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Fixed
 
-- **New-order alert link.** The "New order received" alert (and the status-change alert) now always links to the admin order page. It used the current panel's order page, which does not exist when the order is created from the reseller portal.
 - **Reseller portal: "Become a reseller" and sign-in did nothing.** Submitting either form on `reseller.<domain>` neither saved the application nor signed anyone in, and showed no error (so admin never saw the applicants). Two causes: the portal host sent the app's own form-submit address back to the portal page (the app uses a randomised `livewire-<code>/update` address, which the host rule did not recognise), and, once that passes, the company was not resolved from the portal address on those submits, so an application would have been saved under the default company. Both fixed; wrong passwords now show the error message again. Applications that were attempted while this was broken were never saved — applicants need to apply again.
 
 ### Technical Notes
