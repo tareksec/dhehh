@@ -52,7 +52,7 @@ class Products extends Page implements HasTable
 
     protected string $view = 'filament.reseller.pages.products';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 4;
 
     public static function getNavigationLabel(): string
     {

@@ -150,6 +150,8 @@ class Order extends Model
 
     public const SOURCE_API = 'website_api';
 
+    public const SOURCE_RESELLER_PORTAL = 'reseller_portal';
+
     public const SOURCES = [
         self::SOURCE_ADMIN => 'Admin',
         self::SOURCE_STOREFRONT => 'Storefront',
@@ -158,6 +160,7 @@ class Order extends Model
         self::SOURCE_OFFER => 'Offer',
         self::SOURCE_WOOCOMMERCE => 'WooCommerce',
         self::SOURCE_API => 'Website (API)',
+        self::SOURCE_RESELLER_PORTAL => 'Reseller portal',
     ];
 
     protected $fillable = [

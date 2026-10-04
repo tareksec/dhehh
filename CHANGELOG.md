@@ -12,6 +12,17 @@ All notable production changes to Business Dashboard are documented here.
 
 - New `App\Filament\Pages\FraudChecker` + `filament.pages.fraud-checker` view. Reuses `ExternalCourierFraudService::checkByPhone()` (same cache and `customer_risk_events` audit log as the order form's Courier Fraud Check); the service gains `configuredDrivers()` and a public `normalizePhone()`. Blacklist lookup filters company explicitly (global + current company). New `FraudCheckerPageTest` (8 tests). No migrations.
 
+## [2.45.0] - 2026-10-04
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller portal: Create order.** An approved reseller can now place an order for their own customer from the portal (new **Create order** page, second in the menu). They enter the customer's name, phone, delivery address and optional note, then add products from their own store with a quantity and their own selling price (never below the base price; a product with no wholesale rate sells at the normal price and earns no commission). The page shows the live subtotal, the store's delivery charge for that address, VAT, what the customer pays (cash on delivery) and the reseller's commission. The order arrives as a draft for the store to review and confirm, like a storefront order, shows up in the reseller's **Orders** list with its status, and the commission is credited as usual. A customer is matched by phone; a phone that belongs to another reseller's account only receives the order (that reseller's own details are not overwritten). Orders from the portal are labelled **Reseller portal** in the admin.
+
+### Fixed
+
+- **New-order alert link.** The "New order received" alert (and the status-change alert) now always links to the admin order page. It used the current panel's order page, which does not exist when the order is created from the reseller portal.
 ## [2.44.0] - 2026-10-03
 
 **Release type:** Minor Feature Update
@@ -23,6 +34,7 @@ All notable production changes to Business Dashboard are documented here.
 ### Changed
 
 - **Reseller portal wording and layout.** The link under the sign-in form now reads **Become a reseller** (it said "sign up for an account"). **My Store** has a **Visit store** button that opens the store, in place of **Copy link**. On the dashboard, **Recent orders** now sits above the commission chart.
+
 ## [2.43.0] - 2026-10-03
 
 **Release type:** Minor Feature Update
