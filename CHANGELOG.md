@@ -4,6 +4,10 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.46.0] - 2026-10-04
+
+**Release type:** Minor Feature Update
+
 ### Added
 
 - **Fraud Checker page (Courier → Fraud Checker).** Type a customer's mobile number and see, before taking an order, how that number has done on your connected couriers (Pathao, Steadfast, RedX). The page shows a Safe / Risky verdict, the overall delivery success rate, total / delivered / cancelled parcel tiles, a card per courier with its own numbers and success bar (or "Not configured" with a link to Courier → Providers), fraud reports filed by other merchants (Steadfast), a blacklist warning when the number is on your blacklist, and this store's own order history for the number. **Refresh live data** skips the 24-hour cache. Safe / Risky uses your existing **External courier success ratio review threshold** from Customer Risk Settings — no new rules. Open to staff who can view sales. In English and Bangla.
@@ -11,7 +15,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - New `App\Filament\Pages\FraudChecker` + `filament.pages.fraud-checker` view. Reuses `ExternalCourierFraudService::checkByPhone()` (same cache and `customer_risk_events` audit log as the order form's Courier Fraud Check); the service gains `configuredDrivers()` and a public `normalizePhone()`. Blacklist lookup filters company explicitly (global + current company). New `FraudCheckerPageTest` (8 tests). No migrations.
-
 ## [2.45.0] - 2026-10-04
 
 **Release type:** Minor Feature Update
