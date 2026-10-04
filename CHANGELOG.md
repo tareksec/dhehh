@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.44.0] - 2026-10-03
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -14,7 +16,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Changed
 
 - **Reseller portal wording and layout.** The link under the sign-in form now reads **Become a reseller** (it said "sign up for an account"). **My Store** has a **Visit store** button that opens the store, in place of **Copy link**. On the dashboard, **Recent orders** now sits above the commission chart.
-
 ## [2.43.0] - 2026-10-03
 
 **Release type:** Minor Feature Update
