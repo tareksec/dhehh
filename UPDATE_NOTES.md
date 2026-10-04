@@ -2,6 +2,24 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-04 - Reseller portal: Create order
+
+Reason — owner asked for resellers to integrate their WooCommerce site, create orders and see order status like the main dashboard. I asked four scoping questions (Woo scope, order pricing/payment, status rights, Woo commission); the owner answered "No preference" and then narrowed the request: **"Reseller শুধু অর্ডার তৈরি করতে পারবে এইটা এড কর"** (resellers can create orders — add only this). So only **Create order** is built; the WooCommerce integration is **not** built and still needs the owner's answers (see the questions' options: orders flowing into the ERP by webhook, status pushed back, product import only; and how Woo prices/commission are treated).
+
+Order status was already visible: the portal's **Orders** page shows each order's stage and a read-only detail/timeline (Phase 3), and a portal-created order appears there.
+
+Rules used (no new business rules — the storefront checkout's): own store's products only; own selling price, never below the base price (no wholesale rate = normal price, no commission); cash on delivery; delivery charge and VAT from the store's settings; stock check; order created as `draft` with a new source `reseller_portal`, credited to the reseller; commission via the existing order observers; courier fraud check job dispatched as for storefront orders.
+
+My decisions (say if you want different): variant products are not offered (their lines have no reseller price); the buyer is matched by phone, and a phone that already belongs to a reseller account is not overwritten; the buyer's source is stored as "Other".
+
+Bug fixed on the way: `OrderNotificationObserver` built the admin "View order" link from the *current* panel, which fails (route not defined) when an order is created inside the reseller portal. It now names the admin panel.
+
+Needs Bangla review: 15 new keys in `lang/bn.json` (Create order page).
+
+Tests: `ResellerPortalCreateOrderTest` (15). Full suite: 1664 passed, 1 skipped (`php artisan test`, no `--env`).
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর, এরপর মেইন এ পুশ কর", 2026-10-04).
+
 ## 2026-10-03 - Portal polish: Become a reseller link, Visit store, dashboard order, store logos
 
 Reason — owner's screenshots and requests: (1) sign-in page link "Become a reseller" instead of "sign up…", (2) **Visit store** button where **Copy link** was on My Store (Copy link removed there), (3) **Recent orders** above the commission chart on the dashboard, (4) reseller can set their business logo on My Store, light and dark.

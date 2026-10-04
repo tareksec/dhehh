@@ -35,7 +35,7 @@ class Orders extends Page implements HasTable
 
     protected string $view = 'filament.reseller.pages.orders';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 3;
 
     public static function getNavigationLabel(): string
     {

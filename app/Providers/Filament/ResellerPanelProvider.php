@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Reseller\Pages\Auth\Apply;
 use App\Filament\Reseller\Pages\Auth\Login;
+use App\Filament\Reseller\Pages\CreateOrder;
 use App\Filament\Reseller\Pages\Dashboard;
 use App\Filament\Reseller\Pages\Earnings;
 use App\Filament\Reseller\Pages\MyStore;
@@ -55,6 +56,7 @@ class ResellerPanelProvider extends PanelProvider
             ->darkModeBrandLogo(fn (): ?string => app(CompanySettingsService::class)->darkLogoUrl(company: $this->portalCompany()))
             ->pages([
                 Dashboard::class,
+                CreateOrder::class,
                 Orders::class,
                 Products::class,
                 Earnings::class,

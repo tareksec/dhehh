@@ -711,5 +711,20 @@
     "Logo (light mode)": "লোগো (লাইট মোড)",
     "Logo (dark mode)": "লোগো (ডার্ক মোড)",
     "Shown at the top of your store instead of the store name. A wide logo on a transparent background works best (about 400 x 100 px).": "স্টোর নামের বদলে আপনার স্টোরের একদম ওপরে দেখানো হবে। স্বচ্ছ ব্যাকগ্রাউন্ডের চওড়া লোগো (প্রায় ৪০০ × ১০০ পিক্সেল) সবচেয়ে ভালো দেখায়।",
-    "Optional. A light-coloured version of your logo for visitors using dark mode. If empty, the light-mode logo is used.": "ঐচ্ছিক। ডার্ক মোড ব্যবহারকারী ভিজিটরদের জন্য আপনার লোগোর হালকা রঙের সংস্করণ। খালি রাখলে লাইট মোডের লোগোই দেখানো হবে।"
+    "Optional. A light-coloured version of your logo for visitors using dark mode. If empty, the light-mode logo is used.": "ঐচ্ছিক। ডার্ক মোড ব্যবহারকারী ভিজিটরদের জন্য আপনার লোগোর হালকা রঙের সংস্করণ। খালি রাখলে লাইট মোডের লোগোই দেখানো হবে।",
+    ":product does not have enough stock.": ":product-এর যথেষ্ট স্টক নেই।",
+    "Add at least one product.": "কমপক্ষে একটি পণ্য যোগ করুন।",
+    "Add product": "পণ্য যোগ করুন",
+    "At least :amount.": "কমপক্ষে :amount।",
+    "Choose a product from your store.": "আপনার স্টোর থেকে একটি পণ্য বাছাই করুন।",
+    "Create order": "অর্ডার তৈরি করুন",
+    "Customer name": "কাস্টমারের নাম",
+    "Customer pays (cash on delivery)": "কাস্টমার দেবে (ক্যাশ অন ডেলিভারি)",
+    "Delivery address": "ডেলিভারি ঠিকানা",
+    "Enter a quantity of at least 1.": "কমপক্ষে ১ পরিমাণ লিখুন।",
+    "Only products in your store can be ordered. Payment is cash on delivery.": "শুধু আপনার স্টোরের পণ্য অর্ডার করা যাবে। পেমেন্ট ক্যাশ অন ডেলিভারি।",
+    "Order :number was created. The store will review it.": "অর্ডার :number তৈরি হয়েছে। স্টোর এটি দেখে নেবে।",
+    "Stock": "স্টক",
+    "This product is already on the order.": "এই পণ্য অর্ডারে আগেই আছে।",
+    "Your commission": "আপনার কমিশন"
 }
