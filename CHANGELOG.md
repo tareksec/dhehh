@@ -4,13 +4,22 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller portal: Forgot password.** The portal sign-in page now has a **Forgot password?** link. The reseller enters their phone number and gets a 6-digit code by SMS (valid for 15 minutes, the same reset code as the storefront account), then sets a new password and is signed straight in. **Send a new code** goes back to the phone step. A code is sent only to a pending or approved reseller of that company, and the reply is the same for any number, so the form does not reveal who is a reseller. Needs the store's SMS settings (Storefront → Notifications); without them the page says reset by SMS is not available and to contact the store.
+
+### Technical Notes
+
+- New `App\Filament\Reseller\Pages\Auth\ForgotPassword` (extends Filament's `RequestPasswordReset`, both steps on one page) registered with `->passwordReset()` on the reseller panel; reuses `CustomerAccountService::sendPasswordResetCode()` / `resetPassword()`. Filament's e-mailed link is not used. Tests: `ResellerPortalPasswordResetTest` (includes a run through the real portal Livewire endpoint).
+
 ## [2.48.0] - 2026-10-05
 
 **Release type:** Minor Feature Update
 
 ### Added
 
-- **Reseller portal: Forgot password.** The portal sign-in page now has a **Forgot password?** link. The reseller enters their phone number and gets a 6-digit code by SMS (valid for 15 minutes, the same reset code as the storefront account), then sets a new password and is signed straight in. **Send a new code** goes back to the phone step. A code is sent only to a pending or approved reseller of that company, and the reply is the same for any number, so the form does not reveal who is a reseller. Needs the store's SMS settings (Storefront → Notifications); without them the page says reset by SMS is not available and to contact the store.
 - **Reseller orders with the reseller's own courier.** On **Create order** a reseller now chooses **The store delivers (cash on delivery)** or **My own courier (I pay the full amount in advance)**. With their own courier they enter the courier name and the parcel/consignment ID they booked, and the advance payment details: which of the store's payment methods they paid to (the active send-money/bank methods from Storefront → Payment Methods), the number or account they paid from, and the transaction ID. These orders are charged at the store's price (the base price; the normal price for a product with no wholesale rate), with no delivery charge and no commission — the reseller pays that total in advance. The same parcel ID cannot be used on two of the reseller's orders. If the store has no payment method set up, the option is shown but disabled.
 - **Checking and packing these orders (admin).** The order page shows a **Reseller's own courier** section with the parcel ID in large type, the courier, the payment state and transaction details, and when it was packed; the store's courier booking is hidden for these orders. **Verify reseller payment** (choosing the account the money arrived in) records it in the order's Payments History so the order shows as paid; **Reject reseller payment** sends it back to the reseller. **Mark parcel packed** is available only after the payment is verified. The order list has a **Reseller's own courier** filter and a hideable **Reseller parcel ID** column (searchable). The advance also appears on Storefront → Payments as **Reseller advance (own courier)** with a **Check on order** link.
 - **Reseller's view.** The portal **Orders** list shows the parcel ID with the payment state (waiting, verified, rejected) or **Packed**, and the order details show the courier, parcel ID, payment and packing. A rejected payment can be sent again with **Send payment again**.
@@ -21,7 +30,6 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Technical Notes
 
-- New `App\Filament\Reseller\Pages\Auth\ForgotPassword` (extends Filament's `RequestPasswordReset`, both steps on one page) registered with `->passwordReset()` on the reseller panel; reuses `CustomerAccountService::sendPasswordResetCode()` / `resetPassword()`. Filament's e-mailed link is not used. Tests: `ResellerPortalPasswordResetTest` (includes a run through the real portal Livewire endpoint).
 - Migration `2026_10_05_100000_add_reseller_own_courier_to_orders_table`: `orders.reseller_own_courier`, `reseller_courier_name`, `reseller_parcel_id`, `reseller_parcel_packed_at` (+ index on reseller and parcel ID). Run migrations on deploy.
 - The advance is a manual `StorefrontPayment` with the new purpose `reseller_advance` (`Order::resellerAdvancePayment()`); new `App\Services\ResellerOwnCourierService` (submit, verify, reject, mark packed). `ResellerOrderPlacementService::place()` takes an optional own-courier array. Own-courier orders get no default courier provider and skip the courier fraud check. Tests: `ResellerOwnCourierOrderTest`.
 ## [2.47.0] - 2026-10-05
