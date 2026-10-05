@@ -2,6 +2,26 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-05 - Two-item orders not saving + "Not enough stock" popup
+
+Reason — owner asked (in Bangla) why an order with two items does not get placed, and asked for a warning popup with an option to add stock when a product is out of stock on submit.
+
+Cause (reproduced in a test): on the admin Create order page, a confirmed / processing / completed order takes stock out item by item. When one item had no stock, `StockMovementService::validate()` threw "Insufficient stock for this sale quantity." under the key `quantity`, which matches no form field — so nothing showed on screen. The panel has no database transactions, so the order and its items stayed saved with only part of the stock taken. Two in-stock items save fine; it is the out-of-stock item that blocks.
+
+What changed:
+- New `app/Services/OrderStockCheckService.php`: lists short products/variants for the form's items (lines of the same product are added together) and adds stock as an `adjustment` movement with reason "Stock added from the order form".
+- `CreateOrder`: before saving an accounted-status order, checks stock; if anything is short it opens the **Not enough stock** popup (ordered / in stock / short by per product, a quantity box per product defaulting to the shortage, minimum the shortage) and saves nothing. **Add stock and place order** adds the stock and places the order. Staff without `inventory.create` (e.g. Sales Staff) see the list without the add option.
+- `CreateOrder` and `EditOrder`: database transactions on, and new trait `Pages/Concerns/ReportsStockErrors.php` shows a stock error as a notification (also covers editing a confirmed order's quantity above stock).
+- 9 new lang keys in `lang/en.json` and `lang/bn.json`.
+
+My decisions (say if you want different): draft orders don't take stock, so no popup for them; added stock is recorded as a stock adjustment (not a purchase, since there is no supplier/cost); the popup is on Create order only — **Change status** (draft → confirmed) and the reseller portal still show their existing stock error.
+
+Needs Bangla review: the 9 new keys, especially "pcs to add" (পিস যোগ হবে) and "Short by" (কম আছে).
+
+Tests: new `tests/Feature/OrderStockShortageTest.php` (7) pass. Full suite: 1679 passed, 1 skipped (`php artisan test`, no `--env`, after `npm run build`).
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-05).
+
 ## 2026-10-03 - Fraud Checker page laid out like ParcelVai
 
 Reason — owner asked whether our fraud checker tool could be laid out like https://parcelvai.com/ and sent a screenshot of ParcelVai's result for their own number (verdict banner, summary tiles, per-courier cards).

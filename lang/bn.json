@@ -759,5 +759,14 @@
     "The courier did not answer. Check its login on Courier → Providers, then refresh.": "কুরিয়ার সাড়া দেয়নি। Courier → Providers-এ এর লগইন তথ্য দেখে রিফ্রেশ করুন।",
     "Your store history": "আপনার স্টোরের হিস্ট্রি",
     "Returned": "রিটার্ন হয়েছে",
-    "This number has not ordered from your store yet.": "এই নম্বর থেকে আপনার স্টোরে এখনো কোনো অর্ডার আসেনি।"
+    "This number has not ordered from your store yet.": "এই নম্বর থেকে আপনার স্টোরে এখনো কোনো অর্ডার আসেনি।",
+    "Not enough stock": "পর্যাপ্ত স্টক নেই",
+    "Some products in this order are out of stock or short. Add the missing stock to place the order, or go back and change the items.": "এই অর্ডারের কিছু প্রোডাক্ট স্টকে নেই বা কম আছে। অর্ডার প্লেস করতে ঘাটতি স্টক যোগ করুন, অথবা ফিরে গিয়ে আইটেম পরিবর্তন করুন।",
+    "Some products in this order are out of stock or short. You do not have permission to add stock — ask an inventory manager, or go back and change the items.": "এই অর্ডারের কিছু প্রোডাক্ট স্টকে নেই বা কম আছে। আপনার স্টক যোগ করার অনুমতি নেই — ইনভেন্টরি ম্যানেজারকে বলুন, অথবা ফিরে গিয়ে আইটেম পরিবর্তন করুন।",
+    "Ordered: :ordered · In stock: :available · Short by: :short": "অর্ডার: :ordered · স্টকে আছে: :available · কম আছে: :short",
+    "pcs to add": "পিস যোগ হবে",
+    "Add stock and place order": "স্টক যোগ করে অর্ডার প্লেস করুন",
+    "Back to order": "অর্ডারে ফিরে যান",
+    "Stock added": "স্টক যোগ হয়েছে",
+    "The order could not be saved": "অর্ডারটি সেভ করা যায়নি"
 }
