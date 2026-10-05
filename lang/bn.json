@@ -859,5 +859,13 @@
     "Send a new code": "নতুন কোড পাঠান",
     "Upsell": "আপসেল",
     "Adding: :ordered · In stock: :available · Short by: :short": "যোগ হচ্ছে: :ordered · স্টকে আছে: :available · কম আছে: :short",
-    "Add stock and save order": "স্টক যোগ করে অর্ডার সেভ করুন"
+    "Add stock and save order": "স্টক যোগ করে অর্ডার সেভ করুন",
+    "Upsell items": "আপসেল আইটেম",
+    "With upsell items": "আপসেল আইটেমসহ",
+    "Without upsell items": "আপসেল আইটেম ছাড়া",
+    "Courier booking failed": "কুরিয়ার বুকিং হয়নি",
+    "Courier booked": "কুরিয়ার বুক হয়েছে",
+    "Tracking ID: :tracking": "ট্র্যাকিং আইডি: :tracking",
+    ":courier refused the booking: :reason": ":courier বুকিং নেয়নি: :reason",
+    "Could not reach :courier. Check the internet connection and try again.": ":courier-এর সাথে যোগাযোগ করা যায়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।"
 }

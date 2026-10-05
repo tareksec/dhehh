@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Tables;
 
 use App\Filament\Resources\Orders\Actions\ChangeOrderWorkflowAction;
+use App\Filament\Resources\Orders\Actions\CourierBookingFeedback;
 use App\Livewire\OrderTrashTable;
 use App\Models\CourierBooking;
 use App\Models\CourierProvider;
@@ -182,6 +183,17 @@ class OrdersTable
                 TernaryFilter::make('reseller_own_courier')
                     ->label(__('Reseller\'s own courier')),
 
+                // Orders with an item added after they were created (see
+                // OrderItem::$is_upsell) — admin-only, like the Upsell tag.
+                TernaryFilter::make('has_upsell')
+                    ->label(__('Upsell items'))
+                    ->trueLabel(__('With upsell items'))
+                    ->falseLabel(__('Without upsell items'))
+                    ->queries(
+                        true: fn (Builder $query): Builder => $query->whereHas('items', fn (Builder $items): Builder => $items->where('is_upsell', true)),
+                        false: fn (Builder $query): Builder => $query->whereDoesntHave('items', fn (Builder $items): Builder => $items->where('is_upsell', true)),
+                    ),
+
                 SelectFilter::make('customer_id')
                     ->label('Customer')
                     ->relationship('customer', 'name')
@@ -197,17 +209,17 @@ class OrdersTable
                     ->visible(fn (Order $record): bool => self::canBookCourier($record))
                     ->schema(fn (Order $record): array => self::unifiedBookingForm($record))
                     ->fillForm(fn (Order $record): array => app(CourierService::class)->bookingFormDefaults($record))
-                    ->action(function (Order $record, array $data): void {
+                    ->action(function (Action $action, Order $record, array $data): void {
                         $provider = CourierProvider::query()->findOrFail($data['courier_provider_id']);
                         $payload = self::bookingPayloadFor($provider, $data);
 
-                        match ($provider->driver) {
+                        CourierBookingFeedback::book($action, fn (): CourierBooking => match ($provider->driver) {
                             CourierProvider::DRIVER_STEADFAST => app(CourierService::class)->createSteadfastBooking($record, $provider, $payload),
                             CourierProvider::DRIVER_PATHAO => app(CourierService::class)->createPathaoBooking($record, $provider, $payload),
                             CourierProvider::DRIVER_REDX => app(CourierService::class)->createRedxBooking($record, $provider, $payload),
                             CourierProvider::DRIVER_ECOURIER => app(CourierService::class)->createECourierBooking($record, $provider, $payload),
                             default => app(CourierService::class)->createManualBooking($record, $payload),
-                        };
+                        });
                     }),
                 Action::make('markDelivered')
                     ->label('Delivered')
@@ -470,7 +482,7 @@ class OrdersTable
 
         $booked = 0;
         $skippedAlreadyBooked = 0;
-        $skippedFailed = 0;
+        $failures = [];
 
         foreach ($records as $record) {
             /** @var Order $record */
@@ -486,19 +498,25 @@ class OrdersTable
                     default => app(CourierService::class)->createManualBooking($record, ['courier_provider_id' => $provider->getKey()]),
                 };
                 $booked++;
-            } catch (ValidationException) {
-                $skippedFailed++;
+            } catch (ValidationException $exception) {
+                // Nothing reaches the Status Logs when a booking is refused,
+                // so say which order failed and why.
+                $failures[] = CourierBookingFeedback::failureLine($exception, (string) $record->order_number);
             }
         }
 
         $notes = array_filter([
             $skippedAlreadyBooked > 0 ? "{$skippedAlreadyBooked} already booked" : null,
-            $skippedFailed > 0 ? "{$skippedFailed} failed — see Status Logs" : null,
+            $failures !== [] ? count($failures).' failed' : null,
         ]);
 
         $notification = Notification::make()
             ->title("{$booked} order(s) booked")
-            ->body($notes === [] ? null : implode('; ', $notes).'.');
+            ->body($notes === [] ? null : new HtmlString(collect([implode('; ', $notes).'.', ...$failures])->map(fn (string $line): string => e($line))->implode('<br>')));
+
+        if ($failures !== []) {
+            $notification->persistent();
+        }
 
         if ($booked === 0) {
             $notification->danger();
