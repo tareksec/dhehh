@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.53.0] - 2026-10-05
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -41,7 +43,6 @@ All notable production changes to Business Dashboard are documented here.
 - Phones from the website are normalised to the local `01XXXXXXXXX` form (the same as checkout) before any lookup, so `+880…` and `01…` are one customer and one lockout counter.
 - Tests: new `StorefrontApiAccountTest` (33) — gates, registration, sign-in, lockouts, codes, reset, profile/password, orders, reorder, reviews, tracking, cross-company and per-visitor limits.
 - No new translation keys in the ERP: the API answers with stable error codes and the website words them.
-
 ## [2.52.0] - 2026-10-05
 
 **Release type:** Minor Feature Update
