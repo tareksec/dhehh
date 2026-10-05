@@ -27,6 +27,23 @@ Tests: one new test in `ResellerPortalCreateOrderTest` (not in the menu; one but
 
 Commit status: committed and pushed to the branch together with the own-courier work (owner approval 2026-10-05).
 
+## 2026-10-03 - Fraud Checker page laid out like ParcelVai
+
+Reason — owner asked whether our fraud checker tool could be laid out like https://parcelvai.com/ and sent a screenshot of ParcelVai's result for their own number (verdict banner, summary tiles, per-courier cards).
+
+What changed:
+- New `app/Filament/Pages/FraudChecker.php` + `resources/views/filament/pages/fraud-checker.blade.php` under the Courier menu (`sales.view` permission, same as the courier dashboard). Phone input with +88 prefix, Check / Refresh live data, verdict banner, 4 summary tiles, overall bar, Steadfast merchant fraud reports, one card per courier (Pathao, Steadfast, RedX; unconfigured ones say so and link to Providers), blacklist warning, and this store's own orders for the number.
+- `ExternalCourierFraudService`: new `configuredDrivers()`, `normalizePhone()` made public, provider lookup moved into `activeProvider()`. Behaviour of `checkByPhone()` unchanged.
+- 33 new lang keys in `lang/en.json` and `lang/bn.json`.
+
+My decisions: Safe / Risky uses only the existing `external_fraud_low_ratio_threshold` setting (no new middle level, no ParcelVai-style "AI advice" text, since that would be invented rules). Paperfly and CarryBee (shown by ParcelVai) are not included — the app has no integration for them; adding them needs their API/panel access from the owner. The order form's existing fraud check is unchanged.
+
+Needs Bangla review: all 33 new keys (written by Claude), especially "Trusted" (বিশ্বস্ত), "Not configured" (কনফিগার করা নেই) and the threshold sentences.
+
+Tests: new `tests/Feature/FraudCheckerPageTest.php` (8), plus `ExternalCourierFraudCheckTest` and `TranslationParityTest` all pass; `CourierIntegrationTest` / `SalesOrderTest` pass except 10 table-page tests that hit the missing intl extension below. Full `php artisan test` (plain, no `--env`) in the cloud session: 1491 passed, 1 skipped, 166 failed — every failure is "The intl PHP extension is required" (the session's stand-in PHP 8.4 build has no intl); none involve these files. Re-run the full suite locally before release. `npm run build` clean.
+
+Commit status: committed and pushed to `ccr-ba78e320-bkghqi` on owner approval ("ওকে কমিট এবং পুশ কর", 2026-10-04), then merged with main (v2.45.0) and pushed to `main` on owner approval ("মেইনে পুশ কর", 2026-10-04). (The first commit message said 31 lang keys; it is 33.)
+
 ## 2026-10-04 - Reseller portal: Create order
 
 Reason — owner asked for resellers to integrate their WooCommerce site, create orders and see order status like the main dashboard. I asked four scoping questions (Woo scope, order pricing/payment, status rights, Woo commission); the owner answered "No preference" and then narrowed the request: **"Reseller শুধু অর্ডার তৈরি করতে পারবে এইটা এড কর"** (resellers can create orders — add only this). So only **Create order** is built; the WooCommerce integration is **not** built and still needs the owner's answers (see the questions' options: orders flowing into the ERP by webhook, status pushed back, product import only; and how Woo prices/commission are treated).

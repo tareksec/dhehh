@@ -8,20 +8,41 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Added
 
-- **Reseller portal: Create order.** An approved reseller can now place an order for their own customer from the portal (a **Create order** button at the top of the **Orders** page). They enter the customer's name, phone, delivery address and optional note, then add products from their own store with a quantity and their own selling price (never below the base price; a product with no wholesale rate sells at the normal price and earns no commission). The page shows the live subtotal, the store's delivery charge for that address, VAT, what the customer pays (cash on delivery) and the reseller's commission. The order arrives as a draft for the store to review and confirm, like a storefront order, shows up in the reseller's **Orders** list with its status, and the commission is credited as usual. A customer is matched by phone; a phone that belongs to another reseller's account only receives the order (that reseller's own details are not overwritten). Orders from the portal are labelled **Reseller portal** in the admin.
 - **Reseller orders with the reseller's own courier.** On **Create order** a reseller now chooses **The store delivers (cash on delivery)** or **My own courier (I pay the full amount in advance)**. With their own courier they enter the courier name and the parcel/consignment ID they booked, and the advance payment details: which of the store's payment methods they paid to (the active send-money/bank methods from Storefront → Payment Methods), the number or account they paid from, and the transaction ID. These orders are charged at the store's price (the base price; the normal price for a product with no wholesale rate), with no delivery charge and no commission — the reseller pays that total in advance. The same parcel ID cannot be used on two of the reseller's orders. If the store has no payment method set up, the option is shown but disabled.
 - **Checking and packing these orders (admin).** The order page shows a **Reseller's own courier** section with the parcel ID in large type, the courier, the payment state and transaction details, and when it was packed; the store's courier booking is hidden for these orders. **Verify reseller payment** (choosing the account the money arrived in) records it in the order's Payments History so the order shows as paid; **Reject reseller payment** sends it back to the reseller. **Mark parcel packed** is available only after the payment is verified. The order list has a **Reseller's own courier** filter and a hideable **Reseller parcel ID** column (searchable). The advance also appears on Storefront → Payments as **Reseller advance (own courier)** with a **Check on order** link.
 - **Reseller's view.** The portal **Orders** list shows the parcel ID with the payment state (waiting, verified, rejected) or **Packed**, and the order details show the courier, parcel ID, payment and packing. A rejected payment can be sent again with **Send payment again**.
+
+### Changed
+
+- **Reseller portal: Create order is a button.** **Create order** is no longer in the portal menu; it opens from a **Create order** button at the top of the **Orders** page.
 
 ### Technical Notes
 
 - Migration `2026_10_05_100000_add_reseller_own_courier_to_orders_table`: `orders.reseller_own_courier`, `reseller_courier_name`, `reseller_parcel_id`, `reseller_parcel_packed_at` (+ index on reseller and parcel ID). Run migrations on deploy.
 - The advance is a manual `StorefrontPayment` with the new purpose `reseller_advance` (`Order::resellerAdvancePayment()`); new `App\Services\ResellerOwnCourierService` (submit, verify, reject, mark packed). `ResellerOrderPlacementService::place()` takes an optional own-courier array. Own-courier orders get no default courier provider and skip the courier fraud check. Tests: `ResellerOwnCourierOrderTest`.
 
+## [2.46.0] - 2026-10-04
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Fraud Checker page (Courier → Fraud Checker).** Type a customer's mobile number and see, before taking an order, how that number has done on your connected couriers (Pathao, Steadfast, RedX). The page shows a Safe / Risky verdict, the overall delivery success rate, total / delivered / cancelled parcel tiles, a card per courier with its own numbers and success bar (or "Not configured" with a link to Courier → Providers), fraud reports filed by other merchants (Steadfast), a blacklist warning when the number is on your blacklist, and this store's own order history for the number. **Refresh live data** skips the 24-hour cache. Safe / Risky uses your existing **External courier success ratio review threshold** from Customer Risk Settings — no new rules. Open to staff who can view sales. In English and Bangla.
+
+### Technical Notes
+
+- New `App\Filament\Pages\FraudChecker` + `filament.pages.fraud-checker` view. Reuses `ExternalCourierFraudService::checkByPhone()` (same cache and `customer_risk_events` audit log as the order form's Courier Fraud Check); the service gains `configuredDrivers()` and a public `normalizePhone()`. Blacklist lookup filters company explicitly (global + current company). New `FraudCheckerPageTest` (8 tests). No migrations.
+## [2.45.0] - 2026-10-04
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller portal: Create order.** An approved reseller can now place an order for their own customer from the portal (new **Create order** page, second in the menu). They enter the customer's name, phone, delivery address and optional note, then add products from their own store with a quantity and their own selling price (never below the base price; a product with no wholesale rate sells at the normal price and earns no commission). The page shows the live subtotal, the store's delivery charge for that address, VAT, what the customer pays (cash on delivery) and the reseller's commission. The order arrives as a draft for the store to review and confirm, like a storefront order, shows up in the reseller's **Orders** list with its status, and the commission is credited as usual. A customer is matched by phone; a phone that belongs to another reseller's account only receives the order (that reseller's own details are not overwritten). Orders from the portal are labelled **Reseller portal** in the admin.
+
 ### Fixed
 
 - **New-order alert link.** The "New order received" alert (and the status-change alert) now always links to the admin order page. It used the current panel's order page, which does not exist when the order is created from the reseller portal.
-
 ## [2.44.0] - 2026-10-03
 
 **Release type:** Minor Feature Update
