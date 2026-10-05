@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.52.0] - 2026-10-05
+
 **Release type:** Minor Feature Update
 
 ### Fixed
@@ -18,7 +20,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `CourierService::callCourier()` wraps the Steadfast / Pathao / RedX / E-Courier create calls and turns `RequestException` / `ConnectionException` into a `ValidationException` (key `courier`) with the courier's message. New `Orders\Actions\CourierBookingFeedback` (notifications + `halt()`), used by the order list's **Book courier** and the order page's **Book courier** / **Book Steadfast**; `bookCourierBulk()` reports per-order reasons. `TernaryFilter has_upsell` on `OrdersTable` (`whereHas('items', is_upsell)`). New `OrderCourierBookingFeedbackTest` (6 tests). No migrations.
-
 ## [2.51.0] - 2026-10-05
 
 **Release type:** Minor Feature Update
