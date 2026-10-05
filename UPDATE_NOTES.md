@@ -2,6 +2,27 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-05 - Book courier not booking + Upsell filter on the orders list
+
+Reason — owner asked (in Bangla) for an orders-list filter by upsell items, and reported that clicking **Book courier** does not book.
+
+Cause (reproduced in a test): when a booking could not go through, nothing explained why. A courier refusal (Steadfast/Pathao/RedX/E-Courier HTTP 4xx — e.g. wrong phone, wrong keys, duplicate invoice) was thrown as a raw `RequestException` from the courier client — nothing booked, no readable reason. `CourierService`'s own errors (customer risk review pending, provider mismatch, missing customer) were raised under keys like `risk` / `provider` that match no popup field, so the popup just sat there. The bulk action caught only validation errors, so one HTTP refusal stopped the batch.
+
+I could not see which reason applies to the owner's order (no access to their data or courier account). After this change the popup says it.
+
+What changed:
+- `CourierService::callCourier()`: courier HTTP/connection errors become a readable validation error with the courier's own message.
+- New `app/Filament/Resources/Orders/Actions/CourierBookingFeedback.php`: success notification with the tracking ID; failure notification with the reason, popup kept open. Used by the list's **Book courier** and the order page's **Book courier** / **Book Steadfast**.
+- Bulk **Book courier**: keeps going past a refused order and lists each failed order number with its reason.
+- `OrdersTable`: new **Upsell items** filter (with / without).
+- 8 new lang keys in `lang/en.json` and `lang/bn.json`.
+
+Needs Bangla review: the 8 new keys, especially ":courier বুকিং নেয়নি: :reason" and "আপসেল আইটেমসহ / ছাড়া".
+
+Tests: new `OrderCourierBookingFeedbackTest` (6; 5 of them fail on the old code, all pass now), plus `CourierIntegrationTest`, `OrderUpsellTest`, `OrderStockShortageTest`, `TranslationParityTest`. Full `php artisan test` (plain, no `--env`, PHP 8.4 built with intl in the cloud session, after `npm run build`): **1775 passed, 1 skipped, 0 failed**.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-05).
+
 ## 2026-10-05 - Adding items after an order is created + Upsell tag
 
 Reason — owner reported (in Bangla) that after an order is created, no new item can be added: it errors with "no stock", no popup appears, and adding 10 pcs of stock to the product did not help. They also asked that an item added after the order is created be saved as an **upsell**, with the tag shown only in the dashboard, never to the customer.

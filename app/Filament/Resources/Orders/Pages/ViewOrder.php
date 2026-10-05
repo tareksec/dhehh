@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Pages;
 
 use App\Filament\Resources\Orders\Actions\ChangeOrderWorkflowAction;
+use App\Filament\Resources\Orders\Actions\CourierBookingFeedback;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Models\CourierBooking;
 use App\Models\CourierProvider;
@@ -74,8 +75,8 @@ class ViewOrder extends ViewRecord
                 ->visible(fn (): bool => $this->canBookCourier())
                 ->schema($this->courierBookingForm())
                 ->fillForm(fn (): array => app(CourierService::class)->bookingFormDefaults($this->record, 'manual'))
-                ->action(function (array $data): void {
-                    app(CourierService::class)->createManualBooking($this->record, $data);
+                ->action(function (Action $action, array $data): void {
+                    CourierBookingFeedback::book($action, fn (): CourierBooking => app(CourierService::class)->createManualBooking($this->record, $data));
                     $this->record->refresh();
                 }),
             Action::make('bookSteadfast')
@@ -88,9 +89,9 @@ class ViewOrder extends ViewRecord
                     ->exists())
                 ->schema($this->steadfastBookingForm())
                 ->fillForm(fn (): array => app(CourierService::class)->bookingFormDefaults($this->record, 'steadfast'))
-                ->action(function (array $data): void {
+                ->action(function (Action $action, array $data): void {
                     $provider = CourierProvider::query()->findOrFail($data['courier_provider_id']);
-                    app(CourierService::class)->createSteadfastBooking($this->record, $provider, $data);
+                    CourierBookingFeedback::book($action, fn (): CourierBooking => app(CourierService::class)->createSteadfastBooking($this->record, $provider, $data));
                     $this->record->refresh();
                 }),
             Action::make('markDelivered')

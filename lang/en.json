@@ -859,5 +859,13 @@
     "Send a new code": "Send a new code",
     "Upsell": "Upsell",
     "Adding: :ordered · In stock: :available · Short by: :short": "Adding: :ordered · In stock: :available · Short by: :short",
-    "Add stock and save order": "Add stock and save order"
+    "Add stock and save order": "Add stock and save order",
+    "Upsell items": "Upsell items",
+    "With upsell items": "With upsell items",
+    "Without upsell items": "Without upsell items",
+    "Courier booking failed": "Courier booking failed",
+    "Courier booked": "Courier booked",
+    "Tracking ID: :tracking": "Tracking ID: :tracking",
+    ":courier refused the booking: :reason": ":courier refused the booking: :reason",
+    "Could not reach :courier. Check the internet connection and try again.": "Could not reach :courier. Check the internet connection and try again."
 }

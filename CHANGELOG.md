@@ -4,6 +4,21 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **Book courier did nothing when the booking failed.** Clicking **Book courier** (order list or order page) or **Book Steadfast** showed nothing and booked nothing when the booking could not go through. When the courier refused it (wrong phone, wrong API keys, duplicate invoice, ...), the courier's error was not caught at all. A customer-risk block or a provider mismatch was hidden because it matched no field in the popup. Now a successful booking shows **Courier booked** with the tracking ID. A failed one shows **Courier booking failed** with the reason — the courier's own message, "could not reach the courier", or the risk review that blocks it — and the popup stays open so the courier or details can be changed. In English and Bangla.
+- **Bulk Book courier stopped at a refused order.** A courier refusal on one order no longer stops the rest of the batch. The result now lists each failed order with its reason (it used to say "see Status Logs", where nothing was recorded).
+
+### Added
+
+- **Upsell filter on the orders list.** New **Upsell items** filter: **With upsell items** shows orders that had an item added after they were created, **Without upsell items** the rest. Admin-only, like the Upsell tag. In English and Bangla.
+
+### Technical Notes
+
+- `CourierService::callCourier()` wraps the Steadfast / Pathao / RedX / E-Courier create calls and turns `RequestException` / `ConnectionException` into a `ValidationException` (key `courier`) with the courier's message. New `Orders\Actions\CourierBookingFeedback` (notifications + `halt()`), used by the order list's **Book courier** and the order page's **Book courier** / **Book Steadfast**; `bookCourierBulk()` reports per-order reasons. `TernaryFilter has_upsell` on `OrdersTable` (`whereHas('items', is_upsell)`). New `OrderCourierBookingFeedbackTest` (6 tests). No migrations.
+
 ## [2.51.0] - 2026-10-05
 
 **Release type:** Minor Feature Update
