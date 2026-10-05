@@ -22,6 +22,7 @@ class OrderItem extends Model
         'unit_cost',
         'reseller_base_price',
         'subtotal',
+        'is_upsell',
     ];
 
     protected $casts = [
@@ -30,6 +31,7 @@ class OrderItem extends Model
         'unit_cost' => 'decimal:2',
         'reseller_base_price' => 'decimal:2',
         'subtotal' => 'decimal:2',
+        'is_upsell' => 'boolean',
     ];
 
     protected static function booted(): void

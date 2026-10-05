@@ -845,5 +845,19 @@
     "Add stock and place order": "Add stock and place order",
     "Back to order": "Back to order",
     "Stock added": "Stock added",
-    "The order could not be saved": "The order could not be saved"
+    "The order could not be saved": "The order could not be saved",
+    "Reset your password": "Reset your password",
+    "We will send a reset code by SMS to this number.": "We will send a reset code by SMS to this number.",
+    "Reset code": "Reset code",
+    "The 6-digit code sent by SMS to :phone. It expires in 15 minutes.": "The 6-digit code sent by SMS to :phone. It expires in 15 minutes.",
+    "Password reset by SMS is not available right now. Please contact the store to get back into your account.": "Password reset by SMS is not available right now. Please contact the store to get back into your account.",
+    "If a reseller account uses that phone number, a reset code has been sent by SMS.": "If a reseller account uses that phone number, a reset code has been sent by SMS.",
+    "That code is invalid or has expired. Please request a new one.": "That code is invalid or has expired. Please request a new one.",
+    "Your password has been reset.": "Your password has been reset.",
+    "Send reset code": "Send reset code",
+    "Reset password": "Reset password",
+    "Send a new code": "Send a new code",
+    "Upsell": "Upsell",
+    "Adding: :ordered · In stock: :available · Short by: :short": "Adding: :ordered · In stock: :available · Short by: :short",
+    "Add stock and save order": "Add stock and save order"
 }

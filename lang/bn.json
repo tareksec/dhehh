@@ -845,5 +845,19 @@
     "Add stock and place order": "স্টক যোগ করে অর্ডার প্লেস করুন",
     "Back to order": "অর্ডারে ফিরে যান",
     "Stock added": "স্টক যোগ হয়েছে",
-    "The order could not be saved": "অর্ডারটি সেভ করা যায়নি"
+    "The order could not be saved": "অর্ডারটি সেভ করা যায়নি",
+    "Reset your password": "পাসওয়ার্ড রিসেট করুন",
+    "We will send a reset code by SMS to this number.": "এই নম্বরে SMS-এ একটি রিসেট কোড পাঠানো হবে।",
+    "Reset code": "রিসেট কোড",
+    "The 6-digit code sent by SMS to :phone. It expires in 15 minutes.": ":phone নম্বরে SMS-এ পাঠানো ৬ সংখ্যার কোড। এটি ১৫ মিনিট পর্যন্ত কাজ করবে।",
+    "Password reset by SMS is not available right now. Please contact the store to get back into your account.": "এখন SMS-এ পাসওয়ার্ড রিসেট করা যাচ্ছে না। অ্যাকাউন্টে ঢুকতে স্টোরের সঙ্গে যোগাযোগ করুন।",
+    "If a reseller account uses that phone number, a reset code has been sent by SMS.": "এই ফোন নম্বরে কোনো রিসেলার অ্যাকাউন্ট থাকলে SMS-এ একটি রিসেট কোড পাঠানো হয়েছে।",
+    "That code is invalid or has expired. Please request a new one.": "কোডটি ভুল বা মেয়াদ শেষ। নতুন কোড চেয়ে নিন।",
+    "Your password has been reset.": "আপনার পাসওয়ার্ড রিসেট হয়েছে।",
+    "Send reset code": "রিসেট কোড পাঠান",
+    "Reset password": "পাসওয়ার্ড রিসেট করুন",
+    "Send a new code": "নতুন কোড পাঠান",
+    "Upsell": "আপসেল",
+    "Adding: :ordered · In stock: :available · Short by: :short": "যোগ হচ্ছে: :ordered · স্টকে আছে: :available · কম আছে: :short",
+    "Add stock and save order": "স্টক যোগ করে অর্ডার সেভ করুন"
 }

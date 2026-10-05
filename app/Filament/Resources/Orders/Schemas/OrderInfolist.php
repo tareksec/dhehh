@@ -14,6 +14,7 @@ use App\Support\PhoneLinks;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Enums\TextSize;
@@ -173,7 +174,12 @@ class OrderInfolist
                             ->label('')
                             ->schema([
                                 TextEntry::make('product.name')
-                                    ->label('Product'),
+                                    ->label('Product')
+                                    // Admin-only tag: nothing the customer sees shows it.
+                                    ->belowContent(Text::make(__('Upsell'))
+                                        ->badge()
+                                        ->color('success')
+                                        ->visible(fn (?OrderItem $record): bool => (bool) $record?->is_upsell)),
 
                                 TextEntry::make('variant_label')
                                     ->label('Variant')
