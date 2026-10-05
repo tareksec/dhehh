@@ -2,6 +2,18 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-05 - Reseller portal: Forgot password
+
+Owner asked to start the portal password reset ("পাসওয়ার্ড রিসেট এর কাজ শুরু কর").
+
+What changed: new `app/Filament/Reseller/Pages/Auth/ForgotPassword.php` registered with `->passwordReset()` in `ResellerPanelProvider`, so the portal login shows **Forgot password?**. Same rules as the storefront reset (`CustomerAccountService`): 6-digit SMS code, 15 minutes, then new password and sign-in. Only pending/approved resellers of the portal's company get a code; same reply for any number. Without SMS settings it says reset is not available. Rate limits: 2 code requests and 5 reset tries a minute per visitor.
+
+Tests: new `tests/Feature/ResellerPortalPasswordResetTest.php` (9 tests, mutation-checked), including the real portal Livewire endpoint. 11 new lang keys in en/bn.
+
+Needs Bangla review: the 11 new reset keys.
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-05).
+
 ## 2026-10-05 - Reseller orders with the reseller's own courier
 
 Owner's process: many resellers book the parcel with their own courier, give the company the parcel ID and pay the full amount in advance; the company packs the parcel and puts that parcel ID on it. The owner said to start ("ওকে কাজ শুরু কর") without answering the four open questions, so these defaults were used (easy to change):
