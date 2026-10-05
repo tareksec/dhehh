@@ -20,6 +20,8 @@ final class OrderSummary
             'order_number' => $order->order_number,
             'token' => Signing::orderToken($order),
             'status' => $order->status,
+            'status_label' => Order::STATUSES[$order->status] ?? str((string) $order->status)->headline()->toString(),
+            'order_date' => $order->order_date?->toDateString(),
             'created_at' => $order->created_at?->toIso8601String(),
             'customer' => [
                 'name' => $order->customer?->name,
@@ -29,6 +31,7 @@ final class OrderSummary
             ],
             'delivery_area' => $order->shipping_zone,
             'items' => $order->items->map(fn ($item): array => [
+                'slug' => $item->product?->slug,
                 'name' => $item->product?->name,
                 'variant_label' => $item->variant_label,
                 'quantity' => (int) $item->quantity,

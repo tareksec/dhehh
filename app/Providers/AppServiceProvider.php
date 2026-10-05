@@ -93,6 +93,15 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(3000)->by('storefront-api:ip:'.$request->ip()),
         ]);
 
+        // Sign-in, registration, one-time codes and password resets from the
+        // Next.js site: every visitor reaches the ERP from the website's one
+        // server address, so the limit is per VISITOR (the IP the website
+        // forwards as client_ip), not per caller. Wrong passwords, codes and
+        // resets are additionally counted per account (CustomerAccountService).
+        RateLimiter::for('storefront-auth', fn (Request $request): Limit => Limit::perMinute(20)->by(
+            'storefront-auth:'.sha1((string) $request->bearerToken()).':'.($request->input('client_ip') ?: $request->ip())
+        ));
+
         TextColumn::macro('moneyWithoutTrailingZeroes', function (string|\BackedEnum|\Closure|null $currency = null, int|\Closure $divideBy = 0, string|\BackedEnum|\Closure|null $locale = null, int|\Closure|null $decimalPlaces = null): static {
             $this->formatStateUsing(static function (TextColumn $column, $state) use ($currency, $divideBy, $decimalPlaces): ?string {
                 if (blank($state)) {

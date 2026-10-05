@@ -1,8 +1,8 @@
 # Storefront API (for the headless Next.js website)
 
-> **বাংলা সারসংক্ষেপ:** zamzamint.com-এর নতুন Next.js ওয়েবসাইটের কোনো আলাদা ব্যাকএন্ড নেই — ERP-ই তার ব্যাকএন্ড। এই API দিয়ে ওয়েবসাইট ERP থেকে **পড়ে** (পণ্য, ক্যাটাগরি, ব্যানার, মেনু, পেজ, ফুটার, থিমের রং/ফন্ট, ফ্ল্যাশ সেল ইত্যাদি) এবং **অর্ডার দেয়** (কোট, চেকআউট, অনলাইন পেমেন্ট ফেরত, অর্ডার দেখা)। দাম, ডেলিভারি চার্জ, VAT, নতুন কাস্টমারের ডেলিভারি অগ্রিম, প্রি-অর্ডার অগ্রিম, কুরিয়ার-ঝুঁকির অগ্রিম, চেকআউট পলিসি ও ZiniPay/PayStation পেমেন্ট — সবকিছু ERP সার্ভারে হিসাব হয় (Blade চেকআউটের একই সার্ভিস), ব্রাউজার থেকে কোনো দাম নেওয়া হয় না। সব কনটেন্ট ও কনফিগারেশন ERP অ্যাডমিন থেকেই বদলায়। API চালু করতে **Site → Storefront Settings → Next.js Site** সেকশনে *Enable Next.js site API* অন করুন; API key তৈরি হয় **Settings → Integrations → Website API** থেকে। এই API key শুধু Next.js **সার্ভারের** এনভায়রনমেন্টে থাকবে, ব্রাউজারে কখনো নয়।
+> **বাংলা সারসংক্ষেপ:** zamzamint.com-এর নতুন Next.js ওয়েবসাইটের কোনো আলাদা ব্যাকএন্ড নেই — ERP-ই তার ব্যাকএন্ড। এই API দিয়ে ওয়েবসাইট ERP থেকে **পড়ে** (পণ্য, ক্যাটাগরি, ব্যানার, মেনু, পেজ, ফুটার, থিমের রং/ফন্ট, ফ্ল্যাশ সেল ইত্যাদি) এবং **অর্ডার দেয়** (কোট, চেকআউট, অনলাইন পেমেন্ট ফেরত, অর্ডার দেখা)। গ্রাহক **অ্যাকাউন্ট খুলতে, সাইন ইন করতে** (পাসওয়ার্ড বা এসএমএস/ইমেইল কোড), পাসওয়ার্ড রিসেট করতে, **অর্ডারের অবস্থা ট্র্যাক করতে**, আগের অর্ডার আবার করতে এবং **রিভিউ দিতে** পারেন (§6) — সবই Blade স্টোরফ্রন্টের একই নিয়মে। দাম, ডেলিভারি চার্জ, VAT, নতুন কাস্টমারের ডেলিভারি অগ্রিম, প্রি-অর্ডার অগ্রিম, কুরিয়ার-ঝুঁকির অগ্রিম, চেকআউট পলিসি ও ZiniPay/PayStation পেমেন্ট — সবকিছু ERP সার্ভারে হিসাব হয় (Blade চেকআউটের একই সার্ভিস), ব্রাউজার থেকে কোনো দাম নেওয়া হয় না। সব কনটেন্ট ও কনফিগারেশন ERP অ্যাডমিন থেকেই বদলায়। API চালু করতে **Site → Storefront Settings → Next.js Site** সেকশনে *Enable Next.js site API* অন করুন; API key তৈরি হয় **Settings → Integrations → Website API** থেকে। এই API key শুধু Next.js **সার্ভারের** এনভায়রনমেন্টে থাকবে, ব্রাউজারে কখনো নয়।
 
-This is the API the company's Next.js site (e.g. `zamzamint.com`) uses: read-only catalog endpoints (§3) and the checkout endpoints (§5). It sits next to
+This is the API the company's Next.js site (e.g. `zamzamint.com`) uses: read-only catalog endpoints (§3), the checkout endpoints (§5) and the customer account, order tracking and review endpoints (§6). It sits next to
 the server-to-server API in [`website-integration.md`](website-integration.md) and uses the
 **same per-company Bearer key**, so a key only ever sees its own company.
 
@@ -214,16 +214,87 @@ whatsapp_group{url,message}`.
 * Rate limit its own public checkout routes per visitor IP: the ERP limit is per API key, shared by all
   visitors.
 
-## 6. Keeping the website fresh
+## 6. Customer accounts, order tracking and reviews
+
+Same rules as the Blade storefront's account pages: the service behind both is `CustomerAccountService`
+(registration reuses the CRM record of the same phone, so earlier orders appear; a wrong password is
+counted per account; a login code is valid for 10 minutes and five tries; a reset code for 15 minutes),
+`StorefrontOrderTrackingService` (the status history) and the review rules below. All of it is switched by
+**Customer accounts** in Storefront Settings (answer `403 customer_accounts_disabled` while off) — except
+order tracking, which works for everyone like the Blade `/track` page.
+
+**How a customer is "logged in".** A successful sign-in answers with an opaque `token` (64 characters) and
+`expires_at`. The website keeps it in an **httpOnly cookie on its own server** and sends it back as the
+header `X-Customer-Token` next to the company API key. The ERP stores only a SHA-256 hash
+(`storefront_customer_tokens`), the token only works for the company whose API key is sent, expires after
+48 hours (30 days with `remember: true`) and stops working when an admin deactivates the customer, the
+password is reset, or — for every other device — the password is changed. No token (or an expired one) →
+`401 customer_unauthenticated`.
+
+Failures answer `{ok:false, error:"<code>"}` so the website can word them in Bangla or English itself.
+Field mistakes are the usual `422` with `errors`. Always send the visitor's `client_ip` (and
+`client_user_agent`) on the public sign-in calls: the sign-in limiter (`storefront-auth`, 20 a minute) is
+per visitor, not per website server.
+
+### Sign in (public)
+| Call | Body | Success | Errors |
+|---|---|---|---|
+| `POST /account/register` | `name, phone, email?, address?, password (min 8), password_confirmation, remember?` | `201 {data:{customer, token, expires_at}}` | `409 account_exists`, `409 email_taken`, `422` |
+| `POST /account/login` | `identifier` (phone or email), `password, remember?` | `200` same shape | `422 invalid_credentials`, `429 too_many_attempts` (+`retry_after`), `403 account_disabled` |
+| `POST /account/otp` | `identifier` | `202 {ok, masked_identifier}` — the same answer whether or not an account exists | `422 otp_unavailable` (phone code but no SMS gateway) |
+| `POST /account/otp/verify` | `identifier, code (6 digits), remember?` | `200` token | `422 otp_invalid` |
+| `POST /account/password/forgot` | `phone` | `202 {ok}` (generic) | `422 sms_unavailable` |
+| `POST /account/password/reset` | `phone, code, password, password_confirmation` | `200` token — every older login is signed out | `422 reset_code_invalid`, `429 too_many_attempts` |
+
+Phones are accepted as typed (`+880 1712-345678`, `8801712345678`, `01712345678`) and stored in the local
+`01XXXXXXXXX` form checkout already uses. Five wrong reset codes lock that account's reset until the
+15-minute window ends.
+
+### The account (needs `X-Customer-Token`)
+* `POST /account/logout` — ends only this login.
+* `GET /account` — `customer`, `stats{order_count, active_order_count, completed_order_count, total_spent}`,
+  `recent_orders` (3), `recent_activity` (5).
+* `PATCH /account/profile` (`name, email?, address?`; `409 email_taken`) and `PUT /account/password`
+  (`current_password, password, password_confirmation`; `422 current_password_incorrect`).
+* `GET /account/orders?page=` — `{data:[{order_number, order_date, status, status_label, delivery_status,
+  total_amount, due_amount, item_count, items[3], can_review}], meta}`; `GET /account/orders/{order_number}` —
+  the order summary of §5 plus `tracking`, and per item `slug, review{status,rating,comment}|null, can_review`.
+  Another customer's (or company's) order is `404 order_not_found`.
+* `POST /account/orders/{order_number}/reorder` — `{data:{lines:[{slug, quantity, variant_id}], skipped}}`.
+  The ERP does not touch a cart (the website's cart lives in the browser): it names the lines that can be
+  ordered again; the website adds them and the normal quote re-prices and re-checks them.
+* `POST /account/orders/{order_number}/reviews` — `product_slug, rating (1–5), comment?`. Only for a product on
+  the customer's own **completed** order, once per product and order (`409 order_not_completed`,
+  `409 already_reviewed`, `404 product_not_in_order`). A review starts **pending**; it shows up in
+  `GET /products/{slug}` (`reviews`) only after the owner approves it in the ERP.
+* `GET /account/activity?page=`.
+
+### Order tracking (public)
+* `POST /orders/track` — `order_number` + `phone` (the phone the order was placed with). A wrong phone is
+  indistinguishable from a missing order (`404 order_not_found`), and eight wrong guesses lock that order
+  number for 15 minutes (`429 too_many_attempts`). The answer is the order summary **without the customer's
+  name, e-mail and address**.
+* `GET /orders/{order_number}/tracking?token=…` — the same with the unguessable order `token` from checkout (the
+  success link), no phone needed, customer details included.
+
+Both add `status_label, order_date` and `tracking{delivery_status, delivery_status_label,
+courier{tracking_id, status, status_label}|null, updates[{time, type: order|delivery|courier, status, label,
+note}]}` (newest first). `status`/`delivery_status` are stable keys; the `label`s are English for any key the
+website has no translation for.
+
+Passing `X-Customer-Token` on `POST /checkout` (or the payment finalize call) also records "Order placed" in the
+customer's account activity; a missing or expired token never affects the order.
+
+## 7. Keeping the website fresh
 
 The website caches ERP responses and refreshes them when the ERP sends a signed
 `product.updated` webhook (price/sale price/stock changes — see
 [`website-integration.md`](website-integration.md) §3). Other changes (banners, menus, categories,
 descriptions, collections) show up when the website's safety-net cache expires (default 2 minutes).
 
-## 7. Not in this API yet
+## 8. Not in this API yet
 
-Customer login and order tracking (beyond the one-time success page), review submission, reseller
-pricing, offer landing pages and Meta pixel/conversion events for the Next.js site. These follow in
-later phases. The OpenAPI file [`website-integration.openapi.yaml`](website-integration.openapi.yaml)
-does not describe the storefront endpoints yet.
+Reseller pricing, offer landing pages, Meta pixel/conversion events and a cookie-consent banner for the
+Next.js site, and review photos. These follow in later phases. The OpenAPI file
+[`website-integration.openapi.yaml`](website-integration.openapi.yaml) does not describe the storefront
+endpoints yet.

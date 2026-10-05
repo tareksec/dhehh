@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\Order;
+use App\Models\StorefrontCustomerActivity;
 use App\Models\StorefrontPayment;
 use App\Models\StorefrontPaymentMethod;
 use App\Models\StorefrontSetting;
@@ -13,6 +14,8 @@ use App\Services\CompanyContext;
 use App\Services\StorefrontApiCartResolver;
 use App\Services\StorefrontCatalogService;
 use App\Services\StorefrontCheckoutService;
+use App\Services\StorefrontCustomerActivityService;
+use App\Services\StorefrontCustomerSession;
 use App\Services\StorefrontDeliveryAreaResolver;
 use App\Services\StorefrontDeliveryService;
 use App\Services\StorefrontMetaTrackingService;
@@ -48,6 +51,8 @@ class StorefrontCheckoutController extends Controller
         protected StorefrontMetaTrackingService $metaTracking,
         protected StorefrontDeliveryService $delivery,
         protected StorefrontDeliveryAreaResolver $areas,
+        protected StorefrontCustomerSession $session,
+        protected StorefrontCustomerActivityService $activities,
     ) {}
 
     /** What the cart would cost right now: priced lines, issues, delivery, VAT, totals and the payment options. */
@@ -144,6 +149,8 @@ class StorefrontCheckoutController extends Controller
             return $this->error('payment_not_completed', 422, 'The payment was not completed or could not be verified. No order was placed.');
         }
 
+        $this->recordAccountActivity($request, $order);
+
         return response()->json(['data' => ['status' => 'placed', 'order' => OrderSummary::make($order, $company, $setting)]]);
     }
 
@@ -165,6 +172,28 @@ class StorefrontCheckoutController extends Controller
     }
 
     // ------------------------------------------------------------------ internals
+
+    /**
+     * When the order was placed by a signed-in customer (the website sends the
+     * customer token along), it also shows in their account activity, as it does
+     * on the Blade storefront. A missing or expired token never affects the order.
+     */
+    protected function recordAccountActivity(Request $request, Order $order): void
+    {
+        $resolved = $this->session->resolve($request);
+
+        if (! $resolved || $resolved['customer']->getKey() !== $order->customer_id) {
+            return;
+        }
+
+        $this->activities->record(
+            $resolved['customer'],
+            StorefrontCustomerActivity::TYPE_ORDER_PLACED,
+            'Order placed',
+            "Order {$order->order_number} was submitted successfully.",
+            ['order_number' => $order->order_number, 'total_amount' => (float) $order->total_amount],
+        );
+    }
 
     protected function run(Request $request, Company $company, StorefrontSetting $setting, array $validated, string $returnUrl, string $cancelUrl, ?string $cacheKey): JsonResponse
     {
@@ -202,6 +231,10 @@ class StorefrontCheckoutController extends Controller
             clientIp: (string) ($clientIp ?? ''),
             metaContext: $this->metaTracking->contextFromClient($setting, $validated['meta'] ?? [], $clientIp, $validated['client_user_agent'] ?? null),
         );
+
+        if ($outcome->placed()) {
+            $this->recordAccountActivity($request, $outcome->order);
+        }
 
         if ($cacheKey) {
             Cache::put($cacheKey, $outcome->placed()

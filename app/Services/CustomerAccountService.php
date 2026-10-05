@@ -61,9 +61,9 @@ class CustomerAccountService
      * @return Customer|null null when the identifier/password pair doesn't match a registered account.
      *
      * @throws ValidationException when the identifier has failed too many times recently. This is
-     *                              keyed on the identifier itself (not the caller's IP), so it also
-     *                              catches a password-guessing attack distributed across many IPs -
-     *                              the route-level `throttle:10,1` only protects a single IP.
+     *                             keyed on the identifier itself (not the caller's IP), so it also
+     *                             catches a password-guessing attack distributed across many IPs -
+     *                             the route-level `throttle:10,1` only protects a single IP.
      */
     public function attemptLogin(string $identifier, string $password): ?Customer
     {
@@ -79,7 +79,8 @@ class CustomerAccountService
         $query = Customer::query()->whereNotNull('password');
 
         if (str_contains($identifier, '@')) {
-            $query->where('email', $identifier);
+            // Same case-insensitive match the one-time-code login uses.
+            $query->whereRaw('LOWER(email) = ?', [mb_strtolower($identifier)]);
         } else {
             $this->wherePhoneMatches($query, $identifier);
         }
@@ -222,14 +223,27 @@ class CustomerAccountService
 
     public function resetPassword(Customer $customer, string $code, string $newPassword): bool
     {
+        // A 6-digit code must not be guessable by trying them all: five wrong
+        // tries lock this account's reset for the rest of the 15-minute window
+        // (the code itself expires then anyway).
+        $attemptsKey = 'storefront-reset:'.$customer->getKey();
+
+        if (RateLimiter::tooManyAttempts($attemptsKey, 5)) {
+            return false;
+        }
+
         if (
             blank($customer->password_reset_code)
             || ! $customer->password_reset_expires_at
             || $customer->password_reset_expires_at->isPast()
             || ! Hash::check($code, $customer->password_reset_code)
         ) {
+            RateLimiter::hit($attemptsKey, 15 * 60);
+
             return false;
         }
+
+        RateLimiter::clear($attemptsKey);
 
         $customer->forceFill([
             'password' => Hash::make($newPassword),
@@ -238,6 +252,14 @@ class CustomerAccountService
         ])->save();
 
         return true;
+    }
+
+    /** Seconds until a locked reset can be tried again (0 when it is not locked). */
+    public function resetLockedFor(Customer $customer): int
+    {
+        $key = 'storefront-reset:'.$customer->getKey();
+
+        return RateLimiter::tooManyAttempts($key, 5) ? RateLimiter::availableIn($key) : 0;
     }
 
     public function updatePassword(Customer $customer, string $newPassword): void

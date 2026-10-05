@@ -2,6 +2,28 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-06 - Headless Next.js storefront, phase 3 (customer accounts / order tracking / reviews)
+
+Reason — owner asked "ধাপ ৩ শুরু কর" after phase 2 reached `main`. Parity rule: nothing is re-implemented — the API calls the services the Blade account pages use.
+
+What changed (ERP, this repo):
+- **Customer token** — migration `2026_10_06_100000_create_storefront_customer_tokens_table`, `StorefrontCustomerToken` (hash only; 48 h, 30 d with remember; revoked on password reset/change, deactivation), `StorefrontCustomerSession`, middleware `AuthenticateStorefrontCustomer` + `EnsureStorefrontAccountsEnabled`.
+- **API** (`routes/api.php`, `v1/storefront`): `account/register|login|otp|otp/verify|password/forgot|password/reset|logout`, `account` (home), `account/profile`, `account/password`, `account/activity`, `account/orders[/{n}]`, `…/reorder`, `…/reviews`, and the public `orders/track` + `orders/{n}/tracking?token=`. Contract: `docs/api/storefront-api.md` §6.
+- **Shared code** — `StorefrontOrderTrackingService` (Blade tracking page now uses it, output unchanged); `CustomerAccountService` untouched in behaviour except: reset-code attempt lock (**Security**), e-mail login now case-insensitive.
+- **Order summary** gained `status_label`, `order_date`, item `slug`; checkout/finalize record "Order placed" in the account activity when the customer token is sent.
+- Tests: `StorefrontApiAccountTest` (33) + `MultiCompanyIsolationTest` entry; Blade tracking/auth/checkout tests pass unchanged. Verification: full ERP suite 1783 passed / 1 skipped / 0 failed (13,502 assertions); Pint clean on all touched PHP files; website `npm run typecheck` + `npm run build` pass; browser run (Playwright on a throwaway SQLite DB, real ERP + real `next start`, mock SMS gateway) passed every check — register, sign-in (+880 spelling, remember-me), OTP, forgot/reset, prefilled checkout, order tracking by link and by phone, review pending→approved, reorder, profile/password, sign-out, Bangla pages, no horizontal scroll at 390 px, httpOnly cookie not readable by scripts and the token absent from every response body.
+
+What changed (website repo `zamzamint-new-website-theme`): `/account/login|register|login/code|forgot-password`, `/account` (overview), `/account/orders[/n]`, `/account/profile`, `/track`; the login token lives only in the httpOnly `zi-customer` cookie, set by route handlers under `/api/account/*`; checkout is prefilled from the profile; the success page links to `/track?order&token`; header account/"Track order" links. ~170 new en+bn keys.
+
+Owner decisions / open items:
+- **Registration can adopt an existing customer record by phone number** (the Blade behaviour, kept for parity): someone who knows a customer's phone number can register an account for it and then sees that customer's past orders (items, address) without proving they own the phone. Suggested hardening, not done because it is a business decision: when the phone already belongs to a customer with orders, require the SMS code before the account is created (needs the SMS gateway configured).
+- Approved reviews reach the Next.js product page only after the website's 2-minute catalogue cache expires (no webhook is sent when a review is approved).
+- Order status shown to customers: a new website order is `draft` in the ERP until an admin confirms it; the website words it "Order received" (Blade shows "Draft").
+
+Needs Bangla review: the website's `auth.*`, `account.*`, `order.*`, `review.*`, `track.*`, `status.*`, `activity.*` keys (`src/i18n/messages.ts` in the website repo).
+
+Commit status: committed and pushed to branch `claude/loving-mendel-adxwam` on owner approval ("commit আর push কর", 2026-10-06) — both repos (ERP `Business-Dashboard` and `zamzamint-new-website-theme`). Not yet on `main`: the ERP `main` has moved on (v2.48.x release cuts), so merge `origin/main` into the branch and re-run the suite before it goes there.
+
 ## 2026-10-05 - Reseller orders with the reseller's own courier
 
 Owner's process: many resellers book the parcel with their own courier, give the company the parcel ID and pay the full amount in advance; the company packs the parcel and puts that parcel ID on it. The owner said to start ("ওকে কাজ শুরু কর") without answering the four open questions, so these defaults were used (easy to change):

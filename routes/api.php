@@ -3,9 +3,14 @@
 use App\Http\Controllers\Api\V1\LeadController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
+use App\Http\Controllers\Api\V1\StorefrontAccountAuthController;
+use App\Http\Controllers\Api\V1\StorefrontAccountController;
 use App\Http\Controllers\Api\V1\StorefrontCheckoutController;
 use App\Http\Controllers\Api\V1\StorefrontController;
+use App\Http\Controllers\Api\V1\StorefrontOrderTrackingController;
+use App\Http\Middleware\AuthenticateStorefrontCustomer;
 use App\Http\Middleware\EnsureNextjsSiteEnabled;
+use App\Http\Middleware\EnsureStorefrontAccountsEnabled;
 use App\Http\Middleware\ForceJsonResponse;
 use App\Http\Middleware\ResolveCompanyFromApiKey;
 use Illuminate\Support\Facades\Route;
@@ -68,4 +73,32 @@ Route::prefix('v1/storefront')
         Route::post('checkout', [StorefrontCheckoutController::class, 'place']);
         Route::post('checkout/payments/{payment}/finalize', [StorefrontCheckoutController::class, 'finalizePayment']);
         Route::get('orders/{order_number}', [StorefrontCheckoutController::class, 'order']);
+
+        // Order tracking for visitors who are not signed in (Phase 3).
+        Route::post('orders/track', [StorefrontOrderTrackingController::class, 'track']);
+        Route::get('orders/{order_number}/tracking', [StorefrontOrderTrackingController::class, 'byToken']);
+
+        // Customer accounts (Phase 3): sign-in, then the account area behind the customer token.
+        Route::prefix('account')->middleware(EnsureStorefrontAccountsEnabled::class)->group(function (): void {
+            Route::middleware('throttle:storefront-auth')->group(function (): void {
+                Route::post('register', [StorefrontAccountAuthController::class, 'register']);
+                Route::post('login', [StorefrontAccountAuthController::class, 'login']);
+                Route::post('otp', [StorefrontAccountAuthController::class, 'sendOtp']);
+                Route::post('otp/verify', [StorefrontAccountAuthController::class, 'verifyOtp']);
+                Route::post('password/forgot', [StorefrontAccountAuthController::class, 'forgotPassword']);
+                Route::post('password/reset', [StorefrontAccountAuthController::class, 'resetPassword']);
+            });
+
+            Route::middleware(AuthenticateStorefrontCustomer::class)->group(function (): void {
+                Route::post('logout', [StorefrontAccountAuthController::class, 'logout']);
+                Route::get('/', [StorefrontAccountController::class, 'show']);
+                Route::patch('profile', [StorefrontAccountController::class, 'updateProfile']);
+                Route::put('password', [StorefrontAccountController::class, 'updatePassword']);
+                Route::get('activity', [StorefrontAccountController::class, 'activity']);
+                Route::get('orders', [StorefrontAccountController::class, 'orders']);
+                Route::get('orders/{order_number}', [StorefrontAccountController::class, 'order']);
+                Route::post('orders/{order_number}/reorder', [StorefrontAccountController::class, 'reorder']);
+                Route::post('orders/{order_number}/reviews', [StorefrontAccountController::class, 'storeReview']);
+            });
+        });
     });
