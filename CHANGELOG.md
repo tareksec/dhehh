@@ -14,13 +14,10 @@ All notable production changes to Business Dashboard are documented here.
 - **Checkout for the Next.js website.** The website can now take real orders through the ERP (`POST /api/v1/storefront/checkout/quote`, `…/checkout`, `…/checkout/payments/{payment}/finalize`, `GET …/orders/{order_number}`). The website sends only the product, quantity and customer details; the ERP works out every price, delivery charge (inside/outside Dhaka from the address), VAT, new-customer delivery advance, pre-order advance, courier-risk advance, checkout-policy block and the payment options exactly as the Blade checkout does, and starts the ZiniPay/PayStation payment when an advance or full online payment is needed. The order is created only after the gateway confirms the payment. A double click or a retry never places a second order, a changed total is refused with the new total, and a stale cart (minimum order quantity, stock) is reported instead of being changed silently.
 - **Wholesale price rule for the website (owner decision):** a live Flash Sale / Trending / New Arrivals **deal price** wins over wholesale quantity prices; otherwise the quantity price reached applies; otherwise the normal selling price. A variation always keeps its own price, and a deal that is not lower than the selling price is ignored.
 - **Customer accounts, order tracking and reviews for the Next.js website.** Customers of the website can create an account, sign in with a password or with a 6-digit code sent by SMS or email, reset a forgotten password by SMS, see their order history, follow an order's status and courier updates, order the same items again, change their profile and password, and review the products of an order once it is completed. It works like the Blade storefront's account pages and uses the same **Customer accounts** switch in Storefront Settings, the same SMS gateway and the same rules (a registration reuses the customer record of the same phone number, so earlier orders appear straight away). Anyone can also track an order without an account with the order number and the phone number it was placed with, or with the link on the order confirmation. A new review waits in **Product Reviews** until you approve it, exactly as before.
-- **Upsell filter on the orders list.** New **Upsell items** filter: **With upsell items** shows orders that had an item added after they were created, **Without upsell items** the rest. Admin-only, like the Upsell tag. In English and Bangla.
 
 ### Fixed
 
 - **Signing in with an e-mail address ignored capital letters inconsistently.** The password sign-in compared the e-mail exactly while the one-time-code sign-in did not, so `Name@Example.com` worked for one and not the other. Both now ignore capitals.
-- **Book courier did nothing when the booking failed.** Clicking **Book courier** (order list or order page) or **Book Steadfast** showed nothing and booked nothing when the booking could not go through. When the courier refused it (wrong phone, wrong API keys, duplicate invoice, ...), the courier's error was not caught at all. A customer-risk block or a provider mismatch was hidden because it matched no field in the popup. Now a successful booking shows **Courier booked** with the tracking ID. A failed one shows **Courier booking failed** with the reason — the courier's own message, "could not reach the courier", or the risk review that blocks it — and the popup stays open so the courier or details can be changed. In English and Bangla.
-- **Bulk Book courier stopped at a refused order.** A courier refusal on one order no longer stops the rest of the batch. The result now lists each failed order with its reason (it used to say "see Status Logs", where nothing was recorded).
 
 ### Security
 
@@ -44,8 +41,23 @@ All notable production changes to Business Dashboard are documented here.
 - Phones from the website are normalised to the local `01XXXXXXXXX` form (the same as checkout) before any lookup, so `+880…` and `01…` are one customer and one lockout counter.
 - Tests: new `StorefrontApiAccountTest` (33) — gates, registration, sign-in, lockouts, codes, reset, profile/password, orders, reorder, reviews, tracking, cross-company and per-visitor limits.
 - No new translation keys in the ERP: the API answers with stable error codes and the website words them.
-- `CourierService::callCourier()` wraps the Steadfast / Pathao / RedX / E-Courier create calls and turns `RequestException` / `ConnectionException` into a `ValidationException` (key `courier`) with the courier's message. New `Orders\Actions\CourierBookingFeedback` (notifications + `halt()`), used by the order list's **Book courier** and the order page's **Book courier** / **Book Steadfast**; `bookCourierBulk()` reports per-order reasons. `TernaryFilter has_upsell` on `OrdersTable` (`whereHas('items', is_upsell)`). New `OrderCourierBookingFeedbackTest` (6 tests). No migrations.
 
+## [2.52.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **Book courier did nothing when the booking failed.** Clicking **Book courier** (order list or order page) or **Book Steadfast** showed nothing and booked nothing when the booking could not go through. When the courier refused it (wrong phone, wrong API keys, duplicate invoice, ...), the courier's error was not caught at all. A customer-risk block or a provider mismatch was hidden because it matched no field in the popup. Now a successful booking shows **Courier booked** with the tracking ID. A failed one shows **Courier booking failed** with the reason — the courier's own message, "could not reach the courier", or the risk review that blocks it — and the popup stays open so the courier or details can be changed. In English and Bangla.
+- **Bulk Book courier stopped at a refused order.** A courier refusal on one order no longer stops the rest of the batch. The result now lists each failed order with its reason (it used to say "see Status Logs", where nothing was recorded).
+
+### Added
+
+- **Upsell filter on the orders list.** New **Upsell items** filter: **With upsell items** shows orders that had an item added after they were created, **Without upsell items** the rest. Admin-only, like the Upsell tag. In English and Bangla.
+
+### Technical Notes
+
+- `CourierService::callCourier()` wraps the Steadfast / Pathao / RedX / E-Courier create calls and turns `RequestException` / `ConnectionException` into a `ValidationException` (key `courier`) with the courier's message. New `Orders\Actions\CourierBookingFeedback` (notifications + `halt()`), used by the order list's **Book courier** and the order page's **Book courier** / **Book Steadfast**; `bookCourierBulk()` reports per-order reasons. `TernaryFilter has_upsell` on `OrdersTable` (`whereHas('items', is_upsell)`). New `OrderCourierBookingFeedbackTest` (6 tests). No migrations.
 ## [2.51.0] - 2026-10-05
 
 **Release type:** Minor Feature Update
