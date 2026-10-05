@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.50.0] - 2026-10-05
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -13,7 +15,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - New `App\Filament\Reseller\Pages\Auth\ForgotPassword` (extends Filament's `RequestPasswordReset`, both steps on one page) registered with `->passwordReset()` on the reseller panel; reuses `CustomerAccountService::sendPasswordResetCode()` / `resetPassword()`. Filament's e-mailed link is not used. Tests: `ResellerPortalPasswordResetTest` (includes a run through the real portal Livewire endpoint).
-
 ## [2.49.0] - 2026-10-05
 
 **Release type:** Minor Feature Update
