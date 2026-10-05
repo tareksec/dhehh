@@ -192,28 +192,132 @@ class OrderStockShortageTest extends TestCase
         $this->assertSame(2, $this->outOfStock->refresh()->stock);
     }
 
-    public function test_a_stock_error_while_editing_is_shown_and_nothing_is_half_saved(): void
+    private function confirmedOrderWith(Product $product, int $quantity = 1): Order
     {
-        $this->actingAsRole('super_admin');
-
         $order = Order::query()->create([
-            'order_number' => 'SCC-EDIT-1',
+            'order_number' => 'SCC-EDIT-'.(Order::query()->count() + 1),
             'customer_id' => $this->customer->id,
             'order_date' => now()->toDateString(),
             'status' => Order::STATUS_CONFIRMED,
             'delivery_status' => CourierBooking::STATUS_NOT_BOOKED,
         ]);
-        $order->items()->create(['product_id' => $this->inStock->id, 'quantity' => 1, 'unit_price' => 100]);
+        $order->items()->create(['product_id' => $product->id, 'quantity' => $quantity, 'unit_price' => 100]);
+
+        return $order;
+    }
+
+    private function editWithNewItem(Order $order, Product $product, int $quantity = 1)
+    {
+        $component = Livewire::test(EditOrder::class, ['record' => $order->getRouteKey()]);
+        $items = $component->get('data.items');
+        $items['added-item'] = [
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+            'variant_label' => null,
+            'quantity' => $quantity,
+            'unit_price' => 100,
+            'subtotal' => 100 * $quantity,
+        ];
+
+        return $component->set('data.items', $items);
+    }
+
+    public function test_raising_a_quantity_above_stock_while_editing_shows_the_stock_popup_and_changes_nothing(): void
+    {
+        $this->actingAsRole('super_admin');
+        $order = $this->confirmedOrderWith($this->inStock);
 
         $component = Livewire::test(EditOrder::class, ['record' => $order->getRouteKey()]);
         $itemKey = array_key_first($component->get('data.items'));
 
         $component
             ->set("data.items.{$itemKey}.quantity", 50)
-            ->call('save');
+            ->call('save')
+            ->assertActionMounted('stockShortage');
 
-        Notification::assertNotified(__('The order could not be saved'));
         $this->assertSame(1, $order->items()->sole()->quantity);
         $this->assertSame(9, $this->inStock->refresh()->stock);
+    }
+
+    /**
+     * Owner report (2026-10-05): after an order was created, no new item
+     * could be added — "not enough stock" — even after adding stock to the
+     * new item's product. The order's existing line was for a product whose
+     * stock had gone below zero (a WooCommerce sale is never blocked), and
+     * every item save re-checked that unchanged line.
+     */
+    public function test_an_in_stock_item_can_be_added_when_an_existing_lines_product_is_below_zero(): void
+    {
+        $this->actingAsRole('super_admin');
+        $order = $this->confirmedOrderWith($this->inStock);
+        $wooSale = new StockMovement(['product_id' => $this->inStock->id, 'type' => 'sale', 'quantity' => 12, 'note' => 'WooCommerce sale']);
+        $wooSale->allowNegativeStock = true;
+        $wooSale->save();
+        $this->assertSame(-3, $this->inStock->refresh()->stock);
+        $this->outOfStock->setStockFromProductForm(10);
+
+        $this->editWithNewItem($order, $this->outOfStock)
+            ->call('save')
+            ->assertActionNotMounted('stockShortage')
+            ->assertHasNoFormErrors();
+
+        Notification::assertNotNotified(__('The order could not be saved'));
+        $this->assertSame(2, $order->items()->count());
+        $this->assertSame(9, $this->outOfStock->refresh()->stock);
+        $this->assertSame(-3, $this->inStock->refresh()->stock);
+    }
+
+    public function test_adding_an_out_of_stock_item_while_editing_offers_to_add_stock(): void
+    {
+        $this->actingAsRole('super_admin');
+        $order = $this->confirmedOrderWith($this->inStock);
+
+        $this->editWithNewItem($order, $this->outOfStock, 2)
+            ->call('save')
+            ->assertActionMounted('stockShortage')
+            ->setActionData(['add' => ['p'.$this->outOfStock->id.'v0' => 2]])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $this->assertSame(2, $order->items()->count());
+        $this->assertSame(0, $this->outOfStock->refresh()->stock);
+        $this->assertSame(9, $this->inStock->refresh()->stock);
+        $this->assertTrue(StockMovement::query()
+            ->where('product_id', $this->outOfStock->id)
+            ->where('type', 'adjustment')
+            ->where('note', 'Added while editing invoice '.$order->order_number)
+            ->exists());
+    }
+
+    public function test_the_edit_popup_asks_only_for_stock_beyond_what_the_order_already_took(): void
+    {
+        $this->actingAsRole('super_admin');
+        // 10 in stock, the order takes 4: raising it to 15 needs 11 more, 6 are left.
+        $order = $this->confirmedOrderWith($this->inStock, 4);
+
+        $component = Livewire::test(EditOrder::class, ['record' => $order->getRouteKey()]);
+        $itemKey = array_key_first($component->get('data.items'));
+
+        $component
+            ->set("data.items.{$itemKey}.quantity", 15)
+            ->call('save')
+            ->assertActionMounted('stockShortage')
+            ->assertSchemaStateSet(['add' => ['p'.$this->inStock->id.'v0' => 5]], 'mountedActionSchema0')
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $this->assertSame(15, $order->items()->sole()->quantity);
+        $this->assertSame(0, $this->inStock->refresh()->stock);
+    }
+
+    public function test_adding_stock_to_a_product_below_zero_is_allowed(): void
+    {
+        $sale = new StockMovement(['product_id' => $this->outOfStock->id, 'type' => 'sale', 'quantity' => 12, 'note' => 'WooCommerce sale']);
+        $sale->allowNegativeStock = true;
+        $sale->save();
+
+        StockMovement::query()->create(['product_id' => $this->outOfStock->id, 'type' => 'purchase', 'quantity' => 10]);
+
+        $this->assertSame(-2, $this->outOfStock->refresh()->stock);
     }
 }

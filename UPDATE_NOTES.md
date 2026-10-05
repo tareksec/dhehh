@@ -2,6 +2,27 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-05 - Adding items after an order is created + Upsell tag
+
+Reason — owner reported (in Bangla) that after an order is created, no new item can be added: it errors with "no stock", no popup appears, and adding 10 pcs of stock to the product did not help. They also asked that an item added after the order is created be saved as an **upsell**, with the tag shown only in the dashboard, never to the customer.
+
+Cause (reproduced in a test): every item save re-syncs *all* of the order's sale movements, and `StockMovementService::validate()` re-checked each one against current stock. When an existing line's product had gone below zero (a WooCommerce sale is never blocked), that unchanged line failed — so adding any item, even one with plenty of stock, was refused, and adding stock to the *new* item's product could not help. Separately, a purchase/adjustment that raised a below-zero product but left it still below zero was refused too. The popup existed on Create order only.
+
+What changed:
+- `StockMovementService::validate()`: negative stock blocks a movement only when it lowers stock compared with what it booked before (`takesStock()`). Unchanged/decreased order lines and stock additions pass.
+- `OrderStockCheckService::shortages()` takes the saved order and only asks for stock beyond what the order already took; `short` now also covers stock already below zero (before, the popup could add too little).
+- New trait `Pages/Concerns/HandlesStockShortages.php` holds the "Not enough stock" popup; `CreateOrder` and now `EditOrder` (`beforeSave`) use it. On edit it shows "Adding · In stock · Short by" and the button **Add stock and save order**. Not shown for WooCommerce orders or draft orders.
+- Upsell: migration adds `order_items.is_upsell`; the items repeater marks rows created on the edit page as upsell; an **Upsell** badge shows under the product on the order edit and view pages. Invoice/PDF/storefront/customer account do not read it.
+- 3 new lang keys in `lang/en.json` and `lang/bn.json`.
+
+My decisions (say if you want different): "after creation" = added on the admin Edit order page (WooCommerce re-syncs, the reseller portal and the storefront never mark upsell); editing an existing line's quantity does not make it an upsell; the tag is not shown in the reseller portal either; no upsell report/filter was added; the **Change status** (draft → confirmed) action still shows its existing stock error, not the popup.
+
+Needs Bangla review: "Upsell" (আপসেল), "Adding: … Short by" (যোগ হচ্ছে … কম আছে), "Add stock and save order" (স্টক যোগ করে অর্ডার সেভ করুন).
+
+Tests: `OrderStockShortageTest` (11, 4 new + 1 changed: raising a quantity above stock on edit now opens the popup) and new `OrderUpsellTest` (6) pass, plus `TranslationParityTest`. Full `php artisan test` (plain, no `--env`) in the cloud session after `npm run build`: 1523 passed, 1 skipped, 166 failed — every failure is "The intl PHP extension is required" (this session's stand-in PHP 8.4 has no intl; same 166 as the 2026-10-03 cloud run), none in the changed files. Re-run the full suite locally before release.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-05).
+
 ## 2026-10-05 - Two-item orders not saving + "Not enough stock" popup
 
 Reason — owner asked (in Bangla) why an order with two items does not get placed, and asked for a warning popup with an option to add stock when a product is out of stock on submit.

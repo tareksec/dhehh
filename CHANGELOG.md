@@ -4,6 +4,21 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **Items could not be added to an order after it was created.** On a confirmed order, adding an item failed with "Insufficient stock" — even after stock was added to the new item's product. The block came from one of the order's *existing* items: when that product's stock had gone below zero (for example after a WooCommerce sale, which is never blocked), every save re-checked the unchanged line and refused it. Lines whose quantity does not go up are no longer blocked, and adding stock to a product that is below zero is no longer refused either; only stock actually being taken out must be available.
+
+### Added
+
+- **"Not enough stock" popup when editing an order.** Raising a quantity or adding an item on a confirmed / processing / completed order now shows the same popup as Create order when something is short, asking only for the stock beyond what the order already took ("Adding · In stock · Short by"). **Add stock and save order** adds the stock and saves. If a product is already below zero, the popup asks for enough to cover that too. WooCommerce orders are never stopped. In English and Bangla.
+- **Upsell tag.** An item added to an order after it was created is saved as an upsell and shows an **Upsell** badge under the product on the order's edit and view pages. The tag is admin-only — the invoice, PDF, storefront tracking and the customer's account do not show it.
+
+### Technical Notes
+
+- `StockMovementService::validate()` blocks negative stock only when the movement lowers stock compared with what it booked before (new `takesStock()`). `OrderStockCheckService::shortages()` takes the saved order and subtracts its booked sale quantities; `short` now covers stock already below zero. Popup moved from `CreateOrder` into the new `Pages/Concerns/HandlesStockShortages` trait, used by `CreateOrder::beforeCreate()` and `EditOrder::beforeSave()`. Migration `2026_10_05_100000_add_is_upsell_to_order_items_table` adds `order_items.is_upsell` (boolean, default false); the order form's items repeater sets it on rows created on the edit page. New `OrderUpsellTest` (6 tests); `OrderStockShortageTest` now 11 tests.
+
 ## [2.47.0] - 2026-10-05
 
 **Release type:** Minor Feature Update

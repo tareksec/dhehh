@@ -768,5 +768,8 @@
     "Add stock and place order": "Add stock and place order",
     "Back to order": "Back to order",
     "Stock added": "Stock added",
-    "The order could not be saved": "The order could not be saved"
+    "The order could not be saved": "The order could not be saved",
+    "Upsell": "Upsell",
+    "Adding: :ordered · In stock: :available · Short by: :short": "Adding: :ordered · In stock: :available · Short by: :short",
+    "Add stock and save order": "Add stock and save order"
 }

@@ -768,5 +768,8 @@
     "Add stock and place order": "স্টক যোগ করে অর্ডার প্লেস করুন",
     "Back to order": "অর্ডারে ফিরে যান",
     "Stock added": "স্টক যোগ হয়েছে",
-    "The order could not be saved": "অর্ডারটি সেভ করা যায়নি"
+    "The order could not be saved": "অর্ডারটি সেভ করা যায়নি",
+    "Upsell": "আপসেল",
+    "Adding: :ordered · In stock: :available · Short by: :short": "যোগ হচ্ছে: :ordered · স্টকে আছে: :available · কম আছে: :short",
+    "Add stock and save order": "স্টক যোগ করে অর্ডার সেভ করুন"
 }
