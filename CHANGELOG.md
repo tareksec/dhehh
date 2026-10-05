@@ -21,6 +21,21 @@ All notable production changes to Business Dashboard are documented here.
 - Migration `2026_10_05_100000_add_reseller_own_courier_to_orders_table`: `orders.reseller_own_courier`, `reseller_courier_name`, `reseller_parcel_id`, `reseller_parcel_packed_at` (+ index on reseller and parcel ID). Run migrations on deploy.
 - The advance is a manual `StorefrontPayment` with the new purpose `reseller_advance` (`Order::resellerAdvancePayment()`); new `App\Services\ResellerOwnCourierService` (submit, verify, reject, mark packed). `ResellerOrderPlacementService::place()` takes an optional own-courier array. Own-courier orders get no default courier provider and skip the courier fraud check. Tests: `ResellerOwnCourierOrderTest`.
 
+## [2.47.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **Orders with two or more items would not save.** When a confirmed (or processing / completed) order had an item that was out of stock, saving did nothing visible: the "Insufficient stock" error had no field to show on, and the order was left half-saved with only some of its stock taken out. The order is now saved all-or-nothing, and a stock error while saving or editing an order is shown as a message.
+
+### Added
+
+- **"Not enough stock" popup on Create order.** Placing a confirmed / processing / completed order now checks every item first. If any product (or variation) is short, a popup lists each one with how many were ordered, how many are in stock and how many are missing. Staff who can add stock can type how many to add (at least the missing amount) and press **Add stock and place order** — the stock is added as a stock adjustment ("Stock added from the order form") and the order is placed. Others see the list and go back to change the items. Draft orders do not take stock out, so they are saved without the popup. In English and Bangla.
+
+### Technical Notes
+
+- New `App\Services\OrderStockCheckService` (`shortages()` totals lines per product + variant like `OrderWorkflowService::syncStockMovements()`; `addStock()` books an `adjustment` movement). `CreateOrder::beforeCreate()` mounts the `stockShortage` action and halts. `CreateOrder` and `EditOrder` now use database transactions and the new `ReportsStockErrors` trait. New `OrderStockShortageTest` (7 tests). No migrations.
 ## [2.46.0] - 2026-10-04
 
 **Release type:** Minor Feature Update

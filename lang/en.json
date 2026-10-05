@@ -804,5 +804,14 @@
     "The courier did not answer. Check its login on Courier → Providers, then refresh.": "The courier did not answer. Check its login on Courier → Providers, then refresh.",
     "Your store history": "Your store history",
     "Returned": "Returned",
-    "This number has not ordered from your store yet.": "This number has not ordered from your store yet."
+    "This number has not ordered from your store yet.": "This number has not ordered from your store yet.",
+    "Not enough stock": "Not enough stock",
+    "Some products in this order are out of stock or short. Add the missing stock to place the order, or go back and change the items.": "Some products in this order are out of stock or short. Add the missing stock to place the order, or go back and change the items.",
+    "Some products in this order are out of stock or short. You do not have permission to add stock — ask an inventory manager, or go back and change the items.": "Some products in this order are out of stock or short. You do not have permission to add stock — ask an inventory manager, or go back and change the items.",
+    "Ordered: :ordered · In stock: :available · Short by: :short": "Ordered: :ordered · In stock: :available · Short by: :short",
+    "pcs to add": "pcs to add",
+    "Add stock and place order": "Add stock and place order",
+    "Back to order": "Back to order",
+    "Stock added": "Stock added",
+    "The order could not be saved": "The order could not be saved"
 }
