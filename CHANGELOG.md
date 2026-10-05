@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.49.0] - 2026-10-05
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -25,7 +27,6 @@ All notable production changes to Business Dashboard are documented here.
 - No migration and no new model. Payment `ref` and order `token` are HMACs of the payment/order id and company derived from `APP_KEY` (rotating `APP_KEY` invalidates links already sent to customers). `return_url`/`cancel_url` must be https on the company's `nextjs_site_domain` (localhost allowed only in `local`/`testing`). Visitor IP comes from the website (`client_ip`); without it IP rules are skipped.
 - Tests: new `StorefrontApiCheckoutTest` (26) and a deal-rule case in `StorefrontApiTest`; the existing Blade checkout, payment and policy tests pass unchanged.
 - 32 new translation keys in `lang/en.json` and `lang/bn.json`.
-
 ## [2.48.0] - 2026-10-05
 
 **Release type:** Minor Feature Update
