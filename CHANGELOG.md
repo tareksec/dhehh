@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.48.0] - 2026-10-05
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -22,7 +24,6 @@ All notable production changes to Business Dashboard are documented here.
 - New `App\Filament\Reseller\Pages\Auth\ForgotPassword` (extends Filament's `RequestPasswordReset`, both steps on one page) registered with `->passwordReset()` on the reseller panel; reuses `CustomerAccountService::sendPasswordResetCode()` / `resetPassword()`. Filament's e-mailed link is not used. Tests: `ResellerPortalPasswordResetTest` (includes a run through the real portal Livewire endpoint).
 - Migration `2026_10_05_100000_add_reseller_own_courier_to_orders_table`: `orders.reseller_own_courier`, `reseller_courier_name`, `reseller_parcel_id`, `reseller_parcel_packed_at` (+ index on reseller and parcel ID). Run migrations on deploy.
 - The advance is a manual `StorefrontPayment` with the new purpose `reseller_advance` (`Order::resellerAdvancePayment()`); new `App\Services\ResellerOwnCourierService` (submit, verify, reject, mark packed). `ResellerOrderPlacementService::place()` takes an optional own-courier array. Own-courier orders get no default courier provider and skip the courier fraud check. Tests: `ResellerOwnCourierOrderTest`.
-
 ## [2.47.0] - 2026-10-05
 
 **Release type:** Minor Feature Update
