@@ -2,6 +2,38 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-04 - Headless Next.js storefront, phase 2 (quote / checkout / payment)
+
+Reason — owner asked "ধাপ ২ শুরু কর" and decided how a live Collection deal price combines with wholesale tier prices: **the deal price wins** ("ডিল-প্রাইসই কার্যকর").
+
+What changed (ERP, this repo):
+- **Shared checkout service.** `App\Services\StorefrontCheckoutService::process()` now holds every rule the Blade checkout applied (contact rules/normalising, delivery area + fee, VAT, checkout policy, pre-order / new-customer-delivery / courier-risk advance, full online payment, COD, manual send-money, stock check, order creation). `Storefront\CheckoutController` only builds the signed return URLs and handles the session/redirects; behaviour is unchanged (all existing checkout tests pass). `CheckoutOutcome` is the result object; `StorefrontCheckoutPolicyService::evaluate()` takes an optional visitor IP.
+- **Checkout API** in `routes/api.php` (`v1/storefront`, same key + Next.js switch, now with `ForceJsonResponse`): `POST checkout/quote`, `POST checkout`, `POST checkout/payments/{payment}/finalize`, `GET orders/{order_number}?token=`. `Api\V1\StorefrontCheckoutController`, `StorefrontApiCartResolver` (slug + variation + quantity → priced lines, every adjustment reported as an `issue`), `Support\StorefrontApi\{Signing,OrderSummary}`. Contract: `docs/api/storefront-api.md` §5.
+- **Price rule (decided):** variation price → live deal price → wholesale tier → selling price; a deal not lower than the selling price is ignored and variations never get a product-level deal (`StorefrontCatalogService::unitPrice()/dealFor()`; the API card's `deal` follows the same rule).
+- Safety: price/total never read from the browser (`expected_total` guard → 409 `price_changed`); idempotency by `client_request_id` + lock; return/cancel URLs must be https on `nextjs_site_domain`; the order is created only after the gateway verifies; payment `ref` / order `token` are HMACs (unguessable); visitor IP is forwarded by the website and never replaced by the Next.js server's IP; `StorefrontMetaTrackingService::contextFromClient()` is consent-aware.
+- Docs: `docs/api/storefront-api.md`, `PROJECT_GUIDE.md`, `CHANGELOG.md`, `CLAUDE.md`. No migration, no new model, no new translation key in this repo (API messages are developer-facing English like phase 1).
+- Tests: `StorefrontApiCheckoutTest` (26: gate, JSON errors, deal > tier > selling, ignored client prices, variations, MOQ/stock issues, delivery/VAT/payment options, COD order, price change, retry idempotency, visitor IP, policy block, manual payment, PayStation preorder/new-customer/courier-risk/full online payment with `Http::fake`, finalize once, return URL host rules, order token, cross-company isolation) and a deal-rule case in `StorefrontApiTest`.
+
+What changed (website repo `bhd4232/zamzamint-new-website-theme`):
+- `/checkout` (live ERP quote, address → delivery area, payment methods incl. send-money fields, advance notice and "Pay now" step, stale-cart fix button), `/checkout/payment/return` (finalizes on the server), `/checkout/success` (order summary by number + token; clears the cart), proxy routes `/api/checkout` and `/api/checkout/quote` (whitelist of browser fields, visitor IP via `TRUSTED_PROXY_HOPS`, per-IP rate limits, fixed return/cancel URLs from `SITE_URL`), cart drawer "Proceed to checkout" enabled, ~65 new interface strings in Bangla + English, mobile header no longer overflows at 390px.
+
+Verification:
+- ERP: full `php artisan test` (no `--env`) — **1693 passed, 0 failed** (12,461 assertions; 1666 before this phase + 27 new). The 376 Blade checkout/payment/policy tests were also run on their own right after the refactor. `vendor/bin/pint --test` is clean on the touched PHP files.
+- End to end on a **disposable** SQLite database (no seeder / `demo:refresh` / `migrate:fresh`): ERP `artisan serve` + `next start` + headless Chromium. COD order with a deal price and a 12-pcs tier price (ERP order 11,060 = 10,990 + 70, items priced server-side), double-click placed one order, inside/outside Dhaka detected from the address, send-money requires sender number + trx id and is recorded, pre-order advance with no gateway blocks the button with a clear message, stale quantity reported and fixed in one click, a spoofed `price` / `client_ip` / `return_url` from curl is ignored (409 `price_changed`), wrong success-token shows "not found", Bangla page, no horizontal scroll at 390px, ERP key absent from `.next/static`. Hosted-gateway flows (PayStation/ZiniPay) are covered by PHPUnit with `Http::fake`, not by a live gateway.
+- Website: `npm run typecheck` and `npm run build` pass (needs no ERP).
+
+My decisions (say if you want different):
+- When an advance is required, the customer first sees a "Pay ৳X now" step (with the owner's own message) instead of being redirected silently; clicking it opens the gateway. Retrying the same form returns the same payment.
+- The order-success link is `/checkout/success?order=…&token=…`; it empties the cart only if the order is less than 30 minutes old.
+- Order status/ERP-internal fields are never shown to customers; payment-method names, instructions and the advance messages are shown exactly as the admin entered them (not translated).
+- ERP API validation/policy messages are English (developer-facing), so a policy block shows the ERP's English sentence to the customer; translating those is part of the admin-content translation plan, not done here.
+
+Not done / needs a decision: customer login, order tracking, review submission (phase 3); DNS cut-over on Coolify (phase 4); Meta pixel / conversion events for the Next.js site (the API accepts `meta`, the website sends none and has no consent banner); a live PayStation/ZiniPay run (needs real credentials); OpenAPI file still does not describe the storefront endpoints; `TRUSTED_PROXY_HOPS` must be set correctly on Coolify (1 behind Traefik only, 2 behind Cloudflare + Traefik) or the visitor IP used by the policy rules is wrong.
+
+Needs Bangla review: the checkout / payment-return / success strings in the website's `src/i18n/messages.ts` (keys `checkout.*`, `payment_return.*`, `success.*`).
+
+Commit status: committed and pushed on owner approval ("কমিট এবং পুশ কর", 2026-10-05) — both repos (ERP `Business-Dashboard` and `zamzamint-new-website-theme`), branch `claude/loving-mendel-adxwam`.
+
 ## 2026-10-03 - Headless Next.js storefront, phase 1 (read-only catalog API + website wiring)
 
 Reason — owner asked to connect the rebuilt zamzamint.com website (Next.js, no backend) to this ERP, then answered the design questions: both Blade and Next.js sites stay in the **Site → Storefront Settings** list and share its settings; Flash Sale / Trending / New Arrivals are managed as an option in **Offers**; the checkout must follow every Blade rule; Bangla + English; Coolify hosting; the frontend becomes the wholesale site. "ক) আর খ) দুটোতেই প্রস্তাবিতটা, ধাপ ১ শুরু কর".

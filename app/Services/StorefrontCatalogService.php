@@ -88,7 +88,7 @@ class StorefrontCatalogService
             'selling_price' => $salePrice ?? $price,
             'has_discount' => $hasDiscount,
             'discount_percent' => $hasDiscount ? (int) round((1 - $salePrice / $price) * 100) : 0,
-            'deal' => $this->deals()[$product->getKey()] ?? null,
+            'deal' => $this->dealFor($product),
             'stock' => $stock,
             'reorder_level' => (int) $product->reorder_level,
             // The ERP's own low-stock rule (stock <= reorder level), not a website guess.
@@ -231,7 +231,7 @@ class StorefrontCatalogService
         // Loaded once per request: collections() and deals() both need them.
         $this->live ??= Offer::query()
             ->liveCollections()
-            ->with(['items' => fn ($query) => $query->orderBy('sort_order')->orderBy('id')])
+            ->with(['items' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'), 'items.product'])
             ->get()
             ->sortBy(fn (Offer $offer): array => [
                 array_search($offer->collection_kind, array_values(self::KIND_SLUGS), true),
@@ -240,6 +240,36 @@ class StorefrontCatalogService
             ->values();
 
         return $kind ? $this->live->where('collection_kind', $kind)->values() : $this->live;
+    }
+
+    /**
+     * The live Collection deal for a product, or null. A product with variations
+     * never has one: like wholesale tiers, a deal applies to the base product
+     * price only, and a variation keeps its own price.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function dealFor(Product $product): ?array
+    {
+        return $product->has_variants ? null : ($this->deals()[$product->getKey()] ?? null);
+    }
+
+    /**
+     * The unit price the server charges for one cart line — the single price
+     * rule behind the storefront API checkout (the browser never sends a price):
+     *
+     *  1. a variation keeps its own price;
+     *  2. otherwise a live Collection deal price wins (owner decision 2026-10-04);
+     *  3. otherwise the deepest wholesale tier reached by $quantity;
+     *  4. otherwise the normal selling price.
+     */
+    public function unitPrice(Product $product, ?ProductVariant $variant, int $quantity): float
+    {
+        if ($variant) {
+            return $variant->effectiveSalePrice();
+        }
+
+        return (float) ($this->dealFor($product)['price'] ?? $product->priceForQuantity($quantity));
     }
 
     /**
@@ -259,6 +289,15 @@ class StorefrontCatalogService
         foreach ($this->liveCollections() as $offer) {
             foreach ($offer->items as $item) {
                 if ($item->deal_price === null || isset($this->deals[$item->product_id])) {
+                    continue;
+                }
+
+                // A deal must beat the normal selling price; otherwise it is a typo,
+                // and charging it would overcharge the customer.
+                $product = $item->product;
+                $normal = (float) ($product?->sale_price ?? $product?->price ?? 0);
+
+                if (! $product || (float) $item->deal_price >= $normal) {
                     continue;
                 }
 

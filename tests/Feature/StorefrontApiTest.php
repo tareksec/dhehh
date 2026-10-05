@@ -16,6 +16,8 @@ use App\Models\StorefrontSlide;
 use App\Services\CompanyContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -295,7 +297,7 @@ class StorefrontApiTest extends TestCase
         Storage::fake('public');
         $category = $this->category('Gifts');
         $path = 'companies/'.$this->company->storage_key.'/public/products/main.jpg';
-        $foreignPath = 'companies/'.\Illuminate\Support\Str::uuid().'/public/products/stolen.jpg';
+        $foreignPath = 'companies/'.Str::uuid().'/public/products/stolen.jpg';
         Storage::disk('public')->put($path, 'img');
 
         $product = $this->product('Gift Box', 'GB-1', [
@@ -428,6 +430,26 @@ class StorefrontApiTest extends TestCase
         $this->assertNull($cards['plain-item']['deal'], 'an ended collection gives no deal');
     }
 
+    public function test_a_deal_is_reported_only_when_it_really_lowers_the_price_and_never_for_variations(): void
+    {
+        $dearDeal = $this->product('Dear Deal', 'DD-1', ['price' => 600, 'sale_price' => 500]);
+        $equalDeal = $this->product('Equal Deal', 'DD-2', ['price' => 600, 'sale_price' => 500]);
+        $variable = $this->product('Variable Deal', 'DD-3', ['has_variants' => true]);
+
+        $collection = $this->collection('Deals', Offer::KIND_TRENDING, [$dearDeal, $equalDeal, $variable]);
+        $collection->items()->where('product_id', $dearDeal->getKey())->update(['deal_price' => 800]);
+        $collection->items()->where('product_id', $equalDeal->getKey())->update(['deal_price' => 500]);
+        $collection->items()->where('product_id', $variable->getKey())->update(['deal_price' => 100]);
+
+        $cards = collect($this->api('products?slugs=dear-deal,equal-deal,variable-deal')->json('data'))->keyBy('slug');
+
+        // A "deal" above or equal to the normal price is no deal (the checkout would never charge it).
+        $this->assertNull($cards['dear-deal']['deal']);
+        $this->assertNull($cards['equal-deal']['deal']);
+        // Variations keep their own price, so a product-level deal does not apply to them.
+        $this->assertNull($cards['variable-deal']['deal']);
+    }
+
     public function test_the_collection_filter_lists_only_products_of_a_live_collection_of_that_kind(): void
     {
         $inFlash = $this->product('In Flash', 'FL-1');
@@ -481,7 +503,7 @@ class StorefrontApiTest extends TestCase
 
     // --------------------------------------------------------------- helpers
 
-    protected function api(string $path, ?string $token = null): \Illuminate\Testing\TestResponse
+    protected function api(string $path, ?string $token = null): TestResponse
     {
         return $this->getJson('/api/v1/storefront/'.$path, ['Authorization' => 'Bearer '.($token ?? $this->token)]);
     }

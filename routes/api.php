@@ -3,8 +3,10 @@
 use App\Http\Controllers\Api\V1\LeadController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
+use App\Http\Controllers\Api\V1\StorefrontCheckoutController;
 use App\Http\Controllers\Api\V1\StorefrontController;
 use App\Http\Middleware\EnsureNextjsSiteEnabled;
+use App\Http\Middleware\ForceJsonResponse;
 use App\Http\Middleware\ResolveCompanyFromApiKey;
 use Illuminate\Support\Facades\Route;
 
@@ -38,7 +40,7 @@ Route::prefix('v1')
 
 /*
 |--------------------------------------------------------------------------
-| Storefront API (v1) — read-only, for the headless Next.js site
+| Storefront API (v1) — catalog and checkout, for the headless Next.js site
 |--------------------------------------------------------------------------
 |
 | Same per-company Bearer key as above, but only usable while the owner has
@@ -50,7 +52,7 @@ Route::prefix('v1')
 */
 
 Route::prefix('v1/storefront')
-    ->middleware(['throttle:storefront-api', ResolveCompanyFromApiKey::class, EnsureNextjsSiteEnabled::class])
+    ->middleware(['throttle:storefront-api', ForceJsonResponse::class, ResolveCompanyFromApiKey::class, EnsureNextjsSiteEnabled::class])
     ->group(function (): void {
         Route::get('site', [StorefrontController::class, 'site']);
         Route::get('categories', [StorefrontController::class, 'categories']);
@@ -60,4 +62,10 @@ Route::prefix('v1/storefront')
         Route::get('collections', [StorefrontController::class, 'collections']);
         Route::get('pages', [StorefrontController::class, 'pages']);
         Route::get('pages/{slug}', [StorefrontController::class, 'page']);
+
+        // Checkout (Phase 2): the ERP prices everything; see StorefrontCheckoutController.
+        Route::post('checkout/quote', [StorefrontCheckoutController::class, 'quote']);
+        Route::post('checkout', [StorefrontCheckoutController::class, 'place']);
+        Route::post('checkout/payments/{payment}/finalize', [StorefrontCheckoutController::class, 'finalizePayment']);
+        Route::get('orders/{order_number}', [StorefrontCheckoutController::class, 'order']);
     });
