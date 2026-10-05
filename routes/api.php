@@ -3,6 +3,10 @@
 use App\Http\Controllers\Api\V1\LeadController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
+use App\Http\Controllers\Api\V1\StorefrontCheckoutController;
+use App\Http\Controllers\Api\V1\StorefrontController;
+use App\Http\Middleware\EnsureNextjsSiteEnabled;
+use App\Http\Middleware\ForceJsonResponse;
 use App\Http\Middleware\ResolveCompanyFromApiKey;
 use Illuminate\Support\Facades\Route;
 
@@ -32,4 +36,36 @@ Route::prefix('v1')
         Route::get('orders/{order_number}', [OrderController::class, 'show']);
 
         Route::post('leads', [LeadController::class, 'store']);
+    });
+
+/*
+|--------------------------------------------------------------------------
+| Storefront API (v1) — catalog and checkout, for the headless Next.js site
+|--------------------------------------------------------------------------
+|
+| Same per-company Bearer key as above, but only usable while the owner has
+| switched on Site → Storefront Settings → Next.js Site (EnsureNextjsSiteEnabled).
+| Called by the Next.js *server*, never by browsers — the key must stay in the
+| server environment. Rate limited per key ("storefront-api", see
+| AppServiceProvider), not per IP, because every call comes from one server.
+| See docs/api/storefront-api.md.
+*/
+
+Route::prefix('v1/storefront')
+    ->middleware(['throttle:storefront-api', ForceJsonResponse::class, ResolveCompanyFromApiKey::class, EnsureNextjsSiteEnabled::class])
+    ->group(function (): void {
+        Route::get('site', [StorefrontController::class, 'site']);
+        Route::get('categories', [StorefrontController::class, 'categories']);
+        Route::get('products', [StorefrontController::class, 'products']);
+        Route::get('products/{slug}', [StorefrontController::class, 'product']);
+        Route::get('slides', [StorefrontController::class, 'slides']);
+        Route::get('collections', [StorefrontController::class, 'collections']);
+        Route::get('pages', [StorefrontController::class, 'pages']);
+        Route::get('pages/{slug}', [StorefrontController::class, 'page']);
+
+        // Checkout (Phase 2): the ERP prices everything; see StorefrontCheckoutController.
+        Route::post('checkout/quote', [StorefrontCheckoutController::class, 'quote']);
+        Route::post('checkout', [StorefrontCheckoutController::class, 'place']);
+        Route::post('checkout/payments/{payment}/finalize', [StorefrontCheckoutController::class, 'finalizePayment']);
+        Route::get('orders/{order_number}', [StorefrontCheckoutController::class, 'order']);
     });

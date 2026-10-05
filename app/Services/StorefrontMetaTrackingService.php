@@ -379,6 +379,33 @@ class StorefrontMetaTrackingService
         ], static fn ($value): bool => filled($value));
     }
 
+    /**
+     * The same tracking context requestContext() captures from a browser
+     * request, for the headless Next.js site: its server forwards what it
+     * read from the visitor (cookies, IP, user agent). Honours the company's
+     * consent setting — when consent is required, nothing is captured unless
+     * the visitor granted it on the website.
+     *
+     * @param  array<string, mixed>  $meta  fbp, fbc, event_source_url, consent_granted
+     */
+    public function contextFromClient(StorefrontSetting $setting, array $meta, ?string $ip, ?string $userAgent): array
+    {
+        if ($setting->meta_consent_required && ($meta['consent_granted'] ?? false) !== true) {
+            return [];
+        }
+
+        $sourceUrl = (string) ($meta['event_source_url'] ?? '');
+
+        return array_filter([
+            'client_ip_address' => filter_var($ip, FILTER_VALIDATE_IP) !== false ? $ip : null,
+            'client_user_agent' => Str::limit((string) $userAgent, 500, ''),
+            'fbp' => $this->validMetaCookie($meta['fbp'] ?? null),
+            'fbc' => $this->validMetaCookie($meta['fbc'] ?? null),
+            'event_source_url' => preg_match('#^https?://#i', $sourceUrl) === 1 ? Str::limit($sourceUrl, 500, '') : null,
+            'consent_granted' => true,
+        ], static fn ($value): bool => filled($value));
+    }
+
     public function purchasePayload(Order $order): array
     {
         $order->loadMissing('items.product');

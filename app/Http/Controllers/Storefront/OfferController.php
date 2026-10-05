@@ -56,6 +56,7 @@ class OfferController extends Controller
         $type = in_array($type, [Offer::TYPE_SINGLE, Offer::TYPE_COMBO], true) ? $type : null;
 
         $offers = Offer::query()
+            ->landingPages()
             ->published()
             ->when($type, fn ($query) => $query->where('type', $type))
             ->with('items.product')
@@ -116,6 +117,7 @@ class OfferController extends Controller
     protected function findPublishedOffer(string $slug): Offer
     {
         return Offer::query()
+            ->landingPages()
             ->where('slug', trim($slug))
             ->where('status', Offer::STATUS_PUBLISHED)
             ->firstOrFail();
@@ -124,7 +126,7 @@ class OfferController extends Controller
     /** Preview may show a Draft/Archived offer too — CompanyScope (already set by previewStorefront()) still keeps this to the previewed company only. */
     protected function findOfferForPreview(string $slug): Offer
     {
-        return Offer::query()->where('slug', trim($slug))->firstOrFail();
+        return Offer::query()->landingPages()->where('slug', trim($slug))->firstOrFail();
     }
 
     protected function domainStorefront(Request $request): array

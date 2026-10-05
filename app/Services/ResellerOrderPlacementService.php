@@ -74,16 +74,22 @@ class ResellerOrderPlacementService
     /**
      * The order's money without creating anything -- what the form shows live.
      *
+     * With $ownCourier the reseller's own courier delivers: every line is
+     * charged at the base price (the normal price when there is no wholesale
+     * rate), there is no company delivery charge and no commission -- the
+     * reseller pays this total in advance and keeps whatever their customer
+     * pays them.
+     *
      * @param  array<int, array{product_id?: mixed, quantity?: mixed, price?: mixed}>  $lines
      * @return array{items: array<int, array<string, mixed>>, subtotal: float, shipping_fee: float, vat: float, total: float, commission: float}
      */
-    public function quote(Customer $reseller, array $lines, string $address): array
+    public function quote(Customer $reseller, array $lines, string $address, bool $ownCourier = false): array
     {
-        $items = $this->resolveLines($reseller, $lines);
+        $items = $this->resolveLines($reseller, $lines, $ownCourier);
         $setting = $reseller->company->storefrontSetting;
         $subtotal = round($items->sum('subtotal'), 2);
-        $area = $this->deliveryAreas->resolve($address, $setting);
-        $fee = (float) $this->delivery->quote($items, $area, $setting)['fee'];
+        $area = $ownCourier ? null : $this->deliveryAreas->resolve($address, $setting);
+        $fee = $ownCourier ? 0.0 : (float) $this->delivery->quote($items, $area, $setting)['fee'];
         $vat = $setting->vatAmountForItems($items);
 
         return [
@@ -100,31 +106,49 @@ class ResellerOrderPlacementService
     }
 
     /**
+     * $ownCourier (courier_name, parcel_id, payment_method_id, sender,
+     * transaction_id) sends the order with the reseller's own courier and
+     * records their advance payment -- see ResellerOwnCourierService.
+     *
      * @param  array{name: string, phone: string, address: string, note?: ?string}  $buyer
      * @param  array<int, array{product_id?: mixed, quantity?: mixed, price?: mixed}>  $lines
+     * @param  array{courier_name?: ?string, parcel_id: string, payment_method_id: mixed, sender: string, transaction_id: string}|null  $ownCourier
      */
-    public function place(Customer $reseller, array $buyer, array $lines): Order
+    public function place(Customer $reseller, array $buyer, array $lines, ?array $ownCourier = null): Order
     {
         abort_unless($reseller->isApprovedReseller(), 403);
 
-        $quote = $this->quote($reseller, $lines, $buyer['address']);
+        $quote = $this->quote($reseller, $lines, $buyer['address'], $ownCourier !== null);
 
-        return DB::transaction(function () use ($reseller, $buyer, $quote): Order {
+        if ($ownCourier !== null) {
+            $this->validateOwnCourier($reseller, $ownCourier);
+        }
+
+        return DB::transaction(function () use ($reseller, $buyer, $quote, $ownCourier): Order {
             $customer = $this->buyer($buyer);
+            $payment = $ownCourier === null
+                ? 'Payment method: Cash on delivery'
+                : 'Payment method: Full advance by the reseller (reseller\'s own courier)';
 
             $order = Order::query()->create([
                 'customer_id' => $customer->getKey(),
                 'reseller_customer_id' => $reseller->getKey(),
+                'reseller_own_courier' => $ownCourier !== null,
+                'reseller_courier_name' => filled($ownCourier['courier_name'] ?? null) ? trim($ownCourier['courier_name']) : null,
+                'reseller_parcel_id' => $ownCourier !== null ? trim($ownCourier['parcel_id']) : null,
                 'customer_name' => $customer->name,
                 'order_date' => now()->toDateString(),
                 'discount' => 0,
                 'vat' => $quote['vat'],
-                'shipping_zone' => $quote['delivery_area'],
+                // A non-null zone stops Order::creating() from adding the
+                // company's delivery charge to an own-courier order.
+                'shipping_zone' => $ownCourier !== null ? '' : $quote['delivery_area'],
                 'shipping_fee' => $quote['shipping_fee'],
                 'paid_amount' => 0,
                 'status' => 'draft',
                 'source' => Order::SOURCE_RESELLER_PORTAL,
-                'note' => trim("Reseller portal order\nDelivery address: {$buyer['address']}\nPayment method: Cash on delivery"
+                'note' => trim("Reseller portal order\nDelivery address: {$buyer['address']}\n{$payment}"
+                    .($ownCourier !== null ? "\nReseller's courier: ".(trim((string) ($ownCourier['courier_name'] ?? '')) ?: '-').', parcel ID: '.trim($ownCourier['parcel_id']) : '')
                     .(filled($buyer['note'] ?? null) ? "\nCustomer note: {$buyer['note']}" : '')),
             ]);
 
@@ -139,10 +163,54 @@ class ResellerOrderPlacementService
                 ]);
             }
 
+            $order->refresh();
+
+            if ($ownCourier !== null) {
+                // Paid in advance and delivered by the reseller's courier, so
+                // there is no cash-on-delivery risk to check.
+                app(ResellerOwnCourierService::class)->submitPayment($order, $ownCourier);
+
+                return $order;
+            }
+
             CheckExternalCourierFraudJob::dispatch($order->getKey())->afterCommit();
 
-            return $order->refresh();
+            return $order;
         });
+    }
+
+    /**
+     * @param  array{courier_name?: ?string, parcel_id?: mixed, payment_method_id?: mixed, sender?: mixed, transaction_id?: mixed}  $ownCourier
+     */
+    protected function validateOwnCourier(Customer $reseller, array $ownCourier): void
+    {
+        $service = app(ResellerOwnCourierService::class);
+        $errors = [];
+        $parcelId = trim((string) ($ownCourier['parcel_id'] ?? ''));
+
+        if ($parcelId === '') {
+            $errors['data.parcel_id'] = __('Enter the parcel ID from your courier.');
+        } elseif ($service->parcelIdIsTaken((int) $reseller->getKey(), $parcelId)) {
+            $errors['data.parcel_id'] = __('This parcel ID is already on another of your orders.');
+        }
+
+        $methodId = (int) ($ownCourier['payment_method_id'] ?? 0);
+
+        if (! $service->paymentMethods($reseller->company)->contains(fn ($method): bool => (int) $method->getKey() === $methodId)) {
+            $errors['data.payment_method_id'] = __('Choose how you paid.');
+        }
+
+        if (trim((string) ($ownCourier['sender'] ?? '')) === '') {
+            $errors['data.sender'] = __('Enter the number or account you paid from.');
+        }
+
+        if (trim((string) ($ownCourier['transaction_id'] ?? '')) === '') {
+            $errors['data.transaction_id'] = __('Enter the transaction ID.');
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 
     /**
@@ -152,7 +220,7 @@ class ResellerOrderPlacementService
      * @param  array<int, array{product_id?: mixed, quantity?: mixed, price?: mixed}>  $lines
      * @return \Illuminate\Support\Collection<int, array<string, mixed>>
      */
-    public function resolveLines(Customer $reseller, array $lines): \Illuminate\Support\Collection
+    public function resolveLines(Customer $reseller, array $lines, bool $ownCourier = false): \Illuminate\Support\Collection
     {
         $catalog = $this->catalog($reseller)->keyBy('id');
         $errors = [];
@@ -191,6 +259,21 @@ class ResellerOrderPlacementService
             }
 
             $base = $this->basePrice($reseller, $product);
+
+            if ($ownCourier) {
+                // The reseller pays the company's price; no commission line.
+                $price = round($base ?? $product->baseSellingPrice(), 2);
+                $items->push([
+                    'product' => $product,
+                    'quantity' => $quantity,
+                    'unit_price' => $price,
+                    'reseller_base_price' => null,
+                    'subtotal' => round($price * $quantity, 2),
+                ]);
+
+                continue;
+            }
+
             $price = $this->defaultPrice($reseller, $product);
 
             if ($base !== null && filled($line['price'] ?? null)) {

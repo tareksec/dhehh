@@ -5,11 +5,16 @@ namespace App\Filament\Reseller\Pages;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\ResellerCommission;
+use App\Models\StorefrontPaymentMethod;
+use App\Services\ResellerOwnCourierService;
 use App\Support\MoneyFormatter;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -35,7 +40,7 @@ class Orders extends Page implements HasTable
 
     protected string $view = 'filament.reseller.pages.orders';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 2;
 
     public static function getNavigationLabel(): string
     {
@@ -54,6 +59,17 @@ class Orders extends Page implements HasTable
         return __('Orders');
     }
 
+    /** @return array<int, Action> */
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('createOrder')
+                ->label(__('Create order'))
+                ->icon(Heroicon::OutlinedPlusCircle)
+                ->url(CreateOrder::getUrl()),
+        ];
+    }
+
     public function reseller(): Customer
     {
         /** @var Customer $customer */
@@ -67,7 +83,7 @@ class Orders extends Page implements HasTable
         $currency = $this->reseller()->company?->currency ?: 'BDT';
 
         return $table
-            ->query(fn (): Builder => $this->reseller()->resellerOrders()->getQuery()->with(['customer', 'resellerCommission']))
+            ->query(fn (): Builder => $this->reseller()->resellerOrders()->getQuery()->with(['customer', 'resellerCommission', 'resellerAdvancePayment']))
             ->columns([
                 TextColumn::make('order_number')
                     ->label(__('Order'))
@@ -110,13 +126,21 @@ class Orders extends Page implements HasTable
                         default => 'gray',
                     }),
 
+                TextColumn::make('reseller_parcel_id')
+                    ->label(__('Parcel ID'))
+                    ->placeholder('—')
+                    ->searchable()
+                    ->description(fn (Order $record): ?string => $record->reseller_own_courier
+                        ? ($record->reseller_parcel_packed_at ? __('Packed') : ResellerOwnCourierService::paymentStateLabels()[app(ResellerOwnCourierService::class)->paymentState($record)])
+                        : null),
+
                 TextColumn::make('commission')
                     ->label(__('Commission'))
                     ->state(function (Order $record) use ($currency): string {
                         $commission = $record->resellerCommission;
 
                         if (! $commission) {
-                            return '—';
+                            return $record->reseller_own_courier ? __('None (own courier)') : '—';
                         }
 
                         return MoneyFormatter::currency($commission->amount, $currency)
@@ -139,12 +163,47 @@ class Orders extends Page implements HasTable
                         ->when($data['until'] ?? null, fn (Builder $q, string $date): Builder => $q->whereDate('order_date', '<=', $date))),
             ])
             ->recordActions([
+                Action::make('resendPayment')
+                    ->label(__('Send payment again'))
+                    ->icon(Heroicon::OutlinedBanknotes)
+                    ->color('warning')
+                    ->visible(fn (Order $record): bool => $record->reseller_own_courier
+                        && app(ResellerOwnCourierService::class)->paymentState($record) === 'rejected'
+                        && $record->status !== Order::STATUS_CANCELLED)
+                    ->modalDescription(fn (Order $record): string => __('Your last payment was not accepted. Send :amount and enter the new payment details.', [
+                        'amount' => MoneyFormatter::currency($record->total_amount, $currency),
+                    ]))
+                    ->schema(fn (): array => [
+                        Select::make('payment_method_id')
+                            ->label(__('Paid to'))
+                            ->options(app(ResellerOwnCourierService::class)->paymentMethods($this->reseller()->company)
+                                ->mapWithKeys(fn (StorefrontPaymentMethod $method): array => [
+                                    $method->getKey() => trim($method->name.($method->account_number ? ' — '.$method->account_number : '')),
+                                ])->all())
+                            ->required(),
+                        TextInput::make('sender')
+                            ->label(__('Paid from (number or account)'))
+                            ->required()
+                            ->maxLength(40),
+                        TextInput::make('transaction_id')
+                            ->label(__('Transaction ID'))
+                            ->required()
+                            ->maxLength(100),
+                    ])
+                    ->action(function (Order $record, array $data): void {
+                        abort_unless((int) $record->reseller_customer_id === (int) $this->reseller()->getKey(), 403);
+
+                        app(ResellerOwnCourierService::class)->submitPayment($record, $data, 'mountedActions.0.data.');
+
+                        Notification::make()->title(__('Payment sent. The store will check it.'))->success()->send();
+                    }),
+
                 Action::make('view')
                     ->label(__('View'))
                     ->icon(Heroicon::OutlinedEye)
                     ->modalHeading(fn (Order $record): string => $record->order_number)
                     ->modalContent(fn (Order $record) => view('filament.reseller.pages.partials.order-detail', [
-                        'order' => $record->load(['items.product', 'statusTransitions' => fn ($q) => $q->orderBy('created_at'), 'resellerCommission']),
+                        'order' => $record->load(['items.product', 'statusTransitions' => fn ($q) => $q->orderBy('created_at'), 'resellerCommission', 'resellerAdvancePayment.paymentMethod']),
                         'currency' => $currency,
                     ]))
                     ->modalWidth('2xl')

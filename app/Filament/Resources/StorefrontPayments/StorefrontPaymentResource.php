@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\StorefrontPayments;
 
 use App\Filament\Clusters\Storefront;
+use App\Filament\Resources\Orders\OrderResource;
 use App\Filament\Resources\StorefrontPayments\Pages\ListStorefrontPayments;
 use App\Models\StorefrontPayment;
 use BackedEnum;
@@ -44,6 +45,7 @@ class StorefrontPaymentResource extends Resource
                         StorefrontPayment::PURPOSE_CHECKOUT_ADVANCE => 'Checkout advance',
                         StorefrontPayment::PURPOSE_NEW_CUSTOMER_DELIVERY => 'New customer delivery',
                         StorefrontPayment::PURPOSE_PREORDER_ADVANCE => 'Pre-order advance',
+                        StorefrontPayment::PURPOSE_RESELLER_ADVANCE => __('Reseller advance (own courier)'),
                         default => 'Order payment',
                     }),
                 TextColumn::make('gateway')
@@ -96,11 +98,19 @@ class StorefrontPaymentResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
+                // A reseller's advance is checked on the order itself, where
+                // verifying also records it in the order's Payments History.
+                Action::make('openResellerOrder')
+                    ->label(__('Check on order'))
+                    ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
+                    ->visible(fn (StorefrontPayment $record): bool => $record->purpose === StorefrontPayment::PURPOSE_RESELLER_ADVANCE && $record->order_id !== null)
+                    ->url(fn (StorefrontPayment $record): string => OrderResource::getUrl('view', ['record' => $record->order_id])),
                 Action::make('verify')
                     ->label('Verify')
                     ->color('success')
                     ->icon(Heroicon::OutlinedCheck)
                     ->visible(fn (StorefrontPayment $record): bool => $record->status === StorefrontPayment::STATUS_PENDING
+                        && $record->purpose !== StorefrontPayment::PURPOSE_RESELLER_ADVANCE
                         && in_array($record->gateway, ['manual', 'manual_bkash', 'manual_nagad'], true))
                     ->requiresConfirmation()
                     ->action(function (StorefrontPayment $record): void {
@@ -112,6 +122,7 @@ class StorefrontPaymentResource extends Resource
                     ->color('danger')
                     ->icon(Heroicon::OutlinedXMark)
                     ->visible(fn (StorefrontPayment $record): bool => $record->status === StorefrontPayment::STATUS_PENDING
+                        && $record->purpose !== StorefrontPayment::PURPOSE_RESELLER_ADVANCE
                         && in_array($record->gateway, ['manual', 'manual_bkash', 'manual_nagad'], true))
                     ->requiresConfirmation()
                     ->action(function (StorefrontPayment $record): void {

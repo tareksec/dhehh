@@ -30,6 +30,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -72,6 +73,13 @@ class OrdersTable
                     ->placeholder('-')
                     ->copyable()
                     ->toggleable(),
+
+                TextColumn::make('reseller_parcel_id')
+                    ->label(__('Reseller parcel ID'))
+                    ->placeholder('-')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('order_date')
                     ->label('Sale Date')
@@ -170,6 +178,9 @@ class OrdersTable
 
                 SelectFilter::make('source')
                     ->options(Order::SOURCES),
+
+                TernaryFilter::make('reseller_own_courier')
+                    ->label(__('Reseller\'s own courier')),
 
                 SelectFilter::make('customer_id')
                     ->label('Customer')
@@ -769,7 +780,9 @@ class OrdersTable
 
     protected static function canBookCourier(Order $record): bool
     {
-        return $record->delivery_status === CourierBooking::STATUS_NOT_BOOKED
+        // A reseller's own-courier order is carried by their courier, never booked here.
+        return ! $record->reseller_own_courier
+            && $record->delivery_status === CourierBooking::STATUS_NOT_BOOKED
             && app(CompanyContext::class)->hasCompany()
             && (int) app(CompanyContext::class)->id() === (int) $record->company_id;
     }

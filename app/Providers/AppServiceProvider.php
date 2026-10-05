@@ -59,9 +59,12 @@ use Filament\Notifications\Livewire\Notifications;
 use Filament\Tables\Columns\Summarizers\Summarizer;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
@@ -80,6 +83,16 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // The headless Next.js storefront reads the catalog from ONE server, so
+        // the default per-IP limiter would put every visitor in a single bucket.
+        // Bucket by the presented API token instead (this runs before the key is
+        // resolved, so a wrong key is throttled too) and keep a high per-IP
+        // ceiling as a backstop against anyone hammering the endpoint.
+        RateLimiter::for('storefront-api', fn (Request $request): array => [
+            Limit::perMinute(600)->by('storefront-api:token:'.sha1((string) $request->bearerToken())),
+            Limit::perMinute(3000)->by('storefront-api:ip:'.$request->ip()),
+        ]);
+
         TextColumn::macro('moneyWithoutTrailingZeroes', function (string|\BackedEnum|\Closure|null $currency = null, int|\Closure $divideBy = 0, string|\BackedEnum|\Closure|null $locale = null, int|\Closure|null $decimalPlaces = null): static {
             $this->formatStateUsing(static function (TextColumn $column, $state) use ($currency, $divideBy, $decimalPlaces): ?string {
                 if (blank($state)) {
