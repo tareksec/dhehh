@@ -5,12 +5,15 @@ use App\Http\Middleware\RestrictResellerPortalHost;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetCurrentCompany;
 use App\Support\StorefrontErrorPages;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -86,6 +89,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // JSON error handling for those must not be touched.
         $exceptions->render(function (\Throwable $e, Request $request) {
             if (app()->environment('local', 'testing')) {
+                return null;
+            }
+
+            // These are not errors: Laravel turns them into a redirect to the
+            // login page, a redirect back with validation errors, or the
+            // response the code threw. Showing the "500" page for them broke
+            // every guest visit to a login-protected page and every failed
+            // form validation outside the admin panel.
+            if ($e instanceof AuthenticationException || $e instanceof ValidationException || $e instanceof HttpResponseException) {
                 return null;
             }
 

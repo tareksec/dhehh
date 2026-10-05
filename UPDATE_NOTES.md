@@ -2,6 +2,144 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-05 - Reseller orders with the reseller's own courier
+
+Owner's process: many resellers book the parcel with their own courier, give the company the parcel ID and pay the full amount in advance; the company packs the parcel and puts that parcel ID on it. The owner said to start ("ওকে কাজ শুরু কর") without answering the four open questions, so these defaults were used (easy to change):
+
+- No commission on these orders: lines are charged at the base price (normal price without a wholesale rate), and the reseller keeps what their customer pays them.
+- Payment per order: send money to one of the store's active manual payment methods, then enter sender and transaction ID; staff verify on the order page. No prepaid balance.
+- No packaging fee and no delivery charge.
+- The parcel ID is required when the order is created; one parcel ID per reseller (not counting cancelled orders).
+
+Files: migration `2026_10_05_100000_add_reseller_own_courier_to_orders_table`, `ResellerOwnCourierService`, `ResellerOrderPlacementService`, `Order` (columns, `resellerAdvancePayment()`, no default courier for these), `StorefrontPayment::PURPOSE_RESELLER_ADVANCE`, portal `CreateOrder` + view, portal `Orders` + order-detail partial, admin `ViewOrder`, `OrderInfolist`, `OrdersTable`, `StorefrontPaymentResource`, lang en/bn, `ResellerOwnCourierOrderTest` (10 tests, mutation-checked).
+
+Needs Bangla review: all new keys (delivery choice, advance payment, parcel ID, admin verify/reject/packed labels).
+
+Commit status: committed and pushed to the branch on owner approval ("ওকে কাজ শুরু কর এইটা শেষ করে কমিট এবং পুশ করবে", 2026-10-05), then to main ("মেইনে পুশ কর").
+
+## 2026-10-04 - Create order moved from the menu to a button on Orders
+
+Reason — owner's screenshot: take **Create order** out of the sidebar and put a button in the marked area (top right of the Orders page) that opens the order page.
+
+What changed: `CreateOrder` no longer registers a menu item; `Orders` has a **Create order** header action linking to it; the menu order is back to Dashboard, Orders, Products, … (the earlier sort bump was undone). No new strings.
+
+Tests: one new test in `ResellerPortalCreateOrderTest` (not in the menu; one button link on Orders). Full suite below.
+
+Commit status: committed and pushed to the branch together with the own-courier work (owner approval 2026-10-05).
+
+## 2026-10-05 - Two-item orders not saving + "Not enough stock" popup
+
+Reason — owner asked (in Bangla) why an order with two items does not get placed, and asked for a warning popup with an option to add stock when a product is out of stock on submit.
+
+Cause (reproduced in a test): on the admin Create order page, a confirmed / processing / completed order takes stock out item by item. When one item had no stock, `StockMovementService::validate()` threw "Insufficient stock for this sale quantity." under the key `quantity`, which matches no form field — so nothing showed on screen. The panel has no database transactions, so the order and its items stayed saved with only part of the stock taken. Two in-stock items save fine; it is the out-of-stock item that blocks.
+
+What changed:
+- New `app/Services/OrderStockCheckService.php`: lists short products/variants for the form's items (lines of the same product are added together) and adds stock as an `adjustment` movement with reason "Stock added from the order form".
+- `CreateOrder`: before saving an accounted-status order, checks stock; if anything is short it opens the **Not enough stock** popup (ordered / in stock / short by per product, a quantity box per product defaulting to the shortage, minimum the shortage) and saves nothing. **Add stock and place order** adds the stock and places the order. Staff without `inventory.create` (e.g. Sales Staff) see the list without the add option.
+- `CreateOrder` and `EditOrder`: database transactions on, and new trait `Pages/Concerns/ReportsStockErrors.php` shows a stock error as a notification (also covers editing a confirmed order's quantity above stock).
+- 9 new lang keys in `lang/en.json` and `lang/bn.json`.
+
+My decisions (say if you want different): draft orders don't take stock, so no popup for them; added stock is recorded as a stock adjustment (not a purchase, since there is no supplier/cost); the popup is on Create order only — **Change status** (draft → confirmed) and the reseller portal still show their existing stock error.
+
+Needs Bangla review: the 9 new keys, especially "pcs to add" (পিস যোগ হবে) and "Short by" (কম আছে).
+
+Tests: new `tests/Feature/OrderStockShortageTest.php` (7) pass. Full suite: 1679 passed, 1 skipped (`php artisan test`, no `--env`, after `npm run build`).
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-05).
+
+## 2026-10-03 - Fraud Checker page laid out like ParcelVai
+
+Reason — owner asked whether our fraud checker tool could be laid out like https://parcelvai.com/ and sent a screenshot of ParcelVai's result for their own number (verdict banner, summary tiles, per-courier cards).
+
+What changed:
+- New `app/Filament/Pages/FraudChecker.php` + `resources/views/filament/pages/fraud-checker.blade.php` under the Courier menu (`sales.view` permission, same as the courier dashboard). Phone input with +88 prefix, Check / Refresh live data, verdict banner, 4 summary tiles, overall bar, Steadfast merchant fraud reports, one card per courier (Pathao, Steadfast, RedX; unconfigured ones say so and link to Providers), blacklist warning, and this store's own orders for the number.
+- `ExternalCourierFraudService`: new `configuredDrivers()`, `normalizePhone()` made public, provider lookup moved into `activeProvider()`. Behaviour of `checkByPhone()` unchanged.
+- 33 new lang keys in `lang/en.json` and `lang/bn.json`.
+
+My decisions: Safe / Risky uses only the existing `external_fraud_low_ratio_threshold` setting (no new middle level, no ParcelVai-style "AI advice" text, since that would be invented rules). Paperfly and CarryBee (shown by ParcelVai) are not included — the app has no integration for them; adding them needs their API/panel access from the owner. The order form's existing fraud check is unchanged.
+
+Needs Bangla review: all 33 new keys (written by Claude), especially "Trusted" (বিশ্বস্ত), "Not configured" (কনফিগার করা নেই) and the threshold sentences.
+
+Tests: new `tests/Feature/FraudCheckerPageTest.php` (8), plus `ExternalCourierFraudCheckTest` and `TranslationParityTest` all pass; `CourierIntegrationTest` / `SalesOrderTest` pass except 10 table-page tests that hit the missing intl extension below. Full `php artisan test` (plain, no `--env`) in the cloud session: 1491 passed, 1 skipped, 166 failed — every failure is "The intl PHP extension is required" (the session's stand-in PHP 8.4 build has no intl); none involve these files. Re-run the full suite locally before release. `npm run build` clean.
+
+Commit status: committed and pushed to `ccr-ba78e320-bkghqi` on owner approval ("ওকে কমিট এবং পুশ কর", 2026-10-04), then merged with main (v2.45.0) and pushed to `main` on owner approval ("মেইনে পুশ কর", 2026-10-04). (The first commit message said 31 lang keys; it is 33.)
+
+## 2026-10-04 - Reseller portal: Create order
+
+Reason — owner asked for resellers to integrate their WooCommerce site, create orders and see order status like the main dashboard. I asked four scoping questions (Woo scope, order pricing/payment, status rights, Woo commission); the owner answered "No preference" and then narrowed the request: **"Reseller শুধু অর্ডার তৈরি করতে পারবে এইটা এড কর"** (resellers can create orders — add only this). So only **Create order** is built; the WooCommerce integration is **not** built and still needs the owner's answers (see the questions' options: orders flowing into the ERP by webhook, status pushed back, product import only; and how Woo prices/commission are treated).
+
+Order status was already visible: the portal's **Orders** page shows each order's stage and a read-only detail/timeline (Phase 3), and a portal-created order appears there.
+
+Rules used (no new business rules — the storefront checkout's): own store's products only; own selling price, never below the base price (no wholesale rate = normal price, no commission); cash on delivery; delivery charge and VAT from the store's settings; stock check; order created as `draft` with a new source `reseller_portal`, credited to the reseller; commission via the existing order observers; courier fraud check job dispatched as for storefront orders.
+
+My decisions (say if you want different): variant products are not offered (their lines have no reseller price); the buyer is matched by phone, and a phone that already belongs to a reseller account is not overwritten; the buyer's source is stored as "Other".
+
+Bug fixed on the way: `OrderNotificationObserver` built the admin "View order" link from the *current* panel, which fails (route not defined) when an order is created inside the reseller portal. It now names the admin panel.
+
+Needs Bangla review: 15 new keys in `lang/bn.json` (Create order page).
+
+Tests: `ResellerPortalCreateOrderTest` (15). Full suite: 1664 passed, 1 skipped (`php artisan test`, no `--env`).
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর, এরপর মেইন এ পুশ কর", 2026-10-04).
+
+## 2026-10-03 - Portal polish: Become a reseller link, Visit store, dashboard order, store logos
+
+Reason — owner's screenshots and requests: (1) sign-in page link "Become a reseller" instead of "sign up…", (2) **Visit store** button where **Copy link** was on My Store (Copy link removed there), (3) **Recent orders** above the commission chart on the dashboard, (4) reseller can set their business logo on My Store, light and dark.
+
+What changed: `Login::registerAction()` label; `my-store.blade.php` button; `dashboard.blade.php` order; new `customers.reseller_logo` / `reseller_logo_dark` (migration), `Customer::resellerLogoUrl()/resellerLogoDarkUrl()`; `MyStore` has two logo uploads (stored under the company's public `reseller-logos` folder; they do not use the admin `CompanyMedia` write check, which needs a staff user, and record nothing in the Media Hub); `storefront/layout.blade.php` feeds the reseller logos to every theme's header (a light-only logo is used in both modes; none = store name as before).
+
+My decisions: the dashboard's own Copy link / WhatsApp / Facebook buttons were left (only the marked My Store button changed); the always-dark marketplace-pro header shows the dark logo when there is one; 1 MB size limit like the admin logo fields; old logo files are not deleted when replaced.
+
+Needs Bangla review: 5 new keys ("Visit store", the two logo labels and their helper texts).
+
+Tests: 6 new in `ResellerPortalAccountTest`.
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-03).
+
+## 2026-10-03 - Content Creation (plan 14) Phase 0: Bangla rendering check, Imagick, bundled font
+
+Reason — owner asked for an AdBreezy-style ad creative builder, then said "কাজ শুরু কর" (start the work), and later "ডায়াগনস্টিক কমান্ড বানিয়ে শুরু কর" (start by building the diagnostic command) and "দুটোই কর, ফন্ট আর Imagick যোগ কর" (do both: add the font and Imagick).
+
+What changed:
+- Phase 0 spike: GD breaks Bangla shaping; Imagick (PECL 3.8.1 Windows build, ImageMagick 7.1.1-46 with raqm) renders it correctly; a browser canvas also does and stays the fallback. Results are in plan 14 §9.
+- New `app/Services/AdCreative/TextRenderingCapability.php` + `app/Console/Commands/CheckAdCreativeRendering.php` (`ad-creative:check-rendering [--font=] [--render]`).
+- `resources/fonts/ad-creative/HindSiliguri-{Regular,Bold}.ttf` + `OFL.txt` (Google Fonts repo, OFL).
+- `composer.json` / `composer.lock`: `ext-imagick` required (Nixpacks reads extensions only from here). `.github/workflows/deploy.yml`: `imagick` added to setup-php.
+- New `14_AI_TOOL_MENU_CONTENT_CREATION_PLAN.md` (numbered 14 because `13_RESELLER_PORTAL_PLAN.md` already exists upstream).
+- No user-visible UI strings (console output only), so no lang keys.
+
+Tests:
+- New `tests/Feature/CheckAdCreativeRenderingCommandTest.php` (4; the Imagick-only case is skipped locally because local PHP has no imagick).
+- Full `php artisan test` (plain, no `--env`): 1639 passed, 1 skipped (11341 assertions), run on top of `origin/main` (v2.42.1). `npm run build` clean; no frontend assets changed.
+
+Still open: after deploy, run `php artisan ad-creative:check-rendering --render` in the Coolify terminal. If `raqm` or shaping FAILs on the Nix ImageMagick build, switch the renderer to the browser-canvas fallback.
+
+Commit status: committed and pushed to `main` (owner approved: "কমিট + পুশ"). Only the Phase 0 files plus these notes; other sessions' pending changes were left unstaged.
+
+## 2026-10-03 - Hotfix 2: portal apply/login did nothing
+
+Reason — owner reported that after the first hotfix the portal login page opens, but signing up and logging in does nothing (no error), and admin shows no applicants.
+
+Root causes (both reproduced by posting the real Livewire request in a test before fixing):
+1. `RestrictResellerPortalHost` only let `livewire/...` through, but this app's Livewire update URL is the randomised `livewire-<hash>/update`, so on the portal host every form submit was redirected back to `/portal` (302) — nothing was saved or logged in. The earlier Phase tests used `Livewire::test()`, which skips HTTP middleware entirely, so they could not see this.
+2. Even with that fixed, Livewire only re-runs "persistent" middleware on update requests; `ResolveCompanyFromResellerPortalDomain` wasn't one, so the company was unresolved on submits and an application was saved to the default company (id 1) instead of the portal's. Now persistent.
+
+New `tests/Feature/ResellerPortalLivewireHttpTest.php` (4 tests, real HTTP Livewire endpoint): update URL not redirected, apply saves to the portal company as pending, wrong password returns the error, approved reseller logs in. Mutation check: dropping either fix fails the tests.
+
+Owner note: nothing was saved while it was broken, so applicants must apply again; no data to repair. Same fixes make the portal's tables/actions (Orders, Products, Withdrawals…) work after login.
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-03).
+
+## 2026-10-03 - Hotfix: portal "500" for guests (and failed storefront forms)
+
+Reason — owner reported `reseller.zamzamint.com/portal` showing "500 Something went wrong". The owner ran a read-only debug command in the production terminal; it showed the real exception was `AuthenticationException` ("Unauthenticated") — a normal "send to login" signal, not a crash.
+
+Root cause: the production-only error-page hook in `bootstrap/app.php` (added for the security plan) caught every exception, including `AuthenticationException` and `ValidationException`, and replaced Laravel's login redirect / back-with-errors with the branded 500 page. Tests never saw it because the hook is off in `local`/`testing`. This is older than the reseller work: any guest hitting a login-protected page or any failed validation outside `/admin` got the 500 page in production.
+
+What changed: the hook now returns null for `AuthenticationException`, `ValidationException` and `HttpResponseException`. New `tests/Feature/ProductionErrorPagesTest.php` (3 tests) switches the app to the production environment: guest `/portal` redirects to `/portal/login`, a failed storefront validation redirects back with errors, and a real 404 still renders. I reproduced the 500 in the same test before fixing it.
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
+
 ## 2026-10-04 - Headless Next.js storefront, phase 2 (quote / checkout / payment)
 
 Reason — owner asked "ধাপ ২ শুরু কর" and decided how a live Collection deal price combines with wholesale tier prices: **the deal price wins** ("ডিল-প্রাইসই কার্যকর").
@@ -32,7 +170,7 @@ Not done / needs a decision: customer login, order tracking, review submission (
 
 Needs Bangla review: the checkout / payment-return / success strings in the website's `src/i18n/messages.ts` (keys `checkout.*`, `payment_return.*`, `success.*`).
 
-Commit status: committed and pushed on owner approval ("কমিট এবং পুশ কর", 2026-10-05) — both repos (ERP `Business-Dashboard` and `zamzamint-new-website-theme`), branch `claude/loving-mendel-adxwam`.
+Commit status: committed and pushed on owner approval ("কমিট এবং পুশ কর", 2026-10-05) — both repos (ERP `Business-Dashboard` and `zamzamint-new-website-theme`), branch `claude/loving-mendel-adxwam`. Then pushed to `main` in both repos on the owner's request ("২ রিপোর মেইনে পুশ কর", 2026-10-05); the ERP branch first merged `origin/main` (v2.47.0 + reseller own-courier work; conflicts only in CHANGELOG, UPDATE_NOTES and the two lang files, both sides kept; full suite 1750 passed).
 
 ## 2026-10-03 - Headless Next.js storefront, phase 1 (read-only catalog API + website wiring)
 
@@ -348,7 +486,7 @@ Verification:
 - Pint: passed. `npm run build`: succeeded.
 - Not verified in a browser.
 
-Commit status: not committed — waiting for owner approval.
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
 
 ## 2026-09-29 - Documentation article: "Publicly shareable" toggle
 
@@ -373,7 +511,7 @@ Verification:
 - Pint: passed. `npm run build`: succeeded.
 - Not verified in a browser.
 
-Commit status: not committed — waiting for owner approval.
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
 
 ## 2026-09-29 - Documentation article: slug auto-fills from title
 
@@ -419,7 +557,7 @@ Verification:
 - Pint: passed. `npm run build`: succeeded.
 - Not verified in a browser.
 
-Commit status: not committed — waiting for owner approval.
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
 
 ## 2026-09-28 - Documentation "Import Markdown": add file upload
 
@@ -440,7 +578,7 @@ Verification:
 - Pint: passed. `npm run build`: succeeded.
 - Not covered by an automated test: the file-upload wiring itself (Filament `FileUpload` → `TemporaryUploadedFile::get()`) — only the conversion function it feeds is tested. Not verified in a browser; the owner should try uploading the API guide `.md` file through the new file picker and confirm the formatting comes through correctly.
 
-Commit status: not committed — waiting for owner approval.
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
 
 ## 2026-09-28 - Documentation module: "Import Markdown" button
 
@@ -463,7 +601,7 @@ Verification:
 - Pint: passed. `npm run build`: succeeded.
 - Not verified in a browser — the owner should re-paste the API guide through the new button and confirm the formatting looks right before relying on it for other documents.
 
-Commit status: not committed — waiting for owner approval.
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
 
 ## 2026-09-28 - Documentation module: fixes from automated PR review (Codex)
 
@@ -612,7 +750,7 @@ Verification:
 - `npm run build`: succeeded.
 - Not verified in a browser.
 
-Commit status: not committed — waiting for owner approval.
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
 
 ## 2026-09-28 - Investment withdrawal: voucher first, then the status turns "Withdrawn"; the record is kept
 

@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Reseller\Pages\Auth\Apply;
 use App\Filament\Reseller\Pages\Auth\Login;
+use App\Filament\Reseller\Pages\CreateOrder;
 use App\Filament\Reseller\Pages\Dashboard;
 use App\Filament\Reseller\Pages\Earnings;
 use App\Filament\Reseller\Pages\MyStore;
@@ -55,6 +56,7 @@ class ResellerPanelProvider extends PanelProvider
             ->darkModeBrandLogo(fn (): ?string => app(CompanySettingsService::class)->darkLogoUrl(company: $this->portalCompany()))
             ->pages([
                 Dashboard::class,
+                CreateOrder::class,
                 Orders::class,
                 Products::class,
                 Earnings::class,
@@ -77,6 +79,14 @@ class ResellerPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
+            ])
+            // Livewire re-runs only "persistent" middleware on its own update
+            // requests (every form submit and table action on the portal).
+            // Without this the company is not resolved from the host there, so
+            // an application would be saved to the default company and a
+            // login could not find the reseller's company.
+            ->persistentMiddleware([
+                ResolveCompanyFromResellerPortalDomain::class,
             ])
             ->authMiddleware([
                 Authenticate::class,

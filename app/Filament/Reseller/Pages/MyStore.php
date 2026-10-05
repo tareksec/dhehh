@@ -2,18 +2,26 @@
 
 namespace App\Filament\Reseller\Pages;
 
+use App\Filament\Concerns\OptimizesUploadedImages;
 use App\Filament\Reseller\Concerns\ForApprovedResellers;
 use App\Models\Company;
 use App\Models\Customer;
+use App\Services\CompanyStorageService;
+use App\Services\ImageOptimizerService;
 use App\Services\ResellerDomainDnsChecker;
+use App\Support\CompanyMedia;
 use BackedEnum;
+use Filament\Forms\Components\BaseFileUpload;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\Rules\Unique;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 /**
  * Reseller portal Phase 5 (13_RESELLER_PORTAL_PLAN.md §3 row 6): the store's
@@ -26,6 +34,7 @@ use Illuminate\Validation\Rules\Unique;
 class MyStore extends Page
 {
     use ForApprovedResellers;
+    use OptimizesUploadedImages;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingStorefront;
 
@@ -55,6 +64,8 @@ class MyStore extends Page
             'reseller_subdomain' => $reseller->reseller_subdomain,
             'reseller_custom_domain' => $reseller->reseller_custom_domain,
             'reseller_store_name' => $reseller->reseller_store_name,
+            'reseller_logo' => $reseller->reseller_logo,
+            'reseller_logo_dark' => $reseller->reseller_logo_dark,
         ]);
     }
 
@@ -126,6 +137,14 @@ class MyStore extends Page
                             ->maxLength(255)
                             ->placeholder($reseller->business_name ?: $reseller->name)
                             ->helperText(__('Shown at the top of your store. Leave it empty to use your business name.')),
+
+                        $this->logoUpload('reseller_logo')
+                            ->label(__('Logo (light mode)'))
+                            ->helperText(__('Shown at the top of your store instead of the store name. A wide logo on a transparent background works best (about 400 x 100 px).')),
+
+                        $this->logoUpload('reseller_logo_dark')
+                            ->label(__('Logo (dark mode)'))
+                            ->helperText(__('Optional. A light-coloured version of your logo for visitors using dark mode. If empty, the light-mode logo is used.')),
                     ]),
             ]);
     }
@@ -148,6 +167,8 @@ class MyStore extends Page
             'reseller_subdomain' => $this->company()?->reseller_subdomains_enabled
                 ? (filled($data['reseller_subdomain'] ?? null) ? strtolower(trim($data['reseller_subdomain'])) : null)
                 : $reseller->reseller_subdomain,
+            'reseller_logo' => $this->uploadedPath($data['reseller_logo'] ?? null),
+            'reseller_logo_dark' => $this->uploadedPath($data['reseller_logo_dark'] ?? null),
             'reseller_store_name' => filled($data['reseller_store_name'] ?? null) ? trim($data['reseller_store_name']) : null,
         ]);
 
@@ -155,6 +176,45 @@ class MyStore extends Page
             ->title(__('Your store settings have been saved.'))
             ->success()
             ->send();
+    }
+
+    /**
+     * A logo upload for the store header. The admin forms' own helpers check
+     * the signed-in *staff user*'s company access, which a reseller (a
+     * customer account) does not have, so this stores straight into the
+     * portal company's public folder and records nothing in the Media Hub.
+     */
+    protected function logoUpload(string $name): FileUpload
+    {
+        return FileUpload::make($name)
+            ->image()
+            ->maxSize(1024)
+            ->tap(static::browserCompactImagePrecompression())
+            ->disk(fn (): string => CompanyMedia::publicDiskName())
+            ->directory(fn (): string => app(CompanyStorageService::class)->publicDirectory($this->company(), 'reseller-logos'))
+            ->fetchFileInformation(false)
+            ->getUploadedFileUsing(CompanyMedia::publicFileMetadataCallback())
+            ->getOpenableFileUrlUsing(CompanyMedia::publicFileUrlCallback())
+            ->getDownloadableFileUrlUsing(CompanyMedia::publicFileUrlCallback())
+            ->saveUploadedFileUsing(static fn (BaseFileUpload $component, TemporaryUploadedFile $file): ?string => app(ImageOptimizerService::class)->optimizeAndStore(
+                $file,
+                $component->getDirectory(),
+                $component->getDiskName(),
+                ImageOptimizerService::MAX_WIDTH_COMPACT,
+                85,
+            ))
+            ->imageEditor()
+            ->downloadable()
+            ->openable();
+    }
+
+    protected function uploadedPath(mixed $state): ?string
+    {
+        if (is_array($state)) {
+            $state = Arr::first($state);
+        }
+
+        return filled($state) ? (string) $state : null;
     }
 
     /** Re-checks the saved custom domain's DNS and, if it points to us, makes it live. */

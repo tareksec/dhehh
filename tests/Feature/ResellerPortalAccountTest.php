@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Reseller\Pages\Dashboard;
 use App\Filament\Reseller\Pages\Earnings;
 use App\Filament\Reseller\Pages\MyStore;
 use App\Filament\Reseller\Pages\PayoutAccounts;
@@ -26,9 +27,11 @@ use App\Support\MoneyFormatter;
 use App\Support\StorefrontThemeRegistry;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -546,6 +549,125 @@ class ResellerPortalAccountTest extends TestCase
             $this->assertStringContainsString('Acme Trading Company', $mainHeader, "[{$theme}] main store still shows the company");
             $this->assertStringNotContainsString('Rahim', $mainHeader);
         }
+    }
+
+    // ---- My Store: logos, Visit store; dashboard order; login link --------
+
+    public function test_a_reseller_can_upload_a_light_and_a_dark_store_logo(): void
+    {
+        Storage::fake('public');
+        [$company, $reseller] = $this->setUpCompany('logo-upload.example.test');
+        $this->asPortal($company, $reseller);
+
+        Livewire::test(MyStore::class)
+            ->fillForm([
+                'reseller_slug' => $reseller->reseller_slug,
+                'reseller_logo' => UploadedFile::fake()->image('light.png', 400, 100),
+                'reseller_logo_dark' => UploadedFile::fake()->image('dark.png', 400, 100),
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $fresh = $reseller->fresh();
+        $this->assertNotNull($fresh->reseller_logo);
+        $this->assertNotNull($fresh->reseller_logo_dark);
+        $this->assertNotSame($fresh->reseller_logo, $fresh->reseller_logo_dark);
+        $this->assertStringContainsString('reseller-logos', $fresh->reseller_logo);
+        Storage::disk('public')->assertExists($fresh->reseller_logo);
+        Storage::disk('public')->assertExists($fresh->reseller_logo_dark);
+    }
+
+    public function test_saving_other_settings_keeps_the_logos(): void
+    {
+        Storage::fake('public');
+        [$company, $reseller] = $this->setUpCompany('logo-keep.example.test');
+        $reseller->update(['reseller_logo' => 'x/light.webp', 'reseller_logo_dark' => 'x/dark.webp']);
+        $this->asPortal($company, $reseller);
+
+        Livewire::test(MyStore::class)
+            ->fillForm(['reseller_store_name' => 'Renamed'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('x/light.webp', $reseller->fresh()->reseller_logo);
+        $this->assertSame('x/dark.webp', $reseller->fresh()->reseller_logo_dark);
+    }
+
+    public function test_the_store_header_shows_the_resellers_light_and_dark_logos_in_every_theme(): void
+    {
+        Storage::fake('public');
+
+        foreach (array_keys(StorefrontThemeRegistry::themes()) as $theme) {
+            $domain = Str::slug($theme).'-logos.example.test';
+            [$company, $reseller] = $this->setUpCompany($domain, theme: $theme, companyName: 'Acme Trading Company');
+            $this->pickProduct($company, $reseller);
+
+            $root = $company->storageRoot().'/public';
+            $paths = [
+                'company' => "{$root}/storefront/logos/acme-logo.webp",
+                'light' => "{$root}/reseller-logos/light-logo.webp",
+                'dark' => "{$root}/reseller-logos/dark-logo.webp",
+            ];
+            foreach ($paths as $path) {
+                Storage::disk('public')->put($path, 'x');
+            }
+
+            $company->storefrontSetting->update(['logo' => $paths['company']]);
+            $reseller->update(['reseller_logo' => $paths['light'], 'reseller_logo_dark' => $paths['dark']]);
+            $header = $this->headerOf("http://{$domain}/store/{$reseller->reseller_slug}");
+
+            // The marketplace theme has an always-dark header and shows only
+            // the dark logo; the others show both and switch with the mode.
+            if (! str_contains($header, 'mp-header')) {
+                $this->assertStringContainsString('light-logo.webp', $header, "[{$theme}] light logo");
+            }
+            $this->assertStringContainsString('dark-logo.webp', $header, "[{$theme}] dark logo");
+            $this->assertStringNotContainsString('acme-logo.webp', $header, "[{$theme}] never the company logo");
+
+            // Light only: shown in both modes, no dark image.
+            $reseller->update(['reseller_logo_dark' => null]);
+            $header = $this->headerOf("http://{$domain}/store/{$reseller->reseller_slug}");
+            $this->assertStringContainsString('light-logo.webp', $header);
+            $this->assertStringNotContainsString('dark-logo.webp', $header);
+
+            // No logo at all: name only.
+            $reseller->update(['reseller_logo' => null]);
+            $header = $this->headerOf("http://{$domain}/store/{$reseller->reseller_slug}");
+            $this->assertStringNotContainsString('logo.webp', $header);
+        }
+    }
+
+    public function test_my_store_has_a_visit_store_button_and_no_copy_link_button(): void
+    {
+        [$company, $reseller] = $this->setUpCompany('visit-store.example.test');
+        $this->asPortal($company, $reseller);
+
+        Livewire::test(MyStore::class)
+            ->assertSee('Visit store')
+            ->assertSee($reseller->resellerStoreUrl())
+            ->assertDontSee('Copy link');
+    }
+
+    public function test_the_dashboard_lists_recent_orders_above_the_commission_chart(): void
+    {
+        [$company, $reseller] = $this->setUpCompany('dash-order.example.test');
+        $this->asPortal($company, $reseller);
+
+        $html = Livewire::test(Dashboard::class)->html();
+
+        $this->assertNotFalse(strpos($html, 'Recent orders'));
+        $this->assertNotFalse(strpos($html, 'Commission (last 6 months)'));
+        $this->assertLessThan(strpos($html, 'Commission (last 6 months)'), strpos($html, 'Recent orders'));
+    }
+
+    public function test_the_login_page_link_says_become_a_reseller(): void
+    {
+        $this->setUpCompany('login-link.example.test');
+
+        $this->get('http://reseller.login-link.example.test/portal/login')
+            ->assertOk()
+            ->assertSee('Become a reseller')
+            ->assertDontSee('sign up for an account');
     }
 
     // ---- Helpers ----------------------------------------------------------

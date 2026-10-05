@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Orders\Pages;
 use App\Filament\Concerns\HasStickyHeaderFormActions;
 use App\Filament\Resources\Orders\Actions\ChangeOrderWorkflowAction;
 use App\Filament\Resources\Orders\OrderResource;
+use App\Filament\Resources\Orders\Pages\Concerns\ReportsStockErrors;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
@@ -13,8 +14,17 @@ use Livewire\Attributes\On;
 class EditOrder extends EditRecord
 {
     use HasStickyHeaderFormActions;
+    use ReportsStockErrors;
 
     protected static string $resource = OrderResource::class;
+
+    /** See CreateOrder: a rejected stock movement must not leave a half-saved order. */
+    protected ?bool $hasDatabaseTransactions = true;
+
+    public function save(bool $shouldRedirect = true, bool $shouldSendSavedNotification = true): void
+    {
+        $this->runReportingStockErrors(fn () => parent::save($shouldRedirect, $shouldSendSavedNotification));
+    }
 
     protected function getHeaderActions(): array
     {
