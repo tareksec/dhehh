@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\StorefrontSettings\Pages;
 
 use App\Filament\Concerns\HasStickyHeaderFormActions;
+use App\Filament\Resources\StorefrontSettings\Pages\Concerns\HandlesNextjsSiteDomain;
 use App\Filament\Resources\StorefrontSettings\Pages\Concerns\HasStorefrontSettingsNavigation;
 use App\Filament\Resources\StorefrontSettings\StorefrontSettingResource;
 use App\Models\Company;
@@ -12,6 +13,7 @@ use Illuminate\Validation\ValidationException;
 
 class CreateStorefrontSetting extends CreateRecord
 {
+    use HandlesNextjsSiteDomain;
     use HasStickyHeaderFormActions;
     use HasStorefrontSettingsNavigation;
 
@@ -41,7 +43,7 @@ class CreateStorefrontSetting extends CreateRecord
 
         unset($data['company_domain'], $data['company_domain_verified']);
 
-        return $data;
+        return $this->applyNextjsSiteDomain($data, null, isset($data['company_id']) ? (int) $data['company_id'] : null);
     }
 
     protected function domainSyncData(array $data): array
@@ -88,6 +90,8 @@ class CreateStorefrontSetting extends CreateRecord
         if (! $domain) {
             return;
         }
+
+        $this->assertBladeDomainIsNotNextjs($domain);
 
         $exists = Company::withoutGlobalScopes()
             ->where('domain', $domain)

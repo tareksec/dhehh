@@ -805,6 +805,7 @@ class VideoGeneration extends Page
         }
 
         return Offer::query()
+            ->landingPages()
             ->when($search !== '', fn ($query) => $query->where('title', 'like', "%{$search}%"))
             ->orderByDesc('id')
             ->limit(30)
