@@ -67,9 +67,49 @@
         </table>
     </div>
 
+    @if ($order->reseller_own_courier)
+        @php
+            $courier = app(\App\Services\ResellerOwnCourierService::class);
+            $payment = $order->resellerAdvancePayment;
+        @endphp
+        <div>
+            <h3 class="mb-2 text-sm font-semibold">{{ __('Own courier') }}</h3>
+            <div class="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
+                <div>
+                    <div class="text-gray-500 dark:text-gray-400">{{ __('Courier name') }}</div>
+                    <div class="font-medium">{{ $order->reseller_courier_name ?: '—' }}</div>
+                </div>
+                <div>
+                    <div class="text-gray-500 dark:text-gray-400">{{ __('Parcel ID') }}</div>
+                    <div class="font-medium">{{ $order->reseller_parcel_id }}</div>
+                </div>
+                <div>
+                    <div class="text-gray-500 dark:text-gray-400">{{ __('Packed') }}</div>
+                    <div class="font-medium">{{ $order->reseller_parcel_packed_at?->format('d M Y, h:i A') ?? __('Not yet') }}</div>
+                </div>
+                <div>
+                    <div class="text-gray-500 dark:text-gray-400">{{ __('Advance payment') }}</div>
+                    <div class="font-medium">{{ \App\Services\ResellerOwnCourierService::paymentStateLabels()[$courier->paymentState($order)] }}</div>
+                </div>
+                @if ($payment)
+                    <div>
+                        <div class="text-gray-500 dark:text-gray-400">{{ __('Amount') }}</div>
+                        <div class="font-medium">{{ MoneyFormatter::currency($payment->amount, $currency) }}</div>
+                    </div>
+                    <div>
+                        <div class="text-gray-500 dark:text-gray-400">{{ __('Transaction ID') }}</div>
+                        <div class="font-medium">{{ $payment->transaction_id }}</div>
+                    </div>
+                @endif
+            </div>
+        </div>
+    @endif
+
     <div>
         <h3 class="mb-2 text-sm font-semibold">{{ __('Commission') }}</h3>
-        @if ($order->resellerCommission)
+        @if ($order->reseller_own_courier && ! $order->resellerCommission)
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('None (own courier)') }}</p>
+        @elseif ($order->resellerCommission)
             <p class="text-sm">
                 {{ MoneyFormatter::currency($order->resellerCommission->amount, $currency) }}
                 &mdash; {{ ResellerCommission::STATUSES[$order->resellerCommission->status] ?? $order->resellerCommission->status }}

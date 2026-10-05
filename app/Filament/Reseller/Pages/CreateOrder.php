@@ -4,9 +4,12 @@ namespace App\Filament\Reseller\Pages;
 
 use App\Filament\Reseller\Concerns\ForApprovedResellers;
 use App\Models\Product;
+use App\Models\StorefrontPaymentMethod;
 use App\Services\ResellerOrderPlacementService;
+use App\Services\ResellerOwnCourierService;
 use App\Support\MoneyFormatter;
 use BackedEnum;
+use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -25,6 +28,10 @@ use Illuminate\Validation\ValidationException;
  * customer. The rules (own store's products only, own price never below the
  * base price, cash on delivery, the store's delivery charge) live in
  * ResellerOrderPlacementService, which mirrors the storefront checkout.
+ *
+ * Or the reseller sends it with their own courier: they give their parcel ID
+ * and pay the full amount in advance, and the store packs the parcel with
+ * that ID (ResellerOwnCourierService).
  */
 class CreateOrder extends Page
 {
@@ -32,7 +39,8 @@ class CreateOrder extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPlusCircle;
 
-    protected static ?int $navigationSort = 2;
+    /** Reached from the button on the Orders page, not from the menu. */
+    protected static bool $shouldRegisterNavigation = false;
 
     protected string $view = 'filament.reseller.pages.create-order';
 
@@ -44,14 +52,12 @@ class CreateOrder extends Page
         return __('Create order');
     }
 
-    public static function getNavigationLabel(): string
-    {
-        return __('Create order');
-    }
-
     public function mount(): void
     {
-        $this->form->fill(['items' => [['product_id' => null, 'quantity' => 1, 'price' => null]]]);
+        $this->form->fill([
+            'delivery_method' => 'store',
+            'items' => [['product_id' => null, 'quantity' => 1, 'price' => null]],
+        ]);
     }
 
     public function form(Schema $schema): Schema
@@ -59,6 +65,8 @@ class CreateOrder extends Page
         $service = app(ResellerOrderPlacementService::class);
         $reseller = $this->reseller();
         $products = $service->catalog($reseller)->keyBy('id');
+        $paymentMethods = app(ResellerOwnCourierService::class)->paymentMethods($reseller->company)->keyBy('id');
+        $ownCourier = fn (Get $get): bool => $get('delivery_method') === 'own';
 
         return $schema
             ->statePath('data')
@@ -89,8 +97,61 @@ class CreateOrder extends Page
                     ])
                     ->columns(2),
 
+                Section::make(__('Delivery'))
+                    ->schema([
+                        Radio::make('delivery_method')
+                            ->hiddenLabel()
+                            ->options([
+                                'store' => __('The store delivers (cash on delivery)'),
+                                'own' => __('My own courier (I pay the full amount in advance)'),
+                            ])
+                            ->disableOptionWhen(fn (string $value): bool => $value === 'own' && $paymentMethods->isEmpty())
+                            ->helperText($paymentMethods->isEmpty() ? __('Own courier orders are not available yet: the store has no payment method set up.') : null)
+                            ->default('store')
+                            ->required()
+                            ->live()
+                            ->columnSpanFull(),
+                        TextInput::make('courier_name')
+                            ->label(__('Courier name'))
+                            ->maxLength(100)
+                            ->visible($ownCourier),
+                        TextInput::make('parcel_id')
+                            ->label(__('Parcel ID'))
+                            ->helperText(__('The parcel or consignment ID from your courier. The store puts it on the package.'))
+                            ->required($ownCourier)
+                            ->maxLength(100)
+                            ->visible($ownCourier),
+                    ])
+                    ->columns(2),
+
+                Section::make(__('Advance payment'))
+                    ->description(__('Send the full amount shown in the order summary, then enter the payment details. The store packs the parcel after checking the payment.'))
+                    ->visible($ownCourier)
+                    ->schema([
+                        Select::make('payment_method_id')
+                            ->label(__('Paid to'))
+                            ->options(fn (): array => $paymentMethods->mapWithKeys(fn (StorefrontPaymentMethod $method): array => [
+                                $method->getKey() => trim($method->name.($method->account_number ? ' — '.$method->account_number : '')),
+                            ])->all())
+                            ->required($ownCourier)
+                            ->live()
+                            ->helperText(fn (Get $get): ?string => $paymentMethods->get((int) $get('payment_method_id'))?->instructions)
+                            ->columnSpanFull(),
+                        TextInput::make('sender')
+                            ->label(__('Paid from (number or account)'))
+                            ->required($ownCourier)
+                            ->maxLength(40),
+                        TextInput::make('transaction_id')
+                            ->label(__('Transaction ID'))
+                            ->required($ownCourier)
+                            ->maxLength(100),
+                    ])
+                    ->columns(2),
+
                 Section::make(__('Products'))
-                    ->description(__('Only products in your store can be ordered. Payment is cash on delivery.'))
+                    ->description(fn (Get $get): string => $get('delivery_method') === 'own'
+                        ? __('Only products in your store can be ordered. You pay the store price; there is no commission on these orders.')
+                        : __('Only products in your store can be ordered. Payment is cash on delivery.'))
                     ->schema([
                         Repeater::make('items')
                             ->hiddenLabel()
@@ -129,6 +190,7 @@ class CreateOrder extends Page
                                         ? __('At least :amount.', ['amount' => MoneyFormatter::number($base)])
                                         : null)
                                     ->live(onBlur: true)
+                                    ->visible(fn (Get $get): bool => $get('../../delivery_method') !== 'own')
                                     ->columnSpan(2),
                             ])
                             ->columns(6),
@@ -153,10 +215,15 @@ class CreateOrder extends Page
         }
 
         try {
-            return app(ResellerOrderPlacementService::class)->quote($this->reseller(), $lines, (string) ($this->data['address'] ?? ''));
+            return app(ResellerOrderPlacementService::class)->quote($this->reseller(), $lines, (string) ($this->data['address'] ?? ''), $this->isOwnCourier());
         } catch (ValidationException) {
             return null;
         }
+    }
+
+    public function isOwnCourier(): bool
+    {
+        return ($this->data['delivery_method'] ?? 'store') === 'own';
     }
 
     public function create(): void
@@ -168,10 +235,18 @@ class CreateOrder extends Page
             'phone' => trim($data['phone']),
             'address' => trim($data['address']),
             'note' => $data['note'] ?? null,
-        ], $data['items']);
+        ], $data['items'], $this->isOwnCourier() ? [
+            'courier_name' => $data['courier_name'] ?? null,
+            'parcel_id' => (string) ($data['parcel_id'] ?? ''),
+            'payment_method_id' => $data['payment_method_id'] ?? null,
+            'sender' => (string) ($data['sender'] ?? ''),
+            'transaction_id' => (string) ($data['transaction_id'] ?? ''),
+        ] : null);
 
         Notification::make()
-            ->title(__('Order :number was created. The store will review it.', ['number' => $order->order_number]))
+            ->title($this->isOwnCourier()
+                ? __('Order :number was created. The store will check your payment and pack the parcel.', ['number' => $order->order_number])
+                : __('Order :number was created. The store will review it.', ['number' => $order->order_number]))
             ->success()
             ->send();
 

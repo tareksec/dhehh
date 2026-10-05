@@ -2,6 +2,31 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-05 - Reseller orders with the reseller's own courier
+
+Owner's process: many resellers book the parcel with their own courier, give the company the parcel ID and pay the full amount in advance; the company packs the parcel and puts that parcel ID on it. The owner said to start ("ওকে কাজ শুরু কর") without answering the four open questions, so these defaults were used (easy to change):
+
+- No commission on these orders: lines are charged at the base price (normal price without a wholesale rate), and the reseller keeps what their customer pays them.
+- Payment per order: send money to one of the store's active manual payment methods, then enter sender and transaction ID; staff verify on the order page. No prepaid balance.
+- No packaging fee and no delivery charge.
+- The parcel ID is required when the order is created; one parcel ID per reseller (not counting cancelled orders).
+
+Files: migration `2026_10_05_100000_add_reseller_own_courier_to_orders_table`, `ResellerOwnCourierService`, `ResellerOrderPlacementService`, `Order` (columns, `resellerAdvancePayment()`, no default courier for these), `StorefrontPayment::PURPOSE_RESELLER_ADVANCE`, portal `CreateOrder` + view, portal `Orders` + order-detail partial, admin `ViewOrder`, `OrderInfolist`, `OrdersTable`, `StorefrontPaymentResource`, lang en/bn, `ResellerOwnCourierOrderTest` (10 tests, mutation-checked).
+
+Needs Bangla review: all new keys (delivery choice, advance payment, parcel ID, admin verify/reject/packed labels).
+
+Commit status: committed and pushed to the branch on owner approval ("ওকে কাজ শুরু কর এইটা শেষ করে কমিট এবং পুশ করবে", 2026-10-05).
+
+## 2026-10-04 - Create order moved from the menu to a button on Orders
+
+Reason — owner's screenshot: take **Create order** out of the sidebar and put a button in the marked area (top right of the Orders page) that opens the order page.
+
+What changed: `CreateOrder` no longer registers a menu item; `Orders` has a **Create order** header action linking to it; the menu order is back to Dashboard, Orders, Products, … (the earlier sort bump was undone). No new strings.
+
+Tests: one new test in `ResellerPortalCreateOrderTest` (not in the menu; one button link on Orders). Full suite below.
+
+Commit status: committed and pushed to the branch together with the own-courier work (owner approval 2026-10-05).
+
 ## 2026-10-04 - Reseller portal: Create order
 
 Reason — owner asked for resellers to integrate their WooCommerce site, create orders and see order status like the main dashboard. I asked four scoping questions (Woo scope, order pricing/payment, status rights, Woo commission); the owner answered "No preference" and then narrowed the request: **"Reseller শুধু অর্ডার তৈরি করতে পারবে এইটা এড কর"** (resellers can create orders — add only this). So only **Create order** is built; the WooCommerce integration is **not** built and still needs the owner's answers (see the questions' options: orders flowing into the ERP by webhook, status pushed back, product import only; and how Woo prices/commission are treated).

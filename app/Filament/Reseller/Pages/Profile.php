@@ -35,7 +35,7 @@ class Profile extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserCircle;
 
-    protected static ?int $navigationSort = 9;
+    protected static ?int $navigationSort = 8;
 
     protected string $view = 'filament.reseller.pages.profile';
 

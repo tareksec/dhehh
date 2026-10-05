@@ -31,7 +31,7 @@ class Earnings extends Page implements HasTable
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 4;
 
     protected string $view = 'filament.reseller.pages.earnings';
 
