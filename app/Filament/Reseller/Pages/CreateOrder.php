@@ -5,8 +5,10 @@ namespace App\Filament\Reseller\Pages;
 use App\Filament\Reseller\Concerns\ForApprovedResellers;
 use App\Models\Product;
 use App\Models\StorefrontPaymentMethod;
+use App\Services\ExternalCourierFraudService;
 use App\Services\ResellerOrderPlacementService;
 use App\Services\ResellerOwnCourierService;
+use App\Support\FraudCheckReport;
 use App\Support\MoneyFormatter;
 use BackedEnum;
 use Filament\Forms\Components\Radio;
@@ -16,11 +18,13 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Html;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -28,6 +32,9 @@ use Illuminate\Validation\ValidationException;
  * customer. The rules (own store's products only, own price never below the
  * base price, cash on delivery, the store's delivery charge) live in
  * ResellerOrderPlacementService, which mirrors the storefront checkout.
+ *
+ * Typing the customer's phone runs the courier fraud check and shows the
+ * same card as the admin order form (filament.fraud-check.compact).
  *
  * Or the reseller sends it with their own courier: they give their parcel ID
  * and pay the full amount in advance, and the store packs the parcel with
@@ -46,6 +53,11 @@ class CreateOrder extends Page
 
     /** @var array<string, mixed>|null */
     public ?array $data = [];
+
+    /** @var array<string, mixed>|null courier fraud check for $fraudPhone */
+    public ?array $fraudResult = null;
+
+    public ?string $fraudPhone = null;
 
     public function getTitle(): string
     {
@@ -81,7 +93,11 @@ class CreateOrder extends Page
                             ->label(__('Phone'))
                             ->tel()
                             ->required()
-                            ->maxLength(40),
+                            ->maxLength(40)
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn (?string $state) => $this->checkCourierFraud($state)),
+                        Html::make(fn (): HtmlString => $this->fraudCheckCard())
+                            ->columnSpanFull(),
                         Textarea::make('address')
                             ->label(__('Delivery address'))
                             ->required()
@@ -219,6 +235,41 @@ class CreateOrder extends Page
         } catch (ValidationException) {
             return null;
         }
+    }
+
+    /**
+     * Runs when the phone field loses focus: the same courier fraud check
+     * as the admin order form, on the store's courier accounts. Always from
+     * the 24h cache when there is one — resellers get no cache-skipping
+     * refresh (see FraudChecker).
+     */
+    public function checkCourierFraud(?string $phone): void
+    {
+        $phone = trim((string) $phone);
+
+        if (! preg_match(FraudChecker::PHONE_PATTERN, $phone)) {
+            $this->fraudResult = null;
+            $this->fraudPhone = null;
+
+            return;
+        }
+
+        $service = app(ExternalCourierFraudService::class);
+        $this->fraudPhone = $service->normalizePhone($phone);
+        $this->fraudResult = $service->checkByPhone($this->fraudPhone, (int) $this->reseller()->company_id);
+    }
+
+    protected function fraudCheckCard(): HtmlString
+    {
+        if ($this->fraudResult === null || $this->fraudPhone === null) {
+            return new HtmlString('');
+        }
+
+        return new HtmlString(view('filament.fraud-check.compact', [
+            'report' => new FraudCheckReport($this->fraudResult, $this->fraudPhone, (int) $this->reseller()->company_id),
+            'fullReportUrl' => FraudChecker::getUrl(['phone' => $this->fraudPhone], panel: 'reseller'),
+            'storeData' => false,
+        ])->render());
     }
 
     public function isOwnCourier(): bool

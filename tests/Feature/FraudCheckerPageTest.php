@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\FraudChecker;
+use App\Filament\Resources\Orders\Pages\CreateOrder;
 use App\Models\Company;
 use App\Models\CourierProvider;
 use App\Models\Customer;
@@ -44,12 +45,12 @@ class FraudCheckerPageTest extends TestCase
             ->assertSee(__('Courier-wise performance'))
             ->assertSee(__('Not configured'));
 
-        $summary = $page->instance()->summary();
+        $summary = $page->instance()->report()->summary();
         $this->assertSame(22, $summary['total']);
         $this->assertSame(22, $summary['success']);
         $this->assertEquals(100, $summary['ratio']);
 
-        $cards = $page->instance()->courierCards();
+        $cards = $page->instance()->report()->courierCards();
         $this->assertTrue($cards[CourierProvider::DRIVER_STEADFAST]['configured']);
         $this->assertEquals(100, $cards[CourierProvider::DRIVER_STEADFAST]['ratio']);
         $this->assertFalse($cards[CourierProvider::DRIVER_PATHAO]['configured']);
@@ -67,7 +68,7 @@ class FraudCheckerPageTest extends TestCase
             ->call('check')
             ->assertSee(__('Risky'));
 
-        $this->assertSame('risky', $page->instance()->verdict()['key']);
+        $this->assertSame('risky', $page->instance()->report()->verdict()['key']);
     }
 
     public function test_no_configured_courier_reports_no_history_instead_of_safe(): void
@@ -80,7 +81,7 @@ class FraudCheckerPageTest extends TestCase
             ->call('check')
             ->assertSee(__('No courier history'));
 
-        $this->assertSame('none', $page->instance()->verdict()['key']);
+        $this->assertSame('none', $page->instance()->report()->verdict()['key']);
         Http::assertNothingSent();
     }
 
@@ -136,7 +137,7 @@ class FraudCheckerPageTest extends TestCase
             ->assertSee(__('This number is on your blacklist'))
             ->assertSee('Refused three parcels');
 
-        $history = $page->instance()->storeHistory();
+        $history = $page->instance()->report()->storeHistory();
         $this->assertSame(3, $history['total']);
         $this->assertSame(2, $history['completed']);
         $this->assertSame(1, $history['returned']);
@@ -158,8 +159,41 @@ class FraudCheckerPageTest extends TestCase
             ->assertDontSee('Other Company Buyer')
             ->assertDontSee('Other company only');
 
-        $this->assertNull($page->instance()->storeHistory());
-        $this->assertNull($page->instance()->blacklistEntry());
+        $this->assertNull($page->instance()->report()->storeHistory());
+        $this->assertNull($page->instance()->report()->blacklistEntry());
+    }
+
+    public function test_the_order_form_shows_the_fraud_card_with_a_full_report_link_when_a_customer_is_picked(): void
+    {
+        $company = $this->actingAsRole('sales_staff');
+        $this->steadfastProvider();
+        Http::fake($this->fakeSteadfastApi(delivered: 1, cancelled: 9));
+        $customer = Customer::query()->create(['name' => 'Order Form Buyer', 'phone' => '+8801712345678', 'address' => 'Dhaka', 'opening_balance' => 0, 'is_active' => true]);
+        CustomerBlacklist::query()->create(['company_id' => $company->id, 'phone' => '01712345678', 'reason' => 'Refused parcels', 'is_active' => true]);
+
+        Livewire::test(CreateOrder::class)
+            ->set('data.customer_id', $customer->getKey())
+            ->assertSee(__('Risky'))
+            ->assertSee('1/10')
+            ->assertSee(__('This number is on your blacklist'))
+            ->assertSee('Refused parcels')
+            ->assertSee(__('Full report'))
+            ->assertSee('fraud-checker?phone=01712345678', false);
+    }
+
+    public function test_the_full_report_link_opens_the_page_already_checked(): void
+    {
+        $this->actingAsRole('sales_staff');
+        $this->steadfastProvider();
+        Http::fake($this->fakeSteadfastApi(delivered: 3, cancelled: 0));
+
+        Livewire::withQueryParams(['phone' => '01712345678'])
+            ->test(FraudChecker::class)
+            ->assertSet('checkedPhone', '01712345678')
+            ->assertSee(__('Safe'));
+
+        // Opened from the order form right after its check: served from cache.
+        Http::assertSentCount(1);
     }
 
     protected function actingAsRole(string $role): Company

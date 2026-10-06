@@ -2,6 +2,26 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-06 - Fraud check on the Create order forms + Fraud Checker for resellers
+
+Reason — owner (in Bangla) asked how the Fraud Checker would show on the Create order page; after my proposal they said yes, resellers may use the fraud checker too: add it to the reseller order page and add the Fraud Checker page to the reseller dashboard.
+
+What changed:
+- **Admin Create / Edit order:** the old one-line result + inline-styled table under **Courier Fraud Check** is now a compact card (`filament.fraud-check.compact`) with the verdict, delivery rate, totals, one chip per connected courier, other merchants' fraud reports, blacklist hit with reason, this store's order history for the number, and **Full report** (opens the admin Fraud Checker with `?phone=` in a new tab, already checked from the cache). Same auto-check on customer pick and same cache-skipping button as before. The button label and its warning are now translated.
+- **Reseller portal:** new **Fraud Checker** menu item (after Orders) and the same card on **Create order**, shown when the phone field loses focus (only for a valid BD mobile number; a half-typed number clears it).
+- Shared logic: `FraudCheckReport` + `ChecksCourierFraud`, so admin and reseller screens always agree. Verdict still uses the `external_fraud_low_ratio_threshold` Customer Risk setting — no new rules.
+
+My decisions (say if you want different):
+- Resellers never see the store's own data for a number: customer name, order history, blacklist reason. They also don't see couriers the store hasn't set up.
+- Resellers get no **Refresh live data** (cache skip). Every check of a new number still logs in to the store's courier panels; there is no per-reseller limit on how many numbers they check. Tell me if you want a daily limit.
+- Reseller checks are logged in the same customer-risk audit log as staff checks, without a customer link.
+
+Needs Bangla review: the 6 new keys — "স্টোরের কুরিয়ারগুলোতে এই নম্বরের ডেলিভারি হিস্ট্রি চেক করে।", "কুরিয়ার সাড়া দেয়নি। কিছুক্ষণ পরে আবার চেষ্টা করুন।", ":ratio% ডেলিভারি হয়েছে", "পুরো রিপোর্ট", "কুরিয়ার ফ্রড চেক", "আগে ফোন নম্বরসহ একজন কাস্টমার সিলেক্ট করুন".
+
+Tests: new `ResellerFraudCheckerTest` (6: access + menu, no store data, no cache skip, only the reseller's own store's couriers, Create order card, `?phone=` link), `FraudCheckerPageTest` 10 (+2: admin order form card, `?phone=` link). Affected tests (`FraudCheckerPage`, `ResellerFraudChecker`, `ResellerPortal*`, `SalesOrder`, `OrderForm`, `TranslationParity`, `MultiCompanyIsolation`, `ExternalCourierFraud*`): all pass except 17 that need the `intl` extension. Full plain `php artisan test` on this server (PHP 8.4 without intl): 1827 tests, 181 failures, all "intl extension required", 0 other failures — needs a full run with intl locally. `npm run build` clean; both admin and reseller themes include the card styles.
+
+Commit status: committed and pushed to the branch and main on owner approval ("ওকে কমিট এবং পুশ কর, মেইনেও দাও", 2026-10-06).
+
 ## 2026-10-06 - Courier status flow audit: order vs courier status, callbacks, booking, labels
 
 Reason — owner (in Bangla): there are two status fields (order status and courier status); booking a courier makes the order look delivered; audit the flow, check whether anything breaks or gets stuck, whether the API calls and booking/sticker work, and whether the callback URL works — "no API callback has come from the courier yet".

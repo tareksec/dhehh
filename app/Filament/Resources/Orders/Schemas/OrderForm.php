@@ -6,6 +6,7 @@ use App\Filament\Forms\Components\CustomerSourceSelect;
 use App\Filament\Forms\Components\CustomerTypeSelect;
 use App\Filament\Forms\Components\EmailInput;
 use App\Filament\Forms\Components\PhoneInput;
+use App\Filament\Pages\FraudChecker;
 use App\Models\CourierProvider;
 use App\Models\Customer;
 use App\Models\Order;
@@ -14,9 +15,9 @@ use App\Models\OrderPayment;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Services\CompanyContext;
-use App\Services\CustomerRiskSettingsService;
 use App\Services\ExternalCourierFraudService;
 use App\Services\ShippingFeeService;
+use App\Support\FraudCheckReport;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -108,7 +109,7 @@ class OrderForm
                         Flex::make([
                             Actions::make([
                                 Action::make('checkExternalCourierFraud')
-                                    ->label('Courier Fraud Check')
+                                    ->label(__('Courier Fraud Check'))
                                     ->icon('heroicon-o-shield-exclamation')
                                     ->color('warning')
                                     ->action(function (Get $get, Set $set): void {
@@ -116,7 +117,7 @@ class OrderForm
 
                                         if (! $customer?->phone) {
                                             Notification::make()
-                                                ->title('Select a customer with a phone number first')
+                                                ->title(__('Select a customer with a phone number first'))
                                                 ->warning()
                                                 ->send();
 
@@ -129,67 +130,19 @@ class OrderForm
 
                             Html::make(function (Get $get): HtmlString {
                                 $result = $get('external_fraud_result');
+                                $customer = Customer::find($get('customer_id'));
 
-                                if (! is_array($result)) {
+                                if (! is_array($result) || ! $customer?->phone) {
                                     return new HtmlString('');
                                 }
 
-                                $ratio = $result['overall_success_ratio'] ?? null;
-                                $threshold = app(CustomerRiskSettingsService::class)
-                                    ->int('external_fraud_low_ratio_threshold');
+                                $phone = app(ExternalCourierFraudService::class)->normalizePhone($customer->phone);
 
-                                [$color, $label] = match (true) {
-                                    $ratio === null => ['#9ca3af', 'No courier history found'],
-                                    $ratio < $threshold => ['#ef4444', "High risk — {$ratio}% success"],
-                                    default => ['#22c55e', "Good — {$ratio}% success"],
-                                };
-
-                                $rows = collect($result)
-                                    ->except('overall_success_ratio')
-                                    ->map(function (array $stats, string $driver): string {
-                                        $total = max(1, (int) $stats['total']);
-                                        $successRate = round(($stats['success'] / $total) * 100, 1);
-
-                                        return '<tr>'
-                                            .'<td style="padding:2px 10px 2px 0;font-weight:600;">'.e(ucfirst($driver)).'</td>'
-                                            .'<td style="padding:2px 10px;text-align:right;">'.e((string) $stats['total']).'</td>'
-                                            .'<td style="padding:2px 10px;text-align:right;color:#22c55e;">'.e((string) $stats['success']).'</td>'
-                                            .'<td style="padding:2px 10px;text-align:right;color:#ef4444;">'.e((string) $stats['cancel']).'</td>'
-                                            .'<td style="padding:2px 0;text-align:right;">'.e((string) $successRate).'%</td>'
-                                            .'</tr>';
-                                    })
-                                    ->implode('');
-
-                                $table = $rows !== ''
-                                    ? '<div style="overflow-x:auto;max-width:100%;">'
-                                        .'<table style="font-size:0.8125rem;opacity:0.85;border-collapse:collapse;font-variant-numeric:tabular-nums;white-space:nowrap;">'
-                                        .'<thead><tr style="opacity:0.6;">'
-                                        .'<th style="text-align:left;padding:2px 10px 2px 0;">Courier</th>'
-                                        .'<th style="padding:2px 10px;text-align:right;">Total</th>'
-                                        .'<th style="padding:2px 10px;text-align:right;">Delivered</th>'
-                                        .'<th style="padding:2px 10px;text-align:right;">Undelivered</th>'
-                                        .'<th style="padding:2px 0;text-align:right;">Confidence</th>'
-                                        .'</tr></thead><tbody>'.$rows.'</tbody></table>'
-                                        .'</div>'
-                                    : '';
-
-                                // Steadfast's fraud-check API also says how many
-                                // other merchants have reported this customer.
-                                $reports = collect($result)
-                                    ->except('overall_success_ratio')
-                                    ->filter(fn (array $stats): bool => ($stats['reports'] ?? 0) > 0)
-                                    ->map(fn (array $stats, string $driver): string => '<span style="color:#ef4444;font-size:0.8125rem;">'
-                                        .e(__(':courier: :count fraud reports from other merchants', ['courier' => ucfirst($driver), 'count' => $stats['reports']]))
-                                        .'</span>')
-                                    ->implode('');
-
-                                return new HtmlString(
-                                    '<div style="display:flex;flex-direction:column;gap:4px;font-size:0.875rem;min-width:0;max-width:100%;">'
-                                    .'<span style="color:'.$color.';font-weight:600;">'.e($label).'</span>'
-                                    .$table
-                                    .$reports
-                                    .'</div>'
-                                );
+                                return new HtmlString(view('filament.fraud-check.compact', [
+                                    'report' => new FraudCheckReport($result, $phone, (int) (app(CompanyContext::class)->id() ?? $customer->company_id)),
+                                    'fullReportUrl' => FraudChecker::canAccess() ? FraudChecker::getUrl(['phone' => $phone], panel: 'admin') : null,
+                                    'storeData' => true,
+                                ])->render());
                             }),
                         ])
                             // Stacks the button above the result (full width on

@@ -8,6 +8,7 @@ use App\Filament\Reseller\Pages\Auth\Login;
 use App\Filament\Reseller\Pages\CreateOrder;
 use App\Filament\Reseller\Pages\Dashboard;
 use App\Filament\Reseller\Pages\Earnings;
+use App\Filament\Reseller\Pages\FraudChecker;
 use App\Filament\Reseller\Pages\MyStore;
 use App\Filament\Reseller\Pages\Orders;
 use App\Filament\Reseller\Pages\PayoutAccounts;
@@ -63,6 +64,7 @@ class ResellerPanelProvider extends PanelProvider
                 Dashboard::class,
                 CreateOrder::class,
                 Orders::class,
+                FraudChecker::class,
                 Products::class,
                 Earnings::class,
                 Withdrawals::class,
