@@ -24,7 +24,7 @@ Tests: 5 new in `ResellerOwnCourierOrderTest` (overpayment → deposit → used 
 
 Needs Bangla review: the 13 new keys ("জমা", "পাঠানো টাকা", "প্রাপ্ত টাকা", "আংশিক পাওয়া গেছে — বাকিটা পাঠান", …).
 
-Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes); only CHANGELOG/UPDATE_NOTES conflicted (both sides kept).
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes), then merged with `origin/main` v2.55.0 (fraud check card); conflicts in CHANGELOG/UPDATE_NOTES, lang files, the portal CreateOrder and ResellerPanelProvider resolved by keeping both sides. Full suite after the merge: 1863 passed, 1 skipped, 0 failed.
 
 ## 2026-10-06 - Reseller's own-courier orders: reseller branding and Due on the invoice, reseller-only edits
 
@@ -46,7 +46,7 @@ Tests: `ResellerOwnCourierOrderTest` now 25 (7 new: staff cannot change items, p
 
 Needs Bangla review: the 16 new keys, especially "বাড়তি টাকার পেমেন্ট", "এখন পাঠাবেন", "এখনও পাওয়া বাকি", "পরিবর্তন".
 
-Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes); only CHANGELOG/UPDATE_NOTES conflicted (both sides kept).
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes), then merged with `origin/main` v2.55.0 (fraud check card); conflicts in CHANGELOG/UPDATE_NOTES, lang files, the portal CreateOrder and ResellerPanelProvider resolved by keeping both sides. Full suite after the merge: 1863 passed, 1 skipped, 0 failed.
 
 ## 2026-10-06 - Reseller module audit: stock errors, Book courier, courier callbacks
 
@@ -62,7 +62,7 @@ Tests: 4 new cases in `ResellerOwnCourierOrderTest`.
 
 Needs Bangla review: "Not enough stock: :products. …", ":name (ordered :ordered, in stock :available)", ":count order(s) were skipped:", "Could not mark the parcel packed", "Parcel marked packed".
 
-Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes); only CHANGELOG/UPDATE_NOTES conflicted (both sides kept).
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes), then merged with `origin/main` v2.55.0 (fraud check card); conflicts in CHANGELOG/UPDATE_NOTES, lang files, the portal CreateOrder and ResellerPanelProvider resolved by keeping both sides. Full suite after the merge: 1863 passed, 1 skipped, 0 failed.
 
 ## 2026-10-06 - A reseller's customer only sees the reseller's price
 
@@ -78,7 +78,7 @@ Tests: 3 new cases in `ResellerOwnCourierOrderTest` (buyer sees only retail on i
 
 Needs Bangla review: "Your customer's price", "Store price", "Your customer's price (on their invoice)", "You pay the store", "Order total", the updated Products description.
 
-Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes); only CHANGELOG/UPDATE_NOTES conflicted (both sides kept).
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes), then merged with `origin/main` v2.55.0 (fraud check card); conflicts in CHANGELOG/UPDATE_NOTES, lang files, the portal CreateOrder and ResellerPanelProvider resolved by keeping both sides. Full suite after the merge: 1863 passed, 1 skipped, 0 failed.
 
 ## 2026-10-06 - Packaging charge on reseller own-courier orders
 
@@ -90,7 +90,27 @@ Tests: new case in `ResellerOwnCourierOrderTest` (quote, order, advance, store-d
 
 Needs Bangla review: "Packaging charge", the setting label and help text, the updated Products description.
 
-Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes); only CHANGELOG/UPDATE_NOTES conflicted (both sides kept).
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes), then merged with `origin/main` v2.55.0 (fraud check card); conflicts in CHANGELOG/UPDATE_NOTES, lang files, the portal CreateOrder and ResellerPanelProvider resolved by keeping both sides. Full suite after the merge: 1863 passed, 1 skipped, 0 failed.
+
+## 2026-10-06 - Fraud check on the Create order forms + Fraud Checker for resellers
+
+Reason — owner (in Bangla) asked how the Fraud Checker would show on the Create order page; after my proposal they said yes, resellers may use the fraud checker too: add it to the reseller order page and add the Fraud Checker page to the reseller dashboard.
+
+What changed:
+- **Admin Create / Edit order:** the old one-line result + inline-styled table under **Courier Fraud Check** is now a compact card (`filament.fraud-check.compact`) with the verdict, delivery rate, totals, one chip per connected courier, other merchants' fraud reports, blacklist hit with reason, this store's order history for the number, and **Full report** (opens the admin Fraud Checker with `?phone=` in a new tab, already checked from the cache). Same auto-check on customer pick and same cache-skipping button as before. The button label and its warning are now translated.
+- **Reseller portal:** new **Fraud Checker** menu item (after Orders) and the same card on **Create order**, shown when the phone field loses focus (only for a valid BD mobile number; a half-typed number clears it).
+- Shared logic: `FraudCheckReport` + `ChecksCourierFraud`, so admin and reseller screens always agree. Verdict still uses the `external_fraud_low_ratio_threshold` Customer Risk setting — no new rules.
+
+My decisions (say if you want different):
+- Resellers never see the store's own data for a number: customer name, order history, blacklist reason. They also don't see couriers the store hasn't set up.
+- Resellers get no **Refresh live data** (cache skip). Every check of a new number still logs in to the store's courier panels; there is no per-reseller limit on how many numbers they check. Tell me if you want a daily limit.
+- Reseller checks are logged in the same customer-risk audit log as staff checks, without a customer link.
+
+Needs Bangla review: the 6 new keys — "স্টোরের কুরিয়ারগুলোতে এই নম্বরের ডেলিভারি হিস্ট্রি চেক করে।", "কুরিয়ার সাড়া দেয়নি। কিছুক্ষণ পরে আবার চেষ্টা করুন।", ":ratio% ডেলিভারি হয়েছে", "পুরো রিপোর্ট", "কুরিয়ার ফ্রড চেক", "আগে ফোন নম্বরসহ একজন কাস্টমার সিলেক্ট করুন".
+
+Tests: new `ResellerFraudCheckerTest` (6: access + menu, no store data, no cache skip, only the reseller's own store's couriers, Create order card, `?phone=` link), `FraudCheckerPageTest` 10 (+2: admin order form card, `?phone=` link). Affected tests (`FraudCheckerPage`, `ResellerFraudChecker`, `ResellerPortal*`, `SalesOrder`, `OrderForm`, `TranslationParity`, `MultiCompanyIsolation`, `ExternalCourierFraud*`): all pass except 17 that need the `intl` extension. Full plain `php artisan test` on this server (PHP 8.4 without intl): 1827 tests, 181 failures, all "intl extension required", 0 other failures — needs a full run with intl locally. `npm run build` clean; both admin and reseller themes include the card styles.
+
+Commit status: committed and pushed to the branch and main on owner approval ("ওকে কমিট এবং পুশ কর, মেইনেও দাও", 2026-10-06).
 
 ## 2026-10-03 - Security audit fixes (items 1–4)
 

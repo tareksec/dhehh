@@ -32,6 +32,18 @@ All notable production changes to Business Dashboard are documented here.
 - Tests: `ResellerOwnCourierOrderTest` (now 30 tests); `MultiCompanyIsolationTest` lists `ResellerDepositEntry`. New lang keys in `lang/en.json` and `lang/bn.json`.
 
 
+## [2.55.0] - 2026-10-06
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Fraud check card on the Create order form.** Picking a customer still runs the courier fraud check, but the result is now a card in the same style as the **Fraud Checker** page: Safe / Risky / No courier history with the delivery rate, total / delivered / cancelled parcels, one line per connected courier, fraud reports from other merchants, a blacklist warning (with its reason) and this store's earlier orders for the number. **Full report** opens the Fraud Checker page for that number in a new tab, already checked. The **Courier Fraud Check** button (skips the 24-hour cache) stays. Now in English and Bangla.
+- **Fraud Checker for resellers.** The reseller portal has a new **Fraud Checker** menu item with the same page, and its **Create order** page shows the same card as soon as the customer's phone number is typed. The check runs on the store's own courier accounts. Resellers see only the courier history and the verdict: never the store's customer names, order history or blacklist reasons, no "set up this courier" cards, and no **Refresh live data** button, so a reseller always gets the 24-hour cached result and cannot make the store's courier panels log in again and again.
+
+### Technical Notes
+
+- New `App\Support\FraudCheckReport` (summary, verdict, courier cards, store history, blacklist) and `App\Filament\Concerns\ChecksCourierFraud` (shared page logic; `showsStoreData()` / `canRefresh()` decide the differences), used by the admin `FraudChecker`, the new `App\Filament\Reseller\Pages\FraudChecker` and both create-order forms. Views moved to `resources/views/filament/fraud-check/` (`page`, new `compact`); the reseller theme now scans that folder. The page accepts `?phone=` and checks it on open. `OrderForm`'s inline-styled result table replaced by the compact card. 6 new lang keys. New `ResellerFraudCheckerTest` (6 tests); `FraudCheckerPageTest` +2 (10 total). No migrations.
 ## [2.54.1] - 2026-10-06
 
 **Release type:** Security Update
