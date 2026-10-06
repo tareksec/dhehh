@@ -34,7 +34,7 @@ Follow-up 2, same change — owner said "পরের কাজ কর" again. N
 
 - Deliberately left as is (my decision, say if you want it changed): `TRUSTED_PROXIES=*` — documented in `docs/deployment.md` as required behind Coolify/Traefik, and the app port is reached only through Traefik; tightening it needs the server's proxy network range. `/health/version` details — the admin updater, deploy docs and tests depend on its fields, and nothing in it is secret. A script-level CSP is still a separate pass (plan 09 step 3.4).
 
-Commit status: committed and pushed to `claude/security-audit-fixes` on owner approval ("commit আর push কর", 2026-10-06). Not merged to main.
+Commit status: committed and pushed to `claude/security-audit-fixes` on owner approval ("commit আর push কর", 2026-10-06); merged with `origin/main` (v2.54.0), full suite then 1834 passed, 2 skipped; pushed to `main` on owner approval ("মেইনে পুশ কর", 2026-10-06).
 
 ## 2026-10-06 - Courier status flow audit: order vs courier status, callbacks, booking, labels
 
