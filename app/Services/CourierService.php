@@ -199,9 +199,9 @@ class CourierService
             ]);
         }
 
-        $response = filled($booking->tracking_id)
+        $response = $this->callCourier('Steadfast', fn (): array => filled($booking->tracking_id)
             ? app(SteadfastCourierClient::class)->statusByTrackingCode($booking->provider, $booking->tracking_id)
-            : app(SteadfastCourierClient::class)->statusByInvoice($booking->provider, $booking->order->order_number);
+            : app(SteadfastCourierClient::class)->statusByInvoice($booking->provider, $booking->order->order_number));
 
         if (($response['status'] ?? null) !== 200 || blank($response['delivery_status'] ?? null)) {
             throw ValidationException::withMessages([
@@ -279,7 +279,7 @@ class CourierService
             ]);
         }
 
-        $response = app(PathaoCourierClient::class)->orderInfo($booking->provider, (string) $booking->tracking_id);
+        $response = $this->callCourier('Pathao', fn (): array => app(PathaoCourierClient::class)->orderInfo($booking->provider, (string) $booking->tracking_id));
         $orderStatus = $response['data']['order_status'] ?? null;
 
         if (blank($orderStatus)) {
@@ -360,7 +360,7 @@ class CourierService
             ]);
         }
 
-        $response = app(RedxCourierClient::class)->parcelInfo($booking->provider, (string) $booking->tracking_id);
+        $response = $this->callCourier('RedX', fn (): array => app(RedxCourierClient::class)->parcelInfo($booking->provider, (string) $booking->tracking_id));
         $status = $response['parcel']['status'] ?? null;
 
         if (blank($status)) {
@@ -445,7 +445,7 @@ class CourierService
             ]);
         }
 
-        $response = app(ECourierClient::class)->track($booking->provider, (string) $booking->tracking_id);
+        $response = $this->callCourier('E-Courier', fn (): array => app(ECourierClient::class)->track($booking->provider, (string) $booking->tracking_id));
         $status = $response['status'] ?? data_get($response, 'query_data.status');
 
         if (is_array($status)) {
@@ -485,7 +485,8 @@ class CourierService
      * courier refuses (bad phone, wrong keys, duplicate invoice, ...) used
      * to surface as a raw exception: no readable message on the Book
      * courier popup, and a bulk booking stopped at that order. Turn it into
-     * a validation error carrying the courier's own reason.
+     * a validation error carrying the courier's own reason. Status syncs go
+     * through here too.
      *
      * @param  Closure(): mixed  $call
      */

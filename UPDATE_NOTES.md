@@ -2,6 +2,55 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-06 - Courier status flow audit: order vs courier status, callbacks, booking, labels
+
+Reason — owner (in Bangla): there are two status fields (order status and courier status); booking a courier makes the order look delivered; audit the flow, check whether anything breaks or gets stuck, whether the API calls and booking/sticker work, and whether the callback URL works — "no API callback has come from the courier yet".
+
+What I checked (each in a test, Steadfast payloads as in its webhook guide):
+- **Booking does not mark an order delivered.** Book courier (Steadfast answers `in_review`) leaves the order at Confirmed with Delivery = Booking pending. A `Pending` callback moves it to Processing / In transit; `Delivered` to Completed / Delivered. Status mapping (incl. `*_approval_pending` → In transit) is as in the 2026-09-27 guide work.
+- **What looked like "delivered":** after booking, the order row shows a green **Delivered** button (and red **Returned**) — quick actions for marking by hand, not the status. Renamed to Mark delivered / Mark returned, with a clearer confirmation. This is my best reading of the report; I can't see the owner's screen or data, so if an order's Delivery column itself says Delivered right after booking, send its Status Logs / Webhook Logs.
+- **Callback URL:** route `POST /webhooks/couriers/{provider id}` is CSRF-exempt, reachable without login, and HTTPS-aware behind Coolify (trusted proxies). Auth: `Authorization: Bearer <Webhook Auth Token>` + optional `X-Signature` HMAC. A call with no/wrong token, or when the provider has no token saved, is rejected with 401 — and was not logged anywhere, so it looked like the courier never called. Now logged as **Rejected** with the reason.
+- **Processing needs the queue worker.** A verified callback is saved as Pending and applied by `ProcessCourierWebhook` on the queue. `docs/deployment.md` runs the worker as a separate Coolify service; if it isn't running, callbacks stay Pending and orders never move. The Webhook Logs page now warns after 5 minutes and has **Process now**.
+- **API calls:** booking and status-sync HTTP errors now come back as readable reasons (booking part was done 2026-10-05; sync added now). The scheduled `couriers:sync-statuses` runs every 30 minutes and also needs the scheduler (`schedule:run` cron) running.
+- **Labels / stickers:** **Print label** appears only when the provider has a Label URL template. Steadfast has none, so there is no sticker for Steadfast bookings in the app — not built here (would need the sticker layout from the owner).
+- **Cancel booking** only marks the booking cancelled in the ERP; no courier cancel API is called. Its confirmation now says so. A re-booking of the same invoice can then be refused by Steadfast as a duplicate (the reason is shown).
+- **Pathao callbacks** (not used by the owner as far as I can see — the tracking IDs are Steadfast's): our adapter reads `order_status`, while Pathao's webhook sends an `event` field and expects an integration handshake. Not changed; needs checking against Pathao's current docs before Pathao is used.
+
+What changed:
+- `CourierWebhookController`: logs rejected calls (deduped per body; payload kept only up to 16 KB); answers Steadfast with 200 `{"status":"success","message":"Webhook received successfully."}` (Steadfast's guide; 202 is kept for the other couriers). I have not confirmed with Steadfast that 202 was a problem.
+- `CourierWebhookLogResource` / `ListCourierWebhookLogs`: Rejected status + filter, **Process now**, stuck-callback warning.
+- `CourierBookingFeedback::run()` for Sync / Update status / Cancel / Mark delivered / Mark returned (order list, order page, booking page). Status-sync calls wrapped in `CourierService::callCourier()`.
+- 14 new lang keys.
+
+Owner check after deploy:
+1. Courier → Providers → Steadfast: a **Webhook Auth Token** is saved; the same token is in Steadfast's panel → Webhook → Auth token; the Callback URL there is exactly the one shown on our provider page (https).
+2. Courier → Webhook Logs: after the next status change at Steadfast, a row should appear. **Rejected** → the token/URL fix it names. **Pending** for minutes → the queue worker service isn't running on Coolify (start it per `docs/deployment.md`; Process now works meanwhile). Nothing at all → Steadfast isn't calling the URL (check the URL in their panel and its Delivery health).
+
+Needs Bangla review: the 14 new keys, especially "ডেলিভারি হয়েছে চিহ্নিত করুন" / "রিটার্ন হয়েছে চিহ্নিত করুন" and the long stuck-callback and cancel-booking sentences.
+
+Tests: new `CourierStatusFlowAuditTest` (6; all 6 fail on the old code — the first only on the 200 response, its status flow already passed), updated `SteadfastApiGuideTest` and `CourierIntegrationTest`; `OrderCourierBookingFeedbackTest`, `CourierMonitoringTest`, `LiveCourierAdaptersTest`, `TranslationParityTest` pass. Full `php artisan test` (plain, no `--env`, PHP 8.4 with intl): **1818 passed, 1 skipped, 0 failed**.
+
+Commit status: committed and pushed to the branch and main on owner approval ("ওকে কমিট এবং পুশ করো মেইনেও পোস্ট করো", 2026-10-06), together with the "already booked" fix below.
+
+## 2026-10-06 - Book courier: "already booked" for a never-booked order
+
+Reason — owner sent a screenshot of bulk Book courier on a brand-new order: "0 order(s) booked · 1 already booked", although the order had never been booked.
+
+Cause (reproduced in tests): "can this order be booked" only checked `orders.delivery_status === not_booked`. That field changes without any courier booking: the Create order form has a Delivery Status select, and Change status → Shipping sets it to In transit (`OrderStatusWorkflowService`). Bulk booking reported every non-bookable order as "already booked", and the row/order-page Book courier buttons were hidden for it. I can't see the owner's order, so which of the two moved this one is not confirmed; both now book.
+
+What changed:
+- New `Order::courierBookingBlocker()`: blocks only a live courier booking (latest booking not cancelled/failed), a delivered/partly delivered/returned delivery, a cancelled/returned/refunded order, or a reseller's own-courier order. After a cancelled or failed booking a new one can be made.
+- `OrdersTable` (row + bulk) and `ViewOrder` use it; the current-company check stays. Bulk Book courier lists each skipped order with its reason.
+- 10 new lang keys (reasons, bulk summary, popup text, plus "Refunded" / "Partial Delivered" for the reason text).
+
+My decision (say if you want different): when an order's Delivery status says In transit but it has no booking, booking it is allowed and then sets Delivery status from the courier's answer (usually Booking pending).
+
+Needs Bangla review: the 10 new keys, especially "অর্ডারটি :status।" and "কুরিয়ার বুক করতে অর্ডারের কোম্পানিতে যান।"
+
+Tests: `OrderCourierBookingFeedbackTest` 10 (4 new; the 4 fail on the old code), plus `CourierIntegrationTest`, `ResellerOwnCourierOrderTest`, `SalesOrderTest`, `TranslationParityTest`. Full `php artisan test` (plain, no `--env`, PHP 8.4 with intl): **1812 passed, 1 skipped, 0 failed**.
+
+Commit status: committed and pushed to the branch and main on owner approval ("ওকে কমিট এবং পুশ করো মেইনেও পোস্ট করো", 2026-10-06).
+
 ## 2026-10-06 - Headless Next.js storefront, phase 3 (customer accounts / order tracking / reviews)
 
 Reason — owner asked "ধাপ ৩ শুরু কর" after phase 2 reached `main`. Parity rule: nothing is re-implemented — the API calls the services the Blade account pages use.

@@ -43,6 +43,31 @@ class CourierBookingFeedback
             ->send();
     }
 
+    /**
+     * Same reporting for the other courier actions (sync, status change,
+     * cancel, mark delivered / returned), whose errors also match no field.
+     */
+    public static function run(Action $action, Closure $callback, string $successTitle): void
+    {
+        try {
+            $callback();
+        } catch (ValidationException $exception) {
+            Notification::make()
+                ->title(__('Courier action failed'))
+                ->body(collect($exception->errors())->flatten()->unique()->implode(' '))
+                ->danger()
+                ->persistent()
+                ->send();
+
+            $action->halt();
+        }
+
+        Notification::make()
+            ->title($successTitle)
+            ->success()
+            ->send();
+    }
+
     /** One failed order's line for a bulk booking summary. */
     public static function failureLine(ValidationException $exception, string $orderNumber): string
     {

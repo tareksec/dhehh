@@ -4,6 +4,27 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **"Already booked" for an order that was never booked.** Book courier treated an order as already booked whenever its **Delivery status** was anything but "Not booked". That field can move without any courier booking — chosen on the Create order form, or set to "In transit" by **Change status → Shipping** — so such an order was skipped by bulk Book courier ("0 order(s) booked · 1 already booked"), and its own Book courier button was hidden. Booking is now decided by the order's actual courier booking: an order with no live booking can be booked (including after a cancelled or failed booking). Orders that really cannot be booked are still skipped: a live booking exists, the order is delivered / partly delivered / returned, the order is cancelled / returned / refunded, or the reseller ships it with their own courier.
+- **Bulk Book courier now says why each order was skipped**, one line per order with its number (for example "Already booked (tracking ID …)" or "The order is Cancelled."), instead of a single "already booked" count. The popup text is updated to match. In English and Bangla.
+- **Order list: "Delivered" / "Returned" buttons read like a status.** Right after an order is booked, its row showed a green **Delivered** button (and a red **Returned** one). These are quick actions that mark the parcel delivered or returned by hand, not the order's status, but they looked like the order had been delivered. They are now **Mark delivered** / **Mark returned** (also on the order page), and the confirmation says it moves the order to Delivered without asking the courier. Booking itself never marks an order delivered: it stays at its order status with Delivery = Booking pending until the courier reports progress.
+- **Courier callbacks that were turned away left no trace.** A callback with a missing or wrong Auth token (or when no token is saved on the provider) was rejected silently, so a Callback URL / token mismatch looked exactly like the courier never calling. Each rejected call is now listed in **Courier → Webhook Logs** as **Rejected**, with the reason and what to fix.
+- **Courier actions that failed silently** — Sync courier status, Update status, Cancel booking, Mark delivered / returned — now show a success or failure message with the reason. A courier's HTTP error during a status sync becomes a readable reason (also in the scheduled sync's last error).
+- **Steadfast callbacks are answered the way Steadfast's webhook guide shows** (200 with `{"status":"success","message":"Webhook received successfully."}` instead of 202).
+
+### Added
+
+- **Webhook Logs: Process now, and a warning when callbacks are stuck.** A saved callback is applied by the queue worker. When callbacks wait more than 5 minutes, the Webhook Logs page now says the queue worker does not seem to be running, and each waiting or failed callback has a **Process now** button.
+- **Cancel booking explains itself:** the confirmation says it only marks the booking cancelled in this app and that the parcel must also be cancelled in the courier's own panel.
+
+### Technical Notes
+
+- New `Order::courierBookingBlocker()` (reads `latestCourierBooking`, which the orders list eager-loads). `OrdersTable::canBookCourier()` / new `courierBookingBlocker()` (adds the current-company check) and `ViewOrder::canBookCourier()` use it; `bookCourierBulk()` lists per-order skip reasons. 10 new lang keys. `OrderCourierBookingFeedbackTest` +4 tests (10 total). No migrations.
+- `CourierWebhookController` logs rejected calls (`status = rejected`, deduped per body, payload kept only up to 16 KB) and answers Steadfast with 200. `CourierWebhookLogResource::processNowAction()` runs `ProcessCourierWebhook` inline; `ListCourierWebhookLogs::getSubheading()` warns on pending logs older than 5 minutes. `CourierBookingFeedback::run()` wraps the other courier actions. Status-sync client calls also go through `CourierService::callCourier()`. New `CourierStatusFlowAuditTest` (6 tests); `SteadfastApiGuideTest` / `CourierIntegrationTest` updated for the 200 response and the rejected-call log. 14 more lang keys.
+
 ## [2.53.0] - 2026-10-05
 
 **Release type:** Minor Feature Update

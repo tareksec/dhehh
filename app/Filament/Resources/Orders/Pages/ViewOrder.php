@@ -95,7 +95,7 @@ class ViewOrder extends ViewRecord
                     $this->record->refresh();
                 }),
             Action::make('markDelivered')
-                ->label('Mark delivered')
+                ->label(__('Mark delivered'))
                 ->icon('heroicon-o-check-circle')
                 ->color('success')
                 ->visible(fn (): bool => filled($this->record->latestCourierBooking) && ! in_array($this->record->delivery_status, [
@@ -104,12 +104,13 @@ class ViewOrder extends ViewRecord
                     CourierBooking::STATUS_CANCELLED,
                 ], true))
                 ->requiresConfirmation()
-                ->action(function (): void {
-                    app(CourierService::class)->updateStatus($this->record->latestCourierBooking, CourierBooking::STATUS_DELIVERED, 'Marked delivered from order detail.');
+                ->modalDescription(__('Only when the customer has received the parcel. This moves the order to Delivered without asking the courier.'))
+                ->action(function (Action $action): void {
+                    CourierBookingFeedback::run($action, fn () => app(CourierService::class)->updateStatus($this->record->latestCourierBooking, CourierBooking::STATUS_DELIVERED, 'Marked delivered from order detail.'), __('Marked delivered'));
                     $this->record->refresh();
                 }),
             Action::make('markReturned')
-                ->label('Mark returned')
+                ->label(__('Mark returned'))
                 ->icon('heroicon-o-arrow-uturn-left')
                 ->color('danger')
                 ->visible(fn (): bool => filled($this->record->latestCourierBooking) && ! in_array($this->record->delivery_status, [
@@ -118,8 +119,8 @@ class ViewOrder extends ViewRecord
                     CourierBooking::STATUS_CANCELLED,
                 ], true))
                 ->requiresConfirmation()
-                ->action(function (): void {
-                    app(CourierService::class)->updateStatus($this->record->latestCourierBooking, CourierBooking::STATUS_RETURNED, 'Marked returned from order detail.');
+                ->action(function (Action $action): void {
+                    CourierBookingFeedback::run($action, fn () => app(CourierService::class)->updateStatus($this->record->latestCourierBooking, CourierBooking::STATUS_RETURNED, 'Marked returned from order detail.'), __('Marked returned'));
                     $this->record->refresh();
                 }),
             Action::make('orderSummaryCard')
@@ -314,11 +315,10 @@ class ViewOrder extends ViewRecord
 
     protected function canBookCourier(): bool
     {
-        // The reseller's own courier carries these; the company never books one.
-        return ! $this->record->reseller_own_courier
-            && $this->record->delivery_status === CourierBooking::STATUS_NOT_BOOKED
-            && app(CompanyContext::class)->hasCompany()
-            && (int) app(CompanyContext::class)->id() === (int) $this->record->company_id;
+        // A live courier booking, not the Delivery status field, decides (see Order::courierBookingBlocker()).
+        return app(CompanyContext::class)->hasCompany()
+            && (int) app(CompanyContext::class)->id() === (int) $this->record->company_id
+            && $this->record->courierBookingBlocker() === null;
     }
 
     /**

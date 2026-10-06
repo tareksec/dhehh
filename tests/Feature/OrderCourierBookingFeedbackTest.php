@@ -14,12 +14,14 @@ use App\Models\Product;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Services\CompanyContext;
+use App\Services\OrderStatusWorkflowService;
 use App\Services\SteadfastCourierClient;
 use Filament\Actions\Testing\TestAction;
 use Filament\Notifications\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\HtmlString;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -220,5 +222,105 @@ class OrderCourierBookingFeedbackTest extends TestCase
             ->filterTable('has_upsell', false)
             ->assertCanSeeTableRecords([$withoutUpsell])
             ->assertCanNotSeeTableRecords([$withUpsell]);
+    }
+
+    private function fakeSteadfastSuccess(string $tracking = 'SF-NEW'): void
+    {
+        Http::fake([
+            SteadfastCourierClient::DEFAULT_BASE_URL.'/create_order' => Http::response([
+                'status' => 200,
+                'consignment' => ['consignment_id' => 90, 'tracking_code' => $tracking, 'status' => 'in_review'],
+            ]),
+        ]);
+    }
+
+    /**
+     * Owner report (2026-10-06): a brand-new order that was never booked was
+     * skipped by bulk Book courier as "1 already booked". Only the Delivery
+     * status field was checked, and it can be moved past "Not booked"
+     * without any booking — here by Change status → Shipping.
+     */
+    public function test_an_order_moved_to_shipping_without_a_booking_can_still_be_booked(): void
+    {
+        $order = $this->order();
+        app(OrderStatusWorkflowService::class)->transition($order, Order::STAGE_SHIPPING);
+        $this->assertSame(CourierBooking::STATUS_IN_TRANSIT, $order->refresh()->delivery_status);
+        $this->fakeSteadfastSuccess();
+
+        Livewire::test(ListOrders::class)
+            ->assertTableActionVisible('bookCourier', $order)
+            ->callTableBulkAction('bookCourierBulk', [$order], ['courier_provider_id' => $this->steadfast->getKey()]);
+
+        Notification::assertNotified(__(':count order(s) booked', ['count' => 1]));
+        $this->assertSame('SF-NEW', CourierBooking::query()->sole()->tracking_id);
+    }
+
+    public function test_a_delivery_status_set_on_the_order_without_a_booking_does_not_block_booking(): void
+    {
+        $order = $this->order();
+        $order->forceFill(['delivery_status' => CourierBooking::STATUS_BOOKED])->save();
+        $this->fakeSteadfastSuccess();
+
+        Livewire::test(ViewOrder::class, ['record' => $order->getRouteKey()])
+            ->assertActionVisible('bookCourier');
+
+        Livewire::test(ListOrders::class)
+            ->mountTableAction('bookCourier', $order)
+            ->callMountedTableAction()
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame('SF-NEW', CourierBooking::query()->sole()->tracking_id);
+    }
+
+    public function test_bulk_booking_says_why_each_order_was_skipped(): void
+    {
+        $booked = $this->order('+8801700000005');
+        CourierBooking::query()->create([
+            'company_id' => $this->company->getKey(),
+            'courier_provider_id' => $this->manual->getKey(),
+            'order_id' => $booked->getKey(),
+            'tracking_id' => 'LIVE-1',
+            'recipient_name' => 'Courier Customer',
+            'status' => CourierBooking::STATUS_BOOKED,
+            'booked_at' => now(),
+        ]);
+        $cancelled = $this->order('+8801700000006');
+        app(OrderStatusWorkflowService::class)->transition($cancelled, Order::STAGE_CANCELLED, 'Customer cancelled');
+
+        Livewire::test(ListOrders::class)
+            ->assertCanSeeTableRecords([$booked, $cancelled])
+            ->callTableBulkAction('bookCourierBulk', [$booked, $cancelled], ['courier_provider_id' => $this->steadfast->getKey()])
+            ->assertHasNoTableBulkActionErrors();
+
+        Notification::assertNotified(
+            Notification::make()
+                ->title(__(':count order(s) booked', ['count' => 0]))
+                ->body(new HtmlString(collect([
+                    __(':count skipped', ['count' => 2]).'.',
+                    // In the list's newest-first order.
+                    $cancelled->order_number.': '.__('The order is :status.', ['status' => __('Cancelled')]),
+                    $booked->order_number.': '.__('Already booked (tracking ID :tracking).', ['tracking' => 'LIVE-1']),
+                ])->map(fn (string $line): string => e($line))->implode('<br>')))
+                ->danger()
+                ->persistent()
+        );
+        Http::assertNothingSent();
+    }
+
+    public function test_an_order_whose_booking_was_cancelled_can_be_booked_again(): void
+    {
+        $order = $this->order();
+        CourierBooking::query()->create([
+            'company_id' => $this->company->getKey(),
+            'courier_provider_id' => $this->manual->getKey(),
+            'order_id' => $order->getKey(),
+            'tracking_id' => 'OLD-1',
+            'recipient_name' => 'Courier Customer',
+            'status' => CourierBooking::STATUS_CANCELLED,
+            'booked_at' => now(),
+        ]);
+        $order->forceFill(['delivery_status' => CourierBooking::STATUS_CANCELLED])->save();
+
+        $this->assertNull($order->refresh()->courierBookingBlocker());
     }
 }
