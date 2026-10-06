@@ -89,6 +89,7 @@ use App\Models\TransactionLedger;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherAttachment;
+use App\Models\WhatsAppContact;
 use App\Scopes\CompanyScope;
 use App\Services\CompanyContext;
 use App\Services\ReportService;
@@ -131,6 +132,7 @@ class MultiCompanyIsolationTest extends TestCase
             Broadcast::class, Media::class, GeneratedImage::class, GeneratedVideo::class,
             ExpenseScan::class, ExpenseScanItem::class,
             ResellerCommission::class, ResellerPayoutRequest::class, ResellerPayoutAccount::class,
+            WhatsAppContact::class,
         ];
 
         foreach ($models as $modelClass) {

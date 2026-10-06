@@ -4,6 +4,29 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **WhatsApp Web Login (CRM → WhatsApp Web Login).** Link the WhatsApp Business app to the ERP by scanning a QR code, the same way as WhatsApp Web. Every 1:1 chat the phone shares — the full history and every new message, sent or received — is saved into the CRM Inbox with photos, voice notes, videos and documents, and every WhatsApp contact is saved as a customer record linked to the matching customer or lead by phone. The page shows the connection status, the QR code, history sync progress and how many chats, messages and contacts were saved. In English and Bangla.
+- **Chats and customer info survive a ban.** The archive belongs to the ERP: logging out, deleting the channel or WhatsApp banning the number never deletes saved chats, messages or contacts. A "delete for everyone" on WhatsApp keeps the original message in the ERP and marks it **Deleted on WhatsApp** in the Inbox.
+
+### Changed
+
+- WhatsApp Web chats are read-only in the ERP Inbox — reply from the phone app (internal notes still work). The AI auto-reply, read receipts and SMS fallback never run for them.
+
+### Security
+
+- The bridge API key is stored encrypted per company; every webhook from the bridge is HMAC-SHA256 signed with a per-channel secret and rejected otherwise.
+
+### Technical Notes
+
+- **New service to deploy:** `whatsapp-bridge/` (Node.js 20+, Baileys `7.0.0-rc14`, Dockerfile included). It needs `BRIDGE_API_KEY` and a **persistent** `DATA_DIR` volume; run it as its own Coolify app. See `whatsapp-bridge/README.md`. Unofficial WhatsApp Web client — not a Meta API.
+- Migration `2026_10_05_100000_add_whatsapp_web_archive_support`: `conversation_channels.web_status/web_phone/web_connected_at/web_disconnected_at/web_history_synced_at`, `conversation_messages.revoked_at`, new company-owned `whatsapp_contacts` table (channel_id nullOnDelete). `connection_type = 'web'` marks these channels.
+- New routes `POST /webhooks/whatsapp-web/{channel}` and `/media` (CSRF-exempt, throttle 600/min). Messages are archived by queued `ImportWhatsAppWebMessagesJob` / `SyncWhatsAppWebContactsJob` (idempotent on `waweb:{channel}:{id}`), so a queue worker must run. Media uploads need PHP `post_max_size` large enough for the attachments.
+- Rules for WhatsApp Web channels, with the relevant clauses of WhatsApp's Terms of Service, Business App terms, Messaging Guidelines and Business Messaging Policy quoted word for word (checked 2026-10-06), are in `docs/whatsapp-web-rules.md` and referenced from `CLAUDE.md`.
+- New `WhatsAppWebArchiveTest` (12 tests) and bridge unit tests (`npm test` in `whatsapp-bridge/`, 10 tests).
+
 ## [2.46.0] - 2026-10-04
 
 **Release type:** Minor Feature Update

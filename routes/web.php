@@ -48,6 +48,7 @@ use App\Http\Controllers\Storefront\ProductReviewController as StorefrontProduct
 use App\Http\Controllers\Storefront\ProductShowController as StorefrontProductShowController;
 use App\Http\Controllers\Storefront\ResellerController;
 use App\Http\Controllers\Storefront\ResellerStoreController;
+use App\Http\Controllers\WhatsAppWebWebhookController;
 use App\Http\Controllers\WooCommerceWebhookController;
 use App\Http\Controllers\ZiniPayWebhookController;
 use App\Http\Middleware\ResolveCompanyFromDomain;
@@ -80,6 +81,16 @@ Route::get('/webhooks/meta', [MetaWebhookController::class, 'verify'])
     ->name('webhooks.meta.verify');
 Route::post('/webhooks/meta', [MetaWebhookController::class, 'handle'])
     ->name('webhooks.meta.handle');
+
+// Signed (HMAC) by the self-hosted whatsapp-bridge; see WhatsAppWebWebhookController.
+Route::middleware('throttle:600,1')->group(function (): void {
+    Route::post('/webhooks/whatsapp-web/{channel}', [WhatsAppWebWebhookController::class, 'handle'])
+        ->whereNumber('channel')
+        ->name('webhooks.whatsapp-web.handle');
+    Route::post('/webhooks/whatsapp-web/{channel}/media', [WhatsAppWebWebhookController::class, 'media'])
+        ->whereNumber('channel')
+        ->name('webhooks.whatsapp-web.media');
+});
 
 Route::middleware('throttle:30,1')->group(function (): void {
     Route::get('/o/{token}', [ChatOrderController::class, 'show'])

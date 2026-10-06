@@ -17,6 +17,10 @@ These rules are mandatory for any AI agent working in this repository.
 - Never invent demo/placeholder business rules — real rules only, gathered from the owner. External credentials (payment, SMS, WhatsApp, WooCommerce) are always admin-configurable encrypted settings fields; the owner plugs in keys.
 - Storefront-visible content must be manageable from the Filament admin panel, never hardcoded in views.
 
+## WhatsApp Web (QR) channel rule
+
+- Any work on WhatsApp channels with `connection_type = 'web'` (the `whatsapp-bridge` service) must follow `docs/whatsapp-web-rules.md`: the archive is never deleted; sending is off by default and only allowed as a staff reply to a customer who messaged first; no bulk, broadcast, follow-up or AI sending; honour opt-out; admin-set rate limits; stop on ban/logout; no SMS fallback.
+
 ## Bilingual (Bangla + English) rule
 
 - Follow `docs/i18n-bangla-english-plan.md` (section 0 applies to every task, not only i18n work).

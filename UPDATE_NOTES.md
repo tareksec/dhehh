@@ -2,6 +2,60 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-06 - WhatsApp terms quoted word for word in the rules file
+
+Reason — owner asked "সব টার্মস গুলো যুক্ত করেছ?" (did you add all the terms?). I said only a summary of the relevant parts was there, two pages had not been read fully, and offered to quote the relevant clauses word for word. Owner: "১ নম্বরটা কর, তারপর কমিট এবং পুশ কর" (do option 1, then commit and push).
+
+What changed (docs only): `docs/whatsapp-web-rules.md` "What WhatsApp's terms say" now quotes, word for word with links and dates:
+- WhatsApp Terms for WhatsApp Business App (effective 2026-09-23): Restrictions (a)–(h), Compliance (opt-in, opt-out), Acceptable Use (e)–(h), (l), (m), Enforcement, section 12 Termination. (The 2026-10-05 version used a search-result summary because the page URL I had was 404; the right URL was found.)
+- WhatsApp Terms of Service (effective 2021-01-04): Our Terms And Policies, Legal And Acceptable Use, Harm To WhatsApp Or Our Users, termination.
+- WhatsApp Messaging Guidelines (2026-09-23): "… scrape data, or use unofficial clients …".
+- WhatsApp Business Messaging Policy (2026-09-23): opt-in, opt-out, at-scale messaging, permanent prohibition.
+- Help Center "About unofficial apps" is listed as not quoted: its body loads only in a browser and could not be read from the cloud session.
+Every quote fragment (25) was checked by script against the downloaded page text.
+
+New finding for the owner: Business App terms section 12 says that when the terms end the company must "delete any user information Company obtained in breach of these Business App Terms". Archived chats may count as obtained in breach. The file says so; rule 1 (keep the archive) stays because the owner asked for it, and any deletion after a ban is the owner's legal decision.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7` on owner approval ("১ নম্বরটা কর, তারপর কমিট এবং পুশ কর", 2026-10-06), together with the two entries below.
+
+## 2026-10-05 - WhatsApp Web rules + terms check (before ERP sending)
+
+Reason — owner asked whether the ERP can also send text/image/voice/video/files through the WhatsApp Web channel, then said (Bangla) "add the rules first, and first check WhatsApp's terms".
+
+What changed (docs only, no code):
+- New `docs/whatsapp-web-rules.md`: summary of WhatsApp Terms of Service, Business App terms, the unofficial-apps help page and the Business Messaging Policy (checked 2026-10-05, with links), and 9 rules for web channels (permanent archive; sending off by default; reply only to customers who messaged first; no bulk/automation/AI; honour opt-out; one-at-a-time with admin-set limits; stop on ban/logout; save and attribute every sent message; no SMS fallback).
+- `CLAUDE.md`: new "WhatsApp Web (QR) channel rule" section pointing to that file.
+
+Terms finding to tell the owner: linking an unofficial WhatsApp Web client breaks WhatsApp's terms even for read-only use; sending raises the risk. The official no-risk way to send media from the ERP is the Cloud API / Coexistence channel the app already has.
+
+Open owner decisions: build ERP sending on the web channel or not; if yes, the pause and per-minute/per-hour limits (rule 6).
+
+Commit status: committed and pushed on owner approval (2026-10-06), with the entry above.
+
+## 2026-10-05 - WhatsApp Web (QR) login: full chat archive that survives a ban
+
+Reason — owner asked (Bangla): add WhatsApp Web login so all WhatsApp Business app messages load, everything sent in the app so far is saved in the ERP, customer messages are not lost even if the WhatsApp Business number is banned, and all customer info is saved in our database.
+
+What changed:
+- New `whatsapp-bridge/` Node.js service (Baileys 7.0.0-rc14): QR login as a linked device ("Desktop" identity + all history sync types, so WhatsApp sends the full history), archives 1:1 chats only (groups/status/channels skipped), contacts, media, and "delete for everyone" markers. Disk-backed outbox: events are kept until the ERP answers 2xx. Read-only — never sends WhatsApp messages. Dockerfile + README.
+- ERP: new CRM page **WhatsApp Web Login** (super admin; bridge URL + encrypted API key, link device / show QR, status, history progress, chats/messages/contacts saved, log out). Webhook `WhatsAppWebWebhookController` (HMAC-signed, per-channel secret in `app_secret`), jobs `ImportWhatsAppWebMessagesJob` / `SyncWhatsAppWebContactsJob`, `WhatsAppWebArchiveService`, `WhatsAppWebBridgeClient`, `WhatsAppWebSettingsService`, model `WhatsAppContact` (+ isolation test entry), migration (channel web_* columns, `conversation_messages.revoked_at`, `whatsapp_contacts`).
+- Inbox shows **Deleted on WhatsApp** on revoked messages. `ConversationMessengerService` refuses to send on web-archive chats (before creating a message, so no SMS fallback fires) and skips read receipts. Channels list hides Test & Subscribe / Edit for web channels.
+
+My decisions (say if you want different):
+- Read-only archive: replies stay on the phone. Sending through an unofficial WhatsApp Web client raises the ban risk the owner is worried about. Can be added later.
+- History import links chats to existing customers/leads by phone but does **not** create leads (thousands of old chats would flood the lead pipeline); every chat's number is still saved in `whatsapp_contacts`. Live incoming messages from unknown numbers create a lead (channel `auto_create_leads`).
+- Only 1:1 chats; groups are skipped.
+- If the same number is also connected by Coexistence, its chats appear under both channels (separate conversations).
+- Risk to tell the owner: WhatsApp Web automation is unofficial (not a Meta API); WhatsApp may unlink or restrict the number. Data already saved is unaffected.
+
+Deploy needs: a separate bridge app with a persistent volume and `BRIDGE_API_KEY`, a running queue worker, and PHP/web server body limits big enough for media.
+
+Needs Bangla review: 49 new keys in `lang/bn.json` (WhatsApp Web Login page, statuses, Inbox "Deleted on WhatsApp", read-only error).
+
+Tests: new `tests/Feature/WhatsAppWebArchiveTest.php` (12) and `whatsapp-bridge` `npm test` (10) pass. Full `php artisan test` (plain, no `--env`): 1683 passed, 2 skipped. `npm run build` clean. Bridge smoke-started locally (health, session API, outbox persisted events while the ERP was unreachable); a real QR scan could not be tested from the cloud sandbox (no WhatsApp network access).
+
+Commit status: committed and pushed on owner approval (2026-10-06), with the entries above.
+
 ## 2026-10-03 - Fraud Checker page laid out like ParcelVai
 
 Reason — owner asked whether our fraud checker tool could be laid out like https://parcelvai.com/ and sent a screenshot of ParcelVai's result for their own number (verdict banner, summary tiles, per-courier cards).
