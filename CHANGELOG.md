@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.56.0] - 2026-10-06
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -30,8 +32,6 @@ All notable production changes to Business Dashboard are documented here.
 - Migration `2026_10_06_110000_create_reseller_deposit_entries_table` (new company-owned `ResellerDepositEntry`: +overpayment / −used, balance = sum). `ResellerOwnCourierService::depositBalance()`, `applyDeposit()` (a completed `StorefrontPayment` with gateway `reseller_deposit` plus an `OrderPayment` with no account — the cash was already posted with the earlier order's payment, which records the full amount received), `verifyPayment(..., $received)` credits the overpayment, new payment state `short`. Deposit payments do not lock an order for the reseller's changes. `OrderPayment` sets `received_by` only for a staff `User` (a reseller signed in to the portal is a `Customer`). Top-bar badge via `PanelsRenderHook::USER_MENU_BEFORE` on the reseller panel. Run migrations on deploy.
 - `OrderStatusWorkflowService` checks stock (`OrderStockCheckService::shortages()`) before moving an order into an accounted status and reports it under `stage`; `ResellerOwnCourierService::markPacked()` confirms a draft inside the same transaction.
 - Tests: `ResellerOwnCourierOrderTest` (now 30 tests); `MultiCompanyIsolationTest` lists `ResellerDepositEntry`. New lang keys in `lang/en.json` and `lang/bn.json`.
-
-
 ## [2.55.0] - 2026-10-06
 
 **Release type:** Minor Feature Update
