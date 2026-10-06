@@ -41,7 +41,8 @@ class UserRoleResource extends Resource
 
     public static function canAccess(): bool
     {
-        return Auth::user() instanceof User && Auth::user()->canManageUsers();
+        // Editing what a role may do is changing permissions: Super Admin only.
+        return Auth::user() instanceof User && Auth::user()->canChangePermissions();
     }
 
     public static function form(Schema $schema): Schema

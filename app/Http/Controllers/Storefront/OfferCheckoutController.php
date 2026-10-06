@@ -76,6 +76,11 @@ class OfferCheckoutController extends Controller
 
         abort_unless($order->company_id === $company->getKey() && $order->source === Order::SOURCE_OFFER, 404);
 
+        // The preview has no signed URL, so the order ID alone would expose
+        // a customer's name, phone and address to any signed-in staff member.
+        // Require the same permission as opening the order in the admin panel.
+        abort_unless(! auth()->check() || auth()->user()->canPerformModelAbility('view', Order::class), 404);
+
         return $this->thankYouView($company, $setting, $slug, $order, $company->slug);
     }
 

@@ -13,6 +13,34 @@ All notable production changes to Business Dashboard are documented here.
 
 - New `App\Support\FraudCheckReport` (summary, verdict, courier cards, store history, blacklist) and `App\Filament\Concerns\ChecksCourierFraud` (shared page logic; `showsStoreData()` / `canRefresh()` decide the differences), used by the admin `FraudChecker`, the new `App\Filament\Reseller\Pages\FraudChecker` and both create-order forms. Views moved to `resources/views/filament/fraud-check/` (`page`, new `compact`); the reseller theme now scans that folder. The page accepts `?phone=` and checks it on open. `OrderForm`'s inline-styled result table replaced by the compact card. 6 new lang keys. New `ResellerFraudCheckerTest` (6 tests); `FraudCheckerPageTest` +2 (10 total). No migrations.
 
+## [2.54.1] - 2026-10-06
+
+**Release type:** Security Update
+
+### Security
+
+- **Order details could be opened by any staff login.** The storefront preview's order-confirmation pages (`/storefront/<store>/checkout/success/<id>` and the offer thank-you page) had no check, so any signed-in staff member, whatever their role, could show a customer's name, phone and address by trying order numbers 1, 2, 3… These pages now need the same permission as opening the order in the admin panel ("Sales: View").
+- **Staff could preview another company's storefront.** Eight storefront preview pages (pages, contact, complaints, cart, checkout, order tracking, reviews, account orders) did not check the company. A staff member of one company could open another company's preview by its address and even send a complaint into it. They now return "not found" unless the staff member belongs to that company (Super Admin still sees all).
+- **Changing or resetting a customer password now signs out their other devices.** Before, an old login (for example on a shared or lost phone) stayed signed in, and "remember me" kept working, after the password was changed. The device that made the change stays signed in.
+- **Only a Super Admin can change permissions now.** Before, a custom role with the "Users: Manage" permission could change any user's role (its own included, even to Super Admin), create roles, and change what each role may do. It could also edit, delete or reset the password of a Super Admin account. Now only a Super Admin can change a user's role, create a role or open the role permissions screen ("Manage Roles"), and only a Super Admin can change a Super Admin's account. Other staff with "Users: Manage" can still add users and edit names, emails, passwords, active status and companies. They see the role but cannot change it, and a user they add starts as Sales Staff until a Super Admin sets the role.
+- **Limits on repeated tries:** the storefront preview's sign-in, register, forgot/reset-password and change-password forms, the live storefront's change-password form, and the Meta (Facebook/Instagram) message webhook now limit how many requests one address can send per minute, like the other sign-in forms already did.
+- **Extra browser protection headers:** every page now tells the browser to use HTTPS only (sent on HTTPS pages only), and a basic Content-Security-Policy blocks other sites from framing the app, `<base>` tag hijacking and browser plugins. Scripts are not restricted yet, so nothing on the site changes.
+- **Security updates for third-party packages:** Laravel 13.23 → 13.34 (debug-page XSS), Filament 5.7.5 → 5.8.4 (an already-used two-factor code could be used again), league/commonmark 2.8.3 → 2.10.3 (several denial-of-service and filter-bypass issues), league/flysystem 3.35 → 3.36. In the browser bundle, `@grpc/grpc-js` (pulled in by Firebase) is forced to 1.14.5. `composer audit` and `npm audit` now report no known vulnerabilities.
+
+### Fixed
+
+- **Storefront preview: the order-confirmation page crashed.** Links built for preview pages used the wrong parameter name, so the preview "Order placed" page showed an error instead of the order.
+
+### Technical Notes
+
+- New `App\Http\Middleware\InvalidateStaleCustomerSession` (appended to the `web` group): stamps `password_hash_customer` (same key and format as the reseller panel's `AuthenticateSession`) after each request and signs the customer guard out when it no longer matches. Only the customer guard is touched, so a staff session in the same browser is kept. `CustomerAccountService::updatePassword()` / `resetPassword()` also rotate `remember_token`.
+- Each storefront controller's `previewStorefront()` now applies the same `canAccessCompany()` check as `PreviewController::previewCompany()`.
+- `StorefrontUrl::prepend()` used the key `slug` for the preview route's `{company}` parameter (it also clashed with a route's own `{slug}`); it now uses `company`.
+- Dependencies: `composer update` of only the affected packages (no `--with-dependencies`, so no major bumps of Guzzle etc.); `package.json` gains an `overrides` entry for `@grpc/grpc-js`. Filament's published assets in `public/` were refreshed by `filament:upgrade`.
+- `SecurityHeaders`: `Content-Security-Policy: frame-ancestors 'self'; base-uri 'self'; object-src 'none'` (not set when the response already has its own policy) and `Strict-Transport-Security: max-age=31536000` on secure requests (no `includeSubDomains`, since not every company/reseller domain is guaranteed HTTPS). A script-level CSP is still a separate pass (plan 09 step 3.4).
+- `User::canChangePermissions()` (Super Admin only) and `canModifyUser()`. `Gate::before` denies every ability except `view`/`viewAny` on a Super Admin `User` record for non-Super-Admins. In `UserForm` the role field is disabled and the inline "Create role" refuses (403) for non-Super-Admins. `CreateUser` forces `User::defaultRole()` and `EditUser` drops `role` from the save, so a hand-crafted request can't change it. `UserRoleResource::canAccess()` requires a Super Admin (it used to be `canManageUsers()`). The users table's `DeleteBulkAction` now uses `authorizeIndividualRecords('delete')`; it previously deleted the whole selection with no per-record check. New `tests/Feature/UserManagementEscalationTest.php` (8 tests).
+- Throttles: preview `account/login`, `register`, `forgot-password` (5/min), `reset-password`, `password` and the domain `account/password` at 10/min; `POST /webhooks/meta` at 600/min.
+- New `tests/Feature/StorefrontPreviewAndSessionSecurityTest.php` (5 tests). `SecurityHardeningTest` gains 4 tests (CSP, own CSP kept, HSTS only on HTTPS, throttled routes).
 ## [2.54.0] - 2026-10-06
 
 **Release type:** Minor Feature Update

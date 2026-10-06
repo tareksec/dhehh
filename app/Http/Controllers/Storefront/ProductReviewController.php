@@ -144,6 +144,13 @@ class ProductReviewController extends Controller
     {
         abort_unless(app()->environment(['local', 'testing']) || auth()->check(), 404);
 
+        // Same gate as PreviewController::previewCompany(): a signed-in staff
+        // member may only preview their own company/companies, never another
+        // company's by slug (set() below would otherwise switch the scope).
+        if (auth()->check()) {
+            abort_unless(auth()->user()->canAccessCompany($company->getKey()), 404);
+        }
+
         $this->context->set($company);
 
         return $company->storefrontSetting ?: new StorefrontSetting([

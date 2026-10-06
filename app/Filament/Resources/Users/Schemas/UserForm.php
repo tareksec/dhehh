@@ -38,6 +38,10 @@ class UserForm
 
                         Select::make('role')
                             ->options(fn (): array => User::roleOptions())
+                            // Only a Super Admin changes permissions; others
+                            // see the role but can't change it (CreateUser /
+                            // EditUser also enforce this server-side).
+                            ->disabled(fn (): bool => ! (auth()->user()?->canChangePermissions() ?? false))
                             ->default(fn (): ?string => User::defaultRole())
                             ->selectablePlaceholder(false)
                             ->searchable()
@@ -60,6 +64,8 @@ class UserForm
                                 ->icon('heroicon-o-plus')
                                 ->modalHeading('Create user role'))
                             ->createOptionUsing(function (array $data): string {
+                                abort_unless(auth()->user()?->canChangePermissions(), 403);
+
                                 $slug = Str::slug($data['name'], '_');
                                 $originalSlug = $slug;
                                 $suffix = 2;

@@ -201,6 +201,11 @@ class CheckoutController extends Controller
 
         abort_unless($order->company_id === $company->getKey() && $order->source === Order::SOURCE_STOREFRONT, 404);
 
+        // The preview has no signed URL, so the order ID alone would expose
+        // a customer's name, phone and address to any signed-in staff member.
+        // Require the same permission as opening the order in the admin panel.
+        abort_unless(! auth()->check() || auth()->user()->canPerformModelAbility('view', Order::class), 404);
+
         return StorefrontThemeRegistry::page('checkout.success', [
             'company' => $company,
             'setting' => $setting,
@@ -350,6 +355,13 @@ class CheckoutController extends Controller
     protected function previewStorefront(Company $company): StorefrontSetting
     {
         abort_unless(app()->environment(['local', 'testing']) || auth()->check(), 404);
+
+        // Same gate as PreviewController::previewCompany(): a signed-in staff
+        // member may only preview their own company/companies, never another
+        // company's by slug (set() below would otherwise switch the scope).
+        if (auth()->check()) {
+            abort_unless(auth()->user()->canAccessCompany($company->getKey()), 404);
+        }
 
         $this->context->set($company);
 

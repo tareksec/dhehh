@@ -22,6 +22,40 @@ Tests: new `ResellerFraudCheckerTest` (6: access + menu, no store data, no cache
 
 Commit status: committed and pushed to the branch and main on owner approval ("ওকে কমিট এবং পুশ কর, মেইনেও দাও", 2026-10-06).
 
+## 2026-10-03 - Security audit fixes (items 1–4)
+
+Reason — owner asked for a security check against a 9-point OWASP-style list ("আমাদের অ্যাপে এক সিকিউরিটি প্রবলেম গুলো কি আছে দেখ তো?"), then approved fixing items 1–4 ("হ্যাঁ, ১ থেকে ৪ নম্বর ঠিক করে দাও").
+
+What changed:
+1. Dependencies: `composer update laravel/framework 'filament/*' league/commonmark league/flysystem league/flysystem-local` (no `-w`; a `-w` run wanted Guzzle 8 / brick/math 1.0, rejected as too risky). `package.json` overrides `@grpc/grpc-js` to `^1.14.5`. `composer audit` / `npm audit --omit=dev`: 0 advisories. Filament assets in `public/` republished (file modes kept at 644).
+2. IDOR: `CheckoutController::successPreview()` and `OfferCheckoutController::thankYouPreview()` require `canPerformModelAbility('view', Order::class)` for signed-in staff.
+3. Cross-company preview: `previewStorefront()` in Page, OrderTrack, ProductReview, Cart, Complaint, Checkout, AccountOrders and Contact controllers now checks `canAccessCompany()`.
+4. Sessions: new `InvalidateStaleCustomerSession` middleware (web group); customer password change/reset rotates `remember_token`.
+- Found while testing: `StorefrontUrl::prepend()` passed the preview slug as `slug` instead of `company`, so the preview success page crashed. Fixed (one line).
+- No new user-visible strings, so no lang keys.
+
+Tests:
+- New `tests/Feature/StorefrontPreviewAndSessionSecurityTest.php` (5). With the fixes reverted, 4 of them fail (the 5th is a control).
+- Full `php artisan test` (plain, no `--env`): 1659 passed, 2 skipped (11415 assertions), re-run after the owner's permissions rule (2026-10-06). `npm run build` clean.
+- Local env note: this container needed PHP 8.4 (installed from the ondrej PPA) to run `composer install`.
+
+Follow-up, same change — owner said "এখন পরের কাজ কর" (now do the next task, i.e. audit items 5–7) and asked for a session-relevant branch name: branch renamed locally to `claude/security-audit-fixes`.
+5. Throttles added: preview login/register/forgot/reset/password routes, the domain `PUT /account/password`, and `POST /webhooks/meta` (600/min).
+6. `SecurityHeaders`: script-safe CSP (`frame-ancestors 'self'; base-uri 'self'; object-src 'none'`, kept off responses that set their own) and HSTS on HTTPS only, no `includeSubDomains`.
+- `SecurityHardeningTest` +4 tests; with the change reverted, 3 fail (the "own CSP kept" one is a control).
+Follow-up 2, same change — owner said "পরের কাজ কর" again. Next was the audit's open loose end (where `role`/`is_active` can be changed):
+- Found: a custom role with `users.manage` could set any user's role to `super_admin` (its own included), and could edit, reset the password of, or bulk-delete a Super Admin. Fixed with the `User::canAssignRole()`/`canModifyUser()` guards in `Gate::before`, `UserForm`, `CreateUser`/`EditUser`, and per-record authorization on the users bulk delete.
+- New `tests/Feature/UserManagementEscalationTest.php` (7). With the guards reverted, the 4 escalation tests fail; the bulk-delete test fails without `authorizeIndividualRecords` (it needs two Super Admins, or the existing "last Super Admin" rule hides the hole).
+- Owner then set the rule (2026-10-06): "কোন ইউজার তার নিজের পারমিশন পরিবর্তন করতে পারবে না একমাত্র সুপার এডমিনই পারমিশন পরিবর্তন করতে পারবে" (no user can change their own permissions; only a Super Admin can change permissions). Implemented as `User::canChangePermissions()` = Super Admin: role field disabled for others, `EditUser` ignores a submitted role, `CreateUser` forces the default role (Sales Staff), and the inline "Create role" and the User Roles screen ("Manage Roles") are Super Admin only. This replaces the earlier `canAssignRole()` guard (which only blocked Super Admin).
+- My reading of the rule (say if different): a non-Super-Admin with "Users: Manage" can still add users, but every new user starts as Sales Staff until a Super Admin sets the role. A Super Admin may change their own role (the existing "at least one active Super Admin" rule still applies).
+- `UserManagementEscalationTest` is now 8 tests. With the rule reverted, 5 fail; the other 3 are covered by the earlier Super Admin guards.
+- Still open for the owner (not changed): a "Users: Manage" holder can assign users to any company, because the Users screen is not company-scoped.
+- No new user-visible strings (the guard is a 403), so no lang keys.
+
+- Deliberately left as is (my decision, say if you want it changed): `TRUSTED_PROXIES=*` — documented in `docs/deployment.md` as required behind Coolify/Traefik, and the app port is reached only through Traefik; tightening it needs the server's proxy network range. `/health/version` details — the admin updater, deploy docs and tests depend on its fields, and nothing in it is secret. A script-level CSP is still a separate pass (plan 09 step 3.4).
+
+Commit status: committed and pushed to `claude/security-audit-fixes` on owner approval ("commit আর push কর", 2026-10-06); merged with `origin/main` (v2.54.0), full suite then 1834 passed, 2 skipped; pushed to `main` on owner approval ("মেইনে পুশ কর", 2026-10-06).
+
 ## 2026-10-06 - Courier status flow audit: order vs courier status, callbacks, booking, labels
 
 Reason — owner (in Bangla): there are two status fields (order status and courier status); booking a courier makes the order look delivered; audit the flow, check whether anything breaks or gets stuck, whether the API calls and booking/sticker work, and whether the callback URL works — "no API callback has come from the courier yet".

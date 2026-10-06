@@ -23,6 +23,55 @@ class SecurityHardeningTest extends TestCase
             ->assertHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
     }
 
+    public function test_responses_carry_a_script_safe_content_security_policy(): void
+    {
+        Route::get('/_test/csp', fn () => 'ok')->middleware('web');
+
+        $this->get('/_test/csp')
+            ->assertOk()
+            ->assertHeader('Content-Security-Policy', "frame-ancestors 'self'; base-uri 'self'; object-src 'none'");
+    }
+
+    public function test_a_response_that_sets_its_own_content_security_policy_keeps_it(): void
+    {
+        Route::get('/_test/own-csp', fn () => response('ok')->header('Content-Security-Policy', "default-src 'none'; sandbox"))
+            ->middleware('web');
+
+        $this->get('/_test/own-csp')
+            ->assertHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    }
+
+    public function test_hsts_is_sent_only_over_https(): void
+    {
+        Route::get('/_test/hsts', fn () => 'ok')->middleware('web');
+
+        $this->get('https://localhost/_test/hsts')
+            ->assertHeader('Strict-Transport-Security', 'max-age=31536000');
+
+        $this->get('http://localhost/_test/hsts')
+            ->assertHeaderMissing('Strict-Transport-Security');
+    }
+
+    public function test_sensitive_storefront_and_webhook_routes_are_throttled(): void
+    {
+        foreach ([
+            'storefront.preview.account.login.store',
+            'storefront.preview.account.register.store',
+            'storefront.preview.account.forgot-password.store',
+            'storefront.preview.account.reset-password.store',
+            'storefront.preview.account.password.update',
+            'storefront.account.password.update',
+            'webhooks.meta.handle',
+        ] as $name) {
+            $middleware = Route::getRoutes()->getByName($name)?->gatherMiddleware() ?? [];
+
+            $this->assertNotEmpty(
+                array_filter($middleware, fn ($entry): bool => is_string($entry) && str_starts_with($entry, 'throttle:')),
+                "Route [{$name}] has no throttle middleware.",
+            );
+        }
+    }
+
     public function test_robots_txt_disallows_admin_and_livewire(): void
     {
         // public/robots.txt is served directly by the web server in
