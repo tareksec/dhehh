@@ -9,6 +9,7 @@ use App\Filament\Forms\Components\PhoneInput;
 use App\Models\CourierProvider;
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\OrderPayment;
 use App\Models\Product;
 use App\Models\ProductVariant;
@@ -29,6 +30,7 @@ use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\Html;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -268,6 +270,11 @@ class OrderForm
                                     ->searchable()
                                     ->live()
                                     ->required()
+                                    // Admin-only tag: nothing the customer sees shows it.
+                                    ->belowContent(Text::make(__('Upsell'))
+                                        ->badge()
+                                        ->color('success')
+                                        ->visible(fn (?OrderItem $record): bool => (bool) $record?->is_upsell))
                                     ->afterStateUpdated(function (Get $get, Set $set, $state): void {
                                         $product = Product::find($state);
 
@@ -348,6 +355,11 @@ class OrderForm
                             ])
                             ->columns(4)
                             ->defaultItems(1)
+                            // An item added after the order was created is an
+                            // upsell (owner request, 2026-10-05).
+                            ->mutateRelationshipDataBeforeCreateUsing(fn (array $data, string $operation): array => $operation === 'edit'
+                                ? [...$data, 'is_upsell' => true]
+                                : $data)
                             ->addActionLabel('Add item')
                             ->reorderable(false)
                             ->live()

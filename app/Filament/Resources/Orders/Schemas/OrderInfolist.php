@@ -9,11 +9,15 @@ use App\Models\CustomerRiskReview;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Services\OrderActivityFeedService;
+use App\Services\ResellerOwnCourierService;
 use App\Support\PhoneLinks;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\FontWeight;
+use Filament\Support\Enums\TextSize;
 
 class OrderInfolist
 {
@@ -60,8 +64,44 @@ class OrderInfolist
                     ])
                     ->columns(4),
 
+                Section::make(__('Reseller\'s own courier'))
+                    ->columnSpanFull()
+                    ->visible(fn (Order $record): bool => (bool) $record->reseller_own_courier)
+                    ->schema([
+                        TextEntry::make('reseller_parcel_id')
+                            ->label(__('Parcel ID'))
+                            ->size(TextSize::Large)
+                            ->weight(FontWeight::Bold)
+                            ->copyable(),
+                        TextEntry::make('reseller_courier_name')
+                            ->label(__('Courier name'))
+                            ->placeholder('-'),
+                        TextEntry::make('reseller_advance_payment')
+                            ->label(__('Advance payment'))
+                            ->badge()
+                            ->state(fn (Order $record): string => app(ResellerOwnCourierService::class)->paymentState($record))
+                            ->formatStateUsing(fn (string $state): string => ResellerOwnCourierService::paymentStateLabels()[$state] ?? $state)
+                            ->color(fn (string $state): string => match ($state) {
+                                'verified' => 'success',
+                                'rejected' => 'danger',
+                                default => 'warning',
+                            }),
+                        TextEntry::make('resellerAdvancePayment.transaction_id')
+                            ->label(__('Transaction ID'))
+                            ->placeholder('-'),
+                        TextEntry::make('resellerAdvancePayment.payment_method')
+                            ->label(__('Paid from (number or account)'))
+                            ->placeholder('-'),
+                        TextEntry::make('reseller_parcel_packed_at')
+                            ->label(__('Packed'))
+                            ->dateTime()
+                            ->placeholder(__('Not yet')),
+                    ])
+                    ->columns(3),
+
                 Section::make('Courier')
                     ->columnSpanFull()
+                    ->hidden(fn (Order $record): bool => (bool) $record->reseller_own_courier)
                     ->schema([
                         TextEntry::make('latestCourierBooking.provider.name')
                             ->label('Provider')
@@ -134,7 +174,12 @@ class OrderInfolist
                             ->label('')
                             ->schema([
                                 TextEntry::make('product.name')
-                                    ->label('Product'),
+                                    ->label('Product')
+                                    // Admin-only tag: nothing the customer sees shows it.
+                                    ->belowContent(Text::make(__('Upsell'))
+                                        ->badge()
+                                        ->color('success')
+                                        ->visible(fn (?OrderItem $record): bool => (bool) $record?->is_upsell)),
 
                                 TextEntry::make('variant_label')
                                     ->label('Variant')

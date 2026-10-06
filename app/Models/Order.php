@@ -150,6 +150,8 @@ class Order extends Model
 
     public const SOURCE_API = 'website_api';
 
+    public const SOURCE_RESELLER_PORTAL = 'reseller_portal';
+
     public const SOURCES = [
         self::SOURCE_ADMIN => 'Admin',
         self::SOURCE_STOREFRONT => 'Storefront',
@@ -158,6 +160,7 @@ class Order extends Model
         self::SOURCE_OFFER => 'Offer',
         self::SOURCE_WOOCOMMERCE => 'WooCommerce',
         self::SOURCE_API => 'Website (API)',
+        self::SOURCE_RESELLER_PORTAL => 'Reseller portal',
     ];
 
     protected $fillable = [
@@ -165,6 +168,10 @@ class Order extends Model
         'order_number',
         'customer_id',
         'reseller_customer_id',
+        'reseller_own_courier',
+        'reseller_courier_name',
+        'reseller_parcel_id',
+        'reseller_parcel_packed_at',
         'customer_name',
         'order_date',
         'subtotal',
@@ -185,6 +192,8 @@ class Order extends Model
 
     protected $casts = [
         'order_date' => 'date',
+        'reseller_own_courier' => 'boolean',
+        'reseller_parcel_packed_at' => 'datetime',
         'subtotal' => 'decimal:2',
         'discount' => 'decimal:2',
         'vat' => 'decimal:2',
@@ -211,7 +220,9 @@ class Order extends Model
             // both. Purely a preference for whoever books the courier
             // later; it doesn't book anything by itself, and can still be
             // changed on the order's Delivery Status section before booking.
-            if ($order->courier_provider_id === null) {
+            // A reseller's own-courier order is never booked with the
+            // company's courier, so it gets no default provider.
+            if ($order->courier_provider_id === null && ! $order->reseller_own_courier) {
                 $order->courier_provider_id = CourierProvider::defaultForCompany($order->company_id)?->getKey();
             }
 
@@ -411,6 +422,14 @@ class Order extends Model
         return $this->hasOne(ResellerCommission::class);
     }
 
+    /** The reseller's latest advance payment for an own-courier order (a rejected one can be sent again). */
+    public function resellerAdvancePayment(): HasOne
+    {
+        return $this->hasOne(StorefrontPayment::class)
+            ->where('purpose', StorefrontPayment::PURPOSE_RESELLER_ADVANCE)
+            ->latestOfMany();
+    }
+
     public function statusTransitions(): HasMany
     {
         return $this->hasMany(OrderStatusTransition::class);
@@ -549,6 +568,44 @@ class Order extends Model
         }
 
         return round(max($total, 0), 2);
+    }
+
+    /**
+     * Why this order cannot be booked with a courier, or null when it can.
+     *
+     * "Already booked" means a courier booking that is still live — not the
+     * Delivery status field, which can say Booked / In transit without any
+     * booking (set on the Create order form, or by moving the order to
+     * Shipping through Change status). Such an order used to be reported as
+     * already booked and could never be booked. When the latest booking was
+     * cancelled or failed, a new one can be made.
+     */
+    public function courierBookingBlocker(): ?string
+    {
+        if ($this->reseller_own_courier) {
+            return __('The reseller ships this order with their own courier.');
+        }
+
+        if (in_array($this->status, [self::STATUS_CANCELLED, self::STATUS_RETURNED, self::STATUS_REFUNDED], true)) {
+            return __('The order is :status.', ['status' => __(self::STATUSES[$this->status] ?? $this->status)]);
+        }
+
+        if (in_array($this->delivery_status, [
+            CourierBooking::STATUS_DELIVERED,
+            CourierBooking::STATUS_PARTIAL_DELIVERED,
+            CourierBooking::STATUS_RETURNED,
+        ], true)) {
+            return __('The order is :status.', ['status' => __(self::DELIVERY_STATUSES[$this->delivery_status])]);
+        }
+
+        // The orders list eager-loads latestCourierBooking.
+        $liveBooking = $this->latestCourierBooking;
+
+        if ($liveBooking && ! in_array($liveBooking->status, [CourierBooking::STATUS_CANCELLED, CourierBooking::STATUS_FAILED], true)) {
+            return __('Already booked (tracking ID :tracking).', ['tracking' => $liveBooking->tracking_id ?: '—']);
+        }
+
+        return null;
     }
 
     public function workflowStage(): string

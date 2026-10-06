@@ -460,10 +460,15 @@ class StorefrontSetting extends Model
         'reseller_min_withdrawal',
         'social_links',
         'is_published',
+        'nextjs_site_enabled',
+        'nextjs_site_domain',
+        'nextjs_site_domain_verified',
     ];
 
     protected $casts = [
         'is_published' => 'boolean',
+        'nextjs_site_enabled' => 'boolean',
+        'nextjs_site_domain_verified' => 'boolean',
         'customer_accounts_enabled' => 'boolean',
         'marketplace_announcement_enabled' => 'boolean',
         'marketplace_quote_enabled' => 'boolean',
@@ -562,6 +567,68 @@ class StorefrontSetting extends Model
     public function footerBlocks(): array
     {
         return $this->footer_blocks ?: self::DEFAULT_FOOTER_BLOCKS;
+    }
+
+    /**
+     * Whether the company's headless Next.js storefront may read the ERP's
+     * /api/v1/storefront/* endpoints. A domain is not required to be set yet
+     * so the site can be developed against the API before it goes live.
+     */
+    public function nextjsSiteEnabled(): bool
+    {
+        return (bool) $this->nextjs_site_enabled;
+    }
+
+    /**
+     * Whether $host is the Next.js site domain of a company other than
+     * $exceptCompanyId. Looked up without the company scope: a domain is
+     * global across all companies, exactly like `companies.domain`.
+     */
+    public static function nextjsDomainTaken(?string $host, ?int $exceptCompanyId = null): bool
+    {
+        $host = Company::normalizeDomain($host);
+
+        if ($host === null) {
+            return false;
+        }
+
+        return static::withoutGlobalScopes()
+            ->where('nextjs_site_domain', $host)
+            ->when($exceptCompanyId, fn ($query) => $query->where('company_id', '!=', $exceptCompanyId))
+            ->exists();
+    }
+
+    /**
+     * Why $domain cannot be a company's Next.js site domain, or null when it
+     * is free. A domain is global: it may not already be a storefront or
+     * reseller-portal domain, a reseller's own store domain, or another
+     * company's Next.js site.
+     */
+    public static function nextjsDomainConflict(?string $domain, ?int $companyId = null): ?string
+    {
+        $host = Company::normalizeDomain($domain);
+
+        if ($host === null) {
+            return null;
+        }
+
+        $usedByCompany = Company::withoutGlobalScopes()
+            ->where(fn ($query) => $query->where('domain', $host)->orWhere('reseller_portal_domain', $host))
+            ->exists();
+
+        if ($usedByCompany) {
+            return __('This domain is already used as a storefront or portal domain.');
+        }
+
+        if (Customer::withoutGlobalScopes()->where('reseller_custom_domain', $host)->exists()) {
+            return __('This domain is already used as a reseller store domain.');
+        }
+
+        if (static::nextjsDomainTaken($host, $companyId)) {
+            return __('This domain is already used by another Next.js site.');
+        }
+
+        return null;
     }
 
     protected static function booted(): void

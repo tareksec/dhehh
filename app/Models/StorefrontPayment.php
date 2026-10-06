@@ -17,6 +17,9 @@ class StorefrontPayment extends Model
 
     public const PURPOSE_CHECKOUT_ADVANCE = 'checkout_advance';
 
+    /** A reseller's full advance payment for an order sent with their own courier. */
+    public const PURPOSE_RESELLER_ADVANCE = 'reseller_advance';
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_COMPLETED = 'completed';

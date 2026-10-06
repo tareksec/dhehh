@@ -29,6 +29,200 @@ All notable production changes to Business Dashboard are documented here.
 - Throttles: preview `account/login`, `register`, `forgot-password` (5/min), `reset-password`, `password` and the domain `account/password` at 10/min; `POST /webhooks/meta` at 600/min.
 - New `tests/Feature/StorefrontPreviewAndSessionSecurityTest.php` (5 tests). `SecurityHardeningTest` gains 4 tests (CSP, own CSP kept, HSTS only on HTTPS, throttled routes).
 
+## [2.54.0] - 2026-10-06
+
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **"Already booked" for an order that was never booked.** Book courier treated an order as already booked whenever its **Delivery status** was anything but "Not booked". That field can move without any courier booking — chosen on the Create order form, or set to "In transit" by **Change status → Shipping** — so such an order was skipped by bulk Book courier ("0 order(s) booked · 1 already booked"), and its own Book courier button was hidden. Booking is now decided by the order's actual courier booking: an order with no live booking can be booked (including after a cancelled or failed booking). Orders that really cannot be booked are still skipped: a live booking exists, the order is delivered / partly delivered / returned, the order is cancelled / returned / refunded, or the reseller ships it with their own courier.
+- **Bulk Book courier now says why each order was skipped**, one line per order with its number (for example "Already booked (tracking ID …)" or "The order is Cancelled."), instead of a single "already booked" count. The popup text is updated to match. In English and Bangla.
+- **Order list: "Delivered" / "Returned" buttons read like a status.** Right after an order is booked, its row showed a green **Delivered** button (and a red **Returned** one). These are quick actions that mark the parcel delivered or returned by hand, not the order's status, but they looked like the order had been delivered. They are now **Mark delivered** / **Mark returned** (also on the order page), and the confirmation says it moves the order to Delivered without asking the courier. Booking itself never marks an order delivered: it stays at its order status with Delivery = Booking pending until the courier reports progress.
+- **Courier callbacks that were turned away left no trace.** A callback with a missing or wrong Auth token (or when no token is saved on the provider) was rejected silently, so a Callback URL / token mismatch looked exactly like the courier never calling. Each rejected call is now listed in **Courier → Webhook Logs** as **Rejected**, with the reason and what to fix.
+- **Courier actions that failed silently** — Sync courier status, Update status, Cancel booking, Mark delivered / returned — now show a success or failure message with the reason. A courier's HTTP error during a status sync becomes a readable reason (also in the scheduled sync's last error).
+- **Steadfast callbacks are answered the way Steadfast's webhook guide shows** (200 with `{"status":"success","message":"Webhook received successfully."}` instead of 202).
+
+### Added
+
+- **Webhook Logs: Process now, and a warning when callbacks are stuck.** A saved callback is applied by the queue worker. When callbacks wait more than 5 minutes, the Webhook Logs page now says the queue worker does not seem to be running, and each waiting or failed callback has a **Process now** button.
+- **Cancel booking explains itself:** the confirmation says it only marks the booking cancelled in this app and that the parcel must also be cancelled in the courier's own panel.
+
+### Technical Notes
+
+- New `Order::courierBookingBlocker()` (reads `latestCourierBooking`, which the orders list eager-loads). `OrdersTable::canBookCourier()` / new `courierBookingBlocker()` (adds the current-company check) and `ViewOrder::canBookCourier()` use it; `bookCourierBulk()` lists per-order skip reasons. 10 new lang keys. `OrderCourierBookingFeedbackTest` +4 tests (10 total). No migrations.
+- `CourierWebhookController` logs rejected calls (`status = rejected`, deduped per body, payload kept only up to 16 KB) and answers Steadfast with 200. `CourierWebhookLogResource::processNowAction()` runs `ProcessCourierWebhook` inline; `ListCourierWebhookLogs::getSubheading()` warns on pending logs older than 5 minutes. `CourierBookingFeedback::run()` wraps the other courier actions. Status-sync client calls also go through `CourierService::callCourier()`. New `CourierStatusFlowAuditTest` (6 tests); `SteadfastApiGuideTest` / `CourierIntegrationTest` updated for the 200 response and the rejected-call log. 14 more lang keys.
+## [2.53.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Next.js site in Site → Storefront Settings.** A new **Next.js Site** section lets you switch the headless Next.js website (for example zamzamint.com) on or off, enter its domain and mark the domain verified. The settings list has a new **Sites** column that shows each company's Blade storefront and its Next.js site side by side. Both sites keep reading the same storefront settings (theme colours, fonts, contact details, menus, footer, banners, payment and delivery rules), so nothing is configured twice. A domain can't be reused by another company, a reseller's store or another Next.js site.
+- **Collections in Offers.** **Offers** now has a third type, **Collection**, for **Flash Sale**, **Trending** and **New Arrivals**. Pick the products in display order, set when the collection starts and ends (a Flash Sale needs an end time, which runs its countdown) and optionally a **deal price** per product. Collections are only product lists for the Next.js site: they never appear as offer landing pages, in the `/offers` list or in the offer checkout, and aren't offered when generating AI images or videos.
+- **Storefront API for the Next.js website** (`/api/v1/storefront/…`). The website, which has no backend of its own, reads site settings, categories, products (with images, variations, ratings, minimum order quantity and wholesale quantity prices), hero slides, live collections and content pages from the ERP. It uses the company's existing API key and works only while *Enable Next.js site API* is on. See `docs/api/storefront-api.md`.
+- **Checkout for the Next.js website.** The website can now take real orders through the ERP (`POST /api/v1/storefront/checkout/quote`, `…/checkout`, `…/checkout/payments/{payment}/finalize`, `GET …/orders/{order_number}`). The website sends only the product, quantity and customer details; the ERP works out every price, delivery charge (inside/outside Dhaka from the address), VAT, new-customer delivery advance, pre-order advance, courier-risk advance, checkout-policy block and the payment options exactly as the Blade checkout does, and starts the ZiniPay/PayStation payment when an advance or full online payment is needed. The order is created only after the gateway confirms the payment. A double click or a retry never places a second order, a changed total is refused with the new total, and a stale cart (minimum order quantity, stock) is reported instead of being changed silently.
+- **Wholesale price rule for the website (owner decision):** a live Flash Sale / Trending / New Arrivals **deal price** wins over wholesale quantity prices; otherwise the quantity price reached applies; otherwise the normal selling price. A variation always keeps its own price, and a deal that is not lower than the selling price is ignored.
+- **Customer accounts, order tracking and reviews for the Next.js website.** Customers of the website can create an account, sign in with a password or with a 6-digit code sent by SMS or email, reset a forgotten password by SMS, see their order history, follow an order's status and courier updates, order the same items again, change their profile and password, and review the products of an order once it is completed. It works like the Blade storefront's account pages and uses the same **Customer accounts** switch in Storefront Settings, the same SMS gateway and the same rules (a registration reuses the customer record of the same phone number, so earlier orders appear straight away). Anyone can also track an order without an account with the order number and the phone number it was placed with, or with the link on the order confirmation. A new review waits in **Product Reviews** until you approve it, exactly as before.
+
+### Fixed
+
+- **Signing in with an e-mail address ignored capital letters inconsistently.** The password sign-in compared the e-mail exactly while the one-time-code sign-in did not, so `Name@Example.com` worked for one and not the other. Both now ignore capitals.
+
+### Security
+
+- **A password-reset code can no longer be guessed.** Five wrong reset codes now lock that account's reset until the code's 15-minute window ends (before, the 6 digits could be tried without limit). This protects both the Blade storefront and the new website.
+
+### Technical Notes
+
+- `CLAUDE.md` (agent memory) now records that zamzamint.com is the wholesale ZamZam International site and zamzamgadgetbd.com the retail ZamZam Gadget site, and the owner's decisions for the Next.js website. `Company::CORE_COMPANIES` and `docs/storefront-go-live.md` still carry the old "Gift Items / Gadget Items" labels (not changed here).
+- New migrations (run `php artisan migrate --force`; both only add columns, existing rows are unchanged): `2026_10_03_100000_add_nextjs_site_to_storefront_settings_table` (`nextjs_site_enabled` default off, unique `nextjs_site_domain`, `nextjs_site_domain_verified`) and `2026_10_03_110000_add_collection_fields_to_offers_tables` (`offers.collection_kind`, `starts_at`, `ends_at`; `offer_items.deal_price`).
+- `Offer::TYPE_COLLECTION`; scopes `landingPages()`, `collections()`, `liveCollections()`. `OfferController`, `OfferCheckoutController` and the image/video generation offer pickers now use `landingPages()`. Switching an offer away from *Collection* clears its kind and schedule.
+- `StorefrontSetting::nextjsDomainConflict()` / `nextjsDomainTaken()`; `Company::hostIsTakenByThePlatform()` also treats a Next.js domain as taken. Server-side checks live in `HandlesNextjsSiteDomain` (Create/Edit pages) in addition to the form rules.
+- New `EnsureNextjsSiteEnabled` middleware (403 `nextjs_site_disabled`), the `storefront-api` rate limiter (600/min per API token + 3000/min per IP; defined in `AppServiceProvider`), `StorefrontController`, `StorefrontCatalogService` and `StorefrontSiteConfigService`. `Product::reviews()` relation added. No new company-owned model, so `MultiCompanyIsolationTest` is unchanged; `StorefrontApiTest` covers isolation between two companies.
+- The existing server-to-server `/api/v1` routes are untouched and are not gated by the Next.js switch.
+- **Phase 2 (checkout) —** the Blade `Storefront\CheckoutController` now delegates to the new shared `StorefrontCheckoutService::process()` (totals, checkout policy, advance eligibility, online/full payment, order creation) with no behaviour change; the API controller `Api\V1\StorefrontCheckoutController` calls the same method. New: `CheckoutOutcome`, `StorefrontApiCartResolver` (Blade line rules without silent changes), `ForceJsonResponse` middleware (storefront API only), `Support\StorefrontApi\{Signing,OrderSummary}`, `StorefrontCatalogService::unitPrice()` / `dealFor()`, `StorefrontMetaTrackingService::contextFromClient()`, and an optional `$clientIp` argument on `StorefrontCheckoutPolicyService::evaluate()`.
+- No migration and no new model. Payment `ref` and order `token` are HMACs of the payment/order id and company derived from `APP_KEY` (rotating `APP_KEY` invalidates links already sent to customers). `return_url`/`cancel_url` must be https on the company's `nextjs_site_domain` (localhost allowed only in `local`/`testing`). Visitor IP comes from the website (`client_ip`); without it IP rules are skipped.
+- Tests: new `StorefrontApiCheckoutTest` (26) and a deal-rule case in `StorefrontApiTest`; the existing Blade checkout, payment and policy tests pass unchanged.
+- 32 new translation keys in `lang/en.json` and `lang/bn.json`.
+- **Phase 3 (accounts, tracking, reviews).** Migration `2026_10_06_100000_create_storefront_customer_tokens_table` (run `php artisan migrate --force`; a new table, nothing existing changes): `storefront_customer_tokens` (company, customer, SHA-256 token hash, expiry, last use) with the company-scoped model `StorefrontCustomerToken`, added to `MultiCompanyIsolationTest`. The website's server sends the token as `X-Customer-Token` next to the company API key (`AuthenticateStorefrontCustomer`, `EnsureStorefrontAccountsEnabled` middleware, `StorefrontCustomerSession`).
+- New `Api\V1\StorefrontAccountAuthController`, `StorefrontAccountController` and `StorefrontOrderTrackingController`; `Support\StorefrontApi\{AccountPayload,TrackingSummary,Phone}`; `OrderSummary` gains `status_label`, `order_date` and the product `slug` per item. The `storefront-auth` rate limiter (20/min per visitor — the `client_ip` the website forwards, not its own address).
+- New shared `StorefrontOrderTrackingService` (status history + courier) now also feeds the Blade tracking page, whose output is unchanged. `CustomerAccountService::resetPassword()` gained the attempt lock and `resetLockedFor()`; `attemptLogin()` matches e-mail case-insensitively.
+- Phones from the website are normalised to the local `01XXXXXXXXX` form (the same as checkout) before any lookup, so `+880…` and `01…` are one customer and one lockout counter.
+- Tests: new `StorefrontApiAccountTest` (33) — gates, registration, sign-in, lockouts, codes, reset, profile/password, orders, reorder, reviews, tracking, cross-company and per-visitor limits.
+- No new translation keys in the ERP: the API answers with stable error codes and the website words them.
+## [2.52.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **Book courier did nothing when the booking failed.** Clicking **Book courier** (order list or order page) or **Book Steadfast** showed nothing and booked nothing when the booking could not go through. When the courier refused it (wrong phone, wrong API keys, duplicate invoice, ...), the courier's error was not caught at all. A customer-risk block or a provider mismatch was hidden because it matched no field in the popup. Now a successful booking shows **Courier booked** with the tracking ID. A failed one shows **Courier booking failed** with the reason — the courier's own message, "could not reach the courier", or the risk review that blocks it — and the popup stays open so the courier or details can be changed. In English and Bangla.
+- **Bulk Book courier stopped at a refused order.** A courier refusal on one order no longer stops the rest of the batch. The result now lists each failed order with its reason (it used to say "see Status Logs", where nothing was recorded).
+
+### Added
+
+- **Upsell filter on the orders list.** New **Upsell items** filter: **With upsell items** shows orders that had an item added after they were created, **Without upsell items** the rest. Admin-only, like the Upsell tag. In English and Bangla.
+
+### Technical Notes
+
+- `CourierService::callCourier()` wraps the Steadfast / Pathao / RedX / E-Courier create calls and turns `RequestException` / `ConnectionException` into a `ValidationException` (key `courier`) with the courier's message. New `Orders\Actions\CourierBookingFeedback` (notifications + `halt()`), used by the order list's **Book courier** and the order page's **Book courier** / **Book Steadfast**; `bookCourierBulk()` reports per-order reasons. `TernaryFilter has_upsell` on `OrdersTable` (`whereHas('items', is_upsell)`). New `OrderCourierBookingFeedbackTest` (6 tests). No migrations.
+## [2.51.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **Items could not be added to an order after it was created.** On a confirmed order, adding an item failed with "Insufficient stock" — even after stock was added to the new item's product. The block came from one of the order's *existing* items: when that product's stock had gone below zero (for example after a WooCommerce sale, which is never blocked), every save re-checked the unchanged line and refused it. Lines whose quantity does not go up are no longer blocked, and adding stock to a product that is below zero is no longer refused either; only stock actually being taken out must be available.
+
+### Added
+
+- **"Not enough stock" popup when editing an order.** Raising a quantity or adding an item on a confirmed / processing / completed order now shows the same popup as Create order when something is short, asking only for the stock beyond what the order already took ("Adding · In stock · Short by"). **Add stock and save order** adds the stock and saves. If a product is already below zero, the popup asks for enough to cover that too. WooCommerce orders are never stopped. In English and Bangla.
+- **Upsell tag.** An item added to an order after it was created is saved as an upsell and shows an **Upsell** badge under the product on the order's edit and view pages. The tag is admin-only — the invoice, PDF, storefront tracking and the customer's account do not show it.
+
+### Technical Notes
+
+- `StockMovementService::validate()` blocks negative stock only when the movement lowers stock compared with what it booked before (new `takesStock()`). `OrderStockCheckService::shortages()` takes the saved order and subtracts its booked sale quantities; `short` now covers stock already below zero. Popup moved from `CreateOrder` into the new `Pages/Concerns/HandlesStockShortages` trait, used by `CreateOrder::beforeCreate()` and `EditOrder::beforeSave()`. Migration `2026_10_05_110000_add_is_upsell_to_order_items_table` adds `order_items.is_upsell` (boolean, default false); the order form's items repeater sets it on rows created on the edit page. New `OrderUpsellTest` (6 tests); `OrderStockShortageTest` now 11 tests.
+## [2.50.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller portal: Forgot password.** The portal sign-in page now has a **Forgot password?** link. The reseller enters their phone number and gets a 6-digit code by SMS (valid for 15 minutes, the same reset code as the storefront account), then sets a new password and is signed straight in. **Send a new code** goes back to the phone step. A code is sent only to a pending or approved reseller of that company, and the reply is the same for any number, so the form does not reveal who is a reseller. Needs the store's SMS settings (Storefront → Notifications); without them the page says reset by SMS is not available and to contact the store.
+
+### Technical Notes
+
+- New `App\Filament\Reseller\Pages\Auth\ForgotPassword` (extends Filament's `RequestPasswordReset`, both steps on one page) registered with `->passwordReset()` on the reseller panel; reuses `CustomerAccountService::sendPasswordResetCode()` / `resetPassword()`. Filament's e-mailed link is not used. Tests: `ResellerPortalPasswordResetTest` (includes a run through the real portal Livewire endpoint).
+## [2.49.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Next.js site in Site → Storefront Settings.** A new **Next.js Site** section lets you switch the headless Next.js website (for example zamzamint.com) on or off, enter its domain and mark the domain verified. The settings list has a new **Sites** column that shows each company's Blade storefront and its Next.js site side by side. Both sites keep reading the same storefront settings (theme colours, fonts, contact details, menus, footer, banners, payment and delivery rules), so nothing is configured twice. A domain can't be reused by another company, a reseller's store or another Next.js site.
+- **Collections in Offers.** **Offers** now has a third type, **Collection**, for **Flash Sale**, **Trending** and **New Arrivals**. Pick the products in display order, set when the collection starts and ends (a Flash Sale needs an end time, which runs its countdown) and optionally a **deal price** per product. Collections are only product lists for the Next.js site: they never appear as offer landing pages, in the `/offers` list or in the offer checkout, and aren't offered when generating AI images or videos.
+- **Storefront API for the Next.js website** (`/api/v1/storefront/…`). The website, which has no backend of its own, reads site settings, categories, products (with images, variations, ratings, minimum order quantity and wholesale quantity prices), hero slides, live collections and content pages from the ERP. It uses the company's existing API key and works only while *Enable Next.js site API* is on. See `docs/api/storefront-api.md`.
+- **Checkout for the Next.js website.** The website can now take real orders through the ERP (`POST /api/v1/storefront/checkout/quote`, `…/checkout`, `…/checkout/payments/{payment}/finalize`, `GET …/orders/{order_number}`). The website sends only the product, quantity and customer details; the ERP works out every price, delivery charge (inside/outside Dhaka from the address), VAT, new-customer delivery advance, pre-order advance, courier-risk advance, checkout-policy block and the payment options exactly as the Blade checkout does, and starts the ZiniPay/PayStation payment when an advance or full online payment is needed. The order is created only after the gateway confirms the payment. A double click or a retry never places a second order, a changed total is refused with the new total, and a stale cart (minimum order quantity, stock) is reported instead of being changed silently.
+- **Wholesale price rule for the website (owner decision):** a live Flash Sale / Trending / New Arrivals **deal price** wins over wholesale quantity prices; otherwise the quantity price reached applies; otherwise the normal selling price. A variation always keeps its own price, and a deal that is not lower than the selling price is ignored.
+
+### Technical Notes
+- `CLAUDE.md` (agent memory) now records that zamzamint.com is the wholesale ZamZam International site and zamzamgadgetbd.com the retail ZamZam Gadget site, and the owner's decisions for the Next.js website. `Company::CORE_COMPANIES` and `docs/storefront-go-live.md` still carry the old "Gift Items / Gadget Items" labels (not changed here).
+- New migrations (run `php artisan migrate --force`; both only add columns, existing rows are unchanged): `2026_10_03_100000_add_nextjs_site_to_storefront_settings_table` (`nextjs_site_enabled` default off, unique `nextjs_site_domain`, `nextjs_site_domain_verified`) and `2026_10_03_110000_add_collection_fields_to_offers_tables` (`offers.collection_kind`, `starts_at`, `ends_at`; `offer_items.deal_price`).
+- `Offer::TYPE_COLLECTION`; scopes `landingPages()`, `collections()`, `liveCollections()`. `OfferController`, `OfferCheckoutController` and the image/video generation offer pickers now use `landingPages()`. Switching an offer away from *Collection* clears its kind and schedule.
+- `StorefrontSetting::nextjsDomainConflict()` / `nextjsDomainTaken()`; `Company::hostIsTakenByThePlatform()` also treats a Next.js domain as taken. Server-side checks live in `HandlesNextjsSiteDomain` (Create/Edit pages) in addition to the form rules.
+- New `EnsureNextjsSiteEnabled` middleware (403 `nextjs_site_disabled`), the `storefront-api` rate limiter (600/min per API token + 3000/min per IP; defined in `AppServiceProvider`), `StorefrontController`, `StorefrontCatalogService` and `StorefrontSiteConfigService`. `Product::reviews()` relation added. No new company-owned model, so `MultiCompanyIsolationTest` is unchanged; `StorefrontApiTest` covers isolation between two companies.
+- The existing server-to-server `/api/v1` routes are untouched and are not gated by the Next.js switch.
+- **Phase 2 (checkout) —** the Blade `Storefront\CheckoutController` now delegates to the new shared `StorefrontCheckoutService::process()` (totals, checkout policy, advance eligibility, online/full payment, order creation) with no behaviour change; the API controller `Api\V1\StorefrontCheckoutController` calls the same method. New: `CheckoutOutcome`, `StorefrontApiCartResolver` (Blade line rules without silent changes), `ForceJsonResponse` middleware (storefront API only), `Support\StorefrontApi\{Signing,OrderSummary}`, `StorefrontCatalogService::unitPrice()` / `dealFor()`, `StorefrontMetaTrackingService::contextFromClient()`, and an optional `$clientIp` argument on `StorefrontCheckoutPolicyService::evaluate()`.
+- No migration and no new model. Payment `ref` and order `token` are HMACs of the payment/order id and company derived from `APP_KEY` (rotating `APP_KEY` invalidates links already sent to customers). `return_url`/`cancel_url` must be https on the company's `nextjs_site_domain` (localhost allowed only in `local`/`testing`). Visitor IP comes from the website (`client_ip`); without it IP rules are skipped.
+- Tests: new `StorefrontApiCheckoutTest` (26) and a deal-rule case in `StorefrontApiTest`; the existing Blade checkout, payment and policy tests pass unchanged.
+- 32 new translation keys in `lang/en.json` and `lang/bn.json`.
+## [2.48.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller orders with the reseller's own courier.** On **Create order** a reseller now chooses **The store delivers (cash on delivery)** or **My own courier (I pay the full amount in advance)**. With their own courier they enter the courier name and the parcel/consignment ID they booked, and the advance payment details: which of the store's payment methods they paid to (the active send-money/bank methods from Storefront → Payment Methods), the number or account they paid from, and the transaction ID. These orders are charged at the store's price (the base price; the normal price for a product with no wholesale rate), with no delivery charge and no commission — the reseller pays that total in advance. The same parcel ID cannot be used on two of the reseller's orders. If the store has no payment method set up, the option is shown but disabled.
+- **Checking and packing these orders (admin).** The order page shows a **Reseller's own courier** section with the parcel ID in large type, the courier, the payment state and transaction details, and when it was packed; the store's courier booking is hidden for these orders. **Verify reseller payment** (choosing the account the money arrived in) records it in the order's Payments History so the order shows as paid; **Reject reseller payment** sends it back to the reseller. **Mark parcel packed** is available only after the payment is verified. The order list has a **Reseller's own courier** filter and a hideable **Reseller parcel ID** column (searchable). The advance also appears on Storefront → Payments as **Reseller advance (own courier)** with a **Check on order** link.
+- **Reseller's view.** The portal **Orders** list shows the parcel ID with the payment state (waiting, verified, rejected) or **Packed**, and the order details show the courier, parcel ID, payment and packing. A rejected payment can be sent again with **Send payment again**.
+
+### Changed
+
+- **Reseller portal: Create order is a button.** **Create order** is no longer in the portal menu; it opens from a **Create order** button at the top of the **Orders** page.
+
+### Technical Notes
+
+- Migration `2026_10_05_100000_add_reseller_own_courier_to_orders_table`: `orders.reseller_own_courier`, `reseller_courier_name`, `reseller_parcel_id`, `reseller_parcel_packed_at` (+ index on reseller and parcel ID). Run migrations on deploy.
+- The advance is a manual `StorefrontPayment` with the new purpose `reseller_advance` (`Order::resellerAdvancePayment()`); new `App\Services\ResellerOwnCourierService` (submit, verify, reject, mark packed). `ResellerOrderPlacementService::place()` takes an optional own-courier array. Own-courier orders get no default courier provider and skip the courier fraud check. Tests: `ResellerOwnCourierOrderTest`.
+## [2.47.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **Orders with two or more items would not save.** When a confirmed (or processing / completed) order had an item that was out of stock, saving did nothing visible: the "Insufficient stock" error had no field to show on, and the order was left half-saved with only some of its stock taken out. The order is now saved all-or-nothing, and a stock error while saving or editing an order is shown as a message.
+
+### Added
+
+- **"Not enough stock" popup on Create order.** Placing a confirmed / processing / completed order now checks every item first. If any product (or variation) is short, a popup lists each one with how many were ordered, how many are in stock and how many are missing. Staff who can add stock can type how many to add (at least the missing amount) and press **Add stock and place order** — the stock is added as a stock adjustment ("Stock added from the order form") and the order is placed. Others see the list and go back to change the items. Draft orders do not take stock out, so they are saved without the popup. In English and Bangla.
+
+### Technical Notes
+
+- New `App\Services\OrderStockCheckService` (`shortages()` totals lines per product + variant like `OrderWorkflowService::syncStockMovements()`; `addStock()` books an `adjustment` movement). `CreateOrder::beforeCreate()` mounts the `stockShortage` action and halts. `CreateOrder` and `EditOrder` now use database transactions and the new `ReportsStockErrors` trait. New `OrderStockShortageTest` (7 tests). No migrations.
+## [2.46.0] - 2026-10-04
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Fraud Checker page (Courier → Fraud Checker).** Type a customer's mobile number and see, before taking an order, how that number has done on your connected couriers (Pathao, Steadfast, RedX). The page shows a Safe / Risky verdict, the overall delivery success rate, total / delivered / cancelled parcel tiles, a card per courier with its own numbers and success bar (or "Not configured" with a link to Courier → Providers), fraud reports filed by other merchants (Steadfast), a blacklist warning when the number is on your blacklist, and this store's own order history for the number. **Refresh live data** skips the 24-hour cache. Safe / Risky uses your existing **External courier success ratio review threshold** from Customer Risk Settings — no new rules. Open to staff who can view sales. In English and Bangla.
+
+### Technical Notes
+
+- New `App\Filament\Pages\FraudChecker` + `filament.pages.fraud-checker` view. Reuses `ExternalCourierFraudService::checkByPhone()` (same cache and `customer_risk_events` audit log as the order form's Courier Fraud Check); the service gains `configuredDrivers()` and a public `normalizePhone()`. Blacklist lookup filters company explicitly (global + current company). New `FraudCheckerPageTest` (8 tests). No migrations.
+## [2.45.0] - 2026-10-04
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller portal: Create order.** An approved reseller can now place an order for their own customer from the portal (new **Create order** page, second in the menu). They enter the customer's name, phone, delivery address and optional note, then add products from their own store with a quantity and their own selling price (never below the base price; a product with no wholesale rate sells at the normal price and earns no commission). The page shows the live subtotal, the store's delivery charge for that address, VAT, what the customer pays (cash on delivery) and the reseller's commission. The order arrives as a draft for the store to review and confirm, like a storefront order, shows up in the reseller's **Orders** list with its status, and the commission is credited as usual. A customer is matched by phone; a phone that belongs to another reseller's account only receives the order (that reseller's own details are not overwritten). Orders from the portal are labelled **Reseller portal** in the admin.
+
+### Fixed
+
+- **New-order alert link.** The "New order received" alert (and the status-change alert) now always links to the admin order page. It used the current panel's order page, which does not exist when the order is created from the reseller portal.
+## [2.44.0] - 2026-10-03
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller store logos.** On the portal's **My Store** page a reseller can upload their own logo — one for light mode and an optional one for dark mode. It replaces the store name at the top of their store (the company's own logo is never shown there); with no logo the store name is shown as before. Uploads are compressed to WebP like other logos. The always-dark marketplace theme header shows the dark logo.
+
+### Changed
+
+- **Reseller portal wording and layout.** The link under the sign-in form now reads **Become a reseller** (it said "sign up for an account"). **My Store** has a **Visit store** button that opens the store, in place of **Copy link**. On the dashboard, **Recent orders** now sits above the commission chart.
+
 ## [2.43.0] - 2026-10-03
 
 **Release type:** Minor Feature Update
@@ -43,6 +237,7 @@ All notable production changes to Business Dashboard are documented here.
 - **Deploy change:** `ext-imagick` added to `composer.json` `require`, the only way Nixpacks installs a PHP extension; `composer.lock` changes only its content-hash and platform list. CI (`.github/workflows/deploy.yml`) now installs `imagick`. Local machines without imagick: `composer install --ignore-platform-req=ext-imagick` (the app itself still boots).
 - Bundled font: Hind Siliguri Regular/Bold (SIL OFL 1.1, Indian Type Foundry) in `resources/fonts/ad-creative/` with `OFL.txt`.
 - Plan: `14_AI_TOOL_MENU_CONTENT_CREATION_PLAN.md` (Phase 0 results).
+
 ## [2.42.2] - 2026-10-03
 
 **Release type:** Hotfix Update
@@ -54,6 +249,7 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `RestrictResellerPortalHost` lets every `livewire`/`livewire-<hash>` path through; `ResellerPanelProvider` marks `ResolveCompanyFromResellerPortalDomain` as persistent middleware. New `ResellerPortalLivewireHttpTest` posts the real Livewire update request (apply, wrong password, login).
+
 ## [2.42.1] - 2026-10-03
 
 **Release type:** Hotfix Update
@@ -76,6 +272,7 @@ All notable production changes to Business Dashboard are documented here.
 
 **Technical Notes:**
 - Filament's `RichEditor` has no built-in unlink tool, so `DocumentationArticleResource` registers a custom `unlink` `RichEditorTool` (`extendMarkRange('link').unsetLink()`) and lists it in `toolbarButtons()` next to `link`.
+
 ## [2.41.0] - 2026-09-29
 
 **Release type:** Minor Feature Update
@@ -103,6 +300,7 @@ All notable production changes to Business Dashboard are documented here.
   - the old investor rows are kept because they may have their own investments. A row that was only a partner still appears in the investor list and can be deleted there if it has no investments.
 - New `ChannelPartner` model (`BelongsToCompany`, `User::MODEL_MODULES` → `investments`, audited, added to `MultiCompanyIsolationTest`) and `ChannelPartnerResource`, with `ReferredInvestorsRelationManager`, `PayoutsRelationManager` and the shared `DocumentsRelationManager`. `PartnerPayoutsRelationManager` on investors is deleted.
 - `SettlementService::allocateProfit()` returns `partner_rows` (partner id => amount), and one `ChannelPartnerPayout` is created per partner. `Investment` no longer rejects a second partner in a project.
+
 ## [2.40.0] - 2026-09-29
 
 **Release type:** Minor Feature Update
@@ -192,6 +390,7 @@ All notable production changes to Business Dashboard are documented here.
 - New `VoucherTrashService` (`trash` / `restore` / `deletePermanently`), new `User::canDeleteVoucher()`, and a new page `TrashedVouchers` at `/vouchers/trash`. `VoucherResource::canDelete()` stays `false`.
 - `InvestmentWithdrawalService::voucherTrashed()` / `voucherRestored()`. The `Investment` model allows withdrawn → active only while the withdrawal voucher is in trash, and counts "withdrawn" only while that voucher exists. An investment that has ever had a withdrawal voucher cannot be deleted.
 - `SettlementService::calculateAndSettle()` uses `investments()->active()`.
+
 ## [2.34.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
@@ -208,6 +407,7 @@ All notable production changes to Business Dashboard are documented here.
 - New `InvestmentWithdrawalService::withdraw()` locks the investment, calls `VoucherService::submit()` (debit, `investor_payout`, fund source's account), then sets the status, all in one transaction. The `Investment` model refuses `status = withdrawn` without a withdrawal voucher, and refuses to change or delete a withdrawn investment.
 - `Investor::investmentStatus()` works it out from the investments. Nothing is stored on the investor.
 - Settlement calculations are unchanged: withdrawn investments are still counted if the project is settled later. This is left for the owner to decide.
+
 ## [2.33.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
@@ -227,6 +427,7 @@ All notable production changes to Business Dashboard are documented here.
 - `InvestorResource::PAPER_COPY_UPLOADS`, `splitPaperCopies()`, `attachPaperCopies()`; `CreateInvestor::handleRecordCreation()` and `EditInvestor::handleRecordUpdate()` save the uploads as `InvestmentDocument` rows in the same transaction as the investor.
 - `InvestorImportService::investmentDefaults()` also accepts `channel_partner_id` (checked against the current company).
 - Deleted `InvestorDocumentUploadService` and the `document_keywords` config. No migration.
+
 ## [2.32.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
@@ -243,6 +444,7 @@ All notable production changes to Business Dashboard are documented here.
 - **Webhook:** new `lead.status_updated` event (`id`, `external_reference`, `status`, `updated_at`) via `WebsiteWebhookDispatcher::dispatchLeadStatusUpdated()`, fired from `Lead::updated` when `status` changes and `external_reference` is set. Same signing, queue job and per-company settings as the existing events.
 - **Docs:** `docs/api/website-integration.md` and `website-integration.openapi.yaml` updated. New `docs/api/website-mapping-tasneem-noor.md`: a path-by-path, field-by-field mapping from each website team's own (incorrect) integration doc to the real API, linked from `website-integration.md`.
 - No new user-visible strings, so no `lang/` changes.
+
 ## [2.31.0] - 2026-09-28
 
 **Release type:** Minor Feature Update
@@ -388,6 +590,7 @@ All notable production changes to Business Dashboard are documented here.
 **Technical Notes:**
 - New migration `2026_09_28_100000_add_investment_fields_to_investor_drafts_table` (`existing_investor_id`, `project_id`, `investment_amount`, `payment_method`, `invested_at`). Run `php artisan migrate --force`.
 - `InvestorImportService::confirm()` creates the `Investment` (+ `InvestorSecurityInstrument` when stamp/cheque numbers exist) in the same transaction as the investor, then calls `InvestmentLedgerService::recordInvestmentReceived()`. The `Investment` model's own rules (investment window, one channel partner per project) still apply and block the confirm with their message.
+
 ## [2.28.1] - 2026-09-27
 
 **Release type:** Patch/Fix Update
@@ -400,6 +603,7 @@ All notable production changes to Business Dashboard are documented here.
 
 - New `OpenRouterImageProvider` adapter, registered in `ImageProviderResolver` and `ImageProviderSettingsService::API_FORMATS`. It posts to OpenRouter's single `POST /api/v1/images` endpoint (appending `/images` when the Base URL is the bare API root), sends `aspect_ratio`/`resolution`/`n`, and for image-to-image adds the source photo as a base64 data URL in `input_references` on the same call. The generic "Custom" adapter assumes OpenAI's `/images/generations` + `/images/edits` routes, which OpenRouter does not have.
 - Production needs a running queue worker (`php artisan queue:work`) for Image Generation; without one, generations stay "Queued" forever.
+
 ## [2.28.0] - 2026-09-27
 
 **Release type:** Minor Feature Update
@@ -428,12 +632,14 @@ All notable production changes to Business Dashboard are documented here.
   - Everything is off until a super admin sets values.
 
 **Technical Notes:** new `GeneratedVideoAttacher` (`attachToProduct()` / `attachToOffer()`) writes the stored clip path into `products.video_path` / `offers.video_path` (the columns came with the Phase 1 migrations) and sets the generation's `linked` morph. It refuses an unfinished row, a row whose clip is missing, a row awaiting or failing review, and a record from another company (`VideoAttachmentException`). `VideoGeneration` gains `attachToProduct` / `attachToOffer` actions, scoped to the user's own rows, and records `ai_video.attached` in the audit log. New read-only `AttachedVideoPreview` form field (never dehydrated, no upload) on `ProductForm` and `OfferForm`, with a `removeVideo` hint action. `storefront/products/show.blade.php` gains a `data-product-video` block; `storefront/offers/blocks/hero.blade.php` plays `video_path` over `cover_image` (`motion-reduce:hidden`). New strings go through `__()` with keys in `lang/en.json` and `lang/bn.json`. Plan: `12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md` Phases 3–4. Phase 4: new `VideoLibrary` page (AI Tools cluster, `ai_tools.video_generation`); `VideoGeneration` gains `toggleFavorite` / `saveToDrive` actions and `?from=<id>` prefill. New `SaveVideoToDriveJob` (queued, one try, sets/clears `CompanyContext`) → `VideoDriveExporter` → new `GoogleDriveBackupService::uploadStream()` (resumable upload, streamed from the public disk, `supportsAllDrives=true`); the backup `upload()` is unchanged. Per-company folder in `companies.settings->ai_tools->video_drive->folder_id`. **Migration:** `2026_09_27_100000_add_google_drive_columns_to_generated_videos_table` adds `drive_status`, `drive_file_id`, `drive_url`, `drive_saved_at`, `drive_error` to `generated_videos`. Audit event `ai_video.saved_to_drive`. Phase 5: new `VideoGovernanceService` (`companies.settings->ai_tools->video_governance`, cap = count of non-failed videos this month) and super-admin `VideoGovernance` page (hidden from the sidebar, linked from the Tool Menu header). `VideoGeneration::generate()` checks the cap before dehydrating the form and sets `review_status`; `VideoLibrary` gains `approveReview` / `rejectReview` (audit `ai_video.review_approved` / `ai_video.review_rejected`). `User::ROLE_PERMISSIONS['manager']` gains `ai_tools.video_generation.review`. **Migration:** `2026_09_28_100000_grant_video_review_permission_to_manager_role` appends that permission to the stored Manager role only if the row already has `ai_tools.video_generation`, leaving everything else unchanged.
+
 ## [2.27.1] - 2026-09-27
 
 **Release type:** Maintenance Update
 
 **Technical Notes:**
 - CI workflow (`.github/workflows/deploy.yml`) moves to GitHub Action versions that run on Node.js 24: `actions/checkout@v5`, `actions/setup-node@v5`, `actions/setup-java@v5` and `actions/upload-artifact@v6`. GitHub is retiring the Node.js 20 runtime for actions, and the old v4 versions showed "Node.js 20 is deprecated" and "setup-java v4 is deprecated" warnings on every run. The runtime of each new version was checked in its `action.yml`: `upload-artifact@v5` still uses Node 20, so v6 is used. `shivammathur/setup-php@v2` already runs on Node 24. The Node version the project itself builds with (`node-version: 20.19.0`) is unchanged, and so are the tests, the release cut and the APK build steps.
+
 ## [2.27.0] - 2026-09-27
 
 **Release type:** Minor Feature Update
@@ -453,6 +659,7 @@ All notable production changes to Business Dashboard are documented here.
   - The "External Fraud Check (Merchant Panel Login)" section is no longer shown for Steadfast.
 
 **Technical Notes:** `SteadfastCourierClient` gains `ping()` and `fraudCheck()` (`GET /fraud_check/score/{phone}`), URL-encodes path values, and retries only connection errors and 5xx. It never retries a 4xx: the guide says 10 failed logins in 5 minutes lock the key for 60 minutes, booking included. `SteadfastFraudClient` now calls the API instead of scraping the portal (the portal code is removed). After a 401 it skips lookups with the same keys for 15 minutes. The guide does not name the response fields, so `parseScore()` accepts the common spellings, at the top level or under `data`. A response with no delivered or cancelled count is treated as a failed check, never as a clean 0/0. `ExternalCourierFraudService` passes a Steadfast provider's booking API keys and `base_url` to the client. `CourierProviderInterface` gains `verifyWebhookRequest()` and `webhookSkipReason()`, with defaults in `AbstractCourierAdapter`. `CourierWebhookController` uses them and reads `Idempotency-Key`. `ProcessCourierWebhook` marks skipped events `ignored`. `CourierService::normalizeSteadfastStatus()` now returns `?string`. New strings go through `__()` with keys in `lang/en.json` and `lang/bn.json`. No migrations.
+
 ## [2.26.0] - 2026-09-27
 
 **Release type:** Minor Feature Update
@@ -465,6 +672,7 @@ All notable production changes to Business Dashboard are documented here.
 - **Video guides on the Prompt Enhancer page.** Settings → Integrations → Prompt Enhancer → **Context guides** now lists four video guides next to the image ones. Labels now start with "Image —" or "Video —", so the two "General" guides are easy to tell apart. As before, leave a guide blank to keep the built-in default.
 
 **Technical Notes:** `config/prompt_guides.php` gains four `video_generation.*` contexts and a separate `video_provider_styles` map (only `custom`). The image `provider_styles` entry for Stability asks for keyword tags, which suits images but not a video motion prompt. `PromptEnhancementService` picks the medium from the context key prefix (`video_generation.*` → video): the system prompt's first and last lines say video / on-screen text, and `PromptGuideRepository::providerStyle($format, $medium)` reads the matching style map. The `enhance()` signature is unchanged. `VideoGenerationClient` gains `usesTextPrompt()` (`StabilityVideoProvider` returns false). `VideoGeneration` stores `original_prompt` (the column already existed). No migrations. Plan: `12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md` Phase 2.
+
 ## [2.25.1] - 2026-09-27
 
 **Release type:** Patch/Fix Update
@@ -484,6 +692,7 @@ All notable production changes to Business Dashboard are documented here.
 - **Sample CSV** now downloads in the same layout as your INV sheet.
 
 **Technical Notes:** `InvestorImportService` finds the header row below a title line, reads every Excel sheet, folds Bangla spelling variants when matching column names, and skips SL/total rows. The sample layout and new aliases live in `config/investor_import.php`. No migrations.
+
 ## [2.25.0] - 2026-09-27
 
 **Release type:** Minor Feature Update
@@ -505,6 +714,7 @@ All notable production changes to Business Dashboard are documented here.
 - **AI Expense Scan is renamed Smart Scan** everywhere it shows: the settings page, **Finance → Smart Scans**, and its messages.
 
 **Technical Notes:** `ImageProviderSettings`, `VideoProviderSettings`, `PromptEnhancerSettings` and `ExpenseScanSettings` moved from the `AiTools` to the `Settings` cluster and use the new `OpenedFromIntegrations` trait (hidden from navigation, breadcrumb to Integrations). Their URLs are now `/admin/settings/{slug}` (slugs unchanged); a `301` route redirects the old `/admin/ai-tools/{slug}`. `Integrations::aiToolProviderLinks()` builds the cards, showing each only to users who can open that page. `ImageGovernance` stays in `AiTools` with `$shouldRegisterNavigation = false`, linked from the `imageGovernance` header action on `ToolMenu`. New and renamed labels go through `__()` with keys in `lang/en.json` and `lang/bn.json`. No migrations.
+
 ## [2.24.0] - 2026-09-27
 
 **Release type:** Minor Feature Update
@@ -524,6 +734,7 @@ All notable production changes to Business Dashboard are documented here.
 - New migration `2026_09_26_100000_create_investor_drafts_table` (`investor_drafts`, company-owned; `nid_number` / `nominee_nid_or_passport` encrypted like on `investors`). Run `php artisan migrate --force`.
 - New `InvestorDraft` model (`BelongsToCompany` + `CompanyScope`), `App\Services\Investment\InvestorImportService` (reading with the existing `openspout/openspout` dependency), `InvestorDraftResource` in the Investments cluster. Column/label names live in `config/investor_import.php`.
 - Drafts need the `investments.manage` permission. Uploaded files are deleted right after they are read.
+
 ## [2.23.1] - 2026-09-26
 
 **Release type:** Patch/Fix Update
@@ -552,6 +763,7 @@ On other devices:
   - `saveImage()` writes to MediaStore on Android 10+.
   - `AndroidManifest.xml` gains a `<queries>` block for the seven messenger package names, needed for Android 11+ package visibility.
 - `OrderSummaryCardService` drops the text share links. It adds `customer_phone` (international digits), per-row `key` on totals, and card `labels`.
+
 ## [2.23.0] - 2026-09-25
 
 **Release type:** Minor Feature Update
@@ -582,6 +794,7 @@ On other devices:
 - Migration `2026_09_25_120100_add_last_company_selection_to_users_table` adds nullable `users.last_company_selection` (company id or `all`). `CompanySwitchController` writes it. `SetCurrentCompany` uses it only when the session has no company yet, and still checks access.
 - New `App\Support\PhoneLinks`, `App\Services\OrderSummaryCardService`, `CourierService::courierNote()`. The courier note text is always English because the courier reads it. It is not UI text.
 - New tests: `OrderManagementFeaturesTest`, plus new cases in `CourierIntegrationTest` and `CompanySelectionPersistenceTest`.
+
 ## [2.22.0] - 2026-09-25
 
 **Release type:** Minor Feature Update
@@ -591,6 +804,7 @@ On other devices:
 - **AI Expense Scan can now read expenses pasted as text, not just photos.** The scan page (Finance → Expense Scans → Scan photo or text, or **Scan with AI** on the Expenses list) has a new **"Or paste expenses as text"** box. Paste several expenses at once, one per line in any format (for example a WhatsApp message or a notes-app list, in Bangla or English). They are read into draft lines exactly like a photo: dates, amounts, suggested category and suggested pay-from account, with the same review and **Publish** step before anything is posted. A scan can have photos, pasted text, or both. The pasted text is shown on the review page and on each published expense as its source.
 
   **Technical Notes:** migration `2026_09_25_110000_add_source_text_to_expense_scans_table` adds a nullable `expense_scans.source_text` column. `ExpenseScanReader` sends the pasted text to the model as a delimited text block alongside any photos, and a scan needs at least one of the two.
+
 ## [2.21.0] - 2026-09-25
 
 **Release type:** Minor Feature Update
@@ -642,6 +856,7 @@ On other devices:
 - `axios` was removed. It was unused (`resources/js/bootstrap.js` deleted), which drops ~14 KB gzip from the storefront bundle.
 - New tests: `StorefrontVatAndDeliveryTimeTest`, `tests/Unit/TranslationParityTest`. `StorefrontThemeTest` was updated for the owner's new hero, copy and utility-bar rules.
 - New agent rule in `CLAUDE.md` / `AGENTS.md`: every new user-visible string goes into both `lang/en.json` and `lang/bn.json`.
+
 ## [2.20.0] - 2026-09-25
 
 **Release type:** Minor Feature Update
@@ -659,6 +874,7 @@ On other devices:
   - **Setup:** a Super Admin sets the AI model and API key on the new **AI Tools → Expense Scan** page. Any Anthropic (Claude) or OpenAI-compatible vision model works. This key is separate from the CRM and Prompt Enhancer keys, so its cost can be tracked on its own.
 
   **Technical Notes:** migration `2026_09_24_100000_create_expense_scans_tables` adds `expense_scans` and `expense_scan_items` (both company-owned: `BelongsToCompany` + `CompanyScope`, added to `MultiCompanyIsolationTest`) and a nullable `expenses.expense_scan_id` FK (`nullOnDelete`). Drafts are deliberately kept out of `expenses`, because an `Expense` posts to the ledger in its `saved` hook. Photos are stored privately through `CompanyStorageService` (`private/expense-scans/`) and served by the new permission-checked `expense-scans.image` route. The vision call runs in the new queued `ProcessExpenseScanJob` (`tries=1`, `timeout=240`). It sets `CompanyContext` explicitly and restores it afterwards, so it also works under `QUEUE_CONNECTION=sync`. **Production needs a running queue worker for scans to be read off the request.** New services `ExpenseScanConfigService` (encrypted per-company settings at `settings->ai_tools->expense_scan`), `ExpenseScanReader` (vision prompt + `record_expenses` tool; re-validates every category/account id, amount and date the model returns), and `ExpenseScanPublisher` (transactional publish, category de-duplication, duplicate hint). `AiLlmClient` gained an optional `$maxTokens` constructor argument (default unchanged at 1024). `ExpenseCategory::createWithUniqueSlug()` now holds the unique-slug logic previously inlined in `ExpenseForm`. New permission key `expenses.ai_scan` is not added to any built-in role.
+
 ## [2.19.0] - 2026-09-20
 
 **Release type:** Minor Feature Update
@@ -668,6 +884,7 @@ On other devices:
 - **New external Website Integration API** (Settings → Integrations → Website API), so a company's own customer-facing website can sync with ZamZam ERP: two-way product price/stock sync, website → ERP order and inquiry submission, and one-way ERP → website order status tracking. Real-time in both directions — inbound via a REST API, outbound via signed webhooks. Generate a per-company API key and (optionally) a webhook URL/secret from the new tab; full contract, auth, and webhook signature verification are documented in `docs/api/website-integration.md` and `docs/api/website-integration.openapi.yaml` (importable straight into Postman), with a staging setup walkthrough in `docs/api/staging-setup.md`.
 
   **Technical Notes:** new `routes/api.php` (registered in `bootstrap/app.php`), authenticated by a new per-company `CompanyApiKey` model (SHA-256-hashed bearer token, looked up before company context exists — same `withoutGlobalScopes()` precedent as `ChatOrderLink`) via the new `ResolveCompanyFromApiKey` middleware, which sets `CompanyContext` for the request. New endpoints under `/api/v1`: `GET/PATCH products/{sku}`, `GET products`, `POST orders` (idempotent on `external_reference`, new `Order::SOURCE_API`), `GET orders/{order_number}`, `POST leads` (reuses the existing `Lead::SOURCES['website']`, no model change needed). A `PATCH products/{sku}` stock update is never a raw column overwrite — `Product::setStockFromProductForm()` (already used by the admin Product form) now accepts an optional reference/reason override so the resulting `StockMovement` is stamped as API-originated, ledger-safe like every other stock change. Outbound webhooks (`order.status_updated`, `product.updated`) go through a new `WebsiteWebhookDispatcher` service + queued `DispatchWebsiteWebhookJob` (HMAC-SHA256-signed, `X-ZamZam-Signature` header), configured per company on a new encrypted `storefront_settings.website_api_credentials` column (same pattern as `woocommerce_credentials`); an API-originated stock change is deliberately not echoed back as a webhook to the same company that made it (checked via the `StockMovement.reference_type` it was stamped with), while every other stock/price/order-status change still notifies normally. New `CompanyApiKey` is added to `MultiCompanyIsolationTest`'s company-scope contract test.
+
 ## [2.18.2] - 2026-09-17
 
 **Release type:** Patch/Fix Update
@@ -677,6 +894,7 @@ On other devices:
 - **Orders: auto shipping fee could stay ৳0 even with a correctly detected zone, when a company has more than one courier provider.** `ShippingFeeService` priced a detected zone using whichever active courier provider happened to have the lowest database id — not necessarily the one actually marked "Set as default courier." A company with a second courier added later (or fees only configured on the real default) would silently get ৳0 shipping on every order regardless of the customer's address, and the CRM sales bot's delivery-fee quote had the same problem.
 
   **Technical Notes:** `ShippingFeeService::defaultCourierProvider()` now delegates to `CourierProvider::defaultForCompany()` — the same "is_default, falling back to the sole active provider" lookup already used to pre-assign `courier_provider_id` on new orders — instead of its own inconsistent `orderBy('id')->first()` query.
+
 ## [2.18.1] - 2026-09-17
 
 **Release type:** Patch/Fix Update
@@ -686,6 +904,7 @@ On other devices:
 - **Orders: auto shipping-cost zone detection now reads a customer's address in Bangla too, and a manually typed shipping fee is no longer wiped out when auto-detection fails.** Previously the zone matcher only recognized a district's official English spelling (e.g. "Chattogram"), so an address written in Bangla script (ঢাকা, চট্টগ্রাম, …) or an older/informal English spelling (Chittagong, Comilla, Bogra, Barisal, Jessore, …) always fell through to "Could not detect a zone from the customer address" — and on top of that, if staff then typed the shipping fee in by hand, saving the order silently reset it back to ৳0.
 
   **Technical Notes:** `ShippingFeeService::determineZone()` now also matches each configured zone keyword against `BangladeshDistricts::aliasesFor()` (the Bengali name and any older English spelling for that district/suburb). `Order`'s `creating` hook now only auto-computes `shipping_fee` when one hasn't already been set to a real amount, so a manual entry survives even when `shipping_zone` stays null.
+
 ## [2.18.0] - 2026-09-15
 
 **Release type:** Minor Feature Update
@@ -698,6 +917,7 @@ On other devices:
   - Both are optional and off by default — existing configurations (main model handles images inline, voice notes unanswered) are unchanged unless explicitly turned on.
 
   **Technical Notes:** new `AiVisionDescriber` and `AiVoiceTranscriber` services; new encrypted `image_api_key`/`voice_api_key` settings alongside the existing per-tool credential shape in `AiSettingsService`. `DownloadConversationMediaJob` now also queues the AI reply job for incoming voice notes (previously only images), and `AiReplyService` writes the transcript/description onto the source message's own `body` so it flows through the existing text-based reply pipeline unchanged.
+
 ## [2.17.0] - 2026-09-13
 
 **Release type:** Minor Feature Update
@@ -786,6 +1006,7 @@ On other devices:
 - New `App\Support\StorefrontListingCache` (`storefront-home-products:`, `storefront-categories:`, `storefront-products:` cache keys). The product-listing page is parameterized by category/sort/page, so instead of enumerating every combination to forget, its keys carry a per-company "generation" number that `forgetCompany()` bumps — old keys simply become unreachable and expire via TTL, on any cache driver. `Product`, `Category`, and `StorefrontSetting` now call it from their existing `saved`/`deleted` hooks (`Category`/`StorefrontSetting` already forgot the separate, pre-existing `storefront-home:{companyId}` slide cache there; that call is unchanged).
 - Production Redis is now also the recommended session backend: `SESSION_DRIVER=redis` with `SESSION_CONNECTION=session` (new `redis.session` connection in `config/database.php`, `REDIS_SESSION_DB` defaults to its own database `2`, separate from the queue's `0` and cache's `1`) so a busy storefront isn't reading/writing a session row in MySQL on every request, and a `cache:clear` can never sign out every active session along with it. `.env.production.example`/`.env.example` and `docs/deployment.md` ("Redis on Coolify") updated accordingly; `database` remains supported for both if Redis isn't available yet.
 - Full suite: 1213 passed (as of the Sales Automation navigation-sort fix above).
+
 ## [2.15.0] - 2026-09-10
 
 **Release type:** Minor Feature Update
@@ -828,6 +1049,7 @@ On other devices:
   - **Access:** new permission keys `ai_tools.menu`, `ai_tools.image_generation`, `ai_tools.image_generation.review`, plus reserved `ai_tools.video_generation` / `ai_tools.content_creation`. Super Admin and the built-in Manager role hold the first three by default; all are selectable on custom roles.
 
   **Technical Notes:** new `generated_images` table (`BelongsToCompany` + `CompanyScope`, registered in `MultiCompanyIsolationTest`). `companies.settings` gains `ai_tools.image_generation` (provider list), `ai_tools.prompt_enhancer`, `ai_tools.image_governance`, `prompt_guides`, and `image_brand_style` — each owned by its own service (`ImageProviderSettingsService`, `PromptEnhancerConfigService`, `ImageGovernanceService`, `PromptGuideRepository`); `AiSettingsService` is not involved. Provider adapters and every LLM call are `Http::fake()`-mocked in tests.
+
 ## [2.13.4] - 2026-09-08
 
 **Release type:** Patch/Fix Update
@@ -835,6 +1057,7 @@ On other devices:
 ### Changed
 
 - **Hero Slides gained a per-slide "Fit to frame" toggle.** When on, that banner image is always shown in full — never cropped — with a thin strip of the banner background above/below if it isn't the exact banner ratio (the same "fit to screen" behaviour mobile already uses, now available on desktop for a specific slide). Off by default, so the standard edge-to-edge crop-to-fit is unchanged. New `storefront_slides.fit_to_frame` column; the storefront applies it as a `.storefront-image-banner-fit` class that forces `object-fit: contain` at every breakpoint.
+
 ## [2.13.3] - 2026-09-08
 
 **Release type:** Patch/Fix Update
@@ -842,6 +1065,7 @@ On other devices:
 ### Changed
 
 - **The Marketplace Pro storefront's hero banner is shorter on desktop**, so the "Shop by category" row directly below it stays in view without scrolling on large screens. Its slot ratio changes from `3:1` to `4:1` (`1920×480`, capped at `30rem` / 480px tall on monitors ≥1920px wide), and the Hero Slides upload editor now locks new artwork to that same ratio. Mobile is unchanged, and the Built-in and Noor Solar themes keep their existing banner sizes. `StorefrontThemeRegistry::BANNER_SPECS`, `.storefront-image-banner` (scoped `body[data-storefront-theme='marketplace_pro']`).
+
 ## [2.13.2] - 2026-09-08
 
 **Release type:** Patch/Fix Update
@@ -849,6 +1073,7 @@ On other devices:
 ### Fixed
 
 - **An image field whose preview is stuck on "Loading / Waiting for size" can now always be cleared.** When the preview of an already-saved image can't load — a slow or failing company-media URL, an offline mobile webview, the dev server under load — FilePond's own remove ("×") button never appears, so a required image field looked permanently occupied and the whole form couldn't be saved. Every FileUpload in the app now carries a small **"Remove"** action in its label row (next to "Select From Media"), added once globally via `FileUpload::configureUsing()` in `AppServiceProvider` (`App\Support\FileUploadClearAction`). It sits outside FilePond so it's always reachable; one click empties the field. The stored file is left in storage — same as the native remove — so a mis-click is recoverable from the Media Hub. The action is only shown while the field actually holds a value.
+
 ## [2.13.1] - 2026-09-08
 
 **Release type:** Patch/Fix Update
@@ -856,6 +1081,7 @@ On other devices:
 ### Changed
 
 - **Inbox message thread redesigned as modern chat bubbles** (WhatsApp/Messenger-style, owner-approved design pass). Messages now render as colored rounded bubbles — amber for your replies, neutral cards for the customer's — instead of plain callout boxes, with consecutive messages from the same side grouped together (no repeated spacing, and only the last bubble in a run gets the rounded "tail" corner). The conversation list now shows a colored initials avatar per contact instead of a generic channel icon. Delivery status is now a tick icon (single/double/red alert) next to the timestamp, with the status text kept for screen readers; the WhatsApp→SMS fallback badge and internal-note bubbles were restyled to match. The reply composer is now a floating pill shape. Purely visual — every Livewire binding, filter, and keyboard/screen-reader behavior on the page is unchanged.
+
 ## [2.13.0] - 2026-09-07
 
 **Release type:** Minor Feature Update
@@ -877,6 +1103,7 @@ On other devices:
 ### Fixed
 
 - **The courier booking form now reliably pre-fills the recipient name, phone, and address from the order.** The prefill (plus the COD default) is now applied through one shared `CourierService::bookingFormDefaults()` via the action's `->fillForm()`, instead of per-field `->default()` calls that could come up blank.
+
 ## [2.12.0] - 2026-09-06
 
 **Release type:** Minor Feature Update
@@ -891,6 +1118,7 @@ On other devices:
   - Manual bKash/Nagad numbers for Offer-page checkouts and other non-gateway storefront content are unaffected and stay on Storefront Settings.
 - **AI Integration's provider/model fields now have a "quick setup" picker.** Each AI tool's tab (Auto Messaging, Ad Assistant, Landing Page Builder) gained two optional, searchable dropdowns above the existing free-text fields: pick a popular OpenAI-compatible provider (DeepSeek, Groq, OpenRouter, Mistral, xAI, Together AI, Fireworks AI, Perplexity, OpenAI, or a self-hosted Ollama/vLLM endpoint) to auto-fill its provider name, base URL, and API format, then pick from that provider's own short list of well-known models (searchable) to fill the Model field. Both pickers are pure convenience — the underlying Provider/Base URL/Model fields stay 100% free-text, so any provider or model not listed can still be typed in directly, same as before.
 - **Offers now have "Preview" and "Open Page" buttons** — on the list and on the edit page, next to "Generate Landing Page with AI" — since there was previously no way to actually see a generated (or hand-built) landing page. "Preview" works for any offer regardless of status (admin-only, bypasses the published check, same convention as the storefront's own preview). "Open Page" is the real customer-facing URL and only appears once the offer is Published and the company has a domain set.
+
 ## [2.11.4] - 2026-09-05
 
 **Release type:** Patch/Fix Update
@@ -898,6 +1126,7 @@ On other devices:
 ### Changed
 
 - **Every admin page now uses the full width available beside the sidebar on desktop.** The panel content was previously capped at 80rem (Filament's default `7xl`) and centred, leaving wide empty gutters on large monitors — forms, tables, and dashboards now stretch edge to edge. Phones and tablets are unaffected: their viewport is already narrower than the old cap, so only the desktop layout widens. Set once on the panel via `->maxContentWidth(Width::Full)` in `AdminPanelProvider`; the login and other simple/centred auth pages keep their own narrow width.
+
 ## [2.11.3] - 2026-09-02
 
 **Release type:** Patch/Fix Update
@@ -910,6 +1139,7 @@ On other devices:
   - **The 8-second inbox poll no longer writes to the database on every tick** — `markHumanPresent()` (the AI pause window) is now throttled to once per minute; explicit conversation selections still mark presence immediately, and `markRead()` keeps running each tick so unread badges stay accurate.
   - **The Android shell now declares `android:windowSoftInputMode="adjustResize"`** (was missing from the Capacitor default) so the viewport resizes when the soft keyboard opens — the composer no longer risks hiding behind the keyboard in the mobile app. The inbox already sizes itself with `100dvh` and re-syncs scroll, so keyboard-open now keeps the latest message and the composer visible.
   - Regression coverage: `tests/Feature/InboxSmoothnessTest.php` (body search, load-more expansion, composer reset markup, manifest resize) + updated markup assertions in `InboxPageTest`.
+
 ## [2.11.2] - 2026-08-31
 
 **Release type:** Patch/Fix Update
@@ -917,6 +1147,7 @@ On other devices:
 ### Fixed
 
 - **A WooCommerce order whose sold quantity exceeded the ERP's own tracked stock silently never synced at all.** The stock ledger's usual negative-stock guard — correct for a manually-entered ERP sale — was also blocking every WooCommerce order sync once a product's real-world sales outpaced its ERP stock record, failing with a 500 that showed no useful reason anywhere reachable. A WooCommerce order's sale already happened on the storefront regardless of ERP stock, so a sync can no longer be blocked this way; the shortfall is now surfaced as a note directly on the order instead (e.g. "Sold below available stock, now negative on hand and needs restocking: Product X (-4).") so it's obvious the product needs restocking. Manually-entered ERP sales are still correctly blocked when stock is insufficient — unaffected.
+
 ## [2.11.1] - 2026-08-31
 
 **Release type:** Patch/Fix Update
@@ -924,6 +1155,7 @@ On other devices:
 ### Fixed
 
 - **The new "Sync an order now" button (Settings → Integrations → WooCommerce, added in v2.11.0) failed instantly with a generic "Error while loading page" instead of opening its order-ID prompt.** A string `->action('methodName')` on a Filament action with a `->schema()` attached is wired as a raw click handler that calls the method directly with no arguments, bypassing the modal that's supposed to collect the form first — a hard PHP error against the method's required parameter. Switched to a closure action (the pattern already used by the order "Change status" action), which correctly opens the modal first.
+
 ## [2.11.0] - 2026-08-30
 
 **Release type:** Minor Feature Update
@@ -931,6 +1163,7 @@ On other devices:
 ### Added
 
 - **Settings → Integrations → WooCommerce has a new "Sync an order now" button.** Pulls one order straight from WooCommerce's own REST API by its order ID and runs it through the exact same sync logic a real webhook delivery uses. Two uses in one: manually backfilling an order a webhook never delivered (e.g. one sent before a secret was saved), and diagnosing *why* a sync fails — any error is shown verbatim in the notification, instead of only in a server log or WooCommerce's own delivery log (which hides response bodies unless `WP_DEBUG` is on).
+
 ## [2.10.3] - 2026-08-30
 
 **Release type:** Patch/Fix Update
@@ -938,6 +1171,7 @@ On other devices:
 ### Fixed
 
 - **A rejected WooCommerce webhook delivery now explains itself in WooCommerce's own delivery log**, instead of showing a bare status code with no way to tell why without server access. A missing/blank webhook secret (404) or a signature that doesn't match the secret saved in Settings → Integrations → WooCommerce (403) now return a small JSON body — `error: no_webhook_secret_saved` / `signature_mismatch`, plus a plain-language hint and whether the signature header even arrived — viewable from WooCommerce's own "Recent Deliveries" → response tab. No secret or signature value is ever included.
+
 ## [2.10.2] - 2026-08-30
 
 **Release type:** Patch/Fix Update
@@ -951,6 +1185,7 @@ On other devices:
 - **Recording a payment on an order's edit page could silently undo itself.** Paid Amount/Due Amount on the edit form are read-only once an order exists (corrections go through the Payments History ledger below), but read-only alone didn't stop their stale, page-load-time values from being resubmitted — saving the order after adding a payment there could overwrite the just-recorded amount back to what it was before, so the invoice's Paid/Due lines never reflected it either. Those two fields are no longer written by the edit form at all now; only the Payments History ledger can change them. The order screen also refreshes its own Paid/Due Amount immediately after a payment is added, edited, or deleted, instead of only on the next page load.
 - **Every list in the app now shows its newest record on top by default** — Orders, Customers, Products, Users, and every other list/relation table that didn't already set its own sort order previously showed the oldest record first and the newest at the very bottom (Filament's own built-in fallback sorts by ID ascending). A list that already had an intentional sort (alphabetical, drag-to-reorder, etc.) is unaffected.
 - **The order "Change status" action now reports a real error instead of appearing to do nothing** if something unexpected goes wrong mid-transition (a database error, a courier-sync failure, etc.) — previously an error here could fail without any visible feedback. The success notification also now names the resulting status (e.g. "MAIN-20260830-001 is now Confirmed.") instead of a generic message.
+
 ## [2.10.1] - 2026-08-29
 
 **Release type:** Patch/Fix Update
@@ -958,6 +1193,7 @@ On other devices:
 ### Fixed
 
 - **v2.10.0's automatic-migration deploy step broke production startup**: the `nixpacks.toml` `[start]` override hardcoded `heroku-php-apache2` as the web-server command (a Railway/Heroku-buildpack assumption), which doesn't exist on this app's actual host (a Contabo VPS running Coolify) — every deploy's new container failed its healthcheck with `heroku-php-apache2: command not found`. Coolify's own rollback-on-unhealthy behavior caught this automatically each time (the site never actually went down), but no new deploy could ever go live. The `[start]` override is removed entirely — Nixpacks' own auto-detected start command (already proven working) is used again — and `php artisan deploy:migrate` now runs via **Coolify's native "Post-deployment Command"** setting instead, which executes inside the already-healthy container rather than needing to know how it was started.
+
 ## [2.10.0] - 2026-08-29
 
 **Release type:** Minor Feature Update
@@ -976,6 +1212,7 @@ On other devices:
 - **Deploy error notifications**: new `nixpacks.toml` `[start]` command runs `php artisan deploy:migrate; heroku-php-apache2 /app/public` (`;` not `&&` — a total crash in the command must never stop the site from starting). New `App\Console\Commands\DeployMigrate` wraps `migrate --force --isolated` in a try/catch and always exits 0; a failure is handed to the new `App\Services\DeploymentErrorReporter`, which logs it, persists a new `deployment_errors` row (`App\Models\DeploymentError` — deliberately not company-scoped, same precedent as `MobileCrashReport`, excluded from `MultiCompanyIsolationTest` on purpose), and notifies every active `role = 'super_admin'` user via a new `App\Notifications\DeploymentErrorAlert` database notification (`danger()`, two actions: "Copy Error Log" using the identical Alpine `navigator.clipboard.writeText` + `$tooltip` snippet Filament's own `->copyable()` uses — extracted into `App\Support\ClipboardCopy` — and "View Full Log"). New super-admin-only `App\Filament\Resources\DeploymentErrors\DeploymentErrorResource` at Settings → Deploy Error Logs (list + view, row-level "Copy Log", delete/bulk-delete for housekeeping) is where the log survives after the notification is gone. New migration `2026_08_29_010000_create_deployment_errors_table`. New tests `DeploymentErrorReporterTest` (persistence + notification targeting/actions) and `DeployMigrateCommandTest` (a real forced migration failure via a throwaway `--path`, not a mock, confirms the command still exits 0).
 - **App version rollback**: new `App\Support\CoolifySettings` (global `AppSetting`-backed, encrypted — `base_url`, `api_token`, `application_uuid` — same pattern as `FirebaseSettings`) and `App\Services\CoolifyDeploymentService`, which calls Coolify's own public API (verified directly against `coollabsio/coolify`'s source, not guessed): `GET /api/v1/deployments/applications/{uuid}` to list recent deployments (filtered to `status === 'finished'`, current live one excluded) and `POST /api/v1/applications/{uuid}/rollback` (`{"commit": "<sha>"}`) to queue a redeploy of an older commit. New `App\Filament\Pages\CoolifyDeploymentSettings` (Settings → Deployment Settings, credential form + a "Test Connection" button) and `App\Filament\Pages\AppVersions` (Settings → App Versions, lists the last 5 rollback-eligible deployments with a confirm-then-rollback button per row) — both super-admin only. New tests `CoolifyDeploymentSettingsTest`, `CoolifyDeploymentServiceTest` (via `Http::fake`, including the exact request shape sent to Coolify), and `AppVersionsPageTest` (drives the real rollback action through Livewire).
 - Full `php artisan test` for both features together: 1023 passed, 0 failed. No frontend build assets changed (Blade + inline styles only), so `npm run build` was not required.
+
 ## [2.9.0] - 2026-08-29
 
 **Release type:** Minor Feature Update
@@ -991,6 +1228,7 @@ On other devices:
 ### Technical Notes
 
 - Parcel ID uses the existing `courier_bookings.provider_reference` column — no new migration. `resources/views/orders/partials/invoice.blade.php` reads `$order->latestCourierBooking?->provider_reference`; `OrderInfolist.php`'s Courier section gained a matching `TextEntry` right after Tracking ID. New/updated tests: `InvoiceDesignTest::test_invoice_shows_barcode_weight_delivery_partner_and_cut_slip` and `test_invoice_hides_parcel_id_when_the_booking_has_no_provider_reference`.
+
 ## [2.8.1] - 2026-08-29
 
 **Release type:** Maintenance Update
@@ -1039,6 +1277,7 @@ On other devices:
 ### Technical Notes
 
 - `resources/css/app.css`'s `.storefront-image-banner` rule changed from `height: calc(100vh / N)` to `aspect-ratio` (`45 / 16` mobile, `3 / 1` desktop from `1024px` up), matching `App\Support\StorefrontThemeRegistry::BANNER_SPECS`. Mobile now uses `object-fit: contain` on the slide `<img>` (was `object-fit: cover` via a Tailwind class on the element, removed so the CSS above is the single source of truth); desktop keeps `cover`. Also made the ratio itself explicit at the front of each Hero Slides form field's helper text (`StorefrontThemeRegistry::BANNER_SPECS['note']`) instead of only mentioning it mid-sentence. Regression test `StorefrontBannerTest::test_banner_height_uses_the_requested_viewport_ratios` (which had locked in the old, buggy vh-based CSS) replaced with `test_banner_height_is_driven_by_its_declared_aspect_ratio_not_viewport_height` and `test_banner_fits_to_screen_on_mobile_without_cropping`.
+
 ## [2.6.0] - 2026-08-28
 
 **Release type:** Minor Feature Update
@@ -1077,6 +1316,7 @@ On other devices:
 
 - New shared trait `App\Filament\Concerns\HasDrilldownStatCards` (used by `VoucherSummaryWidget`, `AccountSummaryWidget`, `ExpenseCategorySummaryWidget`) provides the modal-building plumbing; `BusinessOverview`'s own existing drilldown code on the main Dashboard is untouched. All three widgets now reuse `BusinessOverview`'s view (`filament.widgets.business-overview` — genuinely generic markup, its docblock updated to say so) so the `<x-filament-actions::modals />` these mounted actions need actually render. Since Account/Expense have a variable number of cards (one per account/category, not a fixed set), each card's `wire:click` embeds only that record's numeric ID (never its name/text, which would need JS-string escaping) — the specific record is then re-resolved inside the modal's own closures via Filament's `array $arguments` closure-injection (any Action closure parameter literally named `$arguments` receives the mounted action's arguments). Voucher/Fund Transfer cards (a fixed, known set) pass a `type`/`bucket` or `status` argument the same way. New tests: 5 in `DashboardSummaryCardsTest` covering all three widgets' modal content.
 - **Unmatched-item total bug root cause**: `subtotal`/`total_amount` are always recalculated by `OrderWorkflowService::sync()` purely from the OrderItems that actually exist (triggered by every `OrderItem`'s own `saved`/`deleted` hook) — correct in general (it's the one place totals get computed everywhere in the app), but a line item that never became an `OrderItem` (because no ERP product matched it) was invisible to that calculation, silently vanishing from the total. `WooCommerceOrderSyncService::syncItems()` now returns which line items were unmatched; when any were, `reconcileTotalsWithWooCommerce()` recomputes `subtotal`/`total_amount`/`due_amount` using the exact same formula `OrderWorkflowService::sync()` uses, except the subtotal is summed directly from *every* line item WooCommerce reported (matched or not), not only the ones that became a real `OrderItem` row. New tests: `test_an_order_with_an_unmatched_item_still_gets_woocommerces_full_total_not_just_shipping`, `test_totals_still_reconcile_correctly_when_only_some_items_are_unmatched`.
+
 ## [2.4.3] - 2026-08-28
 
 **Release type:** Patch/Fix Update
@@ -1093,6 +1333,7 @@ On other devices:
 
 - **Summary card sizing**: same technique the main Dashboard's own stat cards already use (`.zz-business-overview-stat` in `theme.css`) — a CSS class added to each `Stat` via `->extraAttributes(['class' => '...'], merge: true)`, scoped so it only affects these three widgets' cards. New `.zz-voucher-summary-stat`/`.zz-account-summary-stat`/`.zz-expense-summary-stat` rules shrink the label to 11px and the value to 18px (down from Filament's defaults of 14px/30px) and tighten padding to 10px. New test: `DashboardSummaryCardsTest::test_voucher_summary_cards_use_the_compact_stat_style`, plus assertions added to the existing Account/Expense summary tests.
 - Root cause of the print-inside-the-app issue: yesterday's mobile-browser fix made `window.print()` work correctly in real mobile browsers, but Android's own WebView (which is what the app's UI actually runs inside) never implements `window.print()` at all — calling it there was always a silent no-op, browser fix or not. Added a native bridge (`android/app/src/main/java/com/zamzamint/erp/PrintBridge.java`, registered by `MainActivity` as `window.ZzPrintBridge`) that drives Android's own `PrintManager`/`WebView.createPrintDocumentAdapter()` — the standard way a WebView page is printed natively. Both invoice print pages now call `window.ZzPrintBridge.print()` when it's present (i.e. running inside the app) and fall back to `window.print()` otherwise (real browsers, unaffected). **Requires a new Android app build to reach devices** — unlike a web-only fix, this doesn't take effect just by deploying the server; the owner needs to install the next app update once built. New tests: `InvoiceDesignTest::test_print_button_falls_back_to_the_native_android_bridge_inside_the_app`, plus an assertion added to `OrderBulkPrintTest`.
+
 ## [2.4.2] - 2026-08-27
 
 **Release type:** Patch/Fix Update
@@ -1118,6 +1359,7 @@ On other devices:
 - **Owner also asked to hide the "Built for repeat and wholesale buyers / Open business account" card for retail-only companies** (e.g. ZamZam Gadget) while keeping it for wholesale-only companies (e.g. ZamZam International) — this already exists as a per-company toggle (Storefront Settings → Marketplace Pro Features → "Business account callouts"), so no code change was needed; just needs switching off for the retail company via the dashboard.
 - New tests: `StorefrontThemeTest::test_marketplace_hero_is_full_width_without_promo_cards_and_uses_a_real_arrow_icon`, `test_marketplace_trust_strip_scrolls_horizontally_on_mobile`.
 - Found (not fixed here — unrelated, admin-only, flagged separately): `resources/views/filament/pages/inbox.blade.php` has its own, different single-byte encoding issue.
+
 ## [2.4.1] - 2026-08-27
 
 **Release type:** Patch/Fix Update
@@ -1130,6 +1372,7 @@ On other devices:
 ### Technical Notes
 
 - `WooCommerceOrderSyncService::syncItems()`: SKU match first, then falls back to `Product.slug` matched against `Str::slug($lineItem['name'])` — the exact normalization `WooCommerceImportService::importProduct()` already applies when a product doesn't have its own WooCommerce-supplied slug, so a product previously imported through that flow matches correctly here too. Still skips (and now also notes) anything matching neither. New tests: `test_a_line_item_with_a_blank_sku_matches_by_product_name_instead`, `test_an_unmatched_line_item_leaves_a_visible_note_on_the_order`.
+
 ## [2.4.0] - 2026-08-27
 
 **Release type:** Minor Feature Update
@@ -1150,6 +1393,7 @@ On other devices:
 - **Shipping-fee overwrite root cause**: `Order::creating()` auto-fills `shipping_zone`/`shipping_fee` from `ShippingFeeService::feeFor()` whenever `shipping_zone` is still `null` on a brand-new order — correct for admin-created orders (no shipping charge exists yet to preserve), wrong for a WooCommerce-synced order, which always already has a real `shipping_total` in its webhook payload. `WooCommerceOrderSyncService::upsertOrder()` now sets `shipping_zone` (via the same `ShippingFeeService::determineZone()`, for reporting/filtering consistency, defaulting to `''` rather than `null` when nothing matches) *before* filling in WooCommerce's real `shipping_fee`, so the `creating` hook's condition (`shipping_zone === null`) never fires and the real value survives. New regression test `WooCommerceOrderWebhookTest::test_shipping_fee_and_total_use_woocommerces_real_values_not_the_erp_zone_calculator` configures a company whose ERP-calculated fee would differ from WooCommerce's real one if the bug were still present — confirmed it fails without the fix (reverted the fix locally, re-ran, got the exact "70.0 is not 150.0" mismatch) before restoring it. The existing webhook tests never caught this because their fixture's `shipping_total` happened to be `'0.00'`, which coincidentally matches the ERP calculator's own zero-fee fallback for an unconfigured shipping zone.
 - **ERP → WooCommerce status push**: new `App\Jobs\PushWooCommerceOrderStatusJob` (queued) calls `WooCommerceOrderSyncService::pushStatusToWooCommerce()`, which `PUT`s `{status}` to `/wp-json/wc/v3/orders/{id}` using the same Consumer key/secret Basic Auth pattern `WooCommerceImportService` already uses. New `WooCommerceOrderSyncService::REVERSE_STATUS_MAP` (Order status → WooCommerce status — a reasonable default, not a confirmed business rule, same caveat as the existing forward `STATUS_MAP`; ERP's extra `confirmed` state and WooCommerce's simpler status list both collapse to WooCommerce `processing`, ERP `returned` maps to WooCommerce's closest equivalent `refunded`). Triggered from `Order::booted()`'s `updated()` hook whenever `status` changes on an existing WooCommerce-sourced order. **Loop prevention**: a new transient (non-persisted) `Order::$suppressWooCommercePush` property, set by `WooCommerceOrderSyncService::upsertOrder()`/`markCancelled()` before saving a status change that just arrived FROM a webhook — without it, every WooCommerce → ERP sync would immediately queue a push of that same status straight back to WooCommerce. New `tests/Feature/WooCommerceOrderStatusPushTest.php` (6 tests: queues correctly for a WooCommerce order's status change, never queues for a non-WooCommerce order, never queues for a webhook-originated change, sends the correctly-mapped status via the REST API, and two safe-no-op cases — missing credentials, non-WooCommerce source).
 - **Copy icons**: all three are Filament's native `TextColumn::make(...)->copyable()` — no custom JS. `CustomersTable`'s existing `phone` column gained it directly. `OrdersTable` gained two brand-new columns that didn't exist before: `customer.phone` (`->toggleable()`, placeholder `-`) and `latestCourierBooking.tracking_id` (`->toggleable()`, placeholder `-`, blank until a courier is booked) — both eager-loaded via `modifyQueryUsing()` (added `latestCourierBooking` to the existing `with([...])` alongside `customer`/`latestFraudCheck`/`latestRiskReview`) to avoid N+1 queries. New `tests/Feature/CopyableColumnsTest.php` (4 tests) asserts the `fi-copyable` CSS class Filament renders when `->copyable()` is active actually lands on the phone/tracking-ID values, not just that the pages load.
+
 ## [2.3.1] - 2026-08-27
 
 **Release type:** Patch/Fix Update
@@ -1162,6 +1406,7 @@ On other devices:
 
 - Reordering was a pure `navigationSort` change across the 13 `NavigationCluster` subclasses in `app/Filament/Clusters/` — no routes changed for anything except Customer Success. The `CustomerSuccess` cluster class is now deleted; its 5 owning Resources/Pages (`CustomerRiskProfileResource`, `CustomerBlacklistResource`, `CustomerRiskReviewResource`, `CustomerRiskEventResource`, `CustomerRiskSettings`) now declare `$cluster = Courier::class`, moving their URLs from `/admin/customer-success/*` to `/admin/courier/*` (updated in `tests/Feature/CustomerRiskTest.php`). Verified the full requested order programmatically (`getNavigationSort()` per cluster) before shipping.
 - **`tests/Feature/ReleaseNotesTest.php` made version-agnostic**: 6 assertions hardcoded the exact version/date/type-label string (`v2.2.0`, `Released 2026-08-26`, `Minor Feature`), so the very next `cut-release` CI run (this round auto-cut `v2.3.0`) broke this test file again — the same class of maintenance the auto-cut feature was supposed to reduce, just one file over. All 6 now read the expected value from `AppRelease::latestPublished()` at test time instead of a literal, so this file no longer needs a manual touch on every future release cut.
+
 ## [2.3.0] - 2026-08-27
 
 **Release type:** Minor Feature Update
@@ -1210,6 +1455,7 @@ On other devices:
 - **Found and fixed a real bug in this same round's own security-hardening work**: the brand-neutral error views above originally lived at `resources/views/errors/{status}.blade.php` — but that is Laravel's own conventional `errors::` view-namespace path (registered app-wide by `Illuminate\Foundation\Exceptions\Handler`'s `RegisterErrorViewPaths`), so simply having a file there made Laravel's *default* exception rendering use it for literally any HTML-rendering exception, completely independent of `StorefrontErrorPages::appliesTo()` — a webhook/admin/API client that doesn't send `Accept: application/json` (WooCommerce's real webhook deliveries, confirmed live) would still get this branded page even though `appliesTo()` correctly said not to intervene, since `bootstrap/app.php`'s closure returning `null` only means "fall through to Laravel's default", and that default itself was contaminated. Fixed by moving the views to `resources/views/storefront/errors/*` (a path Laravel never auto-discovers) and having the closure render that path explicitly — excluded requests now correctly fall all the way through to Laravel's own true default handling. New regression test `SecurityHardeningTest::test_a_403_on_an_excluded_route_never_renders_the_branded_storefront_page` (a real HTTP round trip, not a unit-level `appliesTo()` check, since that's exactly what let this ship in the first place).
 - Full `php artisan test` (no `--env` flag) — see UPDATE_NOTES.md for the exact count from this round's final run.
 - **Releases are now cut automatically on every push to `main`**, closing the gap that let 25 real commits ship without ever converting `[Unreleased]` into a dated version (the reason `v2.2.0` above needed a manual catch-up in the first place). New `.github/workflows/deploy.yml` job `cut-release` (runs after `tests` passes, `permissions: contents: write`) calls `php artisan release:cut --apply`, which is a no-op whenever `[Unreleased]` has no bullet content and otherwise: converts `[Unreleased]` into a new `## [x.y.z] - <date>` entry, infers the version bump and release type from which sections actually have content (`Added` → Minor Feature Update/bump MINOR; `Security` alone → Security Update; `Changed`/`Fixed` alone → Patch/Fix Update; only `Technical Notes` → Maintenance Update — all four bump PATCH except Minor, matching `docs/release-policy.md`'s version table exactly; `Added` wins over `Security` when both are present, e.g. `v2.2.0`/`v2.1.0` before it, both "Minor Feature Update" despite real security fixes inside them — "Security Update" is reserved for when that's the release's whole point, not merely present in it), then syncs `config/release.php`, `.env.example`, `.env.production.example`, and `docs/deployment.md`'s example env block to the new version/type/date, and commits+pushes that back to `main` with `[skip ci]` (so the bot's own commit doesn't re-trigger the workflow — the next run would find `[Unreleased]` already empty and no-op anyway). A commit can still request `major`/`critical_fix`/`hotfix`/`initial` on purpose by writing an explicit `**Release type:** X` line as the first line under `[Unreleased]` — those four are deliberately never auto-inferred, since a breaking/urgent release should never happen by accident. New `App\Support\ReleaseCutter` (pure, testable: `plan()` takes/returns plain strings, `apply()` is the only place that touches disk) and `php artisan release:cut` (`--apply` required to actually write; without it, always a safe dry run regardless of what `CHANGELOG.md` currently holds). New `tests/Feature/ReleaseCutterTest.php` (16 tests). This only ever updates the repo's own fallback defaults — the production server's actual `APP_VERSION`/`APP_RELEASE_TYPE`/`APP_RELEASE_DATE` env values (Coolify) still override those defaults if set at all; per `docs/release-policy.md` every release should also update those, but since the app's user-facing version displays (Release Notes page, in-app update banner, push notifications) already read `AppRelease::latestPublished()` straight from `CHANGELOG.md` rather than those env vars, **the recommended production setup is to not set `APP_VERSION`/`APP_RELEASE_TYPE`/`APP_RELEASE_DATE` in Coolify at all**, so the repo's auto-bumped fallback always wins and nothing there ever needs a manual touch again.
+
 ## [2.2.0] - 2026-08-26
 
 **Release type:** Minor Feature Update

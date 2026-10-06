@@ -193,6 +193,7 @@ class PhaseFourAdminPagesTest extends TestCase
                 'notifications',
                 'navigation_seo',
                 'reseller',
+                'nextjs_site',
             ],
             array_column($component->instance()->sectionNavigation(), 'key'),
         );

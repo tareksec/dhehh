@@ -86,7 +86,7 @@ class OfferCheckoutController extends Controller
 
     protected function storeForCompany(Request $request, Company $company, StorefrontSetting $setting, string $slug, ?string $previewSlug = null): RedirectResponse
     {
-        $offer = Offer::query()->where('slug', trim($slug))->where('status', Offer::STATUS_PUBLISHED)->firstOrFail();
+        $offer = Offer::query()->landingPages()->where('slug', trim($slug))->where('status', Offer::STATUS_PUBLISHED)->firstOrFail();
         $data = $this->validatedCheckout($request, $offer);
         $quantity = (int) $data['quantity'];
 
@@ -175,7 +175,7 @@ class OfferCheckoutController extends Controller
 
     protected function thankYouView(Company $company, StorefrontSetting $setting, string $slug, Order $order, ?string $previewSlug = null): View
     {
-        $offer = Offer::query()->where('slug', trim($slug))->first();
+        $offer = Offer::query()->landingPages()->where('slug', trim($slug))->first();
 
         return StorefrontThemeRegistry::page('offers.thank-you', [
             'company' => $company,

@@ -3,68 +3,54 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
-use App\Jobs\CheckExternalCourierFraudJob;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Order;
-use App\Models\OrderItem;
-use App\Models\StorefrontCheckoutAttempt;
 use App\Models\StorefrontCustomerActivity;
 use App\Models\StorefrontPayment;
-use App\Models\StorefrontPaymentMethod;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
-use App\Services\PaymentGatewayResolver;
 use App\Services\StorefrontCart;
-use App\Services\StorefrontCheckoutPolicyService;
+use App\Services\StorefrontCheckoutService;
 use App\Services\StorefrontCustomerActivityService;
 use App\Services\StorefrontDeliveryAreaResolver;
 use App\Services\StorefrontDeliveryService;
-use App\Services\StorefrontMetaDispatchService;
 use App\Services\StorefrontMetaTrackingService;
-use App\Services\StorefrontPaymentEligibilityService;
 use App\Services\StorefrontPaymentService;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
-use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
+/**
+ * The Blade storefront's checkout. The rules themselves (delivery, VAT,
+ * checkout policy, advances, online payment, order creation) live in
+ * StorefrontCheckoutService, shared with the headless Next.js API; this class
+ * only does what is specific to the session cart, redirects and views.
+ */
 class CheckoutController extends Controller
 {
     public function __construct(
         protected CompanyContext $context,
         protected StorefrontCart $cart,
-        protected PaymentGatewayResolver $gateways,
+        protected StorefrontCheckoutService $checkout,
         protected StorefrontCustomerActivityService $activities,
-        protected StorefrontCheckoutPolicyService $checkoutPolicies,
         protected StorefrontDeliveryService $delivery,
         protected StorefrontDeliveryAreaResolver $deliveryAreas,
         protected StorefrontPaymentService $payments,
-        protected StorefrontPaymentEligibilityService $paymentEligibility,
         protected StorefrontMetaTrackingService $metaTracking,
-        protected StorefrontMetaDispatchService $metaDispatch,
     ) {}
 
     /**
-     * Advance amount payable online for pre-order lines: quantity beyond
-     * current stock means the line is fulfilled as a pre-order, and its
-     * full subtotal times the product's advance percent is due up front.
+     * Advance amount payable online for pre-order lines. Kept as a delegate:
+     * the rule lives in StorefrontCheckoutService::advanceDue().
      */
     public static function advanceDue($items): float
     {
-        return (float) collect($items)
-            ->filter(fn (array $item): bool => ! ($item['variant'] ?? null)
-                && $item['product']->is_preorder
-                && $item['quantity'] > (int) $item['product']->stock)
-            ->sum(fn (array $item): float => $item['subtotal'] * $item['product']->preorderAdvancePercent() / 100);
+        return StorefrontCheckoutService::advanceDue($items);
     }
 
     public function show(Request $request): View|RedirectResponse
@@ -86,62 +72,26 @@ class CheckoutController extends Controller
         [$company, $setting] = $this->domainStorefront($request);
         $items = $this->cart->items($company);
         $data = $this->validatedCheckout($request, $setting);
-        $data['meta_tracking_context'] = $this->metaTracking->requestContext($request, $setting);
-        $data['delivery_area'] = $this->deliveryAreas->resolve($data['address'], $setting);
-        $quote = $this->delivery->quote($items, $data['delivery_area'], $setting);
-        $data['vat'] = $setting->vatAmountForItems($items);
-        $totalAmount = $this->cart->subtotal($company) + (float) $quote['fee'] + $data['vat'];
-        $this->cart->startCheckout($company, $totalAmount, $data);
-        [$data, $checkoutAttempt] = $this->checkoutPolicies->evaluate(
+
+        $outcome = $this->checkout->process(
+            $company,
+            $setting,
             $request,
-            $company,
-            $setting,
+            $items,
             $data,
-            $totalAmount,
+            fn (StorefrontPayment $payment): array => [
+                URL::temporarySignedRoute('storefront.checkout.payment-return', now()->addHour(), ['payment' => $payment]),
+                route('storefront.checkout.show'),
+            ],
+            cart: $this->cart,
+            metaContext: $this->metaTracking->requestContext($request, $setting),
         );
 
-        // A customer choosing to pay the full order online is orthogonal to
-        // the mandatory-advance rules below (preorder/new-customer/courier
-        // risk) — paying in full already covers whatever advance those rules
-        // would otherwise require, so this always takes the online-payment
-        // path regardless of the eligibility decision.
-        if ($data['payment_method'] === StorefrontPaymentMethod::TYPE_ONLINE_GATEWAY) {
-            $this->assertOnlinePaymentAvailable($setting, 'Online payment is not available right now.');
-            $onlineDecision = $this->fullOnlinePaymentDecision($totalAmount);
-            $this->checkoutPolicies->recordPaymentDecision($checkoutAttempt, $onlineDecision);
-
-            return $this->startCheckoutAdvancePayment(
-                $company,
-                $setting,
-                $data,
-                $items,
-                $quote,
-                $onlineDecision,
-                checkoutAttempt: $checkoutAttempt,
-            );
+        if (! $outcome->placed()) {
+            return redirect()->away($outcome->paymentUrl);
         }
 
-        $customer = Customer::query()->whereIn('phone', $this->checkoutPolicies->phoneVariants($data['phone']))->first();
-        $decision = $this->paymentEligibility->decide(
-            $company,
-            $setting,
-            $data['phone'],
-            $totalAmount,
-            self::advanceDue($items),
-            ! $customer && ($setting->new_customer_delivery_advance_enabled ?? true) ? (float) $quote['fee'] : 0,
-            $customer,
-        );
-        $data['courier_success_ratio'] = $decision['courier_success_ratio'];
-        $this->checkoutPolicies->recordPaymentDecision($checkoutAttempt, $decision);
-
-        if ($decision['required_advance'] > 0) {
-            $this->assertOnlinePaymentAvailable($setting, 'This order requires a verified online advance before it can be placed.');
-
-            return $this->startCheckoutAdvancePayment($company, $setting, $data, $items, $quote, $decision, checkoutAttempt: $checkoutAttempt);
-        }
-
-        $order = $this->createOrder($company, $data, $items, $quote['fee']);
-        $this->checkoutPolicies->markAccepted($checkoutAttempt, $order);
+        $order = $outcome->order;
         $successUrl = $this->signedSuccessUrl($order);
         $customer = auth('customer')->user();
 
@@ -163,56 +113,25 @@ class CheckoutController extends Controller
         $setting = $this->previewStorefront($company);
         $items = $this->cart->items($company);
         $data = $this->validatedCheckout($request, $setting);
-        $data['delivery_area'] = $this->deliveryAreas->resolve($data['address'], $setting);
-        $quote = $this->delivery->quote($items, $data['delivery_area'], $setting);
-        $data['vat'] = $setting->vatAmountForItems($items);
-        $totalAmount = $this->cart->subtotal($company) + (float) $quote['fee'] + $data['vat'];
-        $this->cart->startCheckout($company, $totalAmount, $data);
-        [$data, $checkoutAttempt] = $this->checkoutPolicies->evaluate(
+
+        $outcome = $this->checkout->process(
+            $company,
+            $setting,
             $request,
-            $company,
-            $setting,
+            $items,
             $data,
-            $totalAmount,
+            fn (StorefrontPayment $payment): array => [
+                URL::temporarySignedRoute('storefront.preview.checkout.payment-return', now()->addHour(), ['company' => $company->slug, 'payment' => $payment]),
+                route('storefront.preview.checkout.show', $company->slug),
+            ],
+            cart: $this->cart,
         );
 
-        if ($data['payment_method'] === StorefrontPaymentMethod::TYPE_ONLINE_GATEWAY) {
-            $this->assertOnlinePaymentAvailable($setting, 'Online payment is not available right now.');
-
-            return $this->startCheckoutAdvancePayment(
-                $company,
-                $setting,
-                $data,
-                $items,
-                $quote,
-                $this->fullOnlinePaymentDecision($totalAmount),
-                $company->slug,
-                $checkoutAttempt,
-            );
+        if (! $outcome->placed()) {
+            return redirect()->away($outcome->paymentUrl);
         }
 
-        $customer = Customer::query()->whereIn('phone', $this->checkoutPolicies->phoneVariants($data['phone']))->first();
-        $decision = $this->paymentEligibility->decide(
-            $company,
-            $setting,
-            $data['phone'],
-            $totalAmount,
-            self::advanceDue($items),
-            ! $customer && ($setting->new_customer_delivery_advance_enabled ?? true) ? (float) $quote['fee'] : 0,
-            $customer,
-        );
-        $this->checkoutPolicies->recordPaymentDecision($checkoutAttempt, $decision);
-
-        if ($decision['required_advance'] > 0) {
-            $this->assertOnlinePaymentAvailable($setting, 'This order requires a verified online advance before it can be placed.');
-
-            return $this->startCheckoutAdvancePayment($company, $setting, $data, $items, $quote, $decision, $company->slug, $checkoutAttempt);
-        }
-
-        $order = $this->createOrder($company, $data, $items, $quote['fee']);
-        $this->checkoutPolicies->markAccepted($checkoutAttempt, $order);
-
-        return redirect()->route('storefront.preview.checkout.success', [$company->slug, $order]);
+        return redirect()->route('storefront.preview.checkout.success', [$company->slug, $outcome->order]);
     }
 
     public function autosave(Request $request): Response
@@ -245,126 +164,6 @@ class CheckoutController extends Controller
         $this->cart->rememberCheckout($company, $data, $this->cart->subtotal($company));
 
         return response()->noContent();
-    }
-
-    protected function assertOnlinePaymentAvailable(StorefrontSetting $setting, string $message): void
-    {
-        if (! $this->gateways->isConfigured($setting)) {
-            throw ValidationException::withMessages(['payment' => $message.' No active online payment gateway is available right now.']);
-        }
-    }
-
-    /**
-     * Same shape as StorefrontPaymentEligibilityService::decide(), for the
-     * customer's own choice to pay the full order online (a normal checkout
-     * option, not a risk-driven mandatory advance).
-     *
-     * @return array{required_advance: float, reasons: array<string, float>, courier_success_ratio: float|null, courier_lookup_status: string}
-     */
-    protected function fullOnlinePaymentDecision(float $totalAmount): array
-    {
-        return [
-            'required_advance' => round(max(0, $totalAmount), 2),
-            'reasons' => ['full_online_payment' => round(max(0, $totalAmount), 2)],
-            'courier_success_ratio' => null,
-            'courier_lookup_status' => 'not_applicable',
-        ];
-    }
-
-    /**
-     * Start one hosted checkout-advance payment without creating a Customer
-     * or Order. The verified webhook/return flow places both atomically.
-     */
-    protected function startCheckoutAdvancePayment(
-        Company $company,
-        StorefrontSetting $setting,
-        array $data,
-        $items,
-        array $quote,
-        array $decision,
-        ?string $previewSlug = null,
-        ?StorefrontCheckoutAttempt $checkoutAttempt = null,
-    ): RedirectResponse {
-        $this->cart->rememberContact($company, $data['phone'], $data['name']);
-        $this->assertCartStock($items);
-
-        $payment = StorefrontPayment::query()->create([
-            'company_id' => $company->getKey(),
-            'order_id' => null,
-            'gateway' => $setting->online_payment_gateway ?: 'zinipay',
-            'purpose' => StorefrontPayment::PURPOSE_CHECKOUT_ADVANCE,
-            'amount' => $decision['required_advance'],
-            'status' => StorefrontPayment::STATUS_PENDING,
-            'checkout_data' => [
-                ...$data,
-                'shipping_fee' => (float) $quote['fee'],
-                'vat' => (float) ($data['vat'] ?? 0),
-                'total_weight' => (float) $quote['weight'],
-                'billed_weight' => (int) $quote['billed_weight'],
-                'checkout_attempt_id' => $checkoutAttempt?->getKey(),
-                'cart_record_id' => $this->cart->recordId($company),
-                'reseller_customer_id' => $this->cart->orderResellerId($company, $items),
-                'advance_reasons' => $decision['reasons'],
-                'courier_lookup_status' => $decision['courier_lookup_status'],
-                'courier_success_ratio' => $decision['courier_success_ratio'],
-                'items' => collect($items)->map(fn (array $item): array => [
-                    'product_id' => $item['product']->getKey(),
-                    'product_variant_id' => ($item['variant'] ?? null)?->getKey(),
-                    'variant_label' => ($item['variant'] ?? null)?->label(),
-                    'quantity' => (int) $item['quantity'],
-                    'unit_price' => (float) $item['unit_price'],
-                    'unit_cost' => (float) (($item['variant'] ?? null)?->cost_price ?? $item['product']->cost_price ?? 0),
-                    'reseller_base_price' => $item['reseller_base_price'] ?? null,
-                ])->values()->all(),
-            ],
-        ]);
-
-        $redirectUrl = $previewSlug
-            ? URL::temporarySignedRoute('storefront.preview.checkout.payment-return', now()->addHour(), ['company' => $previewSlug, 'payment' => $payment])
-            : URL::temporarySignedRoute('storefront.checkout.payment-return', now()->addHour(), ['payment' => $payment]);
-        $cancelUrl = $previewSlug
-            ? route('storefront.preview.checkout.show', $previewSlug)
-            : route('storefront.checkout.show');
-
-        $gateway = $setting->online_payment_gateway ?: 'zinipay';
-        // Used as PayStation's own invoice_number since PayStation never
-        // echoes one back (ZiniPay ignores this and derives its own invoice
-        // id instead). Deliberately NOT just the StorefrontPayment's own
-        // primary key: PayStation tracks invoice numbers on its own side
-        // permanently, independent of this app's database, so a local table
-        // reset (migrate:fresh, demo refresh, restore) that restarts the
-        // auto-increment sequence would resend an invoice_number PayStation
-        // already saw before and gets rejected with "Duplicate invoice
-        // number" — confirmed live in production. The random suffix makes
-        // this unique regardless of local ID reuse; the payment id prefix
-        // keeps it traceable back to the StorefrontPayment row.
-        $merchantReference = $payment->getKey().'-'.Str::random(10);
-
-        try {
-            $created = $this->gateways->forSetting($setting)->createPayment(
-                $setting,
-                $decision['required_advance'],
-                $data['name'],
-                $data['email'],
-                $data['phone'],
-                $data['address'],
-                $redirectUrl,
-                $cancelUrl,
-                webhookUrl: route($gateway.'.webhook', $payment),
-                merchantReference: $merchantReference,
-                metadata: ['payment_id' => $payment->getKey(), 'purpose' => StorefrontPayment::PURPOSE_CHECKOUT_ADVANCE],
-            );
-        } catch (\Throwable $exception) {
-            $payment->update(['status' => StorefrontPayment::STATUS_FAILED, 'payload' => ['error' => $exception->getMessage()]]);
-            Log::warning('Checkout advance payment creation failed', ['payment' => $payment->getKey(), 'error' => $exception->getMessage()]);
-
-            throw ValidationException::withMessages(['payment' => 'The secure payment page could not be opened. No order was placed; please try again.']);
-        }
-
-        $payment->update(['invoice_id' => $created['invoice_id']]);
-        $this->checkoutPolicies->markPendingPayment($checkoutAttempt);
-
-        return redirect()->away($created['payment_url']);
     }
 
     public function success(Request $request, Order $order): View
@@ -519,9 +318,9 @@ class CheckoutController extends Controller
             'subtotal' => $this->cart->subtotal($company),
             'vatAmount' => $setting->vatAmountForItems($items),
             'vatIncluded' => $setting->vatIncludedInItems($items),
-            'advanceDue' => self::advanceDue($items),
-            'onlinePaymentAvailable' => $this->gateways->isConfigured($setting),
-            'paymentMethods' => $this->activePaymentMethods($setting),
+            'advanceDue' => StorefrontCheckoutService::advanceDue($items),
+            'onlinePaymentAvailable' => $this->checkout->onlinePaymentAvailable($setting),
+            'paymentMethods' => $this->checkout->activePaymentMethods($setting),
             'insideQuote' => $insideQuote,
             'outsideQuote' => $outsideQuote,
             'insideDhakaKeywords' => $this->deliveryAreas->keywords($setting),
@@ -529,175 +328,17 @@ class CheckoutController extends Controller
         ]);
     }
 
-    /**
-     * The dashboard-managed, company-scoped checkout payment options —
-     * any number of `cod`/`manual` rows plus at most one `online_gateway`
-     * row, which is only included when the gateway it reuses actually has
-     * credentials configured (a company can enable the row while its
-     * gateway credentials are stale/missing, e.g. mid-switch between
-     * ZiniPay and PayStation).
-     */
-    protected function activePaymentMethods(StorefrontSetting $setting): Collection
-    {
-        return StorefrontPaymentMethod::query()
-            ->where('is_active', true)
-            ->orderBy('sort_order')
-            ->get()
-            ->filter(fn (StorefrontPaymentMethod $method): bool => $method->type !== StorefrontPaymentMethod::TYPE_ONLINE_GATEWAY
-                || $this->gateways->isConfigured($setting))
-            ->values();
-    }
-
     protected function validatedCheckout(Request $request, StorefrontSetting $setting): array
     {
-        $methods = $this->activePaymentMethods($setting);
-        $allowedValues = $methods->map->paymentValue()->all();
+        $methods = $this->checkout->activePaymentMethods($setting);
 
         if (! $request->filled('payment_method') && $methods->isNotEmpty()) {
             $request->merge(['payment_method' => $methods->first()->paymentValue()]);
         }
 
-        $isManualSelection = str_starts_with((string) $request->input('payment_method'), StorefrontPaymentMethod::TYPE_MANUAL.':');
+        $data = $request->validate($this->checkout->contactRules($methods, (string) $request->input('payment_method')));
 
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'phone' => ['required', 'string', 'max:40'],
-            'email' => ['nullable', 'email', 'max:255'],
-            'address' => ['required', 'string', 'max:1000'],
-            'note' => ['nullable', 'string', 'max:1000'],
-            'payment_method' => ['required', Rule::in($allowedValues)],
-            'sender_number' => [$isManualSelection ? 'required' : 'nullable', 'string', 'max:20'],
-            'trx_id' => [$isManualSelection ? 'required' : 'nullable', 'string', 'max:40'],
-        ]);
-
-        $data['phone'] = trim($data['phone']);
-        $data['phone'] = $this->checkoutPolicies->normalizeLocalPhone($data['phone']) ?: $data['phone'];
-        $data['email'] = $data['email'] ?? null;
-
-        return $data;
-    }
-
-    protected function createOrder(Company $company, array $data, $items, float $deliveryCharge): Order
-    {
-        // Keep the contact on the persisted cart so abandoned-cart
-        // reminders can reach the customer if this checkout fails.
-        $this->cart->rememberContact($company, $data['phone'], $data['name']);
-
-        return DB::transaction(function () use ($company, $data, $items, $deliveryCharge): Order {
-            abort_if($items->isEmpty(), 422, 'Your cart is empty.');
-
-            $this->assertCartStock($items);
-
-            $customer = Customer::query()
-                ->whereIn('phone', $this->checkoutPolicies->phoneVariants($data['phone']))
-                ->first() ?? new Customer(['phone' => $data['phone']]);
-
-            $customer->fill([
-                'name' => $data['name'],
-                'email' => $data['email'] ?? $customer->email,
-                'address' => $data['address'],
-                'customer_type' => $customer->customer_type ?: 'regular',
-                'customer_source' => 'website',
-                'opening_balance' => $customer->opening_balance ?? 0,
-                'is_active' => true,
-            ]);
-            $customer->save();
-
-            $order = Order::query()->create([
-                'customer_id' => $customer->getKey(),
-                'reseller_customer_id' => $this->cart->orderResellerId($company, $items),
-                'customer_name' => $customer->name,
-                'order_date' => now()->toDateString(),
-                'discount' => 0,
-                'vat' => (float) ($data['vat'] ?? 0),
-                'shipping_zone' => $data['delivery_area'],
-                'shipping_fee' => $deliveryCharge,
-                'paid_amount' => 0,
-                'status' => 'draft',
-                'source' => Order::SOURCE_STOREFRONT,
-                'note' => trim("Storefront checkout\nDelivery address: {$data['address']}\nPayment method: ".self::paymentMethodLabel($data['payment_method'])."\n".(($data['note'] ?? null) ? "Customer note: {$data['note']}" : '')),
-            ]);
-
-            foreach ($items as $item) {
-                $variant = $item['variant'] ?? null;
-
-                OrderItem::query()->create([
-                    'order_id' => $order->getKey(),
-                    'product_id' => $item['product']->getKey(),
-                    'product_variant_id' => $variant?->getKey(),
-                    'variant_label' => $variant?->label(),
-                    'quantity' => $item['quantity'],
-                    'unit_price' => $item['unit_price'],
-                    'unit_cost' => ($variant?->cost_price ?? $item['product']->cost_price) ?? 0,
-                    'reseller_base_price' => $item['reseller_base_price'] ?? null,
-                ]);
-            }
-
-            $order->refresh();
-            $cartRecordId = $this->cart->recordId($company);
-
-            if (str_starts_with($data['payment_method'], StorefrontPaymentMethod::TYPE_MANUAL.':')) {
-                StorefrontPayment::query()->create([
-                    'company_id' => $company->getKey(),
-                    'order_id' => $order->getKey(),
-                    'gateway' => StorefrontPaymentMethod::TYPE_MANUAL,
-                    'storefront_payment_method_id' => (int) substr($data['payment_method'], strlen(StorefrontPaymentMethod::TYPE_MANUAL.':')),
-                    'amount' => round((float) $order->total_amount, 2),
-                    'status' => StorefrontPayment::STATUS_PENDING,
-                    'payment_method' => $data['sender_number'],
-                    'transaction_id' => $data['trx_id'],
-                ]);
-            }
-
-            $this->cart->clear($company, $order);
-
-            // Customer never sees this — the external check happens in the
-            // background and only surfaces to staff as a review requirement
-            // if the cross-courier success ratio is low (Part 3.8).
-            CheckExternalCourierFraudJob::dispatch($order->getKey())->afterCommit();
-
-            $this->metaDispatch->captureOrder(
-                $order,
-                $company->storefrontSetting,
-                (array) ($data['meta_tracking_context'] ?? []),
-                isset($data['courier_success_ratio']) ? (float) $data['courier_success_ratio'] : null,
-                $cartRecordId,
-            );
-
-            return $order;
-        });
-    }
-
-    protected function assertCartStock($items): void
-    {
-        abort_if(collect($items)->isEmpty(), 422, 'Your cart is empty.');
-
-        foreach ($items as $item) {
-            $variant = $item['variant'] ?? null;
-            $availableStock = $variant ? (int) $variant->stock : (int) $item['product']->stock;
-
-            if (! $variant && $item['product']->is_preorder) {
-                continue;
-            }
-
-            abort_if($item['quantity'] > $availableStock, 422, "{$item['product']->name} does not have enough stock.");
-        }
-    }
-
-    protected static function paymentMethodLabel(string $paymentValue): string
-    {
-        if ($paymentValue === StorefrontPaymentMethod::TYPE_ONLINE_GATEWAY) {
-            return 'Paid online in full';
-        }
-
-        if (str_starts_with($paymentValue, StorefrontPaymentMethod::TYPE_MANUAL.':')) {
-            $methodId = (int) substr($paymentValue, strlen(StorefrontPaymentMethod::TYPE_MANUAL.':'));
-            $name = StorefrontPaymentMethod::withoutGlobalScopes()->find($methodId)?->name;
-
-            return $name ? "{$name} (Send Money, pending verification)" : 'Manual payment (pending verification)';
-        }
-
-        return 'Cash on Delivery';
+        return $this->checkout->normalizeContact($data);
     }
 
     protected function domainStorefront(Request $request): array

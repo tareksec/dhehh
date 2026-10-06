@@ -15,11 +15,12 @@
     $resellerStoreSlug = \App\Support\StorefrontUrl::currentResellerSlug();
     // Inside a reseller's own store the header carries only that reseller's
     // name/brand -- never the company's name or logo (owner's answer,
-    // 13_RESELLER_PORTAL_PLAN.md §2.1 Q3).
+    // 13_RESELLER_PORTAL_PLAN.md §2.1 Q3). The reseller's own logos (light
+    // and dark) come from the portal's My Store page; none uploaded = name only.
     $storeReseller = request()->attributes->get('storefront_reseller');
     $brandName = $storeReseller ? $storeReseller->resellerStoreName() : $company->name;
-    $brandLogoUrl = $storeReseller ? null : $logoUrl;
-    $brandLogoDarkUrl = $storeReseller ? null : $logoDarkUrl;
+    $brandLogoUrl = $storeReseller ? $storeReseller->resellerLogoUrl() : $logoUrl;
+    $brandLogoDarkUrl = $storeReseller ? $storeReseller->resellerLogoDarkUrl() : $logoDarkUrl;
     $homeUrl = $resellerStoreSlug
         ? \App\Support\StorefrontUrl::route('show', [], $previewSlug)
         : (isset($previewSlug) ? route('storefront.preview.show', $previewSlug) : route('marketing.home'));

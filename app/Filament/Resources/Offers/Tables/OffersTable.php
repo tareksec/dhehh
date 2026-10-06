@@ -26,8 +26,19 @@ class OffersTable
                     ->sortable(),
                 TextColumn::make('type')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state): string => Offer::TYPES[$state] ?? (string) $state)
+                    ->formatStateUsing(fn (?string $state): string => __(Offer::TYPES[$state] ?? (string) $state))
                     ->sortable(),
+                TextColumn::make('collection_kind')
+                    ->label(__('Collection kind'))
+                    ->badge()
+                    ->placeholder('-')
+                    ->formatStateUsing(fn (?string $state): string => __(Offer::COLLECTION_KINDS[$state] ?? (string) $state))
+                    ->toggleable(),
+                TextColumn::make('ends_at')
+                    ->label(__('Ends at'))
+                    ->dateTime()
+                    ->placeholder('-')
+                    ->toggleable(),
                 TextColumn::make('status')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => Offer::STATUSES[$state] ?? (string) $state)
@@ -43,7 +54,7 @@ class OffersTable
                     ->sortable(),
                 TextColumn::make('final_price')
                     ->label('Price')
-                    ->state(fn (Offer $record): string => MoneyFormatter::currency(app(OfferPricingService::class)->finalPrice($record))),
+                    ->state(fn (Offer $record): string => $record->isCollection() ? '-' : MoneyFormatter::currency(app(OfferPricingService::class)->finalPrice($record))),
                 TextColumn::make('items_count')
                     ->label('Products')
                     ->counts('items')
@@ -58,7 +69,7 @@ class OffersTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                SelectFilter::make('type')->options(Offer::TYPES),
+                SelectFilter::make('type')->options(fn (): array => array_map(fn (string $label): string => __($label), Offer::TYPES)),
                 SelectFilter::make('status')->options(Offer::STATUSES),
             ])
             ->defaultSort('updated_at', 'desc')
@@ -68,13 +79,14 @@ class OffersTable
                     ->label('Preview')
                     ->icon('heroicon-o-eye')
                     ->url(fn (Offer $record): string => OfferResource::previewUrl($record))
-                    ->openUrlInNewTab(),
+                    ->openUrlInNewTab()
+                    ->visible(fn (Offer $record): bool => ! $record->isCollection()),
                 Action::make('openLandingPage')
                     ->label('Open Page')
                     ->icon('heroicon-o-arrow-top-right-on-square')
                     ->url(fn (Offer $record): string => OfferResource::publicUrl($record))
                     ->openUrlInNewTab()
-                    ->visible(fn (Offer $record): bool => $record->status === Offer::STATUS_PUBLISHED && filled($record->company?->domain)),
+                    ->visible(fn (Offer $record): bool => ! $record->isCollection() && $record->status === Offer::STATUS_PUBLISHED && filled($record->company?->domain)),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

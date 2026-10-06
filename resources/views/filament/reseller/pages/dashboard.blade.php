@@ -97,8 +97,6 @@
             </x-filament::section>
         @endif
 
-        @livewire(\App\Filament\Reseller\Widgets\CommissionTrend::class)
-
         <x-filament::section>
             <x-slot name="heading">{{ __('Recent orders') }}</x-slot>
 
@@ -129,5 +127,7 @@
                 </table>
             @endif
         </x-filament::section>
+
+        @livewire(\App\Filament\Reseller\Widgets\CommissionTrend::class)
     @endif
 </x-filament-panels::page>

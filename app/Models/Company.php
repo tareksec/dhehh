@@ -267,6 +267,11 @@ class Company extends Model
             return true;
         }
 
+        // A company's headless Next.js storefront domain is just as reserved.
+        if (StorefrontSetting::nextjsDomainTaken($host)) {
+            return true;
+        }
+
         // Anything underneath a company's domain ("x.<company domain>") is the
         // company's namespace -- subdomain stores and "reseller." live there.
         $parent = str_contains($host, '.') ? explode('.', $host, 2)[1] : '';
