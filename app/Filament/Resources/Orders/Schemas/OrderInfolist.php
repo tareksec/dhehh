@@ -8,6 +8,7 @@ use App\Models\CustomerRiskProfile;
 use App\Models\CustomerRiskReview;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\StorefrontPayment;
 use App\Services\OrderActivityFeedService;
 use App\Services\ResellerOwnCourierService;
 use App\Support\PhoneLinks;
@@ -86,12 +87,36 @@ class OrderInfolist
                                 'rejected' => 'danger',
                                 default => 'warning',
                             }),
-                        TextEntry::make('resellerAdvancePayment.transaction_id')
-                            ->label(__('Transaction ID'))
-                            ->placeholder('-'),
-                        TextEntry::make('resellerAdvancePayment.payment_method')
-                            ->label(__('Paid from (number or account)'))
-                            ->placeholder('-'),
+                        TextEntry::make('reseller_advance_payments')
+                            ->label(__('Payments'))
+                            ->state(fn (Order $record): array => $record->resellerAdvancePayments
+                                ->map(fn (StorefrontPayment $payment): string => $payment->gateway === ResellerOwnCourierService::GATEWAY_DEPOSIT
+                                    ? __(':amount from the reseller\'s deposit', ['amount' => number_format((float) $payment->amount, 2)])
+                                    : __(':amount from :sender, transaction :transaction (:status)', [
+                                        'amount' => number_format((float) $payment->amount, 2),
+                                        'sender' => $payment->payment_method,
+                                        'transaction' => $payment->transaction_id,
+                                        'status' => match ($payment->status) {
+                                            StorefrontPayment::STATUS_PENDING => __('Waiting for verification'),
+                                            StorefrontPayment::STATUS_COMPLETED => __('Verified'),
+                                            StorefrontPayment::STATUS_FAILED => __('Rejected'),
+                                            default => $payment->status,
+                                        },
+                                    ]))
+                                ->all())
+                            ->listWithLineBreaks()
+                            ->placeholder('-')
+                            ->columnSpan(2),
+                        TextEntry::make('reseller_deposit_credited')
+                            ->label(__('Added to the reseller\'s deposit'))
+                            ->state(fn (Order $record): float => app(ResellerOwnCourierService::class)->creditedFrom($record))
+                            ->numeric(decimalPlaces: 2)
+                            ->visible(fn (Order $record): bool => app(ResellerOwnCourierService::class)->creditedFrom($record) > 0),
+                        TextEntry::make('reseller_advance_outstanding')
+                            ->label(__('Still to receive'))
+                            ->state(fn (Order $record): float => app(ResellerOwnCourierService::class)->outstandingAmount($record))
+                            ->numeric(decimalPlaces: 2)
+                            ->visible(fn (Order $record): bool => app(ResellerOwnCourierService::class)->outstandingAmount($record) > 0),
                         TextEntry::make('reseller_parcel_packed_at')
                             ->label(__('Packed'))
                             ->dateTime()
@@ -144,6 +169,10 @@ class OrderInfolist
                         TextEntry::make('subtotal')->moneyWithoutTrailingZeroes('BDT'),
                         TextEntry::make('discount')->moneyWithoutTrailingZeroes('BDT'),
                         TextEntry::make('vat')->moneyWithoutTrailingZeroes('BDT'),
+                        TextEntry::make('packaging_fee')
+                            ->label(__('Packaging charge'))
+                            ->moneyWithoutTrailingZeroes('BDT')
+                            ->visible(fn (Order $record): bool => (float) $record->packaging_fee > 0),
                         TextEntry::make('total_amount')->moneyWithoutTrailingZeroes('BDT'),
                         TextEntry::make('paid_amount')->moneyWithoutTrailingZeroes('BDT'),
                         TextEntry::make('due_amount')->moneyWithoutTrailingZeroes('BDT'),

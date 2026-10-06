@@ -179,6 +179,7 @@ class Order extends Model
         'vat',
         'shipping_zone',
         'shipping_fee',
+        'packaging_fee',
         'total_amount',
         'paid_amount',
         'due_amount',
@@ -198,6 +199,7 @@ class Order extends Model
         'discount' => 'decimal:2',
         'vat' => 'decimal:2',
         'shipping_fee' => 'decimal:2',
+        'packaging_fee' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'paid_amount' => 'decimal:2',
         'due_amount' => 'decimal:2',
@@ -422,12 +424,45 @@ class Order extends Model
         return $this->hasOne(ResellerCommission::class);
     }
 
+    /**
+     * Owner rule: a reseller's customer never sees the store's price. On an
+     * own-courier order the amounts on the order are what the reseller pays
+     * the store, so anything shown to the buyer (invoice, courier slip,
+     * order tracking, the buyer's account, the summary card) uses these.
+     */
+    public function showsResellerPricesToBuyer(): bool
+    {
+        return (bool) $this->reseller_own_courier;
+    }
+
+    /** The order total in the buyer's prices (the reseller's retail prices on an own-courier order). */
+    public function buyerTotal(): float
+    {
+        if (! $this->showsResellerPricesToBuyer()) {
+            return (float) $this->total_amount;
+        }
+
+        return round($this->items->sum(fn (OrderItem $item): float => $item->buyerSubtotal()), 2);
+    }
+
     /** The reseller's latest advance payment for an own-courier order (a rejected one can be sent again). */
     public function resellerAdvancePayment(): HasOne
     {
         return $this->hasOne(StorefrontPayment::class)
             ->where('purpose', StorefrontPayment::PURPOSE_RESELLER_ADVANCE)
             ->latestOfMany();
+    }
+
+    /**
+     * Every advance payment of an own-courier order: the first one for the
+     * whole order, then one for the extra each time the reseller's edit
+     * raised the total (ResellerOwnCourierService).
+     */
+    public function resellerAdvancePayments(): HasMany
+    {
+        return $this->hasMany(StorefrontPayment::class)
+            ->where('purpose', StorefrontPayment::PURPOSE_RESELLER_ADVANCE)
+            ->orderBy('id');
     }
 
     public function statusTransitions(): HasMany

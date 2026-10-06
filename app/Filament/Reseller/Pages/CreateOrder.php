@@ -67,6 +67,22 @@ class CreateOrder extends Page
         $products = $service->catalog($reseller)->keyBy('id');
         $paymentMethods = app(ResellerOwnCourierService::class)->paymentMethods($reseller->company)->keyBy('id');
         $ownCourier = fn (Get $get): bool => $get('delivery_method') === 'own';
+        // Own courier and something left to send after the reseller's deposit.
+        $mustPay = fn (Get $get): bool => $ownCourier($get) && ($this->summary()['to_send'] ?? 1) > 0;
+        // Lowest price allowed on a line, or null when the price is fixed.
+        $minPrice = function (Get $get) use ($products, $service, $reseller): ?float {
+            $product = $products->get((int) $get('product_id'));
+
+            if (! $product) {
+                return null;
+            }
+
+            $base = $service->basePrice($reseller, $product);
+
+            return $get('../../delivery_method') === 'own'
+                ? round($base ?? $product->baseSellingPrice(), 2)
+                : $base;
+        };
 
         return $schema
             ->statePath('data')
@@ -126,31 +142,32 @@ class CreateOrder extends Page
 
                 Section::make(__('Advance payment'))
                     ->description(__('Send the full amount shown in the order summary, then enter the payment details. The store packs the parcel after checking the payment.'))
-                    ->visible($ownCourier)
+                    ->visible($mustPay)
                     ->schema([
                         Select::make('payment_method_id')
                             ->label(__('Paid to'))
                             ->options(fn (): array => $paymentMethods->mapWithKeys(fn (StorefrontPaymentMethod $method): array => [
                                 $method->getKey() => trim($method->name.($method->account_number ? ' — '.$method->account_number : '')),
                             ])->all())
-                            ->required($ownCourier)
+                            ->required($mustPay)
                             ->live()
                             ->helperText(fn (Get $get): ?string => $paymentMethods->get((int) $get('payment_method_id'))?->instructions)
                             ->columnSpanFull(),
                         TextInput::make('sender')
                             ->label(__('Paid from (number or account)'))
-                            ->required($ownCourier)
+                            ->required($mustPay)
                             ->maxLength(40),
                         TextInput::make('transaction_id')
                             ->label(__('Transaction ID'))
-                            ->required($ownCourier)
+                            ->required($mustPay)
                             ->maxLength(100),
+                        self::amountSentField(fn (): float => (float) ($this->summary()['to_send'] ?? 0), $this->currency()),
                     ])
                     ->columns(2),
 
                 Section::make(__('Products'))
                     ->description(fn (Get $get): string => $get('delivery_method') === 'own'
-                        ? __('Only products in your store can be ordered. You pay the store price; there is no commission on these orders.')
+                        ? __('Only products in your store can be ordered. Set the price your customer pays; you pay the store price plus the packaging charge per piece, and there is no commission on these orders. Your customer only ever sees your price.')
                         : __('Only products in your store can be ordered. Payment is cash on delivery.'))
                     ->schema([
                         Repeater::make('items')
@@ -181,16 +198,18 @@ class CreateOrder extends Page
                                     ->live(onBlur: true)
                                     ->columnSpan(1),
                                 TextInput::make('price')
-                                    ->label(__('Your price'))
+                                    ->label(fn (Get $get): string => $get('../../delivery_method') === 'own' ? __("Your customer's price") : __('Your price'))
                                     ->numeric()
-                                    ->minValue(fn (Get $get): ?float => ($product = $products->get((int) $get('product_id'))) ? $service->basePrice($reseller, $product) : null)
-                                    ->disabled(fn (Get $get): bool => ($product = $products->get((int) $get('product_id'))) === null || $service->basePrice($reseller, $product) === null)
+                                    ->minValue(fn (Get $get): ?float => $minPrice($get))
+                                    // With the store's delivery a product without a wholesale rate
+                                    // sells at the normal price; with their own courier the
+                                    // reseller always sets the price their customer sees.
+                                    ->disabled(fn (Get $get): bool => $minPrice($get) === null)
                                     ->dehydrated()
-                                    ->helperText(fn (Get $get): ?string => ($product = $products->get((int) $get('product_id'))) && ($base = $service->basePrice($reseller, $product)) !== null
-                                        ? __('At least :amount.', ['amount' => MoneyFormatter::number($base)])
+                                    ->helperText(fn (Get $get): ?string => ($min = $minPrice($get)) !== null
+                                        ? __('At least :amount.', ['amount' => MoneyFormatter::number($min)])
                                         : null)
                                     ->live(onBlur: true)
-                                    ->visible(fn (Get $get): bool => $get('../../delivery_method') !== 'own')
                                     ->columnSpan(2),
                             ])
                             ->columns(6),
@@ -221,6 +240,25 @@ class CreateOrder extends Page
         }
     }
 
+    /**
+     * "Amount sent": blank means exactly what is owed; more goes to the
+     * reseller's deposit once the store verifies it (owner rule, 2026-10-06).
+     *
+     * @param  \Closure(): float  $owed
+     */
+    public static function amountSentField(\Closure $owed, string $currency): TextInput
+    {
+        return TextInput::make('amount')
+            ->label(__('Amount sent'))
+            ->numeric()
+            ->minValue(fn (): float => $owed())
+            ->placeholder(fn (): string => MoneyFormatter::number($owed()))
+            ->helperText(fn (): string => __('Leave empty if you sent exactly :amount. If you sent more, the extra goes to your deposit and pays your next orders.', [
+                'amount' => MoneyFormatter::currency($owed(), $currency),
+            ]))
+            ->columnSpanFull();
+    }
+
     public function isOwnCourier(): bool
     {
         return ($this->data['delivery_method'] ?? 'store') === 'own';
@@ -241,6 +279,7 @@ class CreateOrder extends Page
             'payment_method_id' => $data['payment_method_id'] ?? null,
             'sender' => (string) ($data['sender'] ?? ''),
             'transaction_id' => (string) ($data['transaction_id'] ?? ''),
+            'amount' => $data['amount'] ?? null,
         ] : null);
 
         Notification::make()

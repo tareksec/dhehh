@@ -90,7 +90,10 @@ class Dashboard extends Page
         return (float) $this->reseller()->resellerOrders()
             ->whereIn('status', Order::ACCOUNTED_STATUSES)
             ->whereDate('order_date', '>=', now()->startOfMonth())
-            ->sum('total_amount');
+            ->with('items')
+            ->get()
+            // Own-courier orders count at the reseller's own sale price.
+            ->sum(fn (Order $order): float => $order->buyerTotal());
     }
 
     public function thisMonthCommission(): float

@@ -76,12 +76,13 @@ class ResellerOrderPlacementService
      *
      * With $ownCourier the reseller's own courier delivers: every line is
      * charged at the base price (the normal price when there is no wholesale
-     * rate), there is no company delivery charge and no commission -- the
+     * rate), there is no company delivery charge and no commission, and the
+     * store's packaging charge per piece is added (owner rule) -- the
      * reseller pays this total in advance and keeps whatever their customer
      * pays them.
      *
      * @param  array<int, array{product_id?: mixed, quantity?: mixed, price?: mixed}>  $lines
-     * @return array{items: array<int, array<string, mixed>>, subtotal: float, shipping_fee: float, vat: float, total: float, commission: float}
+     * @return array{items: array<int, array<string, mixed>>, subtotal: float, shipping_fee: float, packaging_fee: float, vat: float, total: float, commission: float}
      */
     public function quote(Customer $reseller, array $lines, string $address, bool $ownCourier = false): array
     {
@@ -91,14 +92,25 @@ class ResellerOrderPlacementService
         $area = $ownCourier ? null : $this->deliveryAreas->resolve($address, $setting);
         $fee = $ownCourier ? 0.0 : (float) $this->delivery->quote($items, $area, $setting)['fee'];
         $vat = $setting->vatAmountForItems($items);
+        $packaging = $ownCourier
+            ? round((int) $items->sum('quantity') * (float) ($setting->reseller_packaging_cost_per_unit ?? 0), 2)
+            : 0.0;
+        $total = round($subtotal + $fee + $packaging + $vat, 2);
+        // Own courier: the reseller's deposit pays first, they send the rest.
+        $depositUsed = $ownCourier ? min(app(ResellerOwnCourierService::class)->depositBalance($reseller), $total) : 0.0;
 
         return [
             'items' => $items->all(),
             'delivery_area' => $area,
             'subtotal' => $subtotal,
             'shipping_fee' => $fee,
+            'packaging_fee' => $packaging,
             'vat' => $vat,
-            'total' => round($subtotal + $fee + $vat, 2),
+            'total' => $total,
+            'deposit_used' => $depositUsed,
+            'to_send' => round($total - $depositUsed, 2),
+            // What the reseller's customer is charged on an own-courier order (their retail prices).
+            'customer_total' => round($items->sum(fn (array $item): float => ($item['retail_price'] ?? $item['unit_price']) * $item['quantity']), 2),
             'commission' => round($items->sum(fn (array $item): float => $item['reseller_base_price'] === null
                 ? 0.0
                 : ($item['unit_price'] - $item['reseller_base_price']) * $item['quantity']), 2),
@@ -121,7 +133,7 @@ class ResellerOrderPlacementService
         $quote = $this->quote($reseller, $lines, $buyer['address'], $ownCourier !== null);
 
         if ($ownCourier !== null) {
-            $this->validateOwnCourier($reseller, $ownCourier);
+            $this->validateOwnCourier($reseller, $ownCourier, $quote['to_send'] > 0);
         }
 
         return DB::transaction(function () use ($reseller, $buyer, $quote, $ownCourier): Order {
@@ -144,6 +156,7 @@ class ResellerOrderPlacementService
                 // company's delivery charge to an own-courier order.
                 'shipping_zone' => $ownCourier !== null ? '' : $quote['delivery_area'],
                 'shipping_fee' => $quote['shipping_fee'],
+                'packaging_fee' => $quote['packaging_fee'],
                 'paid_amount' => 0,
                 'status' => 'draft',
                 'source' => Order::SOURCE_RESELLER_PORTAL,
@@ -160,6 +173,7 @@ class ResellerOrderPlacementService
                     'unit_price' => $item['unit_price'],
                     'unit_cost' => $item['product']->cost_price ?? 0,
                     'reseller_base_price' => $item['reseller_base_price'],
+                    'reseller_retail_price' => $item['retail_price'] ?? null,
                 ]);
             }
 
@@ -167,10 +181,16 @@ class ResellerOrderPlacementService
 
             if ($ownCourier !== null) {
                 // Paid in advance and delivered by the reseller's courier, so
-                // there is no cash-on-delivery risk to check.
-                app(ResellerOwnCourierService::class)->submitPayment($order, $ownCourier);
+                // there is no cash-on-delivery risk to check. Their deposit
+                // pays first; they send the rest.
+                $courier = app(ResellerOwnCourierService::class);
+                $courier->applyDeposit($order);
 
-                return $order;
+                if ($courier->outstandingAmount($order) > 0) {
+                    $courier->submitPayment($order, $ownCourier);
+                }
+
+                return $order->refresh();
             }
 
             CheckExternalCourierFraudJob::dispatch($order->getKey())->afterCommit();
@@ -182,18 +202,45 @@ class ResellerOrderPlacementService
     /**
      * @param  array{courier_name?: ?string, parcel_id?: mixed, payment_method_id?: mixed, sender?: mixed, transaction_id?: mixed}  $ownCourier
      */
-    protected function validateOwnCourier(Customer $reseller, array $ownCourier): void
+    protected function validateOwnCourier(Customer $reseller, array $ownCourier, bool $needsPayment = true): void
     {
-        $service = app(ResellerOwnCourierService::class);
-        $errors = [];
+        $errors = [
+            ...$this->parcelErrors($reseller, $ownCourier),
+            ...($needsPayment ? $this->paymentErrors($reseller, $ownCourier) : []),
+        ];
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
+    /**
+     * @param  array{parcel_id?: mixed}  $ownCourier
+     * @return array<string, string>
+     */
+    protected function parcelErrors(Customer $reseller, array $ownCourier, ?int $exceptOrderId = null): array
+    {
         $parcelId = trim((string) ($ownCourier['parcel_id'] ?? ''));
 
         if ($parcelId === '') {
-            $errors['data.parcel_id'] = __('Enter the parcel ID from your courier.');
-        } elseif ($service->parcelIdIsTaken((int) $reseller->getKey(), $parcelId)) {
-            $errors['data.parcel_id'] = __('This parcel ID is already on another of your orders.');
+            return ['data.parcel_id' => __('Enter the parcel ID from your courier.')];
         }
 
+        if (app(ResellerOwnCourierService::class)->parcelIdIsTaken((int) $reseller->getKey(), $parcelId, $exceptOrderId)) {
+            return ['data.parcel_id' => __('This parcel ID is already on another of your orders.')];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param  array{payment_method_id?: mixed, sender?: mixed, transaction_id?: mixed}  $ownCourier
+     * @return array<string, string>
+     */
+    protected function paymentErrors(Customer $reseller, array $ownCourier): array
+    {
+        $service = app(ResellerOwnCourierService::class);
+        $errors = [];
         $methodId = (int) ($ownCourier['payment_method_id'] ?? 0);
 
         if (! $service->paymentMethods($reseller->company)->contains(fn ($method): bool => (int) $method->getKey() === $methodId)) {
@@ -208,9 +255,244 @@ class ResellerOrderPlacementService
             $errors['data.transaction_id'] = __('Enter the transaction ID.');
         }
 
+        return $errors;
+    }
+
+    /**
+     * What an own-courier order would cost after the reseller's edit, without
+     * changing anything -- what the edit form shows live. `extra` is what the
+     * reseller still has to send (only the part above what they already
+     * sent, owner rule 2026-10-06).
+     *
+     * @param  array<int, array{item_id?: mixed, product_id?: mixed, quantity?: mixed, price?: mixed}>  $lines
+     *                                                                                                          `deposit_used` is the part of the extra the reseller's deposit pays,
+     *                                                                                                          `to_send` what is left for them to send.
+     * @return array{subtotal: float, packaging_fee: float, vat: float, total: float, customer_total: float, extra: float, deposit_used: float, to_send: float}
+     */
+    public function quoteEdit(Customer $reseller, Order $order, array $lines): array
+    {
+        return array_diff_key($this->planEdit($reseller, $order, $lines), ['kept' => 0, 'new' => 0]);
+    }
+
+    /**
+     * The reseller changes their own-courier order from the portal (owner
+     * rules, 2026-10-06): products can be added, quantities raised and
+     * their customer's prices changed, but nothing on the order can be
+     * removed or lowered; the courier, parcel ID and their customer's
+     * details can be corrected. Only until the store verifies any of the
+     * advance. When the total goes up, $payment (payment_method_id, sender,
+     * transaction_id) is required and records a payment for the extra only.
+     *
+     * @param  array{name: string, phone: string, address: string}  $buyer
+     * @param  array<int, array{item_id?: mixed, product_id?: mixed, quantity?: mixed, price?: mixed}>  $lines
+     * @param  array{courier_name?: ?string, parcel_id: string}  $courier
+     * @param  array{payment_method_id?: mixed, sender?: mixed, transaction_id?: mixed}  $payment
+     */
+    public function updateOwnCourierOrder(Customer $reseller, Order $order, array $buyer, array $lines, array $courier, array $payment = []): Order
+    {
+        abort_unless($reseller->isApprovedReseller() && (int) $order->reseller_customer_id === (int) $reseller->getKey(), 403);
+
+        $courierService = app(ResellerOwnCourierService::class);
+
+        return DB::transaction(function () use ($reseller, $order, $buyer, $lines, $courier, $payment, $courierService): Order {
+            $order = Order::query()->lockForUpdate()->findOrFail($order->getKey());
+
+            if (! $courierService->canEdit($order)) {
+                throw ValidationException::withMessages(['data.items' => __('This order can no longer be changed: the store has verified your payment or packed the parcel.')]);
+            }
+
+            $plan = $this->planEdit($reseller, $order, $lines);
+            $errors = [
+                ...$this->parcelErrors($reseller, $courier, (int) $order->getKey()),
+                ...($plan['to_send'] > 0 ? $this->paymentErrors($reseller, $payment) : []),
+            ];
+
+            if ($errors !== []) {
+                throw ValidationException::withMessages($errors);
+            }
+
+            $customer = $this->buyer($buyer);
+            $address = trim($buyer['address']);
+            $order->forceFill([
+                'customer_id' => $customer->getKey(),
+                'customer_name' => $customer->name,
+                'reseller_courier_name' => filled($courier['courier_name'] ?? null) ? trim($courier['courier_name']) : null,
+                'reseller_parcel_id' => trim($courier['parcel_id']),
+                'packaging_fee' => $plan['packaging_fee'],
+                'vat' => $plan['vat'],
+                'note' => preg_replace('/^Delivery address: .*$/m', 'Delivery address: '.str_replace(["\r", "\n"], ' ', $address), (string) $order->note, 1),
+            ])->save();
+
+            foreach ($plan['kept'] as $line) {
+                $line['item']->forceFill([
+                    'quantity' => $line['quantity'],
+                    'reseller_retail_price' => $line['retail_price'],
+                ])->save();
+            }
+
+            foreach ($plan['new'] as $line) {
+                OrderItem::query()->create([
+                    'order_id' => $order->getKey(),
+                    'product_id' => $line['product']->getKey(),
+                    'quantity' => $line['quantity'],
+                    'unit_price' => $line['unit_price'],
+                    'unit_cost' => $line['product']->cost_price ?? 0,
+                    'reseller_base_price' => null,
+                    'reseller_retail_price' => $line['retail_price'],
+                ]);
+            }
+
+            $order->refresh();
+            app(OrderWorkflowService::class)->sync($order);
+            $order->refresh();
+
+            $courierService->applyDeposit($order);
+
+            if ($courierService->outstandingAmount($order) > 0) {
+                $courierService->submitPayment($order, [
+                    'payment_method_id' => $payment['payment_method_id'] ?? null,
+                    'sender' => (string) ($payment['sender'] ?? ''),
+                    'transaction_id' => (string) ($payment['transaction_id'] ?? ''),
+                    'amount' => $payment['amount'] ?? null,
+                ]);
+            }
+
+            return $order->refresh();
+        });
+    }
+
+    /**
+     * Checks and prices an edit. Lines with an item_id are already on the
+     * order: their product and store price stay, the quantity can only go
+     * up and their customer's price never below the store price. Lines
+     * without one are new products from the reseller's store at today's
+     * store price. Errors are keyed to the repeater line.
+     *
+     * @param  array<int, array{item_id?: mixed, product_id?: mixed, quantity?: mixed, price?: mixed}>  $lines
+     * @return array{kept: list<array{item: OrderItem, quantity: int, retail_price: float}>, new: list<array<string, mixed>>, subtotal: float, packaging_fee: float, vat: float, total: float, customer_total: float, extra: float, deposit_used: float, to_send: float}
+     */
+    protected function planEdit(Customer $reseller, Order $order, array $lines): array
+    {
+        $existing = $order->items()->with('product')->get()->keyBy('id');
+        $catalog = $this->catalog($reseller)->keyBy('id');
+        $seen = $existing->mapWithKeys(fn (OrderItem $item): array => [(int) $item->product_id => true])->all();
+        $errors = [];
+        $kept = [];
+        $new = [];
+        $stockRows = [];
+
+        foreach (array_values($lines) as $index => $line) {
+            $key = "data.items.{$index}";
+            $quantity = (int) ($line['quantity'] ?? 0);
+            $item = filled($line['item_id'] ?? null) ? $existing->get((int) $line['item_id']) : null;
+
+            if (filled($line['item_id'] ?? null) && ! $item) {
+                $errors["{$key}.product_id"] = __('Choose a product from your store.');
+
+                continue;
+            }
+
+            if ($item) {
+                $retail = filled($line['price'] ?? null) ? round((float) $line['price'], 2) : $item->buyerUnitPrice();
+
+                if ($quantity < (int) $item->quantity) {
+                    $errors["{$key}.quantity"] = __('You cannot lower the quantity below :quantity.', ['quantity' => (int) $item->quantity]);
+                } elseif ($retail < (float) $item->unit_price) {
+                    $errors["{$key}.price"] = __('Your price must be at least :amount.', ['amount' => MoneyFormatter::number((float) $item->unit_price)]);
+                } else {
+                    $kept[(int) $item->getKey()] = ['item' => $item, 'quantity' => $quantity, 'retail_price' => $retail, 'index' => $index];
+                }
+
+                continue;
+            }
+
+            $productId = (int) ($line['product_id'] ?? 0);
+            $product = $catalog->get($productId);
+
+            if (! $product) {
+                $errors["{$key}.product_id"] = __('Choose a product from your store.');
+
+                continue;
+            }
+
+            if (isset($seen[$productId])) {
+                $errors["{$key}.product_id"] = __('This product is already on the order.');
+
+                continue;
+            }
+            $seen[$productId] = true;
+
+            if ($quantity < 1) {
+                $errors["{$key}.quantity"] = __('Enter a quantity of at least 1.');
+
+                continue;
+            }
+
+            $storePrice = round($this->basePrice($reseller, $product) ?? $product->baseSellingPrice(), 2);
+            $retail = filled($line['price'] ?? null) ? round((float) $line['price'], 2) : $this->defaultPrice($reseller, $product);
+
+            if ($retail < $storePrice) {
+                $errors["{$key}.price"] = __('Your price must be at least :amount.', ['amount' => MoneyFormatter::number($storePrice)]);
+
+                continue;
+            }
+
+            $new[] = ['product' => $product, 'quantity' => $quantity, 'unit_price' => $storePrice, 'retail_price' => $retail, 'index' => $index];
+        }
+
+        $mentioned = collect($lines)->pluck('item_id')->filter()->map(fn ($id): int => (int) $id);
+
+        if ($existing->keys()->diff($mentioned)->isNotEmpty()) {
+            $errors['data.items'] = __('Products already on the order cannot be removed.');
+        }
+
+        // Pre-order products are not stock-checked, as at checkout.
+        foreach ([...array_values($kept), ...$new] as $line) {
+            $product = isset($line['item']) ? $line['item']->product : $line['product'];
+
+            if ($product && ! $product->is_preorder) {
+                $stockRows[$line['index']] = ['product_id' => $product->getKey(), 'quantity' => $line['quantity']];
+            }
+        }
+
+        foreach (app(OrderStockCheckService::class)->shortages($stockRows, $order) as $shortage) {
+            $index = collect($stockRows)->search(fn (array $row): bool => (int) $row['product_id'] === $shortage['product_id']);
+            $errors["data.items.{$index}.quantity"] = __(':product does not have enough stock.', ['product' => $shortage['name']]);
+        }
+
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
         }
+
+        $setting = $reseller->company->storefrontSetting;
+        $priced = collect([...array_values($kept), ...$new])->map(fn (array $line): array => [
+            'product' => $line['item']->product ?? $line['product'] ?? null,
+            'quantity' => $line['quantity'],
+            'subtotal' => round((isset($line['item']) ? (float) $line['item']->unit_price : $line['unit_price']) * $line['quantity'], 2),
+            'customer_subtotal' => round($line['retail_price'] * $line['quantity'], 2),
+        ]);
+        $addedPieces = collect($kept)->sum(fn (array $line): int => $line['quantity'] - (int) $line['item']->quantity)
+            + collect($new)->sum('quantity');
+        $subtotal = round($priced->sum('subtotal'), 2);
+        $packaging = round((float) $order->packaging_fee + $addedPieces * (float) ($setting->reseller_packaging_cost_per_unit ?? 0), 2);
+        $vat = $setting->vatAmountForItems($priced);
+        $total = round(max($subtotal - (float) $order->discount + $vat + (float) $order->shipping_fee + $packaging, 0), 2);
+        $courier = app(ResellerOwnCourierService::class);
+        $extra = max(0.0, round($total - $courier->sentAmount($order), 2));
+        $depositUsed = min($courier->depositBalance($reseller), $extra);
+
+        return [
+            'kept' => array_values($kept),
+            'new' => $new,
+            'subtotal' => $subtotal,
+            'packaging_fee' => $packaging,
+            'vat' => $vat,
+            'total' => $total,
+            'customer_total' => round($priced->sum('customer_subtotal'), 2),
+            'extra' => $extra,
+            'deposit_used' => $depositUsed,
+            'to_send' => round($extra - $depositUsed, 2),
+        ];
     }
 
     /**
@@ -261,14 +543,27 @@ class ResellerOrderPlacementService
             $base = $this->basePrice($reseller, $product);
 
             if ($ownCourier) {
-                // The reseller pays the company's price; no commission line.
-                $price = round($base ?? $product->baseSellingPrice(), 2);
+                // The reseller pays the store's price (no commission line);
+                // their own retail price is kept for their customer, who
+                // must never see the store's price (owner rule).
+                $storePrice = round($base ?? $product->baseSellingPrice(), 2);
+                $retail = filled($line['price'] ?? null)
+                    ? round((float) $line['price'], 2)
+                    : $this->defaultPrice($reseller, $product);
+
+                if ($retail < $storePrice) {
+                    $errors["{$key}.price"] = __('Your price must be at least :amount.', ['amount' => MoneyFormatter::number($storePrice)]);
+
+                    continue;
+                }
+
                 $items->push([
                     'product' => $product,
                     'quantity' => $quantity,
-                    'unit_price' => $price,
+                    'unit_price' => $storePrice,
                     'reseller_base_price' => null,
-                    'subtotal' => round($price * $quantity, 2),
+                    'retail_price' => $retail,
+                    'subtotal' => round($storePrice * $quantity, 2),
                 ]);
 
                 continue;

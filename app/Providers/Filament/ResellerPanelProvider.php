@@ -8,6 +8,7 @@ use App\Filament\Reseller\Pages\Auth\Login;
 use App\Filament\Reseller\Pages\CreateOrder;
 use App\Filament\Reseller\Pages\Dashboard;
 use App\Filament\Reseller\Pages\Earnings;
+use App\Filament\Reseller\Pages\EditOrder;
 use App\Filament\Reseller\Pages\MyStore;
 use App\Filament\Reseller\Pages\Orders;
 use App\Filament\Reseller\Pages\PayoutAccounts;
@@ -17,14 +18,19 @@ use App\Filament\Reseller\Pages\Withdrawals;
 use App\Http\Middleware\ResolveCompanyFromResellerPortalDomain;
 use App\Http\Middleware\RestrictResellerPortalHost;
 use App\Models\Company;
+use App\Models\Customer;
 use App\Services\CompanyContext;
 use App\Services\CompanySettingsService;
+use App\Services\ResellerOwnCourierService;
+use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -62,6 +68,7 @@ class ResellerPanelProvider extends PanelProvider
             ->pages([
                 Dashboard::class,
                 CreateOrder::class,
+                EditOrder::class,
                 Orders::class,
                 Products::class,
                 Earnings::class,
@@ -71,6 +78,8 @@ class ResellerPanelProvider extends PanelProvider
                 Profile::class,
             ])
             ->homeUrl(Dashboard::class)
+            // The reseller's deposit, beside the user menu on every page (owner rule, 2026-10-06).
+            ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn (): View|string => $this->depositBadge())
             ->viteTheme('resources/css/filament/reseller/theme.css')
             ->middleware([
                 RestrictResellerPortalHost::class,
@@ -101,5 +110,20 @@ class ResellerPanelProvider extends PanelProvider
     protected function portalCompany(): ?Company
     {
         return app(CompanyContext::class)->company();
+    }
+
+    /** Only approved resellers have a deposit (overpaid own-courier advances, ResellerOwnCourierService). */
+    protected function depositBadge(): View|string
+    {
+        $reseller = Filament::auth()->user();
+
+        if (! $reseller instanceof Customer || ! $reseller->isApprovedReseller()) {
+            return '';
+        }
+
+        return view('filament.reseller.deposit-badge', [
+            'balance' => app(ResellerOwnCourierService::class)->depositBalance($reseller),
+            'currency' => app(CompanyContext::class)->company()?->currency ?: 'BDT',
+        ]);
     }
 }

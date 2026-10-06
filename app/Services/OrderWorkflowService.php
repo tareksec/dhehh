@@ -18,7 +18,7 @@ class OrderWorkflowService
 
         $items = $order->items()->get();
         $subtotal = $items->sum(fn (OrderItem $item): float => (int) $item->quantity * (float) $item->unit_price);
-        $total = max($subtotal - (float) $order->discount + (float) $order->vat + (float) $order->shipping_fee, 0);
+        $total = max($subtotal - (float) $order->discount + (float) $order->vat + (float) $order->shipping_fee + (float) $order->packaging_fee, 0);
         $due = max($total - (float) $order->paid_amount, 0);
 
         if ($order->subtotal != $subtotal || $order->total_amount != $total || $order->due_amount != $due) {

@@ -1142,6 +1142,14 @@ class StorefrontSettingResource extends Resource
                         ->prefix(fn (): string => app(CompanyContext::class)->company()?->currency ?: 'BDT')
                         ->helperText(__("Added to a product's lowest wholesale tier price to get a reseller's cost. Resellers can sell at any price at or above that cost; the difference is their commission.")),
 
+                    TextInput::make('reseller_packaging_cost_per_unit')
+                        ->label(__('Packaging charge per piece (own courier)'))
+                        ->numeric()
+                        ->minValue(0)
+                        ->default(0)
+                        ->prefix(fn (): string => app(CompanyContext::class)->company()?->currency ?: 'BDT')
+                        ->helperText(__('Charged on orders a reseller sends with their own courier: this amount times the number of pieces. The reseller pays it in advance with the order.')),
+
                     TextInput::make('reseller_min_withdrawal')
                         ->label(__('Minimum reseller withdrawal'))
                         ->numeric()

@@ -83,7 +83,7 @@ class Orders extends Page implements HasTable
         $currency = $this->reseller()->company?->currency ?: 'BDT';
 
         return $table
-            ->query(fn (): Builder => $this->reseller()->resellerOrders()->getQuery()->with(['customer', 'resellerCommission', 'resellerAdvancePayment']))
+            ->query(fn (): Builder => $this->reseller()->resellerOrders()->getQuery()->with(['customer', 'resellerCommission', 'resellerAdvancePayments']))
             ->columns([
                 TextColumn::make('order_number')
                     ->label(__('Order'))
@@ -112,7 +112,8 @@ class Orders extends Page implements HasTable
 
                 TextColumn::make('total_amount')
                     ->label(__('Sale amount'))
-                    ->state(fn (Order $record): string => MoneyFormatter::currency($record->total_amount, $currency)),
+                    // Own courier: the reseller's own sale (their retail prices), not what they pay the store.
+                    ->state(fn (Order $record): string => MoneyFormatter::currency($record->buyerTotal(), $currency)),
 
                 TextColumn::make('workflow_stage')
                     ->label(__('Status'))
@@ -163,17 +164,24 @@ class Orders extends Page implements HasTable
                         ->when($data['until'] ?? null, fn (Builder $q, string $date): Builder => $q->whereDate('order_date', '<=', $date))),
             ])
             ->recordActions([
+                // Own courier: until the store verifies the advance (owner rule, 2026-10-06).
+                Action::make('edit')
+                    ->label(__('Change'))
+                    ->icon(Heroicon::OutlinedPencilSquare)
+                    ->visible(fn (Order $record): bool => app(ResellerOwnCourierService::class)->canEdit($record))
+                    ->url(fn (Order $record): string => EditOrder::getUrl(['record' => $record->getKey()])),
+
                 Action::make('resendPayment')
                     ->label(__('Send payment again'))
                     ->icon(Heroicon::OutlinedBanknotes)
                     ->color('warning')
                     ->visible(fn (Order $record): bool => $record->reseller_own_courier
-                        && app(ResellerOwnCourierService::class)->paymentState($record) === 'rejected'
+                        && in_array(app(ResellerOwnCourierService::class)->paymentState($record), ['rejected', 'short'], true)
                         && $record->status !== Order::STATUS_CANCELLED)
                     ->modalDescription(fn (Order $record): string => __('Your last payment was not accepted. Send :amount and enter the new payment details.', [
-                        'amount' => MoneyFormatter::currency($record->total_amount, $currency),
+                        'amount' => MoneyFormatter::currency(app(ResellerOwnCourierService::class)->outstandingAmount($record), $currency),
                     ]))
-                    ->schema(fn (): array => [
+                    ->schema(fn (Order $record): array => [
                         Select::make('payment_method_id')
                             ->label(__('Paid to'))
                             ->options(app(ResellerOwnCourierService::class)->paymentMethods($this->reseller()->company)
@@ -189,6 +197,7 @@ class Orders extends Page implements HasTable
                             ->label(__('Transaction ID'))
                             ->required()
                             ->maxLength(100),
+                        CreateOrder::amountSentField(fn (): float => app(ResellerOwnCourierService::class)->outstandingAmount($record), $currency),
                     ])
                     ->action(function (Order $record, array $data): void {
                         abort_unless((int) $record->reseller_customer_id === (int) $this->reseller()->getKey(), 403);
@@ -203,7 +212,7 @@ class Orders extends Page implements HasTable
                     ->icon(Heroicon::OutlinedEye)
                     ->modalHeading(fn (Order $record): string => $record->order_number)
                     ->modalContent(fn (Order $record) => view('filament.reseller.pages.partials.order-detail', [
-                        'order' => $record->load(['items.product', 'statusTransitions' => fn ($q) => $q->orderBy('created_at'), 'resellerCommission', 'resellerAdvancePayment.paymentMethod']),
+                        'order' => $record->load(['items.product', 'statusTransitions' => fn ($q) => $q->orderBy('created_at'), 'resellerCommission', 'resellerAdvancePayments.paymentMethod']),
                         'currency' => $currency,
                     ]))
                     ->modalWidth('2xl')

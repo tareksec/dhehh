@@ -4,6 +4,34 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Packaging charge on reseller own-courier orders.** New setting **Packaging charge per piece (own courier)** under Site → Storefront Settings → Reseller Settings. When a reseller sends an order with their own courier, this amount times the number of pieces is added to the order as a **Packaging charge** (shown on Create order's summary, in the reseller's order details, and on the admin order page and edit form). It is part of the total the reseller pays in advance and is never shown to the reseller's customer. Orders the store delivers never carry it. With the setting at 0 nothing changes.
+- **A reseller's customer only ever sees the reseller's price and store (owner rules).** On an own-courier order the reseller sets the price their customer pays for each product (**Your customer's price**, at least the store price); the store still charges the reseller its own price. Everything the customer can see shows only the reseller's side: the printed invoice and the PDF invoice carry the reseller's **store name and logo** (not the company's name, logo, hotline, e-mail, address, website or social links), items and totals at the reseller's price, and a **Due Amount** equal to that total (also on the courier slip); no store price, packaging charge, advance or internal note; the courier and parcel ID are the reseller's. The shareable order summary card shows the reseller's store name with Total and Due. The reseller's portal shows their own sale as the **Sale amount** and, separately, **You pay the store**.
+- **Resellers can change their own-courier orders (owner rules).** A **Change** button on the portal's Orders list opens the order until the store verifies any of the advance (and never once the parcel is packed or the order is closed). The reseller can add products, raise quantities, change their customer's prices, and correct the courier name, parcel ID and their customer's name, phone and address. Products already on the order cannot be removed or lowered. When the total goes up, the page shows the extra and asks for its payment details; the reseller sends **only the extra**, which is listed beside the first payment. Staff verify each payment in turn from the order page, and **Mark parcel packed** appears only once the whole total is verified. A rejected payment is sent again for the unpaid part only. The admin order page lists every payment and what is **Still to receive**; the portal's order details list them with what is **Still to send**.
+
+- **Reseller deposit (owner rule).** When paying for an own-courier order the reseller can enter the **Amount sent** (blank means exactly what is owed; never less). When staff verify a payment they confirm the **Amount received** (they can correct it). Whatever the verified payments hold above the order's total goes to the reseller's **Deposit**, shown in the portal's top bar on every page. The deposit pays the advance of the reseller's next own-courier orders (and the extra after a change) automatically, before anything else; only the rest has to be sent, and when the deposit covers it all no payment details are asked. The deposit cannot be withdrawn. If less arrived than was owed, the order shows **Part received — send the rest** and the reseller sends the remainder.
+
+### Changed
+
+- **Staff can no longer add or change items on a reseller's own-courier order.** The Items list on the admin edit form is locked on these orders, with a note that only the reseller can change them from the portal (they have paid for these items in advance). Other order fields stay editable.
+
+### Fixed
+
+- **Confirming an order with too little stock did nothing.** Change status → Confirmed (on the order page or in bulk) on a draft whose products are short left the order as a draft with no visible message. It now names each short product with the ordered and in-stock quantities, and bulk Change status lists every skipped order with its reason.
+- **Mark parcel packed on a reseller's draft order took no stock.** Packing now confirms the draft first, so the packed products leave stock; when stock is short it says which products and marks nothing.
+
+### Technical Notes
+
+- Migration `2026_10_06_100000_add_reseller_packaging_cost`: `storefront_settings.reseller_packaging_cost_per_unit`, `orders.packaging_fee` (both default 0) and `order_items.reseller_retail_price` (nullable). `OrderWorkflowService::sync()` and the admin order form's live total now add `packaging_fee`. New `Order::showsResellerPricesToBuyer()` / `buyerTotal()` and `OrderItem::buyerUnitPrice()` / `buyerSubtotal()` are used by every buyer-facing view (invoice partial, `orders.pdf`, `OrderSummaryCardService`, storefront account and tracking pages). Run migrations on deploy.
+- Reseller order edits: `ResellerOrderPlacementService::quoteEdit()` / `updateOwnCourierOrder()`; new portal page `App\Filament\Reseller\Pages\EditOrder` (`/portal/orders/{record}/edit`). New `Order::resellerAdvancePayments()`; `ResellerOwnCourierService` gains `sentAmount()`, `outstandingAmount()`, `canEdit()`, and `submitPayment()` now records only the outstanding amount; `paymentState()` / `canMarkPacked()` look at all advance payments. `OrderPdfController` passes the reseller's logo. No new migration for this part.
+- Migration `2026_10_06_110000_create_reseller_deposit_entries_table` (new company-owned `ResellerDepositEntry`: +overpayment / −used, balance = sum). `ResellerOwnCourierService::depositBalance()`, `applyDeposit()` (a completed `StorefrontPayment` with gateway `reseller_deposit` plus an `OrderPayment` with no account — the cash was already posted with the earlier order's payment, which records the full amount received), `verifyPayment(..., $received)` credits the overpayment, new payment state `short`. Deposit payments do not lock an order for the reseller's changes. `OrderPayment` sets `received_by` only for a staff `User` (a reseller signed in to the portal is a `Customer`). Top-bar badge via `PanelsRenderHook::USER_MENU_BEFORE` on the reseller panel. Run migrations on deploy.
+- `OrderStatusWorkflowService` checks stock (`OrderStockCheckService::shortages()`) before moving an order into an accounted status and reports it under `stage`; `ResellerOwnCourierService::markPacked()` confirms a draft inside the same transaction.
+- Tests: `ResellerOwnCourierOrderTest` (now 30 tests); `MultiCompanyIsolationTest` lists `ResellerDepositEntry`. New lang keys in `lang/en.json` and `lang/bn.json`.
+
+
 ## [2.54.1] - 2026-10-06
 
 **Release type:** Security Update

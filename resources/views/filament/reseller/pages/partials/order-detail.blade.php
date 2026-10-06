@@ -16,7 +16,7 @@
         </div>
         <div>
             <div class="text-gray-500 dark:text-gray-400">{{ __('Sale amount') }}</div>
-            <div class="font-medium">{{ MoneyFormatter::currency($order->total_amount, $currency) }}</div>
+            <div class="font-medium">{{ MoneyFormatter::currency($order->buyerTotal(), $currency) }}</div>
         </div>
     </div>
 
@@ -59,8 +59,8 @@
                             @endif
                         </td>
                         <td class="py-1 text-right">{{ $item->quantity }}</td>
-                        <td class="py-1 text-right">{{ MoneyFormatter::currency($item->unit_price, $currency) }}</td>
-                        <td class="py-1 text-right">{{ MoneyFormatter::currency($item->subtotal, $currency) }}</td>
+                        <td class="py-1 text-right">{{ MoneyFormatter::currency($item->buyerUnitPrice(), $currency) }}</td>
+                        <td class="py-1 text-right">{{ MoneyFormatter::currency($item->buyerSubtotal(), $currency) }}</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -70,7 +70,12 @@
     @if ($order->reseller_own_courier)
         @php
             $courier = app(\App\Services\ResellerOwnCourierService::class);
-            $payment = $order->resellerAdvancePayment;
+            $outstanding = $courier->outstandingAmount($order);
+            $paymentStatuses = [
+                \App\Models\StorefrontPayment::STATUS_PENDING => __('Waiting for verification'),
+                \App\Models\StorefrontPayment::STATUS_COMPLETED => __('Verified'),
+                \App\Models\StorefrontPayment::STATUS_FAILED => __('Rejected'),
+            ];
         @endphp
         <div>
             <h3 class="mb-2 text-sm font-semibold">{{ __('Own courier') }}</h3>
@@ -91,17 +96,50 @@
                     <div class="text-gray-500 dark:text-gray-400">{{ __('Advance payment') }}</div>
                     <div class="font-medium">{{ \App\Services\ResellerOwnCourierService::paymentStateLabels()[$courier->paymentState($order)] }}</div>
                 </div>
-                @if ($payment)
+                <div>
+                    <div class="text-gray-500 dark:text-gray-400">{{ __('You pay the store') }}</div>
+                    <div class="font-medium">{{ MoneyFormatter::currency($order->total_amount, $currency) }}</div>
+                </div>
+                @if ((float) $order->packaging_fee > 0)
                     <div>
-                        <div class="text-gray-500 dark:text-gray-400">{{ __('Amount') }}</div>
-                        <div class="font-medium">{{ MoneyFormatter::currency($payment->amount, $currency) }}</div>
+                        <div class="text-gray-500 dark:text-gray-400">{{ __('Packaging charge') }}</div>
+                        <div class="font-medium">{{ MoneyFormatter::currency($order->packaging_fee, $currency) }}</div>
                     </div>
+                @endif
+                @if (($credited = $courier->creditedFrom($order)) > 0)
                     <div>
-                        <div class="text-gray-500 dark:text-gray-400">{{ __('Transaction ID') }}</div>
-                        <div class="font-medium">{{ $payment->transaction_id }}</div>
+                        <div class="text-gray-500 dark:text-gray-400">{{ __('Added to your deposit') }}</div>
+                        <div class="font-medium">{{ MoneyFormatter::currency($credited, $currency) }}</div>
+                    </div>
+                @endif
+                @if ($outstanding > 0 && $order->status !== Order::STATUS_CANCELLED)
+                    <div>
+                        <div class="text-gray-500 dark:text-gray-400">{{ __('Still to send') }}</div>
+                        <div class="font-medium">{{ MoneyFormatter::currency($outstanding, $currency) }}</div>
                     </div>
                 @endif
             </div>
+
+            @if ($order->resellerAdvancePayments->isNotEmpty())
+                <table class="mt-3 w-full text-left text-sm">
+                    <thead>
+                        <tr class="text-gray-500 dark:text-gray-400">
+                            <th class="pb-1">{{ __('Transaction ID') }}</th>
+                            <th class="pb-1">{{ __('Status') }}</th>
+                            <th class="pb-1 text-right">{{ __('Amount') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($order->resellerAdvancePayments as $payment)
+                            <tr class="border-t border-gray-100 dark:border-white/10">
+                                <td class="py-1">{{ $payment->gateway === \App\Services\ResellerOwnCourierService::GATEWAY_DEPOSIT ? __('From your deposit') : $payment->transaction_id }}</td>
+                                <td class="py-1">{{ $paymentStatuses[$payment->status] ?? $payment->status }}</td>
+                                <td class="py-1 text-right">{{ MoneyFormatter::currency($payment->amount, $currency) }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            @endif
         </div>
     @endif
 

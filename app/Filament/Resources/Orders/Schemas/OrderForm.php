@@ -253,9 +253,16 @@ class OrderForm
 
                 Section::make('Items')
                     ->columnSpanFull()
+                    ->description(fn (?Order $record): ?string => $record?->reseller_own_courier
+                        ? __('The reseller sends this order with their own courier and has paid for these items in advance, so only the reseller can add or change items, from the reseller portal.')
+                        : null)
                     ->schema([
                         Repeater::make('items')
                             ->relationship()
+                            // Owner rule (2026-10-06): staff never add or change
+                            // items on an own-courier order; a disabled repeater
+                            // is not saved either.
+                            ->disabled(fn (?Order $record): bool => (bool) $record?->reseller_own_courier)
                             ->table([
                                 TableColumn::make('Product'),
                                 TableColumn::make('Variation'),
@@ -410,6 +417,16 @@ class OrderForm
                                 : 'Could not detect a zone from the customer address — set manually if needed.')
                             ->afterStateUpdated(fn (Get $get, Set $set) => self::setOrderTotals($get, $set)),
 
+                        // Set when a reseller's own-courier order is placed
+                        // (per-piece packaging charge); shown only on those.
+                        TextInput::make('packaging_fee')
+                            ->label(__('Packaging charge'))
+                            ->numeric()
+                            ->prefix('৳')
+                            ->readOnly()
+                            ->dehydrated(false)
+                            ->visible(fn (Get $get): bool => (float) ($get('packaging_fee') ?? 0) > 0),
+
                         TextInput::make('total_amount')
                             ->numeric()
                             ->prefix('৳')
@@ -502,7 +519,8 @@ class OrderForm
             $subtotal
             - (float) ($get($prefix.'discount') ?? 0)
             + (float) ($get($prefix.'vat') ?? 0)
-            + (float) ($get($prefix.'shipping_fee') ?? 0),
+            + (float) ($get($prefix.'shipping_fee') ?? 0)
+            + (float) ($get($prefix.'packaging_fee') ?? 0),
             0
         );
         $due = max($total - (float) ($get($prefix.'paid_amount') ?? 0), 0);

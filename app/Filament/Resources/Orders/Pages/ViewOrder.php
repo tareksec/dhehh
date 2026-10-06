@@ -23,9 +23,11 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\On;
 
 class ViewOrder extends ViewRecord
@@ -251,10 +253,11 @@ class ViewOrder extends ViewRecord
      */
     protected function resellerOwnCourierActions(): array
     {
+        // The oldest payment still waiting: the first advance, then the
+        // extra the reseller sent after raising the total (one at a time).
         $pendingPayment = fn (): ?StorefrontPayment => $this->record->reseller_own_courier
-            && ($payment = $this->record->resellerAdvancePayment()->first())?->status === StorefrontPayment::STATUS_PENDING
-                ? $payment
-                : null;
+            ? $this->record->resellerAdvancePayments()->where('status', StorefrontPayment::STATUS_PENDING)->first()
+            : null;
 
         return [
             Action::make('verifyResellerPayment')
@@ -272,7 +275,16 @@ class ViewOrder extends ViewRecord
                         'transaction' => $payment->transaction_id,
                     ]) : null;
                 })
+                ->fillForm(fn (): array => ['amount_received' => (float) $pendingPayment()?->amount])
                 ->schema([
+                    // What really arrived; anything above the order's total goes
+                    // to the reseller's deposit (owner rule, 2026-10-06).
+                    TextInput::make('amount_received')
+                        ->label(__('Amount received'))
+                        ->numeric()
+                        ->minValue(0.01)
+                        ->required()
+                        ->helperText(__('Change it if a different amount arrived. Anything above the order total goes to the reseller\'s deposit for their next orders.')),
                     Select::make('account_id')
                         ->label(__('Received into'))
                         ->options(fn (): array => OrderPayment::accountOptions())
@@ -282,7 +294,11 @@ class ViewOrder extends ViewRecord
                 ])
                 ->action(function (array $data) use ($pendingPayment): void {
                     if ($payment = $pendingPayment()) {
-                        app(ResellerOwnCourierService::class)->verifyPayment($payment, isset($data['account_id']) ? (int) $data['account_id'] : null);
+                        app(ResellerOwnCourierService::class)->verifyPayment(
+                            $payment,
+                            isset($data['account_id']) ? (int) $data['account_id'] : null,
+                            isset($data['amount_received']) ? (float) $data['amount_received'] : null,
+                        );
                     }
                     $this->record->refresh();
                 }),
@@ -306,8 +322,20 @@ class ViewOrder extends ViewRecord
                 ->visible(fn (): bool => app(ResellerOwnCourierService::class)->canMarkPacked($this->record))
                 ->requiresConfirmation()
                 ->modalDescription(fn (): string => __('Put parcel ID :parcel on the package before marking it packed.', ['parcel' => $this->record->reseller_parcel_id]))
-                ->action(function (): void {
-                    app(ResellerOwnCourierService::class)->markPacked($this->record);
+                ->action(function (Action $action): void {
+                    try {
+                        app(ResellerOwnCourierService::class)->markPacked($this->record);
+                    } catch (ValidationException $exception) {
+                        // e.g. not enough stock to confirm the order: say why, never "nothing happened".
+                        Notification::make()
+                            ->title(__('Could not mark the parcel packed'))
+                            ->body(collect($exception->errors())->flatten()->implode(' '))
+                            ->danger()
+                            ->send();
+                        $action->halt();
+                    }
+
+                    Notification::make()->title(__('Parcel marked packed'))->success()->send();
                     $this->record->refresh();
                 }),
         ];

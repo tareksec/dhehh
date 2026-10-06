@@ -278,7 +278,7 @@ class OrdersTable
                         ->deselectRecordsAfterCompletion()
                         ->action(function (Collection $records, array $data): void {
                             $updated = 0;
-                            $skipped = 0;
+                            $skipped = [];
 
                             foreach ($records as $record) {
                                 try {
@@ -289,18 +289,20 @@ class OrdersTable
                                         'bulk',
                                     );
                                     $updated++;
-                                } catch (ValidationException) {
-                                    $skipped++;
+                                } catch (ValidationException $exception) {
+                                    // Each skipped order with its own reason (a transition that is not
+                                    // allowed, or not enough stock), never a bare count.
+                                    $skipped[] = $record->order_number.': '.collect($exception->errors())->flatten()->implode(' ');
                                 }
                             }
 
                             $notification = Notification::make()
                                 ->title("{$updated} order(s) updated")
-                                ->body($skipped > 0 ? "{$skipped} order(s) were skipped because that transition is not allowed." : null);
+                                ->body($skipped !== [] ? __(':count order(s) were skipped:', ['count' => count($skipped)]).' '.implode(' | ', $skipped) : null);
 
                             if ($updated === 0) {
                                 $notification->danger();
-                            } elseif ($skipped > 0) {
+                            } elseif ($skipped !== []) {
                                 $notification->warning();
                             } else {
                                 $notification->success();

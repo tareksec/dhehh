@@ -2,6 +2,96 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-06 - Reseller deposit: overpayments credited and used on the next orders
+
+Owner rule (in Bangla): if a reseller pays more than the ordered amount, the extra is added to the reseller's balance and shown in the header. Asked three things; answers: the reseller enters the amount sent and staff correct it when verifying; the balance is a **separate deposit, used on the next orders, not withdrawable**; shown in the **portal's top bar**.
+
+What changed:
+- New table `reseller_deposit_entries` / `ResellerDepositEntry` (company-scoped; +credit, −used).
+- Portal payment forms (Create order, Change order, Send payment again): optional **Amount sent** (blank = exactly what is owed, never less).
+- Staff **Verify reseller payment**: **Amount received** (pre-filled with what the reseller said). The full received amount is recorded in the order's Payments History (and the chosen account); what verified payments hold above the total is credited to the deposit once.
+- The deposit pays first on every new own-courier order and on the extra after a change; only the rest is asked for. When it covers everything, the payment section is hidden and the order is ready to pack.
+- New state **Part received — send the rest** when less arrived than owed; the reseller can send the rest from Orders.
+- Top-bar **Deposit** badge for approved resellers. Order details (admin and portal) show deposit payments and what an order added to the deposit.
+- Fix found on the way: `OrderPayment` filled `received_by` from whoever was signed in, which in the portal is a reseller (`Customer`), breaking the foreign key to users. Now only a staff user is recorded.
+
+My decisions (say if you want different):
+- When an order paid (partly) from the deposit is cancelled, the deposit is **not** given back automatically — staff would need to handle it. Tell me if cancelling should return it.
+- Staff cannot yet adjust a deposit by hand (e.g. a refund outside the system), and the admin has no deposit list per reseller; only the order pages show it.
+- The order that was overpaid shows the full amount received as paid (more than its total, due 0), so the account balance matches the money that arrived; the later order shows the deposit part as a payment without an account.
+
+Tests: 5 new in `ResellerOwnCourierOrderTest` (overpayment → deposit → used on the next order, fully covered order needs no payment and can be packed; amount below owed refused; staff set a lower amount received → short → reseller sends the rest; top bar + Create order uses the deposit; no badge for a pending reseller). `MultiCompanyIsolationTest` updated. Full `php artisan test` (plain, no `--env`): **1838 passed, 1 skipped, 0 failed**.
+
+Needs Bangla review: the 13 new keys ("জমা", "পাঠানো টাকা", "প্রাপ্ত টাকা", "আংশিক পাওয়া গেছে — বাকিটা পাঠান", …).
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes); only CHANGELOG/UPDATE_NOTES conflicted (both sides kept).
+
+## 2026-10-06 - Reseller's own-courier orders: reseller branding and Due on the invoice, reseller-only edits
+
+Owner answers (in Bangla): the invoice shows the reseller's **store name and logo** (not the reseller's own name); the customer **must see the Due Amount**; staff **cannot add or change items** on own-courier orders — the **reseller** adds or edits them. Asked how the advance works after an edit; answers: editable **until the store verifies the payment**, the reseller sends **only the extra**, and the total cannot go down (nothing removed or lowered). The reseller can change products/quantities/customer prices, courier name and parcel ID, and the customer's name, phone and address.
+
+What changed:
+- **Invoice (print + PDF) and summary card, buyer view:** reseller store name (`Customer::resellerStoreName()`) and logo (light, else dark; no company logo fallback) instead of the company's; company hotline, e-mail, address, website, Facebook, WhatsApp and thank-you line hidden; **Due Amount = the retail total** (invoice, courier slip, PDF Due/COD, card Total + Due).
+- **Found while doing this:** the PDF invoice (`orders.pdf`, Download PDF on the order) still printed the store's prices on own-courier orders — it now uses the same buyer view.
+- **Admin edit form:** Items repeater disabled on own-courier orders (a disabled repeater is not saved, so a forged request cannot change them either), with an explanation. Discount/VAT/shipping fields left as they were.
+- **Portal Change page** (`/portal/orders/{id}/edit`, button **Change** on Orders): `ResellerOrderPlacementService::updateOwnCourierOrder()` — existing lines keep their product and store price, quantity only up, customer price ≥ store price; new products at today's store price; stock checked with `OrderStockCheckService` (works for confirmed orders too); packaging charge grows by the added pieces; VAT recomputed; the order note's delivery address line follows the new address. Locked once any advance payment is verified, the parcel is packed, or the order is cancelled/returned/refunded/completed.
+- **Several advance payments per order:** `Order::resellerAdvancePayments()`. `submitPayment()` records only the outstanding amount (total − waiting − verified). `paymentState()`: verified when verified payments cover the total; rejected when the latest was rejected and money is still owed; else waiting / not sent. **Mark parcel packed** only when everything is verified. Admin verifies waiting payments oldest first; the order page lists all payments and **Still to receive**; the portal details list them with **Still to send**.
+
+My decisions (say if you want different):
+- The customer's Due on their invoice is the whole retail total (nothing the customer paid the reseller is recorded in the ERP).
+- The reseller's own phone is not printed on the invoice (only store name and logo, as asked).
+- An order that a confirmed status already took stock for can still be changed by the reseller until the payment is verified; the extra quantity is stock-checked.
+
+Tests: `ResellerOwnCourierOrderTest` now 25 (7 new: staff cannot change items, price/courier/customer change without extra payment, extra payment + packing waits for all of it, rejected extra resent for the extra only, nothing removed/lowered/below store price + stock, locked after verification, the portal page end to end incl. the real `/portal/orders/{id}/edit` URL and another reseller getting 404); the buyer-view test now checks the store name/logo, Due Amount and the PDF. Full `php artisan test` (plain, no `--env`): **1833 passed, 1 skipped, 0 failed**.
+
+Needs Bangla review: the 16 new keys, especially "বাড়তি টাকার পেমেন্ট", "এখন পাঠাবেন", "এখনও পাওয়া বাকি", "পরিবর্তন".
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes); only CHANGELOG/UPDATE_NOTES conflicted (both sides kept).
+
+## 2026-10-06 - Reseller module audit: stock errors, Book courier, courier callbacks
+
+Reason — owner asked to check the reseller module for breaks: when booking, a product out of stock showed no error; selecting orders and Book courier did not book; no callbacks came from the courier (the owner fixed these on main and asked whether the reseller module has them, or anything else).
+
+Findings and fixes:
+- **No stock error (found, fixed):** Change status → Confirmed on a draft (a reseller portal order arrives as a draft) with short stock left it as a draft, with the error under a field the action does not show — so nothing visible happened. `OrderStatusWorkflowService` now checks stock before moving into an accounted status and reports "Not enough stock: <product> (ordered N, in stock M)". Bulk Change status lists each skipped order with its reason.
+- **Book courier:** no reseller-specific problem. Own-courier orders are blocked with a reason by main's `Order::courierBookingBlocker()`; store-delivered reseller orders book like any other order.
+- **Callbacks:** a courier "delivered" callback moves a reseller's order to completed and makes the reseller's commission payable (checked in a test). Own-courier orders get no callbacks (the reseller's courier never calls us); staff move them by hand.
+- **Also found:** **Mark parcel packed** on a draft own-courier order took no stock. It now confirms the order first (stock checked, products named when short, nothing marked).
+
+Tests: 4 new cases in `ResellerOwnCourierOrderTest`.
+
+Needs Bangla review: "Not enough stock: :products. …", ":name (ordered :ordered, in stock :available)", ":count order(s) were skipped:", "Could not mark the parcel packed", "Parcel marked packed".
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes); only CHANGELOG/UPDATE_NOTES conflicted (both sides kept).
+
+## 2026-10-06 - A reseller's customer only sees the reseller's price
+
+Owner rule: "Reseller এর কাস্টমার প্রোডাক্টের খরচ কখনোই দেখবে না, কাস্টমার শুধু খুচরা রেট দেখবে যেটা reseller সেট করে দিবে। এইটা invoice এ এপ্লাই করতেই হবে।"
+
+Problem: on an own-courier order the order's prices are the store's price to the reseller (plus packaging), and the invoice packed with the parcel printed them.
+
+What changed: the reseller sets **Your customer's price** per line on own-courier orders too (at least the store price), kept in new `order_items.reseller_retail_price`; `unit_price` stays the store's price. Buyer-facing views use `Order::showsResellerPricesToBuyer()` / `buyerTotal()` and `OrderItem::buyerUnitPrice()` / `buyerSubtotal()`: invoice (retail items and totals only; no packaging, paid, due or internal note; reseller's courier and parcel ID), courier slip (no due), summary card (single Total), storefront account pages, tracking page (defensive; portal orders are not trackable there). Portal: Sale amount = the reseller's own sale; order details add "You pay the store". The invoice no longer has the packaging row from the previous entry. Store-delivered reseller orders are unchanged (their prices are already the reseller's).
+
+Superseded in part by the entry above (owner answers 2026-10-06): the invoice now shows the reseller's store name/logo and a Due Amount.
+
+Tests: 3 new cases in `ResellerOwnCourierOrderTest` (buyer sees only retail on invoice/card, price floor, store-delivered invoice unchanged); mutation-checked on the invoice and the card.
+
+Needs Bangla review: "Your customer's price", "Store price", "Your customer's price (on their invoice)", "You pay the store", "Order total", the updated Products description.
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes); only CHANGELOG/UPDATE_NOTES conflicted (both sides kept).
+
+## 2026-10-06 - Packaging charge on reseller own-courier orders
+
+Owner rule: "রিশেলারের নিজস্ব কুরিয়ার হলে প্যাকেজিং কস্ট যুক্ত হবে". Asked how it is counted; answer: a fixed amount **per piece**, the amount set by the admin.
+
+What changed: setting `reseller_packaging_cost_per_unit` (Reseller Settings section), `orders.packaging_fee`, added to the order total in `OrderWorkflowService::sync()` and the admin `OrderForm` live total; `ResellerOrderPlacementService::quote()` adds pieces x setting for own-courier orders only, so the advance payment includes it. Shown on the portal Create order summary and order details, admin infolist Totals and edit form (read-only, only when set); not on the buyer's invoice (see the entry above).
+
+Tests: new case in `ResellerOwnCourierOrderTest` (quote, order, advance, store-delivered order has none, re-sync, invoice, admin edit save), mutation-checked.
+
+Needs Bangla review: "Packaging charge", the setting label and help text, the updated Products description.
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes); only CHANGELOG/UPDATE_NOTES conflicted (both sides kept).
+
 ## 2026-10-03 - Security audit fixes (items 1–4)
 
 Reason — owner asked for a security check against a 9-point OWASP-style list ("আমাদের অ্যাপে এক সিকিউরিটি প্রবলেম গুলো কি আছে দেখ তো?"), then approved fixing items 1–4 ("হ্যাঁ, ১ থেকে ৪ নম্বর ঠিক করে দাও").

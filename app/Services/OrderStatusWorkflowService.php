@@ -53,15 +53,53 @@ class OrderStatusWorkflowService
             $current->statusTransitionSource = $source;
             $current->statusTransitionActorId = $actorId ?? Auth::id();
 
+            $this->ensureStockFor($current, $attributes['status'] ?? $current->status);
+
             try {
                 $this->syncLatestCourierBooking($current, $attributes, $reason, $stage);
                 $current->forceFill($attributes)->save();
+            } catch (ValidationException $exception) {
+                // A stock or courier rule rejected the change under a key
+                // ("quantity", "product_variant_id"...) that no status popup
+                // shows -- report it on the stage field so it is never silent.
+                throw ValidationException::withMessages([
+                    'stage' => collect($exception->errors())->flatten()->implode(' '),
+                ]);
             } finally {
                 $current->clearStatusTransitionContext();
             }
 
             return $current->refresh();
         });
+    }
+
+    /**
+     * Moving an order into a status that takes stock (e.g. a draft from the
+     * storefront or the reseller portal being confirmed) names every short
+     * product, instead of failing on the first stock movement.
+     */
+    protected function ensureStockFor(Order $order, string $newStatus): void
+    {
+        if ($order->isAccounted() || ! in_array($newStatus, Order::ACCOUNTED_STATUSES, true)) {
+            return;
+        }
+
+        $shortages = app(OrderStockCheckService::class)->shortages(
+            $order->items()->get(['product_id', 'product_variant_id', 'quantity'])->toArray(),
+            $order,
+        );
+
+        if ($shortages === []) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'stage' => __('Not enough stock: :products. Add stock or change the order first.', [
+                'products' => collect($shortages)
+                    ->map(fn (array $line): string => __(':name (ordered :ordered, in stock :available)', $line))
+                    ->implode('; '),
+            ]),
+        ]);
     }
 
     protected function attributesForStage(Order $order, string $stage): array
