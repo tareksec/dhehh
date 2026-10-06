@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.54.0] - 2026-10-06
+
 **Release type:** Minor Feature Update
 
 ### Fixed
@@ -24,7 +26,6 @@ All notable production changes to Business Dashboard are documented here.
 
 - New `Order::courierBookingBlocker()` (reads `latestCourierBooking`, which the orders list eager-loads). `OrdersTable::canBookCourier()` / new `courierBookingBlocker()` (adds the current-company check) and `ViewOrder::canBookCourier()` use it; `bookCourierBulk()` lists per-order skip reasons. 10 new lang keys. `OrderCourierBookingFeedbackTest` +4 tests (10 total). No migrations.
 - `CourierWebhookController` logs rejected calls (`status = rejected`, deduped per body, payload kept only up to 16 KB) and answers Steadfast with 200. `CourierWebhookLogResource::processNowAction()` runs `ProcessCourierWebhook` inline; `ListCourierWebhookLogs::getSubheading()` warns on pending logs older than 5 minutes. `CourierBookingFeedback::run()` wraps the other courier actions. Status-sync client calls also go through `CourierService::callCourier()`. New `CourierStatusFlowAuditTest` (6 tests); `SteadfastApiGuideTest` / `CourierIntegrationTest` updated for the 200 response and the rejected-call log. 14 more lang keys.
-
 ## [2.53.0] - 2026-10-05
 
 **Release type:** Minor Feature Update
