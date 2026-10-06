@@ -79,6 +79,7 @@ Route::get('/internal/tls-ask', \App\Http\Controllers\TlsAskController::class)
 Route::get('/webhooks/meta', [MetaWebhookController::class, 'verify'])
     ->name('webhooks.meta.verify');
 Route::post('/webhooks/meta', [MetaWebhookController::class, 'handle'])
+    ->middleware('throttle:600,1')
     ->name('webhooks.meta.handle');
 
 Route::middleware('throttle:30,1')->group(function (): void {
@@ -166,8 +167,10 @@ Route::prefix('/storefront/{company:slug}')->group(function (): void {
     Route::get('/account/activity', [StorefrontAccountController::class, 'activityPreview'])
         ->name('storefront.preview.account.activity');
     Route::get('/account/login', [StorefrontAccountAuthController::class, 'showLoginPreview'])
+        ->middleware('throttle:10,1')
         ->name('storefront.preview.account.login');
     Route::post('/account/login', [StorefrontAccountAuthController::class, 'loginPreview'])
+        ->middleware('throttle:10,1')
         ->name('storefront.preview.account.login.store');
     Route::get('/account/otp', [StorefrontAccountAuthController::class, 'showOtpPreview'])
         ->middleware('throttle:10,1')
@@ -184,14 +187,17 @@ Route::prefix('/storefront/{company:slug}')->group(function (): void {
     Route::get('/account/register', [StorefrontAccountAuthController::class, 'showRegisterPreview'])
         ->name('storefront.preview.account.register');
     Route::post('/account/register', [StorefrontAccountAuthController::class, 'registerPreview'])
+        ->middleware('throttle:10,1')
         ->name('storefront.preview.account.register.store');
     Route::get('/account/forgot-password', [StorefrontAccountAuthController::class, 'showForgotPasswordPreview'])
         ->name('storefront.preview.account.forgot-password');
     Route::post('/account/forgot-password', [StorefrontAccountAuthController::class, 'forgotPasswordPreview'])
+        ->middleware('throttle:5,1')
         ->name('storefront.preview.account.forgot-password.store');
     Route::get('/account/reset-password', [StorefrontAccountAuthController::class, 'showResetPasswordPreview'])
         ->name('storefront.preview.account.reset-password');
     Route::post('/account/reset-password', [StorefrontAccountAuthController::class, 'resetPasswordPreview'])
+        ->middleware('throttle:10,1')
         ->name('storefront.preview.account.reset-password.store');
     Route::post('/account/logout', [StorefrontAccountAuthController::class, 'logoutPreview'])
         ->name('storefront.preview.account.logout');
@@ -200,6 +206,7 @@ Route::prefix('/storefront/{company:slug}')->group(function (): void {
     Route::patch('/account/profile', [StorefrontAccountProfileController::class, 'updatePreview'])
         ->name('storefront.preview.account.profile.update');
     Route::put('/account/password', [StorefrontAccountProfileController::class, 'updatePasswordPreview'])
+        ->middleware('throttle:10,1')
         ->name('storefront.preview.account.password.update');
     Route::get('/account/reseller', [ResellerStoreController::class, 'editPreview'])
         ->name('storefront.preview.account.reseller');
@@ -351,6 +358,7 @@ Route::middleware(ResolveCompanyFromDomain::class)->group(function (): void {
     Route::patch('/account/profile', [StorefrontAccountProfileController::class, 'update'])
         ->name('storefront.account.profile.update');
     Route::put('/account/password', [StorefrontAccountProfileController::class, 'updatePassword'])
+        ->middleware('throttle:10,1')
         ->name('storefront.account.password.update');
     Route::get('/account/reseller', [ResellerStoreController::class, 'edit'])
         ->name('storefront.account.reseller');

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\InvalidateStaleCustomerSession;
 use App\Http\Middleware\PreventDemoModeWrites;
 use App\Http\Middleware\RestrictResellerPortalHost;
 use App\Http\Middleware\SecurityHeaders;
@@ -72,6 +73,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('web', PreventDemoModeWrites::class);
         $middleware->appendToGroup('web', SetCurrentCompany::class);
         $middleware->appendToGroup('web', SecurityHeaders::class);
+        $middleware->appendToGroup('web', InvalidateStaleCustomerSession::class);
         // Company context must be bound before route model binding runs,
         // otherwise CompanyScope cannot constrain implicit bindings and a
         // record from another company could resolve on admin routes.

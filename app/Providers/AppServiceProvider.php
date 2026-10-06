@@ -206,6 +206,10 @@ class AppServiceProvider extends ServiceProvider
                 return null;
             }
 
+            if ($subject instanceof User && ! in_array($ability, ['view', 'viewAny'], true) && ! $user->canModifyUser($subject)) {
+                return false;
+            }
+
             return $user->canPerformModelAbility($ability, $modelClass);
         });
 

@@ -397,6 +397,25 @@ class User extends Authenticatable implements FilamentUser
         return $this->isSuperAdmin() || $this->hasPermission('users.manage');
     }
 
+    /**
+     * Owner's rule: only a Super Admin changes permissions — a user's role
+     * (their own included) and what each role is allowed to do. "Users:
+     * Manage" still covers everything else about user accounts.
+     */
+    public function canChangePermissions(): bool
+    {
+        return $this->isSuperAdmin();
+    }
+
+    /**
+     * "Users: Manage" must not be a path to taking over a Super Admin: only a
+     * Super Admin may change, delete or reset the password of one.
+     */
+    public function canModifyUser(User $target): bool
+    {
+        return ! $target->isSuperAdmin() || $this->isSuperAdmin();
+    }
+
     public function canEditPayments(): bool
     {
         return $this->isSuperAdmin() || $this->effectiveRole() === 'accountant';

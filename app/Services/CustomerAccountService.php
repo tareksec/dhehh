@@ -8,6 +8,7 @@ use App\Models\StorefrontSetting;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -235,6 +236,9 @@ class CustomerAccountService
             'password' => Hash::make($newPassword),
             'password_reset_code' => null,
             'password_reset_expires_at' => null,
+            // Kills "remember me" cookies on every other device; their open
+            // sessions are signed out by InvalidateStaleCustomerSession.
+            'remember_token' => Str::random(60),
         ])->save();
 
         return true;
@@ -242,7 +246,11 @@ class CustomerAccountService
 
     public function updatePassword(Customer $customer, string $newPassword): void
     {
-        $customer->forceFill(['password' => Hash::make($newPassword)])->save();
+        $customer->forceFill([
+            'password' => Hash::make($newPassword),
+            // See resetPassword(): other devices must sign in again.
+            'remember_token' => Str::random(60),
+        ])->save();
     }
 
     public function emailAvailable(string $email, ?int $ignoreCustomerId = null): bool
