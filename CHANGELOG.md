@@ -4,6 +4,10 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.54.1] - 2026-10-06
+
+**Release type:** Security Update
+
 ### Security
 
 - **Order details could be opened by any staff login.** The storefront preview's order-confirmation pages (`/storefront/<store>/checkout/success/<id>` and the offer thank-you page) had no check, so any signed-in staff member, whatever their role, could show a customer's name, phone and address by trying order numbers 1, 2, 3… These pages now need the same permission as opening the order in the admin panel ("Sales: View").
@@ -28,7 +32,6 @@ All notable production changes to Business Dashboard are documented here.
 - `User::canChangePermissions()` (Super Admin only) and `canModifyUser()`. `Gate::before` denies every ability except `view`/`viewAny` on a Super Admin `User` record for non-Super-Admins. In `UserForm` the role field is disabled and the inline "Create role" refuses (403) for non-Super-Admins. `CreateUser` forces `User::defaultRole()` and `EditUser` drops `role` from the save, so a hand-crafted request can't change it. `UserRoleResource::canAccess()` requires a Super Admin (it used to be `canManageUsers()`). The users table's `DeleteBulkAction` now uses `authorizeIndividualRecords('delete')`; it previously deleted the whole selection with no per-record check. New `tests/Feature/UserManagementEscalationTest.php` (8 tests).
 - Throttles: preview `account/login`, `register`, `forgot-password` (5/min), `reset-password`, `password` and the domain `account/password` at 10/min; `POST /webhooks/meta` at 600/min.
 - New `tests/Feature/StorefrontPreviewAndSessionSecurityTest.php` (5 tests). `SecurityHardeningTest` gains 4 tests (CSP, own CSP kept, HSTS only on HTTPS, throttled routes).
-
 ## [2.54.0] - 2026-10-06
 
 **Release type:** Minor Feature Update
