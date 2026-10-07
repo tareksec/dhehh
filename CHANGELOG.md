@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.59.0] - 2026-10-07
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -19,7 +21,6 @@ All notable production changes to Business Dashboard are documented here.
 - Migration `2026_10_07_120000_add_storefront_setting_id_to_slides_and_pages`: nullable `storefront_setting_id` (NULL = all sites) on `storefront_slides` and `storefront_pages`, `nullOnDelete` (deleting a site returns its slides/pages to all sites). `StorefrontSlide::forCompanyTheme()` takes the site (the cached company list is filtered in memory, so the cache key is unchanged); `StorefrontPage::forSite()` is used by the Blade page route, layout menus/footer, the API pages, and the API menu/footer resolution.
 - `StorefrontSetting::primaryFor()` (Next.js row else Blade) and `isPrimary()` are read by `WooCommerceImportService`, `WooCommerceOrderSyncService`, `WooCommerceWebhookController`, the Integrations page, `Crm\BroadcastService`, `Crm\ConversationMessengerService` and `SendLeadFollowUpReminders`.
 - Tests: new `StorefrontSiteContentTest` (8); new cases in `StorefrontApiTest`, `WooCommerceOrderWebhookTest`, `LeadFollowUpReminderTest`; `IntegrationsPageTest` updated for the primary-row WooCommerce tab. 3 new lang keys in `lang/en.json` and `lang/bn.json`.
-
 ## [2.58.0] - 2026-10-07
 
 **Release type:** Minor Feature Update
