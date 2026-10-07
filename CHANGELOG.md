@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.60.0] - 2026-10-07
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -13,7 +15,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - Reseller guide: migration `2026_10_07_110000_add_reseller_guide_to_storefront_settings_table` adds `reseller_guide_enabled` (default on), `reseller_guide_intro`, `reseller_guide_rules` (JSON list of `{title, body}`) and `reseller_guide_show_figures` (default off) to the Blade storefront row. New `Reseller\ResellerGuideController` + `resources/views/reseller/guide.blade.php` at `GET /portal/guide` (route `reseller.portal.guide`, portal host only via `ResolveCompanyFromResellerPortalDomain` / `RestrictResellerPortalHost`; 404 when the page is off). New `Company::resellerJoinUrl()` used by the storefront layout, Marketplace Pro home and account profile; the header's "Reseller status" link for someone who already applied goes to the portal. `ResellerPanelProvider` adds the guide link above the application form (`AUTH_REGISTER_FORM_BEFORE`). 70 new lang keys. New `ResellerGuidePageTest` (5 tests).
-
 ## [2.59.1] - 2026-10-07
 
 **Release type:** Security Update
