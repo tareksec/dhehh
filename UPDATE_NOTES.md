@@ -2,6 +2,23 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-07 - "Users: Manage" limited to the editor's own companies
+
+Reason — owner: "এখনো খোলা: "Users: Manage" থাকা কেউ যেকোনো user-কে যেকোনো কোম্পানিতে যোগ করতে পারে। এটা আটকাতে হবে" (block adding users to any company). Follow-up to the 2026-10-03 security audit fixes (already on main).
+
+What changed:
+- `User::assignableCompanyIds()` / `resolveCompanyAccessChange()`; `CreateUser` / `EditUser` apply it; `UserForm` shows and loads only assignable companies in "Assigned Companies" / "Default Company".
+- My reading of the rule (say if different): a non-Super-Admin may add/remove only companies they can access; a user's access to other companies is kept untouched; the default company only moves to one of the editor's companies; Super Admin unchanged.
+- No new user-visible strings (Filament's own "invalid" message covers a tampered request), so no lang keys.
+
+Tests:
+- `UserManagementEscalationTest` +5 (13 total). With the rule reverted, 3 fail; the other 2 are controls (own companies still manageable, Super Admin assigns any).
+- Full `php artisan test` (plain, no `--env`): 1889 passed, 2 skipped (14743 assertions).
+
+Still open (owner decision): a "Users: Manage" holder can still edit (name, email, password, active) a user who belongs only to other companies, because the Users list is not company-scoped.
+
+Commit status: committed and pushed to `claude/security-audit-fixes` and `main` on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
 ## 2026-10-07 - Sign-up needs an SMS code (account takeover by phone number)
 
 Reason — owner asked "পরবর্তী কাজ কি", I listed the open item "registration adopts an existing customer record by phone without proving ownership" as the first thing to fix, owner said "ওটিপি সিকিউরিটি যোগ করো".

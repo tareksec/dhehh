@@ -408,6 +408,62 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /**
+     * Companies this user may give (or take away) access to on the Users
+     * screen: every active company for a Super Admin, otherwise only their
+     * own active companies.
+     *
+     * @return list<int>
+     */
+    public function assignableCompanyIds(): array
+    {
+        $query = $this->isSuperAdmin()
+            ? Company::query()->where('is_active', true)->pluck('id')
+            : $this->companies()->where('companies.is_active', true)->pluck('companies.id');
+
+        return $query->map(fn ($id): int => (int) $id)->values()->all();
+    }
+
+    /**
+     * Applies the owner's rule (2026-10-07) to a company-access change made by
+     * this user: a non-Super-Admin can only add or remove companies they can
+     * access themselves. The target's access to any other company is kept as
+     * it was, and the default company only moves to one of this user's own.
+     *
+     * @param  list<int>  $requestedIds
+     * @return array{0: list<int>, 1: ?int}
+     */
+    public function resolveCompanyAccessChange(array $requestedIds, ?int $requestedDefault, ?User $target = null): array
+    {
+        if ($this->isSuperAdmin()) {
+            return [$requestedIds, $requestedDefault];
+        }
+
+        $allowed = $this->assignableCompanyIds();
+        $kept = [];
+        $currentDefault = null;
+
+        if ($target?->exists) {
+            $kept = array_diff(
+                $target->companies()->pluck('companies.id')->map(fn ($id): int => (int) $id)->all(),
+                $allowed,
+            );
+            $currentDefault = $target->companies()->wherePivot('is_default', true)->value('companies.id');
+            $currentDefault = $currentDefault === null ? null : (int) $currentDefault;
+        }
+
+        $default = match (true) {
+            $requestedDefault !== null && in_array($requestedDefault, $allowed, true) => $requestedDefault,
+            $currentDefault !== null && in_array($currentDefault, $kept, true) => $currentDefault,
+            default => null,
+        };
+
+        return [
+            array_values(array_unique([...array_intersect($requestedIds, $allowed), ...$kept])),
+            $default,
+        ];
+    }
+
+    /**
      * "Users: Manage" must not be a path to taking over a Super Admin: only a
      * Super Admin may change, delete or reset the password of one.
      */
