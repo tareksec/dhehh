@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
 use App\Models\Company;
+use App\Models\Customer;
 use App\Models\StorefrontCustomerActivity;
 use App\Services\CompanyContext;
 use App\Services\CustomerAccountService;
@@ -13,7 +14,9 @@ use App\Services\StorefrontNotificationService;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -80,6 +83,27 @@ class AccountAuthController extends Controller
         $this->preparePreview($request, $company);
 
         return $this->register($request);
+    }
+
+    public function showRegisterVerifyPreview(Request $request, Company $company): View|RedirectResponse
+    {
+        $this->preparePreview($request, $company);
+
+        return $this->showRegisterVerify($request);
+    }
+
+    public function verifyRegisterPreview(Request $request, Company $company): RedirectResponse
+    {
+        $this->preparePreview($request, $company);
+
+        return $this->verifyRegister($request);
+    }
+
+    public function resendRegisterCodePreview(Request $request, Company $company): RedirectResponse
+    {
+        $this->preparePreview($request, $company);
+
+        return $this->resendRegisterCode($request);
     }
 
     public function showForgotPasswordPreview(Request $request, Company $company): View
@@ -292,9 +316,15 @@ class AccountAuthController extends Controller
         ]);
     }
 
+    /**
+     * Sign-up. When the store can send SMS the phone is proven with a
+     * 6-digit code first (CustomerAccountService::registrationVerification()),
+     * because the new account takes over any existing customer record — and
+     * its order history — of that number.
+     */
     public function register(Request $request): RedirectResponse
     {
-        [, $setting] = $this->domainStorefront($request);
+        [$company, $setting] = $this->domainStorefront($request);
         abort_if(! $setting->customer_accounts_enabled, 404);
 
         $data = $request->validate([
@@ -305,8 +335,108 @@ class AccountAuthController extends Controller
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
-        $customer = $this->accounts->register($data);
+        $this->accounts->ensureCanRegister($data);
 
+        switch ($this->accounts->registrationVerification($setting, $data['phone'])) {
+            case CustomerAccountService::VERIFY_UNAVAILABLE:
+                throw ValidationException::withMessages([
+                    'phone' => __('This phone number already has orders with us, and it can\'t be verified by SMS right now. Please contact us to set up your account.'),
+                ]);
+
+            case CustomerAccountService::VERIFY_SMS:
+                if (! $this->accounts->sendRegistrationCode($company, $setting, $data['phone'])) {
+                    throw ValidationException::withMessages([
+                        'phone' => __('We couldn\'t send a verification code to this number. Please try again later.'),
+                    ]);
+                }
+
+                // Only the hash of the password waits in the session.
+                $request->session()->put($this->registrationSessionKey($company), [
+                    ...Arr::except($data, ['password', 'password_confirmation']),
+                    'password_hash' => Hash::make($data['password']),
+                ]);
+
+                return redirect()
+                    ->to($this->accountRoute($request, 'register.verify'))
+                    ->with('storefront_status', __('We sent a 6-digit code to your phone. Enter it to create your account.'));
+        }
+
+        return $this->completeRegistration($request, $this->accounts->register($data));
+    }
+
+    public function showRegisterVerify(Request $request): View|RedirectResponse
+    {
+        [$company, $setting] = $this->domainStorefront($request);
+        abort_if(! $setting->customer_accounts_enabled, 404);
+
+        $pending = $request->session()->get($this->registrationSessionKey($company));
+
+        if (! is_array($pending)) {
+            return redirect()->to($this->accountRoute($request, 'register'));
+        }
+
+        return StorefrontThemeRegistry::page('account.register-verify', [
+            'company' => $company,
+            'setting' => $setting,
+            'maskedIdentifier' => $this->maskIdentifier($pending['phone']),
+            'previewSlug' => $this->previewSlug($request),
+        ]);
+    }
+
+    public function verifyRegister(Request $request): RedirectResponse
+    {
+        [$company, $setting] = $this->domainStorefront($request);
+        abort_if(! $setting->customer_accounts_enabled, 404);
+
+        $data = $request->validate([
+            'code' => ['required', 'digits:6'],
+        ]);
+        $pending = $request->session()->get($this->registrationSessionKey($company));
+
+        if (! is_array($pending)) {
+            return redirect()->to($this->accountRoute($request, 'register'));
+        }
+
+        if (! $this->accounts->verifyRegistrationCode($company, $pending['phone'], $data['code'])) {
+            throw ValidationException::withMessages([
+                'code' => __('That code is invalid or has expired. Request a new code and try again.'),
+            ]);
+        }
+
+        $request->session()->forget($this->registrationSessionKey($company));
+
+        try {
+            $customer = $this->accounts->register($pending);
+        } catch (ValidationException $exception) {
+            // The number or email was taken while the code was on its way.
+            return redirect()->to($this->accountRoute($request, 'register'))->withErrors($exception->errors());
+        }
+
+        return $this->completeRegistration($request, $customer);
+    }
+
+    public function resendRegisterCode(Request $request): RedirectResponse
+    {
+        [$company, $setting] = $this->domainStorefront($request);
+        abort_if(! $setting->customer_accounts_enabled, 404);
+
+        $pending = $request->session()->get($this->registrationSessionKey($company));
+
+        if (! is_array($pending)) {
+            return redirect()->to($this->accountRoute($request, 'register'));
+        }
+
+        $sent = $this->accounts->sendRegistrationCode($company, $setting, $pending['phone']);
+
+        return redirect()
+            ->to($this->accountRoute($request, 'register.verify'))
+            ->with('storefront_status', $sent
+                ? __('We sent a 6-digit code to your phone. Enter it to create your account.')
+                : __('We couldn\'t send a verification code to this number. Please try again later.'));
+    }
+
+    protected function completeRegistration(Request $request, Customer $customer): RedirectResponse
+    {
         Auth::guard('customer')->login($customer);
         $request->session()->regenerate();
 
@@ -446,6 +576,11 @@ class AccountAuthController extends Controller
         }
 
         return route('storefront.account.'.$name, $parameters);
+    }
+
+    protected function registrationSessionKey(Company $company): string
+    {
+        return 'storefront_pending_registration_'.$company->getKey();
     }
 
     protected function otpSessionKey(Company $company): string

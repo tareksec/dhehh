@@ -192,7 +192,7 @@ class PhaseFourAdminPagesTest extends TestCase
                 'integrations',
                 'notifications',
                 'navigation_seo',
-                'reseller',
+                // Reseller settings moved to Resellers → Reseller Settings (2026-10-06).
             ],
             array_column($component->instance()->sectionNavigation(), 'key'),
         );

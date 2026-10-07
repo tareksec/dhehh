@@ -2,6 +2,49 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-06 - All reseller settings on Resellers → Reseller Settings
+
+Owner rule (in Bangla): every reseller setting goes in the Reseller Settings option and everything is controlled from there.
+
+Before: module + subdomains + custom domains + portal domain on the company form (Super Admin only); cost per unit, packaging charge, minimum withdrawal in Storefront Settings → Reseller Settings; "Show reseller program" in Storefront Settings → Footer Builder; the payment channels in Payment Methods.
+
+What changed:
+- New page **Resellers → Reseller Settings** (`App\Filament\Pages\ResellerSettings`) with all of those for the current company. Module/domain fields stay Super Admin only (shown disabled to other staff, and a forged change is ignored on save). Portal domain normalised and unique across companies.
+- Removed from the company form and from Storefront Settings (section and footer toggle).
+- Payment channels are **listed** on the page with a link to Payment Methods, not edited there: the same methods are the storefront checkout's manual payment options, so editing them in two places would be confusing. Say if you want them editable on this page too.
+- Who can open it: users with Settings: Manage (same as Storefront Settings). In "All companies" view it asks to choose a company.
+- Docs updated: `docs/deployment.md` (where to switch subdomains/custom domains on), `13_RESELLER_PORTAL_PLAN.md` (admin side; own-courier orders are no longer read-only for the reseller).
+
+Tests: new `ResellerSettingsPageTest` (5: Super Admin saves everything; portal domain unique; settings manager can change money rules but not the module; no access without the permission; old places no longer show the fields); `ResellerCommissionTest` moved to the new page; `PhaseFourAdminPagesTest`'s Storefront Settings section list no longer has `reseller`. Full `php artisan test` (plain, no `--env`): **1868 passed, 1 skipped, 0 failed**.
+
+Needs Bangla review: the new keys on the page ("টাকার নিয়ম", "রিসেলার মডিউল চালু", "নিজস্ব কুরিয়ারের অগ্রিম পেমেন্ট", …).
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07), merged with `origin/main` v2.57.0 and v2.57.1 (separate Blade / Next.js storefront settings): the reseller settings keep using the Blade storefront row (`Company::storefrontSetting()`), as v2.57.0 intends; conflicts in CHANGELOG/UPDATE_NOTES, lang files and `PhaseFourAdminPagesTest` resolved by keeping both sides; `NextjsSiteSettingsTest` now expects no `reseller` section on the Blade site either. Full suite after the merges: **1890 passed, 1 skipped, 0 failed**.
+
+
+
+## 2026-10-07 - Sign-up needs an SMS code (account takeover by phone number)
+
+Reason — owner asked "পরবর্তী কাজ কি", I listed the open item "registration adopts an existing customer record by phone without proving ownership" as the first thing to fix, owner said "ওটিপি সিকিউরিটি যোগ করো".
+
+What changed:
+- Blade storefront sign-up: form → 6-digit SMS code page (`/account/register/verify`, with "Send a new code" and "Change details") → account. Only the password hash waits in the session.
+- Next.js API `POST /account/register`: without `code` → SMS + `202 verification_required`; same form again with `code` → `201`. Errors `otp_invalid`, `verification_unavailable`. Documented in `docs/api/storefront-api.md` §6.
+- Code: 10 minutes, 5 tries, 1-minute resend cooldown, one per company + phone; taken phone/email refused before any SMS.
+
+My decisions (say if you want different):
+- With an SMS gateway, **every** sign-up needs the code (also brand-new numbers — otherwise someone could pre-register a stranger's number and later see that person's guest orders).
+- Without an SMS gateway: brand-new numbers still sign up directly; a number that already has a customer record can't sign up ("contact us").
+- Offer landing-page checkout still creates its account automatically with a random password (the buyer doesn't learn it, so it can't be used to take over the record).
+
+**Not done — needs the website repo:** the Next.js site (`zamzamint-new-website-theme`) does not show a code field yet; access to that repo was denied in this session. Until it is updated, sign-up on the Next.js site fails on a store with an SMS gateway (sign-in, checkout and tracking are not affected). Owner chose to push to main anyway (2026-10-07).
+
+Needs Bangla review: the 11 new keys (sign-up code page, "This phone number already has orders with us…", "We couldn't send a verification code…").
+
+Tests: `StorefrontApiAccountTest` (+4: adoption via code, existing number needs code / no SMS → refused, five wrong codes + quick resend, taken number before SMS, failed SMS), `StorefrontCustomerAuthTest` (+2; existing sign-ups go through the code). Registration-related tests (92): all pass except 1 that needs `intl`. Full plain `php artisan test` on this server (PHP 8.4 without intl): 1870 tests, 189 failures, all "intl extension required", 0 other failures; after merging `origin/main` (separate Blade / Next.js storefront settings): 1886 tests, 189 failures, all intl, 0 other.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07); `origin/main` merged first — CHANGELOG `[Unreleased]` sections combined, lang files rebuilt as main's keys plus ours.
+
 ## 2026-10-07 (follow-up) - Show on for slides and pages; WooCommerce, CRM messaging and lead reminders read the Next.js row
 
 Owner answers (in Bangla) to the two open questions after the settings split: (1) separate hero slides, custom pages and offers per site — **do it**; (2) the company-level features **read the Next.js row**.

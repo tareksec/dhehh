@@ -1157,48 +1157,10 @@ class StorefrontSettingResource extends Resource
                 ->collapsible()
                 ->collapsed(),
 
-            Section::make(__('Reseller Settings'))
-                ->columnSpanFull()
-                ->description(__('Money rules for the reseller program: the cost added to the wholesale rate, and the minimum withdrawal. Nothing here is shown on the public storefront.'))
-                ->schema([
-                    TextInput::make('reseller_cost_per_unit')
-                        ->label(__('Reseller cost per unit'))
-                        ->numeric()
-                        ->minValue(0)
-                        ->default(0)
-                        ->prefix(fn (): string => app(CompanyContext::class)->company()?->currency ?: 'BDT')
-                        ->helperText(__("Added to a product's lowest wholesale tier price to get a reseller's cost. Resellers can sell at any price at or above that cost; the difference is their commission.")),
-
-                    TextInput::make('reseller_packaging_cost_per_unit')
-                        ->label(__('Packaging charge per piece (own courier)'))
-                        ->numeric()
-                        ->minValue(0)
-                        ->default(0)
-                        ->prefix(fn (): string => app(CompanyContext::class)->company()?->currency ?: 'BDT')
-                        ->helperText(__('Charged on orders a reseller sends with their own courier: this amount times the number of pieces. The reseller pays it in advance with the order.')),
-
-                    TextInput::make('reseller_min_withdrawal')
-                        ->label(__('Minimum reseller withdrawal'))
-                        ->numeric()
-                        ->minValue(0)
-                        ->default(0)
-                        ->prefix(fn (): string => app(CompanyContext::class)->company()?->currency ?: 'BDT')
-                        ->helperText(__('The smallest amount a reseller can request to withdraw from their delivered-order commission.')),
-                ])
-                ->columns(2)
-                ->collapsible()
-                ->collapsed(),
-
             Section::make('Footer Builder')
                 ->columnSpanFull()
                 ->description('Add, remove, and reorder the sections shown in the public footer. Leave empty to use the automatic default footer (brand, quick links, contact, bottom bar).')
                 ->schema([
-                    Toggle::make('reseller_program_enabled')
-                        ->label('Show reseller program')
-                        ->default(true)
-                        ->helperText('Off hides "Become a reseller" from the account menu and footer. The reseller pages and dashboard keep working at their direct URL — only the links are hidden.')
-                        ->columnSpanFull(),
-
                     Repeater::make('social_links')
                         ->label('Social links')
                         ->columnSpanFull()
@@ -1351,7 +1313,6 @@ class StorefrontSettingResource extends Resource
             'notifications',
             'notifications',
             'navigation_seo',
-            'reseller',
             'navigation_seo',
             'navigation_seo',
             'nextjs_site',
@@ -1561,13 +1522,12 @@ class StorefrontSettingResource extends Resource
 
     /**
      * Whether a settings section (by its navigation key) belongs to this kind of
-     * site: reseller settings only exist on the Blade storefront, the Next.js
-     * switch and domain only on the Next.js site. Everything else is shared.
+     * site: the Next.js switch and domain only exist on the Next.js site.
+     * Everything else is shared by both kinds of site.
      */
     public static function sectionAppliesToSite(string $section, string $siteType): bool
     {
         return match ($section) {
-            'reseller' => $siteType !== StorefrontSetting::SITE_NEXTJS,
             'nextjs_site' => $siteType === StorefrontSetting::SITE_NEXTJS,
             default => true,
         };

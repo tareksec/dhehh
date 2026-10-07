@@ -20,6 +20,29 @@ All notable production changes to Business Dashboard are documented here.
 - `StorefrontSetting::primaryFor()` (Next.js row else Blade) and `isPrimary()` are read by `WooCommerceImportService`, `WooCommerceOrderSyncService`, `WooCommerceWebhookController`, the Integrations page, `Crm\BroadcastService`, `Crm\ConversationMessengerService` and `SendLeadFollowUpReminders`.
 - Tests: new `StorefrontSiteContentTest` (8); new cases in `StorefrontApiTest`, `WooCommerceOrderWebhookTest`, `LeadFollowUpReminderTest`; `IntegrationsPageTest` updated for the primary-row WooCommerce tab. 3 new lang keys in `lang/en.json` and `lang/bn.json`.
 
+## [2.58.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Changed
+
+- **All reseller settings in one place: Resellers → Reseller Settings (owner rule).** A new page under the Resellers menu controls the whole reseller program for the current company: the module and its domains (**Reseller module enabled**, **Reseller subdomains enabled**, **Reseller custom domains enabled**, **Reseller portal domain** — Super Admin only, as before), the money rules (**Reseller cost per unit**, **Packaging charge per piece (own courier)**, **Minimum reseller withdrawal**), **Show reseller program** on the storefront, and the list of payment channels resellers pay own-courier advances into (with a link to Payment Methods, which the storefront checkout shares). These settings were removed from the company form and from Storefront Settings (its Reseller Settings section and the Footer Builder toggle). Opening the page needs the Settings: Manage permission.
+
+### Technical Notes
+
+- New `App\Filament\Pages\ResellerSettings` (Resellers cluster) writes `companies.reseller_*` (only for a Super Admin; the section is disabled for others and ignored on save) and `storefront_settings.reseller_*`; the portal domain is normalised and must be unique. `CompanyResource` and `StorefrontSettingResource` no longer have these fields; `HasStorefrontSettingsNavigation` drops the `reseller` section. No migration. New `ResellerSettingsPageTest` (5 tests); `ResellerCommissionTest` and `PhaseFourAdminPagesTest` updated. `docs/deployment.md` and `13_RESELLER_PORTAL_PLAN.md` point to the new page.
+## [2.57.1] - 2026-10-07
+
+**Release type:** Security Update
+
+### Security
+
+- **Signing up now needs an SMS code.** A new storefront account takes over the customer record (and order history) of the same phone number, so before, anyone who knew a customer's number could sign up with it and see that customer's past orders and address. Now, when the store has an SMS gateway, the sign-up form (Blade storefront and the Next.js site's API) texts a 6-digit code to the number and the account is created only after the code is entered. The code is valid for 10 minutes; five wrong codes throw it away; asking again within a minute does not send a second SMS. A taken phone or email is refused before any code is sent. Without an SMS gateway, a brand-new number still signs up in one step, but a number that already has a customer record cannot sign up (the visitor is asked to contact the store). In English and Bangla.
+
+### Technical Notes
+
+- `CustomerAccountService`: new `ensureCanRegister()`, `registrationVerification()` (`VERIFY_SMS` / `VERIFY_NONE` / `VERIFY_UNAVAILABLE`), `sendRegistrationCode()` / `verifyRegistrationCode()` (hashed code in the cache, keyed per company and normalized phone); `register()` accepts `password_hash`. Blade: `AccountAuthController::register()` keeps only the password hash in the session, new `account/register/verify` (GET/POST) and `account/register/resend` routes (domain + preview), new view `storefront/account/register-verify`. API: `POST /account/register` takes `code`; answers `202 verification_required`, `422 otp_invalid`, `422 verification_unavailable` (`docs/api/storefront-api.md`). Offer checkout's automatic account (random password) is unchanged. 11 new lang keys. `StorefrontApiAccountTest` +4, `StorefrontCustomerAuthTest` +2 (existing sign-up tests now go through the code). No migrations.
+- **The Next.js website must handle `202 verification_required` (show a code field and resend the form with `code`)**; until it does, sign-up on the Next.js site fails on a store with an SMS gateway.
 ## [2.57.0] - 2026-10-07
 
 **Release type:** Minor Feature Update

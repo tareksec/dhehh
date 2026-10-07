@@ -200,7 +200,8 @@ class NextjsSiteSettingsTest extends TestCase
         $bladeKeys = array_column(Livewire::test(EditStorefrontSetting::class, ['record' => $blade->getKey()])->instance()->sectionNavigation(), 'key');
         $nextjsKeys = array_column(Livewire::test(EditStorefrontSetting::class, ['record' => $nextjs->getKey()])->instance()->sectionNavigation(), 'key');
 
-        $this->assertContains('reseller', $bladeKeys);
+        // Reseller settings live on Resellers → Reseller Settings, not on either site (owner rule, 2026-10-06).
+        $this->assertNotContains('reseller', $bladeKeys);
         $this->assertNotContains('nextjs_site', $bladeKeys);
         $this->assertContains('nextjs_site', $nextjsKeys);
         $this->assertNotContains('reseller', $nextjsKeys);
