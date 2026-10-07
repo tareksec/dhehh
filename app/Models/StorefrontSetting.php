@@ -477,6 +477,10 @@ class StorefrontSetting extends Model
         'reseller_cost_per_unit',
         'reseller_packaging_cost_per_unit',
         'reseller_min_withdrawal',
+        'reseller_guide_enabled',
+        'reseller_guide_intro',
+        'reseller_guide_rules',
+        'reseller_guide_show_figures',
         'social_links',
         'is_published',
         'nextjs_site_enabled',
@@ -558,6 +562,9 @@ class StorefrontSetting extends Model
         'reseller_cost_per_unit' => 'decimal:2',
         'reseller_packaging_cost_per_unit' => 'decimal:2',
         'reseller_min_withdrawal' => 'decimal:2',
+        'reseller_guide_enabled' => 'boolean',
+        'reseller_guide_rules' => 'array',
+        'reseller_guide_show_figures' => 'boolean',
         'social_links' => 'array',
         'typography_base_size' => 'integer',
         'typography_heading_weight' => 'integer',
@@ -810,6 +817,8 @@ class StorefrontSetting extends Model
             $setting->marketplace_sidebar_enabled ??= true;
             $setting->marketplace_product_limit ??= 10;
             $setting->reseller_program_enabled ??= true;
+            $setting->reseller_guide_enabled ??= true;
+            $setting->reseller_guide_show_figures ??= false;
         });
 
         static::saved(function (StorefrontSetting $setting): void {

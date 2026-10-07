@@ -27,6 +27,7 @@ use App\Http\Controllers\MetaWebhookController;
 use App\Http\Controllers\MobileCrashReportController;
 use App\Http\Controllers\PayStationWebhookController;
 use App\Http\Controllers\QuotationPublicController;
+use App\Http\Controllers\Reseller\ResellerGuideController;
 use App\Http\Controllers\Reseller\ResellerProductPhotosController;
 use App\Http\Controllers\Storefront\AccountAuthController as StorefrontAccountAuthController;
 use App\Http\Controllers\Storefront\AccountController as StorefrontAccountController;
@@ -458,6 +459,12 @@ Route::middleware([ResolveCompanyFromDomain::class, ResolveResellerFromSlug::cla
 Route::get('/portal/products/{product}/photos', ResellerProductPhotosController::class)
     ->middleware([ResolveCompanyFromResellerPortalDomain::class, 'auth:customer'])
     ->name('reseller.portal.products.photos');
+
+// The public reseller guide (rules before applying), on the portal host only;
+// RestrictResellerPortalHost keeps "/portal/*" off every other host.
+Route::get('/portal/guide', ResellerGuideController::class)
+    ->middleware(ResolveCompanyFromResellerPortalDomain::class)
+    ->name('reseller.portal.guide');
 
 Route::view('/pricing', 'marketing.pricing')->name('marketing.pricing');
 
