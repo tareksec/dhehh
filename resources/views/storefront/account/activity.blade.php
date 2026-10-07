@@ -35,7 +35,7 @@
                                 <p class="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">{{ $activity->description }}</p>
                             @endif
                             @if ($orderNumber)
-                                <a class="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-[var(--storefront-brand)] hover:underline" href="{{ isset($previewSlug) ? route('storefront.preview.track.show', [$previewSlug, $orderNumber]) : route('storefront.track.show', $orderNumber) }}">View order</a>
+                                <a class="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-[var(--storefront-brand)] hover:underline" href="{{ \App\Support\StorefrontUrl::route('track.show', [$orderNumber], $previewSlug ?? null) }}">View order</a>
                             @endif
                         </div>
                     </li>

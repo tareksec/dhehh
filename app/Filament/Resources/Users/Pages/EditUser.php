@@ -29,10 +29,17 @@ class EditUser extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        $this->companyIds = array_values(array_filter(array_map('intval', $data['company_ids'] ?? [])));
-        $this->defaultCompanyId = filled($data['default_company_id'] ?? null)
-            ? (int) $data['default_company_id']
-            : null;
+        // Only a Super Admin changes a role, including their own; for anyone
+        // else the stored role is kept, whatever the request says.
+        if (! auth()->user()?->canChangePermissions()) {
+            unset($data['role']);
+        }
+
+        [$this->companyIds, $this->defaultCompanyId] = auth()->user()->resolveCompanyAccessChange(
+            array_values(array_filter(array_map('intval', $data['company_ids'] ?? []))),
+            filled($data['default_company_id'] ?? null) ? (int) $data['default_company_id'] : null,
+            $this->record,
+        );
 
         unset($data['company_ids'], $data['default_company_id']);
 

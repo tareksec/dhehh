@@ -126,9 +126,7 @@ class BroadcastService
 
         $broadcast->forceFill(['status' => 'sending'])->save();
 
-        $setting = StorefrontSetting::withoutGlobalScopes()
-            ->where('company_id', $broadcast->company_id)
-            ->first();
+        $setting = StorefrontSetting::primaryFor((int) $broadcast->company_id);
         $channel = $broadcast->whatsappChannel;
         $deadline = microtime(true) + 25;
 

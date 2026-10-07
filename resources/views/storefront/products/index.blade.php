@@ -27,7 +27,7 @@
         'price_asc' => 'Price: Low to high',
         'price_desc' => 'Price: High to low',
     ];
-    $baseProductsUrl = isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index');
+    $baseProductsUrl = \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null);
 @endphp
 
 @section('content')
@@ -54,7 +54,7 @@
                     </a>
                     @foreach ($categories as $chip)
                         @php
-                            $chipUrl = isset($previewSlug) ? route('storefront.preview.categories.show', [$previewSlug, $chip->slug]) : route('storefront.categories.show', $chip->slug);
+                            $chipUrl = \App\Support\StorefrontUrl::route('categories.show', [$chip->slug], $previewSlug ?? null);
                         @endphp
                         <a class="inline-flex min-h-11 shrink-0 snap-start items-center rounded-full border px-4 text-sm font-medium transition {{ $category?->id === $chip->id ? 'border-[var(--storefront-brand)] bg-[var(--storefront-brand)] text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400 dark:border-white/10 dark:text-gray-300' }}" href="{{ $chipUrl }}" @if ($category?->id === $chip->id) aria-current="page" @endif>
                             {{ $chip->name }}

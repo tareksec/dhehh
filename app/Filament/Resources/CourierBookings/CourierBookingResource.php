@@ -5,6 +5,7 @@ namespace App\Filament\Resources\CourierBookings;
 use App\Filament\Clusters\Courier;
 use App\Filament\Resources\CourierBookings\Pages\ListCourierBookings;
 use App\Filament\Resources\CourierBookings\Pages\ViewCourierBooking;
+use App\Filament\Resources\Orders\Actions\CourierBookingFeedback;
 use App\Models\CourierBooking;
 use App\Models\CourierProvider;
 use App\Services\CourierManager;
@@ -202,8 +203,8 @@ class CourierBookingResource extends Resource
                 Textarea::make('note')
                     ->rows(3),
             ])
-            ->action(function (CourierBooking $record, array $data): void {
-                app(CourierService::class)->updateStatus($record, $data['status'], $data['note'] ?? null);
+            ->action(function (Action $action, CourierBooking $record, array $data): void {
+                CourierBookingFeedback::run($action, fn () => app(CourierService::class)->updateStatus($record, $data['status'], $data['note'] ?? null), __('Courier status updated'));
             });
     }
 
@@ -213,8 +214,8 @@ class CourierBookingResource extends Resource
             ->label('Sync courier status')
             ->icon('heroicon-o-arrow-path')
             ->visible(fn (CourierBooking $record): bool => in_array($record->provider?->driver, CourierProvider::API_DRIVERS, true))
-            ->action(function (CourierBooking $record): void {
-                app(CourierManager::class)->sync($record);
+            ->action(function (Action $action, CourierBooking $record): void {
+                CourierBookingFeedback::run($action, fn () => app(CourierManager::class)->sync($record), __('Courier status synced'));
             });
     }
 
@@ -258,8 +259,12 @@ class CourierBookingResource extends Resource
             ->icon('heroicon-o-x-circle')
             ->color('danger')
             ->requiresConfirmation()
+            // No courier offers a cancel call here: this only marks the booking cancelled in the ERP.
+            ->modalDescription(__('This marks the booking cancelled in this app only — it does not cancel the parcel at the courier. Cancel it in the courier\'s own panel too.'))
             ->visible(fn (CourierBooking $record): bool => ! in_array($record->status, [CourierBooking::STATUS_DELIVERED, CourierBooking::STATUS_RETURNED, CourierBooking::STATUS_CANCELLED], true))
-            ->action(fn (CourierBooking $record) => app(CourierManager::class)->cancel($record));
+            ->action(function (Action $action, CourierBooking $record): void {
+                CourierBookingFeedback::run($action, fn () => app(CourierManager::class)->cancel($record), __('Booking marked cancelled'));
+            });
     }
 
     public static function trackAction(): Action

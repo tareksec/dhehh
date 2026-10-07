@@ -77,7 +77,7 @@ class ListStorefrontSlides extends ListRecords
         $companyId = app(CompanyContext::class)->id();
 
         return $companyId
-            ? StorefrontSetting::withoutGlobalScopes()->where('company_id', $companyId)->first()
+            ? StorefrontSetting::bladeFor($companyId)
             : null;
     }
 }

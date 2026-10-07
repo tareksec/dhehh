@@ -62,10 +62,28 @@ class ExternalCourierFraudService
     }
 
     /**
+     * Which of the fraud-checkable couriers the company has an active,
+     * credentialed provider for — lets the Fraud Checker page tell "not
+     * configured" apart from "configured but returned no data".
+     *
+     * @return array<string, bool>
+     */
+    public function configuredDrivers(int $companyId): array
+    {
+        return collect(array_keys(self::DRIVER_CLIENT_MAP))
+            ->mapWithKeys(function (string $driver) use ($companyId): array {
+                $provider = $this->activeProvider($driver, $companyId);
+
+                return [$driver => $provider !== null && $this->hasUsableCredentials($this->credentialsFor($provider))];
+            })
+            ->all();
+    }
+
+    /**
      * The courier merchant panels only accept the local format (01XXXXXXXXX),
      * so +880/880-prefixed numbers are converted back to it.
      */
-    protected function normalizePhone(string $phone): string
+    public function normalizePhone(string $phone): string
     {
         $digits = preg_replace('/\D+/', '', $phone) ?? '';
 
@@ -99,11 +117,7 @@ class ExternalCourierFraudService
 
     protected function checkDriver(string $driver, string $clientClass, string $phone, int $companyId): ?array
     {
-        $provider = CourierProvider::query()
-            ->where('company_id', $companyId)
-            ->where('driver', $driver)
-            ->where('is_active', true)
-            ->first();
+        $provider = $this->activeProvider($driver, $companyId);
 
         $credentials = $provider ? $this->credentialsFor($provider) : [];
 
@@ -132,6 +146,15 @@ class ExternalCourierFraudService
             'total' => (int) ($stats['total'] ?? 0),
             'reports' => is_numeric($stats['reports'] ?? null) ? (int) $stats['reports'] : null,
         ], fn ($value): bool => $value !== null);
+    }
+
+    protected function activeProvider(string $driver, int $companyId): ?CourierProvider
+    {
+        return CourierProvider::query()
+            ->where('company_id', $companyId)
+            ->where('driver', $driver)
+            ->where('is_active', true)
+            ->first();
     }
 
     /**

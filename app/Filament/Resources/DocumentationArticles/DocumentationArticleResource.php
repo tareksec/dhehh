@@ -14,6 +14,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\RichEditor;
+use Filament\Forms\Components\RichEditor\RichEditorTool;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -101,6 +102,21 @@ class DocumentationArticleResource extends Resource
                         ->required()
                         ->columnSpanFull()
                         ->helperText(__('Write the guide as numbered steps — this is what staff will follow.'))
+                        ->tools([
+                            RichEditorTool::make('unlink')
+                                ->label(__('Remove link'))
+                                ->jsHandler('$getEditor()?.chain().focus().extendMarkRange(\'link\').unsetLink().run()')
+                                ->icon(Heroicon::LinkSlash)
+                                ->iconAlias('forms:components.rich-editor.toolbar.unlink'),
+                        ])
+                        ->toolbarButtons([
+                            ['bold', 'italic', 'underline', 'strike', 'subscript', 'superscript', 'link', 'unlink'],
+                            ['h2', 'h3'],
+                            ['alignStart', 'alignCenter', 'alignEnd'],
+                            ['blockquote', 'codeBlock', 'bulletList', 'orderedList'],
+                            ['table', 'attachFiles'],
+                            ['undo', 'redo'],
+                        ])
                         ->hintAction(static::importMarkdownAction()),
                 ])
                 ->columns(2),

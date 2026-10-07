@@ -69,12 +69,15 @@ use App\Models\QuickReply;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
 use App\Models\ResellerCommission;
+use App\Models\ResellerDepositEntry;
+use App\Models\ResellerPayoutAccount;
 use App\Models\ResellerPayoutRequest;
 use App\Models\SettlementPayout;
 use App\Models\Shipment;
 use App\Models\StockMovement;
 use App\Models\StorefrontCartRecord;
 use App\Models\StorefrontCheckoutAttempt;
+use App\Models\StorefrontCustomerToken;
 use App\Models\StorefrontMetaAttribution;
 use App\Models\StorefrontMetaEvent;
 use App\Models\StorefrontPage;
@@ -119,7 +122,7 @@ class MultiCompanyIsolationTest extends TestCase
             Lead::class, Quotation::class, QuotationItem::class,
             Conversation::class, ConversationChannel::class,
             ChatOrderLink::class, CompanyFaq::class, QuickReply::class,
-            CompanyApiKey::class,
+            CompanyApiKey::class, StorefrontCustomerToken::class,
             InvestmentProject::class, Investor::class, InvestorDraft::class,
             Investment::class, ProjectCostItem::class,
             InvestorSecurityInstrument::class, InvestmentWitness::class, InvestmentDocument::class,
@@ -129,7 +132,7 @@ class MultiCompanyIsolationTest extends TestCase
             Offer::class, OfferItem::class, ProductReview::class,
             Broadcast::class, Media::class, GeneratedImage::class, GeneratedVideo::class,
             ExpenseScan::class, ExpenseScanItem::class,
-            ResellerCommission::class, ResellerPayoutRequest::class,
+            ResellerCommission::class, ResellerPayoutRequest::class, ResellerPayoutAccount::class, ResellerDepositEntry::class,
         ];
 
         foreach ($models as $modelClass) {

@@ -4,7 +4,7 @@
     $legalLinks = collect($data['legal_links'] ?? [])->filter(fn ($link) => filled($link['label'] ?? null) && filled($link['page_id'] ?? null));
     $legalPageIds = $legalLinks->pluck('page_id')->unique();
     $legalPageSlugs = $legalPageIds->isNotEmpty()
-        ? \App\Models\StorefrontPage::withoutGlobalScopes()->where('company_id', $company->getKey())->whereIn('id', $legalPageIds)->where('is_published', true)->pluck('slug', 'id')
+        ? \App\Models\StorefrontPage::withoutGlobalScopes()->where('company_id', $company->getKey())->forSite($setting ?? null)->whereIn('id', $legalPageIds)->where('is_published', true)->pluck('slug', 'id')
         : collect();
 @endphp
 <div class="border-t border-gray-200 dark:border-white/10">

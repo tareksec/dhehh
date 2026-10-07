@@ -48,6 +48,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Unique;
 
 class StorefrontSettingResource extends Resource
 {
@@ -73,6 +74,22 @@ class StorefrontSettingResource extends Resource
                 ->columnSpanFull()
                 ->description('Connect a company to its public storefront and control whether it is visible.')
                 ->schema([
+                    Select::make('site_type')
+                        ->label(__('Site'))
+                        ->options(fn (): array => collect(StorefrontSetting::SITE_TYPES)->map(fn (string $label): string => __($label))->all())
+                        ->default(StorefrontSetting::SITE_BLADE)
+                        ->required()
+                        ->live()
+                        // A row never changes what it is; to switch, create the other site.
+                        ->disabled(fn (string $operation): bool => $operation === 'edit')
+                        ->dehydrated(fn (string $operation): bool => $operation === 'create')
+                        ->helperText(__('Each site has its own storefront settings. The Blade storefront is the reseller store; the Next.js site is the main storefront. A company has at most one of each.')),
+                    Toggle::make('copy_from_blade')
+                        ->label(__('Start from a copy of the Blade storefront settings'))
+                        ->helperText(__('The new Next.js site begins with the same colours, content, checkout rules and integrations as the Blade storefront, then you customise it on its own. Turn off to start from blank defaults.'))
+                        ->default(true)
+                        ->visible(fn (Get $get, string $operation): bool => $operation === 'create' && $get('site_type') === StorefrontSetting::SITE_NEXTJS)
+                        ->dehydrated(),
                     Select::make('company_id')
                         ->relationship('company', 'name', modifyQueryUsing: fn ($query) => CompanyMedia::constrainCompanyQuery($query))
                         ->rule(CompanyMedia::companyAccessRule())
@@ -81,7 +98,13 @@ class StorefrontSettingResource extends Resource
                         ->helperText('Select the company that will own this storefront.')
                         ->searchable()
                         ->preload()
-                        ->unique(table: 'storefront_settings', column: 'company_id', ignoreRecord: true)
+                        ->unique(
+                            table: 'storefront_settings',
+                            column: 'company_id',
+                            ignoreRecord: true,
+                            modifyRuleUsing: fn (Unique $rule, Get $get): Unique => $rule->where('site_type', $get('site_type') ?: StorefrontSetting::SITE_BLADE),
+                        )
+                        ->validationMessages(['unique' => __('This company already has this kind of site.')])
                         ->live()
                         ->afterStateUpdated(function (Set $set, ?int $state): void {
                             $company = $state ? Company::withoutGlobalScopes()->find($state) : null;
@@ -630,6 +653,7 @@ class StorefrontSettingResource extends Resource
                 ->schema([
                     TextInput::make('company_domain')
                         ->label('Storefront Domain')
+                        ->visible(fn (Get $get): bool => ($get('site_type') ?: StorefrontSetting::SITE_BLADE) !== StorefrontSetting::SITE_NEXTJS)
                         ->maxLength(255)
                         ->live(onBlur: true)
                         ->dehydrateStateUsing(fn (?string $state): ?string => Company::normalizeDomain($state))
@@ -640,6 +664,11 @@ class StorefrontSettingResource extends Resource
                                 ->ignore($companyId)
                                 ->whereNotNull('domain');
                         })
+                        ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                            if (StorefrontSetting::nextjsDomainTaken((string) $value)) {
+                                $fail(__('This domain is already used by a Next.js site.'));
+                            }
+                        })
                         ->helperText('Example: zamzamgadgetbd.com. Do not include https:// or paths.')
                         ->afterStateUpdated(fn (Set $set): mixed => $set('company_domain_verified', false))
                         ->afterStateHydrated(function (TextInput $component, ?StorefrontSetting $record): void {
@@ -647,6 +676,7 @@ class StorefrontSettingResource extends Resource
                         }),
                     Toggle::make('company_domain_verified')
                         ->label('Domain verified')
+                        ->visible(fn (Get $get): bool => ($get('site_type') ?: StorefrontSetting::SITE_BLADE) !== StorefrontSetting::SITE_NEXTJS)
                         ->helperText('Changing the domain resets this status. Save the new domain, verify DNS/server routing, then turn this on in a second save.')
                         ->afterStateHydrated(function (Toggle $component, ?StorefrontSetting $record): void {
                             $component->state((bool) $record?->company?->domain_verified);
@@ -1093,6 +1123,8 @@ class StorefrontSettingResource extends Resource
 
             Section::make('Lead Follow-up Reminders')
                 ->columnSpanFull()
+                // Read from the company's primary row (the Next.js site once it has one), so it is not offered on the other.
+                ->visible(fn (?StorefrontSetting $record): bool => ! $record || $record->isPrimary())
                 ->description('When a lead\'s next follow-up date arrives, the assigned staff member is notified in-app, and (when enabled here) the lead is messaged over WhatsApp with an SMS fallback. Runs every 15 minutes via the scheduler. Uses the same SMS gateway and WhatsApp Chat Channel configured above.')
                 ->schema([
                     Toggle::make('lead_follow_up_reminders_enabled')
@@ -1125,40 +1157,10 @@ class StorefrontSettingResource extends Resource
                 ->collapsible()
                 ->collapsed(),
 
-            Section::make(__('Reseller Settings'))
-                ->columnSpanFull()
-                ->description(__('Money rules for the reseller program: the cost added to the wholesale rate, and the minimum withdrawal. Nothing here is shown on the public storefront.'))
-                ->schema([
-                    TextInput::make('reseller_cost_per_unit')
-                        ->label(__('Reseller cost per unit'))
-                        ->numeric()
-                        ->minValue(0)
-                        ->default(0)
-                        ->prefix(fn (): string => app(CompanyContext::class)->company()?->currency ?: 'BDT')
-                        ->helperText(__("Added to a product's lowest wholesale tier price to get a reseller's cost. Resellers can sell at any price at or above that cost; the difference is their commission.")),
-
-                    TextInput::make('reseller_min_withdrawal')
-                        ->label(__('Minimum reseller withdrawal'))
-                        ->numeric()
-                        ->minValue(0)
-                        ->default(0)
-                        ->prefix(fn (): string => app(CompanyContext::class)->company()?->currency ?: 'BDT')
-                        ->helperText(__('The smallest amount a reseller can request to withdraw from their delivered-order commission.')),
-                ])
-                ->columns(2)
-                ->collapsible()
-                ->collapsed(),
-
             Section::make('Footer Builder')
                 ->columnSpanFull()
                 ->description('Add, remove, and reorder the sections shown in the public footer. Leave empty to use the automatic default footer (brand, quick links, contact, bottom bar).')
                 ->schema([
-                    Toggle::make('reseller_program_enabled')
-                        ->label('Show reseller program')
-                        ->default(true)
-                        ->helperText('Off hides "Become a reseller" from the account menu and footer. The reseller pages and dashboard keep working at their direct URL — only the links are hidden.')
-                        ->columnSpanFull(),
-
                     Repeater::make('social_links')
                         ->label('Social links')
                         ->columnSpanFull()
@@ -1226,6 +1228,7 @@ class StorefrontSettingResource extends Resource
 
                                             return $companyId ? StorefrontPage::withoutGlobalScopes()
                                                 ->where('company_id', $companyId)
+                                                ->when($record, fn ($query) => $query->forSite($record))
                                                 ->where('is_published', true)
                                                 ->orderBy('title')
                                                 ->pluck('title', 'id')
@@ -1255,6 +1258,40 @@ class StorefrontSettingResource extends Resource
                 ])
                 ->columns(2)
                 ->collapsible(),
+
+            Section::make(__('Next.js Site'))
+                ->columnSpanFull()
+                ->description(__('This is the headless Next.js site. It reads this row — and only this row — through the ERP API, so everything on these pages customises the main storefront without touching the Blade (reseller) storefront.'))
+                ->schema([
+                    Toggle::make('nextjs_site_enabled')
+                        ->label(__('Enable Next.js site API'))
+                        ->default(false)
+                        ->helperText(__('When off, the Next.js site receives a 403 from /api/v1/storefront/*.')),
+                    TextInput::make('nextjs_site_domain')
+                        ->label(__('Next.js site domain'))
+                        ->maxLength(255)
+                        ->live(onBlur: true)
+                        ->dehydrateStateUsing(fn (?string $state): ?string => Company::normalizeDomain($state))
+                        ->rule(fn (Get $get, ?StorefrontSetting $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get, $record): void {
+                            $conflict = StorefrontSetting::nextjsDomainConflict(
+                                (string) $value,
+                                $get('company_id') ?: $record?->company_id,
+                            );
+
+                            if ($conflict) {
+                                $fail($conflict);
+                            }
+                        })
+                        ->helperText(__('Example: zamzamint.com. Do not include https:// or paths.'))
+                        ->afterStateUpdated(fn (Set $set): mixed => $set('nextjs_site_domain_verified', false)),
+                    Toggle::make('nextjs_site_domain_verified')
+                        ->label(__('Domain verified'))
+                        ->helperText(__('Changing the domain resets this status. Save the new domain, point DNS to the Coolify app, then turn this on in a second save.')),
+                    Text::make(__('Create the API key and the cache-refresh webhook under Settings → Integrations → Website API. Keep the key in the Next.js server environment only, never in browser code.'))
+                        ->columnSpanFull(),
+                ])
+                ->columns(2)
+                ->collapsible(),
         ];
 
         $sectionKeys = [
@@ -1276,17 +1313,18 @@ class StorefrontSettingResource extends Resource
             'notifications',
             'notifications',
             'navigation_seo',
-            'reseller',
             'navigation_seo',
             'navigation_seo',
+            'nextjs_site',
         ];
 
         foreach ($components as $index => $component) {
             $section = $sectionKeys[$index] ?? 'publishing';
 
             $component
-                ->hidden(fn ($livewire): bool => method_exists($livewire, 'isStorefrontSectionActive')
+                ->hidden(fn ($livewire, Get $get): bool => (method_exists($livewire, 'isStorefrontSectionActive')
                     && ! $livewire->isStorefrontSectionActive($section))
+                    || ! self::sectionAppliesToSite($section, (string) ($get('site_type') ?: StorefrontSetting::SITE_BLADE)))
                 ->dehydratedWhenHidden()
                 ->extraAttributes(['class' => 'zz-storefront-settings-anchor']);
         }
@@ -1340,6 +1378,7 @@ class StorefrontSettingResource extends Resource
                     ->required(fn (Get $get): bool => $get('type') === 'page')
                     ->options(fn (Get $get, ?StorefrontSetting $record) => StorefrontPage::withoutGlobalScopes()
                         ->where('company_id', $companyId($get, $record))
+                        ->when($record, fn ($query) => $query->forSite($record))
                         ->where('is_published', true)
                         ->orderBy('title')
                         ->pluck('title', 'id')),
@@ -1370,14 +1409,25 @@ class StorefrontSettingResource extends Resource
                     ->label('Company')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('company.domain')
+                TextColumn::make('site_type')
+                    ->label(__('Site'))
+                    ->state(fn (StorefrontSetting $record): string => $record->siteTypeLabel())
+                    ->badge()
+                    ->color(fn (StorefrontSetting $record): string => $record->isNextjs() ? 'success' : 'info')
+                    ->sortable(),
+                TextColumn::make('site_domain')
                     ->label('Domain')
-                    ->searchable()
+                    ->state(fn (StorefrontSetting $record): ?string => $record->siteDomain())
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->where(
+                        fn (Builder $query): Builder => $query
+                            ->where('nextjs_site_domain', 'like', "%{$search}%")
+                            ->orWhereHas('company', fn (Builder $company): Builder => $company->where('domain', 'like', "%{$search}%")),
+                    ))
                     ->placeholder('-'),
-                IconColumn::make('company.domain_verified')
+                IconColumn::make('site_domain_verified')
                     ->label('Domain Verified')
+                    ->state(fn (StorefrontSetting $record): bool => $record->isNextjs() ? (bool) $record->nextjs_site_domain_verified : (bool) $record->company?->domain_verified)
                     ->boolean()
-                    ->sortable()
                     ->toggleable(),
                 IconColumn::make('is_published')
                     ->label('Published')
@@ -1429,13 +1479,20 @@ class StorefrontSettingResource extends Resource
                     ->label('Preview')
                     ->icon('heroicon-o-eye')
                     ->url(fn (StorefrontSetting $record): string => self::previewUrl($record))
-                    ->openUrlInNewTab(),
+                    ->openUrlInNewTab()
+                    ->visible(fn (StorefrontSetting $record): bool => $record->isBlade()),
                 Action::make('openSite')
                     ->label('Open Site')
                     ->icon('heroicon-o-arrow-top-right-on-square')
                     ->url(fn (StorefrontSetting $record): string => self::publicUrl($record))
                     ->openUrlInNewTab()
-                    ->visible(fn (StorefrontSetting $record): bool => filled($record->company?->domain)),
+                    ->visible(fn (StorefrontSetting $record): bool => $record->isBlade() && filled($record->company?->domain)),
+                Action::make('openNextjsSite')
+                    ->label(__('Open Next.js site'))
+                    ->icon('heroicon-o-computer-desktop')
+                    ->url(fn (StorefrontSetting $record): string => 'https://'.$record->nextjs_site_domain)
+                    ->openUrlInNewTab()
+                    ->visible(fn (StorefrontSetting $record): bool => $record->isNextjs() && filled($record->nextjs_site_domain)),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -1463,15 +1520,29 @@ class StorefrontSettingResource extends Resource
         return $query->whereRaw('1 = 0');
     }
 
+    /**
+     * Whether a settings section (by its navigation key) belongs to this kind of
+     * site: the Next.js switch and domain only exist on the Next.js site.
+     * Everything else is shared by both kinds of site.
+     */
+    public static function sectionAppliesToSite(string $section, string $siteType): bool
+    {
+        return match ($section) {
+            'nextjs_site' => $siteType === StorefrontSetting::SITE_NEXTJS,
+            default => true,
+        };
+    }
+
     public static function readinessChecks(StorefrontSetting $record): array
     {
         return [
             'Published' => $record->is_published,
-            'Domain added' => filled($record->company?->domain),
-            'Domain verified' => (bool) $record->company?->domain_verified,
+            'Domain added' => filled($record->siteDomain()),
+            'Domain verified' => $record->isNextjs() ? (bool) $record->nextjs_site_domain_verified : (bool) $record->company?->domain_verified,
             'Logo uploaded' => filled($record->logo),
             'Hero slide added' => StorefrontSlide::withoutGlobalScopes()
                 ->where('company_id', $record->company_id)
+                ->forSite($record)
                 ->where('is_active', true)
                 ->exists(),
             'SEO completed' => filled($record->meta_title) && filled($record->meta_description),
@@ -1525,6 +1596,7 @@ class StorefrontSettingResource extends Resource
     {
         return StorefrontPage::withoutGlobalScopes()
             ->where('company_id', $record->company_id)
+            ->forSite($record)
             ->where('is_published', true)
             ->count();
     }

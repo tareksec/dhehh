@@ -47,9 +47,9 @@ APP_DEBUG=false
 APP_URL=https://your-domain.com
 ASSET_URL=https://your-domain.com
 TRUSTED_PROXIES=*
-APP_VERSION=2.40.0
-APP_RELEASE_TYPE=minor
-APP_RELEASE_DATE=2026-09-29
+APP_VERSION=2.60.3
+APP_RELEASE_TYPE=patch
+APP_RELEASE_DATE=2026-10-07
 
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
@@ -505,6 +505,49 @@ get the FAQ/delivery-charge caching speed-up (that one is Redis-only; the
 storefront listing cache above works on any `CACHE_STORE`), and sessions add
 one extra database read/write per request instead of hitting Redis.
 
+## Reseller Portal Domain
+
+Each company that uses the reseller module (**Company Management → Reseller module**) gets its own reseller dashboard at `https://reseller.<company-domain>/portal` (for example `reseller.zamzamint.com`), or at a fully custom domain set in **Company Management → Reseller portal domain**. The portal has its own login, separate from the shop and the admin panel (`SESSION_DOMAIN` stays empty, so the sessions never mix). No new environment variables.
+
+For each company:
+
+1. **DNS:** add an `A` (or `CNAME`) record `reseller` pointing to the same server as the company's main domain. For a separate reseller domain, point that whole domain at the server.
+2. **Coolify:** add `https://reseller.<domain>` (or the custom domain) to the application's **Domains** list so Traefik issues its SSL certificate. A wildcard `*.domain` certificate needs a DNS challenge, so listing each host explicitly is simpler.
+3. **Admin:** only for a custom domain, fill **Company Management → Reseller portal domain**. The `reseller.<domain>` form needs nothing.
+4. **Build assets:** the portal has its own Filament theme (`resources/css/filament/reseller/theme.css`), so `npm run build` must run on deploy, as for the admin theme.
+
+Behaviour to expect: on the portal host every non-portal path redirects to the portal, and `/portal` returns 404 on every other host. Resellers who open the old **My Account → Your Store** page are redirected to the portal (they sign in again there — it is a separate login on a different host). Applications now go through the portal's own **Become a reseller** form. Store links (`{company-domain}/store/{slug}`) do not change.
+
+### Reseller store subdomains (`name.<company-domain>`)
+
+Optional, per company. Needs two things on the server before **Resellers → Reseller Settings → Reseller subdomains enabled** is switched on:
+
+1. **Wildcard DNS:** an `A` record `*.<company-domain>` pointing at the same server. Explicit records (`reseller`, `www`) keep working because they are more specific.
+2. **Wildcard SSL:** a `*.<company-domain>` certificate. Let's Encrypt only issues wildcards through a DNS challenge, so Traefik/Coolify needs your DNS provider's API token for that domain. Without it, subdomains open with a certificate warning.
+
+No environment variables, no per-reseller server work: once both are in place a reseller's chosen subdomain is live the moment they save it. Custom domains of their own (e.g. `myshop.com`) are a separate, later step.
+
+### Reseller custom domains (`myshop.com`)
+
+Optional, per company (**Resellers → Reseller Settings → Reseller custom domains enabled**). The app side is finished: it verifies DNS, resolves the domain to the reseller's store, and answers `GET /internal/tls-ask?domain=<host>` with `200` only for a verified reseller domain (otherwise `404`). What the server needs is a proxy that gets an SSL certificate **on demand** and asks that endpoint first. Caddy does this:
+
+```
+{
+    on_demand_tls {
+        ask http://<app-internal-address>/internal/tls-ask
+    }
+}
+
+https:// {
+    tls {
+        on_demand
+    }
+    reverse_proxy <app-internal-address>
+}
+```
+
+It needs no account (Let's Encrypt certificates are free and automatic). It has to receive the traffic for reseller domains on ports 80/443, which Coolify's own Traefik already uses, so how to place it (in front of Traefik, or on its own IP for custom domains) depends on the live server and has to be decided there. Until then, leave **Reseller custom domains enabled** off. The DNS check compares the reseller's domain IPs with the company domain's IPs, so the company domain must resolve to this server.
+
 ## Production Checklist
 
 - `APP_ENV=production`
@@ -519,3 +562,4 @@ one extra database read/write per request instead of hitting Redis.
 - File permissions set for `storage/` and `bootstrap/cache/`
 - Admin users reviewed
 - GitHub deploy secrets configured
+- Reseller portal DNS record and Coolify domain added (if the reseller module is used)

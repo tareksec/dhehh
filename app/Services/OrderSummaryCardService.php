@@ -31,7 +31,7 @@ class OrderSummaryCardService
      */
     public function build(Order $order): array
     {
-        $order->loadMissing(['company', 'customer', 'items.product', 'items.productVariant', 'latestCourierBooking.provider']);
+        $order->loadMissing(['company', 'reseller', 'customer', 'items.product', 'items.productVariant', 'latestCourierBooking.provider']);
 
         $currency = $order->company?->currency ?: 'BDT';
         $money = fn ($amount): string => MoneyFormatter::currency((float) $amount, $currency);
@@ -51,12 +51,21 @@ class OrderSummaryCardService
             ->map(fn (OrderItem $item): array => [
                 'name' => trim(($item->product?->name ?? __('Item')).($item->variant_label ? ' ('.$item->variant_label.')' : '')),
                 'quantity' => (int) $item->quantity,
-                'amount' => $money((float) $item->subtotal ?: (int) $item->quantity * (float) $item->unit_price),
+                'amount' => $money($order->showsResellerPricesToBuyer()
+                    ? $item->buyerSubtotal()
+                    : ((float) $item->subtotal ?: (int) $item->quantity * (float) $item->unit_price)),
             ])
             ->values()
             ->all();
 
-        $totals = array_values(array_filter([
+        // The card is sent to the buyer: a reseller's own-courier customer sees
+        // only the reseller's retail total and what they owe, never the
+        // store's prices or the reseller's advance (owner rule).
+        $buyerView = $order->showsResellerPricesToBuyer();
+        $totals = $buyerView ? [
+            ['key' => 'total', 'label' => __('Total'), 'value' => $order->buyerTotal(), 'strong' => true, 'always' => true, 'minus' => false],
+            ['key' => 'due', 'label' => __('Due'), 'value' => $order->buyerTotal(), 'strong' => true, 'always' => true, 'minus' => false],
+        ] : array_values(array_filter([
             ['key' => 'subtotal', 'label' => __('Subtotal'), 'value' => (float) $order->subtotal, 'strong' => false, 'always' => true, 'minus' => false],
             ['key' => 'delivery', 'label' => __('Delivery charge'), 'value' => (float) $order->shipping_fee, 'strong' => false, 'always' => false, 'minus' => false],
             ['key' => 'discount', 'label' => __('Discount'), 'value' => (float) $order->discount, 'strong' => false, 'always' => false, 'minus' => true],
@@ -73,13 +82,18 @@ class OrderSummaryCardService
             'strong' => $row['strong'],
         ], $totals);
 
-        $company = (string) ($order->company?->name ?? config('app.name'));
+        // ...and it carries the reseller's store name, not the company's.
+        // (every reseller-portal order, owner rule 2026-10-07).
+        $resellerBrand = $order->showsResellerBranding();
+        $company = $resellerBrand
+            ? (string) $order->reseller?->resellerStoreName()
+            : (string) ($order->company?->name ?? config('app.name'));
         $title = __('Order summary');
         $text = $this->text($company, $title, $meta, $items, $totals);
 
         return [
             'company' => $company,
-            'company_phone' => $order->company?->phone,
+            'company_phone' => $resellerBrand ? null : $order->company?->phone,
             'title' => $title,
             'meta' => $meta,
             'items' => $items,

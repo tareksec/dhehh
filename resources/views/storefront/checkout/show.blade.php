@@ -45,9 +45,7 @@
         // content executes before the parent layout's own @php block runs.
         $loggedInCustomer = auth('customer')->user();
         $checkoutAutosaveUrl = ($setting->checkout_autosave_enabled ?? false)
-            ? (isset($previewSlug)
-                ? route('storefront.preview.checkout.autosave', $previewSlug)
-                : route('storefront.checkout.autosave'))
+            ? (\App\Support\StorefrontUrl::route('checkout.autosave', [], $previewSlug ?? null))
             : null;
     @endphp
 
@@ -84,7 +82,7 @@
             get total() { return this.subtotal + this.vat + this.deliveryCharge; }
         }"
     >
-        <form id="checkout-form" class="rounded-lg border border-gray-200 bg-white p-4 sm:p-5 dark:border-gray-800 dark:bg-gray-900" method="POST" action="{{ isset($previewSlug) ? route('storefront.preview.checkout.store', $previewSlug) : route('storefront.checkout.store') }}" @if ($errors->any()) aria-describedby="checkout-errors" @endif>
+        <form id="checkout-form" class="rounded-lg border border-gray-200 bg-white p-4 sm:p-5 dark:border-gray-800 dark:bg-gray-900" method="POST" action="{{ \App\Support\StorefrontUrl::route('checkout.store', [], $previewSlug ?? null) }}" @if ($errors->any()) aria-describedby="checkout-errors" @endif>
             @csrf
 
             @if ($errors->any())

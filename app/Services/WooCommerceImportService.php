@@ -35,7 +35,7 @@ class WooCommerceImportService
      */
     public function importProducts(Company $company, bool $downloadImages = true, ?callable $progress = null): array
     {
-        $setting = $company->storefrontSetting;
+        $setting = StorefrontSetting::primaryFor((int) $company->getKey());
 
         if (! $setting instanceof StorefrontSetting || blank($setting->woocommerce_base_url)) {
             throw new RuntimeException('WooCommerce base URL is not configured in this company\'s storefront settings.');

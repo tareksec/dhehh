@@ -11,6 +11,7 @@ use App\Models\Company;
 use App\Models\CourierBooking;
 use App\Models\CourierProvider;
 use App\Models\CourierStatusLog;
+use App\Models\CourierWebhookLog;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -147,7 +148,7 @@ class CourierIntegrationTest extends TestCase
         $this->call('POST', route('couriers.webhook', $provider), [], [], [], [
             'CONTENT_TYPE' => 'application/json',
             'HTTP_AUTHORIZATION' => 'Bearer steadfast-bearer-token',
-        ], $payload)->assertAccepted();
+        ], $payload)->assertOk();
 
         $this->call('POST', route('couriers.webhook', $provider), [], [], [], [
             'CONTENT_TYPE' => 'application/json',
@@ -158,7 +159,9 @@ class CourierIntegrationTest extends TestCase
             'CONTENT_TYPE' => 'application/json',
         ], $payload)->assertUnauthorized();
 
-        $this->assertDatabaseCount('courier_webhook_logs', 1);
+        // The accepted call, plus one "rejected" row for the turned-away body.
+        $this->assertDatabaseCount('courier_webhook_logs', 2);
+        $this->assertSame(1, CourierWebhookLog::query()->where('status', 'rejected')->count());
         Queue::assertPushed(ProcessCourierWebhook::class, 1);
     }
 

@@ -76,12 +76,17 @@ class OfferCheckoutController extends Controller
 
         abort_unless($order->company_id === $company->getKey() && $order->source === Order::SOURCE_OFFER, 404);
 
+        // The preview has no signed URL, so the order ID alone would expose
+        // a customer's name, phone and address to any signed-in staff member.
+        // Require the same permission as opening the order in the admin panel.
+        abort_unless(! auth()->check() || auth()->user()->canPerformModelAbility('view', Order::class), 404);
+
         return $this->thankYouView($company, $setting, $slug, $order, $company->slug);
     }
 
     protected function storeForCompany(Request $request, Company $company, StorefrontSetting $setting, string $slug, ?string $previewSlug = null): RedirectResponse
     {
-        $offer = Offer::query()->where('slug', trim($slug))->where('status', Offer::STATUS_PUBLISHED)->firstOrFail();
+        $offer = Offer::query()->landingPages()->where('slug', trim($slug))->where('status', Offer::STATUS_PUBLISHED)->firstOrFail();
         $data = $this->validatedCheckout($request, $offer);
         $quantity = (int) $data['quantity'];
 
@@ -170,7 +175,7 @@ class OfferCheckoutController extends Controller
 
     protected function thankYouView(Company $company, StorefrontSetting $setting, string $slug, Order $order, ?string $previewSlug = null): View
     {
-        $offer = Offer::query()->where('slug', trim($slug))->first();
+        $offer = Offer::query()->landingPages()->where('slug', trim($slug))->first();
 
         return StorefrontThemeRegistry::page('offers.thank-you', [
             'company' => $company,

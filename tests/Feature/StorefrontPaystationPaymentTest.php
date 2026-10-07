@@ -247,6 +247,48 @@ class StorefrontPaystationPaymentTest extends TestCase
         ], $overrides));
     }
 
+    public function test_the_webhook_uses_the_gateway_keys_of_the_site_the_payment_was_started_on(): void
+    {
+        // The Blade row only has ZiniPay; the Next.js site has its own PayStation keys.
+        $company = $this->createStore('multi.paystation.example.test');
+        app(CompanyContext::class)->set($company);
+        $nextjs = StorefrontSetting::query()->create([
+            'company_id' => $company->getKey(),
+            'site_type' => StorefrontSetting::SITE_NEXTJS,
+            'nextjs_site_enabled' => true,
+            'online_payment_enabled' => true,
+            'online_payment_gateway' => 'paystation',
+            'payment_credentials' => ['paystation_merchant_id' => 'next-mid', 'paystation_password' => 'next-pass'],
+        ]);
+        $order = Order::query()->create(['customer_name' => 'Hook Buyer', 'status' => 'draft', 'source' => Order::SOURCE_STOREFRONT]);
+        $payment = fn (?int $site, string $invoice): StorefrontPayment => StorefrontPayment::query()->create([
+            'company_id' => $company->getKey(),
+            'storefront_setting_id' => $site,
+            'order_id' => $order->getKey(),
+            'gateway' => 'paystation',
+            'invoice_id' => $invoice,
+            'amount' => 500,
+            'status' => StorefrontPayment::STATUS_PENDING,
+        ]);
+        $fromNextjs = $payment($nextjs->getKey(), '1');
+        $fromBlade = $payment(null, '2');
+
+        Http::fake([
+            'api.paystation.com.bd/grant-token' => Http::response(['token' => 'tok-abc']),
+            'api.paystation.com.bd/retrive-transaction' => Http::response([
+                'status_code' => 200, 'status' => 'success', 'trx_status' => 'Success',
+                'payment_amount' => '500', 'trx_id' => 'TRX1', 'payment_method' => 'nagad',
+            ]),
+        ]);
+
+        $this->postJson('http://multi.paystation.example.test/webhooks/paystation/'.$fromNextjs->getKey(), ['invoice_number' => '1', 'trx_id' => 'TRX1'])->assertOk();
+        $this->assertSame(StorefrontPayment::STATUS_COMPLETED, $fromNextjs->refresh()->status);
+
+        // A payment of the Blade storefront is verified with the Blade row, which has no PayStation keys.
+        $this->postJson('http://multi.paystation.example.test/webhooks/paystation/'.$fromBlade->getKey(), ['invoice_number' => '2', 'trx_id' => 'TRX2'])->assertStatus(422);
+        $this->assertSame(StorefrontPayment::STATUS_PENDING, $fromBlade->refresh()->status);
+    }
+
     private function createStore(string $domain, string $gateway = 'zinipay'): Company
     {
         $company = Company::query()->create([

@@ -62,7 +62,9 @@ class OrderPayment extends Model
             $payment->type ??= self::TYPE_ADVANCE;
             $payment->method ??= 'cash';
             $payment->paid_at ??= now()->toDateString();
-            $payment->received_by ??= Auth::id();
+            // Only a staff user receives money (a reseller signed in to the
+            // portal is a Customer on another guard).
+            $payment->received_by ??= Auth::user() instanceof User ? Auth::id() : null;
         });
 
         // The account the money was received into decides the method, so

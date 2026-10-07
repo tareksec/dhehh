@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -60,12 +61,17 @@ class Company extends Model
         'settings',
         'dashboard_color',
         'reseller_module_enabled',
+        'reseller_portal_domain',
+        'reseller_subdomains_enabled',
+        'reseller_custom_domains_enabled',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'domain_verified' => 'boolean',
         'reseller_module_enabled' => 'boolean',
+        'reseller_subdomains_enabled' => 'boolean',
+        'reseller_custom_domains_enabled' => 'boolean',
         'settings' => 'array',
     ];
 
@@ -89,6 +95,7 @@ class Company extends Model
             $company->timezone = $company->timezone ?: config('app.timezone', 'Asia/Dhaka');
             $company->invoice_prefix = static::normalizeInvoicePrefix($company->invoice_prefix, $company->name);
             $company->domain = static::normalizeDomain($company->domain);
+            $company->reseller_portal_domain = static::normalizeDomain($company->reseller_portal_domain);
         });
 
         static::created(function (Company $company): void {
@@ -103,9 +110,26 @@ class Company extends Model
             ->withTimestamps();
     }
 
+    /**
+     * The company's Blade storefront settings (the reseller store). Stays the
+     * answer to "the company's storefront setting" for everything that predates
+     * the site split; the Next.js site has its own row, see nextjsSetting().
+     */
     public function storefrontSetting(): HasOne
     {
-        return $this->hasOne(StorefrontSetting::class);
+        return $this->hasOne(StorefrontSetting::class)->where('site_type', StorefrontSetting::SITE_BLADE);
+    }
+
+    /** The company's Next.js site settings (the main storefront); null until one is created. */
+    public function nextjsSetting(): HasOne
+    {
+        return $this->hasOne(StorefrontSetting::class)->where('site_type', StorefrontSetting::SITE_NEXTJS);
+    }
+
+    /** Every storefront settings row of the company, whatever the site. */
+    public function storefrontSettings(): HasMany
+    {
+        return $this->hasMany(StorefrontSetting::class);
     }
 
     public function storageRoot(): string
@@ -130,6 +154,194 @@ class Company extends Model
         $domain = preg_replace('/:\d+$/', '', $domain) ?: $domain;
 
         return str_starts_with($domain, 'www.') ? substr($domain, 4) : $domain;
+    }
+
+    /**
+     * The company whose reseller portal is reached at $host: either its own
+     * custom reseller_portal_domain, or "reseller." + its ordinary domain
+     * when no custom one is set. Used by ResolveCompanyFromResellerPortalDomain
+     * and RestrictResellerPortalHost -- both must agree on this exact rule.
+     */
+    public static function forResellerPortalHost(?string $host): ?self
+    {
+        $host = static::normalizeDomain($host);
+
+        if ($host === null || ! Schema::hasTable('companies')) {
+            return null;
+        }
+
+        $company = static::query()
+            ->where('reseller_module_enabled', true)
+            ->where('is_active', true)
+            ->where('reseller_portal_domain', $host)
+            ->first();
+
+        if ($company) {
+            return $company;
+        }
+
+        if (! str_starts_with($host, 'reseller.')) {
+            return null;
+        }
+
+        return static::query()
+            ->where('reseller_module_enabled', true)
+            ->where('is_active', true)
+            ->whereNull('reseller_portal_domain')
+            ->where('domain', substr($host, strlen('reseller.')))
+            ->first();
+    }
+
+    /**
+     * Labels a reseller may never take as a store subdomain: they either serve
+     * the reseller portal / admin / mail or would look like official pages.
+     */
+    public const RESERVED_RESELLER_SUBDOMAINS = [
+        'www', 'reseller', 'resellers', 'portal', 'admin', 'app', 'api', 'mail', 'smtp', 'ftp',
+        'cdn', 'static', 'assets', 'shop', 'store', 'dashboard', 'login', 'support', 'help',
+        'billing', 'staging', 'dev', 'test', 'demo',
+    ];
+
+    /**
+     * The company + subdomain label when $host is "<label>.<company domain>"
+     * for a company that has reseller subdomains switched on. The caller still
+     * has to find the reseller with that label. Reserved labels never match.
+     *
+     * @return array{0: self, 1: string}|null
+     */
+    public static function forResellerSubdomainHost(?string $host): ?array
+    {
+        $host = static::normalizeDomain($host);
+
+        if ($host === null || ! str_contains($host, '.') || ! Schema::hasTable('companies')) {
+            return null;
+        }
+
+        [$label, $parent] = explode('.', $host, 2);
+
+        if (in_array($label, self::RESERVED_RESELLER_SUBDOMAINS, true)) {
+            return null;
+        }
+
+        $company = static::query()
+            ->where('domain', $parent)
+            ->where('is_active', true)
+            ->where('reseller_module_enabled', true)
+            ->where('reseller_subdomains_enabled', true)
+            ->first();
+
+        return $company ? [$company, $label] : null;
+    }
+
+    /**
+     * The verified reseller whose own domain is $host, and their company, when
+     * that company has custom domains switched on. Looked up without the
+     * company scope because the company is exactly what is being resolved.
+     *
+     * @return array{0: self, 1: Customer}|null
+     */
+    public static function forResellerCustomDomainHost(?string $host): ?array
+    {
+        $host = static::normalizeDomain($host);
+
+        if ($host === null || ! Schema::hasTable('companies')) {
+            return null;
+        }
+
+        $reseller = Customer::withoutGlobalScopes()
+            ->where('reseller_custom_domain', $host)
+            ->whereNotNull('reseller_custom_domain_verified_at')
+            ->where('reseller_status', 'approved')
+            ->first();
+
+        if (! $reseller) {
+            return null;
+        }
+
+        $company = static::query()
+            ->whereKey($reseller->company_id)
+            ->where('is_active', true)
+            ->where('reseller_module_enabled', true)
+            ->where('reseller_custom_domains_enabled', true)
+            ->first();
+
+        return $company ? [$company, $reseller] : null;
+    }
+
+    /**
+     * Whether $host is already spoken for by the platform: a company domain,
+     * a portal host, or a store subdomain label under a company domain. A
+     * reseller may not claim any of these as their own domain.
+     */
+    public static function hostIsTakenByThePlatform(string $host): bool
+    {
+        $host = static::normalizeDomain($host) ?? '';
+
+        if ($host === '') {
+            return true;
+        }
+
+        if (static::query()->where('domain', $host)->orWhere('reseller_portal_domain', $host)->exists()) {
+            return true;
+        }
+
+        // A company's headless Next.js storefront domain is just as reserved.
+        if (StorefrontSetting::nextjsDomainTaken($host)) {
+            return true;
+        }
+
+        // Anything underneath a company's domain ("x.<company domain>") is the
+        // company's namespace -- subdomain stores and "reseller." live there.
+        $parent = str_contains($host, '.') ? explode('.', $host, 2)[1] : '';
+
+        return $parent !== '' && static::query()->where('domain', $parent)->exists();
+    }
+
+    /** "<label>.<domain>" for a reseller's chosen subdomain, or null when subdomains are off. */
+    public function resellerSubdomainHost(?string $label): ?string
+    {
+        if (blank($label) || blank($this->domain) || ! $this->reseller_module_enabled || ! $this->reseller_subdomains_enabled) {
+            return null;
+        }
+
+        return $label.'.'.$this->domain;
+    }
+
+    /**
+     * The host this company's reseller portal is reached at, or null when
+     * the reseller module isn't enabled or this company has no domain yet.
+     * The exact inverse of forResellerPortalHost().
+     */
+    public function resellerPortalHost(): ?string
+    {
+        if (! $this->reseller_module_enabled) {
+            return null;
+        }
+
+        if (filled($this->reseller_portal_domain)) {
+            return $this->reseller_portal_domain;
+        }
+
+        return filled($this->domain) ? 'reseller.'.$this->domain : null;
+    }
+
+    /**
+     * Where the storefront's "Become a reseller" links go: the public reseller
+     * guide on the portal host while it is on (Resellers → Reseller Settings),
+     * otherwise straight to the portal's application form. Null when this
+     * company has no portal host.
+     */
+    public function resellerJoinUrl(): ?string
+    {
+        $host = $this->resellerPortalHost();
+
+        if ($host === null) {
+            return null;
+        }
+
+        $guide = (bool) ($this->storefrontSetting?->reseller_guide_enabled ?? true);
+
+        return request()->getScheme().'://'.$host.'/portal/'.($guide ? 'guide' : 'register');
     }
 
     public static function normalizeInvoicePrefix(?string $prefix, ?string $companyName = null): string

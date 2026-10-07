@@ -15,6 +15,7 @@ use App\Services\ResellerPricing;
 use App\Services\StorefrontCart;
 use App\Services\StorefrontMetaTrackingService;
 use App\Support\StorefrontThemeRegistry;
+use App\Support\StorefrontUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -166,9 +167,7 @@ class CartController extends Controller
     {
         $previewSlug = $request->route('company')?->slug;
 
-        return redirect()->to($previewSlug
-            ? route('storefront.preview.checkout.show', $previewSlug)
-            : route('storefront.checkout.show'));
+        return redirect()->to(StorefrontUrl::route('checkout.show', [], $previewSlug));
     }
 
     protected function flashAddToCartEvent(Product $product, int $quantity, float $value): void
@@ -298,6 +297,13 @@ class CartController extends Controller
     protected function previewStorefront(Company $company): StorefrontSetting
     {
         abort_unless(app()->environment(['local', 'testing']) || auth()->check(), 404);
+
+        // Same gate as PreviewController::previewCompany(): a signed-in staff
+        // member may only preview their own company/companies, never another
+        // company's by slug (set() below would otherwise switch the scope).
+        if (auth()->check()) {
+            abort_unless(auth()->user()->canAccessCompany($company->getKey()), 404);
+        }
 
         $this->context->set($company);
 

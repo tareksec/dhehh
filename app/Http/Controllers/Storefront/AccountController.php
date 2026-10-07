@@ -51,7 +51,8 @@ class AccountController extends Controller
             'orderCount' => (clone $orders)->count(),
             'activeOrderCount' => (clone $orders)->whereNotIn('status', ['completed', 'cancelled'])->count(),
             'completedOrderCount' => (clone $orders)->where('status', 'completed')->count(),
-            'totalSpent' => (clone $orders)->whereIn('status', Order::ACCOUNTED_STATUSES)->sum('total_amount'),
+            // In the buyer's own prices: a reseller's own-courier order counts at the reseller's retail price.
+            'totalSpent' => (clone $orders)->whereIn('status', Order::ACCOUNTED_STATUSES)->with('items')->get()->sum(fn (Order $order): float => $order->buyerTotal()),
             'recentOrders' => (clone $orders)->with('items')->latest('order_date')->latest('id')->limit(3)->get(),
             'recentActivities' => $this->activitiesQuery($company, $customer)->limit(5)->get(),
             'previewSlug' => $this->previewSlug($request),

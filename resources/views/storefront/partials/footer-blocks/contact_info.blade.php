@@ -1,10 +1,10 @@
 <div>
     <div class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">{{ $data['heading'] ?? 'Contact' }}</div>
     <div class="mt-3 flex flex-col items-start gap-3">
-        <a class="text-sm text-gray-600 transition hover:text-[var(--storefront-brand)] dark:text-gray-400" href="{{ isset($previewSlug) ? route('storefront.preview.contact', $previewSlug) : route('storefront.contact') }}">
+        <a class="text-sm text-gray-600 transition hover:text-[var(--storefront-brand)] dark:text-gray-400" href="{{ \App\Support\StorefrontUrl::route('contact', [], $previewSlug ?? null) }}">
             Contact us
         </a>
-        <a class="text-sm text-gray-600 transition hover:text-[var(--storefront-brand)] dark:text-gray-400" href="{{ isset($previewSlug) ? route('storefront.preview.complaints.show', $previewSlug) : route('storefront.complaints.show') }}">
+        <a class="text-sm text-gray-600 transition hover:text-[var(--storefront-brand)] dark:text-gray-400" href="{{ \App\Support\StorefrontUrl::route('complaints.show', [], $previewSlug ?? null) }}">
             Product complaint
         </a>
         @if ($setting->reseller_program_enabled ?? true)

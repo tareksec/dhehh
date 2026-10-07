@@ -2,7 +2,7 @@
 
 @section('content')
     @php
-        $checkoutUrl = isset($previewSlug) ? route('storefront.preview.offers.checkout', [$previewSlug, $offer->slug]) : route('storefront.offers.checkout', $offer->slug);
+        $checkoutUrl = \App\Support\StorefrontUrl::route('offers.checkout', [$offer->slug], $previewSlug ?? null);
         $loggedInCustomer = auth('customer')->user();
         $codEnabled = ($setting->cod_enabled ?? true) && ! $offer->online_payment_required;
         $hasBkash = filled($setting->manual_bkash_number);

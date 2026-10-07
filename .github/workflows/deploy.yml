@@ -18,7 +18,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: curl, dom, fileinfo, filter, gd, iconv, intl, mbstring, pdo_sqlite, sqlite3, xml, xmlreader, xmlwriter, zip
+          extensions: curl, dom, fileinfo, filter, gd, iconv, imagick, intl, mbstring, pdo_sqlite, sqlite3, xml, xmlreader, xmlwriter, zip
           coverage: none
 
       - name: Install PHP dependencies for tests

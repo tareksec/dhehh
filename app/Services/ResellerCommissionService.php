@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\ResellerCommission;
 use App\Models\ResellerPayoutRequest;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -75,6 +76,30 @@ class ResellerCommissionService
         }
 
         return ResellerCommission::STATUS_PENDING;
+    }
+
+    /**
+     * Creates a withdrawal request against the reseller's available balance,
+     * or returns null when the amount is more than that balance. Serialised
+     * per reseller so two quick submissions can't both pass the balance
+     * check against the same money. Shared by the storefront account page
+     * and the reseller portal.
+     */
+    public function requestPayout(Customer $reseller, float $amount, string $method, string $accountDetails): ?ResellerPayoutRequest
+    {
+        return Cache::lock('reseller-payout:'.$reseller->getKey(), 10)->block(5, function () use ($reseller, $amount, $method, $accountDetails): ?ResellerPayoutRequest {
+            if ($amount > $this->balances($reseller)['available']) {
+                return null;
+            }
+
+            return ResellerPayoutRequest::query()->create([
+                'customer_id' => $reseller->getKey(),
+                'amount' => round($amount, 2),
+                'method' => $method,
+                'account_details' => $accountDetails,
+                'status' => ResellerPayoutRequest::STATUS_REQUESTED,
+            ]);
+        });
     }
 
     /**

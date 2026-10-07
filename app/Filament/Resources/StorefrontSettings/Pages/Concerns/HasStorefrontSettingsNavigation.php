@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\StorefrontSettings\Pages\Concerns;
 
+use App\Filament\Resources\StorefrontSettings\StorefrontSettingResource;
+use App\Models\StorefrontSetting;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Url;
 
@@ -42,8 +44,30 @@ trait HasStorefrontSettingsNavigation
         return $this->activeSection === $section;
     }
 
+    /** Which kind of site is being edited (or, on the create page, chosen). */
+    public function currentSiteType(): string
+    {
+        $type = ($this->record?->site_type ?? null) ?: data_get($this->data ?? [], 'site_type');
+
+        return $type === StorefrontSetting::SITE_NEXTJS ? StorefrontSetting::SITE_NEXTJS : StorefrontSetting::SITE_BLADE;
+    }
+
+    /** Picking the other site type on the create page may hide the open section. */
+    public function updatedDataSiteType(): void
+    {
+        $this->normalizeActiveSection();
+    }
+
     /** @return array<int, array{key: string, label: string, icon: string}> */
     public function sectionNavigation(): array
+    {
+        $siteType = $this->currentSiteType();
+
+        return array_values(array_filter($this->allSections(), fn (array $item): bool => StorefrontSettingResource::sectionAppliesToSite($item['key'], $siteType)));
+    }
+
+    /** @return array<int, array{key: string, label: string, icon: string}> */
+    protected function allSections(): array
     {
         return [
             ['key' => 'publishing', 'label' => 'Publishing', 'icon' => 'heroicon-o-globe-alt'],
@@ -55,7 +79,7 @@ trait HasStorefrontSettingsNavigation
             ['key' => 'integrations', 'label' => 'Payments & Integrations', 'icon' => 'heroicon-o-credit-card'],
             ['key' => 'notifications', 'label' => 'Notifications', 'icon' => 'heroicon-o-bell-alert'],
             ['key' => 'navigation_seo', 'label' => 'Navigation & SEO', 'icon' => 'heroicon-o-bars-3-bottom-left'],
-            ['key' => 'reseller', 'label' => __('Reseller Settings'), 'icon' => 'heroicon-o-user-group'],
+            ['key' => 'nextjs_site', 'label' => __('Next.js Site'), 'icon' => 'heroicon-o-computer-desktop'],
         ];
     }
 

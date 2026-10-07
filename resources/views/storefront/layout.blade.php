@@ -11,16 +11,29 @@
     $description = $setting->meta_description ?: 'Shop products from '.$company->name;
     $bannerImage = \App\Models\StorefrontSlide::forCompany($company->getKey())->first()?->image;
     $shareImageUrl = \App\Support\CompanyMedia::publicUrl($bannerImage, $company) ?: ($logoUrl ?: null);
-    $homeUrl = isset($previewSlug) ? route('storefront.preview.show', $previewSlug) : route('marketing.home');
-    $productsUrl = isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index');
-    $cartUrl = isset($previewSlug) ? route('storefront.preview.cart.show', $previewSlug) : route('storefront.cart.show');
-    $trackUrl = isset($previewSlug) ? route('storefront.preview.track.index', $previewSlug) : route('storefront.track.index');
-    $accountOrdersUrl = isset($previewSlug) ? route('storefront.preview.account.orders', $previewSlug) : route('storefront.account.orders');
-    $offersUrl = isset($previewSlug) ? route('storefront.preview.offers.index', $previewSlug) : route('storefront.offers.index');
+    $previewSlug = $previewSlug ?? null; // isset() stays false when null
+    $resellerStoreSlug = \App\Support\StorefrontUrl::currentResellerSlug();
+    // Inside a reseller's own store the header carries only that reseller's
+    // name/brand -- never the company's name or logo (owner's answer,
+    // 13_RESELLER_PORTAL_PLAN.md §2.1 Q3). The reseller's own logos (light
+    // and dark) come from the portal's My Store page; none uploaded = name only.
+    $storeReseller = request()->attributes->get('storefront_reseller');
+    $brandName = $storeReseller ? $storeReseller->resellerStoreName() : $company->name;
+    $brandLogoUrl = $storeReseller ? $storeReseller->resellerLogoUrl() : $logoUrl;
+    $brandLogoDarkUrl = $storeReseller ? $storeReseller->resellerLogoDarkUrl() : $logoDarkUrl;
+    $homeUrl = $resellerStoreSlug
+        ? \App\Support\StorefrontUrl::route('show', [], $previewSlug)
+        : (isset($previewSlug) ? route('storefront.preview.show', $previewSlug) : route('marketing.home'));
+    $productsUrl = \App\Support\StorefrontUrl::route('products.index', [], $previewSlug);
+    $cartUrl = \App\Support\StorefrontUrl::route('cart.show', [], $previewSlug);
+    $trackUrl = \App\Support\StorefrontUrl::route('track.index', [], $previewSlug ?? null);
+    $accountOrdersUrl = \App\Support\StorefrontUrl::route('account.orders', [], $previewSlug ?? null);
+    $offersUrl = \App\Support\StorefrontUrl::route('offers.index', [], $previewSlug ?? null);
     $cartCount = app(\App\Services\StorefrontCart::class)->count($company);
     $footerPages = \Illuminate\Support\Facades\Schema::hasTable('storefront_pages')
         ? \App\Models\StorefrontPage::query()
             ->where('company_id', $company->getKey())
+            ->forSite($setting)
             ->published()
             ->orderBy('sort_order')
             ->orderBy('title')
@@ -34,14 +47,17 @@
         ->orderBy('name')
         ->limit(10)
         ->get();
-    $categoryUrl = fn (\App\Models\Category $category) => isset($previewSlug)
-        ? route('storefront.preview.categories.show', [$previewSlug, $category->slug])
-        : route('storefront.categories.show', $category->slug);
-    $previewSlug = $previewSlug ?? null; // isset() stays false when null
-    $resellerUrl = isset($previewSlug) ? route('storefront.preview.reseller.show', $previewSlug) : route('storefront.reseller.show');
-    $pageUrl = fn (string $slug) => isset($previewSlug)
-        ? route('storefront.preview.pages.show', [$previewSlug, $slug])
-        : route('storefront.pages.show', $slug);
+    $categoryUrl = fn (\App\Models\Category $category) => \App\Support\StorefrontUrl::route('categories.show', [$category->slug], $previewSlug);
+    // Owner's answer (13_RESELLER_PORTAL_PLAN.md §2.1 Q4): applications now
+    // go through the reseller portal, not the old in-storefront /reseller
+    // page. Preview has no portal host to link to, so it keeps the old page.
+    $resellerJoinUrl = isset($previewSlug) ? null : $company->resellerJoinUrl();
+    $resellerUrl = $resellerJoinUrl
+        ?: \App\Support\StorefrontUrl::route('reseller.show', [], $previewSlug ?? null);
+    // Someone who already applied goes to the portal (their status), not the guide.
+    $resellerPortalHost = isset($previewSlug) ? null : $company->resellerPortalHost();
+    $resellerStatusUrl = $resellerPortalHost ? request()->getScheme().'://'.$resellerPortalHost.'/portal' : $resellerUrl;
+    $pageUrl = fn (string $slug) => \App\Support\StorefrontUrl::route('pages.show', [$slug], $previewSlug ?? null);
 
     $accountsEnabled = (bool) ($setting->customer_accounts_enabled ?? true);
     $authCustomer = $accountsEnabled ? \Illuminate\Support\Facades\Auth::guard('customer')->user() : null;
@@ -70,18 +86,22 @@
 
         return rtrim($candidatePath, '/') === rtrim($currentPath, '/');
     };
-    $isHomeCurrent = request()->routeIs('marketing.home', 'storefront.preview.show');
+    $isHomeCurrent = request()->routeIs('marketing.home', 'storefront.preview.show', 'storefront.reseller_store.show');
     $isCatalogCurrent = request()->routeIs(
         'storefront.products.*',
         'storefront.categories.*',
         'storefront.preview.products.*',
         'storefront.preview.categories.*',
+        'storefront.reseller_store.products.*',
+        'storefront.reseller_store.categories.*',
     );
     $isCartCurrent = request()->routeIs(
         'storefront.cart.*',
         'storefront.checkout.*',
         'storefront.preview.cart.*',
         'storefront.preview.checkout.*',
+        'storefront.reseller_store.cart.*',
+        'storefront.reseller_store.checkout.*',
     );
     $isAccountCurrent = $accountsEnabled
         ? request()->routeIs('storefront.account.*')
@@ -91,7 +111,7 @@
     $menuCategoryIds = collect([$setting->header_menu, $setting->footer_menu])->flatten(1)->filter()->where('type', 'category')->pluck('category_id')->filter()->unique();
     $menuPageSlugs = collect([$setting->header_menu, $setting->footer_menu])->flatten(1)->filter()->where('type', 'page')->pluck('page_id')->filter()->unique();
     $menuCategoryData = $menuCategoryIds->isEmpty() ? collect() : \App\Models\Category::withoutGlobalScopes()->where('company_id', $company->getKey())->whereIn('id', $menuCategoryIds)->where('is_active', true)->get(['id', 'slug', 'icon'])->keyBy('id');
-    $menuPageSlugs = $menuPageSlugs->isEmpty() ? collect() : \App\Models\StorefrontPage::withoutGlobalScopes()->where('company_id', $company->getKey())->whereIn('id', $menuPageSlugs)->where('is_published', true)->pluck('slug', 'id');
+    $menuPageSlugs = $menuPageSlugs->isEmpty() ? collect() : \App\Models\StorefrontPage::withoutGlobalScopes()->where('company_id', $company->getKey())->forSite($setting)->whereIn('id', $menuPageSlugs)->where('is_published', true)->pluck('slug', 'id');
     $resolveMenu = function (?array $items) use ($productsUrl, $trackUrl, $accountOrdersUrl, $resellerUrl, $offersUrl, $previewSlug, $menuCategoryData, $menuPageSlugs, $pageUrl) {
         return collect($items ?? [])->map(function ($item) use ($productsUrl, $trackUrl, $accountOrdersUrl, $resellerUrl, $offersUrl, $previewSlug, $menuCategoryData, $menuPageSlugs, $pageUrl) {
             $label = trim((string) ($item['label'] ?? ''));
@@ -103,7 +123,7 @@
                 'reseller' => $resellerUrl,
                 'offers' => $offersUrl,
                 'category' => $menuCategory
-                    ? (isset($previewSlug) ? route('storefront.preview.categories.show', [$previewSlug, $menuCategory->slug]) : route('storefront.categories.show', $menuCategory->slug))
+                    ? \App\Support\StorefrontUrl::route('categories.show', [$menuCategory->slug], $previewSlug)
                     : null,
                 'page' => ($slug = $menuPageSlugs->get($item['page_id'] ?? null)) ? $pageUrl($slug) : null,
                 'custom' => filled($item['url'] ?? null) ? $item['url'] : null,

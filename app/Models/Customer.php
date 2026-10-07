@@ -4,6 +4,11 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\ValidatesEmailAddress;
+use App\Services\CompanyContext;
+use App\Support\CompanyMedia;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Models\Contracts\HasName;
+use Filament\Panel;
 use Illuminate\Auth\Authenticatable;
 use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
 use Illuminate\Database\Eloquent\Model;
@@ -18,8 +23,13 @@ use Illuminate\Support\Str;
  * record with no password; it only becomes a login-capable account once
  * CustomerAccountService::register() sets one, so admin/checkout-created
  * customers are unaffected.
+ *
+ * Also the reseller-portal Filament user (panel "reseller"). The portal's own
+ * middleware resolves the company that owns the current portal host into
+ * CompanyContext before auth runs, so canAccessPanel() only has to check that
+ * this record belongs to that same company.
  */
-class Customer extends Model implements AuthenticatableContract
+class Customer extends Model implements AuthenticatableContract, FilamentUser, HasName
 {
     use Authenticatable, BelongsToCompany, ValidatesEmailAddress;
 
@@ -51,6 +61,12 @@ class Customer extends Model implements AuthenticatableContract
         'business_name',
         'reseller_note',
         'reseller_slug',
+        'reseller_subdomain',
+        'reseller_custom_domain',
+        'reseller_custom_domain_verified_at',
+        'reseller_store_name',
+        'reseller_logo',
+        'reseller_logo_dark',
         'opening_balance',
         'current_balance',
         'is_active',
@@ -80,6 +96,7 @@ class Customer extends Model implements AuthenticatableContract
         'login_otp_sent_at' => 'datetime',
         'login_otp_attempts' => 'integer',
         'opted_out_at' => 'datetime',
+        'reseller_custom_domain_verified_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -145,9 +162,107 @@ class Customer extends Model implements AuthenticatableContract
         return $this->hasMany(ResellerPayoutRequest::class);
     }
 
+    public function resellerPayoutAccounts(): HasMany
+    {
+        return $this->hasMany(ResellerPayoutAccount::class);
+    }
+
     public function isApprovedReseller(): bool
     {
         return $this->reseller_status === 'approved';
+    }
+
+    /**
+     * The public address of this reseller's own store,
+     * {company-domain}/store/{slug} -- null until they have a slug and the
+     * company has a domain.
+     */
+    public function resellerStoreUrl(): ?string
+    {
+        if ($this->hasLiveCustomDomain()) {
+            return 'https://'.$this->reseller_custom_domain;
+        }
+
+        $subdomainHost = $this->company?->resellerSubdomainHost($this->reseller_subdomain);
+
+        if ($subdomainHost) {
+            return 'https://'.$subdomainHost;
+        }
+
+        $domain = $this->company?->domain;
+
+        if (blank($this->reseller_slug) || blank($domain)) {
+            return null;
+        }
+
+        return 'https://'.$domain.route('storefront.reseller_store.products.index', $this->reseller_slug, false);
+    }
+
+    /** Public URL of the store-header logo for light mode (falls back to the dark one if only that was uploaded). */
+    public function resellerLogoUrl(): ?string
+    {
+        return $this->logoUrl($this->reseller_logo) ?? $this->logoUrl($this->reseller_logo_dark);
+    }
+
+    /** Dark-mode logo; only set when there is a light one too, so the header can switch between them. */
+    public function resellerLogoDarkUrl(): ?string
+    {
+        return filled($this->reseller_logo) ? $this->logoUrl($this->reseller_logo_dark) : null;
+    }
+
+    protected function logoUrl(?string $path): ?string
+    {
+        return filled($path) ? CompanyMedia::publicUrl($path, $this->company) : null;
+    }
+
+    /** Their own domain is saved, verified, and the company still allows custom domains. */
+    public function hasLiveCustomDomain(): bool
+    {
+        return filled($this->reseller_custom_domain)
+            && $this->reseller_custom_domain_verified_at !== null
+            && (bool) $this->company?->reseller_custom_domains_enabled
+            && (bool) $this->company?->reseller_module_enabled;
+    }
+
+    /**
+     * The name shown in the header of this reseller's own store -- only the
+     * reseller's own name/brand, never the company's (owner's answer,
+     * 13_RESELLER_PORTAL_PLAN.md §2.1 Q3).
+     */
+    public function resellerStoreName(): string
+    {
+        return filled($this->reseller_store_name)
+            ? $this->reseller_store_name
+            : ($this->business_name ?: $this->name);
+    }
+
+    public function canAccessPanel(Panel $panel): bool
+    {
+        if ($panel->getId() !== 'reseller') {
+            return false;
+        }
+
+        if ($this->reseller_status === 'rejected' || ! $this->is_active) {
+            return false;
+        }
+
+        // Pending/approved may both sign in -- the portal itself shows a
+        // status page instead of the dashboard while pending or rejected
+        // (see ResellerPortal\Pages\ApplicationStatus).
+        if (! in_array($this->reseller_status, ['pending', 'approved'], true)) {
+            return false;
+        }
+
+        $company = app(CompanyContext::class)->company();
+
+        return $company !== null
+            && $company->getKey() === $this->company_id
+            && $company->reseller_module_enabled;
+    }
+
+    public function getFilamentName(): string
+    {
+        return $this->business_name ?: $this->name;
     }
 
     /**

@@ -1,0 +1,14 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+/*
+ * The reseller portal's own Filament theme (13_RESELLER_PORTAL_PLAN.md).
+ * Filament's precompiled stylesheet only carries the utility classes its own
+ * views use, so the portal's Blade views (stat-card grids, the store-link
+ * card, the order detail, monthly totals, the shared fraud-check views) need
+ * Tailwind to scan them. It is
+ * deliberately separate from the admin theme, which carries admin-only
+ * overrides (page header sizing, the inbox workspace, ...).
+ */
+@source '../../../../app/Filament/Reseller/**/*';
+@source '../../../../resources/views/filament/reseller/**/*';
+@source '../../../../resources/views/filament/fraud-check/**/*';

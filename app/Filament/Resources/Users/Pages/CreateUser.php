@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Users\Pages;
 use App\Filament\Concerns\HasStickyHeaderFormActions;
 use App\Filament\Resources\Users\UserResource;
 use App\Models\Company;
+use App\Models\User;
 use App\Services\BusinessNotificationService;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -28,10 +29,17 @@ class CreateUser extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $this->companyIds = array_values(array_filter(array_map('intval', $data['company_ids'] ?? [])));
-        $this->defaultCompanyId = filled($data['default_company_id'] ?? null)
-            ? (int) $data['default_company_id']
-            : null;
+        // Only a Super Admin picks a role. Anyone else's new user starts on
+        // the default role, whatever the request says.
+        if (! auth()->user()?->canChangePermissions()) {
+            $data['role'] = User::defaultRole();
+        }
+
+        [$this->companyIds, $this->defaultCompanyId] = auth()->user()->resolveCompanyAccessChange(
+            array_values(array_filter(array_map('intval', $data['company_ids'] ?? []))),
+            filled($data['default_company_id'] ?? null) ? (int) $data['default_company_id'] : null,
+            null,
+        );
 
         unset($data['company_ids'], $data['default_company_id']);
 

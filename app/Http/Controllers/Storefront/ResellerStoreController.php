@@ -17,7 +17,6 @@ use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -76,6 +75,15 @@ class ResellerStoreController extends Controller
 
         if ($reseller instanceof RedirectResponse) {
             return $reseller;
+        }
+
+        // The reseller's dashboard now lives in the reseller portal (owner's
+        // answer, 13_RESELLER_PORTAL_PLAN.md §2.1 Q5: redirect). Staff preview
+        // has no portal host to send anyone to, so it keeps this page.
+        $portalHost = $this->previewSlug($request) ? null : $company->resellerPortalHost();
+
+        if ($portalHost) {
+            return redirect()->away($request->getScheme().'://'.$portalHost.'/portal');
         }
 
         $search = trim((string) $request->query('search', ''));
@@ -243,23 +251,7 @@ class ResellerStoreController extends Controller
             'amount.min' => __('The minimum withdrawal is :amount.', ['amount' => MoneyFormatter::number($minimum)]),
         ]);
 
-        // Serialised per reseller so two quick submissions can't both
-        // pass the balance check against the same money.
-        $created = Cache::lock('reseller-payout:'.$reseller->getKey(), 10)->block(5, function () use ($reseller, $data): bool {
-            if ((float) $data['amount'] > $this->commissions->balances($reseller)['available']) {
-                return false;
-            }
-
-            ResellerPayoutRequest::query()->create([
-                'customer_id' => $reseller->getKey(),
-                'amount' => round((float) $data['amount'], 2),
-                'method' => $data['method'],
-                'account_details' => $data['account_details'],
-                'status' => ResellerPayoutRequest::STATUS_REQUESTED,
-            ]);
-
-            return true;
-        });
+        $created = $this->commissions->requestPayout($reseller, (float) $data['amount'], $data['method'], $data['account_details']);
 
         if (! $created) {
             return redirect()
