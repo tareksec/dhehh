@@ -71,8 +71,8 @@ use Livewire\Attributes\Locked;
  *   only ever touches these columns, never the theme/checkout/SEO settings
  *   living on that same row). A company can have a row per site (Blade
  *   storefront, Next.js site); the "Site" select picks which one is edited.
- *   WooCommerce belongs to the Blade row, which is what the WooCommerce code
- *   reads.
+ *   WooCommerce belongs to the company's primary row (the Next.js site once it
+ *   has one, else the Blade storefront), which is what the WooCommerce code reads.
  */
 class Integrations extends Page
 {
@@ -192,14 +192,16 @@ class Integrations extends Page
 
     /**
      * The row being edited: the chosen site when it belongs to this company,
-     * otherwise the Blade storefront, otherwise whatever the company has.
+     * otherwise the company's primary row (the Next.js site once it has one,
+     * else the Blade storefront), otherwise whatever the company has.
      */
     protected function activeSetting(): ?StorefrontSetting
     {
         $rows = $this->companySettings();
+        $primaryId = StorefrontSetting::primaryFor($this->companyId)?->getKey();
 
         return $rows->firstWhere('id', $this->settingId)
-            ?? $rows->first(fn (StorefrontSetting $row): bool => $row->isBlade())
+            ?? ($primaryId ? $rows->firstWhere('id', $primaryId) : null)
             ?? $rows->first();
     }
 
@@ -211,9 +213,12 @@ class Integrations extends Page
             ->all();
     }
 
-    protected function editingNextjsSite(): bool
+    /** WooCommerce lives on the company's primary row: the Next.js site once it has one, else the Blade storefront. */
+    protected function editingPrimarySite(): bool
     {
-        return (bool) $this->activeSetting()?->isNextjs();
+        $active = $this->activeSetting();
+
+        return $active === null || $active->isPrimary();
     }
 
     public function canManageAi(): bool
@@ -754,7 +759,7 @@ class Integrations extends Page
     /** Checked against the persisted row, matching testWoocommerceWebhook()/syncWooOrder()'s own use of the saved secret over unsaved form state. */
     protected function hasWooCommerceCredentials(): bool
     {
-        $setting = StorefrontSetting::bladeFor($this->companyId);
+        $setting = StorefrontSetting::primaryFor($this->companyId);
 
         return $setting !== null
             && filled($setting->woocommerce_base_url)
@@ -809,7 +814,7 @@ class Integrations extends Page
     public function testWoocommerceWebhook(): void
     {
         $company = $this->selectedCompany();
-        $setting = StorefrontSetting::bladeFor((int) $company->getKey());
+        $setting = StorefrontSetting::primaryFor((int) $company->getKey());
         $secret = (string) data_get($setting?->woocommerce_credentials, 'webhook_secret');
 
         if ($secret === '') {
@@ -879,7 +884,7 @@ class Integrations extends Page
         $company = $this->selectedCompany();
         $wooOrderId = (int) $data['woo_order_id'];
 
-        $setting = StorefrontSetting::bladeFor((int) $company->getKey());
+        $setting = StorefrontSetting::primaryFor((int) $company->getKey());
         $baseUrl = rtrim((string) $setting?->woocommerce_base_url, '/');
         $key = (string) data_get($setting?->woocommerce_credentials, 'consumer_key');
         $secret = (string) data_get($setting?->woocommerce_credentials, 'consumer_secret');
@@ -994,7 +999,7 @@ class Integrations extends Page
 
                         Tab::make('WooCommerce')
                             ->icon(Heroicon::OutlinedShoppingBag)
-                            ->visible(fn (): bool => ! $this->editingNextjsSite())
+                            ->visible(fn (): bool => $this->editingPrimarySite())
                             ->schema([
                                 TextInput::make('woocommerce_base_url')
                                     ->label('WooCommerce site URL')

@@ -35,10 +35,11 @@ class EditUser extends EditRecord
             unset($data['role']);
         }
 
-        $this->companyIds = array_values(array_filter(array_map('intval', $data['company_ids'] ?? [])));
-        $this->defaultCompanyId = filled($data['default_company_id'] ?? null)
-            ? (int) $data['default_company_id']
-            : null;
+        [$this->companyIds, $this->defaultCompanyId] = auth()->user()->resolveCompanyAccessChange(
+            array_values(array_filter(array_map('intval', $data['company_ids'] ?? []))),
+            filled($data['default_company_id'] ?? null) ? (int) $data['default_company_id'] : null,
+            $this->record,
+        );
 
         unset($data['company_ids'], $data['default_company_id']);
 

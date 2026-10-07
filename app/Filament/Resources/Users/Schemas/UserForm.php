@@ -114,8 +114,12 @@ class UserForm
                         Select::make('company_ids')
                             ->label('Assigned Companies')
                             ->multiple()
+                            // Only companies the signed-in user may hand out
+                            // (all for a Super Admin); CreateUser/EditUser
+                            // enforce the same rule server-side.
                             ->options(fn (): array => SchemaFacade::hasTable('companies') ? Company::query()
                                 ->where('is_active', true)
+                                ->whereIn('id', auth()->user()?->assignableCompanyIds() ?? [])
                                 ->orderBy('name')
                                 ->pluck('name', 'id')
                                 ->all() : [])
@@ -126,13 +130,22 @@ class UserForm
                                     return;
                                 }
 
-                                $component->state($record->companies()->pluck('companies.id')->all());
+                                // Companies the signed-in user can't hand out stay
+                                // out of the field; EditUser keeps them as they are.
+                                $component->state(array_values(array_intersect(
+                                    $record->companies()->pluck('companies.id')->map(fn ($id): int => (int) $id)->all(),
+                                    auth()->user()?->assignableCompanyIds() ?? [],
+                                )));
                             }),
 
                         Select::make('default_company_id')
                             ->label('Default Company')
+                            // Only companies the signed-in user may hand out
+                            // (all for a Super Admin); CreateUser/EditUser
+                            // enforce the same rule server-side.
                             ->options(fn (): array => SchemaFacade::hasTable('companies') ? Company::query()
                                 ->where('is_active', true)
+                                ->whereIn('id', auth()->user()?->assignableCompanyIds() ?? [])
                                 ->orderBy('name')
                                 ->pluck('name', 'id')
                                 ->all() : [])
@@ -144,10 +157,14 @@ class UserForm
                                     return;
                                 }
 
+                                $default = $record->companies()
+                                    ->wherePivot('is_default', true)
+                                    ->value('companies.id');
+
                                 $component->state(
-                                    $record->companies()
-                                        ->wherePivot('is_default', true)
-                                        ->value('companies.id'),
+                                    $default !== null && in_array((int) $default, auth()->user()?->assignableCompanyIds() ?? [], true)
+                                        ? (int) $default
+                                        : null,
                                 );
                             }),
                     ])

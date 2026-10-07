@@ -10,6 +10,42 @@ All notable production changes to Business Dashboard are documented here.
 
 - **Reseller guide page (owner request).** A public page on the reseller portal (`reseller.<company domain>/portal/guide`) that a new reseller reads before joining: how the program works in four steps, pricing and commission, withdrawals, their own store (subdomain / custom domain only when switched on), the two delivery options (the own-courier rules only when the store has a payment method), the store's own **rules and regulations**, and **Apply now** / **Sign in** buttons at the top, in the header and at the bottom. Modern layout with the store's colour, logo and dark mode, phone friendly, English and Bangla. Managed on **Resellers → Reseller Settings → Reseller guide page**: turn the page on or off, write the introduction, add, reorder and remove rules, and choose whether to show the minimum withdrawal and packaging charge (off by default; reseller costs are never shown). While the page is on, the storefront's **Become a reseller** links open it instead of the application form, and the portal's application form links to it; someone who has already applied still goes to the portal.
 
+### Technical Notes
+
+- Reseller guide: migration `2026_10_07_110000_add_reseller_guide_to_storefront_settings_table` adds `reseller_guide_enabled` (default on), `reseller_guide_intro`, `reseller_guide_rules` (JSON list of `{title, body}`) and `reseller_guide_show_figures` (default off) to the Blade storefront row. New `Reseller\ResellerGuideController` + `resources/views/reseller/guide.blade.php` at `GET /portal/guide` (route `reseller.portal.guide`, portal host only via `ResolveCompanyFromResellerPortalDomain` / `RestrictResellerPortalHost`; 404 when the page is off). New `Company::resellerJoinUrl()` used by the storefront layout, Marketplace Pro home and account profile; the header's "Reseller status" link for someone who already applied goes to the portal. `ResellerPanelProvider` adds the guide link above the application form (`AUTH_REGISTER_FORM_BEFORE`). 70 new lang keys. New `ResellerGuidePageTest` (5 tests).
+
+## [2.59.1] - 2026-10-07
+
+**Release type:** Security Update
+
+### Security
+
+- **Staff can only give access to their own companies.** Before, anyone with "Users: Manage" could give a user (themselves included) access to any company in the system. Now, apart from a Super Admin, the company list on a user's page shows only the companies the editor can access themselves, and only those can be added, removed or made the default. If a user also has access to companies the editor can't see, that access stays as it is. A Super Admin can still assign any company.
+
+### Technical Notes
+
+- `User::assignableCompanyIds()` (all active companies for a Super Admin, otherwise the user's own active companies) and `User::resolveCompanyAccessChange()`, used by `CreateUser`/`EditUser`. `UserForm` limits both company fields' options and their loaded values to the assignable companies. A request naming another company fails Filament's option validation; the target's other companies and their default are carried over on save. `UserManagementEscalationTest` gains 5 tests.
+## [2.59.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Hero slides and custom pages can be limited to one site (owner decision).** Each slide and page has a new **Show on** choice: *All sites* (what every existing slide and page keeps being) or one of the company's sites — the Blade storefront (reseller store) or the Next.js site (main storefront). The Blade storefront and the Next.js site each show only their own and the shared ones; menu items and footer links to a page that belongs to the other site are left out. The Slides and Pages lists show where each one appears, and picking a site on a slide follows that site's theme and homepage template. Offers were already separate: landing-page offers belong to the Blade storefront and Collections (Flash Sale, Trending, New Arrivals) to the Next.js site.
+
+### Changed
+
+- **WooCommerce, CRM messaging and lead follow-up reminders now use the Next.js site's settings (owner decision).** Once a company has a Next.js site it is the main storefront, so these company-level features read its settings (the WooCommerce tab on Integrations, the SMS/WhatsApp details and the *Lead Follow-up Reminders* section live on that site); a company without one keeps using its Blade storefront. The reseller store/program and the Blade abandoned-cart reminders stay on the Blade storefront settings.
+
+### Technical Notes
+
+- Migration `2026_10_07_120000_add_storefront_setting_id_to_slides_and_pages`: nullable `storefront_setting_id` (NULL = all sites) on `storefront_slides` and `storefront_pages`, `nullOnDelete` (deleting a site returns its slides/pages to all sites). `StorefrontSlide::forCompanyTheme()` takes the site (the cached company list is filtered in memory, so the cache key is unchanged); `StorefrontPage::forSite()` is used by the Blade page route, layout menus/footer, the API pages, and the API menu/footer resolution.
+- `StorefrontSetting::primaryFor()` (Next.js row else Blade) and `isPrimary()` are read by `WooCommerceImportService`, `WooCommerceOrderSyncService`, `WooCommerceWebhookController`, the Integrations page, `Crm\BroadcastService`, `Crm\ConversationMessengerService` and `SendLeadFollowUpReminders`.
+- Tests: new `StorefrontSiteContentTest` (8); new cases in `StorefrontApiTest`, `WooCommerceOrderWebhookTest`, `LeadFollowUpReminderTest`; `IntegrationsPageTest` updated for the primary-row WooCommerce tab. 3 new lang keys in `lang/en.json` and `lang/bn.json`.
+## [2.58.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
 ### Changed
 
 - **All reseller settings in one place: Resellers → Reseller Settings (owner rule).** A new page under the Resellers menu controls the whole reseller program for the current company: the module and its domains (**Reseller module enabled**, **Reseller subdomains enabled**, **Reseller custom domains enabled**, **Reseller portal domain** — Super Admin only, as before), the money rules (**Reseller cost per unit**, **Packaging charge per piece (own courier)**, **Minimum reseller withdrawal**), **Show reseller program** on the storefront, and the list of payment channels resellers pay own-courier advances into (with a link to Payment Methods, which the storefront checkout shares). These settings were removed from the company form and from Storefront Settings (its Reseller Settings section and the Footer Builder toggle). Opening the page needs the Settings: Manage permission.
@@ -17,9 +53,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - New `App\Filament\Pages\ResellerSettings` (Resellers cluster) writes `companies.reseller_*` (only for a Super Admin; the section is disabled for others and ignored on save) and `storefront_settings.reseller_*`; the portal domain is normalised and must be unique. `CompanyResource` and `StorefrontSettingResource` no longer have these fields; `HasStorefrontSettingsNavigation` drops the `reseller` section. No migration. New `ResellerSettingsPageTest` (5 tests); `ResellerCommissionTest` and `PhaseFourAdminPagesTest` updated. `docs/deployment.md` and `13_RESELLER_PORTAL_PLAN.md` point to the new page.
-- Reseller guide: migration `2026_10_07_110000_add_reseller_guide_to_storefront_settings_table` adds `reseller_guide_enabled` (default on), `reseller_guide_intro`, `reseller_guide_rules` (JSON list of `{title, body}`) and `reseller_guide_show_figures` (default off) to the Blade storefront row. New `Reseller\ResellerGuideController` + `resources/views/reseller/guide.blade.php` at `GET /portal/guide` (route `reseller.portal.guide`, portal host only via `ResolveCompanyFromResellerPortalDomain` / `RestrictResellerPortalHost`; 404 when the page is off). New `Company::resellerJoinUrl()` used by the storefront layout, Marketplace Pro home and account profile; the header's "Reseller status" link for someone who already applied goes to the portal. `ResellerPanelProvider` adds the guide link above the application form (`AUTH_REGISTER_FORM_BEFORE`). 70 new lang keys. New `ResellerGuidePageTest` (5 tests).
-
-
 ## [2.57.1] - 2026-10-07
 
 **Release type:** Security Update

@@ -47,7 +47,7 @@ APP_DEBUG=false
 APP_URL=https://your-domain.com
 ASSET_URL=https://your-domain.com
 TRUSTED_PROXIES=*
-APP_VERSION=2.57.1
+APP_VERSION=2.59.1
 APP_RELEASE_TYPE=security
 APP_RELEASE_DATE=2026-10-07
 

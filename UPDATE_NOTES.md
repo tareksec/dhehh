@@ -20,6 +20,23 @@ Needs Bangla review: the 70 new guide / settings keys ("রিসেলার �
 
 Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
 
+## 2026-10-07 - "Users: Manage" limited to the editor's own companies
+
+Reason — owner: "এখনো খোলা: "Users: Manage" থাকা কেউ যেকোনো user-কে যেকোনো কোম্পানিতে যোগ করতে পারে। এটা আটকাতে হবে" (block adding users to any company). Follow-up to the 2026-10-03 security audit fixes (already on main).
+
+What changed:
+- `User::assignableCompanyIds()` / `resolveCompanyAccessChange()`; `CreateUser` / `EditUser` apply it; `UserForm` shows and loads only assignable companies in "Assigned Companies" / "Default Company".
+- My reading of the rule (say if different): a non-Super-Admin may add/remove only companies they can access; a user's access to other companies is kept untouched; the default company only moves to one of the editor's companies; Super Admin unchanged.
+- No new user-visible strings (Filament's own "invalid" message covers a tampered request), so no lang keys.
+
+Tests:
+- `UserManagementEscalationTest` +5 (13 total). With the rule reverted, 3 fail; the other 2 are controls (own companies still manageable, Super Admin assigns any).
+- Full `php artisan test` (plain, no `--env`): 1889 passed, 2 skipped (14743 assertions).
+
+Still open (owner decision): a "Users: Manage" holder can still edit (name, email, password, active) a user who belongs only to other companies, because the Users list is not company-scoped.
+
+Commit status: committed and pushed to `claude/security-audit-fixes` and `main` on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
 ## 2026-10-06 - All reseller settings on Resellers → Reseller Settings
 
 Owner rule (in Bangla): every reseller setting goes in the Reseller Settings option and everything is controlled from there.
@@ -62,6 +79,28 @@ Needs Bangla review: the 11 new keys (sign-up code page, "This phone number alre
 Tests: `StorefrontApiAccountTest` (+4: adoption via code, existing number needs code / no SMS → refused, five wrong codes + quick resend, taken number before SMS, failed SMS), `StorefrontCustomerAuthTest` (+2; existing sign-ups go through the code). Registration-related tests (92): all pass except 1 that needs `intl`. Full plain `php artisan test` on this server (PHP 8.4 without intl): 1870 tests, 189 failures, all "intl extension required", 0 other failures; after merging `origin/main` (separate Blade / Next.js storefront settings): 1886 tests, 189 failures, all intl, 0 other.
 
 Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07); `origin/main` merged first — CHANGELOG `[Unreleased]` sections combined, lang files rebuilt as main's keys plus ours.
+
+## 2026-10-07 (follow-up) - Show on for slides and pages; WooCommerce, CRM messaging and lead reminders read the Next.js row
+
+Owner answers (in Bangla) to the two open questions after the settings split: (1) separate hero slides, custom pages and offers per site — **do it**; (2) the company-level features **read the Next.js row**.
+
+What changed:
+- Slides and pages: new **Show on** (`storefront_setting_id`, NULL = all sites — every existing record). Blade shows all + Blade-only, the Next.js API shows all + Next.js-only; menus/footer legal links drop pages of the other site; lists show a **Show on** column; choosing a site on a slide sets that site's theme/template; a site id from another company is refused.
+- Offers: nothing to add — they are already separate by type in the code (landing-page offers are only served by the Blade `OfferController`/`OfferCheckoutController`; Collections only by the API/`StorefrontCatalogService`, so a Flash Sale deal never changes a Blade price). Say if you still want an explicit **Show on** on offers.
+- `StorefrontSetting::primaryFor()` = the Next.js row once the company has one, else the Blade row. WooCommerce (import, order sync, webhook secret, Integrations tab), CRM messaging (SMS/WhatsApp broadcasts and failed-message fallback) and lead follow-up reminders now read it. The Lead Follow-up Reminders section and the WooCommerce tab appear only on that row.
+
+My decisions (say if you want different):
+- **Reseller stays on the Blade row.** I read "Next.js row" as the company-level integrations only: the reseller program/store is the Blade storefront by your own decision, and the Blade abandoned-cart reminders belong to Blade carts (the Next.js site keeps its cart in the browser).
+- A page's **slug is still unique per company**, so the two sites cannot each have an "about" page with the same address; give them different slugs (e.g. `about`, `about-main`).
+- Existing slides/pages stay on **All sites** until you pick a site for each — the Next.js site will show the same banners as before until you do.
+- Deleting a site's settings row returns the slides/pages limited to it to **All sites**.
+- The payment-method list is still shared by both sites.
+
+Tests: `StorefrontSiteContentTest` (8) plus cases in `StorefrontApiTest`, `WooCommerceOrderWebhookTest`, `LeadFollowUpReminderTest`; the pages/slides/Woo behaviours were checked to fail when the old behaviour is put back.
+
+Needs Bangla review: 3 new keys ("যেখানে দেখাবে", "সব সাইট" and the Show-on help text).
+
+Commit status: NOT committed — waiting for the owner's explicit approval. On top of `origin/main` v2.57.0.
 
 ## 2026-10-07 - Separate storefront settings for the Blade storefront (reseller store) and the Next.js site (main storefront)
 
