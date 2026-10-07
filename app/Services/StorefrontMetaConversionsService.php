@@ -18,8 +18,8 @@ class StorefrontMetaConversionsService
 
     public function sendPurchase(Order $order, array $context = []): bool
     {
-        $order->loadMissing('customer', 'items.product', 'company.storefrontSetting');
-        $setting = $order->company?->storefrontSetting;
+        $order->loadMissing('customer', 'items.product', 'storefrontSetting', 'company.storefrontSetting');
+        $setting = $order->siteSetting();
 
         if (
             ! $setting
@@ -67,9 +67,9 @@ class StorefrontMetaConversionsService
 
     public function sendOrderStatus(OrderStatusTransition $transition): bool
     {
-        $transition->loadMissing(['order.customer', 'order.items.product', 'order.company.storefrontSetting']);
+        $transition->loadMissing(['order.customer', 'order.items.product', 'order.storefrontSetting', 'order.company.storefrontSetting']);
         $order = $transition->order;
-        $setting = $order?->company?->storefrontSetting;
+        $setting = $order?->siteSetting();
         $stage = $this->tracking->statusEventStage($transition);
 
         if (
@@ -119,9 +119,9 @@ class StorefrontMetaConversionsService
 
     public function sendRecovered(StorefrontCartRecord $cart): bool
     {
-        $cart->loadMissing(['recoveredOrder.customer', 'recoveredOrder.items.product', 'recoveredOrder.company.storefrontSetting']);
+        $cart->loadMissing(['recoveredOrder.customer', 'recoveredOrder.items.product', 'recoveredOrder.storefrontSetting', 'recoveredOrder.company.storefrontSetting']);
         $order = $cart->recoveredOrder;
-        $setting = $order?->company?->storefrontSetting;
+        $setting = $order?->siteSetting();
 
         if (
             ! $order

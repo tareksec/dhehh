@@ -195,7 +195,7 @@ class ResellerSettings extends Page
             ])->save();
         }
 
-        $setting = $company->storefrontSetting ?? StorefrontSetting::query()->create(['company_id' => $company->getKey()]);
+        $setting = $company->storefrontSetting ?? StorefrontSetting::query()->create(['company_id' => $company->getKey(), 'site_type' => StorefrontSetting::SITE_BLADE]);
         $setting->forceFill([
             'reseller_cost_per_unit' => round((float) $data['reseller_cost_per_unit'], 2),
             'reseller_packaging_cost_per_unit' => round((float) $data['reseller_packaging_cost_per_unit'], 2),

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -109,9 +110,26 @@ class Company extends Model
             ->withTimestamps();
     }
 
+    /**
+     * The company's Blade storefront settings (the reseller store). Stays the
+     * answer to "the company's storefront setting" for everything that predates
+     * the site split; the Next.js site has its own row, see nextjsSetting().
+     */
     public function storefrontSetting(): HasOne
     {
-        return $this->hasOne(StorefrontSetting::class);
+        return $this->hasOne(StorefrontSetting::class)->where('site_type', StorefrontSetting::SITE_BLADE);
+    }
+
+    /** The company's Next.js site settings (the main storefront); null until one is created. */
+    public function nextjsSetting(): HasOne
+    {
+        return $this->hasOne(StorefrontSetting::class)->where('site_type', StorefrontSetting::SITE_NEXTJS);
+    }
+
+    /** Every storefront settings row of the company, whatever the site. */
+    public function storefrontSettings(): HasMany
+    {
+        return $this->hasMany(StorefrontSetting::class);
     }
 
     public function storageRoot(): string

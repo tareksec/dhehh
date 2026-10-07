@@ -503,6 +503,37 @@ class StorefrontApiTest extends TestCase
 
     // --------------------------------------------------------------- helpers
 
+    public function test_the_api_serves_the_next_js_row_and_never_the_blade_row_of_the_company(): void
+    {
+        // The company's Blade storefront (the reseller store) has settings of its own.
+        StorefrontSetting::query()->create([
+            'company_id' => $this->company->getKey(),
+            'site_type' => StorefrontSetting::SITE_BLADE,
+            'is_published' => true,
+            'whatsapp_number' => '01711111111',
+            'nextjs_site_enabled' => true, // a stale flag on a Blade row never opens the API
+        ]);
+        StorefrontSetting::query()->nextjs()->where('company_id', $this->company->getKey())->update(['whatsapp_number' => '01722222222']);
+
+        $this->api('site')->assertOk()->assertJsonPath('data.contact.whatsapp_number', '01722222222');
+
+        // Switching the Next.js row off closes the API even though the Blade row says "on".
+        StorefrontSetting::query()->nextjs()->where('company_id', $this->company->getKey())->update(['nextjs_site_enabled' => false]);
+        $this->api('site')->assertStatus(403)->assertJsonPath('error', 'nextjs_site_disabled');
+    }
+
+    public function test_a_company_with_only_a_blade_row_is_refused(): void
+    {
+        $company = Company::query()->create([
+            'name' => 'Blade Only', 'slug' => 'blade-only', 'domain' => 'blade-only.example.test', 'domain_verified' => true,
+            'invoice_prefix' => 'BLO', 'currency' => 'BDT', 'timezone' => 'Asia/Dhaka', 'is_active' => true,
+        ]);
+        StorefrontSetting::query()->create(['company_id' => $company->getKey(), 'is_published' => true, 'nextjs_site_enabled' => true]);
+        [, $token] = CompanyApiKey::generate($company);
+
+        $this->api('site', $token)->assertStatus(403)->assertJsonPath('error', 'nextjs_site_disabled');
+    }
+
     protected function api(string $path, ?string $token = null): TestResponse
     {
         return $this->getJson('/api/v1/storefront/'.$path, ['Authorization' => 'Bearer '.($token ?? $this->token)]);
@@ -524,6 +555,7 @@ class StorefrontApiTest extends TestCase
 
         StorefrontSetting::query()->create([
             'company_id' => $company->getKey(),
+            'site_type' => StorefrontSetting::SITE_NEXTJS,
             'is_published' => true,
             'nextjs_site_enabled' => $enabled,
         ]);

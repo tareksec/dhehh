@@ -165,6 +165,7 @@ class Order extends Model
 
     protected $fillable = [
         'company_id',
+        'storefront_setting_id',
         'order_number',
         'customer_id',
         'reseller_customer_id',
@@ -366,6 +367,23 @@ class Order extends Model
     public function storefrontPayments(): HasMany
     {
         return $this->hasMany(StorefrontPayment::class);
+    }
+
+    /** The Next.js site's settings row this order was placed on; null for the Blade storefront. */
+    public function storefrontSetting(): BelongsTo
+    {
+        return $this->belongsTo(StorefrontSetting::class)->withoutGlobalScopes();
+    }
+
+    /**
+     * The storefront settings of the site this order came from: its own
+     * Next.js row, otherwise the company's Blade storefront. Payment, pixel
+     * and notification credentials are read from here, never from "the
+     * company's" row, so an order is always handled with its own site's keys.
+     */
+    public function siteSetting(): ?StorefrontSetting
+    {
+        return $this->storefrontSetting ?? StorefrontSetting::bladeFor((int) $this->company_id);
     }
 
     public function courierBookings(): HasMany

@@ -125,6 +125,7 @@ class PreviewController extends Controller
         }
 
         $company ??= StorefrontSetting::query()
+            ->blade()
             ->where('is_published', true)
             ->with('company')
             ->first()

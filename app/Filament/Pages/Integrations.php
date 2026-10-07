@@ -37,6 +37,7 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -65,10 +66,13 @@ use Livewire\Attributes\Locked;
  * Two backing stores get combined into one Livewire form:
  * - AI fields live in `companies.settings->ai_tools->{tool}`, one entry per
  *   AiSettingsService::TOOLS key (via AiSettingsService).
- * - WooCommerce/Payment Gateway/Meta fields live on the company's single
+ * - WooCommerce/Payment Gateway/Meta/Website API fields live on a
  *   StorefrontSetting row (`updateOrCreate` with a partial attribute array
  *   only ever touches these columns, never the theme/checkout/SEO settings
- *   living on that same row).
+ *   living on that same row). A company can have a row per site (Blade
+ *   storefront, Next.js site); the "Site" select picks which one is edited.
+ *   WooCommerce belongs to the Blade row, which is what the WooCommerce code
+ *   reads.
  */
 class Integrations extends Page
 {
@@ -90,6 +94,10 @@ class Integrations extends Page
     #[Locked]
     public ?int $companyId = null;
 
+    /** The StorefrontSetting row (site) whose payment/Meta/webhook fields are being edited. */
+    #[Locked]
+    public ?int $settingId = null;
+
     public function mount(AiSettingsService $aiSettings): void
     {
         if (app(CompanyContext::class)->isAllCompanies()) {
@@ -99,7 +107,8 @@ class Integrations extends Page
         $company = $this->selectedCompany();
         $this->companyId = (int) $company->getKey();
 
-        $setting = StorefrontSetting::withoutGlobalScopes()->where('company_id', $this->companyId)->first();
+        $setting = $this->activeSetting();
+        $this->settingId = $setting?->getKey();
 
         // Every key is filled explicitly (never left for a field's own
         // ->default() to supply) — a brand-new company has no StorefrontSetting
@@ -109,6 +118,7 @@ class Integrations extends Page
         // fail validation on first save with no visible reason otherwise.
         $this->form->fill([
             ...$this->aiToolFillState($aiSettings, $company),
+            'site_setting_id' => $setting?->getKey(),
             'woocommerce_base_url' => $setting?->woocommerce_base_url,
             'woocommerce_credentials' => $setting?->woocommerce_credentials ?? [],
             'website_api_credentials' => $setting?->website_api_credentials ?? [],
@@ -172,6 +182,40 @@ class Integrations extends Page
     }
 
     /** AI settings stay super-admin-only — this merged page must not loosen that. */
+    /** @return Collection<int, StorefrontSetting> The company's sites, Blade first. */
+    protected function companySettings(): Collection
+    {
+        return $this->companyId
+            ? StorefrontSetting::withoutGlobalScopes()->where('company_id', $this->companyId)->orderBy('site_type')->orderBy('id')->get()
+            : collect();
+    }
+
+    /**
+     * The row being edited: the chosen site when it belongs to this company,
+     * otherwise the Blade storefront, otherwise whatever the company has.
+     */
+    protected function activeSetting(): ?StorefrontSetting
+    {
+        $rows = $this->companySettings();
+
+        return $rows->firstWhere('id', $this->settingId)
+            ?? $rows->first(fn (StorefrontSetting $row): bool => $row->isBlade())
+            ?? $rows->first();
+    }
+
+    /** @return array<int, string> */
+    protected function siteOptions(): array
+    {
+        return $this->companySettings()
+            ->mapWithKeys(fn (StorefrontSetting $row): array => [$row->getKey() => $row->siteTypeLabel().' · '.($row->siteDomain() ?: '—')])
+            ->all();
+    }
+
+    protected function editingNextjsSite(): bool
+    {
+        return (bool) $this->activeSetting()?->isNextjs();
+    }
+
     public function canManageAi(): bool
     {
         return Auth::user()?->isSuperAdmin() ?? false;
@@ -609,7 +653,7 @@ class Integrations extends Page
     public function testWebsiteWebhook(): void
     {
         $company = $this->selectedCompany();
-        $setting = StorefrontSetting::withoutGlobalScopes()->where('company_id', $company->getKey())->first();
+        $setting = $this->activeSetting();
         $credentials = $setting?->website_api_credentials ?? [];
 
         $url = (string) ($credentials['webhook_url'] ?? '');
@@ -710,7 +754,7 @@ class Integrations extends Page
     /** Checked against the persisted row, matching testWoocommerceWebhook()/syncWooOrder()'s own use of the saved secret over unsaved form state. */
     protected function hasWooCommerceCredentials(): bool
     {
-        $setting = StorefrontSetting::withoutGlobalScopes()->where('company_id', $this->companyId)->first();
+        $setting = StorefrontSetting::bladeFor($this->companyId);
 
         return $setting !== null
             && filled($setting->woocommerce_base_url)
@@ -765,7 +809,7 @@ class Integrations extends Page
     public function testWoocommerceWebhook(): void
     {
         $company = $this->selectedCompany();
-        $setting = StorefrontSetting::withoutGlobalScopes()->where('company_id', $company->getKey())->first();
+        $setting = StorefrontSetting::bladeFor((int) $company->getKey());
         $secret = (string) data_get($setting?->woocommerce_credentials, 'webhook_secret');
 
         if ($secret === '') {
@@ -835,7 +879,7 @@ class Integrations extends Page
         $company = $this->selectedCompany();
         $wooOrderId = (int) $data['woo_order_id'];
 
-        $setting = StorefrontSetting::withoutGlobalScopes()->where('company_id', $company->getKey())->first();
+        $setting = StorefrontSetting::bladeFor((int) $company->getKey());
         $baseUrl = rtrim((string) $setting?->woocommerce_base_url, '/');
         $key = (string) data_get($setting?->woocommerce_credentials, 'consumer_key');
         $secret = (string) data_get($setting?->woocommerce_credentials, 'consumer_secret');
@@ -906,6 +950,19 @@ class Integrations extends Page
         return $schema
             ->statePath('data')
             ->components([
+                Select::make('site_setting_id')
+                    ->label(__('Site'))
+                    ->options(fn (): array => $this->siteOptions())
+                    ->visible(fn (): bool => count($this->siteOptions()) > 1)
+                    ->selectablePlaceholder(false)
+                    ->live()
+                    ->afterStateUpdated(function (mixed $state): void {
+                        // Reload payment, Meta and webhook fields from the chosen site's row.
+                        $this->settingId = (int) $state;
+                        $this->mount(app(AiSettingsService::class));
+                    })
+                    ->helperText(__('Payment gateway, Meta pixel and website webhook settings belong to one site. Pick the site you are editing; WooCommerce and the AI tools are shared by the company.'))
+                    ->columnSpanFull(),
                 Tabs::make('integrations')
                     ->columnSpanFull()
                     ->tabs([
@@ -937,6 +994,7 @@ class Integrations extends Page
 
                         Tab::make('WooCommerce')
                             ->icon(Heroicon::OutlinedShoppingBag)
+                            ->visible(fn (): bool => ! $this->editingNextjsSite())
                             ->schema([
                                 TextInput::make('woocommerce_base_url')
                                     ->label('WooCommerce site URL')
@@ -1338,8 +1396,12 @@ class Integrations extends Page
             }
         }
 
+        $active = $this->activeSetting();
+
         StorefrontSetting::withoutGlobalScopes()->updateOrCreate(
-            ['company_id' => $company->getKey()],
+            $active
+                ? ['id' => $active->getKey(), 'company_id' => $company->getKey()]
+                : ['company_id' => $company->getKey(), 'site_type' => StorefrontSetting::SITE_BLADE],
             Arr::only($state, [
                 'woocommerce_base_url',
                 'woocommerce_credentials',

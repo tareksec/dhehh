@@ -55,6 +55,7 @@ class PageController extends Controller
 
         if (! $company instanceof Company && app()->environment(['local', 'testing'])) {
             $company = StorefrontSetting::query()
+                ->blade()
                 ->where('is_published', true)
                 ->whereHas('company', fn ($query) => $query->where('is_active', true))
                 ->with('company')

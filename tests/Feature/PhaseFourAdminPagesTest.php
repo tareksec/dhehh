@@ -193,7 +193,6 @@ class PhaseFourAdminPagesTest extends TestCase
                 'notifications',
                 'navigation_seo',
                 // Reseller settings moved to Resellers → Reseller Settings (2026-10-06).
-                'nextjs_site',
             ],
             array_column($component->instance()->sectionNavigation(), 'key'),
         );

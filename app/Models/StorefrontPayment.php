@@ -34,6 +34,7 @@ class StorefrontPayment extends Model
 
     protected $fillable = [
         'company_id',
+        'storefront_setting_id',
         'order_id',
         'gateway',
         'storefront_payment_method_id',
@@ -56,6 +57,18 @@ class StorefrontPayment extends Model
     public function order()
     {
         return $this->belongsTo(Order::class);
+    }
+
+    /** The Next.js site's settings row this payment was started on; null for the Blade storefront. */
+    public function storefrontSetting()
+    {
+        return $this->belongsTo(StorefrontSetting::class)->withoutGlobalScopes();
+    }
+
+    /** The settings of the site this payment belongs to (own Next.js row, else the company's Blade row). */
+    public function siteSetting(): ?StorefrontSetting
+    {
+        return $this->storefrontSetting ?? StorefrontSetting::bladeFor((int) $this->company_id);
     }
 
     public function paymentMethod()

@@ -14,6 +14,28 @@ All notable production changes to Business Dashboard are documented here.
 
 - New `App\Filament\Pages\ResellerSettings` (Resellers cluster) writes `companies.reseller_*` (only for a Super Admin; the section is disabled for others and ignored on save) and `storefront_settings.reseller_*`; the portal domain is normalised and must be unique. `CompanyResource` and `StorefrontSettingResource` no longer have these fields; `HasStorefrontSettingsNavigation` drops the `reseller` section. No migration. New `ResellerSettingsPageTest` (5 tests); `ResellerCommissionTest` and `PhaseFourAdminPagesTest` updated. `docs/deployment.md` and `13_RESELLER_PORTAL_PLAN.md` point to the new page.
 
+
+## [2.57.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **The Blade storefront and the Next.js site now have separate storefront settings (owner decision).** In Site → Storefront Settings a company has one row per site: the **Blade storefront** (the reseller store) and the **Next.js site** (the main storefront). Each is customised on its own — colours, fonts, content, menus, footer, contact details, checkout and delivery rules, payment gateway, notifications and Meta pixel. The list shows one row per site with a **Site** badge and that site's own domain. The Next.js row keeps the *Enable Next.js site API* switch, the Next.js domain and its verified flag; the Blade domain stays where it was.
+- **New site → Site type.** Creating a storefront setting asks which kind of site it is; a company can have at most one of each. A new Next.js site can **start as a copy of the Blade storefront settings** (colours, content, checkout rules, integrations; credentials are carried over intact) or from blank defaults.
+- **Integrations → Site.** When a company has both sites, the Integrations page asks which site's payment gateway, Meta pixel and website webhook settings you are editing. WooCommerce and the AI tools remain company-wide (WooCommerce uses the Blade row).
+
+### Changed
+
+- **Existing Next.js setup is split automatically.** Companies that had already switched on the Next.js site or given it a domain get their own Next.js row (a copy of their Blade settings, carrying the switch and domain); the Blade row loses those fields. Nothing changes for the Blade storefront, the reseller program or any existing order.
+- The Next.js site API (`/api/v1/storefront/*`) now reads **only the company's Next.js row**; a company with just a Blade row answers `403 nextjs_site_disabled`.
+- Website webhooks are sent for every site that has one configured (once per distinct URL).
+
+### Technical Notes
+
+- Migration `2026_10_07_100000_add_site_type_to_storefront_settings_table`: `storefront_settings.site_type` (`blade` default | `nextjs`), `unique(company_id, site_type)` replacing `unique(company_id)`, nullable `storefront_setting_id` on `orders` and `storefront_payments` (NULL = Blade storefront, every existing record), and the data split above (idempotent). Reversible.
+- `Company::storefrontSetting()` is now the **Blade** row (all earlier code keeps working); new `Company::nextjsSetting()` / `storefrontSettings()`, `StorefrontSetting::bladeFor()` / `nextjsFor()` / `siteDomain()` / `recordedSiteId()`, `Order::siteSetting()` and `StorefrontPayment::siteSetting()` (own Next.js row, else Blade). `StorefrontCheckoutService::createOrder()` takes the site; ZiniPay/PayStation webhooks, Meta conversions/dispatch and the website webhook dispatcher read the order's or payment's own site. Abandoned-cart reminders, CRM messaging, lead reminders, WooCommerce and the slide pages stay on the Blade row.
+- Tests: `NextjsSiteSettingsTest` rewritten (17 tests: separate rows, one per type, domain handling never touching the company domain, per-site sections, list, create with/without copy, migration split); new cases in `StorefrontApiTest`, `StorefrontApiCheckoutTest`, `StorefrontMetaTrackingTest`, `StorefrontPaystationPaymentTest`, `WebsiteWebhookDispatchTest`, `IntegrationsPageTest`. 9 new lang keys in `lang/en.json` and `lang/bn.json`.
 ## [2.56.0] - 2026-10-06
 
 **Release type:** Minor Feature Update
