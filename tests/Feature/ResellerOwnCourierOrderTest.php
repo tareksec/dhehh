@@ -242,18 +242,64 @@ class ResellerOwnCourierOrderTest extends TestCase
         $this->assertSame(260.0, (float) $order->items()->sole()->reseller_retail_price);
     }
 
-    public function test_store_delivered_orders_keep_showing_their_normal_invoice(): void
+    public function test_store_delivered_portal_orders_are_invoiced_in_the_resellers_name(): void
     {
+        // Owner rule (2026-10-07): every order from the reseller portal carries the
+        // reseller's store name and logo, also the cash-on-delivery ones.
+        $this->company->update(['email' => 'office@parcel-co.example.test']);
+        $this->reseller->update(['reseller_store_name' => 'Rima Fashion', 'reseller_logo' => 'resellers/rima-logo.png']);
         $ring = $this->pickProduct('Ring', tier: 300, stock: 20, price: 450);
         $order = app(ResellerOrderPlacementService::class)->place($this->reseller, [
             'name' => 'Buyer', 'phone' => '01722000009', 'address' => 'Dhaka, Mirpur', 'note' => null,
         ], [['product_id' => $ring->getKey(), 'quantity' => 1, 'price' => 500]]);
 
+        // Prices stay as they are: the customer pays the reseller's price plus delivery.
         $this->assertFalse($order->showsResellerPricesToBuyer());
+        $this->assertTrue($order->showsResellerBranding());
         $this->assertSame((float) $order->total_amount, $order->buyerTotal());
 
         $this->asStaff();
-        $this->get(route('orders.print', ['order' => $order]))->assertOk()->assertSee('Due Amount');
+        $html = $this->get(route('orders.print', ['order' => $order]))->assertOk()->getContent();
+        $this->assertStringContainsString('<h1>Rima Fashion</h1>', $html);
+        $this->assertStringContainsString('rima-logo.png', $html);
+        $this->assertStringNotContainsString('Parcel Co', $html);
+        $this->assertStringNotContainsString('office@parcel-co', $html);
+        $this->assertStringNotContainsString('Reseller portal order', $html); // internal note
+        $this->assertStringContainsString('500', $html);
+        $this->assertStringContainsString('Due Amount', $html);
+
+        // The Orders list's "Print invoices" bulk action too.
+        $this->get(route('orders.print.bulk', ['orders' => (string) $order->getKey()]))
+            ->assertOk()->assertSee('<h1>Rima Fashion</h1>', false)->assertDontSee('Parcel Co');
+
+        $card = app(OrderSummaryCardService::class)->build($order->fresh());
+        $this->assertSame('Rima Fashion', $card['company']);
+        $this->assertNull($card['company_phone']);
+
+        $pdf = view('orders.pdf', [
+            'order' => $order->fresh()->load(['company', 'customer', 'items.product', 'reseller']),
+            'company' => app(CompanySettingsService::class)->profile($this->company),
+            'invoice' => app(CompanySettingsService::class)->invoice($this->company),
+            'productImages' => [],
+            'resellerLogoPath' => null,
+        ])->render();
+        $this->assertStringContainsString('<h1>Rima Fashion</h1>', $pdf);
+        $this->assertStringNotContainsString('Parcel Co', $pdf);
+    }
+
+    public function test_orders_without_a_reseller_keep_the_company_invoice(): void
+    {
+        $this->reseller->update(['reseller_store_name' => 'Rima Fashion']);
+        $ring = $this->pickProduct('Ring', tier: 300, stock: 20, price: 450);
+        $order = app(ResellerOrderPlacementService::class)->place($this->reseller, [
+            'name' => 'Buyer', 'phone' => '01722000009', 'address' => 'Dhaka, Mirpur', 'note' => null,
+        ], [['product_id' => $ring->getKey(), 'quantity' => 1, 'price' => 500]]);
+        $order->forceFill(['reseller_customer_id' => null])->save();
+
+        $this->assertFalse($order->fresh()->showsResellerBranding());
+
+        $this->asStaff();
+        $this->get(route('orders.print', ['order' => $order]))->assertOk()->assertDontSee('<h1>Rima Fashion</h1>', false);
     }
 
     public function test_confirming_a_reseller_draft_with_short_stock_names_the_product_instead_of_doing_nothing(): void

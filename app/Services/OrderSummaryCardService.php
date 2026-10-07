@@ -83,7 +83,9 @@ class OrderSummaryCardService
         ], $totals);
 
         // ...and it carries the reseller's store name, not the company's.
-        $company = $buyerView
+        // (every reseller-portal order, owner rule 2026-10-07).
+        $resellerBrand = $order->showsResellerBranding();
+        $company = $resellerBrand
             ? (string) $order->reseller?->resellerStoreName()
             : (string) ($order->company?->name ?? config('app.name'));
         $title = __('Order summary');
@@ -91,7 +93,7 @@ class OrderSummaryCardService
 
         return [
             'company' => $company,
-            'company_phone' => $buyerView ? null : $order->company?->phone,
+            'company_phone' => $resellerBrand ? null : $order->company?->phone,
             'title' => $title,
             'meta' => $meta,
             'items' => $items,

@@ -8,8 +8,6 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Added
 
-- **Hero slides and custom pages can be limited to one site (owner decision).** Each slide and page has a new **Show on** choice: *All sites* (what every existing slide and page keeps being) or one of the company's sites — the Blade storefront (reseller store) or the Next.js site (main storefront). The Blade storefront and the Next.js site each show only their own and the shared ones; menu items and footer links to a page that belongs to the other site are left out. The Slides and Pages lists show where each one appears, and picking a site on a slide follows that site's theme and homepage template. Offers were already separate: landing-page offers belong to the Blade storefront and Collections (Flash Sale, Trending, New Arrivals) to the Next.js site.
-
 - **The Next.js site's home page, header and footer follow the approved design, and every part of it is customised from the dashboard (owner request).** A new **Website Design** tab on the Next.js site's row in Site → Storefront Settings (the Blade storefront has no such tab) holds:
   - **Home Page Builder** — add, remove, hide and reorder the home page sections: *Hero slider* (banner height, seconds per slide, dots, arrows), *Trust strip* (icon, title and subtitle for up to 6 highlights, 16 icons), *Shop by category* (heading, chosen categories in the order picked, how many, cards with icon and tagline or round pictures, product count), *Deals banner* (the gradient "Best deals today" banner with the biggest discounts, a collection or trending/new products, its own colours and link), *Product row* (latest, one category, biggest discounts, or a Flash Sale / Trending / New Arrivals collection; 1–24 products; 4, 5 or 6 columns; its own "View all"), *Flash sale band* (badge, heading, text, countdown, button, background colour — title, text and end time default to the Flash Sale offer's own), *Image banners* (upload up to 6 images with links), *Shop on mobile* (WhatsApp / call buttons and phone pictures with products), *Text block*, *SEO text with Read more* (supports `{company_name}`, `{address}`, `{products_count}`, `{categories_count}`) and the *Business account callout*. Until an owner saves their own order, the default layout is hero, trust strip, categories, deals, latest products, flash sale, trending and new arrivals. A section's heading left blank uses the website's own default heading; the default layout carries no copy of its own.
   - **Top Bar** (the thin dark strip: social icons, a short message, up to 6 quick links with small icons, background colour), **Header** (tagline, search hint, which icons to show, support label and phone, the "All categories" button and its label, sticky or not), **Product Cards** (price and discount-badge colours; show or hide the stock label, Add to cart, wishlist heart, quick view and star rating) and the **Floating Help Button** ("Need help?" — its text and link, else a WhatsApp chat with the WhatsApp number).
@@ -17,6 +15,76 @@ All notable production changes to Business Dashboard are documented here.
 - **Category tagline** — a short line (for example "Earbuds · TWS · Headsets") under a category's name on the Next.js site's category cards (Categories → Tagline). **Hero slide texts** — the slide form now offers the small label above the heading, heading, sub-heading and button label that the slide already supported; leave them empty for a clean image banner.
 - **Dashboard edits reach the website within seconds.** Saving storefront settings (home page, header, footer, menus), a hero slide, a page, a category or an offer now sends a `storefront.updated` webhook to the company's website (about 5 seconds later, at most once per 5 seconds), so the Next.js site refreshes instead of waiting for its cache to expire. Nothing is sent when no website webhook is set up.
 - **The product list can sort by biggest discount and show only products on sale** (used by the home page's "Biggest discounts" and "View all promotions"). A product card tells the website which live collections the product is in, which drives its "New" badge.
+
+### Technical Notes
+
+- Migration `2026_10_08_100000_add_site_design_to_storefront_settings_and_tagline_to_categories`: `storefront_settings.home_sections` and `site_design` (JSON, NULL = defaults), `categories.tagline` (80), `storefront_slides.eyebrow` (60). New `App\Support\StorefrontSiteDesign` cleans everything before it leaves the ERP (unknown section types dropped, text trimmed and cut, numbers clamped, colours `#RRGGBB` only, links only a path / http(s) / mailto: / tel: — never `javascript:`, `data:` or `//host`); `StorefrontSetting::homeSections()` / `siteDesign()` use it. `StorefrontSiteConfigService` adds `design` and `home_sections` to `GET /site` (category ids → slugs, banner / footer images resolved only inside the company's own storage, sections that would be empty dropped, SEO tokens filled) and cleans/resolves the footer blocks (custom links → slugs, contact blanks → the company's details). `GET /categories` adds `tagline`, `GET /slides` adds `eyebrow`, product cards add `collection_kinds`, `GET /products` takes `sort=discount` and `on_sale=1`, menu items carry `icon` (top bar). New concern `NotifiesWebsiteOfStorefrontChanges` (StorefrontSetting, StorefrontSlide, StorefrontPage, Category, Offer) → `WebsiteWebhookDispatcher::dispatchStorefrontUpdated()` (cache-debounced, queued with a 5 s delay); documented in `docs/api/website-integration.md`. Admin: `Filament\Resources\StorefrontSettings\Schemas\NextjsDesignSections` (new `nextjs_design` tab, Next.js row only; the Blade row never stores `home_sections` / `site_design`), the Footer Builder in `StorefrontSettingResource`, Blade partials `footer-blocks/{custom_links,custom_text,payment_methods,image}` plus tagline / contact / bottom-bar additions. Contract: `docs/api/storefront-api.md`.
+- Tests: new `NextjsSiteDesignTest` (22: defaults, cleaning and clamping, slug / image resolution and company isolation, trust-strip fallback, SEO tokens, top bar links, footer blocks and fallbacks, tagline, discount sort, collection kinds, admin form opens with the effective layout and saves, Blade row has no tab and stores nothing, Blade footer renders the new blocks). About 200 new keys in `lang/en.json` and `lang/bn.json`.
+- **The website (`zamzamint-new-website-theme`) must be deployed with this release:** it reads `design`, `home_sections`, the new footer blocks, `tagline`, `eyebrow` and `collection_kinds`; an older website simply ignores them.
+
+## [2.60.3] - 2026-10-07
+
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **Orders from a reseller's online store are now invoiced in the reseller's name too (owner rule).** Until now only the orders a reseller placed from the reseller portal showed the reseller's store name and logo; an order a customer placed on the reseller's own store (`/store/<name>`, the reseller's subdomain or own domain) still printed the company's name, logo, contact details and the internal "Storefront checkout" note. Now every order that belongs to a reseller carries the reseller's store name and logo and none of the company's details, on the printed invoice, the bulk print, the PDF invoice, the courier cut-slip and the order summary card. Amounts are unchanged (the customer already paid the reseller's price). Orders without a reseller keep the company invoice.
+
+### Technical Notes
+
+- `Order::showsResellerBranding()` is now simply "the order has a reseller" (`reseller_customer_id` set — portal orders and reseller-store checkouts). New `ResellerCommissionTest::test_an_order_from_the_resellers_store_is_invoiced_in_the_resellers_name` (real checkout on `/store/<slug>`, then print and summary card); `ResellerOwnCourierOrderTest`'s company-invoice test now uses an order without a reseller. No migration, no new lang keys.
+## [2.60.2] - 2026-10-07
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Every reseller-portal order is now invoiced in the reseller's name (owner rule).** Orders a reseller placed from the portal for the store to deliver (cash on delivery) still printed the company's name, logo, email and address and the internal "Reseller portal order" note. Now every order from the reseller portal — store-delivered or own courier — shows the reseller's store name and logo and none of the company's contact details or the internal note, on the printed invoice, the "Print invoices" bulk print, the PDF invoice, the courier cut-slip and the order summary card. Amounts are unchanged: on a store-delivered order the customer still sees the reseller's price, the delivery charge and the due amount. Orders from other sources keep the company invoice.
+
+### Technical Notes
+
+- New `Order::showsResellerBranding()` (a reseller order whose `source` is `reseller_portal`, or any own-courier order) decides the invoice brand; `showsResellerPricesToBuyer()` (own courier only) still decides the prices. Used in `orders/partials/invoice.blade.php`, `orders/pdf.blade.php`, `OrderPdfController` (reseller logo) and `OrderSummaryCardService`. `ResellerOwnCourierOrderTest`: the store-delivered invoice test now expects the reseller's brand (print, bulk print, PDF, summary card), plus a new test that a non-portal order keeps the company invoice. No migration, no new lang keys.
+## [2.60.1] - 2026-10-07
+
+**Release type:** Security Update
+
+### Security
+
+- **Staff only see and edit the users of their own companies.** Before, the Users page listed every user in the system, so someone with "Users: Manage" could open and change (name, email, password, active status) a user who works only in another company. Now, apart from a Super Admin, the Users page shows only users who share at least one company with you (and yourself), and opening any other user shows "not found". A Super Admin still sees everyone.
+
+### Technical Notes
+
+- `User::canSeeUser()` and the `User::visibleTo()` query scope. `UserResource::getEloquentQuery()` applies the scope (list, view, edit, bulk actions, global search), and `Gate::before` denies every ability on a `User` the signed-in user can't see. `UserManagementEscalationTest` gains 3 tests (16 total); its test manager now shares the factory's default company unless a test gives it one.
+## [2.60.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller guide page (owner request).** A public page on the reseller portal (`reseller.<company domain>/portal/guide`) that a new reseller reads before joining: how the program works in four steps, pricing and commission, withdrawals, their own store (subdomain / custom domain only when switched on), the two delivery options (the own-courier rules only when the store has a payment method), the store's own **rules and regulations**, and **Apply now** / **Sign in** buttons at the top, in the header and at the bottom. Modern layout with the store's colour, logo and dark mode, phone friendly, English and Bangla. Managed on **Resellers → Reseller Settings → Reseller guide page**: turn the page on or off, write the introduction, add, reorder and remove rules, and choose whether to show the minimum withdrawal and packaging charge (off by default; reseller costs are never shown). While the page is on, the storefront's **Become a reseller** links open it instead of the application form, and the portal's application form links to it; someone who has already applied still goes to the portal.
+
+### Technical Notes
+
+- Reseller guide: migration `2026_10_07_110000_add_reseller_guide_to_storefront_settings_table` adds `reseller_guide_enabled` (default on), `reseller_guide_intro`, `reseller_guide_rules` (JSON list of `{title, body}`) and `reseller_guide_show_figures` (default off) to the Blade storefront row. New `Reseller\ResellerGuideController` + `resources/views/reseller/guide.blade.php` at `GET /portal/guide` (route `reseller.portal.guide`, portal host only via `ResolveCompanyFromResellerPortalDomain` / `RestrictResellerPortalHost`; 404 when the page is off). New `Company::resellerJoinUrl()` used by the storefront layout, Marketplace Pro home and account profile; the header's "Reseller status" link for someone who already applied goes to the portal. `ResellerPanelProvider` adds the guide link above the application form (`AUTH_REGISTER_FORM_BEFORE`). 70 new lang keys. New `ResellerGuidePageTest` (5 tests).
+
+## [2.59.1] - 2026-10-07
+
+**Release type:** Security Update
+
+### Security
+
+- **Staff can only give access to their own companies.** Before, anyone with "Users: Manage" could give a user (themselves included) access to any company in the system. Now, apart from a Super Admin, the company list on a user's page shows only the companies the editor can access themselves, and only those can be added, removed or made the default. If a user also has access to companies the editor can't see, that access stays as it is. A Super Admin can still assign any company.
+
+### Technical Notes
+
+- `User::assignableCompanyIds()` (all active companies for a Super Admin, otherwise the user's own active companies) and `User::resolveCompanyAccessChange()`, used by `CreateUser`/`EditUser`. `UserForm` limits both company fields' options and their loaded values to the assignable companies. A request naming another company fails Filament's option validation; the target's other companies and their default are carried over on save. `UserManagementEscalationTest` gains 5 tests.
+## [2.59.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Hero slides and custom pages can be limited to one site (owner decision).** Each slide and page has a new **Show on** choice: *All sites* (what every existing slide and page keeps being) or one of the company's sites — the Blade storefront (reseller store) or the Next.js site (main storefront). The Blade storefront and the Next.js site each show only their own and the shared ones; menu items and footer links to a page that belongs to the other site are left out. The Slides and Pages lists show where each one appears, and picking a site on a slide follows that site's theme and homepage template. Offers were already separate: landing-page offers belong to the Blade storefront and Collections (Flash Sale, Trending, New Arrivals) to the Next.js site.
 
 ### Changed
 
@@ -27,11 +95,6 @@ All notable production changes to Business Dashboard are documented here.
 - Migration `2026_10_07_120000_add_storefront_setting_id_to_slides_and_pages`: nullable `storefront_setting_id` (NULL = all sites) on `storefront_slides` and `storefront_pages`, `nullOnDelete` (deleting a site returns its slides/pages to all sites). `StorefrontSlide::forCompanyTheme()` takes the site (the cached company list is filtered in memory, so the cache key is unchanged); `StorefrontPage::forSite()` is used by the Blade page route, layout menus/footer, the API pages, and the API menu/footer resolution.
 - `StorefrontSetting::primaryFor()` (Next.js row else Blade) and `isPrimary()` are read by `WooCommerceImportService`, `WooCommerceOrderSyncService`, `WooCommerceWebhookController`, the Integrations page, `Crm\BroadcastService`, `Crm\ConversationMessengerService` and `SendLeadFollowUpReminders`.
 - Tests: new `StorefrontSiteContentTest` (8); new cases in `StorefrontApiTest`, `WooCommerceOrderWebhookTest`, `LeadFollowUpReminderTest`; `IntegrationsPageTest` updated for the primary-row WooCommerce tab. 3 new lang keys in `lang/en.json` and `lang/bn.json`.
-
-- Migration `2026_10_08_100000_add_site_design_to_storefront_settings_and_tagline_to_categories`: `storefront_settings.home_sections` and `site_design` (JSON, NULL = defaults), `categories.tagline` (80), `storefront_slides.eyebrow` (60). New `App\Support\StorefrontSiteDesign` cleans everything before it leaves the ERP (unknown section types dropped, text trimmed and cut, numbers clamped, colours `#RRGGBB` only, links only a path / http(s) / mailto: / tel: — never `javascript:`, `data:` or `//host`); `StorefrontSetting::homeSections()` / `siteDesign()` use it. `StorefrontSiteConfigService` adds `design` and `home_sections` to `GET /site` (category ids → slugs, banner / footer images resolved only inside the company's own storage, sections that would be empty dropped, SEO tokens filled) and cleans/resolves the footer blocks (custom links → slugs, contact blanks → the company's details). `GET /categories` adds `tagline`, `GET /slides` adds `eyebrow`, product cards add `collection_kinds`, `GET /products` takes `sort=discount` and `on_sale=1`, menu items carry `icon` (top bar). New concern `NotifiesWebsiteOfStorefrontChanges` (StorefrontSetting, StorefrontSlide, StorefrontPage, Category, Offer) → `WebsiteWebhookDispatcher::dispatchStorefrontUpdated()` (cache-debounced, queued with a 5 s delay); documented in `docs/api/website-integration.md`. Admin: `Filament\Resources\StorefrontSettings\Schemas\NextjsDesignSections` (new `nextjs_design` tab, Next.js row only; the Blade row never stores `home_sections` / `site_design`), the Footer Builder in `StorefrontSettingResource`, Blade partials `footer-blocks/{custom_links,custom_text,payment_methods,image}` plus tagline / contact / bottom-bar additions. Contract: `docs/api/storefront-api.md`.
-- Tests: new `NextjsSiteDesignTest` (22: defaults, cleaning and clamping, slug / image resolution and company isolation, trust-strip fallback, SEO tokens, top bar links, footer blocks and fallbacks, tagline, discount sort, collection kinds, admin form opens with the effective layout and saves, Blade row has no tab and stores nothing, Blade footer renders the new blocks). About 200 new keys in `lang/en.json` and `lang/bn.json`.
-- **The website (`zamzamint-new-website-theme`) must be deployed with this release:** it reads `design`, `home_sections`, the new footer blocks, `tagline`, `eyebrow` and `collection_kinds`; an older website simply ignores them.
-
 ## [2.58.0] - 2026-10-07
 
 **Release type:** Minor Feature Update

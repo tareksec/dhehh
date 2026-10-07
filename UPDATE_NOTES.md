@@ -26,6 +26,82 @@ Tests: new `NextjsSiteDesignTest` (22). Full plain `php artisan test`: **1923 pa
 
 Commit status: committed and pushed to the branch and main on owner approval ("কমিট ও পুশ কর এবং মেইনে পুশ কর", 2026-10-07), in both repositories; ERP `origin/main` (v2.60.3) merged first.
 
+## 2026-10-07 - Reseller-store orders invoiced in the reseller's name too
+
+Owner answer (in Bangla): yes, invoice the reseller-store orders in the reseller's name as well.
+
+What changed: `Order::showsResellerBranding()` = the order has a reseller (`reseller_customer_id`). That covers the portal orders (previous change) and every order a customer places on a reseller's store (`/store/<name>`, reseller subdomain or custom domain). Their invoice print, bulk print, PDF, cut-slip and summary card show the reseller's store name and logo, no company name/contact details and no internal "Storefront checkout" note. Amounts unchanged. Orders without a reseller keep the company invoice.
+
+Tests: new `ResellerCommissionTest::test_an_order_from_the_resellers_store_is_invoiced_in_the_resellers_name` (checkout on the reseller store, then print + summary card); `ResellerOwnCourierOrderTest` company-invoice test uses an order without a reseller. Full `php artisan test` (plain, no `--env`): **1916 passed, 1 skipped, 0 failed**.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
+## 2026-10-07 - Reseller-portal orders invoiced in the reseller's name
+
+Owner report (in Bangla, with a screenshot): a reseller placed this order but the invoice is in our company's name; every order from the reseller portal must be invoiced in that reseller's own name — treat it as important.
+
+Cause: the reseller brand was tied to own-courier orders only (`showsResellerPricesToBuyer()`), so a store-delivered (cash on delivery) portal order printed ZamZam International's name, logo, email, address and the internal "Reseller portal order" note.
+
+What changed:
+- New `Order::showsResellerBranding()`: any order with a reseller and `source = reseller_portal` (or any own-courier order). Invoice print, bulk print, PDF, courier cut-slip and order summary card now show the reseller's store name and logo, no company contact details and no internal note, for all of these orders.
+- Prices unchanged: a store-delivered portal order already charges the reseller's price, so the customer sees that price, the delivery charge and the due amount as before. Own-courier orders keep their retail-price view.
+- Orders from other sources (including a customer buying on the reseller's online store, `/store/<name>`) keep the company invoice — the request named portal orders only. Say if the reseller-store orders should also carry the reseller's name.
+
+Tests: `ResellerOwnCourierOrderTest` (31 tests): store-delivered portal order shows the reseller brand on print, bulk print, PDF and summary card; a non-portal order keeps the company brand. Full `php artisan test` (plain, no `--env`): **1915 passed, 1 skipped, 0 failed**.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
+## 2026-10-07 - Users page: staff see and edit only their own companies' users
+
+Reason — owner: "ওকে ইউজার মিনিট আপডেট করে দাও, কোন ইউজার তার নিজের কোম্পানির ইউজারদের দেখলে এবং এডিট করতে পারবে।" (a user can see and edit only the users of their own company). Closes the open item from the entry below.
+
+What changed:
+- `User::canSeeUser()` / `scopeVisibleTo()`: a Super Admin sees everyone; anyone else sees themselves and users sharing at least one of their active companies.
+- `UserResource::getEloquentQuery()` uses the scope, so another company's user is missing from the list and opening their page gives 404. `Gate::before` returns false for every ability on such a user (defence in depth).
+- My reading (say if different): a user with no company at all is visible only to a Super Admin; a user who is in your company and also another company is visible, with the other company's access protected by the previous change.
+- No new user-visible strings, so no lang keys.
+
+Tests:
+- `UserManagementEscalationTest` +3 (16). With the rule reverted, the 2 visibility tests fail (the Super Admin one is a control).
+- Full `php artisan test` (plain, no `--env`): 1908 passed, 2 skipped (14958 assertions).
+
+Commit status: committed and pushed to `claude/security-audit-fixes` and `main` on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
+## 2026-10-07 - Reseller guide page (rules before joining)
+
+Owner request (in Bangla): a reseller documentation page with a modern UI, so a new reseller can read our rules and regulations before joining, with call-to-action buttons.
+
+What changed:
+- New public page **`reseller.<company domain>/portal/guide`** (or the custom portal domain + `/portal/guide`). Sections: hero with **Apply now** / **Read the rules**, How it works (4 steps), Pricing and commission, Your own store, Orders and delivery, Rules and regulations, and a final **Apply now** / **I already have an account** band. Sticky header with Sign in / Apply now. Store colour (Blade storefront theme colour), logo, dark mode, mobile layout.
+- Nothing on the page is invented: the how-it-works text describes what the system already enforces (commission on delivered orders only, taken back on return; withdraw to bKash/Nagad/Rocket/bank; own-courier advance, edit until verified, pay only the extra, overpayment to a non-withdrawable deposit; customer invoice with the reseller's shop name). Subdomain / custom-domain lines show only when those are on; the own-courier card shows only when the store has a payment method (names only, never account numbers).
+- **The store's own rules come from the admin**: Resellers → Reseller Settings → **Reseller guide page** — on/off, introduction (blank = standard text), a list of rules (title + optional details, reorderable), and **Show money figures** (minimum withdrawal + packaging charge per piece; off by default). Reseller cost per unit is never shown. Until rules are added the page says the store has not published extra rules yet. **Please add your real rules there before sharing the link.**
+- Links: while the page is on, the storefront's "Become a reseller" links (footer, account menu, profile, Marketplace Pro home) open the guide; the portal's application form shows "Read the reseller guide". Someone who already applied ("Reseller status") goes to the portal. Page off → links go straight to the application form, and `/portal/guide` is 404.
+
+Deploy: run migration `2026_10_07_110000_add_reseller_guide_to_storefront_settings_table`; `npm run build` (new Tailwind classes).
+
+Tests: new `ResellerGuidePageTest` (5). `npm run build` OK. Full `php artisan test` (plain, no `--env`): **1895 passed, 1 skipped, 0 failed**.
+
+Needs Bangla review: the 70 new guide / settings keys ("রিসেলার গাইড", "নিয়ম ও শর্তাবলি", "এখনই আবেদন করুন", …).
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
+## 2026-10-07 - "Users: Manage" limited to the editor's own companies
+
+Reason — owner: "এখনো খোলা: "Users: Manage" থাকা কেউ যেকোনো user-কে যেকোনো কোম্পানিতে যোগ করতে পারে। এটা আটকাতে হবে" (block adding users to any company). Follow-up to the 2026-10-03 security audit fixes (already on main).
+
+What changed:
+- `User::assignableCompanyIds()` / `resolveCompanyAccessChange()`; `CreateUser` / `EditUser` apply it; `UserForm` shows and loads only assignable companies in "Assigned Companies" / "Default Company".
+- My reading of the rule (say if different): a non-Super-Admin may add/remove only companies they can access; a user's access to other companies is kept untouched; the default company only moves to one of the editor's companies; Super Admin unchanged.
+- No new user-visible strings (Filament's own "invalid" message covers a tampered request), so no lang keys.
+
+Tests:
+- `UserManagementEscalationTest` +5 (13 total). With the rule reverted, 3 fail; the other 2 are controls (own companies still manageable, Super Admin assigns any).
+- Full `php artisan test` (plain, no `--env`): 1889 passed, 2 skipped (14743 assertions).
+
+Still open (owner decision): a "Users: Manage" holder can still edit (name, email, password, active) a user who belongs only to other companies, because the Users list is not company-scoped.
+
+Commit status: committed and pushed to `claude/security-audit-fixes` and `main` on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
 ## 2026-10-06 - All reseller settings on Resellers → Reseller Settings
 
 Owner rule (in Bangla): every reseller setting goes in the Reseller Settings option and everything is controlled from there.

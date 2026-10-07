@@ -43,10 +43,13 @@
         $due = (float) $order->due_amount;
         // Same buyer view as orders.partials.invoice: a reseller's own-courier
         // customer sees only the reseller's store, logo and retail prices.
+        // Every reseller-portal order carries the reseller's name (owner rule, 2026-10-07).
         $buyerView = $order->showsResellerPricesToBuyer();
         if ($buyerView) {
             $subTotal = $grandTotal = $due = $order->buyerTotal();
             $discount = $vat = $paid = 0.0;
+        }
+        if ($order->showsResellerBranding()) {
             $invoiceLogoPath = $resellerLogoPath ?? null;
             $company = [...$company, 'name' => $order->reseller?->resellerStoreName() ?? '', 'address' => null, 'phone' => null, 'email' => null];
             $invoice = [...$invoice, 'hotline' => null, 'support_hotline' => null, 'facebook_label' => null,

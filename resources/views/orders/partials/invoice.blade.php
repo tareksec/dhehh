@@ -34,12 +34,18 @@
     // The invoice carries the reseller's store name and logo instead of the
     // company's, and none of the company's contact details; the customer
     // owes the whole retail total (owner rules, 2026-10-06).
+    // Every reseller-portal order (also store-delivered, cash on delivery) is
+    // invoiced in the reseller's name with none of the company's details or
+    // the internal note (owner rule, 2026-10-07).
     $buyerView = $order->showsResellerPricesToBuyer();
+    $resellerBrand = $order->showsResellerBranding();
     if ($buyerView) {
         $discount = $vat = $shippingFee = $paid = 0.0;
         $subTotal = $grandTotal = $due = $order->buyerTotal();
         $deliveryPartner = $order->reseller_courier_name;
         $parcelId = $order->reseller_parcel_id;
+    }
+    if ($resellerBrand) {
         $brandName = $order->reseller?->resellerStoreName() ?? '';
         $invoiceLogoUrl = $order->reseller?->resellerLogoUrl();
         $invoice = [...$invoice, 'hotline' => null, 'support_hotline' => null, 'facebook_url' => null, 'facebook_label' => null,
@@ -160,7 +166,7 @@
                 @if (! empty($company['address']))
                     <p><span class="contact-icon">&#9906;</span>{{ $company['address'] }}</p>
                 @endif
-                @if ($order->note && ! $buyerView)
+                @if ($order->note && ! $resellerBrand)
                     <p><strong>Note:</strong> {{ $order->note }}</p>
                 @endif
             </div>

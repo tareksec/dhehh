@@ -10,6 +10,8 @@ use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
 use App\Services\ResellerOwnCourierService;
 use BackedEnum;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
@@ -84,6 +86,10 @@ class ResellerSettings extends Page
             'reseller_packaging_cost_per_unit' => (float) ($setting?->reseller_packaging_cost_per_unit ?? 0),
             'reseller_min_withdrawal' => (float) ($setting?->reseller_min_withdrawal ?? 0),
             'reseller_program_enabled' => (bool) ($setting?->reseller_program_enabled ?? true),
+            'reseller_guide_enabled' => (bool) ($setting?->reseller_guide_enabled ?? true),
+            'reseller_guide_intro' => $setting?->reseller_guide_intro,
+            'reseller_guide_show_figures' => (bool) ($setting?->reseller_guide_show_figures ?? false),
+            'reseller_guide_rules' => $setting?->reseller_guide_rules ?? [],
         ]);
     }
 
@@ -153,6 +159,42 @@ class ResellerSettings extends Page
                             ->helperText(__('Off hides "Become a reseller" from the storefront\'s account menu and footer. The reseller pages keep working at their direct URL — only the links are hidden.')),
                     ]),
 
+                Section::make(__('Reseller guide page'))
+                    ->description(fn (): HtmlString => $this->guideDescription())
+                    ->schema([
+                        Toggle::make('reseller_guide_enabled')
+                            ->label(__('Show the reseller guide'))
+                            ->helperText(__('A public page on the reseller portal that explains how the program works and lists your rules, with buttons to apply or sign in. The storefront\'s "Become a reseller" link opens it while it is on.')),
+                        Toggle::make('reseller_guide_show_figures')
+                            ->label(__('Show money figures on the guide'))
+                            ->helperText(__('Shows the minimum withdrawal and the packaging charge per piece on the guide. Reseller costs are never shown.')),
+                        Textarea::make('reseller_guide_intro')
+                            ->label(__('Introduction'))
+                            ->helperText(__('The text under the guide\'s heading. Leave blank for the standard introduction.'))
+                            ->rows(3)
+                            ->maxLength(1000)
+                            ->columnSpanFull(),
+                        Repeater::make('reseller_guide_rules')
+                            ->label(__('Rules and regulations'))
+                            ->helperText(__('Your own rules, shown in this order under "Rules and regulations". Applicants agree to them by applying.'))
+                            ->addActionLabel(__('Add rule'))
+                            ->reorderable()
+                            ->collapsible()
+                            ->itemLabel(fn (array $state): ?string => $state['title'] ?? null)
+                            ->schema([
+                                TextInput::make('title')
+                                    ->label(__('Rule'))
+                                    ->required()
+                                    ->maxLength(200),
+                                Textarea::make('body')
+                                    ->label(__('Details (optional)'))
+                                    ->rows(3)
+                                    ->maxLength(2000),
+                            ])
+                            ->columnSpanFull(),
+                    ])
+                    ->columns(2),
+
                 Section::make(__('Own-courier advance payments'))
                     ->description(__('Resellers pay the advance of their own-courier orders into these channels. They are the store\'s manual payment methods (also used at the storefront checkout), so they are managed on the Payment Methods page.'))
                     ->schema([
@@ -170,6 +212,20 @@ class ResellerSettings extends Page
             : '<ul class="list-disc ps-5">'.$methods->map(fn (StorefrontPaymentMethod $method): string => '<li>'.e(trim($method->name.($method->account_number ? ' — '.$method->account_number : ''))).'</li>')->implode('').'</ul>';
 
         return new HtmlString($list.'<p class="mt-2"><a class="text-primary-600 underline" href="'.e(StorefrontPaymentMethodResource::getUrl()).'">'.e(__('Manage payment methods')).'</a></p>');
+    }
+
+    protected function guideDescription(): HtmlString
+    {
+        $text = e(__('What a new reseller reads before applying.'));
+        $host = $this->company()?->resellerPortalHost();
+
+        if ($host === null) {
+            return new HtmlString($text.' '.e(__('It goes live once the reseller module is on and the company has a domain.')));
+        }
+
+        $url = request()->getScheme().'://'.$host.'/portal/guide';
+
+        return new HtmlString($text.' <a class="text-primary-600 underline" href="'.e($url).'" target="_blank" rel="noopener">'.e($url).'</a>');
     }
 
     public function save(): void
@@ -201,6 +257,14 @@ class ResellerSettings extends Page
             'reseller_packaging_cost_per_unit' => round((float) $data['reseller_packaging_cost_per_unit'], 2),
             'reseller_min_withdrawal' => round((float) $data['reseller_min_withdrawal'], 2),
             'reseller_program_enabled' => (bool) $data['reseller_program_enabled'],
+            'reseller_guide_enabled' => (bool) $data['reseller_guide_enabled'],
+            'reseller_guide_intro' => filled($data['reseller_guide_intro'] ?? null) ? trim($data['reseller_guide_intro']) : null,
+            'reseller_guide_show_figures' => (bool) $data['reseller_guide_show_figures'],
+            'reseller_guide_rules' => collect($data['reseller_guide_rules'] ?? [])
+                ->map(fn (array $rule): array => ['title' => trim((string) ($rule['title'] ?? '')), 'body' => filled($rule['body'] ?? null) ? trim($rule['body']) : null])
+                ->filter(fn (array $rule): bool => $rule['title'] !== '')
+                ->values()
+                ->all(),
         ])->save();
 
         Notification::make()->title(__('Reseller settings saved'))->success()->send();

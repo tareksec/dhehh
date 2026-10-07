@@ -325,6 +325,25 @@ class Company extends Model
         return filled($this->domain) ? 'reseller.'.$this->domain : null;
     }
 
+    /**
+     * Where the storefront's "Become a reseller" links go: the public reseller
+     * guide on the portal host while it is on (Resellers → Reseller Settings),
+     * otherwise straight to the portal's application form. Null when this
+     * company has no portal host.
+     */
+    public function resellerJoinUrl(): ?string
+    {
+        $host = $this->resellerPortalHost();
+
+        if ($host === null) {
+            return null;
+        }
+
+        $guide = (bool) ($this->storefrontSetting?->reseller_guide_enabled ?? true);
+
+        return request()->getScheme().'://'.$host.'/portal/'.($guide ? 'guide' : 'register');
+    }
+
     public static function normalizeInvoicePrefix(?string $prefix, ?string $companyName = null): string
     {
         $prefix = Str::upper(trim((string) $prefix));
