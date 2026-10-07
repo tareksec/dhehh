@@ -2,6 +2,28 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-07 - Investor portal, Phases 1–2 (portal, sign-in, read-only pages)
+
+Owner requests (in Bangla): (1) read the shared draft "12 — Investor Portal (Mudarabah) Module Plan" and write a detailed implementation plan; (2) "ইমপ্লিমেন্ট কর" — implement it.
+
+What changed:
+- New `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md` (the plan, owner questions P1–P11 / D1–D10 in Bangla, and §15 build log).
+- Phases 1–2 built: a third Filament panel `investor` at `investor.<company domain>/investor` (or a custom domain), off until **Investments → Investor Portal Settings** turns it on. Staff invite an investor or channel partner from their page (**Portal access**, SMS link valid 7 days); the person sets a password, then signs in with phone + password or phone + SMS code; reset by SMS code. Pages: Dashboard, My investments, Statement (printable), Payouts (with the existing payout report), Documents, My investors and Commissions (partners), Profile. Every query is pinned to the signed-in investor/partner (`InvestorPortalService`); settlement figures appear only once confirmed.
+- `RestrictResellerPortalHost` → `RestrictPortalHosts` (both portals). `audit_logs.actor_type/actor_id` record portal users. New permission `investments.portal_manage` (Super Admin only by default).
+- Migrations: 3 additive (`companies` + 2 columns, `investor_portal_accounts`, `audit_logs` + actor). No backfill; nothing changes for any company until the portal is turned on.
+- Docs: `docs/deployment.md` (Investor Portal Domain: DNS, Coolify, admin steps), `PROJECT_GUIDE.md`, `docs/roles-and-permissions.md`, CHANGELOG `[Unreleased]` (Minor Feature Update).
+
+My reading of the open questions, used for Phases 1–2 (say if any is wrong; details in the plan §15):
+- P1 address `investor.<domain>/investor`; P2 password + SMS code (SMS only when the gateway is set); P3 invite by SMS link; P4 a partner sees investor display name, capital at work and join date only; P5 "Channel partner"; P6 an investor downloads their project's contract, cost receipts and purchase documents, not settlement sheets/investor reports/bank slips.
+- The statement is built from the records each time (no stored ledger yet) and has no running balance, because whether a reinvested payout is also marked paid is up to staff today.
+- Not built (need owner input first): self sign-up and KYC, bank accounts, agreements (P7–P8), requests (P9), payout batches / NCC (P10), SMS/WhatsApp texts (P11), the period pool engine (D1–D10).
+
+Needs Bangla review: the 120 new `lang/bn.json` keys for the portal (written by me; please check the wording, especially the SMS texts "Your :company investor portal …").
+
+Tests: new `InvestorPortalTest` (19 tests: host boundary, reseller portal unaffected, invite → set password once, expired link, one account for investor + partner, password / SMS-code sign-in, 5 wrong codes, disabled account locked out at once, other company refused, draft settlement hidden, all pages open, another investor's document/report is 404, partner sees no contact details, admin settings + invite action, permission). `MultiCompanyIsolationTest` covers `InvestorPortalAccount`. Reseller portal suites pass unchanged. `npm run build` OK. Phone-width (375 px) screenshots checked for every page. Full `php artisan test` (plain, no `--env`): **1934 passed, 2 skipped, 0 failed** (15896 assertions); the affected files were re-run after the last layout tweaks.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07).
+
 ## 2026-10-07 - Reseller-store orders invoiced in the reseller's name too
 
 Owner answer (in Bangla): yes, invoice the reseller-store orders in the reseller's name as well.
@@ -702,7 +724,7 @@ Things to know: the portal login is separate (different host), so a redirected r
 
 Tests: two existing tests updated to expect the redirect. Full suite: 1554 passed (`php artisan test`, no `--env`).
 
-Commit status: not committed — waiting for owner approval, together with Phases 1–5 and the plan file.
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07). together with Phases 1–5 and the plan file.
 
 ## 2026-09-29 - Reseller portal Phase 5: Earnings, Withdrawals, My Store, Profile
 
@@ -731,7 +753,7 @@ Tests: new `ResellerPortalAccountTest` (25 tests). I broke the code on purpose i
 
 Not done / still open: portal-internal password reset (a reseller can still reset from the storefront's forgot-password page); §2.1 Q5 (what happens to the old **My Account → Your Store** page) — needed before Phase 6.
 
-Commit status: not committed — waiting for owner approval, together with the plan file and Phases 1–4 (all still pending).
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07). together with the plan file and Phases 1–4 (all still pending).
 
 ## 2026-09-28 - Reseller portal Phase 3: Overview + Orders
 
@@ -751,7 +773,7 @@ Needs Bangla review: the 14 new keys added to `lang/bn.json` this phase (dashboa
 
 Tests: new `ResellerPortalDashboardTest` (4 tests — dashboard renders end-to-end including the embedded chart widget, Orders page company-scoping, full customer info + commission sync, pending/rejected access denial). Full suite: 1529 passed (`php artisan test`, no `--env`). (Frontend build: see the Phase 5 note above — the portal gets its own Vite theme, which is also what makes these pages' layout classes compile.)
 
-Commit status: not committed — waiting for owner approval, together with Phase 1, the plan file, Phase 2, and Phase 4 (all still pending from before this phase).
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07). together with Phase 1, the plan file, Phase 2, and Phase 4 (all still pending from before this phase).
 
 ## 2026-09-28 - Reseller portal Phase 4: Products & pricing
 
@@ -769,7 +791,7 @@ Needs Bangla review: the 16 new keys added to `lang/bn.json` this phase (Product
 
 Tests: new `ResellerPortalProductsTest` (6 tests — company scoping, in-store toggle create/delete, price-floor enforcement, bulk add/remove, bulk set-price-from-suggested skip logic, cross-company photo-download 404). Full suite: 1525 passed (`php artisan test`, no `--env`). (Frontend build: see the Phase 5 note above — the portal gets its own Vite theme, which is also what makes these pages' layout classes compile.)
 
-Commit status: not committed — waiting for owner approval, together with Phase 1, the plan file, and Phase 2 (all still pending from before this phase).
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07). together with Phase 1, the plan file, and Phase 2 (all still pending from before this phase).
 
 ## 2026-09-28 - Reseller portal Phase 2: portal foundation
 
@@ -794,7 +816,7 @@ Needs Bangla review: the 12 new keys added to `lang/bn.json` this phase (portal/
 
 Tests: new `ResellerPortalTest` (9 tests — host isolation both directions, disabled-module 404, custom domain override, cross-company 403, pending/rejected/approved status pages, apply creates a pending login). Full suite: 1519 passed (`php artisan test`, no `--env`). No frontend assets changed, so `npm run build` was not needed.
 
-Commit status: not committed — waiting for owner approval, together with Phase 1 and the plan file (both still pending from before this phase).
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07). together with Phase 1 and the plan file (both still pending from before this phase).
 
 ## 2026-09-28 - Reseller portal Phase 1: store-link fix
 
@@ -815,7 +837,7 @@ Needs owner confirmation: none for this phase — Phase 2 (the portal itself) is
 
 Needs Bangla review: none (no new strings).
 
-Commit status: not committed — waiting for owner approval. The plan file `13_RESELLER_PORTAL_PLAN.md` itself (sent earlier, still untracked) would be committed together with this.
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07). The plan file `13_RESELLER_PORTAL_PLAN.md` itself (sent earlier, still untracked) would be committed together with this.
 ## 2026-09-29 - Documentation editor: "Remove link" toolbar button
 
 Reason — owner: "প্রিভিয়াস লিংক রিমুভ করার অপশন যুক্ত কর।" (Add an option to remove the previous link.) Follows the report that changing an existing link's URL in the editor didn't take effect.
@@ -964,7 +986,7 @@ Verification:
 - Pint: passed. `npm run build`: succeeded.
 - Not verified in a browser.
 
-Commit status: not committed — waiting for owner approval (bundled with the public Guides page below in the same commit).
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07).(bundled with the public Guides page below in the same commit).
 
 ## 2026-09-29 - Public Guides page: share Documentation with people outside the admin panel
 

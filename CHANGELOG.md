@@ -4,6 +4,23 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investor portal (first part).** Investors and channel partners can now sign in to their own portal at `investor.<company domain>/investor` (or a custom domain) from a phone. An investor sees their investments with each project's status and result, a statement of every investment, profit or loss, payment and reinvestment (printable / save as PDF), their payouts with the printable payout report, and their documents (their own papers plus their project's contract and cost receipts). A channel partner sees the investors they brought in (by the name used on shared papers only, no phone or NID) and their commissions, paid and due. Profit only appears once staff confirm the settlement.
+- Sign-in by phone + password, or phone + a 6-digit SMS code (when the company's SMS gateway is set up); "forgot password" by SMS code. Nobody can sign in until staff invite them: **Portal access → Invite to the investor portal** on an investor's or channel partner's page sends an SMS link (valid 7 days) to set a password. Staff can disable access (the person is signed out at once) and enable it again. One person who is both an investor and a partner gets one sign-in that shows both.
+- **Investments → Investor Portal Settings:** turn the portal on or off and see its address; the custom domain is Super Admin only. New permission **Investments: Manage Investor Portal Access** (`investments.portal_manage`), held only by Super Admin by default.
+- The Audit Log now shows actions done by portal users (investor portal and reseller portal), marked "(portal)".
+
+### Technical Notes
+
+- Plan: `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md` (Phases 1–2 built; §15 lists the answers assumed and where the build differs from the plan). Phases 3–7 (self sign-up/KYC, requests, payout batches, notifications, period pool engine) wait for the owner's answers.
+- Migrations: `2026_10_07_130000_add_investor_portal_to_companies_table` (`investor_portal_enabled` default false, `investor_portal_domain` unique), `2026_10_07_130100_create_investor_portal_accounts_table`, `2026_10_07_130200_add_actor_to_audit_logs_table` (nullable `actor_type` / `actor_id`). Additive; nothing is backfilled.
+- New Filament panel `investor` (`InvestorPanelProvider`, guard `investor`, provider `investor_portal_accounts`, theme `resources/css/filament/investor/theme.css` — `npm run build` needed on deploy). New `InvestorPortalAccount` model (company-scoped), `InvestorPortalAccountService` (invite, password, SMS codes: hashed, 10 min, 5 tries, 1 send/min), `InvestorPortalService` (every portal query, pinned to the signed-in investor/partner), `ResolveCompanyFromInvestorPortalDomain`, `Company::forInvestorPortalHost()` / `investorPortalHost()` / `investorPortalUrl()`, portal download/report controllers with ownership checks (`InvestmentReportController::investorPayoutView()` is shared).
+- `RestrictResellerPortalHost` renamed `RestrictPortalHosts` and now guards both portal hosts. `AuditLogService` writes non-staff actors to the new actor columns. "investor"/"investors" added to the reserved reseller subdomain labels; the investor portal domain counts as taken for reseller custom domains.
+- New `InvestorPortalTest` (19 tests); `MultiCompanyIsolationTest` covers `InvestorPortalAccount`. 120 new lang keys (en + bn). DNS/Coolify steps: `docs/deployment.md` → Investor Portal Domain.
+
 ## [2.60.3] - 2026-10-07
 
 **Release type:** Patch/Fix Update

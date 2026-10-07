@@ -1,0 +1,11 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+/*
+ * The investor portal's own Filament theme
+ * (15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md §4.1). Filament's precompiled
+ * stylesheet only carries the utility classes its own views use, so the
+ * portal's Blade views (summary cards, investment cards, statement rows)
+ * need Tailwind to scan them.
+ */
+@source '../../../../app/Filament/Investor/**/*';
+@source '../../../../resources/views/filament/investor/**/*';

@@ -43,6 +43,7 @@ use App\Models\InvestmentWitness;
 use App\Models\Investor;
 use App\Models\InvestorCycleElection;
 use App\Models\InvestorDraft;
+use App\Models\InvestorPortalAccount;
 use App\Models\InvestorSecurityInstrument;
 use App\Models\Lead;
 use App\Models\Media;
@@ -123,7 +124,7 @@ class MultiCompanyIsolationTest extends TestCase
             Conversation::class, ConversationChannel::class,
             ChatOrderLink::class, CompanyFaq::class, QuickReply::class,
             CompanyApiKey::class, StorefrontCustomerToken::class,
-            InvestmentProject::class, Investor::class, InvestorDraft::class,
+            InvestmentProject::class, Investor::class, InvestorDraft::class, InvestorPortalAccount::class,
             Investment::class, ProjectCostItem::class,
             InvestorSecurityInstrument::class, InvestmentWitness::class, InvestmentDocument::class,
             InvestorCycleElection::class, InvestmentWithdrawalNotice::class, ProjectSettlement::class,

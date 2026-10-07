@@ -452,7 +452,7 @@ Route::middleware([ResolveCompanyFromDomain::class, ResolveResellerFromSlug::cla
 
 // The reseller portal's own product-photos download (Phase 4 of
 // 13_RESELLER_PORTAL_PLAN.md). Path-prefixed with "portal" so
-// RestrictResellerPortalHost's allow-list lets it through on the portal
+// RestrictPortalHosts's allow-list lets it through on the portal
 // host; it needs the portal's own company resolution and login, which the
 // Filament panel's middleware stack normally provides, so both are applied
 // explicitly here since this is a plain route, not a panel page.
@@ -461,7 +461,7 @@ Route::get('/portal/products/{product}/photos', ResellerProductPhotosController:
     ->name('reseller.portal.products.photos');
 
 // The public reseller guide (rules before applying), on the portal host only;
-// RestrictResellerPortalHost keeps "/portal/*" off every other host.
+// RestrictPortalHosts keeps "/portal/*" off every other host.
 Route::get('/portal/guide', ResellerGuideController::class)
     ->middleware(ResolveCompanyFromResellerPortalDomain::class)
     ->name('reseller.portal.guide');

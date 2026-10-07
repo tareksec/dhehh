@@ -45,6 +45,12 @@ return [
             'driver' => 'session',
             'provider' => 'customers',
         ],
+
+        // The investor portal (15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md §4.3).
+        'investor' => [
+            'driver' => 'session',
+            'provider' => 'investor_portal_accounts',
+        ],
     ],
 
     /*
@@ -78,6 +84,11 @@ return [
         'customers' => [
             'driver' => 'eloquent',
             'model' => App\Models\Customer::class,
+        ],
+
+        'investor_portal_accounts' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\InvestorPortalAccount::class,
         ],
     ],
 

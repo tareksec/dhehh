@@ -17,7 +17,7 @@ use App\Filament\Reseller\Pages\Products;
 use App\Filament\Reseller\Pages\Profile;
 use App\Filament\Reseller\Pages\Withdrawals;
 use App\Http\Middleware\ResolveCompanyFromResellerPortalDomain;
-use App\Http\Middleware\RestrictResellerPortalHost;
+use App\Http\Middleware\RestrictPortalHosts;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Services\CompanyContext;
@@ -45,7 +45,7 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * reseller_portal_domain, both resolved by ResolveCompanyFromResellerPortalDomain
  * -- never by Filament's own ->domain(), which only matches one fixed host
  * and can't express "any company's domain, prefixed with reseller.". The
- * panel is path-scoped ("/portal") instead, on every host; RestrictResellerPortalHost
+ * panel is path-scoped ("/portal") instead, on every host; RestrictPortalHosts
  * (registered here AND globally in bootstrap/app.php) is what actually keeps
  * it off the shop/admin hosts and keeps everything else off the portal host.
  */
@@ -86,7 +86,7 @@ class ResellerPanelProvider extends PanelProvider
             ->renderHook(PanelsRenderHook::AUTH_REGISTER_FORM_BEFORE, fn (): View|string => $this->guideLink())
             ->viteTheme('resources/css/filament/reseller/theme.css')
             ->middleware([
-                RestrictResellerPortalHost::class,
+                RestrictPortalHosts::class,
                 ResolveCompanyFromResellerPortalDomain::class,
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
