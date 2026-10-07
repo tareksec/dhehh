@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\StorefrontSetting;
+use App\Support\StorefrontApi\Phone;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
@@ -20,12 +22,61 @@ class CustomerAccountService
 {
     public function __construct(protected StorefrontNotificationService $notifications) {}
 
+    /** No code needed: SMS is off and the phone has no customer record yet. */
+    public const VERIFY_NONE = 'none';
+
+    /** The phone must be proven with a 6-digit SMS code first. */
+    public const VERIFY_SMS = 'sms';
+
+    /** The phone belongs to an existing customer but no SMS gateway is set up to prove it. */
+    public const VERIFY_UNAVAILABLE = 'unavailable';
+
+    public const REGISTRATION_CODE_MINUTES = 10;
+
+    protected const REGISTRATION_CODE_MAX_ATTEMPTS = 5;
+
     /**
      * Registers (or upgrades) a Customer. Reuses an existing phone-matched
      * CRM/order record instead of creating a duplicate, so past storefront
-     * orders are immediately visible once the account is created.
+     * orders are immediately visible once the account is created. That is
+     * why the storefront sign-up forms prove the phone with an SMS code
+     * first (registrationVerification()) — otherwise anyone who knows a
+     * customer's number could open their order history.
+     *
+     * $data['password_hash'] (already hashed) may stand in for
+     * $data['password'], so a sign-up waiting for its code never keeps the
+     * plain password.
      */
     public function register(array $data): Customer
+    {
+        $customer = $this->ensureCanRegister($data);
+
+        $customer ??= new Customer;
+
+        $customer->fill([
+            'name' => $data['name'],
+            'phone' => $data['phone'],
+            'email' => $data['email'] ?? $customer->email,
+            'address' => $data['address'] ?? $customer->address,
+            'customer_type' => $customer->customer_type ?: 'regular',
+            'customer_source' => $customer->customer_source ?: 'website',
+            'is_active' => true,
+        ]);
+        $customer->password = $data['password_hash'] ?? Hash::make($data['password']);
+        $customer->save();
+
+        return $customer;
+    }
+
+    /**
+     * The phone/email checks of register(), run before a verification code is
+     * sent so nobody waits for a code that can't be used.
+     *
+     * @return Customer|null the unregistered customer record the account will adopt
+     *
+     * @throws ValidationException
+     */
+    public function ensureCanRegister(array $data): ?Customer
     {
         $customer = Customer::query()->tap(fn (Builder $query) => $this->wherePhoneMatches($query, $data['phone']))->first();
 
@@ -41,21 +92,95 @@ class CustomerAccountService
             ]);
         }
 
-        $customer ??= new Customer;
-
-        $customer->fill([
-            'name' => $data['name'],
-            'phone' => $data['phone'],
-            'email' => $data['email'] ?? $customer->email,
-            'address' => $data['address'] ?? $customer->address,
-            'customer_type' => $customer->customer_type ?: 'regular',
-            'customer_source' => $customer->customer_source ?: 'website',
-            'is_active' => true,
-        ]);
-        $customer->password = Hash::make($data['password']);
-        $customer->save();
-
         return $customer;
+    }
+
+    /**
+     * How a storefront sign-up for $phone must prove the phone is the
+     * visitor's: always by SMS code when the store has an SMS gateway; with
+     * no gateway a brand-new number still signs up directly, but a number
+     * that already has a customer record (and so order history) can't.
+     */
+    public function registrationVerification(StorefrontSetting $setting, string $phone): string
+    {
+        if ($this->notifications->smsConfigured($setting)) {
+            return self::VERIFY_SMS;
+        }
+
+        return Customer::query()->tap(fn (Builder $query) => $this->wherePhoneMatches($query, $phone))->exists()
+            ? self::VERIFY_UNAVAILABLE
+            : self::VERIFY_NONE;
+    }
+
+    /**
+     * Texts a 6-digit sign-up code to $phone, valid for 10 minutes and five
+     * tries. Asking again within a minute keeps the code already sent, so
+     * a double click or the website's "resend" can't flood the number.
+     * Kept in the cache, not on a customer row: the number may have no
+     * customer record yet.
+     */
+    public function sendRegistrationCode(Company $company, StorefrontSetting $setting, string $phone): bool
+    {
+        $key = $this->registrationCodeKey($company, $phone);
+        $pending = Cache::get($key);
+
+        if (is_array($pending) && $pending['sent_at'] > now()->subMinute()->getTimestamp() && $pending['expires_at'] > now()->getTimestamp()) {
+            return true;
+        }
+
+        $code = (string) random_int(100000, 999999);
+
+        Cache::put($key, [
+            'code' => Hash::make($code),
+            'expires_at' => now()->addMinutes(self::REGISTRATION_CODE_MINUTES)->getTimestamp(),
+            'sent_at' => now()->getTimestamp(),
+            'attempts' => 0,
+        ], now()->addMinutes(self::REGISTRATION_CODE_MINUTES));
+
+        $sent = $this->notifications->sendSms(
+            $setting,
+            $phone,
+            "Your {$company->name} account verification code is {$code}. It expires in ".self::REGISTRATION_CODE_MINUTES.' minutes.',
+        );
+
+        if (! $sent) {
+            Cache::forget($key);
+        }
+
+        return $sent;
+    }
+
+    /** One use only; five wrong tries throw the code away. */
+    public function verifyRegistrationCode(Company $company, string $phone, string $code): bool
+    {
+        $key = $this->registrationCodeKey($company, $phone);
+        $pending = Cache::get($key);
+
+        if (! is_array($pending) || $pending['expires_at'] <= now()->getTimestamp() || $pending['attempts'] >= self::REGISTRATION_CODE_MAX_ATTEMPTS) {
+            Cache::forget($key);
+
+            return false;
+        }
+
+        if (! Hash::check($code, $pending['code'])) {
+            $pending['attempts']++;
+
+            $pending['attempts'] >= self::REGISTRATION_CODE_MAX_ATTEMPTS
+                ? Cache::forget($key)
+                : Cache::put($key, $pending, now()->setTimestamp($pending['expires_at']));
+
+            return false;
+        }
+
+        Cache::forget($key);
+
+        return true;
+    }
+
+    /** One code per company and number, whatever spelling of the number was typed. */
+    protected function registrationCodeKey(Company $company, string $phone): string
+    {
+        return 'storefront-register-code:'.$company->getKey().':'.(preg_replace('/\D+/', '', Phone::normalize($phone)) ?: $phone);
     }
 
     /**
