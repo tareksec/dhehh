@@ -20,9 +20,32 @@ My decisions (say if you want different):
 
 Needs Bangla review: the 11 new keys (sign-up code page, "This phone number already has orders with us…", "We couldn't send a verification code…").
 
-Tests: `StorefrontApiAccountTest` (+4: adoption via code, existing number needs code / no SMS → refused, five wrong codes + quick resend, taken number before SMS, failed SMS), `StorefrontCustomerAuthTest` (+2; existing sign-ups go through the code). Registration-related tests (92): all pass except 1 that needs `intl`. Full plain `php artisan test` on this server (PHP 8.4 without intl): 1870 tests, 189 failures, all "intl extension required", 0 other failures.
+Tests: `StorefrontApiAccountTest` (+4: adoption via code, existing number needs code / no SMS → refused, five wrong codes + quick resend, taken number before SMS, failed SMS), `StorefrontCustomerAuthTest` (+2; existing sign-ups go through the code). Registration-related tests (92): all pass except 1 that needs `intl`. Full plain `php artisan test` on this server (PHP 8.4 without intl): 1870 tests, 189 failures, all "intl extension required", 0 other failures; after merging `origin/main` (separate Blade / Next.js storefront settings): 1886 tests, 189 failures, all intl, 0 other.
 
-Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07); `origin/main` merged first — CHANGELOG `[Unreleased]` sections combined, lang files rebuilt as main's keys plus ours.
+
+## 2026-10-07 - Separate storefront settings for the Blade storefront (reseller store) and the Next.js site (main storefront)
+
+Owner decision (in Bangla, after seeing both sites in one Storefront Settings row): Blade and Next.js must be **separate rows** so each can be customised on its own; **Blade = reseller store, Next.js = main storefront**. This replaces the 2026-10-03 decision that both read one shared row (CLAUDE.md updated).
+
+What changed:
+- `storefront_settings.site_type` (`blade` default | `nextjs`), unique per `(company_id, site_type)`. Existing rows stay Blade. The old Next.js switch/domain on a Blade row is moved into a new Next.js row (a full copy of the Blade settings) by the migration; the Blade row loses those fields. Idempotent and reversible; tried on a copy of the e2e database (up, down, up).
+- API: `EnsureNextjsSiteEnabled` serves only the Next.js row (`403 nextjs_site_disabled` for a company with just a Blade row). Everything else in the API already took the row from the request, so it follows.
+- Admin: Storefront Settings lists one row per site (Site badge, that site's own domain); the create form has **Site** (Blade / Next.js) and, for Next.js, **Start from a copy of the Blade storefront settings** (credentials copied from the stored encrypted values, not re-encrypted); the Next.js row hides *Reseller Settings* and the Blade domain, the Blade row hides *Next.js Site*. Saving a Next.js row never writes `companies.domain`.
+- Integrations page: **Site** select (when there are two rows) for the payment gateway, Meta pixel and website webhook fields; WooCommerce and AI stay company-wide (WooCommerce = Blade row).
+- Orders and payments started on the Next.js site keep `storefront_setting_id` (NULL = Blade); ZiniPay/PayStation webhooks, Meta conversions and the status-change dispatch use `Order::siteSetting()` / `StorefrontPayment::siteSetting()`. The website webhook goes to every site that has one configured, once per distinct URL+secret.
+
+My decisions (say if you want different):
+- **Company-level features read the Blade row** (reseller program, WooCommerce import/sync, CRM WhatsApp/SMS, abandoned-cart and lead reminders, slide pages' theme). Since the Next.js site is now the main storefront, you may want some of these (e.g. CRM messaging credentials) to live on the Next.js row instead — a one-line change each.
+- **Slides, pages, offers and the payment-method list are still shared by both sites** (they are not in the settings row). The Next.js site shows the same hero slides and pages as the Blade store until they get a "show on: all sites / this site" choice — not built; tell me if you want it next.
+- Site type cannot be changed after creation (create the other site instead).
+- The abandoned-cart reminder command only runs for Blade rows; the Next.js site keeps its cart in the browser, so it has no server-side carts.
+
+Tests: `NextjsSiteSettingsTest` rewritten (17); new cases in `StorefrontApiTest`, `StorefrontApiCheckoutTest`, `StorefrontMetaTrackingTest`, `StorefrontPaystationPaymentTest`, `WebsiteWebhookDispatchTest`, `IntegrationsPageTest`. The webhook, Meta and API-row tests were checked to fail when the old behaviour is put back.
+
+Needs Bangla review: the 9 new keys (e.g. "সাইট", "ব্লেড স্টোরফ্রন্ট (রিসেলার স্টোর)", "Next.js সাইট (মূল স্টোরফ্রন্ট)", the Site-type and copy-from-Blade help texts).
+
+Commit status: NOT committed — waiting for the owner's explicit approval. Working tree on top of `origin/main` v2.56.0.
 
 ## 2026-10-06 - Reseller deposit: overpayments credited and used on the next orders
 

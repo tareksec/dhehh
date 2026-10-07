@@ -763,6 +763,7 @@ class StorefrontApiAccountTest extends TestCase
 
         StorefrontSetting::query()->create([
             'company_id' => $company->getKey(),
+            'site_type' => StorefrontSetting::SITE_NEXTJS,
             'is_published' => true,
             'nextjs_site_enabled' => $enabled,
             'nextjs_site_domain' => $slug === 'zamzam-international' ? 'zamzamint.com' : null,

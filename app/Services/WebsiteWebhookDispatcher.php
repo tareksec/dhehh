@@ -66,17 +66,24 @@ class WebsiteWebhookDispatcher
             return;
         }
 
-        $setting = StorefrontSetting::withoutGlobalScopes()->where('company_id', $companyId)->first();
-        $credentials = $setting?->website_api_credentials ?? [];
+        // Each site (Blade, Next.js) can have its own webhook; two sites sharing
+        // one URL and secret are notified once.
+        $sent = [];
 
-        $url = (string) ($credentials['webhook_url'] ?? '');
-        $secret = (string) ($credentials['webhook_secret'] ?? '');
-        $enabled = (bool) ($credentials['is_enabled'] ?? false);
+        foreach (StorefrontSetting::withoutGlobalScopes()->where('company_id', $companyId)->orderBy('id')->get() as $setting) {
+            $credentials = $setting->website_api_credentials ?? [];
 
-        if (! $enabled || $url === '' || $secret === '') {
-            return;
+            $url = (string) ($credentials['webhook_url'] ?? '');
+            $secret = (string) ($credentials['webhook_secret'] ?? '');
+            $enabled = (bool) ($credentials['is_enabled'] ?? false);
+
+            if (! $enabled || $url === '' || $secret === '' || isset($sent[$url.'|'.$secret])) {
+                continue;
+            }
+
+            $sent[$url.'|'.$secret] = true;
+
+            DispatchWebsiteWebhookJob::dispatch($url, $secret, $event, $data);
         }
-
-        DispatchWebsiteWebhookJob::dispatch($url, $secret, $event, $data);
     }
 }

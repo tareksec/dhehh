@@ -10,9 +10,9 @@ use App\Support\StorefrontApi\Media;
 
 /**
  * The site-wide configuration the headless Next.js storefront needs, built
- * from the very same StorefrontSetting row that drives the Blade storefront —
- * so the owner configures both sites in one place (Site → Storefront
- * Settings). Colors, fonts and spacing come from the model's own resolvers
+ * from the company's Next.js StorefrontSetting row (site_type "nextjs"), which
+ * the owner customises on its own in Site → Storefront Settings next to the
+ * Blade (reseller) row. Colors, fonts and spacing come from the model's own resolvers
  * (themePalette(), headingFontFamily(), ...), never re-derived here.
  *
  * Customer-facing text is returned exactly as the admin entered it; this

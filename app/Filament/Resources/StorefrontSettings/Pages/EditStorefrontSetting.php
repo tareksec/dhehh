@@ -7,6 +7,7 @@ use App\Filament\Resources\StorefrontSettings\Pages\Concerns\HandlesNextjsSiteDo
 use App\Filament\Resources\StorefrontSettings\Pages\Concerns\HasStorefrontSettingsNavigation;
 use App\Filament\Resources\StorefrontSettings\StorefrontSettingResource;
 use App\Models\Company;
+use App\Models\StorefrontSetting;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Validation\ValidationException;
@@ -32,11 +33,15 @@ class EditStorefrontSetting extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        $this->syncCompanyDomain($this->domainSyncData($data));
+        $siteType = $this->record->isNextjs() ? StorefrontSetting::SITE_NEXTJS : StorefrontSetting::SITE_BLADE;
 
-        unset($data['company_domain'], $data['company_domain_verified']);
+        if ($siteType === StorefrontSetting::SITE_BLADE) {
+            $this->syncCompanyDomain($this->domainSyncData($data));
+        }
 
-        return $this->applyNextjsSiteDomain($data, $this->record, (int) ($data['company_id'] ?? $this->record->company_id));
+        unset($data['company_domain'], $data['company_domain_verified'], $data['site_type'], $data['copy_from_blade']);
+
+        return $this->applySiteFields($data, $this->record, (int) ($data['company_id'] ?? $this->record->company_id), $siteType);
     }
 
     protected function domainSyncData(array $data): array

@@ -15,7 +15,9 @@ class SendAbandonedCartReminders extends Command
 
     public function handle(StorefrontNotificationService $notifications): int
     {
+        // Carts belong to the Blade storefront; the Next.js site keeps its cart in the browser.
         $settings = StorefrontSetting::withoutGlobalScopes()
+            ->blade()
             ->with('company')
             ->where('is_published', true)
             ->where('abandoned_cart_reminders_enabled', true)
