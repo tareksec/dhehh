@@ -4,6 +4,14 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- **Staff only see and edit the users of their own companies.** Before, the Users page listed every user in the system, so someone with "Users: Manage" could open and change (name, email, password, active status) a user who works only in another company. Now, apart from a Super Admin, the Users page shows only users who share at least one company with you (and yourself), and opening any other user shows "not found". A Super Admin still sees everyone.
+
+### Technical Notes
+
+- `User::canSeeUser()` and the `User::visibleTo()` query scope. `UserResource::getEloquentQuery()` applies the scope (list, view, edit, bulk actions, global search), and `Gate::before` denies every ability on a `User` the signed-in user can't see. `UserManagementEscalationTest` gains 3 tests (16 total); its test manager now shares the factory's default company unless a test gives it one.
+
 ## [2.59.1] - 2026-10-07
 
 **Release type:** Security Update

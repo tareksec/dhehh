@@ -2,6 +2,22 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-07 - Users page: staff see and edit only their own companies' users
+
+Reason — owner: "ওকে ইউজার মিনিট আপডেট করে দাও, কোন ইউজার তার নিজের কোম্পানির ইউজারদের দেখলে এবং এডিট করতে পারবে।" (a user can see and edit only the users of their own company). Closes the open item from the entry below.
+
+What changed:
+- `User::canSeeUser()` / `scopeVisibleTo()`: a Super Admin sees everyone; anyone else sees themselves and users sharing at least one of their active companies.
+- `UserResource::getEloquentQuery()` uses the scope, so another company's user is missing from the list and opening their page gives 404. `Gate::before` returns false for every ability on such a user (defence in depth).
+- My reading (say if different): a user with no company at all is visible only to a Super Admin; a user who is in your company and also another company is visible, with the other company's access protected by the previous change.
+- No new user-visible strings, so no lang keys.
+
+Tests:
+- `UserManagementEscalationTest` +3 (16). With the rule reverted, the 2 visibility tests fail (the Super Admin one is a control).
+- Full `php artisan test` (plain, no `--env`): 1908 passed, 2 skipped (14958 assertions).
+
+Commit status: committed and pushed to `claude/security-audit-fixes` and `main` on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
 ## 2026-10-07 - "Users: Manage" limited to the editor's own companies
 
 Reason — owner: "এখনো খোলা: "Users: Manage" থাকা কেউ যেকোনো user-কে যেকোনো কোম্পানিতে যোগ করতে পারে। এটা আটকাতে হবে" (block adding users to any company). Follow-up to the 2026-10-03 security audit fixes (already on main).

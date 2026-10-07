@@ -464,6 +464,35 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /**
+     * Owner's rule (2026-10-07): apart from a Super Admin, a user only sees and
+     * edits the users of their own companies (and themselves).
+     */
+    public function canSeeUser(User $target): bool
+    {
+        if ($this->isSuperAdmin() || $this->is($target)) {
+            return true;
+        }
+
+        return $target->companies()->whereIn('companies.id', $this->assignableCompanyIds())->exists();
+    }
+
+    /**
+     * Narrows a users query to the ones this user may see (see canSeeUser()).
+     */
+    public function scopeVisibleTo(Builder $query, User $viewer): Builder
+    {
+        if ($viewer->isSuperAdmin()) {
+            return $query;
+        }
+
+        $companyIds = $viewer->assignableCompanyIds();
+
+        return $query->where(fn (Builder $query) => $query
+            ->whereKey($viewer->getKey())
+            ->orWhereHas('companies', fn (Builder $companies) => $companies->whereIn('companies.id', $companyIds)));
+    }
+
+    /**
      * "Users: Manage" must not be a path to taking over a Super Admin: only a
      * Super Admin may change, delete or reset the password of one.
      */

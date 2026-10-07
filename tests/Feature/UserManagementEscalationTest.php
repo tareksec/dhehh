@@ -19,7 +19,8 @@ use Tests\TestCase;
  * Owner's rule: only a Super Admin changes permissions (any user's role, their
  * own included, and what a role may do). A custom role holding "Users: Manage"
  * also must not take over a Super Admin account, or give anyone access to a
- * company the manager can't access themselves (owner's rule, 2026-10-07).
+ * company the manager can't access themselves, and only sees and edits the
+ * users of their own companies (owner's rules, 2026-10-07).
  */
 class UserManagementEscalationTest extends TestCase
 {
@@ -257,6 +258,54 @@ class UserManagementEscalationTest extends TestCase
         );
     }
 
+    public function test_a_user_manager_only_sees_users_of_their_own_companies(): void
+    {
+        [$own, $other] = [$this->company('Own Company'), $this->company('Other Company')];
+        $manager = $this->userManager($own);
+        $colleague = $this->staffIn($own, 'Own Colleague');
+        $stranger = $this->staffIn($other, 'Other Stranger');
+
+        $this->actingAs($manager);
+
+        Livewire::test(ListUsers::class)
+            ->assertCanSeeTableRecords([$manager, $colleague])
+            ->assertCanNotSeeTableRecords([$stranger]);
+
+        $this->get("/admin/settings/users/{$stranger->getKey()}")->assertNotFound();
+        $this->get("/admin/settings/users/{$stranger->getKey()}/edit")->assertNotFound();
+        $this->get("/admin/settings/users/{$colleague->getKey()}/edit")->assertOk();
+    }
+
+    public function test_a_user_manager_cannot_change_a_user_of_another_company(): void
+    {
+        [$own, $other] = [$this->company('Own Company'), $this->company('Other Company')];
+        $manager = $this->userManager($own);
+        $stranger = $this->staffIn($other, 'Other Stranger');
+
+        $this->assertFalse($manager->can('update', $stranger));
+        $this->assertFalse($manager->can('delete', $stranger));
+        $this->assertFalse($manager->can('view', $stranger));
+    }
+
+    public function test_a_super_admin_sees_every_user(): void
+    {
+        [$first, $second] = [$this->company('First Company'), $this->company('Second Company')];
+        $one = $this->staffIn($first, 'First Staff');
+        $two = $this->staffIn($second, 'Second Staff');
+
+        $this->actingAs(User::factory()->create(['role' => 'super_admin', 'is_active' => true]));
+
+        Livewire::test(ListUsers::class)->assertCanSeeTableRecords([$one, $two]);
+    }
+
+    private function staffIn(Company $company, string $name): User
+    {
+        $user = User::factory()->create(['name' => $name, 'role' => 'sales_staff', 'is_active' => true]);
+        $user->companies()->sync([$company->getKey() => ['role' => 'sales_staff', 'is_default' => true]]);
+
+        return $user;
+    }
+
     private function company(string $name): Company
     {
         return Company::query()->create([
@@ -279,6 +328,9 @@ class UserManagementEscalationTest extends TestCase
 
         $manager = User::factory()->create(['role' => 'user_manager', 'is_active' => true]);
         $manager->companies()->detach();
+        // Without an explicit company, share the default company that the
+        // user factory gives everyone, so other test users are in reach.
+        $company ??= Company::defaultCompany();
 
         if ($company) {
             $manager->companies()->attach($company, ['role' => 'user_manager', 'is_default' => true]);
