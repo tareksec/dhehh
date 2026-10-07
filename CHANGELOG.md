@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.58.0] - 2026-10-07
+
 **Release type:** Minor Feature Update
 
 ### Changed
@@ -13,8 +15,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - New `App\Filament\Pages\ResellerSettings` (Resellers cluster) writes `companies.reseller_*` (only for a Super Admin; the section is disabled for others and ignored on save) and `storefront_settings.reseller_*`; the portal domain is normalised and must be unique. `CompanyResource` and `StorefrontSettingResource` no longer have these fields; `HasStorefrontSettingsNavigation` drops the `reseller` section. No migration. New `ResellerSettingsPageTest` (5 tests); `ResellerCommissionTest` and `PhaseFourAdminPagesTest` updated. `docs/deployment.md` and `13_RESELLER_PORTAL_PLAN.md` point to the new page.
-
-
 ## [2.57.1] - 2026-10-07
 
 **Release type:** Security Update
