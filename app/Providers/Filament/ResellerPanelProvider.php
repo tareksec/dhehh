@@ -82,6 +82,8 @@ class ResellerPanelProvider extends PanelProvider
             ->homeUrl(Dashboard::class)
             // The reseller's deposit, beside the user menu on every page (owner rule, 2026-10-06).
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn (): View|string => $this->depositBadge())
+            // "Read the rules first" above the application form, while the guide is on.
+            ->renderHook(PanelsRenderHook::AUTH_REGISTER_FORM_BEFORE, fn (): View|string => $this->guideLink())
             ->viteTheme('resources/css/filament/reseller/theme.css')
             ->middleware([
                 RestrictResellerPortalHost::class,
@@ -112,6 +114,15 @@ class ResellerPanelProvider extends PanelProvider
     protected function portalCompany(): ?Company
     {
         return app(CompanyContext::class)->company();
+    }
+
+    protected function guideLink(): View|string
+    {
+        if (! ($this->portalCompany()?->storefrontSetting?->reseller_guide_enabled ?? true)) {
+            return '';
+        }
+
+        return view('filament.reseller.guide-link', ['url' => route('reseller.portal.guide')]);
     }
 
     /** Only approved resellers have a deposit (overpaid own-courier advances, ResellerOwnCourierService). */

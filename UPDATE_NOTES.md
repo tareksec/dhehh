@@ -2,6 +2,24 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-07 - Reseller guide page (rules before joining)
+
+Owner request (in Bangla): a reseller documentation page with a modern UI, so a new reseller can read our rules and regulations before joining, with call-to-action buttons.
+
+What changed:
+- New public page **`reseller.<company domain>/portal/guide`** (or the custom portal domain + `/portal/guide`). Sections: hero with **Apply now** / **Read the rules**, How it works (4 steps), Pricing and commission, Your own store, Orders and delivery, Rules and regulations, and a final **Apply now** / **I already have an account** band. Sticky header with Sign in / Apply now. Store colour (Blade storefront theme colour), logo, dark mode, mobile layout.
+- Nothing on the page is invented: the how-it-works text describes what the system already enforces (commission on delivered orders only, taken back on return; withdraw to bKash/Nagad/Rocket/bank; own-courier advance, edit until verified, pay only the extra, overpayment to a non-withdrawable deposit; customer invoice with the reseller's shop name). Subdomain / custom-domain lines show only when those are on; the own-courier card shows only when the store has a payment method (names only, never account numbers).
+- **The store's own rules come from the admin**: Resellers → Reseller Settings → **Reseller guide page** — on/off, introduction (blank = standard text), a list of rules (title + optional details, reorderable), and **Show money figures** (minimum withdrawal + packaging charge per piece; off by default). Reseller cost per unit is never shown. Until rules are added the page says the store has not published extra rules yet. **Please add your real rules there before sharing the link.**
+- Links: while the page is on, the storefront's "Become a reseller" links (footer, account menu, profile, Marketplace Pro home) open the guide; the portal's application form shows "Read the reseller guide". Someone who already applied ("Reseller status") goes to the portal. Page off → links go straight to the application form, and `/portal/guide` is 404.
+
+Deploy: run migration `2026_10_07_110000_add_reseller_guide_to_storefront_settings_table`; `npm run build` (new Tailwind classes).
+
+Tests: new `ResellerGuidePageTest` (5). `npm run build` OK. Full `php artisan test` (plain, no `--env`): **1895 passed, 1 skipped, 0 failed**.
+
+Needs Bangla review: the 70 new guide / settings keys ("রিসেলার গাইড", "নিয়ম ও শর্তাবলি", "এখনই আবেদন করুন", …).
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
 ## 2026-10-06 - All reseller settings on Resellers → Reseller Settings
 
 Owner rule (in Bangla): every reseller setting goes in the Reseller Settings option and everything is controlled from there.

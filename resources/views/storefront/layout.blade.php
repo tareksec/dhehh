@@ -50,10 +50,12 @@
     // Owner's answer (13_RESELLER_PORTAL_PLAN.md §2.1 Q4): applications now
     // go through the reseller portal, not the old in-storefront /reseller
     // page. Preview has no portal host to link to, so it keeps the old page.
+    $resellerJoinUrl = isset($previewSlug) ? null : $company->resellerJoinUrl();
+    $resellerUrl = $resellerJoinUrl
+        ?: \App\Support\StorefrontUrl::route('reseller.show', [], $previewSlug ?? null);
+    // Someone who already applied goes to the portal (their status), not the guide.
     $resellerPortalHost = isset($previewSlug) ? null : $company->resellerPortalHost();
-    $resellerUrl = $resellerPortalHost
-        ? request()->getScheme().'://'.$resellerPortalHost.'/portal/register'
-        : \App\Support\StorefrontUrl::route('reseller.show', [], $previewSlug ?? null);
+    $resellerStatusUrl = $resellerPortalHost ? request()->getScheme().'://'.$resellerPortalHost.'/portal' : $resellerUrl;
     $pageUrl = fn (string $slug) => \App\Support\StorefrontUrl::route('pages.show', [$slug], $previewSlug ?? null);
 
     $accountsEnabled = (bool) ($setting->customer_accounts_enabled ?? true);
