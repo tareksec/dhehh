@@ -2,6 +2,25 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-06 - All reseller settings on Resellers → Reseller Settings
+
+Owner rule (in Bangla): every reseller setting goes in the Reseller Settings option and everything is controlled from there.
+
+Before: module + subdomains + custom domains + portal domain on the company form (Super Admin only); cost per unit, packaging charge, minimum withdrawal in Storefront Settings → Reseller Settings; "Show reseller program" in Storefront Settings → Footer Builder; the payment channels in Payment Methods.
+
+What changed:
+- New page **Resellers → Reseller Settings** (`App\Filament\Pages\ResellerSettings`) with all of those for the current company. Module/domain fields stay Super Admin only (shown disabled to other staff, and a forged change is ignored on save). Portal domain normalised and unique across companies.
+- Removed from the company form and from Storefront Settings (section and footer toggle).
+- Payment channels are **listed** on the page with a link to Payment Methods, not edited there: the same methods are the storefront checkout's manual payment options, so editing them in two places would be confusing. Say if you want them editable on this page too.
+- Who can open it: users with Settings: Manage (same as Storefront Settings). In "All companies" view it asks to choose a company.
+- Docs updated: `docs/deployment.md` (where to switch subdomains/custom domains on), `13_RESELLER_PORTAL_PLAN.md` (admin side; own-courier orders are no longer read-only for the reseller).
+
+Tests: new `ResellerSettingsPageTest` (5: Super Admin saves everything; portal domain unique; settings manager can change money rules but not the module; no access without the permission; old places no longer show the fields); `ResellerCommissionTest` moved to the new page; `PhaseFourAdminPagesTest`'s Storefront Settings section list no longer has `reseller`. Full `php artisan test` (plain, no `--env`): **1868 passed, 1 skipped, 0 failed**.
+
+Needs Bangla review: the new keys on the page ("টাকার নিয়ম", "রিসেলার মডিউল চালু", "নিজস্ব কুরিয়ারের অগ্রিম পেমেন্ট", …).
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
 ## 2026-10-06 - Reseller deposit: overpayments credited and used on the next orders
 
 Owner rule (in Bangla): if a reseller pays more than the ordered amount, the extra is added to the reseller's balance and shown in the header. Asked three things; answers: the reseller enters the amount sent and staff correct it when verifying; the balance is a **separate deposit, used on the next orders, not withdrawable**; shown in the **portal's top bar**.

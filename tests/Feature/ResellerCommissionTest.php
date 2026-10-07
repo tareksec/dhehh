@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\ResellerSettings;
 use App\Filament\Resources\ResellerCommissions\Pages\ListResellerCommissions;
 use App\Filament\Resources\ResellerPayoutRequests\Pages\ListResellerPayoutRequests;
-use App\Filament\Resources\StorefrontSettings\Pages\EditStorefrontSetting;
 use App\Models\Account;
 use App\Models\Company;
 use App\Models\CourierBooking;
@@ -255,14 +255,13 @@ class ResellerCommissionTest extends TestCase
         [$company] = $this->setUpStore('settings.example.test');
         $setting = $company->storefrontSetting;
 
-        $this->actingAs(User::factory()->create(['role' => 'super_admin', 'is_active' => true]));
+        $this->actingAs(User::factory()->create(['role' => 'super_admin', 'is_active' => true]))
+            ->withSession(['current_company_id' => $company->getKey()]);
 
-        Livewire::test(EditStorefrontSetting::class, ['record' => $setting->getKey()])
-            ->call('selectSection', 'reseller')
+        Livewire::test(ResellerSettings::class)
             ->assertSee(__('Reseller cost per unit'))
             ->assertSee(__('Minimum reseller withdrawal'))
-            ->set('data.reseller_cost_per_unit', 35)
-            ->set('data.reseller_min_withdrawal', 250)
+            ->fillForm(['reseller_cost_per_unit' => 35, 'reseller_min_withdrawal' => 250])
             ->call('save')
             ->assertHasNoFormErrors();
 
