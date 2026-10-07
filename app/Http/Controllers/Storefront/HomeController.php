@@ -62,7 +62,7 @@ class HomeController extends Controller
             'categories' => $listing['categories'],
             'products' => $listing['products'],
             'carousels' => ProductCarousel::forHomepage(),
-            'slides' => StorefrontSlide::forCompanyTheme($company->getKey(), $setting->storefrontTheme(), $setting->homepageTemplate()),
+            'slides' => StorefrontSlide::forCompanyTheme($company->getKey(), $setting->storefrontTheme(), $setting->homepageTemplate(), $setting),
         ]);
     }
 

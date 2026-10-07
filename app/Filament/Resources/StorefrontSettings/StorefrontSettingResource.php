@@ -1123,6 +1123,8 @@ class StorefrontSettingResource extends Resource
 
             Section::make('Lead Follow-up Reminders')
                 ->columnSpanFull()
+                // Read from the company's primary row (the Next.js site once it has one), so it is not offered on the other.
+                ->visible(fn (?StorefrontSetting $record): bool => ! $record || $record->isPrimary())
                 ->description('When a lead\'s next follow-up date arrives, the assigned staff member is notified in-app, and (when enabled here) the lead is messaged over WhatsApp with an SMS fallback. Runs every 15 minutes via the scheduler. Uses the same SMS gateway and WhatsApp Chat Channel configured above.')
                 ->schema([
                     Toggle::make('lead_follow_up_reminders_enabled')
@@ -1155,48 +1157,10 @@ class StorefrontSettingResource extends Resource
                 ->collapsible()
                 ->collapsed(),
 
-            Section::make(__('Reseller Settings'))
-                ->columnSpanFull()
-                ->description(__('Money rules for the reseller program: the cost added to the wholesale rate, and the minimum withdrawal. Nothing here is shown on the public storefront.'))
-                ->schema([
-                    TextInput::make('reseller_cost_per_unit')
-                        ->label(__('Reseller cost per unit'))
-                        ->numeric()
-                        ->minValue(0)
-                        ->default(0)
-                        ->prefix(fn (): string => app(CompanyContext::class)->company()?->currency ?: 'BDT')
-                        ->helperText(__("Added to a product's lowest wholesale tier price to get a reseller's cost. Resellers can sell at any price at or above that cost; the difference is their commission.")),
-
-                    TextInput::make('reseller_packaging_cost_per_unit')
-                        ->label(__('Packaging charge per piece (own courier)'))
-                        ->numeric()
-                        ->minValue(0)
-                        ->default(0)
-                        ->prefix(fn (): string => app(CompanyContext::class)->company()?->currency ?: 'BDT')
-                        ->helperText(__('Charged on orders a reseller sends with their own courier: this amount times the number of pieces. The reseller pays it in advance with the order.')),
-
-                    TextInput::make('reseller_min_withdrawal')
-                        ->label(__('Minimum reseller withdrawal'))
-                        ->numeric()
-                        ->minValue(0)
-                        ->default(0)
-                        ->prefix(fn (): string => app(CompanyContext::class)->company()?->currency ?: 'BDT')
-                        ->helperText(__('The smallest amount a reseller can request to withdraw from their delivered-order commission.')),
-                ])
-                ->columns(2)
-                ->collapsible()
-                ->collapsed(),
-
             Section::make('Footer Builder')
                 ->columnSpanFull()
                 ->description('Add, remove, and reorder the sections shown in the public footer. Leave empty to use the automatic default footer (brand, quick links, contact, bottom bar).')
                 ->schema([
-                    Toggle::make('reseller_program_enabled')
-                        ->label('Show reseller program')
-                        ->default(true)
-                        ->helperText('Off hides "Become a reseller" from the account menu and footer. The reseller pages and dashboard keep working at their direct URL — only the links are hidden.')
-                        ->columnSpanFull(),
-
                     Repeater::make('social_links')
                         ->label('Social links')
                         ->columnSpanFull()
@@ -1264,6 +1228,7 @@ class StorefrontSettingResource extends Resource
 
                                             return $companyId ? StorefrontPage::withoutGlobalScopes()
                                                 ->where('company_id', $companyId)
+                                                ->when($record, fn ($query) => $query->forSite($record))
                                                 ->where('is_published', true)
                                                 ->orderBy('title')
                                                 ->pluck('title', 'id')
@@ -1348,7 +1313,6 @@ class StorefrontSettingResource extends Resource
             'notifications',
             'notifications',
             'navigation_seo',
-            'reseller',
             'navigation_seo',
             'navigation_seo',
             'nextjs_site',
@@ -1414,6 +1378,7 @@ class StorefrontSettingResource extends Resource
                     ->required(fn (Get $get): bool => $get('type') === 'page')
                     ->options(fn (Get $get, ?StorefrontSetting $record) => StorefrontPage::withoutGlobalScopes()
                         ->where('company_id', $companyId($get, $record))
+                        ->when($record, fn ($query) => $query->forSite($record))
                         ->where('is_published', true)
                         ->orderBy('title')
                         ->pluck('title', 'id')),
@@ -1557,13 +1522,12 @@ class StorefrontSettingResource extends Resource
 
     /**
      * Whether a settings section (by its navigation key) belongs to this kind of
-     * site: reseller settings only exist on the Blade storefront, the Next.js
-     * switch and domain only on the Next.js site. Everything else is shared.
+     * site: the Next.js switch and domain only exist on the Next.js site.
+     * Everything else is shared by both kinds of site.
      */
     public static function sectionAppliesToSite(string $section, string $siteType): bool
     {
         return match ($section) {
-            'reseller' => $siteType !== StorefrontSetting::SITE_NEXTJS,
             'nextjs_site' => $siteType === StorefrontSetting::SITE_NEXTJS,
             default => true,
         };
@@ -1578,6 +1542,7 @@ class StorefrontSettingResource extends Resource
             'Logo uploaded' => filled($record->logo),
             'Hero slide added' => StorefrontSlide::withoutGlobalScopes()
                 ->where('company_id', $record->company_id)
+                ->forSite($record)
                 ->where('is_active', true)
                 ->exists(),
             'SEO completed' => filled($record->meta_title) && filled($record->meta_description),
@@ -1631,6 +1596,7 @@ class StorefrontSettingResource extends Resource
     {
         return StorefrontPage::withoutGlobalScopes()
             ->where('company_id', $record->company_id)
+            ->forSite($record)
             ->where('is_published', true)
             ->count();
     }

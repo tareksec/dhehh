@@ -635,6 +635,43 @@ class StorefrontSetting extends Model
         return $companyId ? static::withoutGlobalScopes()->nextjs()->where('company_id', $companyId)->first() : null;
     }
 
+    /**
+     * The row company-level features read (WooCommerce, CRM messaging, lead
+     * reminders): the Next.js site once the company has one — it is the main
+     * storefront — otherwise the Blade storefront. The reseller store and the
+     * Blade carts always use the Blade row (see bladeFor()).
+     */
+    public static function primaryFor(?int $companyId): ?self
+    {
+        return static::nextjsFor($companyId) ?? static::bladeFor($companyId);
+    }
+
+    public function isPrimary(): bool
+    {
+        return (bool) static::primaryFor((int) $this->company_id)?->is($this);
+    }
+
+    /**
+     * "Show on" choices for a slide or page: each of the company's sites,
+     * keyed by its settings row id. "All sites" is the empty choice.
+     *
+     * @return array<int, string>
+     */
+    public static function siteChoicesFor(?int $companyId): array
+    {
+        if (! $companyId) {
+            return [];
+        }
+
+        return static::withoutGlobalScopes()
+            ->with('company')
+            ->where('company_id', $companyId)
+            ->orderBy('site_type')
+            ->get()
+            ->mapWithKeys(fn (self $row): array => [$row->getKey() => $row->siteTypeLabel().' · '.($row->siteDomain() ?: '—')])
+            ->all();
+    }
+
     /** Domain this site is served on: the company's storefront domain, or the Next.js site's own. */
     public function siteDomain(): ?string
     {

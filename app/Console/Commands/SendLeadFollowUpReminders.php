@@ -68,7 +68,7 @@ class SendLeadFollowUpReminders extends Command
             return;
         }
 
-        $setting = StorefrontSetting::bladeFor((int) $lead->company_id);
+        $setting = StorefrontSetting::primaryFor((int) $lead->company_id);
 
         if (! $setting || ! $setting->lead_follow_up_reminders_enabled) {
             return;

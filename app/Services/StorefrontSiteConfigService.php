@@ -148,7 +148,7 @@ class StorefrontSiteConfigService
         $items = collect($items ?? []);
         $categories = Category::query()->where('is_active', true)
             ->whereIn('id', $items->pluck('category_id')->filter()->all())->pluck('slug', 'id');
-        $pages = StorefrontPage::query()->published()
+        $pages = StorefrontPage::query()->published()->forSite($this->setting)
             ->whereIn('id', $items->pluck('page_id')->filter()->all())->pluck('slug', 'id');
 
         return $items->map(function (array $item) use ($categories, $pages): ?array {
@@ -181,7 +181,7 @@ class StorefrontSiteConfigService
     {
         $blocks = collect($this->setting->footerBlocks());
         $pageIds = $blocks->flatMap(fn (array $block) => collect($block['data']['legal_links'] ?? [])->pluck('page_id'))->filter()->all();
-        $pages = StorefrontPage::query()->published()->whereIn('id', $pageIds)->get(['id', 'slug', 'title'])->keyBy('id');
+        $pages = StorefrontPage::query()->published()->forSite($this->setting)->whereIn('id', $pageIds)->get(['id', 'slug', 'title'])->keyBy('id');
 
         return $blocks->map(function (array $block) use ($pages): array {
             $data = (array) ($block['data'] ?? []);

@@ -136,7 +136,7 @@ class StorefrontController extends Controller
         $setting = $request->attributes->get('storefront_setting');
         $company = $this->context->company();
 
-        $slides = StorefrontSlide::forCompanyTheme($company->getKey(), $setting->storefrontTheme(), $setting->homepageTemplate());
+        $slides = StorefrontSlide::forCompanyTheme($company->getKey(), $setting->storefrontTheme(), $setting->homepageTemplate(), $setting);
         $products = Product::query()
             ->whereIn('id', $slides->pluck('product_id')->filter()->all())
             ->where('is_active', true)
@@ -175,11 +175,12 @@ class StorefrontController extends Controller
         return response()->json(['data' => $this->catalog()->collections($kind)]);
     }
 
-    public function pages(): JsonResponse
+    public function pages(Request $request): JsonResponse
     {
         $company = $this->context->company();
 
         return response()->json(['data' => StorefrontPage::query()->published()
+            ->forSite($request->attributes->get('storefront_setting'))
             ->orderBy('sort_order')->orderBy('title')->get()
             ->map(fn (StorefrontPage $page): array => [
                 'slug' => $page->slug,
@@ -189,9 +190,11 @@ class StorefrontController extends Controller
             ])->values()->all()]);
     }
 
-    public function page(string $slug): JsonResponse
+    public function page(Request $request, string $slug): JsonResponse
     {
-        $page = StorefrontPage::query()->published()->where('slug', $slug)->first();
+        $page = StorefrontPage::query()->published()
+            ->forSite($request->attributes->get('storefront_setting'))
+            ->where('slug', $slug)->first();
 
         if (! $page) {
             return $this->error('page_not_found', 404);

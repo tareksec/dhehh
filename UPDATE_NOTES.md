@@ -19,6 +19,27 @@ Still open (owner decision): a "Users: Manage" holder can still edit (name, emai
 
 Commit status: committed and pushed to `claude/security-audit-fixes` and `main` on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
 
+## 2026-10-06 - All reseller settings on Resellers → Reseller Settings
+
+Owner rule (in Bangla): every reseller setting goes in the Reseller Settings option and everything is controlled from there.
+
+Before: module + subdomains + custom domains + portal domain on the company form (Super Admin only); cost per unit, packaging charge, minimum withdrawal in Storefront Settings → Reseller Settings; "Show reseller program" in Storefront Settings → Footer Builder; the payment channels in Payment Methods.
+
+What changed:
+- New page **Resellers → Reseller Settings** (`App\Filament\Pages\ResellerSettings`) with all of those for the current company. Module/domain fields stay Super Admin only (shown disabled to other staff, and a forged change is ignored on save). Portal domain normalised and unique across companies.
+- Removed from the company form and from Storefront Settings (section and footer toggle).
+- Payment channels are **listed** on the page with a link to Payment Methods, not edited there: the same methods are the storefront checkout's manual payment options, so editing them in two places would be confusing. Say if you want them editable on this page too.
+- Who can open it: users with Settings: Manage (same as Storefront Settings). In "All companies" view it asks to choose a company.
+- Docs updated: `docs/deployment.md` (where to switch subdomains/custom domains on), `13_RESELLER_PORTAL_PLAN.md` (admin side; own-courier orders are no longer read-only for the reseller).
+
+Tests: new `ResellerSettingsPageTest` (5: Super Admin saves everything; portal domain unique; settings manager can change money rules but not the module; no access without the permission; old places no longer show the fields); `ResellerCommissionTest` moved to the new page; `PhaseFourAdminPagesTest`'s Storefront Settings section list no longer has `reseller`. Full `php artisan test` (plain, no `--env`): **1868 passed, 1 skipped, 0 failed**.
+
+Needs Bangla review: the new keys on the page ("টাকার নিয়ম", "রিসেলার মডিউল চালু", "নিজস্ব কুরিয়ারের অগ্রিম পেমেন্ট", …).
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07), merged with `origin/main` v2.57.0 and v2.57.1 (separate Blade / Next.js storefront settings): the reseller settings keep using the Blade storefront row (`Company::storefrontSetting()`), as v2.57.0 intends; conflicts in CHANGELOG/UPDATE_NOTES, lang files and `PhaseFourAdminPagesTest` resolved by keeping both sides; `NextjsSiteSettingsTest` now expects no `reseller` section on the Blade site either. Full suite after the merges: **1890 passed, 1 skipped, 0 failed**.
+
+
+
 ## 2026-10-07 - Sign-up needs an SMS code (account takeover by phone number)
 
 Reason — owner asked "পরবর্তী কাজ কি", I listed the open item "registration adopts an existing customer record by phone without proving ownership" as the first thing to fix, owner said "ওটিপি সিকিউরিটি যোগ করো".
@@ -40,6 +61,28 @@ Needs Bangla review: the 11 new keys (sign-up code page, "This phone number alre
 Tests: `StorefrontApiAccountTest` (+4: adoption via code, existing number needs code / no SMS → refused, five wrong codes + quick resend, taken number before SMS, failed SMS), `StorefrontCustomerAuthTest` (+2; existing sign-ups go through the code). Registration-related tests (92): all pass except 1 that needs `intl`. Full plain `php artisan test` on this server (PHP 8.4 without intl): 1870 tests, 189 failures, all "intl extension required", 0 other failures; after merging `origin/main` (separate Blade / Next.js storefront settings): 1886 tests, 189 failures, all intl, 0 other.
 
 Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07); `origin/main` merged first — CHANGELOG `[Unreleased]` sections combined, lang files rebuilt as main's keys plus ours.
+
+## 2026-10-07 (follow-up) - Show on for slides and pages; WooCommerce, CRM messaging and lead reminders read the Next.js row
+
+Owner answers (in Bangla) to the two open questions after the settings split: (1) separate hero slides, custom pages and offers per site — **do it**; (2) the company-level features **read the Next.js row**.
+
+What changed:
+- Slides and pages: new **Show on** (`storefront_setting_id`, NULL = all sites — every existing record). Blade shows all + Blade-only, the Next.js API shows all + Next.js-only; menus/footer legal links drop pages of the other site; lists show a **Show on** column; choosing a site on a slide sets that site's theme/template; a site id from another company is refused.
+- Offers: nothing to add — they are already separate by type in the code (landing-page offers are only served by the Blade `OfferController`/`OfferCheckoutController`; Collections only by the API/`StorefrontCatalogService`, so a Flash Sale deal never changes a Blade price). Say if you still want an explicit **Show on** on offers.
+- `StorefrontSetting::primaryFor()` = the Next.js row once the company has one, else the Blade row. WooCommerce (import, order sync, webhook secret, Integrations tab), CRM messaging (SMS/WhatsApp broadcasts and failed-message fallback) and lead follow-up reminders now read it. The Lead Follow-up Reminders section and the WooCommerce tab appear only on that row.
+
+My decisions (say if you want different):
+- **Reseller stays on the Blade row.** I read "Next.js row" as the company-level integrations only: the reseller program/store is the Blade storefront by your own decision, and the Blade abandoned-cart reminders belong to Blade carts (the Next.js site keeps its cart in the browser).
+- A page's **slug is still unique per company**, so the two sites cannot each have an "about" page with the same address; give them different slugs (e.g. `about`, `about-main`).
+- Existing slides/pages stay on **All sites** until you pick a site for each — the Next.js site will show the same banners as before until you do.
+- Deleting a site's settings row returns the slides/pages limited to it to **All sites**.
+- The payment-method list is still shared by both sites.
+
+Tests: `StorefrontSiteContentTest` (8) plus cases in `StorefrontApiTest`, `WooCommerceOrderWebhookTest`, `LeadFollowUpReminderTest`; the pages/slides/Woo behaviours were checked to fail when the old behaviour is put back.
+
+Needs Bangla review: 3 new keys ("যেখানে দেখাবে", "সব সাইট" and the Show-on help text).
+
+Commit status: NOT committed — waiting for the owner's explicit approval. On top of `origin/main` v2.57.0.
 
 ## 2026-10-07 - Separate storefront settings for the Blade storefront (reseller store) and the Next.js site (main storefront)
 

@@ -761,17 +761,23 @@ class IntegrationsPageTest extends TestCase
 
         Livewire::test(Integrations::class)
             ->assertFormFieldExists('site_setting_id')
-            ->assertSet('data.site_setting_id', $blade->getKey())
-            ->assertSet('data.online_payment_gateway', 'zinipay')
+            // Opens on the company's primary row: the Next.js site once it has one.
+            ->assertSet('data.site_setting_id', $nextjs->getKey())
+            ->assertSet('data.online_payment_gateway', 'paystation')
+            // WooCommerce is read from that primary row.
             ->assertFormFieldIsVisible('woocommerce_base_url')
+            ->set('data.site_setting_id', $blade->getKey())
+            ->assertSet('data.online_payment_gateway', 'zinipay')
+            ->assertFormFieldIsHidden('woocommerce_base_url')
             ->set('data.site_setting_id', $nextjs->getKey())
             ->assertSet('data.online_payment_gateway', 'paystation')
-            ->assertFormFieldIsHidden('woocommerce_base_url')
+            ->set('data.woocommerce_base_url', 'https://woo-next.example.com')
             ->set('data.meta_pixel_id', '5544332211009988')
             ->call('save')
             ->assertHasNoFormErrors();
 
         $this->assertSame('5544332211009988', $nextjs->fresh()->meta_pixel_id);
+        $this->assertSame('https://woo-next.example.com', $nextjs->fresh()->woocommerce_base_url);
         $this->assertNull($blade->fresh()->meta_pixel_id, 'Saving the Next.js site must not write to the Blade row.');
         $this->assertSame('https://woo.example.com', $blade->fresh()->woocommerce_base_url);
         $this->assertSame(['zinipay_api_key' => 'blade-key'], $blade->fresh()->payment_credentials);

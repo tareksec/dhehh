@@ -534,6 +534,49 @@ class StorefrontApiTest extends TestCase
         $this->api('site', $token)->assertStatus(403)->assertJsonPath('error', 'nextjs_site_disabled');
     }
 
+    public function test_slides_pages_and_menu_links_follow_the_site_they_are_shown_on(): void
+    {
+        $nextjs = StorefrontSetting::query()->nextjs()->where('company_id', $this->company->getKey())->firstOrFail();
+        $blade = StorefrontSetting::query()->create(['company_id' => $this->company->getKey(), 'site_type' => StorefrontSetting::SITE_BLADE, 'is_published' => true]);
+
+        foreach ([['Shared', null, 1], ['Only Next', $nextjs, 2], ['Only Blade', $blade, 3]] as [$heading, $site, $order]) {
+            StorefrontSlide::query()->create([
+                'image' => 'https://cdn.example.test/'.str($heading)->slug().'.jpg',
+                'heading' => $heading,
+                'storefront_setting_id' => $site?->getKey(),
+                'sort_order' => $order,
+                'is_active' => true,
+            ]);
+        }
+
+        $this->assertSame(['Shared', 'Only Next'], collect($this->api('slides')->assertOk()->json('data'))->pluck('heading')->all());
+
+        // The API clears the company context when a request ends.
+        app(CompanyContext::class)->set($this->company);
+        $shared = StorefrontPage::query()->create(['title' => 'Shared Page', 'content' => 'x', 'is_published' => true]);
+        $mine = StorefrontPage::query()->create(['title' => 'Next Page', 'content' => 'x', 'is_published' => true, 'storefront_setting_id' => $nextjs->getKey()]);
+        $theirs = StorefrontPage::query()->create(['title' => 'Blade Page', 'content' => 'x', 'is_published' => true, 'storefront_setting_id' => $blade->getKey()]);
+
+        $this->assertEqualsCanonicalizing(['shared-page', 'next-page'], collect($this->api('pages')->assertOk()->json('data'))->pluck('slug')->all());
+        $this->api('pages/next-page')->assertOk();
+        $this->api('pages/shared-page')->assertOk();
+        $this->api('pages/blade-page')->assertStatus(404)->assertJsonPath('error', 'page_not_found');
+
+        // A menu or footer link to a page that belongs to the other site is dropped, like an unpublished one.
+        $nextjs->update([
+            'header_menu' => [
+                ['label' => 'Mine', 'type' => 'page', 'page_id' => $mine->getKey()],
+                ['label' => 'Theirs', 'type' => 'page', 'page_id' => $theirs->getKey()],
+                ['label' => 'Both', 'type' => 'page', 'page_id' => $shared->getKey()],
+            ],
+            'footer_blocks' => [['type' => 'bottom_bar', 'data' => ['legal_links' => [['page_id' => $mine->getKey()], ['page_id' => $theirs->getKey()]]]]],
+        ]);
+
+        $site = $this->api('site')->assertOk();
+        $this->assertSame(['Mine', 'Both'], collect($site->json('data.menus.header'))->pluck('label')->all());
+        $this->assertSame(['next-page'], collect($site->json('data.footer.0.data.legal_links') ?? $site->json('data.footer_blocks.0.data.legal_links'))->pluck('page_slug')->all());
+    }
+
     protected function api(string $path, ?string $token = null): TestResponse
     {
         return $this->getJson('/api/v1/storefront/'.$path, ['Authorization' => 'Bearer '.($token ?? $this->token)]);

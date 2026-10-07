@@ -47,7 +47,7 @@ APP_DEBUG=false
 APP_URL=https://your-domain.com
 ASSET_URL=https://your-domain.com
 TRUSTED_PROXIES=*
-APP_VERSION=2.57.0
+APP_VERSION=2.59.0
 APP_RELEASE_TYPE=minor
 APP_RELEASE_DATE=2026-10-07
 
@@ -520,7 +520,7 @@ Behaviour to expect: on the portal host every non-portal path redirects to the p
 
 ### Reseller store subdomains (`name.<company-domain>`)
 
-Optional, per company. Needs two things on the server before **Company Management → Reseller subdomains enabled** is switched on:
+Optional, per company. Needs two things on the server before **Resellers → Reseller Settings → Reseller subdomains enabled** is switched on:
 
 1. **Wildcard DNS:** an `A` record `*.<company-domain>` pointing at the same server. Explicit records (`reseller`, `www`) keep working because they are more specific.
 2. **Wildcard SSL:** a `*.<company-domain>` certificate. Let's Encrypt only issues wildcards through a DNS challenge, so Traefik/Coolify needs your DNS provider's API token for that domain. Without it, subdomains open with a certificate warning.
@@ -529,7 +529,7 @@ No environment variables, no per-reseller server work: once both are in place a 
 
 ### Reseller custom domains (`myshop.com`)
 
-Optional, per company (**Reseller custom domains enabled**). The app side is finished: it verifies DNS, resolves the domain to the reseller's store, and answers `GET /internal/tls-ask?domain=<host>` with `200` only for a verified reseller domain (otherwise `404`). What the server needs is a proxy that gets an SSL certificate **on demand** and asks that endpoint first. Caddy does this:
+Optional, per company (**Resellers → Reseller Settings → Reseller custom domains enabled**). The app side is finished: it verifies DNS, resolves the domain to the reseller's store, and answers `GET /internal/tls-ask?domain=<host>` with `200` only for a verified reseller domain (otherwise `404`). What the server needs is a proxy that gets an SSL certificate **on demand** and asks that endpoint first. Caddy does this:
 
 ```
 {
