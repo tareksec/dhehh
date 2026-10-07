@@ -175,6 +175,57 @@ class VoucherTrashTest extends TestCase
         $this->assertSame(ResellerPayoutRequest::STATUS_PAID, $request->fresh()->status);
     }
 
+    public function test_a_rejected_or_cancelled_payout_voucher_makes_the_payout_unpaid(): void
+    {
+        $project = InvestmentProject::query()->create([
+            'company_id' => $this->company->id, 'project_code' => 'INV-9', 'name' => 'Machines', 'duration_type' => 'custom_days',
+            'trade_cycle_days' => 60, 'start_date' => now()->toDateString(), 'investor_share_percent' => 40,
+            'channel_partner_share_percent' => 10, 'company_share_percent' => 50, 'payout_fund_source_id' => $this->fundSource->id, 'status' => 'running',
+        ]);
+        foreach ([['Karim', '01711111111', '1479939603'], ['Rahim', '01722222222', '1901688455']] as [$name, $phone, $nid]) {
+            $investor = Investor::query()->create(['company_id' => $this->company->id, 'name' => $name, 'phone' => $phone, 'nid_number' => $nid]);
+            Investment::query()->create(['company_id' => $this->company->id, 'project_id' => $project->id, 'investor_id' => $investor->id, 'amount' => 100000, 'payment_method' => 'bank', 'invested_at' => now()->toDateString()]);
+        }
+        $project->update(['status' => 'closed']);
+        $settlements = app(SettlementService::class);
+        $settlement = $settlements->calculateAndSettle($project->fresh(), 300000, $this->admin->id, acknowledgeUnprovenCosts: true);
+        $settlements->confirmSettlement($settlement, $this->admin->id);
+
+        foreach ($settlement->payouts()->get() as $payout) {
+            $payout->update(['payment_status' => 'paid', 'paid_at' => now()->toDateString()]);
+            app(InvestmentLedgerService::class)->recordInvestorPayoutPaid($payout, $this->admin->id);
+        }
+        $settlement->update(['status' => 'paid_out']);
+        [$first, $second] = $settlement->payouts()->get()->all();
+
+        app(VoucherService::class)->reject($first->fresh()->voucher, 'Wrong account', $this->admin);
+        $this->assertSame('pending', $first->fresh()->payment_status);
+        $this->assertNull($first->fresh()->paid_at);
+        $this->assertSame('paid', $second->fresh()->payment_status);
+        $this->assertSame('confirmed', $settlement->fresh()->status);
+
+        app(VoucherService::class)->cancel($second->fresh()->voucher);
+        $this->assertSame('pending', $second->fresh()->payment_status);
+
+        // Restoring a voucher that was already rejected does not mark the payout paid again.
+        app(VoucherTrashService::class)->trash($first->fresh()->voucher, $this->admin);
+        app(VoucherTrashService::class)->restore($first->fresh()->voucher()->withTrashed()->first(), $this->admin);
+        $this->assertSame('pending', $first->fresh()->payment_status);
+
+        $reseller = Customer::query()->create(['name' => 'Reseller', 'phone' => '01811000000']);
+        $category = ExpenseCategory::query()->create(['name' => 'Reseller commission', 'slug' => 'reseller-commission', 'is_active' => true]);
+        foreach (['reject', 'cancel'] as $how) {
+            $request = ResellerPayoutRequest::query()->create(['customer_id' => $reseller->getKey(), 'amount' => 120, 'method' => 'nagad', 'account_details' => '01811000000']);
+            $voucher = app(ResellerPayoutService::class)->markPaid($request, ['payment_reference' => 'TRX-'.$how, 'fund_source_id' => $this->fundSource->id, 'expense_category_id' => $category->id], $this->admin);
+
+            $how === 'reject'
+                ? app(VoucherService::class)->reject($voucher, 'Wrong number', $this->admin)
+                : app(VoucherService::class)->cancel($voucher);
+
+            $this->assertSame(ResellerPayoutRequest::STATUS_APPROVED, $request->fresh()->status);
+        }
+    }
+
     private function voucher(): Voucher
     {
         return app(VoucherService::class)->submit([

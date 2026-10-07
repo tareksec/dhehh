@@ -26,6 +26,24 @@ Tests: new `NextjsSiteDesignTest` (22). Full plain `php artisan test`: **1923 pa
 
 Commit status: committed and pushed to the branch and main on owner approval ("কমিট ও পুশ কর এবং মেইনে পুশ কর", 2026-10-07), in both repositories; ERP `origin/main` (v2.60.3) merged first.
 
+## 2026-09-29 - Rejected or cancelled payout vouchers make the payout unpaid (missing part of the earlier voucher-trash work)
+
+Reason — owner: "পেআউটের ভাউচার রিজেক্ট হলে পেআউট অপরিশোধিত হবে- এটাকি ইমপ্লিমেন্ট করেছিলে?" — the owner asked whether the rule "a rejected payout voucher makes the payout unpaid" had been implemented.
+
+It had not. When I asked about trashed payout vouchers, I left rejected and cancelled ones out on purpose and said so ("পেআউটের ভাউচার রিজেক্ট বা ক্যানসেল হলে পেআউট এখনো পরিশোধিত-ই থাকে"). The owner's answer to the trash question was yes; this asked for the same rule for reject. It is now done.
+
+What changed:
+- `VoucherService::reject()` and `cancel()` call `VoucherLinkedPayoutsService::voucherVoided()` next to the withdrawal hook. Trash calls the same method, so all three paths behave the same way.
+- Effect: `SettlementPayout` / `ChannelPartnerPayout` go from paid to pending with `paid_at` cleared. A `paid_out` settlement goes back to `confirmed`. A `ResellerPayoutRequest` goes from paid to approved.
+- Restoring a rejected or cancelled voucher from trash does not mark anything paid again (already the case through `isVoid()`).
+
+Verification:
+- New test in `VoucherTrashTest`: reject and cancel for two investor payouts (only the affected one turns pending, and the settlement goes back to confirmed), a restore after reject that does not re-pay, and reseller withdrawals rejected and cancelled.
+- `VoucherTrashTest` + `InvestmentWithdrawalTest`: 15 passed. Full `php artisan test` (plain, no `--env`): **1557 passed, 0 failed**. Pint passes.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
 ## 2026-10-07 - Reseller-store orders invoiced in the reseller's name too
 
 Owner answer (in Bangla): yes, invoice the reseller-store orders in the reseller's name as well.
