@@ -55,11 +55,11 @@ with the Google Fonts URL, `typography`, `appearance`), `contact`, `social_links
 `announcement`, `utility_bar`, `campaign`, `trust_items`, `offer_countdown` (`null` once it ended),
 `business` (business-account text, bulk-pricing rows — wholesale), `features`, `menus.header` /
 `menus.footer` (category and page ids already resolved to slugs; an inactive category or an
-unpublished page is dropped), `footer_blocks` (the Footer Builder, legal links resolved to page
-slugs) and `seo`.
+unpublished page is dropped), `footer_blocks` (the Footer Builder, see below), `design`, `home_sections`
+(the Home Page Builder, see below) and `seo`.
 
 ### `GET /categories`
-Active categories: `id, name, slug, description, image_url, icon, products_count` (visible products).
+Active categories: `id, name, slug, description, tagline, image_url, icon, products_count` (visible products). `icon` is a Heroicon name such as `heroicon-o-speaker-wave`; `tagline` is the short line shown under the name on the category cards.
 
 ### `GET /products`
 Paginated product **cards**. Query:
@@ -68,15 +68,16 @@ Paginated product **cards**. Query:
 | --- | --- |
 | `category` | category slug (`404 category_not_found` if unknown) |
 | `q` | search in name, SKU and brand (max 100 chars) |
-| `sort` | `latest` (default), `price_asc`, `price_desc` |
+| `sort` | `latest` (default), `price_asc`, `price_desc`, `discount` (biggest percentage off first, full-price products last) |
+| `on_sale` | `1` = only products whose `sale_price` is below `price` |
 | `collection` | `flash-sale`, `trending`, `new-arrivals` — only products in a **live** collection of that kind |
 | `slugs` | comma list (max 50); returns those products in that order, unpaginated — use it to refresh cart/wishlist lines |
 | `page`, `per_page` | `per_page` default 24, max 48 |
 
 Card fields: `id, sku, slug, name, brand, unit, category{id,name,slug}, image_url, price,
 sale_price, selling_price, has_discount, discount_percent, deal, stock, reorder_level,
-stock_status, is_preorder, orderable, moq, tier_prices, has_variants, rating{average,count},
-created_at`.
+stock_status, is_preorder, orderable, moq, tier_prices, has_variants, collection_kinds, rating{average,count},
+created_at`. `collection_kinds` lists the live Offers → Collection kinds the product is in (`flash_sale`, `trending`, `new_arrivals`) — the website's "New" badge.
 
 * `stock_status` is `in_stock`, `low_stock` (the ERP's own rule: stock ≤ reorder level),
   `out_of_stock` or `preorder` (zero stock but pre-order allowed).
@@ -95,7 +96,7 @@ inject), `description_text`, `weight_kg`, `gallery_urls`, `video_url`, `variants
 
 ### `GET /slides`
 The Hero Slides for the company's active theme/template (schedule respected):
-`id, image_url, image_mobile_url, fit_to_frame, heading, subheading, cta_label, cta_url, product{slug,name}`.
+`id, image_url, image_mobile_url, fit_to_frame, eyebrow, heading, subheading, cta_label, cta_url, product{slug,name}`.
 A link to a product that is no longer visible comes back as `product: null`.
 `cta_url` is stored by the admin and may be a Blade path (`/products`, `/category/x`, `/product/x`,
 `/pages/x`) — the website mirrors those routes.
@@ -115,6 +116,53 @@ Published content pages: `slug, title, excerpt, cover_image_url`; the detail add
 A page's **Show on** (admin: *Site → Pages*) works the same way: pages for all sites and those limited to
 the Next.js site are served (a page limited to the Blade storefront answers `404 page_not_found`), and menu
 or footer links to a page of the other site are left out.
+
+### The site design: `design`, `home_sections` and the footer
+
+Everything below is set in the Next.js row's **Website Design** tab (and the Footer Builder) and is already
+cleaned by the ERP — text trimmed and cut to its limit, numbers clamped, colours `#RRGGBB`, links only a path,
+`http(s)`, `mailto:` or `tel:` — so the website never has to trust raw admin input (it still escapes it and drops
+unsafe links). A site with nothing saved gets the defaults below; the default layout carries no copy of its own.
+
+**`design`**
+
+| Key | Contents |
+| --- | --- |
+| `topbar` | `enabled`, `show_social`, `message`, `background`, `links` (menu items with `label, type, category_slug, page_slug, url, new_tab, icon`) |
+| `header` | `tagline`, `search_placeholder`, `show_search`, `show_theme_toggle`, `show_account`, `show_wishlist`, `show_support`, `support_label`, `support_phone`, `show_categories_menu`, `categories_label`, `sticky` |
+| `footer` | `background` |
+| `product_card` | `price_color`, `badge_color`, `show_rating`, `show_stock`, `show_wishlist`, `show_quick_view`, `show_add_to_cart` |
+| `floating_help` | `enabled`, `title`, `subtitle`, `url` (null = a WhatsApp chat with `contact.whatsapp_number`) |
+
+**`home_sections`** — the sections to show, in the admin's order, as `[{ "type", "data" }]`. Sections the admin switched
+off, a row for a category that is gone, banners without a usable image and text sections without any words are left out.
+A `null` title means "use the website's own default heading".
+
+| `type` | `data` |
+| --- | --- |
+| `hero` | `autoplay_seconds`, `show_dots`, `show_arrows`, `height` (`compact` / `standard` / `tall`) — the banners are `GET /slides` |
+| `trust_strip` | `items: [{icon, title, subtitle}]` (own items, else the site's Trust Strip messages) |
+| `category_grid` | `title`, `subtitle`, `category_slugs` (empty = every category with products), `limit`, `style` (`tiles` / `circles`), `show_tagline`, `show_count` |
+| `deals_banner` | `title`, `subtitle`, `link_label`, `link_url`, `limit`, `source`, `color_from`, `color_to` |
+| `product_row` | `title`, `subtitle`, `source`, `category_slug` (when `source` is `category`), `limit` (≤ 24), `columns` (4 / 5 / 6), `link_label`, `link_url` |
+| `flash_sale` | `badge`, `title`, `description`, `countdown_label`, `button_label`, `button_url`, `limit`, `source`, `show_countdown`, `background` |
+| `banners` | `columns`, `items: [{image_url, alt, url, new_tab}]` |
+| `mobile_cta` | `eyebrow`, `heading`, `text`, `whatsapp_label`, `call_label` (`{phone}` token), `show_whatsapp`, `show_call`, `show_mockups`, `mockup_button_label`, `background` |
+| `text` | `heading`, `body`, `button_label`, `button_url`, `align`, `tone` |
+| `seo_text` | `heading`, `body` (tokens already filled), `collapsed_lines` |
+| `business_callout` | — (uses `business`) |
+
+`source` is `latest`, `category`, `top_discount` (`GET /products?sort=discount&on_sale=1`) or a collection kind
+(`flash_sale`, `trending`, `new_arrivals` — `GET /collections`, in the admin's order).
+
+**`footer_blocks`** — `[{type, data}]` in the admin's order; unknown types are dropped. Types: `brand_about`
+(`show_logo`, `text`, `tagline`), `quick_links` (`heading`; the links are `menus.footer`), `custom_links` (`heading`,
+`links` resolved like the menus), `contact_info` (`heading`, `address`, `email`, `phones[]`, `hours`, `trade_license` — blanks are
+filled from the company's own details), `social_links` (`heading`; the profiles are `social_links`), `payment_methods`
+(`heading`, `items: [{label, tone}]`), `custom_text` (`heading`, `text`, `button_label`, `button_url`), `image`
+(`heading`, `image_url`, `alt`, `url`) and `bottom_bar` (`copyright_text`, `center_text`, `right_text` with a `{heart}`
+token, `legal_links: [{label, page_slug}]`). `own_column` (on `social_links`, `custom_text`, `payment_methods`, `image`)
+asks for a column of its own instead of sitting under the previous one.
 
 ## 4. Collections, deals and the ERP price
 

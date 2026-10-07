@@ -52,7 +52,8 @@ class StorefrontController extends Controller
     }
 
     /**
-     * Query: category (slug), q, sort (latest|price_asc|price_desc),
+     * Query: category (slug), q, sort (latest|price_asc|price_desc|discount),
+     * on_sale (1 = only products with a sale price below the regular price),
      * collection (flash-sale|trending|new-arrivals), slugs (comma list, for
      * refreshing cart/wishlist lines), page, per_page.
      */
@@ -99,7 +100,16 @@ class StorefrontController extends Controller
                 ->orWhere('brand', 'like', "%{$search}%"));
         }
 
+        if ($request->boolean('on_sale')) {
+            $query->whereNotNull('sale_price')->where('price', '>', 0)->whereColumn('sale_price', '<', 'price');
+        }
+
         match ((string) $request->query('sort')) {
+            // Biggest percentage off first; products without a discount sort last, newest first.
+            'discount' => $query
+                ->orderByRaw('CASE WHEN sale_price IS NOT NULL AND price > 0 AND sale_price < price THEN (price - sale_price) * 1.0 / price ELSE 0 END desc')
+                ->latest()
+                ->orderByDesc('id'),
             'price_asc' => $query->orderByRaw('COALESCE(sale_price, price) asc')->orderBy('id'),
             'price_desc' => $query->orderByRaw('COALESCE(sale_price, price) desc')->orderBy('id'),
             default => $query->latest()->orderByDesc('id'),
@@ -149,6 +159,7 @@ class StorefrontController extends Controller
             'image_url' => Media::url($slide->image, $company),
             'image_mobile_url' => Media::url($slide->image_mobile, $company),
             'fit_to_frame' => (bool) $slide->fit_to_frame,
+            'eyebrow' => $slide->eyebrow,
             'heading' => $slide->heading,
             'subheading' => $slide->subheading,
             'cta_label' => $slide->cta_label,

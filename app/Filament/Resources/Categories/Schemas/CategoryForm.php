@@ -28,6 +28,11 @@ class CategoryForm
                     ->required(),
                 Textarea::make('description')
                     ->columnSpanFull(),
+                TextInput::make('tagline')
+                    ->label(__('Tagline'))
+                    ->maxLength(80)
+                    ->helperText(__('A short line (for example "Earbuds · TWS · Headsets") shown under the category name on the Next.js website\'s category cards.'))
+                    ->columnSpanFull(),
                 ...self::mediaFields(),
                 Toggle::make('is_active')
                     ->required(),

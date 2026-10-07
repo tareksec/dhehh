@@ -2,6 +2,30 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-08 - Next.js home page, header and footer follow the approved design; everything is customised from the dashboard
+
+Owner request (in Bangla, with a screenshot of the design from the upstream repo `sajiduzzaman-im/zamzam-international`): the forked site had drifted to a Blade-theme look — the home page must be exactly that design, the dashboard must have every option to customise it, header and footer must match, and the Footer Builder must be able to build a custom footer.
+
+What changed (details in CHANGELOG `[Unreleased]`):
+- New **Website Design** tab on the Next.js row (Home Page Builder, Top Bar, Header, Product Cards, Floating Help Button). The Blade row has no such tab and never stores it.
+- Footer Builder: Custom links column, Custom text, Payment badges, Image / badge; richer Contact info and Bottom bar; footer background colour; Blade footer renders the new blocks too.
+- API: `design`, `home_sections`, cleaned footer blocks, category `tagline`, slide `eyebrow`, product `collection_kinds`, `sort=discount`, `on_sale=1`. New `StorefrontSiteDesign` cleans everything (colours, links, numbers) — never raw admin input.
+- Website repo (`bhd4232/zamzamint-new-website-theme`): top bar, header, hero, trust strip, category cards, deals banner, product rows, flash-sale band, WhatsApp section, SEO text, dark footer, floating help — all driven by the above.
+
+My decisions (say if you want different):
+- The upstream repo is not reachable from this session (private; add_repo was refused), and the fork only carries its first commit, which is an older design than the screenshot. The design was rebuilt **from the screenshot** (spacing, colours, card layout, sections); fonts come from the ERP typography setting (the screenshot's font could not be identified) — pick a font in Storefront Settings → Storefront Typography.
+- The screenshot's "Inventory not synced yet / Sync now" line was a mock-data leftover and is not rebuilt (the ERP is the live source).
+- The default home layout has no per-category rows and no WhatsApp / SEO text sections (those need copy only the owner can write); the owner adds them in the Home Page Builder. The category cards show categories alphabetically unless the owner picks categories (the pick order is kept) — categories have no sort number.
+- "New" badge = the product is in a live **New Arrivals** collection (no automatic "new" rule, per the earlier owner rule). Prices on cards are orange by default (changeable).
+
+Needs Bangla review: all ~200 new admin labels in `lang/bn.json` (Website Design tab, Home Page Builder sections, Footer Builder blocks) and the website's new interface strings (`home.*`, `help.*`, `footer.*`, `product.new`).
+
+Also: saving settings / slides / pages / categories / offers now sends a debounced `storefront.updated` webhook (5 s delay, once per 5 s) so the Next.js site shows dashboard edits within seconds (the website's webhook route already accepts it); set the webhook URL and secret under Integrations → Website API.
+
+Tests: new `NextjsSiteDesignTest` (22). Full plain `php artisan test`: **1923 passed, 1 skipped, 0 failed**; website `tsc --noEmit` and `npm run build` clean. Browser checks on a throwaway database: desktop 1920 / 1440 / 1100, tablet, phone, dark mode, Bangla; mobile menu, categories dropdown, add to cart, Read more, link safety, sticky header; admin Website Design tab.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট ও পুশ কর এবং মেইনে পুশ কর", 2026-10-07), in both repositories; ERP `origin/main` (v2.60.3) merged first.
+
 ## 2026-10-06 - All reseller settings on Resellers → Reseller Settings
 
 Owner rule (in Bangla): every reseller setting goes in the Reseller Settings option and everything is controlled from there.

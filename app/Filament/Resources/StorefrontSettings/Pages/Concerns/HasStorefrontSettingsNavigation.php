@@ -80,6 +80,7 @@ trait HasStorefrontSettingsNavigation
             ['key' => 'notifications', 'label' => 'Notifications', 'icon' => 'heroicon-o-bell-alert'],
             ['key' => 'navigation_seo', 'label' => 'Navigation & SEO', 'icon' => 'heroicon-o-bars-3-bottom-left'],
             ['key' => 'nextjs_site', 'label' => __('Next.js Site'), 'icon' => 'heroicon-o-computer-desktop'],
+            ['key' => 'nextjs_design', 'label' => __('Website Design'), 'icon' => 'heroicon-o-squares-2x2'],
         ];
     }
 
