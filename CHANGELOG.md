@@ -4,11 +4,18 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Minor Feature Update
-
 ### Security
 
 - **Signing up now needs an SMS code.** A new storefront account takes over the customer record (and order history) of the same phone number, so before, anyone who knew a customer's number could sign up with it and see that customer's past orders and address. Now, when the store has an SMS gateway, the sign-up form (Blade storefront and the Next.js site's API) texts a 6-digit code to the number and the account is created only after the code is entered. The code is valid for 10 minutes; five wrong codes throw it away; asking again within a minute does not send a second SMS. A taken phone or email is refused before any code is sent. Without an SMS gateway, a brand-new number still signs up in one step, but a number that already has a customer record cannot sign up (the visitor is asked to contact the store). In English and Bangla.
+
+### Technical Notes
+
+- `CustomerAccountService`: new `ensureCanRegister()`, `registrationVerification()` (`VERIFY_SMS` / `VERIFY_NONE` / `VERIFY_UNAVAILABLE`), `sendRegistrationCode()` / `verifyRegistrationCode()` (hashed code in the cache, keyed per company and normalized phone); `register()` accepts `password_hash`. Blade: `AccountAuthController::register()` keeps only the password hash in the session, new `account/register/verify` (GET/POST) and `account/register/resend` routes (domain + preview), new view `storefront/account/register-verify`. API: `POST /account/register` takes `code`; answers `202 verification_required`, `422 otp_invalid`, `422 verification_unavailable` (`docs/api/storefront-api.md`). Offer checkout's automatic account (random password) is unchanged. 11 new lang keys. `StorefrontApiAccountTest` +4, `StorefrontCustomerAuthTest` +2 (existing sign-up tests now go through the code). No migrations.
+- **The Next.js website must handle `202 verification_required` (show a code field and resend the form with `code`)**; until it does, sign-up on the Next.js site fails on a store with an SMS gateway.
+
+## [2.57.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
 
 ### Added
 
@@ -27,10 +34,6 @@ All notable production changes to Business Dashboard are documented here.
 - Migration `2026_10_07_100000_add_site_type_to_storefront_settings_table`: `storefront_settings.site_type` (`blade` default | `nextjs`), `unique(company_id, site_type)` replacing `unique(company_id)`, nullable `storefront_setting_id` on `orders` and `storefront_payments` (NULL = Blade storefront, every existing record), and the data split above (idempotent). Reversible.
 - `Company::storefrontSetting()` is now the **Blade** row (all earlier code keeps working); new `Company::nextjsSetting()` / `storefrontSettings()`, `StorefrontSetting::bladeFor()` / `nextjsFor()` / `siteDomain()` / `recordedSiteId()`, `Order::siteSetting()` and `StorefrontPayment::siteSetting()` (own Next.js row, else Blade). `StorefrontCheckoutService::createOrder()` takes the site; ZiniPay/PayStation webhooks, Meta conversions/dispatch and the website webhook dispatcher read the order's or payment's own site. Abandoned-cart reminders, CRM messaging, lead reminders, WooCommerce and the slide pages stay on the Blade row.
 - Tests: `NextjsSiteSettingsTest` rewritten (17 tests: separate rows, one per type, domain handling never touching the company domain, per-site sections, list, create with/without copy, migration split); new cases in `StorefrontApiTest`, `StorefrontApiCheckoutTest`, `StorefrontMetaTrackingTest`, `StorefrontPaystationPaymentTest`, `WebsiteWebhookDispatchTest`, `IntegrationsPageTest`. 9 new lang keys in `lang/en.json` and `lang/bn.json`.
-- `CustomerAccountService`: new `ensureCanRegister()`, `registrationVerification()` (`VERIFY_SMS` / `VERIFY_NONE` / `VERIFY_UNAVAILABLE`), `sendRegistrationCode()` / `verifyRegistrationCode()` (hashed code in the cache, keyed per company and normalized phone); `register()` accepts `password_hash`. Blade: `AccountAuthController::register()` keeps only the password hash in the session, new `account/register/verify` (GET/POST) and `account/register/resend` routes (domain + preview), new view `storefront/account/register-verify`. API: `POST /account/register` takes `code`; answers `202 verification_required`, `422 otp_invalid`, `422 verification_unavailable` (`docs/api/storefront-api.md`). Offer checkout's automatic account (random password) is unchanged. 11 new lang keys. `StorefrontApiAccountTest` +4, `StorefrontCustomerAuthTest` +2 (existing sign-up tests now go through the code). No migrations.
-- **The Next.js website must handle `202 verification_required` (show a code field and resend the form with `code`)**; until it does, sign-up on the Next.js site fails on a store with an SMS gateway.
-
-
 ## [2.56.0] - 2026-10-06
 
 **Release type:** Minor Feature Update
