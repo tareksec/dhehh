@@ -4,6 +4,16 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch
+
+### Fixed
+
+- **Every reseller-portal order is now invoiced in the reseller's name (owner rule).** Orders a reseller placed from the portal for the store to deliver (cash on delivery) still printed the company's name, logo, email and address and the internal "Reseller portal order" note. Now every order from the reseller portal — store-delivered or own courier — shows the reseller's store name and logo and none of the company's contact details or the internal note, on the printed invoice, the "Print invoices" bulk print, the PDF invoice, the courier cut-slip and the order summary card. Amounts are unchanged: on a store-delivered order the customer still sees the reseller's price, the delivery charge and the due amount. Orders from other sources keep the company invoice.
+
+### Technical Notes
+
+- New `Order::showsResellerBranding()` (a reseller order whose `source` is `reseller_portal`, or any own-courier order) decides the invoice brand; `showsResellerPricesToBuyer()` (own courier only) still decides the prices. Used in `orders/partials/invoice.blade.php`, `orders/pdf.blade.php`, `OrderPdfController` (reseller logo) and `OrderSummaryCardService`. `ResellerOwnCourierOrderTest`: the store-delivered invoice test now expects the reseller's brand (print, bulk print, PDF, summary card), plus a new test that a non-portal order keeps the company invoice. No migration, no new lang keys.
+
 ## [2.60.1] - 2026-10-07
 
 **Release type:** Security Update

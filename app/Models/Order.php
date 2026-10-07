@@ -453,6 +453,19 @@ class Order extends Model
         return (bool) $this->reseller_own_courier;
     }
 
+    /**
+     * Owner rule (2026-10-07): every order a reseller places from the reseller
+     * portal -- store-delivered (cash on delivery) or own courier -- is
+     * invoiced in the reseller's own store name and logo, never the
+     * company's. Prices follow showsResellerPricesToBuyer() separately: on a
+     * store-delivered order the amounts already are the reseller's prices.
+     */
+    public function showsResellerBranding(): bool
+    {
+        return $this->reseller_customer_id !== null
+            && ($this->source === self::SOURCE_RESELLER_PORTAL || (bool) $this->reseller_own_courier);
+    }
+
     /** The order total in the buyer's prices (the reseller's retail prices on an own-courier order). */
     public function buyerTotal(): float
     {

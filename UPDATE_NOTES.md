@@ -2,6 +2,21 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-07 - Reseller-portal orders invoiced in the reseller's name
+
+Owner report (in Bangla, with a screenshot): a reseller placed this order but the invoice is in our company's name; every order from the reseller portal must be invoiced in that reseller's own name — treat it as important.
+
+Cause: the reseller brand was tied to own-courier orders only (`showsResellerPricesToBuyer()`), so a store-delivered (cash on delivery) portal order printed ZamZam International's name, logo, email, address and the internal "Reseller portal order" note.
+
+What changed:
+- New `Order::showsResellerBranding()`: any order with a reseller and `source = reseller_portal` (or any own-courier order). Invoice print, bulk print, PDF, courier cut-slip and order summary card now show the reseller's store name and logo, no company contact details and no internal note, for all of these orders.
+- Prices unchanged: a store-delivered portal order already charges the reseller's price, so the customer sees that price, the delivery charge and the due amount as before. Own-courier orders keep their retail-price view.
+- Orders from other sources (including a customer buying on the reseller's online store, `/store/<name>`) keep the company invoice — the request named portal orders only. Say if the reseller-store orders should also carry the reseller's name.
+
+Tests: `ResellerOwnCourierOrderTest` (31 tests): store-delivered portal order shows the reseller brand on print, bulk print, PDF and summary card; a non-portal order keeps the company brand. Full `php artisan test` (plain, no `--env`): **1915 passed, 1 skipped, 0 failed**.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
 ## 2026-10-07 - Users page: staff see and edit only their own companies' users
 
 Reason — owner: "ওকে ইউজার মিনিট আপডেট করে দাও, কোন ইউজার তার নিজের কোম্পানির ইউজারদের দেখলে এবং এডিট করতে পারবে।" (a user can see and edit only the users of their own company). Closes the open item from the entry below.
