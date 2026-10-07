@@ -6,12 +6,29 @@ use App\Models\Concerns\BelongsToCompany;
 use App\Services\StorefrontMetaTrackingService;
 use App\Support\StorefrontListingCache;
 use App\Support\StorefrontThemeRegistry;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 
 class StorefrontSetting extends Model
 {
     use BelongsToCompany;
+
+    /**
+     * A company can run more than one storefront, each with its own settings
+     * row. `blade` is the server-rendered Blade storefront (the reseller
+     * store) and every row that existed before sites were split; `nextjs` is
+     * the headless Next.js site (the main storefront), served through
+     * /api/v1/storefront/*. At most one row of each type per company.
+     */
+    public const SITE_BLADE = 'blade';
+
+    public const SITE_NEXTJS = 'nextjs';
+
+    public const SITE_TYPES = [
+        self::SITE_BLADE => 'Blade storefront (reseller store)',
+        self::SITE_NEXTJS => 'Next.js site (main storefront)',
+    ];
 
     public const CHECKOUT_POLICY_OFF = 'off';
 
@@ -307,6 +324,7 @@ class StorefrontSetting extends Model
 
     protected $fillable = [
         'company_id',
+        'site_type',
         'storefront_theme',
         'homepage_template',
         'marketplace_announcement_enabled',
@@ -571,6 +589,63 @@ class StorefrontSetting extends Model
         return $this->footer_blocks ?: self::DEFAULT_FOOTER_BLOCKS;
     }
 
+    public function isNextjs(): bool
+    {
+        return $this->site_type === self::SITE_NEXTJS;
+    }
+
+    public function isBlade(): bool
+    {
+        return ! $this->isNextjs();
+    }
+
+    /**
+     * What an order or payment stores to remember its site: this row's id for
+     * a Next.js site, NULL for the Blade storefront (the default everywhere).
+     */
+    public function recordedSiteId(): ?int
+    {
+        return $this->isNextjs() ? (int) $this->getKey() : null;
+    }
+
+    public function scopeBlade(Builder $query): Builder
+    {
+        return $query->where($this->qualifyColumn('site_type'), self::SITE_BLADE);
+    }
+
+    public function scopeNextjs(Builder $query): Builder
+    {
+        return $query->where($this->qualifyColumn('site_type'), self::SITE_NEXTJS);
+    }
+
+    /**
+     * The company's Blade storefront settings (the reseller store). This is
+     * also what every company-level feature that predates the site split
+     * (WooCommerce, CRM messaging, reminders, the reseller program) reads.
+     * Looked up without the company scope so it works in jobs and webhooks.
+     */
+    public static function bladeFor(?int $companyId): ?self
+    {
+        return $companyId ? static::withoutGlobalScopes()->blade()->where('company_id', $companyId)->first() : null;
+    }
+
+    /** The company's Next.js site settings (the main storefront), if it has one. */
+    public static function nextjsFor(?int $companyId): ?self
+    {
+        return $companyId ? static::withoutGlobalScopes()->nextjs()->where('company_id', $companyId)->first() : null;
+    }
+
+    /** Domain this site is served on: the company's storefront domain, or the Next.js site's own. */
+    public function siteDomain(): ?string
+    {
+        return $this->isNextjs() ? $this->nextjs_site_domain : $this->company?->domain;
+    }
+
+    public function siteTypeLabel(): string
+    {
+        return __(self::SITE_TYPES[$this->site_type ?: self::SITE_BLADE] ?? self::SITE_TYPES[self::SITE_BLADE]);
+    }
+
     /**
      * Whether the company's headless Next.js storefront may read the ERP's
      * /api/v1/storefront/* endpoints. A domain is not required to be set yet
@@ -578,7 +653,7 @@ class StorefrontSetting extends Model
      */
     public function nextjsSiteEnabled(): bool
     {
-        return (bool) $this->nextjs_site_enabled;
+        return $this->isNextjs() && (bool) $this->nextjs_site_enabled;
     }
 
     /**
@@ -595,6 +670,7 @@ class StorefrontSetting extends Model
         }
 
         return static::withoutGlobalScopes()
+            ->nextjs()
             ->where('nextjs_site_domain', $host)
             ->when($exceptCompanyId, fn ($query) => $query->where('company_id', '!=', $exceptCompanyId))
             ->exists();

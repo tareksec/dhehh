@@ -234,6 +234,8 @@ class StorefrontApiCheckoutTest extends TestCase
 
         $order = Order::query()->with('items')->sole();
         $this->assertSame(Order::SOURCE_STOREFRONT, $order->source);
+        $this->assertSame($this->settings()->getKey(), $order->storefront_setting_id, 'The order remembers the Next.js site it was placed on.');
+        $this->assertTrue($order->siteSetting()->is($this->settings()));
         $this->assertEquals(1090, $order->total_amount);
         $this->assertEquals(90, $order->shipping_fee);
         $this->assertSame('inside', $order->shipping_zone);
@@ -411,6 +413,8 @@ class StorefrontApiCheckoutTest extends TestCase
         $first->assertJsonPath('data.status', 'placed');
 
         $order = Order::query()->sole();
+        $this->assertSame($this->settings()->getKey(), $payment->storefront_setting_id, 'The payment remembers its site.');
+        $this->assertSame($this->settings()->getKey(), $order->storefront_setting_id, 'So does the order it places once paid.');
         $this->assertEquals(1000, $order->paid_amount);
         $this->assertEquals(2090, $order->total_amount); // 2 x 1000 + 70 + 20 for the second kg
         $this->assertSame(Signing::orderToken($order), $first->json('data.order.token'));
@@ -669,6 +673,7 @@ class StorefrontApiCheckoutTest extends TestCase
 
         StorefrontSetting::query()->create([
             'company_id' => $company->getKey(),
+            'site_type' => StorefrontSetting::SITE_NEXTJS,
             'is_published' => true,
             'nextjs_site_enabled' => $enabled,
             'nextjs_site_domain' => $slug === 'zamzam-international' ? 'zamzamint.com' : null,

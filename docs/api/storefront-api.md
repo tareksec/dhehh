@@ -1,6 +1,6 @@
 # Storefront API (for the headless Next.js website)
 
-> **বাংলা সারসংক্ষেপ:** zamzamint.com-এর নতুন Next.js ওয়েবসাইটের কোনো আলাদা ব্যাকএন্ড নেই — ERP-ই তার ব্যাকএন্ড। এই API দিয়ে ওয়েবসাইট ERP থেকে **পড়ে** (পণ্য, ক্যাটাগরি, ব্যানার, মেনু, পেজ, ফুটার, থিমের রং/ফন্ট, ফ্ল্যাশ সেল ইত্যাদি) এবং **অর্ডার দেয়** (কোট, চেকআউট, অনলাইন পেমেন্ট ফেরত, অর্ডার দেখা)। গ্রাহক **অ্যাকাউন্ট খুলতে, সাইন ইন করতে** (পাসওয়ার্ড বা এসএমএস/ইমেইল কোড), পাসওয়ার্ড রিসেট করতে, **অর্ডারের অবস্থা ট্র্যাক করতে**, আগের অর্ডার আবার করতে এবং **রিভিউ দিতে** পারেন (§6) — সবই Blade স্টোরফ্রন্টের একই নিয়মে। দাম, ডেলিভারি চার্জ, VAT, নতুন কাস্টমারের ডেলিভারি অগ্রিম, প্রি-অর্ডার অগ্রিম, কুরিয়ার-ঝুঁকির অগ্রিম, চেকআউট পলিসি ও ZiniPay/PayStation পেমেন্ট — সবকিছু ERP সার্ভারে হিসাব হয় (Blade চেকআউটের একই সার্ভিস), ব্রাউজার থেকে কোনো দাম নেওয়া হয় না। সব কনটেন্ট ও কনফিগারেশন ERP অ্যাডমিন থেকেই বদলায়। API চালু করতে **Site → Storefront Settings → Next.js Site** সেকশনে *Enable Next.js site API* অন করুন; API key তৈরি হয় **Settings → Integrations → Website API** থেকে। এই API key শুধু Next.js **সার্ভারের** এনভায়রনমেন্টে থাকবে, ব্রাউজারে কখনো নয়।
+> **বাংলা সারসংক্ষেপ:** zamzamint.com-এর নতুন Next.js ওয়েবসাইটের কোনো আলাদা ব্যাকএন্ড নেই — ERP-ই তার ব্যাকএন্ড। এই API দিয়ে ওয়েবসাইট ERP থেকে **পড়ে** (পণ্য, ক্যাটাগরি, ব্যানার, মেনু, পেজ, ফুটার, থিমের রং/ফন্ট, ফ্ল্যাশ সেল ইত্যাদি) এবং **অর্ডার দেয়** (কোট, চেকআউট, অনলাইন পেমেন্ট ফেরত, অর্ডার দেখা)। গ্রাহক **অ্যাকাউন্ট খুলতে, সাইন ইন করতে** (পাসওয়ার্ড বা এসএমএস/ইমেইল কোড), পাসওয়ার্ড রিসেট করতে, **অর্ডারের অবস্থা ট্র্যাক করতে**, আগের অর্ডার আবার করতে এবং **রিভিউ দিতে** পারেন (§6) — সবই Blade স্টোরফ্রন্টের একই নিয়মে। দাম, ডেলিভারি চার্জ, VAT, নতুন কাস্টমারের ডেলিভারি অগ্রিম, প্রি-অর্ডার অগ্রিম, কুরিয়ার-ঝুঁকির অগ্রিম, চেকআউট পলিসি ও ZiniPay/PayStation পেমেন্ট — সবকিছু ERP সার্ভারে হিসাব হয় (Blade চেকআউটের একই সার্ভিস), ব্রাউজার থেকে কোনো দাম নেওয়া হয় না। সব কনটেন্ট ও কনফিগারেশন ERP অ্যাডমিন থেকেই বদলায়। Next.js সাইটের নিজস্ব সেটিংস রো আছে (ব্লেড স্টোরফ্রন্ট রিসেলার স্টোর, Next.js মূল স্টোরফ্রন্ট) — **Site → Storefront Settings**-এ *Site: Next.js* রো খুলে *Next.js Site* সেকশনে *Enable Next.js site API* অন করুন; API key তৈরি হয় **Settings → Integrations → Website API** থেকে। এই API key শুধু Next.js **সার্ভারের** এনভায়রনমেন্টে থাকবে, ব্রাউজারে কখনো নয়।
 
 This is the API the company's Next.js site (e.g. `zamzamint.com`) uses: read-only catalog endpoints (§3), the checkout endpoints (§5) and the customer account, order tracking and review endpoints (§6). It sits next to
 the server-to-server API in [`website-integration.md`](website-integration.md) and uses the
@@ -10,7 +10,10 @@ Base URL: `https://<your-erp-domain>/api/v1/storefront`
 
 ## 1. Turning it on
 
-1. **Site → Storefront Settings → Next.js Site** → switch on **Enable Next.js site API** and enter
+1. **Site → Storefront Settings** → open (or create, with *Site: Next.js site*) the company's **Next.js**
+   row — it is separate from the Blade (reseller) storefront row, so its look, content, checkout rules
+   and keys are customised on their own; a new one can start as a copy of the Blade settings. In its
+   **Next.js Site** section switch on **Enable Next.js site API** and enter
    the website's domain (it must not be another company's domain or a reseller's store domain).
    While the switch is off every endpoint answers `403 nextjs_site_disabled` — it is the owner's
    kill switch. A domain is not required to start developing against the API.
@@ -45,7 +48,7 @@ Accept: application/json
 ## 3. Endpoints
 
 ### `GET /site`
-Everything site-wide, from the same storefront settings row the Blade site uses:
+Everything site-wide, from the company's **Next.js** storefront settings row (never the Blade row):
 `company`, `sites` (`blade_domain`, `nextjs_domain`), `branding` (logo URLs), `theme`
 (`mode`, `colors` — the resolved palette incl. contrast colours and dark-mode colours — `fonts`
 with the Google Fonts URL, `typography`, `appearance`), `contact`, `social_links`, `hero`,
@@ -167,7 +170,7 @@ Body:
 | `sender_number`, `trx_id` | required only for a `manual:<id>` (send-money) method |
 | `expected_total` | optional; the `total` the customer saw. If the server total differs by more than ৳0.01 → `409 price_changed` |
 | `client_request_id` | optional idempotency key (≤100 chars). Same key → the same order/payment, never a second one (kept 30 minutes) |
-| `return_url`, `cancel_url` | required, https and **on the company's own Next.js domain** (Storefront Settings → Next.js Site). `http://localhost` / `127.0.0.1` are accepted only when the ERP's `APP_ENV` is `local`/`testing` |
+| `return_url`, `cancel_url` | required, https and **on the company's own Next.js domain** (Storefront Settings → the Next.js row → Next.js Site). `http://localhost` / `127.0.0.1` are accepted only when the ERP's `APP_ENV` is `local`/`testing` |
 | `client_ip`, `client_user_agent` | the **visitor's** IP and browser, forwarded by the Next.js server. The checkout policy (blocked IPs, orders per IP) uses `client_ip`; when it is missing the IP rules are skipped — the Next.js server's own IP is never used instead |
 | `meta` | optional `fbp`, `fbc`, `event_source_url`, `consent_granted` for Meta conversion events (the current website sends none) |
 

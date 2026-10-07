@@ -209,7 +209,7 @@ class StorefrontSlideResource extends Resource
         $companyId = app(CompanyContext::class)->id();
 
         $setting = $companyId
-            ? StorefrontSetting::withoutGlobalScopes()->where('company_id', $companyId)->first()
+            ? StorefrontSetting::bladeFor($companyId)
             : null;
 
         return $setting?->storefrontTheme() ?? StorefrontThemeRegistry::BUILT_IN;

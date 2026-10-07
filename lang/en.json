@@ -716,7 +716,6 @@
     "Domain verified": "Domain verified",
     "Example: zamzamint.com. Do not include https:// or paths.": "Example: zamzamint.com. Do not include https:// or paths.",
     "When off, the Next.js site receives a 403 from /api/v1/storefront/*.": "When off, the Next.js site receives a 403 from /api/v1/storefront/*.",
-    "The headless Next.js storefront reads this same storefront configuration through the ERP API. The Blade storefront above keeps working unchanged.": "The headless Next.js storefront reads this same storefront configuration through the ERP API. The Blade storefront above keeps working unchanged.",
     "Changing the domain resets this status. Save the new domain, point DNS to the Coolify app, then turn this on in a second save.": "Changing the domain resets this status. Save the new domain, point DNS to the Coolify app, then turn this on in a second save.",
     "Create the API key and the cache-refresh webhook under Settings → Integrations → Website API. Keep the key in the Next.js server environment only, never in browser code.": "Create the API key and the cache-refresh webhook under Settings → Integrations → Website API. Keep the key in the Next.js server environment only, never in browser code.",
     "This domain is already used as a storefront or portal domain.": "This domain is already used as a storefront or portal domain.",
@@ -939,5 +938,14 @@
     "Leave empty if you sent exactly :amount. If you sent more, the extra goes to your deposit and pays your next orders.": "Leave empty if you sent exactly :amount. If you sent more, the extra goes to your deposit and pays your next orders.",
     "Money you sent above your orders. It pays your next own-courier orders.": "Money you sent above your orders. It pays your next own-courier orders.",
     "Part received — send the rest": "Part received — send the rest",
-    "Send at least :amount.": "Send at least :amount."
+    "Send at least :amount.": "Send at least :amount.",
+    "Site": "Site",
+    "Blade storefront (reseller store)": "Blade storefront (reseller store)",
+    "Next.js site (main storefront)": "Next.js site (main storefront)",
+    "Each site has its own storefront settings. The Blade storefront is the reseller store; the Next.js site is the main storefront. A company has at most one of each.": "Each site has its own storefront settings. The Blade storefront is the reseller store; the Next.js site is the main storefront. A company has at most one of each.",
+    "Start from a copy of the Blade storefront settings": "Start from a copy of the Blade storefront settings",
+    "The new Next.js site begins with the same colours, content, checkout rules and integrations as the Blade storefront, then you customise it on its own. Turn off to start from blank defaults.": "The new Next.js site begins with the same colours, content, checkout rules and integrations as the Blade storefront, then you customise it on its own. Turn off to start from blank defaults.",
+    "This company already has this kind of site.": "This company already has this kind of site.",
+    "This is the headless Next.js site. It reads this row — and only this row — through the ERP API, so everything on these pages customises the main storefront without touching the Blade (reseller) storefront.": "This is the headless Next.js site. It reads this row — and only this row — through the ERP API, so everything on these pages customises the main storefront without touching the Blade (reseller) storefront.",
+    "Payment gateway, Meta pixel and website webhook settings belong to one site. Pick the site you are editing; WooCommerce and the AI tools are shared by the company.": "Payment gateway, Meta pixel and website webhook settings belong to one site. Pick the site you are editing; WooCommerce and the AI tools are shared by the company."
 }

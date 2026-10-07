@@ -192,7 +192,7 @@ class StorefrontCheckoutService
             return $this->startAdvancePayment($company, $setting, $data, $items, $quote, $decision, $paymentUrls, $attempt, $cart);
         }
 
-        $order = $this->createOrder($company, $data, $items, (float) $quote['fee'], $cart);
+        $order = $this->createOrder($company, $data, $items, (float) $quote['fee'], $cart, $setting);
         $this->policies->markAccepted($attempt, $order);
 
         return new CheckoutOutcome(order: $order, decision: $decision, attempt: $attempt);
@@ -245,6 +245,7 @@ class StorefrontCheckoutService
 
         $payment = StorefrontPayment::query()->create([
             'company_id' => $company->getKey(),
+            'storefront_setting_id' => $setting->recordedSiteId(),
             'order_id' => null,
             'gateway' => $setting->online_payment_gateway ?: 'zinipay',
             'purpose' => StorefrontPayment::PURPOSE_CHECKOUT_ADVANCE,
@@ -320,13 +321,19 @@ class StorefrontCheckoutService
     /**
      * @param  array<string, mixed>  $data
      */
-    public function createOrder(Company $company, array $data, Collection $items, float $deliveryCharge, ?StorefrontCart $cart = null): Order
+    /**
+     * @param  StorefrontSetting|null  $setting  The site the order is placed on. Omitted
+     *                                           for the Blade storefront, whose settings are the company's own.
+     */
+    public function createOrder(Company $company, array $data, Collection $items, float $deliveryCharge, ?StorefrontCart $cart = null, ?StorefrontSetting $setting = null): Order
     {
+        $setting ??= $company->storefrontSetting;
+
         // Keep the contact on the persisted cart so abandoned-cart
         // reminders can reach the customer if this checkout fails.
         $cart?->rememberContact($company, $data['phone'], $data['name']);
 
-        return DB::transaction(function () use ($company, $data, $items, $deliveryCharge, $cart): Order {
+        return DB::transaction(function () use ($company, $data, $items, $deliveryCharge, $cart, $setting): Order {
             abort_if($items->isEmpty(), 422, 'Your cart is empty.');
 
             $this->assertStock($items);
@@ -347,6 +354,7 @@ class StorefrontCheckoutService
             $customer->save();
 
             $order = Order::query()->create([
+                'storefront_setting_id' => $setting?->recordedSiteId(),
                 'customer_id' => $customer->getKey(),
                 'reseller_customer_id' => $cart?->orderResellerId($company, $items),
                 'customer_name' => $customer->name,
@@ -382,6 +390,7 @@ class StorefrontCheckoutService
             if (str_starts_with($data['payment_method'], StorefrontPaymentMethod::TYPE_MANUAL.':')) {
                 StorefrontPayment::query()->create([
                     'company_id' => $company->getKey(),
+                    'storefront_setting_id' => $setting?->recordedSiteId(),
                     'order_id' => $order->getKey(),
                     'gateway' => StorefrontPaymentMethod::TYPE_MANUAL,
                     'storefront_payment_method_id' => (int) substr($data['payment_method'], strlen(StorefrontPaymentMethod::TYPE_MANUAL.':')),
@@ -401,7 +410,7 @@ class StorefrontCheckoutService
 
             $this->metaDispatch->captureOrder(
                 $order,
-                $company->storefrontSetting,
+                $setting,
                 (array) ($data['meta_tracking_context'] ?? []),
                 isset($data['courier_success_ratio']) ? (float) $data['courier_success_ratio'] : null,
                 $cartRecordId,

@@ -15,6 +15,28 @@ use Illuminate\Validation\ValidationException;
 trait HandlesNextjsSiteDomain
 {
     /**
+     * A Blade row never carries a Next.js switch or domain; a Next.js row
+     * validates and stores its own. The company's Blade domain is only ever
+     * written from a Blade row (a Next.js row has no such field, and saving it
+     * must not blank the company's domain).
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function applySiteFields(array $data, ?StorefrontSetting $record, ?int $companyId, string $siteType): array
+    {
+        if ($siteType === StorefrontSetting::SITE_NEXTJS) {
+            return $this->applyNextjsSiteDomain($data, $record, $companyId);
+        }
+
+        $data['nextjs_site_enabled'] = false;
+        $data['nextjs_site_domain'] = null;
+        $data['nextjs_site_domain_verified'] = false;
+
+        return $data;
+    }
+
+    /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */

@@ -19,7 +19,7 @@ class ZiniPayWebhookController extends Controller
             return response()->json(['ok' => true]);
         }
 
-        $setting = $payment->company?->storefrontSetting;
+        $setting = $payment->siteSetting();
 
         if (! $setting || ! ZiniPayClient::isConfigured($setting)) {
             return response()->json(['ok' => false], 422);
