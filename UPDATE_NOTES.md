@@ -2,6 +2,16 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-07 - Reseller-store orders invoiced in the reseller's name too
+
+Owner answer (in Bangla): yes, invoice the reseller-store orders in the reseller's name as well.
+
+What changed: `Order::showsResellerBranding()` = the order has a reseller (`reseller_customer_id`). That covers the portal orders (previous change) and every order a customer places on a reseller's store (`/store/<name>`, reseller subdomain or custom domain). Their invoice print, bulk print, PDF, cut-slip and summary card show the reseller's store name and logo, no company name/contact details and no internal "Storefront checkout" note. Amounts unchanged. Orders without a reseller keep the company invoice.
+
+Tests: new `ResellerCommissionTest::test_an_order_from_the_resellers_store_is_invoiced_in_the_resellers_name` (checkout on the reseller store, then print + summary card); `ResellerOwnCourierOrderTest` company-invoice test uses an order without a reseller. Full `php artisan test` (plain, no `--env`): **1916 passed, 1 skipped, 0 failed**.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
 ## 2026-10-07 - Reseller-portal orders invoiced in the reseller's name
 
 Owner report (in Bangla, with a screenshot): a reseller placed this order but the invoice is in our company's name; every order from the reseller portal must be invoiced in that reseller's own name — treat it as important.

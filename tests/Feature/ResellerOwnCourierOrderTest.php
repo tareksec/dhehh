@@ -287,14 +287,14 @@ class ResellerOwnCourierOrderTest extends TestCase
         $this->assertStringNotContainsString('Parcel Co', $pdf);
     }
 
-    public function test_orders_not_from_the_reseller_portal_keep_the_company_invoice(): void
+    public function test_orders_without_a_reseller_keep_the_company_invoice(): void
     {
         $this->reseller->update(['reseller_store_name' => 'Rima Fashion']);
         $ring = $this->pickProduct('Ring', tier: 300, stock: 20, price: 450);
         $order = app(ResellerOrderPlacementService::class)->place($this->reseller, [
             'name' => 'Buyer', 'phone' => '01722000009', 'address' => 'Dhaka, Mirpur', 'note' => null,
         ], [['product_id' => $ring->getKey(), 'quantity' => 1, 'price' => 500]]);
-        $order->forceFill(['source' => 'website'])->save();
+        $order->forceFill(['reseller_customer_id' => null])->save();
 
         $this->assertFalse($order->fresh()->showsResellerBranding());
 
