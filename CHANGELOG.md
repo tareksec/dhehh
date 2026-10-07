@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.62.0] - 2026-10-07
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -20,7 +22,6 @@ All notable production changes to Business Dashboard are documented here.
 - New Filament panel `investor` (`InvestorPanelProvider`, guard `investor`, provider `investor_portal_accounts`, theme `resources/css/filament/investor/theme.css` — `npm run build` needed on deploy). New `InvestorPortalAccount` model (company-scoped), `InvestorPortalAccountService` (invite, password, SMS codes: hashed, 10 min, 5 tries, 1 send/min), `InvestorPortalService` (every portal query, pinned to the signed-in investor/partner), `ResolveCompanyFromInvestorPortalDomain`, `Company::forInvestorPortalHost()` / `investorPortalHost()` / `investorPortalUrl()`, portal download/report controllers with ownership checks (`InvestmentReportController::investorPayoutView()` is shared).
 - `RestrictResellerPortalHost` renamed `RestrictPortalHosts` and now guards both portal hosts. `AuditLogService` writes non-staff actors to the new actor columns. "investor"/"investors" added to the reserved reseller subdomain labels; the investor portal domain counts as taken for reseller custom domains.
 - New `InvestorPortalTest` (19 tests); `MultiCompanyIsolationTest` covers `InvestorPortalAccount`. 120 new lang keys (en + bn). DNS/Coolify steps: `docs/deployment.md` → Investor Portal Domain.
-
 ## [2.61.0] - 2026-10-07
 
 **Release type:** Minor Feature Update
