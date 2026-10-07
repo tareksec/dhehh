@@ -115,6 +115,34 @@ class LeadFollowUpReminderTest extends TestCase
         $this->assertNotNull($lead->fresh()->follow_up_reminded_at);
     }
 
+    public function test_the_next_js_sites_settings_are_used_once_the_company_has_one(): void
+    {
+        $lead = $this->dueLead();
+        // The Blade row has the reminders off; the Next.js row (the main storefront) has them on.
+        StorefrontSetting::query()->create([
+            'company_id' => $this->company->getKey(),
+            'is_published' => true,
+            'new_customer_delivery_advance_enabled' => false,
+            'lead_follow_up_reminders_enabled' => false,
+        ]);
+        StorefrontSetting::query()->create([
+            'company_id' => $this->company->getKey(),
+            'site_type' => StorefrontSetting::SITE_NEXTJS,
+            'lead_follow_up_reminders_enabled' => true,
+            'notification_credentials' => [
+                'lead_follow_up_whatsapp_template_name' => 'lead_followup',
+                'whatsapp_token' => 'wa-token',
+                'whatsapp_phone_number_id' => '1234567890',
+            ],
+        ]);
+
+        Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.followup']]])]);
+
+        Artisan::call('crm:send-follow-up-reminders');
+
+        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '1234567890/messages'));
+    }
+
     public function test_customer_message_falls_back_to_sms_with_placeholders_when_whatsapp_fails(): void
     {
         $lead = $this->dueLead(['name' => 'Placeholder Person']);

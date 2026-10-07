@@ -2,6 +2,28 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-07 (follow-up) - Show on for slides and pages; WooCommerce, CRM messaging and lead reminders read the Next.js row
+
+Owner answers (in Bangla) to the two open questions after the settings split: (1) separate hero slides, custom pages and offers per site — **do it**; (2) the company-level features **read the Next.js row**.
+
+What changed:
+- Slides and pages: new **Show on** (`storefront_setting_id`, NULL = all sites — every existing record). Blade shows all + Blade-only, the Next.js API shows all + Next.js-only; menus/footer legal links drop pages of the other site; lists show a **Show on** column; choosing a site on a slide sets that site's theme/template; a site id from another company is refused.
+- Offers: nothing to add — they are already separate by type in the code (landing-page offers are only served by the Blade `OfferController`/`OfferCheckoutController`; Collections only by the API/`StorefrontCatalogService`, so a Flash Sale deal never changes a Blade price). Say if you still want an explicit **Show on** on offers.
+- `StorefrontSetting::primaryFor()` = the Next.js row once the company has one, else the Blade row. WooCommerce (import, order sync, webhook secret, Integrations tab), CRM messaging (SMS/WhatsApp broadcasts and failed-message fallback) and lead follow-up reminders now read it. The Lead Follow-up Reminders section and the WooCommerce tab appear only on that row.
+
+My decisions (say if you want different):
+- **Reseller stays on the Blade row.** I read "Next.js row" as the company-level integrations only: the reseller program/store is the Blade storefront by your own decision, and the Blade abandoned-cart reminders belong to Blade carts (the Next.js site keeps its cart in the browser).
+- A page's **slug is still unique per company**, so the two sites cannot each have an "about" page with the same address; give them different slugs (e.g. `about`, `about-main`).
+- Existing slides/pages stay on **All sites** until you pick a site for each — the Next.js site will show the same banners as before until you do.
+- Deleting a site's settings row returns the slides/pages limited to it to **All sites**.
+- The payment-method list is still shared by both sites.
+
+Tests: `StorefrontSiteContentTest` (8) plus cases in `StorefrontApiTest`, `WooCommerceOrderWebhookTest`, `LeadFollowUpReminderTest`; the pages/slides/Woo behaviours were checked to fail when the old behaviour is put back.
+
+Needs Bangla review: 3 new keys ("যেখানে দেখাবে", "সব সাইট" and the Show-on help text).
+
+Commit status: NOT committed — waiting for the owner's explicit approval. On top of `origin/main` v2.57.0.
+
 ## 2026-10-07 - Separate storefront settings for the Blade storefront (reseller store) and the Next.js site (main storefront)
 
 Owner decision (in Bangla, after seeing both sites in one Storefront Settings row): Blade and Next.js must be **separate rows** so each can be customised on its own; **Blade = reseller store, Next.js = main storefront**. This replaces the 2026-10-03 decision that both read one shared row (CLAUDE.md updated).

@@ -252,7 +252,7 @@ class ConversationMessengerService
         }
 
         try {
-            $setting = StorefrontSetting::bladeFor((int) $conversation->company_id);
+            $setting = StorefrontSetting::primaryFor((int) $conversation->company_id);
 
             if (! $setting || ! $this->notifications->smsConfigured($setting)) {
                 return;

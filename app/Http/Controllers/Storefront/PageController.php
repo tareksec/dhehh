@@ -37,6 +37,7 @@ class PageController extends Controller
     ): View {
         $page = StorefrontPage::query()
             ->where('company_id', $company->getKey())
+            ->forSite($setting)
             ->where('slug', StorefrontPage::normalizeSlug($slug))
             ->published()
             ->firstOrFail();

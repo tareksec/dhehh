@@ -33,6 +33,7 @@
     $footerPages = \Illuminate\Support\Facades\Schema::hasTable('storefront_pages')
         ? \App\Models\StorefrontPage::query()
             ->where('company_id', $company->getKey())
+            ->forSite($setting)
             ->published()
             ->orderBy('sort_order')
             ->orderBy('title')
@@ -108,7 +109,7 @@
     $menuCategoryIds = collect([$setting->header_menu, $setting->footer_menu])->flatten(1)->filter()->where('type', 'category')->pluck('category_id')->filter()->unique();
     $menuPageSlugs = collect([$setting->header_menu, $setting->footer_menu])->flatten(1)->filter()->where('type', 'page')->pluck('page_id')->filter()->unique();
     $menuCategoryData = $menuCategoryIds->isEmpty() ? collect() : \App\Models\Category::withoutGlobalScopes()->where('company_id', $company->getKey())->whereIn('id', $menuCategoryIds)->where('is_active', true)->get(['id', 'slug', 'icon'])->keyBy('id');
-    $menuPageSlugs = $menuPageSlugs->isEmpty() ? collect() : \App\Models\StorefrontPage::withoutGlobalScopes()->where('company_id', $company->getKey())->whereIn('id', $menuPageSlugs)->where('is_published', true)->pluck('slug', 'id');
+    $menuPageSlugs = $menuPageSlugs->isEmpty() ? collect() : \App\Models\StorefrontPage::withoutGlobalScopes()->where('company_id', $company->getKey())->forSite($setting)->whereIn('id', $menuPageSlugs)->where('is_published', true)->pluck('slug', 'id');
     $resolveMenu = function (?array $items) use ($productsUrl, $trackUrl, $accountOrdersUrl, $resellerUrl, $offersUrl, $previewSlug, $menuCategoryData, $menuPageSlugs, $pageUrl) {
         return collect($items ?? [])->map(function ($item) use ($productsUrl, $trackUrl, $accountOrdersUrl, $resellerUrl, $offersUrl, $previewSlug, $menuCategoryData, $menuPageSlugs, $pageUrl) {
             $label = trim((string) ($item['label'] ?? ''));

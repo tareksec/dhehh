@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use App\Models\StorefrontSetting;
 use App\Services\WooCommerceOrderSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,7 @@ class WooCommerceWebhookController extends Controller
 {
     public function __invoke(Request $request, Company $company, WooCommerceOrderSyncService $sync): JsonResponse
     {
-        $setting = $company->storefrontSetting;
+        $setting = StorefrontSetting::primaryFor((int) $company->getKey());
         $secret = (string) data_get($setting?->woocommerce_credentials, 'webhook_secret');
 
         if ($secret === '') {

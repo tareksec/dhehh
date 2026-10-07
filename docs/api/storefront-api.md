@@ -99,6 +99,8 @@ The Hero Slides for the company's active theme/template (schedule respected):
 A link to a product that is no longer visible comes back as `product: null`.
 `cta_url` is stored by the admin and may be a Blade path (`/products`, `/category/x`, `/product/x`,
 `/pages/x`) — the website mirrors those routes.
+A slide's **Show on** (admin: *Site → Hero Slides*) limits it to one site: this endpoint returns the
+slides for **all sites** plus those limited to the company's **Next.js** site, never the Blade-only ones.
 
 ### `GET /collections`
 Live **Collections** (admin: *Site → Offers → type Collection*), ordered Flash Sale, Trending,
@@ -110,6 +112,9 @@ returns one kind.
 ### `GET /pages` and `GET /pages/{slug}`
 Published content pages: `slug, title, excerpt, cover_image_url`; the detail adds
 `content_html` (sanitised), `meta_title`, `meta_description`, `updated_at`.
+A page's **Show on** (admin: *Site → Pages*) works the same way: pages for all sites and those limited to
+the Next.js site are served (a page limited to the Blade storefront answers `404 page_not_found`), and menu
+or footer links to a page of the other site are left out.
 
 ## 4. Collections, deals and the ERP price
 

@@ -1123,6 +1123,8 @@ class StorefrontSettingResource extends Resource
 
             Section::make('Lead Follow-up Reminders')
                 ->columnSpanFull()
+                // Read from the company's primary row (the Next.js site once it has one), so it is not offered on the other.
+                ->visible(fn (?StorefrontSetting $record): bool => ! $record || $record->isPrimary())
                 ->description('When a lead\'s next follow-up date arrives, the assigned staff member is notified in-app, and (when enabled here) the lead is messaged over WhatsApp with an SMS fallback. Runs every 15 minutes via the scheduler. Uses the same SMS gateway and WhatsApp Chat Channel configured above.')
                 ->schema([
                     Toggle::make('lead_follow_up_reminders_enabled')
@@ -1264,6 +1266,7 @@ class StorefrontSettingResource extends Resource
 
                                             return $companyId ? StorefrontPage::withoutGlobalScopes()
                                                 ->where('company_id', $companyId)
+                                                ->when($record, fn ($query) => $query->forSite($record))
                                                 ->where('is_published', true)
                                                 ->orderBy('title')
                                                 ->pluck('title', 'id')
@@ -1414,6 +1417,7 @@ class StorefrontSettingResource extends Resource
                     ->required(fn (Get $get): bool => $get('type') === 'page')
                     ->options(fn (Get $get, ?StorefrontSetting $record) => StorefrontPage::withoutGlobalScopes()
                         ->where('company_id', $companyId($get, $record))
+                        ->when($record, fn ($query) => $query->forSite($record))
                         ->where('is_published', true)
                         ->orderBy('title')
                         ->pluck('title', 'id')),
@@ -1578,6 +1582,7 @@ class StorefrontSettingResource extends Resource
             'Logo uploaded' => filled($record->logo),
             'Hero slide added' => StorefrontSlide::withoutGlobalScopes()
                 ->where('company_id', $record->company_id)
+                ->forSite($record)
                 ->where('is_active', true)
                 ->exists(),
             'SEO completed' => filled($record->meta_title) && filled($record->meta_description),
@@ -1631,6 +1636,7 @@ class StorefrontSettingResource extends Resource
     {
         return StorefrontPage::withoutGlobalScopes()
             ->where('company_id', $record->company_id)
+            ->forSite($record)
             ->where('is_published', true)
             ->count();
     }

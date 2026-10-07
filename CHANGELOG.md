@@ -4,6 +4,22 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Hero slides and custom pages can be limited to one site (owner decision).** Each slide and page has a new **Show on** choice: *All sites* (what every existing slide and page keeps being) or one of the company's sites — the Blade storefront (reseller store) or the Next.js site (main storefront). The Blade storefront and the Next.js site each show only their own and the shared ones; menu items and footer links to a page that belongs to the other site are left out. The Slides and Pages lists show where each one appears, and picking a site on a slide follows that site's theme and homepage template. Offers were already separate: landing-page offers belong to the Blade storefront and Collections (Flash Sale, Trending, New Arrivals) to the Next.js site.
+
+### Changed
+
+- **WooCommerce, CRM messaging and lead follow-up reminders now use the Next.js site's settings (owner decision).** Once a company has a Next.js site it is the main storefront, so these company-level features read its settings (the WooCommerce tab on Integrations, the SMS/WhatsApp details and the *Lead Follow-up Reminders* section live on that site); a company without one keeps using its Blade storefront. The reseller store/program and the Blade abandoned-cart reminders stay on the Blade storefront settings.
+
+### Technical Notes
+
+- Migration `2026_10_07_120000_add_storefront_setting_id_to_slides_and_pages`: nullable `storefront_setting_id` (NULL = all sites) on `storefront_slides` and `storefront_pages`, `nullOnDelete` (deleting a site returns its slides/pages to all sites). `StorefrontSlide::forCompanyTheme()` takes the site (the cached company list is filtered in memory, so the cache key is unchanged); `StorefrontPage::forSite()` is used by the Blade page route, layout menus/footer, the API pages, and the API menu/footer resolution.
+- `StorefrontSetting::primaryFor()` (Next.js row else Blade) and `isPrimary()` are read by `WooCommerceImportService`, `WooCommerceOrderSyncService`, `WooCommerceWebhookController`, the Integrations page, `Crm\BroadcastService`, `Crm\ConversationMessengerService` and `SendLeadFollowUpReminders`.
+- Tests: new `StorefrontSiteContentTest` (8); new cases in `StorefrontApiTest`, `WooCommerceOrderWebhookTest`, `LeadFollowUpReminderTest`; `IntegrationsPageTest` updated for the primary-row WooCommerce tab. 3 new lang keys in `lang/en.json` and `lang/bn.json`.
+
 ## [2.57.0] - 2026-10-07
 
 **Release type:** Minor Feature Update

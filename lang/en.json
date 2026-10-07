@@ -947,5 +947,8 @@
     "The new Next.js site begins with the same colours, content, checkout rules and integrations as the Blade storefront, then you customise it on its own. Turn off to start from blank defaults.": "The new Next.js site begins with the same colours, content, checkout rules and integrations as the Blade storefront, then you customise it on its own. Turn off to start from blank defaults.",
     "This company already has this kind of site.": "This company already has this kind of site.",
     "This is the headless Next.js site. It reads this row — and only this row — through the ERP API, so everything on these pages customises the main storefront without touching the Blade (reseller) storefront.": "This is the headless Next.js site. It reads this row — and only this row — through the ERP API, so everything on these pages customises the main storefront without touching the Blade (reseller) storefront.",
-    "Payment gateway, Meta pixel and website webhook settings belong to one site. Pick the site you are editing; WooCommerce and the AI tools are shared by the company.": "Payment gateway, Meta pixel and website webhook settings belong to one site. Pick the site you are editing; WooCommerce and the AI tools are shared by the company."
+    "Payment gateway, Meta pixel and website webhook settings belong to one site. Pick the site you are editing; WooCommerce and the AI tools are shared by the company.": "Payment gateway, Meta pixel and website webhook settings belong to one site. Pick the site you are editing; WooCommerce and the AI tools are shared by the company.",
+    "Show on": "Show on",
+    "All sites": "All sites",
+    "Leave on \"All sites\" to show it on both the Blade storefront and the Next.js site, or pick one site to keep it off the other.": "Leave on \"All sites\" to show it on both the Blade storefront and the Next.js site, or pick one site to keep it off the other."
 }
