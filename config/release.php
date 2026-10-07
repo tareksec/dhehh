@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'version' => env('APP_VERSION', '2.57.0'),
+    'version' => env('APP_VERSION', '2.57.1'),
 
     /*
     |--------------------------------------------------------------------------
@@ -12,7 +12,7 @@ return [
     | maintenance, initial.
     |
     */
-    'type' => env('APP_RELEASE_TYPE', 'minor'),
+    'type' => env('APP_RELEASE_TYPE', 'security'),
 
     'date' => env('APP_RELEASE_DATE', '2026-10-07'),
 
