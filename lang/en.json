@@ -939,5 +939,16 @@
     "Leave empty if you sent exactly :amount. If you sent more, the extra goes to your deposit and pays your next orders.": "Leave empty if you sent exactly :amount. If you sent more, the extra goes to your deposit and pays your next orders.",
     "Money you sent above your orders. It pays your next own-courier orders.": "Money you sent above your orders. It pays your next own-courier orders.",
     "Part received — send the rest": "Part received — send the rest",
-    "Send at least :amount.": "Send at least :amount."
+    "Send at least :amount.": "Send at least :amount.",
+    "This phone number already has orders with us, and it can't be verified by SMS right now. Please contact us to set up your account.": "This phone number already has orders with us, and it can't be verified by SMS right now. Please contact us to set up your account.",
+    "We couldn't send a verification code to this number. Please try again later.": "We couldn't send a verification code to this number. Please try again later.",
+    "We sent a 6-digit code to your phone. Enter it to create your account.": "We sent a 6-digit code to your phone. Enter it to create your account.",
+    "That code is invalid or has expired. Request a new code and try again.": "That code is invalid or has expired. Request a new code and try again.",
+    "Verify your phone": "Verify your phone",
+    "Enter your 6-digit code": "Enter your 6-digit code",
+    "We sent the code by SMS to :phone. It expires in :minutes minutes.": "We sent the code by SMS to :phone. It expires in :minutes minutes.",
+    "Verification code": "Verification code",
+    "Verify and create account": "Verify and create account",
+    "Didn't receive it?": "Didn't receive it?",
+    "Change details": "Change details"
 }

@@ -21,7 +21,8 @@ use Illuminate\Validation\ValidationException;
 /**
  * Customer sign-in for the headless Next.js site (/api/v1/storefront/account/…).
  * Every rule lives in CustomerAccountService, the same service the Blade
- * storefront uses: a registration reuses the CRM record of the same phone, a
+ * storefront uses: a registration reuses the CRM record of the same phone
+ * (so the phone is proven with an SMS code first), a
  * wrong password is counted per identifier, a login code is valid for 10
  * minutes and five tries, a reset code for 15 minutes.
  *
@@ -48,8 +49,39 @@ class StorefrontAccountAuthController extends Controller
             'address' => ['nullable', 'string', 'max:1000'],
             'password' => ['required', 'string', 'min:8', 'max:200', 'confirmed'],
             'remember' => ['nullable', 'boolean'],
+            'code' => ['nullable', 'digits:6'],
         ]);
         $data['phone'] = Phone::normalize($data['phone']);
+
+        try {
+            $this->accounts->ensureCanRegister($data);
+        } catch (ValidationException $exception) {
+            return $this->fail(array_key_exists('email', $exception->errors()) ? 'email_taken' : 'account_exists', 409);
+        }
+
+        // Proving the phone: without "code" the number gets a 6-digit SMS
+        // and the website asks for it, then sends the same form again with
+        // "code". Sending it again without a code within a minute keeps the
+        // code already sent (resend).
+        switch ($this->accounts->registrationVerification($this->setting($request), $data['phone'])) {
+            case CustomerAccountService::VERIFY_UNAVAILABLE:
+                return $this->fail('verification_unavailable', 422);
+
+            case CustomerAccountService::VERIFY_SMS:
+                if (blank($data['code'] ?? null)) {
+                    return $this->accounts->sendRegistrationCode($this->context->company(), $this->setting($request), $data['phone'])
+                        ? response()->json([
+                            'verification_required' => true,
+                            'masked_identifier' => $this->mask($data['phone']),
+                            'expires_in_minutes' => CustomerAccountService::REGISTRATION_CODE_MINUTES,
+                        ], 202)
+                        : $this->fail('verification_unavailable', 422);
+                }
+
+                if (! $this->accounts->verifyRegistrationCode($this->context->company(), $data['phone'], $data['code'])) {
+                    return $this->fail('otp_invalid', 422);
+                }
+        }
 
         try {
             $customer = $this->accounts->register($data);

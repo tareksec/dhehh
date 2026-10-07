@@ -189,6 +189,15 @@ Route::prefix('/storefront/{company:slug}')->group(function (): void {
     Route::post('/account/register', [StorefrontAccountAuthController::class, 'registerPreview'])
         ->middleware('throttle:10,1')
         ->name('storefront.preview.account.register.store');
+    Route::get('/account/register/verify', [StorefrontAccountAuthController::class, 'showRegisterVerifyPreview'])
+        ->middleware('throttle:10,1')
+        ->name('storefront.preview.account.register.verify');
+    Route::post('/account/register/verify', [StorefrontAccountAuthController::class, 'verifyRegisterPreview'])
+        ->middleware('throttle:10,1')
+        ->name('storefront.preview.account.register.verify.store');
+    Route::post('/account/register/resend', [StorefrontAccountAuthController::class, 'resendRegisterCodePreview'])
+        ->middleware('throttle:5,1')
+        ->name('storefront.preview.account.register.resend');
     Route::get('/account/forgot-password', [StorefrontAccountAuthController::class, 'showForgotPasswordPreview'])
         ->name('storefront.preview.account.forgot-password');
     Route::post('/account/forgot-password', [StorefrontAccountAuthController::class, 'forgotPasswordPreview'])
@@ -330,6 +339,10 @@ Route::middleware(ResolveCompanyFromDomain::class)->group(function (): void {
             ->name('storefront.account.register');
         Route::post('/account/register', [StorefrontAccountAuthController::class, 'register'])
             ->name('storefront.account.register.store');
+        Route::get('/account/register/verify', [StorefrontAccountAuthController::class, 'showRegisterVerify'])
+            ->name('storefront.account.register.verify');
+        Route::post('/account/register/verify', [StorefrontAccountAuthController::class, 'verifyRegister'])
+            ->name('storefront.account.register.verify.store');
         Route::get('/account/reset-password', [StorefrontAccountAuthController::class, 'showResetPassword'])
             ->name('storefront.account.reset-password');
         Route::post('/account/reset-password', [StorefrontAccountAuthController::class, 'resetPassword'])
@@ -343,6 +356,8 @@ Route::middleware(ResolveCompanyFromDomain::class)->group(function (): void {
             ->name('storefront.account.forgot-password.store');
         Route::post('/account/otp', [StorefrontAccountAuthController::class, 'sendOtp'])
             ->name('storefront.account.otp.send');
+        Route::post('/account/register/resend', [StorefrontAccountAuthController::class, 'resendRegisterCode'])
+            ->name('storefront.account.register.resend');
     });
 
     Route::post('/account/logout', [StorefrontAccountAuthController::class, 'logout'])

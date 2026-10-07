@@ -939,5 +939,16 @@
     "Leave empty if you sent exactly :amount. If you sent more, the extra goes to your deposit and pays your next orders.": "ঠিক :amount পাঠালে খালি রাখুন। বেশি পাঠালে বাড়তি টাকা আপনার জমায় যাবে এবং পরের অর্ডারগুলোর টাকা দেবে।",
     "Money you sent above your orders. It pays your next own-courier orders.": "অর্ডারের চেয়ে বেশি পাঠানো টাকা। এটি আপনার পরের নিজস্ব কুরিয়ারের অর্ডারগুলোর টাকা দেবে।",
     "Part received — send the rest": "আংশিক পাওয়া গেছে — বাকিটা পাঠান",
-    "Send at least :amount.": "অন্তত :amount পাঠান।"
+    "Send at least :amount.": "অন্তত :amount পাঠান।",
+    "This phone number already has orders with us, and it can't be verified by SMS right now. Please contact us to set up your account.": "এই ফোন নম্বরে আমাদের কাছে আগের অর্ডার আছে, কিন্তু এখন SMS দিয়ে নম্বরটি যাচাই করা যাচ্ছে না। অ্যাকাউন্ট খুলতে আমাদের সাথে যোগাযোগ করুন।",
+    "We couldn't send a verification code to this number. Please try again later.": "এই নম্বরে যাচাইয়ের কোড পাঠানো যায়নি। কিছুক্ষণ পরে আবার চেষ্টা করুন।",
+    "We sent a 6-digit code to your phone. Enter it to create your account.": "আপনার ফোনে একটি ৬ সংখ্যার কোড পাঠানো হয়েছে। অ্যাকাউন্ট খুলতে কোডটি লিখুন।",
+    "That code is invalid or has expired. Request a new code and try again.": "কোডটি ভুল অথবা এর মেয়াদ শেষ। নতুন কোড নিয়ে আবার চেষ্টা করুন।",
+    "Verify your phone": "আপনার ফোন যাচাই করুন",
+    "Enter your 6-digit code": "আপনার ৬ সংখ্যার কোড লিখুন",
+    "We sent the code by SMS to :phone. It expires in :minutes minutes.": ":phone নম্বরে SMS-এ কোড পাঠানো হয়েছে। এটি :minutes মিনিট পর্যন্ত কাজ করবে।",
+    "Verification code": "যাচাইয়ের কোড",
+    "Verify and create account": "যাচাই করে অ্যাকাউন্ট খুলুন",
+    "Didn't receive it?": "কোড পাননি?",
+    "Change details": "তথ্য বদলান"
 }

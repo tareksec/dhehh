@@ -239,12 +239,21 @@ per visitor, not per website server.
 ### Sign in (public)
 | Call | Body | Success | Errors |
 |---|---|---|---|
-| `POST /account/register` | `name, phone, email?, address?, password (min 8), password_confirmation, remember?` | `201 {data:{customer, token, expires_at}}` | `409 account_exists`, `409 email_taken`, `422` |
+| `POST /account/register` | `name, phone, email?, address?, password (min 8), password_confirmation, remember?, code?` | `201 {data:{customer, token, expires_at}}`, or `202 {verification_required:true, masked_identifier, expires_in_minutes}` when the phone must be proven first (see below) | `409 account_exists`, `409 email_taken`, `422 otp_invalid`, `422 verification_unavailable`, `422` |
 | `POST /account/login` | `identifier` (phone or email), `password, remember?` | `200` same shape | `422 invalid_credentials`, `429 too_many_attempts` (+`retry_after`), `403 account_disabled` |
 | `POST /account/otp` | `identifier` | `202 {ok, masked_identifier}` — the same answer whether or not an account exists | `422 otp_unavailable` (phone code but no SMS gateway) |
 | `POST /account/otp/verify` | `identifier, code (6 digits), remember?` | `200` token | `422 otp_invalid` |
 | `POST /account/password/forgot` | `phone` | `202 {ok}` (generic) | `422 sms_unavailable` |
 | `POST /account/password/reset` | `phone, code, password, password_confirmation` | `200` token — every older login is signed out | `422 reset_code_invalid`, `429 too_many_attempts` |
+
+**Phone verification on sign-up (2026-10-06).** A new account takes over the customer record (and order
+history) of the same phone, so the phone is proven first. When the store has an SMS gateway, the first
+`POST /account/register` (no `code`) texts a 6-digit code and answers `202 verification_required`; the
+website asks for the code and sends **the same form again with `code`** → `201` and the token. A wrong or
+expired code is `422 otp_invalid`; five wrong codes or 10 minutes throw the code away. Sending the form again
+without `code` within a minute keeps the code already sent (a "resend" after that sends a new one). With no
+SMS gateway, a brand-new number still signs up in one step, but a number that already has a customer
+record answers `422 verification_unavailable` (also when the SMS could not be sent).
 
 Phones are accepted as typed (`+880 1712-345678`, `8801712345678`, `01712345678`) and stored in the local
 `01XXXXXXXXX` form checkout already uses. Five wrong reset codes lock that account's reset until the

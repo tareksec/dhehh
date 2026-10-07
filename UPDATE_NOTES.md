@@ -2,6 +2,28 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-07 - Sign-up needs an SMS code (account takeover by phone number)
+
+Reason — owner asked "পরবর্তী কাজ কি", I listed the open item "registration adopts an existing customer record by phone without proving ownership" as the first thing to fix, owner said "ওটিপি সিকিউরিটি যোগ করো".
+
+What changed:
+- Blade storefront sign-up: form → 6-digit SMS code page (`/account/register/verify`, with "Send a new code" and "Change details") → account. Only the password hash waits in the session.
+- Next.js API `POST /account/register`: without `code` → SMS + `202 verification_required`; same form again with `code` → `201`. Errors `otp_invalid`, `verification_unavailable`. Documented in `docs/api/storefront-api.md` §6.
+- Code: 10 minutes, 5 tries, 1-minute resend cooldown, one per company + phone; taken phone/email refused before any SMS.
+
+My decisions (say if you want different):
+- With an SMS gateway, **every** sign-up needs the code (also brand-new numbers — otherwise someone could pre-register a stranger's number and later see that person's guest orders).
+- Without an SMS gateway: brand-new numbers still sign up directly; a number that already has a customer record can't sign up ("contact us").
+- Offer landing-page checkout still creates its account automatically with a random password (the buyer doesn't learn it, so it can't be used to take over the record).
+
+**Not done — needs the website repo:** the Next.js site (`zamzamint-new-website-theme`) does not show a code field yet; access to that repo was denied in this session. Until it is updated, sign-up on the Next.js site fails on a store with an SMS gateway (sign-in, checkout and tracking are not affected). Owner chose to push to main anyway (2026-10-07).
+
+Needs Bangla review: the 11 new keys (sign-up code page, "This phone number already has orders with us…", "We couldn't send a verification code…").
+
+Tests: `StorefrontApiAccountTest` (+4: adoption via code, existing number needs code / no SMS → refused, five wrong codes + quick resend, taken number before SMS, failed SMS), `StorefrontCustomerAuthTest` (+2; existing sign-ups go through the code). Registration-related tests (92): all pass except 1 that needs `intl`. Full plain `php artisan test` on this server (PHP 8.4 without intl): 1870 tests, 189 failures, all "intl extension required", 0 other failures.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
 ## 2026-10-06 - Reseller deposit: overpayments credited and used on the next orders
 
 Owner rule (in Bangla): if a reseller pays more than the ordered amount, the extra is added to the reseller's balance and shown in the header. Asked three things; answers: the reseller enters the amount sent and staff correct it when verifying; the balance is a **separate deposit, used on the next orders, not withdrawable**; shown in the **portal's top bar**.

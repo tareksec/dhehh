@@ -111,14 +111,77 @@ class StorefrontApiAccountTest extends TestCase
     public function test_registering_adopts_the_customer_record_of_an_earlier_order_without_duplicating_it(): void
     {
         Queue::fake();
+        $this->configureSms();
+        Http::fake(['sms.example.test/*' => Http::response('OK')]);
         $this->product('Item', 'item');
         $this->placeOrder(['name' => 'Guest buyer', 'phone' => '01712345678'])->assertCreated();
         $this->assertSame(1, Customer::query()->count());
 
-        $token = $this->register()->assertCreated()->json('data.token');
+        $this->register()->assertStatus(202)
+            ->assertJsonPath('verification_required', true)
+            ->assertJsonPath('masked_identifier', '•••••••5678');
+        $token = $this->register(['code' => $this->sentCode('verification code is')])->assertCreated()->json('data.token');
 
         $this->assertSame(1, Customer::query()->count(), 'the CRM record is reused');
         $this->api('GET', '/account/orders', [], $token)->assertOk()->assertJsonCount(1, 'data');
+    }
+
+    public function test_an_existing_customers_number_cannot_be_registered_without_its_sms_code(): void
+    {
+        Queue::fake();
+        $this->product('Item', 'item');
+        $this->placeOrder(['name' => 'Guest buyer', 'phone' => '01712345678'])->assertCreated();
+
+        // No SMS gateway: the number can't be proven, so no account.
+        $this->register()->assertStatus(422)->assertJsonPath('error', 'verification_unavailable');
+
+        $this->configureSms();
+        Http::fake(['sms.example.test/*' => Http::response('OK')]);
+        $this->register()->assertStatus(202);
+        $code = $this->sentCode('verification code is');
+
+        $this->register(['code' => $code === '111111' ? '222222' : '111111'])->assertStatus(422)->assertJsonPath('error', 'otp_invalid');
+        $this->assertFalse(Customer::query()->first()->isRegistered());
+
+        $this->register(['code' => $code])->assertCreated();
+        // The code is spent.
+        $this->register(['code' => $code])->assertStatus(409)->assertJsonPath('error', 'account_exists');
+    }
+
+    public function test_five_wrong_sign_up_codes_burn_the_code_and_a_quick_resend_keeps_it(): void
+    {
+        $this->configureSms();
+        Http::fake(['sms.example.test/*' => Http::response('OK')]);
+
+        $this->register()->assertStatus(202);
+        $this->register()->assertStatus(202);
+        Http::assertSentCount(1);
+        $code = $this->sentCode('verification code is');
+
+        foreach (range(1, 5) as $ignored) {
+            $this->register(['code' => $code === '111111' ? '222222' : '111111'])->assertStatus(422);
+        }
+
+        $this->register(['code' => $code])->assertStatus(422)->assertJsonPath('error', 'otp_invalid');
+        $this->assertSame(0, Customer::query()->count());
+    }
+
+    public function test_a_taken_number_is_refused_before_any_code_is_sent(): void
+    {
+        $this->register()->assertCreated();
+        $this->configureSms();
+        Http::fake(['sms.example.test/*' => Http::response('OK')]);
+
+        $this->register(['phone' => '+880 1712-345678'])->assertStatus(409)->assertJsonPath('error', 'account_exists');
+        Http::assertNothingSent();
+    }
+
+    public function test_a_failed_sms_is_reported_instead_of_waiting_for_a_code(): void
+    {
+        $this->configureSms();
+        Http::fake(['sms.example.test/*' => Http::response('down', 500)]);
+
+        $this->register()->assertStatus(422)->assertJsonPath('error', 'verification_unavailable');
     }
 
     // ---------------------------------------------------------------- login
@@ -205,8 +268,8 @@ class StorefrontApiAccountTest extends TestCase
 
     public function test_a_login_code_signs_the_customer_in_once(): void
     {
-        $this->configureSms();
         $this->register()->assertCreated();
+        $this->configureSms();
         Http::fake(['sms.example.test/*' => Http::response('OK')]);
 
         $this->api('POST', '/account/otp', ['identifier' => '01712345678'])
@@ -236,8 +299,8 @@ class StorefrontApiAccountTest extends TestCase
 
     public function test_five_wrong_codes_burn_the_login_code(): void
     {
-        $this->configureSms();
         $this->register()->assertCreated();
+        $this->configureSms();
         Http::fake(['sms.example.test/*' => Http::response('OK')]);
         $this->api('POST', '/account/otp', ['identifier' => '01712345678'])->assertStatus(202);
         $code = $this->sentCode('login code is');
@@ -254,8 +317,8 @@ class StorefrontApiAccountTest extends TestCase
 
     public function test_a_password_reset_signs_every_other_login_out_and_signs_in_with_the_new_password(): void
     {
-        $this->configureSms();
         $old = $this->register()->assertCreated()->json('data.token');
+        $this->configureSms();
         Http::fake(['sms.example.test/*' => Http::response('OK')]);
 
         $this->api('POST', '/account/password/forgot', ['phone' => '01712345678'])->assertStatus(202);
@@ -287,8 +350,8 @@ class StorefrontApiAccountTest extends TestCase
 
     public function test_five_wrong_reset_codes_lock_the_reset_even_for_the_right_code(): void
     {
-        $this->configureSms();
         $this->register()->assertCreated();
+        $this->configureSms();
         Http::fake(['sms.example.test/*' => Http::response('OK')]);
         $this->api('POST', '/account/password/forgot', ['phone' => '01712345678'])->assertStatus(202);
         $code = $this->sentCode('reset code is');
