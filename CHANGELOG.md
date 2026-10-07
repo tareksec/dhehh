@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.60.4] - 2026-10-07
+
 **Release type:** Patch/Fix Update
 
 ### Fixed
@@ -12,7 +14,6 @@ All notable production changes to Business Dashboard are documented here.
 
 **Technical Notes:**
 - `VoucherLinkedPayoutsService::voucherVoided()` is called from `VoucherService::reject()` and `cancel()`, and from trash (`voucherTrashed()` calls it). No migration.
-
 ## [2.60.3] - 2026-10-07
 
 **Release type:** Patch/Fix Update
