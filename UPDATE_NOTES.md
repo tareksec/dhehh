@@ -2,6 +2,38 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-09-29 - Rejected or cancelled payout vouchers make the payout unpaid (missing part of the earlier voucher-trash work)
+
+Reason — owner: "পেআউটের ভাউচার রিজেক্ট হলে পেআউট অপরিশোধিত হবে- এটাকি ইমপ্লিমেন্ট করেছিলে?" — the owner asked whether the rule "a rejected payout voucher makes the payout unpaid" had been implemented.
+
+It had not. When I asked about trashed payout vouchers, I left rejected and cancelled ones out on purpose and said so ("পেআউটের ভাউচার রিজেক্ট বা ক্যানসেল হলে পেআউট এখনো পরিশোধিত-ই থাকে"). The owner's answer to the trash question was yes; this asked for the same rule for reject. It is now done.
+
+What changed:
+- `VoucherService::reject()` and `cancel()` call `VoucherLinkedPayoutsService::voucherVoided()` next to the withdrawal hook. Trash calls the same method, so all three paths behave the same way.
+- Effect: `SettlementPayout` / `ChannelPartnerPayout` go from paid to pending with `paid_at` cleared. A `paid_out` settlement goes back to `confirmed`. A `ResellerPayoutRequest` goes from paid to approved.
+- Restoring a rejected or cancelled voucher from trash does not mark anything paid again (already the case through `isVoid()`).
+
+Verification:
+- New test in `VoucherTrashTest`: reject and cancel for two investor payouts (only the affected one turns pending, and the settlement goes back to confirmed), a restore after reject that does not re-pay, and reseller withdrawals rejected and cancelled.
+- `VoucherTrashTest` + `InvestmentWithdrawalTest`: 15 passed. Full `php artisan test` (plain, no `--env`): **1557 passed, 0 failed**. Pint passes.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
+## 2026-09-29 - Documentation editor: "Remove link" toolbar button
+
+Reason — owner: "প্রিভিয়াস লিংক রিমুভ করার অপশন যুক্ত কর।" (Add an option to remove the previous link.) Follows the report that changing an existing link's URL in the editor didn't take effect.
+
+What changed:
+- The Content editor toolbar (Settings → Documentation → article) has a new **Remove link** button next to Link. Click inside a link, press it, and the link is removed while the text stays. Filament's editor had no unlink tool, so it is a custom `RichEditorTool`.
+- Not changed: the underlying "URL edit does nothing" behavior — Filament's `setLink` silently ignores URLs that look like an unknown scheme (e.g. `host:8080/x`); waiting on the owner's exact URL to confirm.
+
+Files: `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`, `lang/en.json`, `lang/bn.json`, `tests/Feature/DocumentationModuleTest.php` (+1 test), `CHANGELOG.md`.
+
+Verification: `DocumentationModuleTest` 10 passed; full suite 1553 passed before merging main (re-run after merge below); Pint passed. Not verified in a browser (button behavior in the live editor not clicked through).
+
+Commit status: Committed and pushed to `claude/friendly-feynman-w4twzx` and `main` (owner approved: "হ্যাঁ, commit আর push কর").
+
 ## 2026-09-28 - Channel partners separated from investors (own record, own accounts, several per project)
 
 Reason — owner: "চেনেল পার্টনার তো ইনভেস্টর লিস্ট থেকে আসবেনা। চেনেল পার্টনার সম্পূর্ণ আলাদা থাকবে তার হিসাব ও আলাদা হবে, ইনভেস্টরদের সাথে চ্যানেল পার্টনার কে মিশানো যাবেনা।" — channel partners must not come from the investor list, must be completely separate with their own accounts, and must not be mixed with investors.

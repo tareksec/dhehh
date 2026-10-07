@@ -4,6 +4,27 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **A rejected or cancelled payout voucher now makes the payout unpaid again.** Until now only moving the voucher to trash did this. When the voucher created by **Mark as Paid** is rejected or cancelled, the investor payout, channel-partner payout or reseller withdrawal goes back to **pending** (**approved** for reseller requests), and a settlement that was fully paid out goes back to **confirmed**. The payout can then be paid again with a new voucher. Restoring a rejected or cancelled voucher from trash doesn't mark the payout paid again.
+
+**Technical Notes:**
+- `VoucherLinkedPayoutsService::voucherVoided()` is called from `VoucherService::reject()` and `cancel()`, and from trash (`voucherTrashed()` calls it). No migration.
+
+## [2.42.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Remove link button in the Documentation article editor.** Click inside a link and press the new "Remove link" (broken-chain) button in the toolbar to remove the link and keep the text — no need to retype it.
+
+**Technical Notes:**
+- Filament's `RichEditor` has no built-in unlink tool, so `DocumentationArticleResource` registers a custom `unlink` `RichEditorTool` (`extendMarkRange('link').unsetLink()`) and lists it in `toolbarButtons()` next to `link`.
+## [2.41.0] - 2026-09-29
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -29,7 +50,6 @@ All notable production changes to Business Dashboard are documented here.
   - the old investor rows are kept because they may have their own investments. A row that was only a partner still appears in the investor list and can be deleted there if it has no investments.
 - New `ChannelPartner` model (`BelongsToCompany`, `User::MODEL_MODULES` → `investments`, audited, added to `MultiCompanyIsolationTest`) and `ChannelPartnerResource`, with `ReferredInvestorsRelationManager`, `PayoutsRelationManager` and the shared `DocumentsRelationManager`. `PartnerPayoutsRelationManager` on investors is deleted.
 - `SettlementService::allocateProfit()` returns `partner_rows` (partner id => amount), and one `ChannelPartnerPayout` is created per partner. `Investment` no longer rejects a second partner in a project.
-
 ## [2.40.0] - 2026-09-29
 
 **Release type:** Minor Feature Update
@@ -40,6 +60,7 @@ All notable production changes to Business Dashboard are documented here.
 
 **Technical Notes:**
 - `DocumentationArticleResource` table: `viewGuidePage` action, visible only when `is_published && is_public`; table query eager-loads `category` to avoid an N+1 for both this action and the existing Category column.
+
 ## [2.39.0] - 2026-09-29
 
 **Release type:** Minor Feature Update
