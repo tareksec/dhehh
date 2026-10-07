@@ -140,6 +140,20 @@ class StorefrontSlideResource extends Resource
                         ->label('Fit to frame (never crop the image)')
                         ->helperText('On: the whole banner image is always shown, with a small strip of the banner background above/below if it is not the exact ratio — nothing is ever cut off. Off (default): the image fills the banner edge to edge and is cropped to fit.')
                         ->default(false),
+                    TextInput::make('eyebrow')
+                        ->label(__('Small label above the heading'))
+                        ->maxLength(60)
+                        ->helperText(__('Optional text shown over the banner image (Next.js site). Leave all four text fields empty for a clean image banner.')),
+                    TextInput::make('heading')
+                        ->label(__('Heading'))
+                        ->maxLength(255),
+                    TextInput::make('subheading')
+                        ->label(__('Sub-heading'))
+                        ->maxLength(255),
+                    TextInput::make('cta_label')
+                        ->label(__('Button label'))
+                        ->maxLength(255)
+                        ->helperText(__('The button opens the banner link below (or the linked product).')),
                     TextInput::make('cta_url')
                         ->label('Banner link (optional)')
                         ->url()

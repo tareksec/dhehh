@@ -108,8 +108,10 @@
         : request()->routeIs('storefront.track.*', 'storefront.preview.track.*');
 
     // Admin-managed navigation menus (Storefront Settings → Navigation Menus).
-    $menuCategoryIds = collect([$setting->header_menu, $setting->footer_menu])->flatten(1)->filter()->where('type', 'category')->pluck('category_id')->filter()->unique();
-    $menuPageSlugs = collect([$setting->header_menu, $setting->footer_menu])->flatten(1)->filter()->where('type', 'page')->pluck('page_id')->filter()->unique();
+    // Footer Builder "Custom links" columns hold menu-style links too.
+    $customFooterLinks = collect($setting->footerBlocks())->where('type', 'custom_links')->flatMap(fn ($block) => $block['data']['links'] ?? [])->all();
+    $menuCategoryIds = collect([$setting->header_menu, $setting->footer_menu, $customFooterLinks])->flatten(1)->filter()->where('type', 'category')->pluck('category_id')->filter()->unique();
+    $menuPageSlugs = collect([$setting->header_menu, $setting->footer_menu, $customFooterLinks])->flatten(1)->filter()->where('type', 'page')->pluck('page_id')->filter()->unique();
     $menuCategoryData = $menuCategoryIds->isEmpty() ? collect() : \App\Models\Category::withoutGlobalScopes()->where('company_id', $company->getKey())->whereIn('id', $menuCategoryIds)->where('is_active', true)->get(['id', 'slug', 'icon'])->keyBy('id');
     $menuPageSlugs = $menuPageSlugs->isEmpty() ? collect() : \App\Models\StorefrontPage::withoutGlobalScopes()->where('company_id', $company->getKey())->forSite($setting)->whereIn('id', $menuPageSlugs)->where('is_published', true)->pluck('slug', 'id');
     $resolveMenu = function (?array $items) use ($productsUrl, $trackUrl, $accountOrdersUrl, $resellerUrl, $offersUrl, $previewSlug, $menuCategoryData, $menuPageSlugs, $pageUrl) {

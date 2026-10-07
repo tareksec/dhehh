@@ -33,6 +33,9 @@ trait HandlesNextjsSiteDomain
         $data['nextjs_site_domain'] = null;
         $data['nextjs_site_domain_verified'] = false;
 
+        // The home page builder, top bar, header, footer colour and help button belong to the Next.js site only.
+        unset($data['home_sections'], $data['site_design']);
+
         return $data;
     }
 

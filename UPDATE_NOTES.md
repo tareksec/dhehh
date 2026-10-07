@@ -24,6 +24,48 @@ Tests: new `InvestorPortalTest` (19 tests: host boundary, reseller portal unaffe
 
 Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07).
 
+## 2026-10-08 - Next.js home page, header and footer follow the approved design; everything is customised from the dashboard
+
+Owner request (in Bangla, with a screenshot of the design from the upstream repo `sajiduzzaman-im/zamzam-international`): the forked site had drifted to a Blade-theme look — the home page must be exactly that design, the dashboard must have every option to customise it, header and footer must match, and the Footer Builder must be able to build a custom footer.
+
+What changed (details in CHANGELOG `[Unreleased]`):
+- New **Website Design** tab on the Next.js row (Home Page Builder, Top Bar, Header, Product Cards, Floating Help Button). The Blade row has no such tab and never stores it.
+- Footer Builder: Custom links column, Custom text, Payment badges, Image / badge; richer Contact info and Bottom bar; footer background colour; Blade footer renders the new blocks too.
+- API: `design`, `home_sections`, cleaned footer blocks, category `tagline`, slide `eyebrow`, product `collection_kinds`, `sort=discount`, `on_sale=1`. New `StorefrontSiteDesign` cleans everything (colours, links, numbers) — never raw admin input.
+- Website repo (`bhd4232/zamzamint-new-website-theme`): top bar, header, hero, trust strip, category cards, deals banner, product rows, flash-sale band, WhatsApp section, SEO text, dark footer, floating help — all driven by the above.
+
+My decisions (say if you want different):
+- The upstream repo is not reachable from this session (private; add_repo was refused), and the fork only carries its first commit, which is an older design than the screenshot. The design was rebuilt **from the screenshot** (spacing, colours, card layout, sections); fonts come from the ERP typography setting (the screenshot's font could not be identified) — pick a font in Storefront Settings → Storefront Typography.
+- The screenshot's "Inventory not synced yet / Sync now" line was a mock-data leftover and is not rebuilt (the ERP is the live source).
+- The default home layout has no per-category rows and no WhatsApp / SEO text sections (those need copy only the owner can write); the owner adds them in the Home Page Builder. The category cards show categories alphabetically unless the owner picks categories (the pick order is kept) — categories have no sort number.
+- "New" badge = the product is in a live **New Arrivals** collection (no automatic "new" rule, per the earlier owner rule). Prices on cards are orange by default (changeable).
+
+Needs Bangla review: all ~200 new admin labels in `lang/bn.json` (Website Design tab, Home Page Builder sections, Footer Builder blocks) and the website's new interface strings (`home.*`, `help.*`, `footer.*`, `product.new`).
+
+Also: saving settings / slides / pages / categories / offers now sends a debounced `storefront.updated` webhook (5 s delay, once per 5 s) so the Next.js site shows dashboard edits within seconds (the website's webhook route already accepts it); set the webhook URL and secret under Integrations → Website API.
+
+Tests: new `NextjsSiteDesignTest` (22). Full plain `php artisan test`: **1923 passed, 1 skipped, 0 failed**; website `tsc --noEmit` and `npm run build` clean. Browser checks on a throwaway database: desktop 1920 / 1440 / 1100, tablet, phone, dark mode, Bangla; mobile menu, categories dropdown, add to cart, Read more, link safety, sticky header; admin Website Design tab.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট ও পুশ কর এবং মেইনে পুশ কর", 2026-10-07), in both repositories; ERP `origin/main` (v2.60.3) merged first.
+
+## 2026-09-29 - Rejected or cancelled payout vouchers make the payout unpaid (missing part of the earlier voucher-trash work)
+
+Reason — owner: "পেআউটের ভাউচার রিজেক্ট হলে পেআউট অপরিশোধিত হবে- এটাকি ইমপ্লিমেন্ট করেছিলে?" — the owner asked whether the rule "a rejected payout voucher makes the payout unpaid" had been implemented.
+
+It had not. When I asked about trashed payout vouchers, I left rejected and cancelled ones out on purpose and said so ("পেআউটের ভাউচার রিজেক্ট বা ক্যানসেল হলে পেআউট এখনো পরিশোধিত-ই থাকে"). The owner's answer to the trash question was yes; this asked for the same rule for reject. It is now done.
+
+What changed:
+- `VoucherService::reject()` and `cancel()` call `VoucherLinkedPayoutsService::voucherVoided()` next to the withdrawal hook. Trash calls the same method, so all three paths behave the same way.
+- Effect: `SettlementPayout` / `ChannelPartnerPayout` go from paid to pending with `paid_at` cleared. A `paid_out` settlement goes back to `confirmed`. A `ResellerPayoutRequest` goes from paid to approved.
+- Restoring a rejected or cancelled voucher from trash does not mark anything paid again (already the case through `isVoid()`).
+
+Verification:
+- New test in `VoucherTrashTest`: reject and cancel for two investor payouts (only the affected one turns pending, and the settlement goes back to confirmed), a restore after reject that does not re-pay, and reseller withdrawals rejected and cancelled.
+- `VoucherTrashTest` + `InvestmentWithdrawalTest`: 15 passed. Full `php artisan test` (plain, no `--env`): **1557 passed, 0 failed**. Pint passes.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
 ## 2026-10-07 - Reseller-store orders invoiced in the reseller's name too
 
 Owner answer (in Bangla): yes, invoice the reseller-store orders in the reseller's name as well.
@@ -724,7 +766,7 @@ Things to know: the portal login is separate (different host), so a redirected r
 
 Tests: two existing tests updated to expect the redirect. Full suite: 1554 passed (`php artisan test`, no `--env`).
 
-Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07). together with Phases 1–5 and the plan file.
+Commit status: not committed — waiting for owner approval, together with Phases 1–5 and the plan file.
 
 ## 2026-09-29 - Reseller portal Phase 5: Earnings, Withdrawals, My Store, Profile
 
@@ -753,7 +795,7 @@ Tests: new `ResellerPortalAccountTest` (25 tests). I broke the code on purpose i
 
 Not done / still open: portal-internal password reset (a reseller can still reset from the storefront's forgot-password page); §2.1 Q5 (what happens to the old **My Account → Your Store** page) — needed before Phase 6.
 
-Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07). together with the plan file and Phases 1–4 (all still pending).
+Commit status: not committed — waiting for owner approval, together with the plan file and Phases 1–4 (all still pending).
 
 ## 2026-09-28 - Reseller portal Phase 3: Overview + Orders
 
@@ -773,7 +815,7 @@ Needs Bangla review: the 14 new keys added to `lang/bn.json` this phase (dashboa
 
 Tests: new `ResellerPortalDashboardTest` (4 tests — dashboard renders end-to-end including the embedded chart widget, Orders page company-scoping, full customer info + commission sync, pending/rejected access denial). Full suite: 1529 passed (`php artisan test`, no `--env`). (Frontend build: see the Phase 5 note above — the portal gets its own Vite theme, which is also what makes these pages' layout classes compile.)
 
-Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07). together with Phase 1, the plan file, Phase 2, and Phase 4 (all still pending from before this phase).
+Commit status: not committed — waiting for owner approval, together with Phase 1, the plan file, Phase 2, and Phase 4 (all still pending from before this phase).
 
 ## 2026-09-28 - Reseller portal Phase 4: Products & pricing
 
@@ -791,7 +833,7 @@ Needs Bangla review: the 16 new keys added to `lang/bn.json` this phase (Product
 
 Tests: new `ResellerPortalProductsTest` (6 tests — company scoping, in-store toggle create/delete, price-floor enforcement, bulk add/remove, bulk set-price-from-suggested skip logic, cross-company photo-download 404). Full suite: 1525 passed (`php artisan test`, no `--env`). (Frontend build: see the Phase 5 note above — the portal gets its own Vite theme, which is also what makes these pages' layout classes compile.)
 
-Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07). together with Phase 1, the plan file, and Phase 2 (all still pending from before this phase).
+Commit status: not committed — waiting for owner approval, together with Phase 1, the plan file, and Phase 2 (all still pending from before this phase).
 
 ## 2026-09-28 - Reseller portal Phase 2: portal foundation
 
@@ -816,7 +858,7 @@ Needs Bangla review: the 12 new keys added to `lang/bn.json` this phase (portal/
 
 Tests: new `ResellerPortalTest` (9 tests — host isolation both directions, disabled-module 404, custom domain override, cross-company 403, pending/rejected/approved status pages, apply creates a pending login). Full suite: 1519 passed (`php artisan test`, no `--env`). No frontend assets changed, so `npm run build` was not needed.
 
-Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07). together with Phase 1 and the plan file (both still pending from before this phase).
+Commit status: not committed — waiting for owner approval, together with Phase 1 and the plan file (both still pending from before this phase).
 
 ## 2026-09-28 - Reseller portal Phase 1: store-link fix
 
@@ -837,7 +879,7 @@ Needs owner confirmation: none for this phase — Phase 2 (the portal itself) is
 
 Needs Bangla review: none (no new strings).
 
-Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07). The plan file `13_RESELLER_PORTAL_PLAN.md` itself (sent earlier, still untracked) would be committed together with this.
+Commit status: not committed — waiting for owner approval. The plan file `13_RESELLER_PORTAL_PLAN.md` itself (sent earlier, still untracked) would be committed together with this.
 ## 2026-09-29 - Documentation editor: "Remove link" toolbar button
 
 Reason — owner: "প্রিভিয়াস লিংক রিমুভ করার অপশন যুক্ত কর।" (Add an option to remove the previous link.) Follows the report that changing an existing link's URL in the editor didn't take effect.
@@ -986,7 +1028,7 @@ Verification:
 - Pint: passed. `npm run build`: succeeded.
 - Not verified in a browser.
 
-Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07).(bundled with the public Guides page below in the same commit).
+Commit status: not committed — waiting for owner approval (bundled with the public Guides page below in the same commit).
 
 ## 2026-09-29 - Public Guides page: share Documentation with people outside the admin panel
 

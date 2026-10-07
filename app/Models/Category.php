@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\NotifiesWebsiteOfStorefrontChanges;
 use App\Support\StorefrontListingCache;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
@@ -10,8 +11,9 @@ use Illuminate\Support\Facades\Cache;
 class Category extends Model
 {
     use BelongsToCompany;
+    use NotifiesWebsiteOfStorefrontChanges;
 
-    protected $fillable = ['company_id', 'name', 'slug', 'description', 'image', 'icon', 'is_active'];
+    protected $fillable = ['company_id', 'name', 'slug', 'description', 'tagline', 'image', 'icon', 'is_active'];
 
     protected static function booted(): void
     {

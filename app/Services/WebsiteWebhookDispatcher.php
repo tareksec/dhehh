@@ -7,6 +7,7 @@ use App\Models\Lead;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\StorefrontSetting;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Queues an outbound webhook to an external website whenever something it
@@ -57,10 +58,25 @@ class WebsiteWebhookDispatcher
     }
 
     /**
+     * Storefront content changed (settings, slides, pages, categories,
+     * offers). One delivery per company per few seconds, sent a moment after
+     * the first change, so a form that saves several records at once — or
+     * several quick edits — refreshes the website once and with the final data.
+     */
+    public function dispatchStorefrontUpdated(?int $companyId): void
+    {
+        if (! $companyId || ! Cache::add("website-webhook:storefront:{$companyId}", true, now()->addSeconds(5))) {
+            return;
+        }
+
+        $this->dispatch($companyId, 'storefront.updated', ['updated_at' => now()->toIso8601String()], delaySeconds: 5);
+    }
+
+    /**
      * Also used for the Integrations page's "Send test webhook" action, with
      * event 'ping' and an empty payload.
      */
-    public function dispatch(?int $companyId, string $event, array $data): void
+    public function dispatch(?int $companyId, string $event, array $data, int $delaySeconds = 0): void
     {
         if (! $companyId) {
             return;
@@ -83,7 +99,11 @@ class WebsiteWebhookDispatcher
 
             $sent[$url.'|'.$secret] = true;
 
-            DispatchWebsiteWebhookJob::dispatch($url, $secret, $event, $data);
+            $pending = DispatchWebsiteWebhookJob::dispatch($url, $secret, $event, $data);
+
+            if ($delaySeconds > 0) {
+                $pending->delay(now()->addSeconds($delaySeconds));
+            }
         }
     }
 }

@@ -17,7 +17,11 @@ use App\Models\Voucher;
  */
 class VoucherLinkedPayoutsService
 {
-    public function voucherTrashed(Voucher $voucher): void
+    /**
+     * The voucher went to Trash, or was rejected or cancelled (owner,
+     * 2026-09-28): the payout that was marked paid with it is unpaid again.
+     */
+    public function voucherVoided(Voucher $voucher): void
     {
         $settlementIds = [];
 
@@ -35,6 +39,11 @@ class VoucherLinkedPayoutsService
 
         ResellerPayoutRequest::query()->where('voucher_id', $voucher->getKey())->where('status', ResellerPayoutRequest::STATUS_PAID)->get()
             ->each(fn (ResellerPayoutRequest $request) => $request->update(['status' => ResellerPayoutRequest::STATUS_APPROVED, 'paid_at' => null]));
+    }
+
+    public function voucherTrashed(Voucher $voucher): void
+    {
+        $this->voucherVoided($voucher);
     }
 
     public function voucherRestored(Voucher $voucher): void
