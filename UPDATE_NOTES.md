@@ -2,6 +2,26 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-08 - Hotfix: admin panel 500 after the investor-portal deploy (MySQL 64-character index name)
+
+The owner reported "500 Server Error" on the live site after today's pushes.
+
+Cause: `2026_10_08_100200_create_agreement_tables` auto-named the unique index on `agreement_acceptances` `agreement_acceptances_agreement_template_id_portal_account_id_unique`. That name is 68 characters, and MySQL's limit is 64 (error 1059). Tests run on SQLite, which has no limit, so they passed. On the server, `deploy:migrate` caught the error. By design it does not fail the deploy, and it reports the error to super admins. The tables `agreement_templates` and `agreement_acceptances` (minus the index) were left behind, the migration was not recorded, and `investor_requests` / `payout_batches` were never created. The navigation badges of `InvestorRequestResource` and `PayoutBatchResource` query those tables on every admin page, which caused the 500.
+
+What changed:
+- The migration gives the index a short explicit name and is safe to re-run on the half-migrated database: an existing table is skipped, and only the missing index is added.
+- New `MigrationIdentifierLengthTest` guards every table and index name against the 64-character limit.
+- The same test found two older index names over the limit: `broadcast_recipients` (68) in `2026_08_28_000300` and `investment_documents` (71) in `2026_09_07_100200`. Both now have explicit short names, so a fresh MySQL install works. On production those migrations failed the same way earlier and were finished by `hasTable` guards (CHANGELOG: "Duplicate column name 'opted_out_at'"), so production has the tables but **not** these two indexes: the duplicate guard on broadcast recipients and a lookup index on documents. That is not urgent and is not fixed here.
+
+After deploy: Coolify's post-deployment `php artisan deploy:migrate` should now finish all pending migrations. To confirm, run `php artisan migrate:status` on the server: `2026_10_08_100200`, `100300` and `100400` should show "Ran". If the 500 remains, `storage/logs/laravel.log` names the actual error.
+
+Verification:
+- `MigrationIdentifierLengthTest` passes. Before the rename it listed exactly the three long names.
+- Simulated production's half-migrated state on a disposable SQLite file in the scratchpad (not the demo database): `agreement_templates` and `agreement_acceptances` existed without the index and the migration was unrecorded. `php artisan migrate` then finished `100200`, `100300` and `100400`, creating `investor_requests`, `payout_batches` and the new index. Not run on a real MySQL server, because none is available in this environment.
+- Full `php artisan test` (plain, no `--env`): 2005 passed, 1 skipped, 0 failed. `npm run build` passes.
+
+Commit status: committed and pushed to `ccr-59b8ca5b-4zc27z` and `main` with the owner's approval (2026-10-08).
+
 ## 2026-10-08 - "Open investor portal" button (look-only staff preview of the investor portal)
 
 Owner request (in Bangla): "এডমিন থেকে ইনভেস্টরদের পোর্টালে এক ক্লিকে প্রবেশ করার জন্য ইনভেস্ট ভিউ পেজের হেডারে বাটন যোগ কর … আমাদের এডমিন প্যানেল থেকে এক ক্লিকে ইনভেস্টর পোর্টালে লগিন অপশন থাকতে হবে এবং এটা নতুন ট্যাবে ওপেন হবে।" (The existing Portal access → Invite flow stays as it is.)

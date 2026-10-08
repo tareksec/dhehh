@@ -4,6 +4,18 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Hotfix Update
+
+### Fixed
+
+- **Admin panel showing "500 Server Error" after the v2.63.0 deploy.** On the live MySQL database the migration `2026_10_08_100200_create_agreement_tables` failed. The unique index on `agreement_acceptances` got an automatic name 68 characters long, and MySQL allows at most 64. The deploy's migration stopped halfway: `agreement_templates` and `agreement_acceptances` were created, but the migration was not recorded, and the later `investor_requests` and `payout_batches` tables were never created. The sidebar counts for **Investor Requests** and **Payout Batches** query those tables on every admin page, so every page answered 500. Each later deploy then failed again with "table already exists".
+
+### Technical Notes
+
+- The unique index now has a short explicit name (`agreement_acceptances_template_account_unique`). The migration skips any table that already exists and only adds the missing index, so the next deploy's `deploy:migrate` finishes it on a half-migrated database and then runs `2026_10_08_100300` / `100400`. No data is changed.
+- New `MigrationIdentifierLengthTest` fails when any table or index name is over 64 characters. The test suite runs on SQLite, which has no such limit, so this class of error used to show up only in production.
+- The same test found two older index names over the limit: `broadcast_recipients` (68) in `2026_08_28_000300` and `investment_documents` (71) in `2026_09_07_100200`. Both now have explicit short names, so a fresh MySQL install works. On production those migrations failed the same way earlier and were finished by `hasTable` guards (CHANGELOG: "Duplicate column name 'opted_out_at'"), so production has the tables but **not** these two indexes: the duplicate guard on broadcast recipients and a lookup index on documents. That is not urgent and is not fixed here.
+
 ## [2.64.0] - 2026-10-08
 
 **Release type:** Minor Feature Update
