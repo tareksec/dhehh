@@ -2,6 +2,34 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-08 - "Open investor portal" button (look-only staff preview of the investor portal)
+
+Owner request (in Bangla): "এডমিন থেকে ইনভেস্টরদের পোর্টালে এক ক্লিকে প্রবেশ করার জন্য ইনভেস্ট ভিউ পেজের হেডারে বাটন যোগ কর … আমাদের এডমিন প্যানেল থেকে এক ক্লিকে ইনভেস্টর পোর্টালে লগিন অপশন থাকতে হবে এবং এটা নতুন ট্যাবে ওপেন হবে।" (The existing Portal access → Invite flow stays as it is.)
+
+What changed:
+- New header button **Open investor portal** next to **Portal access** on the investor's page (and, for consistency, on the channel partner's page). It is a plain link with `target="_blank"`, so the browser opens the new tab itself (no pop-up blocker).
+- The dashboard and the portal are on different hosts and cannot share a login, so the link goes to `GET /admin/investor-portal/{investors|channel-partners}/{id}/open` on the dashboard host, which checks the staff member and redirects the tab to `<portal host>/investor/staff-entry/{one-time token}`. The token lasts 60 seconds, works once, only on that company's portal, and is refused if the staff member lost the permission in the meantime.
+- The tab is a **staff preview**: signed in as the person, with a yellow "Staff preview" bar on every page. It is look-only. The password-change form is hidden, and accepting an agreement, adding a payment account, sending or cancelling a request are hidden and refused on the server (`refuseInStaffPreview()` in `InvestorPortalPage`; every future portal page that writes must call it). It is **not** the person's sign-in (`last_login_at` and the "login" audit entry are untouched). What it records in the audit log (`investor_portal.staff_entry_issued`, `investor_portal.staff_entered`, document downloads) is attributed to the staff user, not the investor.
+- Works even if the person has not set a password yet.
+- Files: `InvestorPortalOpenAction`, `Admin\InvestorPortalOpenController`, `InvestorPortal\InvestorPortalStaffEntryController`, `InvestorPortalStaffEntryService`, `Support\InvestorPortalStaffPreview`, banner view `filament/investor/staff-preview-banner`, `InvestorPortalAccountService::ensureAccount()` (account creation shared with `invite()`), `InvestorPortalAccount::canAccessPanel()`, `AuditLogService`. No migration. 7 new lang keys. Docs: CHANGELOG, `docs/roles-and-permissions.md`, plan §15 build log.
+
+Decisions I made without asking, for the owner to confirm or change:
+1. **Who can use it:** the same permission as "Portal access", `investments.portal_manage` (Super Admin only by default). Staff with only `investments.manage` do not see the button.
+2. **No portal account yet:** the click creates one (status "invited", no invite date, no SMS, no link) so there is someone to look at. It then shows as "Invited" in **Investor Portal Settings** counts, although nobody was invited. The **Portal access** button still says "Invite to the investor portal" for such a person; a real invite reuses the same account.
+3. **Never opened:** a disabled account (enable it first), a person without a phone number, and a phone number that has a portal application waiting for review.
+4. **Look-only** (not "act as"): staff cannot accept agreements or change anything on the person's behalf.
+
+Needs Bangla review (added with a Bangla value, please check the wording): "Open investor portal", "Opens the investor portal in a new tab, signed in as this person. You can look at everything but change nothing.", "Could not open the portal", "This staff link has expired. Open the portal again from the dashboard.", "Staff preview: you are looking at the portal as :name (opened by :staff). Nothing can be changed here, and it does not count as :name signing in.", "A staff preview cannot change a password.", "This phone number has a portal application waiting for review, so the portal cannot be opened as this person yet."
+
+Known gap, not caused by this change: an **unsigned-in** visitor of any plain `/admin/...` route that uses the `auth` middleware (print pages, downloads, this button) gets a 500 ("Route [login] not defined") instead of the sign-in page, because the app does not set `redirectGuestsTo`. No data is exposed. Not fixed here.
+
+Verification:
+- New `InvestorPortalStaffEntryTest` (18 tests): the button on both pages and who sees it; the route's permission, company and refusal rules (disabled, no phone, portal off, application waiting); the token (works once, expires, wrong portal, account disabled or staff member deactivated in between); not counted as a sign-in; audit attribution; the banner; an account with no password is locked out when it is not a preview; every write path is refused in a preview and still works for the person themselves.
+- Checked in headless Chromium against a disposable database (deleted afterwards), twice: before and after merging main's Phase 3–5. Clicking the button on the investor's page opened a new tab on the portal host at the dashboard with the "Staff preview" bar; the Agreements page shows the agreement without the accept button, Payment accounts and Requests have no add / new button, Profile has no password form.
+- Full `php artisan test` (plain, no `--env`) on the merged code: 2004 passed, 1 skipped, 0 failed. `npm run build` passes. Pint passes on the changed PHP files.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর"). Built and tested on top of `origin/main` v2.63.0 (portal Phases 3–5), which was merged into the branch; the only merge conflicts were in `CHANGELOG.md`, `UPDATE_NOTES.md` and `InvestorPortalAccount::canAccessPanel()`.
+
 ## 2026-10-08 - Investors list: project picker on the table toolbar
 
 Owner request (in Bangla), with a screenshot of the investor list and a red box at the top left of the table: "image এর চিহ্নিত জায়গায় প্রজেক্ট ভিত্তিক ফিল্টার অপশন যুক্ত কর এবং তার পাশে একটা সার্চ বার যুক্ত কর।"

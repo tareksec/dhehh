@@ -15,6 +15,7 @@ use App\Filament\Investor\Pages\Profile;
 use App\Filament\Investor\Pages\Statement;
 use App\Http\Controllers\InvestorPortal\InvestorPortalDocumentController;
 use App\Http\Controllers\InvestorPortal\InvestorPortalReportController;
+use App\Http\Controllers\InvestorPortal\InvestorPortalStaffEntryController;
 use App\Http\Middleware\ResolveCompanyFromInvestorPortalDomain;
 use App\Http\Middleware\RestrictPortalHosts;
 use App\Models\Company;
@@ -26,6 +27,8 @@ use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -70,12 +73,15 @@ class InvestorPanelProvider extends PanelProvider
             ->homeUrl(fn (): string => Dashboard::getUrl())
             ->routes(function (): void {
                 Route::get('invite/{token}', AcceptInvite::class)->name('invite');
+                // One-time link from the dashboard's "Open investor portal" button.
+                Route::get('staff-entry/{token}', InvestorPortalStaffEntryController::class)->middleware('throttle:20,1')->name('staff-entry');
             })
             ->authenticatedRoutes(function (): void {
                 Route::get('documents/{document}/download', InvestorPortalDocumentController::class)->name('documents.download');
                 Route::get('payouts/{payout}/report', [InvestorPortalReportController::class, 'payout'])->name('reports.payout');
                 Route::get('statement/print', [InvestorPortalReportController::class, 'statement'])->name('reports.statement');
             })
+            ->renderHook(PanelsRenderHook::CONTENT_BEFORE, fn (): View => view('filament.investor.staff-preview-banner'))
             ->viteTheme('resources/css/filament/investor/theme.css')
             ->middleware([
                 RestrictPortalHosts::class,

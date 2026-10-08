@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\InvestorPortalAccount;
 use App\Services\CompanyContext;
 use App\Services\InvestorPortalService;
+use App\Support\InvestorPortalStaffPreview;
 use Filament\Facades\Filament;
 
 /**
@@ -36,6 +37,12 @@ trait InvestorPortalPage
         $account = Filament::auth()->user();
 
         return $account;
+    }
+
+    /** True while a staff member is looking at the portal as this person (look only). */
+    public function isStaffPreview(): bool
+    {
+        return InvestorPortalStaffPreview::isFor($this->account());
     }
 
     public function portal(): InvestorPortalService
