@@ -12,7 +12,7 @@ use App\Filament\Widgets\LowStockProducts;
 use App\Filament\Widgets\SalesPurchaseTrend;
 use App\Filament\Widgets\TopBusinessPerformers;
 use App\Http\Middleware\PreventAdminPageCaching;
-use App\Http\Middleware\RestrictResellerPortalHost;
+use App\Http\Middleware\RestrictPortalHosts;
 use App\Http\Middleware\SetCurrentCompany;
 use App\Http\Middleware\SyncAppUpdates;
 use App\Models\Company;
@@ -497,8 +497,8 @@ class AdminPanelProvider extends PanelProvider
                 // The admin panel doesn't route through the "web" middleware
                 // group, so this has to be listed here too -- otherwise a
                 // reseller-portal host could still reach /admin. See
-                // 13_RESELLER_PORTAL_PLAN.md §6 and RestrictResellerPortalHost.
-                RestrictResellerPortalHost::class,
+                // 13_RESELLER_PORTAL_PLAN.md §6 and RestrictPortalHosts.
+                RestrictPortalHosts::class,
                 PreventAdminPageCaching::class,
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,

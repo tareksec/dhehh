@@ -41,6 +41,9 @@ class StorefrontCatalogService
     /** @var Collection<int, Offer>|null */
     protected ?Collection $live = null;
 
+    /** @var array<int, array<string, string>>|null product_id => the live collection kinds it is in */
+    protected ?array $kinds = null;
+
     public function __construct(protected Company $company) {}
 
     public static function kindSlug(?string $kind): ?string
@@ -103,6 +106,8 @@ class StorefrontCatalogService
             'moq' => $product->effectiveMoq(),
             'tier_prices' => $product->normalizedTiers(),
             'has_variants' => (bool) $product->has_variants,
+            // Live Offers → Collection kinds the product is in (flash_sale / trending / new_arrivals): drives the "New" badge.
+            'collection_kinds' => $this->kindsFor($product),
             'rating' => [
                 'average' => isset($product->approved_reviews_avg) ? round((float) $product->approved_reviews_avg, 1) : null,
                 'count' => (int) ($product->approved_reviews_count ?? 0),
@@ -178,6 +183,7 @@ class StorefrontCatalogService
                 'name' => $category->name,
                 'slug' => $category->slug,
                 'description' => $category->description,
+                'tagline' => $category->tagline,
                 'image_url' => Media::url($category->image, $this->company),
                 'icon' => $category->icon,
                 'products_count' => (int) $category->visible_products_count,
@@ -240,6 +246,22 @@ class StorefrontCatalogService
             ->values();
 
         return $kind ? $this->live->where('collection_kind', $kind)->values() : $this->live;
+    }
+
+    /** @return list<string> */
+    protected function kindsFor(Product $product): array
+    {
+        if ($this->kinds === null) {
+            $this->kinds = [];
+
+            foreach ($this->liveCollections() as $offer) {
+                foreach ($offer->items as $item) {
+                    $this->kinds[$item->product_id][$offer->collection_kind] = $offer->collection_kind;
+                }
+            }
+        }
+
+        return array_values($this->kinds[$product->getKey()] ?? []);
     }
 
     /**

@@ -25,6 +25,8 @@ class AuditLogService
         AuditLog::query()->create([
             'company_id' => $companyId,
             'user_id' => $this->actorId(),
+            'actor_type' => $this->portalActor()?->getMorphClass(),
+            'actor_id' => $this->portalActor()?->getKey(),
             'action' => $action,
             'auditable_type' => $auditableType,
             'auditable_id' => $auditableId,
@@ -47,6 +49,18 @@ class AuditLogService
         $actor = Auth::user();
 
         return $actor instanceof User ? $actor->getKey() : null;
+    }
+
+    /**
+     * A signed-in portal user (investor-portal account, reseller) who is not
+     * staff. Stored in actor_type/actor_id so their own actions are attributed
+     * without ever being mistaken for a staff user id.
+     */
+    protected function portalActor(): ?Model
+    {
+        $actor = Auth::user();
+
+        return $actor instanceof Model && ! $actor instanceof User ? $actor : null;
     }
 
     protected function companyIdFor(string|Model $auditable): ?int

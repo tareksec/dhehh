@@ -47,8 +47,8 @@ APP_DEBUG=false
 APP_URL=https://your-domain.com
 ASSET_URL=https://your-domain.com
 TRUSTED_PROXIES=*
-APP_VERSION=2.60.3
-APP_RELEASE_TYPE=patch
+APP_VERSION=2.62.0
+APP_RELEASE_TYPE=minor
 APP_RELEASE_DATE=2026-10-07
 
 DB_CONNECTION=mysql
@@ -517,6 +517,20 @@ For each company:
 4. **Build assets:** the portal has its own Filament theme (`resources/css/filament/reseller/theme.css`), so `npm run build` must run on deploy, as for the admin theme.
 
 Behaviour to expect: on the portal host every non-portal path redirects to the portal, and `/portal` returns 404 on every other host. Resellers who open the old **My Account → Your Store** page are redirected to the portal (they sign in again there — it is a separate login on a different host). Applications now go through the portal's own **Become a reseller** form. Store links (`{company-domain}/store/{slug}`) do not change.
+
+## Investor Portal Domain
+
+A company that turns the investor portal on (**Investments → Investor Portal Settings**) gets it at `https://investor.<company-domain>/investor` (for example `investor.tasneemknitindustry.com/investor`), or at a fully custom domain (Super Admin only, same page). Investors and channel partners sign in there with their phone; it is a separate login from the admin panel, the shop and the reseller portal (`SESSION_DOMAIN` stays empty). No new environment variables. Plan: `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md`.
+
+For each company:
+
+1. **DNS:** add an `A` (or `CNAME`) record `investor` pointing to the same server as the company's main domain. For a separate domain, point that whole domain at the server.
+2. **Coolify:** add `https://investor.<domain>` (or the custom domain) to the application's **Domains** list so Traefik issues its SSL certificate.
+3. **Admin:** **Investments → Investor Portal Settings** → turn the portal on (custom domain only if one is used). Nobody can sign in until staff press **Portal access → Invite to the investor portal** on an investor's or channel partner's page; the invite goes by SMS through the company's storefront SMS gateway (the Next.js site's settings when the company has one, else the Blade site's). Without an SMS gateway the invite link is shown to staff to share by hand, and sign-in works with a password only.
+4. **Migrations:** `php artisan migrate --force` adds `companies.investor_portal_enabled` / `investor_portal_domain`, the `investor_portal_accounts` table and `audit_logs.actor_type` / `actor_id`. Nothing is backfilled; the portal stays off for every company until it is turned on.
+5. **Build assets:** the portal has its own Filament theme (`resources/css/filament/investor/theme.css`), so `npm run build` must run on deploy.
+
+Behaviour to expect: on the investor host every other path redirects to `/investor`, and `/investor` returns 404 on every other host (the same rule as the reseller portal, both kept by `RestrictPortalHosts`).
 
 ### Reseller store subdomains (`name.<company-domain>`)
 

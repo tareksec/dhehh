@@ -273,6 +273,7 @@ class User extends Authenticatable implements FilamentUser
         'investments.settle' => 'Investments: Calculate Settlements and Pay Payouts',
         'investments.manage_channel_partner' => 'Investments: Change Assigned Channel Partner',
         'investments.override_investment_window' => 'Investments: Add Investment After Window Closes',
+        'investments.portal_manage' => 'Investments: Manage Investor Portal Access',
         'marketing.view' => 'Marketing/Ads: View',
         'marketing.create' => 'Marketing/Ads: Create',
         'marketing.update' => 'Marketing/Ads: Update',

@@ -60,7 +60,21 @@ ai_tools.image_generation.review
 ai_tools.video_generation
 ai_tools.video_generation.review
 ai_tools.content_creation
+investments.view
+investments.manage
+investments.settle
+investments.manage_channel_partner
+investments.override_investment_window
+investments.portal_manage
 ```
+
+`investments.portal_manage` lets a user switch the investor portal on and
+off (Investments → Investor Portal Settings; the custom domain stays Super
+Admin only) and invite, disable or re-enable an investor's or channel
+partner's portal sign-in (the "Portal access" actions on their pages). No
+built-in role except Super Admin (via `*`) holds it; grant it to a custom
+role from the role editor
+(`15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md`).
 
 `ai_tools.content_creation` is reserved for a future tool — the key exists now
 so role setup does not need revisiting when it ships, but nothing is gated by

@@ -8,6 +8,7 @@ use App\Filament\Resources\StorefrontSettings\Pages\Concerns\HasStorefrontSettin
 use App\Filament\Resources\StorefrontSettings\StorefrontSettingResource;
 use App\Models\Company;
 use App\Models\StorefrontSetting;
+use App\Support\StorefrontSiteDesign;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Validation\ValidationException;
@@ -29,6 +30,21 @@ class EditStorefrontSetting extends EditRecord
         parent::mount($record);
 
         $this->normalizeActiveSection();
+    }
+
+    /**
+     * The Next.js row opens with the layout and options the website really
+     * uses: the default home sections while nothing is saved, and every
+     * design switch at its effective value (not blank).
+     */
+    protected function mutateFormDataBeforeFill(array $data): array
+    {
+        if ($this->record->isNextjs()) {
+            $data['home_sections'] = StorefrontSiteDesign::homeSections($this->record->home_sections, forForm: true);
+            $data['site_design'] = $this->record->siteDesign();
+        }
+
+        return $data;
     }
 
     protected function mutateFormDataBeforeSave(array $data): array

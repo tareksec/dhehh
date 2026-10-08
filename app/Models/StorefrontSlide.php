@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\NotifiesWebsiteOfStorefrontChanges;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Cache;
 class StorefrontSlide extends Model
 {
     use BelongsToCompany;
+    use NotifiesWebsiteOfStorefrontChanges;
 
     protected $fillable = [
         'company_id',
@@ -22,6 +24,7 @@ class StorefrontSlide extends Model
         'image',
         'image_mobile',
         'fit_to_frame',
+        'eyebrow',
         'heading',
         'subheading',
         'cta_label',
