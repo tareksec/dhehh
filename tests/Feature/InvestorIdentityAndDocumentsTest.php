@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\InvestmentProjects\InvestmentProjectResource;
 use App\Filament\Resources\InvestmentProjects\RelationManagers\DocumentsRelationManager;
+use App\Filament\Resources\Investors\InvestorResource;
 use App\Filament\Resources\Investors\Pages\CreateInvestor;
 use App\Filament\Resources\Investors\Pages\EditInvestor;
 use App\Filament\Resources\Investors\Pages\ListInvestors;
@@ -222,6 +224,55 @@ class InvestorIdentityAndDocumentsTest extends TestCase
             ->filterTable('project', [$inv2->id])
             ->assertCanSeeTableRecords([$rahim, $both])
             ->assertCanNotSeeTableRecords([$karim]);
+    }
+
+    public function test_the_toolbar_project_picker_filters_the_list_through_the_project_filter(): void
+    {
+        $inv1 = $this->project('INV-1');
+        $inv2 = $this->project('INV-2');
+        $karim = $this->investor('Karim', '01711111111', '1479939603');
+        $rahim = $this->investor('Rahim', '01722222222', '1901688455');
+        $this->invest($karim, $inv1);
+        $this->invest($rahim, $inv2);
+
+        Livewire::test(ListInvestors::class)
+            ->call('setProjectFilter', (string) $inv1->id)
+            ->assertSet('tableFilters.project.values', [(string) $inv1->id])
+            ->assertSet('tableDeferredFilters.project.values', [(string) $inv1->id])
+            ->assertCanSeeTableRecords([$karim])
+            ->assertCanNotSeeTableRecords([$rahim])
+            // Picking "All projects" clears it again.
+            ->call('setProjectFilter', '')
+            ->assertSet('tableFilters.project.values', [])
+            ->assertCanSeeTableRecords([$karim, $rahim])
+            // An id that is not one of this company's projects is ignored.
+            ->call('setProjectFilter', '999999')
+            ->assertSet('tableFilters.project.values', [])
+            ->assertCanSeeTableRecords([$karim, $rahim]);
+    }
+
+    public function test_the_project_picker_is_on_the_investor_list_and_only_there(): void
+    {
+        $this->project('INV-1');
+        $this->project('INV-2');
+
+        $this->actingAs($this->admin)
+            ->withSession(['current_company_id' => $this->company->getKey(), 'current_company_selection_explicit' => true])
+            ->get(InvestorResource::getUrl('index'))
+            ->assertOk()
+            ->assertSee('investor-list-toolbar', false)
+            ->assertSee('All projects')
+            ->assertSee('INV-1 — Sharing machine INV-1')
+            ->assertSee('INV-2 — Sharing machine INV-2')
+            // The table's own search box is the only one; the toolbar adds none.
+            ->assertDontSee('Search name, phone or NID', false);
+
+        // The picker belongs to the investor list only.
+        $this->actingAs($this->admin)
+            ->withSession(['current_company_id' => $this->company->getKey(), 'current_company_selection_explicit' => true])
+            ->get(InvestmentProjectResource::getUrl('index'))
+            ->assertOk()
+            ->assertDontSee('investor-list-toolbar', false);
     }
 
     public function test_many_investors_can_be_given_a_channel_partner_at_once(): void

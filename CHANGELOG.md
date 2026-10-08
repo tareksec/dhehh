@@ -28,6 +28,11 @@ All notable production changes to Business Dashboard are documented here.
 - Payout batches (Phase 5): migration `2026_10_08_100400_create_payout_batches_tables` (`payout_batches`, `payout_batch_items` — payable and payee morphs, a copy of the payment account with the number encrypted). New models `PayoutBatch`, `PayoutBatchItem` (company-scoped, in `User::MODEL_MODULES` and `MultiCompanyIsolationTest`), `PayoutBatchService` (create / remove item / approve / export / mark failed / complete / cancel; permission and maker ≠ checker checked in the service), `PayoutCompletionService` (shared by the single-row Mark as Paid and batches: payout status, voucher, settlement `paid_out`). `VoucherLinkedPayoutsService::voucherRestored()` skips a payout that has joined a new live batch. New `PayoutBatchResource` (list with the New batch modal, view with Approve / Make payment list / Record as paid / Cancel, items with Take out / Mark failed). The payment list is a CSV (UTF-8, formula-like cells neutralised) on the private disk under `payout-batches/{company}/`.
 - New `PayoutBatchTest` (13 tests). 72 new lang keys (en + bn).
 
+- **Investors list: project picker on the table toolbar.** On **Investments → Investors** there is now a **project dropdown** ("All projects" or one project) at the top left of the table. Picking a project shows only the investors who invested in it. It works through the same "Project" filter as the filter menu, so the filter badge, the "Active filters" chip and "Reset filters" all follow it. The existing search box is unchanged.
+
+**Technical Notes:**
+- `InvestorResource::projectFilterOptions()` feeds both the filter menu and the toolbar picker. `ListInvestors::setProjectFilter()` writes the chosen project into `tableFilters` / `tableDeferredFilters` (an id that is not one of the company's projects is ignored). The toolbar is `resources/views/filament/investors/list-toolbar.blade.php`, hooked on `TablesRenderHook::TOOLBAR_START` scoped to `ListInvestors` in `AdminPanelProvider`. No migration. 3 new `lang` keys (en + bn).
+
 ## [2.62.0] - 2026-10-07
 
 **Release type:** Minor Feature Update

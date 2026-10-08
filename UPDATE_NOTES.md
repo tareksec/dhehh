@@ -46,6 +46,28 @@ Tests: new `InvestorPortalOnboardingTest` (13 tests: sign-up → draft with docu
 
 Commit status: committed and pushed to the branch and main on owner approval ("ওকে যে পর্যন্ত কাজ হইছে সেটা কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-08).
 
+## 2026-10-08 - Investors list: project picker on the table toolbar
+
+Owner request (in Bangla), with a screenshot of the investor list and a red box at the top left of the table: "image এর চিহ্নিত জায়গায় প্রজেক্ট ভিত্তিক ফিল্টার অপশন যুক্ত কর এবং তার পাশে একটা সার্চ বার যুক্ত কর।"
+
+Follow-up from the owner after seeing two search boxes: "দুইটা সার্চ বক্স চলে আসছে, আগে থেকে ডিফল্টে একটা ছিল আমি খেয়াল করিনি। নতুন টা ডিলিট করে দেও। আগেরটা ঠিক ঠাক কাজ করছে।" So the search box I added is removed; the table's own search box stays as it was.
+
+What changed (final):
+- The left side of the table toolbar now holds a **project dropdown** ("All projects" + every project, newest first).
+- The dropdown writes into the existing "Project" filter (`tableFilters.project.values`), so the funnel badge, the "Active filters" chip and "Reset filters" follow it. Removing the chip puts the dropdown back to "All projects". If several projects were chosen in the filter menu, the dropdown shows "Several projects".
+- Files: `InvestorResource::projectFilterOptions()` (shared option list), `ListInvestors::setProjectFilter()`, new view `resources/views/filament/investors/list-toolbar.blade.php`, hook in `AdminPanelProvider` (scoped to `ListInvestors`, so no other table changes). 3 new keys in `lang/en.json` and `lang/bn.json`. No migration.
+
+Needs Bangla review (added with a Bangla value, please check the wording): "Filter by project", "All projects", "Several projects".
+
+Verification:
+- Tests in `InvestorIdentityAndDocumentsTest`: the picker filters through the project filter (pick, clear, unknown id ignored); the investor list page renders the picker and no second search box, and another list page (investment projects) has no picker.
+- Before the search box was removed, the picker and search were checked in headless Chromium against a disposable database (since deleted): picking a project cut 3 rows to 2, the chip and "All projects" restored 3 rows, and the layout held at 1500, 1280 and 390 px wide. After removing the search box I re-ran the tests only; I did not look at the page in a browser again.
+- Full `php artisan test` (plain, no `--env`) before the removal: 1919 passed, 1 skipped, 0 failed (it included one fix to `config/release.php`, see below). After the removal: **1919 passed, 1 skipped, 0 failed**.
+- `config/release.php` here is main's copy (2.62.0) because this branch's `CHANGELOG.md` starts from main's; without it `ReleaseNotesTest` fails on the version mismatch. It is not part of this feature and matches main until the branch merges main.
+- `npm run build` and Pint pass.
+
+Commit status: Committed (`babe627`) and merged with `origin/main` (`31399f6`), pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর"). Full suite on the merged state: 1960 passed, 1 skipped, 0 failed.
+
 ## 2026-10-07 - Investor portal, Phases 1–2 (portal, sign-in, read-only pages)
 
 Owner requests (in Bangla): (1) read the shared draft "12 — Investor Portal (Mudarabah) Module Plan" and write a detailed implementation plan; (2) "ইমপ্লিমেন্ট কর" — implement it.
