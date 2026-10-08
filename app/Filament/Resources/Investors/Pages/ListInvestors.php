@@ -14,6 +14,25 @@ class ListInvestors extends ListRecords
 {
     protected static string $resource = InvestorResource::class;
 
+    /**
+     * The project picker on the table toolbar. It writes into the same filter
+     * state as the "Project" filter in the filter menu, so the filter badge,
+     * the active-filter chips and "Reset filters" all follow it.
+     */
+    public function setProjectFilter(?string $projectId): void
+    {
+        $values = [];
+
+        if (filled($projectId) && array_key_exists((int) $projectId, InvestorResource::projectFilterOptions())) {
+            $values = [(string) (int) $projectId];
+        }
+
+        data_set($this->tableFilters, 'project.values', $values);
+        data_set($this->tableDeferredFilters, 'project.values', $values);
+
+        $this->handleTableFilterUpdates();
+    }
+
     protected function getHeaderActions(): array
     {
         return [

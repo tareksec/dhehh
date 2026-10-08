@@ -2,6 +2,8 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Resources\Investors\InvestorResource;
+use App\Filament\Resources\Investors\Pages\ListInvestors;
 use App\Filament\Widgets\BusinessOverview;
 use App\Filament\Widgets\CustomerDueNotifications;
 use App\Filament\Widgets\CustomerRiskAlerts;
@@ -30,7 +32,9 @@ use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\View\TablesRenderHook;
 use Filament\View\PanelsRenderHook;
+use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -441,6 +445,11 @@ class AdminPanelProvider extends PanelProvider
             ->renderHook(
                 PanelsRenderHook::BODY_END,
                 fn (): HtmlString => new HtmlString(view('filament.partials.sidebar-navigation')->render()),
+            )
+            ->renderHook(
+                TablesRenderHook::TOOLBAR_START,
+                fn (): View => view('filament.investors.list-toolbar', ['projects' => InvestorResource::projectFilterOptions()]),
+                scopes: ListInvestors::class,
             )
             ->renderHook(
                 PanelsRenderHook::GLOBAL_SEARCH_BEFORE,

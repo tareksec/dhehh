@@ -2,6 +2,74 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-08 - Investors list: project picker on the table toolbar
+
+Owner request (in Bangla), with a screenshot of the investor list and a red box at the top left of the table: "image এর চিহ্নিত জায়গায় প্রজেক্ট ভিত্তিক ফিল্টার অপশন যুক্ত কর এবং তার পাশে একটা সার্চ বার যুক্ত কর।"
+
+Follow-up from the owner after seeing two search boxes: "দুইটা সার্চ বক্স চলে আসছে, আগে থেকে ডিফল্টে একটা ছিল আমি খেয়াল করিনি। নতুন টা ডিলিট করে দেও। আগেরটা ঠিক ঠাক কাজ করছে।" So the search box I added is removed; the table's own search box stays as it was.
+
+What changed (final):
+- The left side of the table toolbar now holds a **project dropdown** ("All projects" + every project, newest first).
+- The dropdown writes into the existing "Project" filter (`tableFilters.project.values`), so the funnel badge, the "Active filters" chip and "Reset filters" follow it. Removing the chip puts the dropdown back to "All projects". If several projects were chosen in the filter menu, the dropdown shows "Several projects".
+- Files: `InvestorResource::projectFilterOptions()` (shared option list), `ListInvestors::setProjectFilter()`, new view `resources/views/filament/investors/list-toolbar.blade.php`, hook in `AdminPanelProvider` (scoped to `ListInvestors`, so no other table changes). 3 new keys in `lang/en.json` and `lang/bn.json`. No migration.
+
+Needs Bangla review (added with a Bangla value, please check the wording): "Filter by project", "All projects", "Several projects".
+
+Verification:
+- Tests in `InvestorIdentityAndDocumentsTest`: the picker filters through the project filter (pick, clear, unknown id ignored); the investor list page renders the picker and no second search box, and another list page (investment projects) has no picker.
+- Before the search box was removed, the picker and search were checked in headless Chromium against a disposable database (since deleted): picking a project cut 3 rows to 2, the chip and "All projects" restored 3 rows, and the layout held at 1500, 1280 and 390 px wide. After removing the search box I re-ran the tests only; I did not look at the page in a browser again.
+- Full `php artisan test` (plain, no `--env`) before the removal: 1919 passed, 1 skipped, 0 failed (it included one fix to `config/release.php`, see below). After the removal: **1919 passed, 1 skipped, 0 failed**.
+- `config/release.php` here is main's copy (2.62.0) because this branch's `CHANGELOG.md` starts from main's; without it `ReleaseNotesTest` fails on the version mismatch. It is not part of this feature and matches main until the branch merges main.
+- `npm run build` and Pint pass.
+
+Commit status: Not committed, not pushed. Waiting for the owner's explicit approval. The branch is behind `origin/main` (v2.62.0); `CHANGELOG.md`, `UPDATE_NOTES.md` and `config/release.php` here start from main's copies so a later merge of main stays clean.
+
+## 2026-10-07 - Investor portal, Phases 1–2 (portal, sign-in, read-only pages)
+
+Owner requests (in Bangla): (1) read the shared draft "12 — Investor Portal (Mudarabah) Module Plan" and write a detailed implementation plan; (2) "ইমপ্লিমেন্ট কর" — implement it.
+
+What changed:
+- New `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md` (the plan, owner questions P1–P11 / D1–D10 in Bangla, and §15 build log).
+- Phases 1–2 built: a third Filament panel `investor` at `investor.<company domain>/investor` (or a custom domain), off until **Investments → Investor Portal Settings** turns it on. Staff invite an investor or channel partner from their page (**Portal access**, SMS link valid 7 days); the person sets a password, then signs in with phone + password or phone + SMS code; reset by SMS code. Pages: Dashboard, My investments, Statement (printable), Payouts (with the existing payout report), Documents, My investors and Commissions (partners), Profile. Every query is pinned to the signed-in investor/partner (`InvestorPortalService`); settlement figures appear only once confirmed.
+- `RestrictResellerPortalHost` → `RestrictPortalHosts` (both portals). `audit_logs.actor_type/actor_id` record portal users. New permission `investments.portal_manage` (Super Admin only by default).
+- Migrations: 3 additive (`companies` + 2 columns, `investor_portal_accounts`, `audit_logs` + actor). No backfill; nothing changes for any company until the portal is turned on.
+- Docs: `docs/deployment.md` (Investor Portal Domain: DNS, Coolify, admin steps), `PROJECT_GUIDE.md`, `docs/roles-and-permissions.md`, CHANGELOG `[Unreleased]` (Minor Feature Update).
+
+My reading of the open questions, used for Phases 1–2 (say if any is wrong; details in the plan §15):
+- P1 address `investor.<domain>/investor`; P2 password + SMS code (SMS only when the gateway is set); P3 invite by SMS link; P4 a partner sees investor display name, capital at work and join date only; P5 "Channel partner"; P6 an investor downloads their project's contract, cost receipts and purchase documents, not settlement sheets/investor reports/bank slips.
+- The statement is built from the records each time (no stored ledger yet) and has no running balance, because whether a reinvested payout is also marked paid is up to staff today.
+- Not built (need owner input first): self sign-up and KYC, bank accounts, agreements (P7–P8), requests (P9), payout batches / NCC (P10), SMS/WhatsApp texts (P11), the period pool engine (D1–D10).
+
+Needs Bangla review: the 120 new `lang/bn.json` keys for the portal (written by me; please check the wording, especially the SMS texts "Your :company investor portal …").
+
+Tests: new `InvestorPortalTest` (19 tests: host boundary, reseller portal unaffected, invite → set password once, expired link, one account for investor + partner, password / SMS-code sign-in, 5 wrong codes, disabled account locked out at once, other company refused, draft settlement hidden, all pages open, another investor's document/report is 404, partner sees no contact details, admin settings + invite action, permission). `MultiCompanyIsolationTest` covers `InvestorPortalAccount`. Reseller portal suites pass unchanged. `npm run build` OK. Phone-width (375 px) screenshots checked for every page. Full `php artisan test` (plain, no `--env`): **1934 passed, 2 skipped, 0 failed** (15896 assertions); the affected files were re-run after the last layout tweaks.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07).
+
+## 2026-10-08 - Next.js home page, header and footer follow the approved design; everything is customised from the dashboard
+
+Owner request (in Bangla, with a screenshot of the design from the upstream repo `sajiduzzaman-im/zamzam-international`): the forked site had drifted to a Blade-theme look — the home page must be exactly that design, the dashboard must have every option to customise it, header and footer must match, and the Footer Builder must be able to build a custom footer.
+
+What changed (details in CHANGELOG `[Unreleased]`):
+- New **Website Design** tab on the Next.js row (Home Page Builder, Top Bar, Header, Product Cards, Floating Help Button). The Blade row has no such tab and never stores it.
+- Footer Builder: Custom links column, Custom text, Payment badges, Image / badge; richer Contact info and Bottom bar; footer background colour; Blade footer renders the new blocks too.
+- API: `design`, `home_sections`, cleaned footer blocks, category `tagline`, slide `eyebrow`, product `collection_kinds`, `sort=discount`, `on_sale=1`. New `StorefrontSiteDesign` cleans everything (colours, links, numbers) — never raw admin input.
+- Website repo (`bhd4232/zamzamint-new-website-theme`): top bar, header, hero, trust strip, category cards, deals banner, product rows, flash-sale band, WhatsApp section, SEO text, dark footer, floating help — all driven by the above.
+
+My decisions (say if you want different):
+- The upstream repo is not reachable from this session (private; add_repo was refused), and the fork only carries its first commit, which is an older design than the screenshot. The design was rebuilt **from the screenshot** (spacing, colours, card layout, sections); fonts come from the ERP typography setting (the screenshot's font could not be identified) — pick a font in Storefront Settings → Storefront Typography.
+- The screenshot's "Inventory not synced yet / Sync now" line was a mock-data leftover and is not rebuilt (the ERP is the live source).
+- The default home layout has no per-category rows and no WhatsApp / SEO text sections (those need copy only the owner can write); the owner adds them in the Home Page Builder. The category cards show categories alphabetically unless the owner picks categories (the pick order is kept) — categories have no sort number.
+- "New" badge = the product is in a live **New Arrivals** collection (no automatic "new" rule, per the earlier owner rule). Prices on cards are orange by default (changeable).
+
+Needs Bangla review: all ~200 new admin labels in `lang/bn.json` (Website Design tab, Home Page Builder sections, Footer Builder blocks) and the website's new interface strings (`home.*`, `help.*`, `footer.*`, `product.new`).
+
+Also: saving settings / slides / pages / categories / offers now sends a debounced `storefront.updated` webhook (5 s delay, once per 5 s) so the Next.js site shows dashboard edits within seconds (the website's webhook route already accepts it); set the webhook URL and secret under Integrations → Website API.
+
+Tests: new `NextjsSiteDesignTest` (22). Full plain `php artisan test`: **1923 passed, 1 skipped, 0 failed**; website `tsc --noEmit` and `npm run build` clean. Browser checks on a throwaway database: desktop 1920 / 1440 / 1100, tablet, phone, dark mode, Bangla; mobile menu, categories dropdown, add to cart, Read more, link safety, sticky header; admin Website Design tab.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট ও পুশ কর এবং মেইনে পুশ কর", 2026-10-07), in both repositories; ERP `origin/main` (v2.60.3) merged first.
+
 ## 2026-09-29 - Rejected or cancelled payout vouchers make the payout unpaid (missing part of the earlier voucher-trash work)
 
 Reason — owner: "পেআউটের ভাউচার রিজেক্ট হলে পেআউট অপরিশোধিত হবে- এটাকি ইমপ্লিমেন্ট করেছিলে?" — the owner asked whether the rule "a rejected payout voucher makes the payout unpaid" had been implemented.
