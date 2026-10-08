@@ -10,7 +10,8 @@ use Filament\Facades\Filament;
 
 /**
  * Shared by every investor-portal page. A page declares which role may open
- * it through $portalRole ("investor", "partner" or null for both);
+ * it through $portalRole ("investor", "partner", "holder" for either, or
+ * null for everyone signed in, applicants included);
  * canAccess() is re-checked by Filament on every request.
  */
 trait InvestorPortalPage
@@ -26,6 +27,8 @@ trait InvestorPortalPage
         return match (static::$portalRole ?? null) {
             'investor' => $account->isInvestor(),
             'partner' => $account->isChannelPartner(),
+            // An approved investor or partner (not an applicant).
+            'holder' => $account->isInvestor() || $account->isChannelPartner(),
             default => true,
         };
     }

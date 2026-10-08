@@ -8,6 +8,37 @@
     @php($account = $this->account())
     @php($currency = $this->currency())
 
+    @if ($account->isApplicant())
+        <x-filament::section>
+            <div class="flex flex-col items-center gap-3 py-8 text-center">
+                @if ($account->status === \App\Models\InvestorPortalAccount::STATUS_REJECTED)
+                    <x-filament::icon icon="heroicon-o-x-circle" class="h-10 w-10 text-danger-500" />
+                    <h2 class="text-lg font-semibold">{{ __('Your application was not approved') }}</h2>
+                    @if ($account->rejection_reason)
+                        <p class="max-w-md text-sm text-gray-500 dark:text-gray-400">{{ $account->rejection_reason }}</p>
+                    @endif
+                    <p class="max-w-md text-sm text-gray-500 dark:text-gray-400">{{ __('Please contact the company office if you have questions.') }}</p>
+                @else
+                    <x-filament::icon icon="heroicon-o-clock" class="h-10 w-10 text-warning-500" />
+                    <h2 class="text-lg font-semibold">{{ __('Your application is being reviewed') }}</h2>
+                    <p class="max-w-md text-sm text-gray-500 dark:text-gray-400">
+                        {{ __('The company office checks your details and documents. Your investment, the deposit and the signed deed are then completed at the office; after that this portal shows your investments.') }}
+                    </p>
+                @endif
+            </div>
+        </x-filament::section>
+    @endif
+
+    @php($outstanding = app(\App\Services\AgreementService::class)->outstanding($account))
+    @if ($outstanding->isNotEmpty())
+        <x-filament::section icon="heroicon-o-document-check" icon-color="warning">
+            <p class="text-sm">{{ __('Please read and accept: :titles', ['titles' => $outstanding->pluck('title')->implode(', ')]) }}</p>
+            <div class="mt-2">
+                <x-filament::link :href="\App\Filament\Investor\Pages\Agreements::getUrl()">{{ __('Open agreements') }}</x-filament::link>
+            </div>
+        </x-filament::section>
+    @endif
+
     @if ($account->isInvestor())
         @php($summary = $this->portal()->investorSummary($account))
 

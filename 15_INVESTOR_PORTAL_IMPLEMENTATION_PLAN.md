@@ -2,7 +2,7 @@
 
 > **বাংলা সারসংক্ষেপ:** মালিকের খসড়া "12 — Investor Portal (Mudarabah) Module Plan" (২০২৬-১০-০৭) অনুযায়ী Tasneem Knitting Industry-র বিনিয়োগকারী ও চ্যানেল পার্টনারদের জন্য একটা আলাদা পোর্টাল তৈরি হবে। পোর্টালটা মোবাইলে ব্যবহারের উপযোগী হবে। লগইন হবে ফোন নম্বর + পাসওয়ার্ড অথবা SMS OTP দিয়ে। বিনিয়োগকারী নিজের বিনিয়োগ, লাভ, স্টেটমেন্ট, পেমেন্ট ও ডকুমেন্ট দেখবেন। তিনি টপ-আপ, উইথড্র, রিইনভেস্ট ও ব্যাংক অ্যাকাউন্ট পরিবর্তনের অনুরোধ পাঠাতে পারবেন। চ্যানেল পার্টনার দেখবেন তাঁর আনা বিনিয়োগকারী ও তাঁর কমিশন। ERP-তে আগে থেকেই একটা পূর্ণাঙ্গ **প্রজেক্ট-ভিত্তিক** মুদারাবা মডিউল আছে (Project-01-এর ১৯ জন বিনিয়োগকারীর সেটেলমেন্ট সহ)। তাই পোর্টাল সবকিছু নতুন করে বানাবে না, বিদ্যমান ডেটার ওপরেই দাঁড়াবে। খসড়ার সবচেয়ে বড় পরিবর্তন হলো পুরো কোম্পানির মাসিক/ত্রৈমাসিক লাভ "মূলধন × দিন" অনুপাতে ৩৫:৫৫:১০ হারে ভাগ করা। কিন্তু বর্তমান চুক্তিপত্রের নিয়ম আলাদা: লাভ প্রজেক্ট-ভিত্তিক, শুধু সরাসরি খরচ বাদ যায়, আর ভাগ ৪০:৫০:১০। তাই এই নতুন হিসাব একটা আলাদা **"পুল" চুক্তি-ধরন** হিসেবে আসবে, এবং শুধু §৩.৩-এর প্রশ্নগুলোর উত্তর পাওয়ার পরে। কাজ ৮টা ধাপে ভাগ করা। প্রথম ৪টা ধাপ (পোর্টাল, স্টেটমেন্ট, অনবোর্ডিং, অনুরোধ) বর্তমান নিয়মেই চলবে এবং প্রতিটা আলাদাভাবে লাইভ করা যাবে।
 
-Status: **Phases 1–2 built (2026-10-07), not committed yet** — see §15. Phases 3–7 wait for the owner answers in §3.
+Status: **Phases 1–5 built** (1–2 on 2026-10-07, 3–5 on 2026-10-08; Phase 5 without the NCC BEFTN file) — see §15. The NCC file (P10), Phases 6–7 wait for the owner answers in §3 (P10, P11, D1–D10).
 
 Source: the owner's draft *12 — Investor Portal (Mudarabah) Module Plan* (shared in the session on 2026-10-07; summarised in §1.2 so this file is self-contained). This plan maps that draft onto the code as it is today. It keeps every owner rule already recorded in `01_INVESTOR_MUDARABAH_MODULE_PLAN.md` and `01_INVESTOR_MODULE_v3_GAP_ANALYSIS.md`, and copies the structure of the reseller portal (`13_RESELLER_PORTAL_PLAN.md`), which is already live.
 
@@ -434,3 +434,28 @@ The owner asked to implement the plan ("ইমপ্লিমেন্ট কর
 - **Permission:** `investments.portal_manage` (settings page and Portal access actions). Only Super Admin holds it by default; give it to a custom role if someone else should manage portal access.
 - **Host guard:** `RestrictResellerPortalHost` was renamed `RestrictPortalHosts` and handles both portals: the portal that owns a host gets every path, and every portal path is a 404 on other hosts. All reseller portal tests pass unchanged.
 - **Audit:** `audit_logs.actor_type` / `actor_id` record a portal user (investor account or reseller). Portal sign-ins, failed sign-ins, code sends, invites, password changes and document downloads are logged.
+
+### 2026-10-08 — Phases 3 and 4 built
+
+Owner: "পরবর্তি কাজ কর". Built from the rules in the owner's draft (§1.2: sign-up through a referrer's link with admin verification; agreement accepted in the portal with time and IP; requests top-up / withdrawal / reinvest / support, pending → approved / rejected). Answers assumed: P7, P8 (beside the paper deed), P9 as recommended in §3.2.
+
+**Built differently from §5, and why:**
+- **No `kyc_status` columns.** A portal applicant is reviewed in the existing Investor Drafts queue; confirming the draft is the verification, and the account's status (`pending` / `active` / `rejected`) is what the applicant sees. Every existing investor already has paper KYC. One review place instead of two.
+- **No `partner_photo` category** and partners do not self-register (the draft only describes investor sign-up); partners are still created by staff.
+- **Partner bank details not backfilled** into `investor_bank_accounts`: the partner record's own payout fields keep working as today; a partner (or staff) adds a payment account when needed. Payouts still copy the recipient by hand until Phase 5 uses the approved default account.
+- **Agreement templates have no `locale`:** staff paste the text in the language the deed is written in.
+- **Bank change** is not a separate request type: adding a payment account is the request, approved on the person's page.
+- **Requests** need the permission of the flow they run: top-up and withdrawal `investments.manage`, payout choice `investments.settle`, questions `investments.portal_manage`. No maker-checker here (that is for payout batches and pool periods).
+
+### 2026-10-08 — Phase 5 built (payout batches, without the NCC file)
+
+Owner: "পরবর্তি কাজ কর". §9 steps 1–5 are built; the NCC BEFTN export (step 3) waits for the bank's template (P10) and is never guessed, so the only export is the CSV payment list. Step 6 (reseller withdrawals) and Phase 5b (H2H) are not built.
+
+**Built differently from §5 / §9, and why:**
+- **Payouts with a reinvest choice are left out** of batches (listed with the reason). Today a reinvested payout is still marked paid with a voucher for the full amount while the reinvestment books its own capital voucher; sending the full amount by bank would be wrong and sending less would break that accounting. They stay on the settlement page's single-row flow until the owner decides how a batch should treat them.
+- **One voucher per batch from one fund source.** The batch has a fund source; left empty, the projects' payout fund source is used when every payout shares one, otherwise no voucher is booked (the same rule as a project without a payout fund source today). A voucher failure stops the recording, so a batch is never marked paid without its voucher when a fund source is set.
+- **Statuses** `draft → approved → exported → completed`, or `cancelled` from any of the first three. Recording paid is allowed from `approved` too (an MFS batch paid by hand needs no file). Items are `pending / paid / failed`; a failed item or a cancelled batch frees the payout.
+- **Who does what:** `investments.payout_batch_create` makes the batch, takes items out, downloads the list, marks failures and records the result; `investments.payout_batch_approve` approves (never the maker). Either permission can cancel a live batch. Only Super Admin holds them by default.
+- **No `ProfitDistribution` payables** yet (Phase 7).
+- **Single-row Mark as Paid** now goes through `PayoutCompletionService` and refuses a payout held by a live batch; `CycleElectionService` refuses a reinvest on such a payout. Restoring a trashed batch voucher does not re-mark a payout that has meanwhile joined a new live batch.
+

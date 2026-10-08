@@ -8,6 +8,7 @@ use App\Filament\Resources\Investors\Pages\CreateInvestor;
 use App\Filament\Resources\Investors\Pages\EditInvestor;
 use App\Filament\Resources\Investors\Pages\ListInvestors;
 use App\Filament\Resources\Investors\Pages\ViewInvestor;
+use App\Filament\Resources\Investors\RelationManagers\BankAccountsRelationManager;
 use App\Filament\Resources\Investors\RelationManagers\InvestmentsRelationManager;
 use App\Filament\Resources\Investors\RelationManagers\WithdrawalNoticesRelationManager;
 use App\Models\ChannelPartner;
@@ -363,7 +364,7 @@ class InvestorResource extends Resource
 
     public static function getRelations(): array
     {
-        return [InvestmentsRelationManager::class, DocumentsRelationManager::class, WithdrawalNoticesRelationManager::class];
+        return [InvestmentsRelationManager::class, DocumentsRelationManager::class, WithdrawalNoticesRelationManager::class, BankAccountsRelationManager::class];
     }
 
     public static function getPages(): array

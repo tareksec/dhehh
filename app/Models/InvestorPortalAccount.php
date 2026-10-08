@@ -31,9 +31,17 @@ class InvestorPortalAccount extends Model implements AuthenticatableContract, Fi
 
     public const STATUS_DISABLED = 'disabled';
 
+    /** Signed up through a partner's invite link; waits for staff review in Investor Drafts. */
+    public const STATUS_PENDING = 'pending';
+
+    /** Application turned down; can still sign in to see the reason. */
+    public const STATUS_REJECTED = 'rejected';
+
     public const STATUSES = [
         self::STATUS_INVITED => 'Invited',
+        self::STATUS_PENDING => 'Application under review',
         self::STATUS_ACTIVE => 'Active',
+        self::STATUS_REJECTED => 'Application not approved',
         self::STATUS_DISABLED => 'Disabled',
     ];
 
@@ -56,7 +64,9 @@ class InvestorPortalAccount extends Model implements AuthenticatableContract, Fi
     protected static function booted(): void
     {
         static::saving(function (self $account): void {
-            if (! $account->investor_id && ! $account->channel_partner_id) {
+            $isApplicant = in_array($account->status, [self::STATUS_PENDING, self::STATUS_REJECTED], true);
+
+            if (! $account->investor_id && ! $account->channel_partner_id && ! $isApplicant) {
                 throw ValidationException::withMessages(['investor_id' => __('A portal account must belong to an investor or a channel partner.')]);
             }
 
@@ -84,6 +94,17 @@ class InvestorPortalAccount extends Model implements AuthenticatableContract, Fi
         return $this->belongsTo(ChannelPartner::class);
     }
 
+    /** The application waiting in Investor Drafts (self sign-up only). */
+    public function investorDraft(): BelongsTo
+    {
+        return $this->belongsTo(InvestorDraft::class);
+    }
+
+    public function isApplicant(): bool
+    {
+        return in_array($this->status, [self::STATUS_PENDING, self::STATUS_REJECTED], true);
+    }
+
     public function invitedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'invited_by');
@@ -107,12 +128,14 @@ class InvestorPortalAccount extends Model implements AuthenticatableContract, Fi
 
     /**
      * Re-checked by Filament on every request, so disabling an account (or
-     * switching the portal off) locks the person out at once. Only an active
-     * account of the host's own company may enter.
+     * switching the portal off) locks the person out at once. An active
+     * account, or an applicant (who sees only their application status), of
+     * the host's own company may enter.
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        if ($panel->getId() !== 'investor' || $this->status !== self::STATUS_ACTIVE || blank($this->password)) {
+        if ($panel->getId() !== 'investor' || blank($this->password)
+            || ! in_array($this->status, [self::STATUS_ACTIVE, self::STATUS_PENDING, self::STATUS_REJECTED], true)) {
             return false;
         }
 
@@ -121,7 +144,7 @@ class InvestorPortalAccount extends Model implements AuthenticatableContract, Fi
         return $company !== null
             && (int) $company->getKey() === (int) $this->company_id
             && $company->investor_portal_enabled
-            && ($this->isInvestor() || $this->isChannelPartner());
+            && ($this->isApplicant() || $this->isInvestor() || $this->isChannelPartner());
     }
 
     public function getFilamentName(): string

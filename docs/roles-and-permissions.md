@@ -66,6 +66,8 @@ investments.settle
 investments.manage_channel_partner
 investments.override_investment_window
 investments.portal_manage
+investments.payout_batch_create
+investments.payout_batch_approve
 ```
 
 `investments.portal_manage` lets a user switch the investor portal on and
@@ -75,6 +77,13 @@ partner's portal sign-in (the "Portal access" actions on their pages). No
 built-in role except Super Admin (via `*`) holds it; grant it to a custom
 role from the role editor
 (`15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md`).
+
+`investments.payout_batch_create` makes a payout batch (Investments → Payout
+Batches), takes payouts out of a draft, downloads the payment list, marks
+failed payments and records the batch as paid. `investments.payout_batch_approve`
+approves a batch. The approver must be a different user from the one who made
+the batch, even for Super Admin. Either permission can cancel a batch that is
+not yet recorded paid. No built-in role except Super Admin holds them.
 
 `ai_tools.content_creation` is reserved for a future tool — the key exists now
 so role setup does not need revisiting when it ships, but nothing is gated by

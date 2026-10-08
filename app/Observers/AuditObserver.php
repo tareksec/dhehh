@@ -19,7 +19,7 @@ class AuditObserver
 
     public function created(Model $model): void
     {
-        $this->record('created', $model, null, $this->sanitize($model->getAttributes()));
+        $this->record('created', $model, null, $this->sanitize($model->getAttributes(), $model));
     }
 
     public function updated(Model $model): void
@@ -27,8 +27,8 @@ class AuditObserver
         $oldValues = Arr::only($model->getOriginal(), array_keys($model->getChanges()));
         $newValues = $model->getChanges();
 
-        $oldValues = $this->sanitize($oldValues);
-        $newValues = $this->sanitize($newValues);
+        $oldValues = $this->sanitize($oldValues, $model);
+        $newValues = $this->sanitize($newValues, $model);
 
         if ($oldValues === [] && $newValues === []) {
             return;
@@ -39,7 +39,7 @@ class AuditObserver
 
     public function deleted(Model $model): void
     {
-        $this->record('deleted', $model, $this->sanitize($model->getOriginal()), null);
+        $this->record('deleted', $model, $this->sanitize($model->getOriginal(), $model), null);
     }
 
     private function record(string $action, Model $model, ?array $oldValues, ?array $newValues): void
@@ -51,8 +51,9 @@ class AuditObserver
         app(AuditLogService::class)->record($action, $model, $oldValues, $newValues);
     }
 
-    private function sanitize(array $values): array
+    /** A model's own hidden fields (e.g. an encrypted account number) are never copied into the log. */
+    private function sanitize(array $values, Model $model): array
     {
-        return Arr::except($values, self::HIDDEN_FIELDS);
+        return Arr::except($values, [...self::HIDDEN_FIELDS, ...$model->getHidden()]);
     }
 }

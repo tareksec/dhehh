@@ -27,7 +27,7 @@ class Documents extends Page implements HasTable
     use InteractsWithTable;
     use InvestorPortalPage;
 
-    protected static ?string $portalRole = null;
+    protected static ?string $portalRole = 'holder';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedFolder;
 

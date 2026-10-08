@@ -9,6 +9,7 @@ use App\Filament\Resources\Products\Pages\CreateProduct;
 use App\Filament\Resources\Products\Pages\EditProduct;
 use App\Filament\Resources\Products\Pages\ListProducts;
 use App\Models\Account;
+use App\Models\AgreementTemplate;
 use App\Models\Category;
 use App\Models\ChannelPartner;
 use App\Models\ChannelPartnerPayout;
@@ -24,12 +25,16 @@ use App\Models\InvestmentProject;
 use App\Models\InvestmentWithdrawalNotice;
 use App\Models\InvestmentWitness;
 use App\Models\Investor;
+use App\Models\InvestorBankAccount;
 use App\Models\InvestorCycleElection;
+use App\Models\InvestorRequest;
 use App\Models\InvestorSecurityInstrument;
 use App\Models\Order;
 use App\Models\OrderCost;
 use App\Models\OrderItem;
 use App\Models\OrderPayment;
+use App\Models\PayoutBatch;
+use App\Models\PayoutBatchItem;
 use App\Models\Product;
 use App\Models\ProjectCostItem;
 use App\Models\ProjectSettlement;
@@ -261,6 +266,11 @@ class AppServiceProvider extends ServiceProvider
             SettlementPayout::class,
             ChannelPartner::class,
             ChannelPartnerPayout::class,
+            InvestorBankAccount::class,
+            InvestorRequest::class,
+            AgreementTemplate::class,
+            PayoutBatch::class,
+            PayoutBatchItem::class,
             Order::class,
             OrderItem::class,
             OrderPayment::class,

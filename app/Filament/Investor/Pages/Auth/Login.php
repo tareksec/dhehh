@@ -15,6 +15,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Validation\ValidationException;
 use SensitiveParameter;
 
@@ -144,6 +145,12 @@ class Login extends BaseLogin
         $this->mode = 'password';
         $this->codePhone = null;
         $this->resetErrorBag();
+    }
+
+    /** No "sign up" link here: sign-up works only through a partner's invite link. */
+    public function getSubheading(): string|Htmlable|null
+    {
+        return null;
     }
 
     protected function isUserAllowedToAccessPanel(Authenticatable $user): bool
