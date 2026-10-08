@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.64.0] - 2026-10-08
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -13,7 +15,6 @@ All notable production changes to Business Dashboard are documented here.
 **Technical Notes:**
 - Staff preview: the dashboard and the portal are on different hosts, so `Admin\InvestorPortalOpenController` (`GET /admin/investor-portal/{investors|channel-partners}/{id}/open`, `auth`, `investments.portal_manage`, same company check as the document downloads) issues a one-time token through `InvestorPortalStaffEntryService` (60 seconds, only its hash is cached, works once, only on the issuing company's portal, re-checks that the staff member is still active and allowed) and redirects to `<portal host>/investor/staff-entry/{token}` (`InvestorPortalStaffEntryController`, throttled). That logs the account in on the `investor` guard without "remember me" and sets `InvestorPortalStaffPreview::SESSION_KEY` in the portal session only. `InvestorPortalAccount::canAccessPanel()` lets a staff preview in with no password set, never a disabled account. `AuditLogService` attributes what a preview records (`investor_portal.staff_entry_issued`, `investor_portal.staff_entered`, document downloads) to the staff user (`user_id`), not to the investor (`actor_*`). `InvestorPortalAccountService::ensureAccount()` is the account creation shared with `invite()`. The token lives in the cache, so the dashboard and portal must share a cache store (they do: same app).
 - Look-only rule for portal pages: anything that changes data calls `refuseInStaffPreview()` (trait `InvestorPortalPage`) and hides its button while `isStaffPreview()`. Done for `Profile::save`, `Agreements::accept`, `BankAccounts` add and `Requests` new / cancel; every new portal page that writes must do the same. No migration. 7 new lang keys (en + bn).
-
 ## [2.63.0] - 2026-10-08
 
 **Release type:** Minor Feature Update
