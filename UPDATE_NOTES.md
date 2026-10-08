@@ -22,7 +22,7 @@ Verification:
 - `config/release.php` here is main's copy (2.62.0) because this branch's `CHANGELOG.md` starts from main's; without it `ReleaseNotesTest` fails on the version mismatch. It is not part of this feature and matches main until the branch merges main.
 - `npm run build` and Pint pass.
 
-Commit status: Not committed, not pushed. Waiting for the owner's explicit approval. The branch is behind `origin/main` (v2.62.0); `CHANGELOG.md`, `UPDATE_NOTES.md` and `config/release.php` here start from main's copies so a later merge of main stays clean.
+Commit status: Committed (`babe627`) and merged with `origin/main` (`31399f6`), pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর"). Full suite on the merged state: 1960 passed, 1 skipped, 0 failed.
 
 ## 2026-10-07 - Investor portal, Phases 1–2 (portal, sign-in, read-only pages)
 
