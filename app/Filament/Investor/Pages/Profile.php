@@ -118,7 +118,7 @@ class Profile extends Page
     public function save(): void
     {
         // A staff preview never changes the person's password.
-        abort_if($this->isStaffPreview(), 403);
+        $this->refuseInStaffPreview();
 
         $data = $this->form->getState();
         $account = $this->account();

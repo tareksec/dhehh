@@ -10,6 +10,7 @@ use App\Filament\Resources\ChannelPartners\Pages\ViewChannelPartner;
 use App\Filament\Resources\ChannelPartners\RelationManagers\PayoutsRelationManager;
 use App\Filament\Resources\ChannelPartners\RelationManagers\ReferredInvestorsRelationManager;
 use App\Filament\Resources\InvestmentProjects\RelationManagers\DocumentsRelationManager;
+use App\Filament\Resources\Investors\RelationManagers\BankAccountsRelationManager;
 use App\Models\ChannelPartner;
 use App\Support\InvestorIdentity;
 use BackedEnum;
@@ -156,7 +157,7 @@ class ChannelPartnerResource extends Resource
 
     public static function getRelations(): array
     {
-        return [ReferredInvestorsRelationManager::class, PayoutsRelationManager::class, DocumentsRelationManager::class];
+        return [ReferredInvestorsRelationManager::class, PayoutsRelationManager::class, DocumentsRelationManager::class, BankAccountsRelationManager::class];
     }
 
     public static function canCreate(): bool

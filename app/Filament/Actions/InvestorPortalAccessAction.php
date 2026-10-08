@@ -6,6 +6,7 @@ use App\Models\ChannelPartner;
 use App\Models\Company;
 use App\Models\Investor;
 use App\Models\InvestorPortalAccount;
+use App\Services\AuditLogService;
 use App\Services\InvestorPortalAccountService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -76,6 +77,31 @@ class InvestorPortalAccessAction
                     abort_unless(auth()->user()?->hasPermission('investments.portal_manage'), 403);
                     app(InvestorPortalAccountService::class)->enable(self::account($record));
                     Notification::make()->success()->title(__('Portal access enabled'))->send();
+                }),
+            Action::make('partnerInviteOn')
+                ->label(__('Turn on invite link'))
+                ->icon(Heroicon::OutlinedLink)
+                ->visible(fn (Investor|ChannelPartner $record): bool => $record instanceof ChannelPartner && ! $record->invite_enabled)
+                ->requiresConfirmation()
+                ->modalDescription(__('The partner gets a sign-up link for new investors. Every application still waits for your review in Investor Drafts.'))
+                ->action(function (ChannelPartner $record): void {
+                    abort_unless(auth()->user()?->hasPermission('investments.portal_manage'), 403);
+                    $record->ensureInviteCode();
+                    $record->forceFill(['invite_enabled' => true])->save();
+                    app(AuditLogService::class)->record('investor_portal.partner_invite_on', $record);
+                    Notification::make()->success()->title(__('Invite link is on'))->body((string) ($record->inviteUrl() ?? __('The link works once the investor portal is on.')))->persistent()->send();
+                }),
+            Action::make('partnerInviteOff')
+                ->label(__('Turn off invite link'))
+                ->icon(Heroicon::OutlinedLinkSlash)
+                ->color('danger')
+                ->visible(fn (Investor|ChannelPartner $record): bool => $record instanceof ChannelPartner && (bool) $record->invite_enabled)
+                ->requiresConfirmation()
+                ->action(function (ChannelPartner $record): void {
+                    abort_unless(auth()->user()?->hasPermission('investments.portal_manage'), 403);
+                    $record->forceFill(['invite_enabled' => false])->save();
+                    app(AuditLogService::class)->record('investor_portal.partner_invite_off', $record);
+                    Notification::make()->success()->title(__('Invite link is off'))->send();
                 }),
         ])
             ->label(__('Portal access'))

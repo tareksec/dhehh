@@ -7,6 +7,7 @@ use App\Models\ProjectSettlement;
 use App\Models\ResellerPayoutRequest;
 use App\Models\SettlementPayout;
 use App\Models\Voucher;
+use App\Services\Investment\PayoutCompletionService;
 
 /**
  * Payouts marked paid together with a voucher (investor settlement payouts,
@@ -57,6 +58,8 @@ class VoucherLinkedPayoutsService
 
         foreach ([SettlementPayout::class, ChannelPartnerPayout::class] as $model) {
             $model::query()->where('voucher_id', $voucher->getKey())->where('payment_status', 'pending')->get()
+                // A payout that joined a new payout batch meanwhile is paid by that batch.
+                ->reject(fn ($payout): bool => app(PayoutCompletionService::class)->liveBatchItem($payout) !== null)
                 ->each(function ($payout) use (&$settlementIds, $paidAt): void {
                     $payout->update(['payment_status' => 'paid', 'paid_at' => $paidAt]);
                     $settlementIds[] = $payout->settlement_id;

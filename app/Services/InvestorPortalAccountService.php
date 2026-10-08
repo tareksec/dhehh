@@ -96,6 +96,14 @@ class InvestorPortalAccountService
         $this->assertPortalIsOn($company);
         $phone = $this->portalPhone($holder);
 
+        // A portal application (self-registration) waits for staff review; opening the
+        // portal must not attach it to this person behind the review's back.
+        $application = InvestorPortalAccount::query()->withoutGlobalScopes()->where('company_id', $company->getKey())->where('phone', $phone)->first();
+
+        if ($application?->isApplicant() && $this->accountFor($holder)?->getKey() !== $application->getKey()) {
+            throw ValidationException::withMessages(['portal' => __('This phone number has a portal application waiting for review, so the portal cannot be opened as this person yet.')]);
+        }
+
         return DB::transaction(function () use ($holder, $company, $phone): InvestorPortalAccount {
             $account = $this->claimAccount($holder, $company, $phone);
             $account->save();

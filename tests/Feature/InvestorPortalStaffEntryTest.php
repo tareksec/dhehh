@@ -2,19 +2,28 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Investor\Pages\Agreements;
+use App\Filament\Investor\Pages\BankAccounts;
 use App\Filament\Investor\Pages\Profile;
+use App\Filament\Investor\Pages\Requests;
 use App\Filament\Resources\ChannelPartners\Pages\ViewChannelPartner;
 use App\Filament\Resources\Investors\Pages\ViewInvestor;
+use App\Models\AgreementAcceptance;
+use App\Models\AgreementTemplate;
 use App\Models\AuditLog;
 use App\Models\ChannelPartner;
 use App\Models\Company;
 use App\Models\Investor;
+use App\Models\InvestorBankAccount;
 use App\Models\InvestorPortalAccount;
+use App\Models\InvestorRequest;
 use App\Models\StorefrontSetting;
 use App\Models\User;
+use App\Services\AgreementService;
 use App\Services\CompanyContext;
 use App\Services\InvestorPortalAccountService;
 use App\Services\InvestorPortalStaffEntryService;
+use App\Services\InvestorRequestService;
 use App\Support\InvestorPortalStaffPreview;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -284,6 +293,79 @@ class InvestorPortalStaffEntryTest extends TestCase
         }
     }
 
+    public function test_a_preview_cannot_accept_an_agreement(): void
+    {
+        $company = $this->company('agree.example.test');
+        $account = $this->previewOf($company, $this->investor($company, 'Signer', '01711000120'));
+        $template = AgreementTemplate::query()->create(['company_id' => $company->id, 'kind' => AgreementTemplate::KIND_INVESTOR, 'title' => 'Mudarabah deed', 'body' => 'Clause 1']);
+        app(AgreementService::class)->publish($template, $this->staff);
+
+        Livewire::test(Agreements::class)
+            ->assertSee('Mudarabah deed')
+            ->assertDontSee('I have read and agree')
+            ->call('accept', $template->id)
+            ->assertForbidden();
+
+        $this->assertSame(0, AgreementAcceptance::query()->withoutGlobalScopes()->count());
+        $this->assertCount(1, app(AgreementService::class)->outstanding($account));
+    }
+
+    public function test_a_preview_cannot_add_a_payment_account(): void
+    {
+        $company = $this->company('bank.example.test');
+        $this->previewOf($company, $this->investor($company, 'Payee', '01711000121'));
+
+        Livewire::test(BankAccounts::class)
+            ->assertActionHidden('add');
+
+        $this->assertSame(0, InvestorBankAccount::query()->withoutGlobalScopes()->count());
+    }
+
+    public function test_a_preview_cannot_send_or_cancel_a_request(): void
+    {
+        $company = $this->company('request.example.test');
+        $account = $this->previewOf($company, $this->investor($company, 'Asker', '01711000122'));
+        $pending = app(InvestorRequestService::class)->create($account, InvestorRequest::TYPE_SUPPORT, ['message' => 'When is the next payout?']);
+
+        Livewire::test(Requests::class)
+            ->assertActionHidden('new')
+            ->assertTableActionHidden('cancel', $pending);
+
+        $this->assertSame(InvestorRequest::STATUS_PENDING, $pending->fresh()->status);
+        $this->assertSame(1, InvestorRequest::query()->withoutGlobalScopes()->count());
+    }
+
+    public function test_the_same_pages_still_work_for_the_person_themselves(): void
+    {
+        $company = $this->company('own.example.test');
+        $account = $this->ownSessionOf($company, $this->investor($company, 'Owner Self', '01711000123'));
+        $pending = app(InvestorRequestService::class)->create($account, InvestorRequest::TYPE_SUPPORT, ['message' => 'Question']);
+
+        Livewire::test(Requests::class)
+            ->assertActionVisible('new')
+            ->callTableAction('cancel', $pending);
+
+        $this->assertSame(InvestorRequest::STATUS_CANCELLED, $pending->fresh()->status);
+    }
+
+    public function test_a_phone_with_a_portal_application_waiting_is_not_opened(): void
+    {
+        $company = $this->company('applicant.example.test');
+        $investor = $this->investor($company, 'Rahim', '01711000124');
+        InvestorPortalAccount::query()->withoutGlobalScopes()->create([
+            'company_id' => $company->id,
+            'name' => 'Rahim',
+            'phone' => '01711000124',
+            'status' => InvestorPortalAccount::STATUS_PENDING,
+        ]);
+
+        $this->asStaff($company)->get(route('investor-portal.open-investor', $investor))->assertRedirectContains('/admin/');
+
+        $application = InvestorPortalAccount::query()->withoutGlobalScopes()->where('phone', '01711000124')->firstOrFail();
+        $this->assertNull($application->investor_id);
+        $this->assertSame(InvestorPortalAccount::STATUS_PENDING, $application->status);
+    }
+
     // ---- Helpers ---------------------------------------------------------
 
     private function company(string $domain, bool $enabled = true, bool $withSms = false): Company
@@ -345,5 +427,29 @@ class InvestorPortalStaffEntryTest extends TestCase
         $url = app(InvestorPortalStaffEntryService::class)->issue($holder, $staff ?? $this->staff);
 
         return Str::afterLast($url, '/');
+    }
+
+    /** A staff preview of this person, as the portal's own pages see it (session + guard + panel). */
+    private function previewOf(Company $company, Investor $investor): InvestorPortalAccount
+    {
+        $account = $this->ownSessionOf($company, $investor);
+        InvestorPortalStaffPreview::start(request(), $account, $this->staff->id, $this->staff->name);
+
+        return $account;
+    }
+
+    /** The person signed in on their own (no preview): an active account with a password. */
+    private function ownSessionOf(Company $company, Investor $investor): InvestorPortalAccount
+    {
+        $account = app(InvestorPortalAccountService::class)->ensureAccount($investor);
+        $account->forceFill(['status' => InvestorPortalAccount::STATUS_ACTIVE, 'password' => 'a-strong-password-1'])->save();
+
+        $request = Request::create('/investor');
+        $request->setLaravelSession(app('session.store'));
+        app()->instance('request', $request);
+        $this->onPortal($company);
+        $this->actingAs($account, 'investor');
+
+        return $account;
     }
 }

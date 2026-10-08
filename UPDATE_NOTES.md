@@ -30,6 +30,50 @@ Verification:
 
 Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর"). Built and tested on top of `origin/main` v2.63.0 (portal Phases 3–5), which was merged into the branch; the only merge conflicts were in `CHANGELOG.md`, `UPDATE_NOTES.md` and `InvestorPortalAccount::canAccessPanel()`.
 
+## 2026-10-08 - Investor portal, Phase 5 (payout batches)
+
+Owner request (in Bangla): "পরবর্তি কাজ কর" — continue with the next phase of `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md`. Sits on top of the uncommitted Phases 3–4 below (it uses their payment accounts).
+
+What changed:
+- **Investments → Payout Batches.** New payout batch: pending investor and channel-partner payouts of confirmed settlements, each to the payee's approved default payment account; payouts without one, or with a reinvest choice, are listed as left out. A different user approves (never the maker, even Super Admin). Make payment list: a CSV (payee, bank, branch, routing, account number or mobile number, amount), stored privately with its SHA-256; every download is logged and a changed file is refused. Mark failed (with reason) frees a payout for a new batch; Record as paid marks the rest paid with the bank reference and books one pending investor-payout voucher for the batch (fund source chosen on the batch, or the projects' shared payout fund source). Trashing that voucher makes the payouts unpaid again (existing rule). Cancel until recorded paid.
+- New permissions `investments.payout_batch_create` / `investments.payout_batch_approve` (Super Admin only by default).
+- The settlement page's Mark as Paid (investor and partner) now goes through the new `PayoutCompletionService` and refuses a payout in a live batch; a reinvest cannot be recorded on such a payout.
+- Audit log: hidden model fields (encrypted account numbers) are no longer copied into the log; payment accounts, investor requests, portal agreements and payout batches are now audited.
+
+My reading, used here (say if any is wrong):
+- P10 is still open: **no NCC BEFTN file was built** — only the CSV list. Send NCC Bank's BEFTN bulk-upload template or a sample file and the company account details, and the bank file will be added.
+- A payout with a reinvest / partial-reinvest choice stays on the settlement page (not in batches), because today its voucher is booked for the full amount while the reinvestment books its own.
+- Recording paid is allowed straight after approval (for a batch paid by hand through bKash/Nagad without a file).
+
+Needs Bangla review: the 72 new `lang/bn.json` keys (written by me).
+
+Tests: new `PayoutBatchTest` (13 tests: only approved accounts offered, full flow with one voucher and `paid_out`, maker ≠ checker for Super Admin, permissions, a payout in a live batch is not offered / not paid by hand / no reinvest, failed item freed and left out of the voucher, voucher trash/restore, cancel and take out, stored file hash + audited downloads + tamper refused, CSV formula cells neutralised, account number encrypted and kept out of the audit log, channel-partner payout, admin pages). `MultiCompanyIsolationTest` covers the 2 new models. Full `php artisan test` (plain, no `--env`): **1983 passed, 2 skipped, 0 failed** (17994 assertions). No frontend asset changed (no `npm run build` needed).
+
+Commit status: committed and pushed to the branch and main on owner approval ("ওকে যে পর্যন্ত কাজ হইছে সেটা কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-08).
+
+## 2026-10-08 - Investor portal, Phases 3–4 (sign-up, payment accounts, agreements, requests)
+
+Owner request (in Bangla): "পরবর্তি কাজ কর" — continue with the next phases of `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md`.
+
+What changed:
+- **Sign-up through a partner's invite link** (owner's draft: "the investor self-registers through a referrer's invite link and the admin verifies"). Staff turn the link on per partner (Portal access → Turn on invite link). The application becomes an Investor Draft (source portal) with the NID copy and photo; Confirm creates the investor and activates the account (documents move to the investor); Reject application keeps a reason the applicant sees. Applicants can sign in but see only their status.
+- **Payment accounts** (bank with 9-digit routing number, or bKash/Nagad/Rocket): added in the portal, approved/rejected on the investor's or partner's page (new tab); approval makes it the default; approved accounts are locked; numbers encrypted.
+- **Portal agreements**: staff write and publish the investor and partner agreement texts (Investments → Portal agreements); published versions are immutable; acceptance records time, IP, device and a hash of the text. Beside the paper deed, not instead of it.
+- **Requests**: top-up, withdrawal notice, payout choice (withdraw/reinvest/partial), question. Staff queue at Investments → Investor Requests. Approval runs the existing flows (new investment + pending capital voucher; 60-day withdrawal notice from the request date; `CycleElectionService`), each needing that flow's permission (manage / settle; questions need portal_manage).
+
+My reading of the open questions, used here (say if any is wrong):
+- P7: sign-up only with a partner's invite link (the draft says so); the applicant uploads NID copy (both sides) and photo, nominee NID optional; staff review in Investor Drafts. No separate "KYC verified" flag: confirming the draft is the verification, and every existing investor counts as verified (their paper KYC is done).
+- P8: the portal agreement sits **beside** the paper deed. No agreement text was written by me — staff paste it.
+- P9: a top-up is only a request; the investment is added when staff approve after the money arrives (amount, date, method confirmed by staff). The deed/cheque/witness steps stay at the office.
+- Partners' existing inline payout details (on the partner record) were not copied into payment accounts; partners can add one in the portal or staff add one on their page.
+- Still not built: payout batches / NCC file (P10), SMS/WhatsApp notifications (P11), the period pool engine (D1–D10).
+
+Needs Bangla review: the 154 new `lang/bn.json` keys (written by me).
+
+Tests: new `InvestorPortalOnboardingTest` (13 tests: sign-up → draft with documents, invite code required, confirm activates + moves documents, reject/discard shows reason, payment accounts approval + default + lock + routing check, agreement publish/accept/hash/immutability/new version, top-up → investment, withdrawal → 60-day notice, reinvest → election only on own pending payout and only with the settle permission, support answer + cancel, portal and admin pages open). `MultiCompanyIsolationTest` covers the 4 new models. `npm run build` OK; new pages checked at 375 px. Full `php artisan test` (plain, no `--env`): **1970 passed, 2 skipped, 0 failed** (17633 assertions).
+
+Commit status: committed and pushed to the branch and main on owner approval ("ওকে যে পর্যন্ত কাজ হইছে সেটা কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-08).
+
 ## 2026-10-08 - Investors list: project picker on the table toolbar
 
 Owner request (in Bangla), with a screenshot of the investor list and a red box at the top left of the table: "image এর চিহ্নিত জায়গায় প্রজেক্ট ভিত্তিক ফিল্টার অপশন যুক্ত কর এবং তার পাশে একটা সার্চ বার যুক্ত কর।"

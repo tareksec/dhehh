@@ -6,6 +6,7 @@ use App\Models\Concerns\BelongsToCompany;
 use App\Support\InvestorIdentity;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -20,9 +21,9 @@ class ChannelPartner extends Model
 
     public const PAYMENT_METHODS = ['bkash' => 'bKash', 'nagad' => 'Nagad', 'rocket' => 'Rocket', 'bank' => 'Bank', 'cash' => 'Cash'];
 
-    protected $fillable = ['company_id', 'name', 'phone', 'address', 'nid_number', 'payment_method', 'account_name', 'account_number', 'bank_name', 'bank_branch', 'notes', 'is_active'];
+    protected $fillable = ['company_id', 'name', 'phone', 'address', 'nid_number', 'payment_method', 'account_name', 'account_number', 'bank_name', 'bank_branch', 'notes', 'is_active', 'invite_enabled'];
 
-    protected $casts = ['nid_number' => 'encrypted', 'is_active' => 'boolean'];
+    protected $casts = ['nid_number' => 'encrypted', 'is_active' => 'boolean', 'invite_enabled' => 'boolean'];
 
     protected static function booted(): void
     {
@@ -47,6 +48,48 @@ class ChannelPartner extends Model
     }
 
     /** Investors this partner brought in. */
+    /**
+     * Gives the partner an invite code the first time it is needed. Codes are
+     * random, unique per company, and never reused for someone else.
+     */
+    public function ensureInviteCode(): string
+    {
+        if (filled($this->invite_code)) {
+            return (string) $this->invite_code;
+        }
+
+        do {
+            $code = strtoupper(Str::random(8));
+        } while (self::query()->withoutGlobalScopes()->where('company_id', $this->company_id)->where('invite_code', $code)->exists());
+
+        $this->forceFill(['invite_code' => $code])->save();
+
+        return $code;
+    }
+
+    /** The self sign-up link on the investor portal, or null while invites are off or the portal has no address. */
+    public function inviteUrl(): ?string
+    {
+        if (! $this->is_active || ! $this->invite_enabled || blank($this->invite_code)) {
+            return null;
+        }
+
+        return Company::query()->find($this->company_id)?->investorPortalUrl('register?code='.$this->invite_code);
+    }
+
+    /** An active partner of the current company whose invite link is on. */
+    public static function forInviteCode(?string $code): ?self
+    {
+        $code = strtoupper(trim((string) $code));
+
+        return $code === '' ? null : self::query()->where('invite_code', $code)->where('invite_enabled', true)->where('is_active', true)->first();
+    }
+
+    public function bankAccounts()
+    {
+        return $this->morphMany(InvestorBankAccount::class, 'holder');
+    }
+
     public function investors()
     {
         return $this->hasMany(Investor::class, 'channel_partner_id');

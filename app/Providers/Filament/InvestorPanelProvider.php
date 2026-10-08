@@ -2,16 +2,21 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Investor\Pages\Agreements;
 use App\Filament\Investor\Pages\Auth\AcceptInvite;
 use App\Filament\Investor\Pages\Auth\ForgotPassword;
 use App\Filament\Investor\Pages\Auth\Login;
+use App\Filament\Investor\Pages\Auth\Register;
+use App\Filament\Investor\Pages\BankAccounts;
 use App\Filament\Investor\Pages\Commissions;
 use App\Filament\Investor\Pages\Dashboard;
 use App\Filament\Investor\Pages\Documents;
+use App\Filament\Investor\Pages\Invite;
 use App\Filament\Investor\Pages\MyInvestments;
 use App\Filament\Investor\Pages\MyInvestors;
 use App\Filament\Investor\Pages\Payouts;
 use App\Filament\Investor\Pages\Profile;
+use App\Filament\Investor\Pages\Requests;
 use App\Filament\Investor\Pages\Statement;
 use App\Http\Controllers\InvestorPortal\InvestorPortalDocumentController;
 use App\Http\Controllers\InvestorPortal\InvestorPortalReportController;
@@ -44,7 +49,8 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * or the company's own investor_portal_domain, resolved by
  * ResolveCompanyFromInvestorPortalDomain; RestrictPortalHosts keeps it off
  * every other host, the same way as the reseller portal. Accounts are
- * created by staff (invite by SMS); there is no self sign-up yet.
+ * created by staff (invite by SMS) or by self sign-up through a channel
+ * partner's invite link, reviewed in Investor Drafts.
  */
 class InvestorPanelProvider extends PanelProvider
 {
@@ -55,6 +61,8 @@ class InvestorPanelProvider extends PanelProvider
             ->path('investor')
             ->authGuard('investor')
             ->login(Login::class)
+            // Self sign-up only through a channel partner's invite link (?code=…).
+            ->registration(Register::class)
             // Reset by SMS code on one page; Filament's e-mailed link is not used.
             ->passwordReset(ForgotPassword::class, ForgotPassword::class)
             ->brandName(fn (): string => app(CompanySettingsService::class)->name($this->portalCompany()))
@@ -66,8 +74,12 @@ class InvestorPanelProvider extends PanelProvider
                 Statement::class,
                 Payouts::class,
                 Documents::class,
+                Requests::class,
+                BankAccounts::class,
+                Agreements::class,
                 MyInvestors::class,
                 Commissions::class,
+                Invite::class,
                 Profile::class,
             ])
             ->homeUrl(fn (): string => Dashboard::getUrl())
