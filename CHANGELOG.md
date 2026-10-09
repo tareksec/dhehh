@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.66.0] - 2026-10-09
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -24,7 +26,6 @@ All notable production changes to Business Dashboard are documented here.
 - Missing tables: `App\Support\ModuleHealth` (scoped; table list cached 10 minutes and dropped on `MigrationsEnded`). Admin panel middleware `TurnOffPagesWithMissingTables` answers a resource page whose model table is missing with a 503 page. `Gate::before` denies every ability on such a model (models in `User::MODEL_MODULES`). Off in `local` / `testing`, like `ModuleGuard`.
 - New `ModuleGuardTest` (12 tests). It enforces that every navigation badge and every widget in `app/` goes through the guard, and it reproduces the 2026-10-08 state (dropped `investor_requests` table). Without the guard that state answers 500; with it, `/admin` opens. 10 new lang keys (en + bn).
 - New workflow `.github/workflows/mysql-migrations.yml` (MySQL 8.4 service, `migrate --force` from empty, then checks nothing is pending). Checked locally against MySQL 8.0: all 219 migrations run; the unfixed v2.63.0 agreement migration fails with error 1059 (exit 1), the same error as production; the fixed one also finishes a database left half-migrated by it.
-
 ## [2.65.0] - 2026-10-09
 
 **Release type:** Minor Feature Update
