@@ -5,6 +5,7 @@ namespace App\Services\Crm;
 use App\Models\Conversation;
 use App\Models\Lead;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Services\CourierAlertService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -55,13 +56,37 @@ class SalesQualificationService
         });
     }
 
-    public function context(Conversation $conversation): array
+    /**
+     * $includePersonalization is off by default: recent_orders keeps its
+     * original order_number/status-only shape and no returning-customer
+     * signal is added, so a company that never opts in sees the exact same
+     * qualification context as before. On, it also eager-loads each order's
+     * product names and adds is_returning_customer/lead_source so the agent
+     * can personalize tone without the model inventing purchase history.
+     */
+    public function context(Conversation $conversation, bool $includePersonalization = false): array
     {
         $lead = $conversation->lead()->where('company_id', $conversation->company_id)->first();
         $customerId = $conversation->customer_id ?: $lead?->converted_customer_id;
-        $orders = $customerId ? Order::query()->where('company_id', $conversation->company_id)->where('customer_id', $customerId)->latest('id')->limit(3)->get(['order_number', 'status'])->toArray() : [];
+        $query = $customerId ? Order::query()->where('company_id', $conversation->company_id)->where('customer_id', $customerId)->latest('id')->limit(3) : null;
+
+        if (! $includePersonalization) {
+            $orders = $query ? $query->get(['order_number', 'status'])->toArray() : [];
+
+            return ['qualification' => $lead?->qualification ?? [], 'summary' => $lead?->qualification_summary, 'recent_orders' => $orders,
+                'missing' => array_values(array_diff(self::FIELDS, array_keys($lead?->qualification ?? [])))];
+        }
+
+        $orders = $query
+            ? $query->with('items.product:id,name')->get(['id', 'order_number', 'status'])->map(fn (Order $order): array => [
+                'order_number' => $order->order_number,
+                'status' => $order->status,
+                'items' => $order->items->map(fn (OrderItem $item): ?string => $item->product?->name)->filter()->values()->all(),
+            ])->all()
+            : [];
 
         return ['qualification' => $lead?->qualification ?? [], 'summary' => $lead?->qualification_summary, 'recent_orders' => $orders,
-            'missing' => array_values(array_diff(self::FIELDS, array_keys($lead?->qualification ?? [])))];
+            'missing' => array_values(array_diff(self::FIELDS, array_keys($lead?->qualification ?? []))),
+            'is_returning_customer' => $orders !== [], 'lead_source' => $lead?->source];
     }
 }
