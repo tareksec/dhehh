@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\ExpenseScanImageController;
 use App\Http\Controllers\Admin\InvestmentDocumentDownloadController;
 use App\Http\Controllers\Admin\InvestmentReportController;
 use App\Http\Controllers\Admin\InvestorContractDownloadController;
+use App\Http\Controllers\Admin\InvestorPortalOpenController;
 use App\Http\Controllers\Admin\LegacyAdminClusterRedirectController;
 use App\Http\Controllers\Admin\OrderPdfController;
 use App\Http\Controllers\Admin\ProductCsvController;
@@ -685,6 +686,17 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/admin/investment-documents/{document}/download', InvestmentDocumentDownloadController::class)
         ->whereNumber('document')
         ->name('investment-documents.download');
+
+    // "Open investor portal" on an investor's / channel partner's page: opens in a new tab and sends it on to the portal host with a one-time token.
+    Route::get('/admin/investor-portal/investors/{investor}/open', [InvestorPortalOpenController::class, 'investor'])
+        ->whereNumber('investor')
+        ->middleware('throttle:30,1')
+        ->name('investor-portal.open-investor');
+
+    Route::get('/admin/investor-portal/channel-partners/{partner}/open', [InvestorPortalOpenController::class, 'partner'])
+        ->whereNumber('partner')
+        ->middleware('throttle:30,1')
+        ->name('investor-portal.open-partner');
 
     Route::get('/admin/investments/settlement-payouts/{payout}/report', [InvestmentReportController::class, 'investorPayout'])
         ->whereNumber('payout')

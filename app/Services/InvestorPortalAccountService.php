@@ -52,35 +52,13 @@ class InvestorPortalAccountService
     public function invite(Investor|ChannelPartner $holder, ?User $by = null): string
     {
         $company = Company::query()->findOrFail($holder->company_id);
-
-        if (! $company->investor_portal_enabled || $company->investorPortalHost() === null) {
-            throw ValidationException::withMessages(['portal' => __('Turn the investor portal on in Investor Portal Settings first.')]);
-        }
-
-        $phone = Phone::normalize((string) $holder->phone);
-
-        if ($phone === '') {
-            throw ValidationException::withMessages(['phone' => __('Add a phone number before inviting this person to the portal.')]);
-        }
-
+        $this->assertPortalIsOn($company);
+        $phone = $this->portalPhone($holder);
         $column = $holder instanceof Investor ? 'investor_id' : 'channel_partner_id';
         $token = Str::random(48);
 
-        $account = DB::transaction(function () use ($holder, $company, $phone, $column, $token, $by): InvestorPortalAccount {
-            $account = $this->accountFor($holder)
-                ?? InvestorPortalAccount::query()->withoutGlobalScopes()->where('company_id', $company->getKey())->where('phone', $phone)->first()
-                ?? new InvestorPortalAccount(['company_id' => $company->getKey(), 'phone' => $phone, 'name' => $holder->name]);
-
-            if ($account->{$column} !== null && (int) $account->{$column} !== (int) $holder->getKey()) {
-                throw ValidationException::withMessages(['phone' => __('This phone number already signs in to the portal for someone else.')]);
-            }
-
-            if ($account->status === InvestorPortalAccount::STATUS_DISABLED) {
-                throw ValidationException::withMessages(['portal' => __('This portal account is disabled. Enable it before sending a new invite.')]);
-            }
-
-            $account->{$column} = $holder->getKey();
-            $account->name = $account->exists && $account->name ? $account->name : $holder->name;
+        $account = DB::transaction(function () use ($holder, $company, $phone, $token, $by): InvestorPortalAccount {
+            $account = $this->claimAccount($holder, $company, $phone);
             $account->forceFill([
                 'invite_token_hash' => hash('sha256', $token),
                 'invite_expires_at' => now()->addDays(self::INVITE_VALID_DAYS),
@@ -102,6 +80,80 @@ class InvestorPortalAccountService
         ], $account->locale));
 
         return (string) $link;
+    }
+
+    /**
+     * The holder's portal account, created when there is none yet, with no
+     * invite link and no SMS. Staff use this to open the portal as the person
+     * (InvestorPortalStaffEntryService) without inviting them first. The
+     * account stays "invited" with no invite date until a real invite is sent.
+     * The same checks as an invite apply: portal on, a phone number, the phone
+     * not used by someone else, and the account not disabled.
+     */
+    public function ensureAccount(Investor|ChannelPartner $holder): InvestorPortalAccount
+    {
+        $company = Company::query()->findOrFail($holder->company_id);
+        $this->assertPortalIsOn($company);
+        $phone = $this->portalPhone($holder);
+
+        // A portal application (self-registration) waits for staff review; opening the
+        // portal must not attach it to this person behind the review's back.
+        $application = InvestorPortalAccount::query()->withoutGlobalScopes()->where('company_id', $company->getKey())->where('phone', $phone)->first();
+
+        if ($application?->isApplicant() && $this->accountFor($holder)?->getKey() !== $application->getKey()) {
+            throw ValidationException::withMessages(['portal' => __('This phone number has a portal application waiting for review, so the portal cannot be opened as this person yet.')]);
+        }
+
+        return DB::transaction(function () use ($holder, $company, $phone): InvestorPortalAccount {
+            $account = $this->claimAccount($holder, $company, $phone);
+            $account->save();
+
+            return $account;
+        });
+    }
+
+    protected function assertPortalIsOn(Company $company): void
+    {
+        if (! $company->investor_portal_enabled || $company->investorPortalHost() === null) {
+            throw ValidationException::withMessages(['portal' => __('Turn the investor portal on in Investor Portal Settings first.')]);
+        }
+    }
+
+    protected function portalPhone(Investor|ChannelPartner $holder): string
+    {
+        $phone = Phone::normalize((string) $holder->phone);
+
+        if ($phone === '') {
+            throw ValidationException::withMessages(['phone' => __('Add a phone number before inviting this person to the portal.')]);
+        }
+
+        return $phone;
+    }
+
+    /**
+     * The account this holder signs in with (their own, the one that already
+     * uses their phone, or a new one), pointed at the holder but not saved.
+     */
+    protected function claimAccount(Investor|ChannelPartner $holder, Company $company, string $phone): InvestorPortalAccount
+    {
+        $column = $holder instanceof Investor ? 'investor_id' : 'channel_partner_id';
+
+        $account = $this->accountFor($holder)
+            ?? InvestorPortalAccount::query()->withoutGlobalScopes()->where('company_id', $company->getKey())->where('phone', $phone)->first()
+            ?? new InvestorPortalAccount(['company_id' => $company->getKey(), 'phone' => $phone, 'name' => $holder->name]);
+
+        if ($account->{$column} !== null && (int) $account->{$column} !== (int) $holder->getKey()) {
+            throw ValidationException::withMessages(['phone' => __('This phone number already signs in to the portal for someone else.')]);
+        }
+
+        if ($account->status === InvestorPortalAccount::STATUS_DISABLED) {
+            throw ValidationException::withMessages(['portal' => __('This portal account is disabled. Enable it before sending a new invite.')]);
+        }
+
+        $account->{$column} = $holder->getKey();
+        $account->name = $account->exists && $account->name ? $account->name : $holder->name;
+
+        return $account;
     }
 
     /** The account a still-valid invite link belongs to, on this company's portal. */

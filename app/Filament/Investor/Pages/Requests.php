@@ -62,6 +62,7 @@ class Requests extends Page implements HasTable
             Action::make('new')
                 ->label(__('New request'))
                 ->icon(Heroicon::OutlinedPlus)
+                ->hidden(fn (): bool => $this->isStaffPreview())
                 ->schema([
                     Select::make('type')
                         ->label(__('What is it about?'))
@@ -122,6 +123,7 @@ class Requests extends Page implements HasTable
                         ->maxLength(2000),
                 ])
                 ->action(function (array $data): void {
+                    $this->refuseInStaffPreview();
                     $type = (string) $data['type'];
 
                     if ($type === InvestorRequest::TYPE_WITHDRAWAL) {
@@ -173,8 +175,11 @@ class Requests extends Page implements HasTable
                     ->label(__('Cancel'))
                     ->color('danger')
                     ->requiresConfirmation()
-                    ->visible(fn (InvestorRequest $record): bool => $record->isPending())
-                    ->action(fn (InvestorRequest $record) => app(InvestorRequestService::class)->cancel($this->account(), $record)),
+                    ->visible(fn (InvestorRequest $record): bool => $record->isPending() && ! $this->isStaffPreview())
+                    ->action(function (InvestorRequest $record): void {
+                        $this->refuseInStaffPreview();
+                        app(InvestorRequestService::class)->cancel($this->account(), $record);
+                    }),
             ])
             ->emptyStateHeading(__('No requests yet.'))
             ->paginated([10, 25, 50]);

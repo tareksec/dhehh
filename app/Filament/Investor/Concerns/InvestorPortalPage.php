@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\InvestorPortalAccount;
 use App\Services\CompanyContext;
 use App\Services\InvestorPortalService;
+use App\Support\InvestorPortalStaffPreview;
 use Filament\Facades\Filament;
 
 /**
@@ -39,6 +40,21 @@ trait InvestorPortalPage
         $account = Filament::auth()->user();
 
         return $account;
+    }
+
+    /** True while a staff member is looking at the portal as this person (look only). */
+    public function isStaffPreview(): bool
+    {
+        return InvestorPortalStaffPreview::isFor($this->account());
+    }
+
+    /**
+     * Call first in anything that changes data (a form save, an action, a
+     * button): a staff preview is look-only. Hide the button too.
+     */
+    protected function refuseInStaffPreview(): void
+    {
+        abort_if($this->isStaffPreview(), 403);
     }
 
     public function portal(): InvestorPortalService

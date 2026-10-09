@@ -76,6 +76,7 @@ class BankAccounts extends Page implements HasTable
             Action::make('add')
                 ->label(__('Add a payment account'))
                 ->icon(Heroicon::OutlinedPlus)
+                ->hidden(fn (): bool => $this->isStaffPreview())
                 ->modalDescription(__('The company checks a new account before using it. Until then payments go to your approved account.'))
                 ->schema([
                     Radio::make('type')
@@ -93,6 +94,7 @@ class BankAccounts extends Page implements HasTable
                     TextInput::make('mfs_number')->label(__('Mobile number'))->tel()->required()->regex('/^01\d{9}$/')->visible(fn (Get $get): bool => $get('type') === InvestorBankAccount::TYPE_MFS),
                 ])
                 ->action(function (array $data): void {
+                    $this->refuseInStaffPreview();
                     app(InvestorBankAccountService::class)->add($this->holder(), $data);
                     Notification::make()->title(__('Sent to the company for approval.'))->success()->send();
                 }),

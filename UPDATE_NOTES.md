@@ -8,6 +8,109 @@ Owner request (in Bangla): in the investor portal, clicking the profile name in 
 
 Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-09).
 
+## 2026-10-08 - Keep one module's error inside that module (error isolation)
+
+Owner request (in Bangla), after the v2.63.0 outage: if a module or part of the app has a problem or error, it must not affect the whole app. Only that specific module or part should show the error. The owner approved all five steps proposed, one after another.
+
+What changed:
+1. **Sidebar badges:** `HasGuardedNavigationBadge` on the 5 badges (Inbox, Investor Drafts, Investor Requests, Payout Batches, Reseller Payout Requests). On an error the badge is hidden.
+2. **Render hooks and widgets:** `GuardedViewManager` guards every Filament render hook in every panel. `GuardsWidgetRendering` covers all 19 widgets, which show a "could not load" card on an error.
+3. **Crashed pages:** `PanelErrorPages` plus the `panel-errors.module` view show a clear page with buttons instead of "500 | Server Error". This covers the admin panel and the portals, including Livewire actions sent from them.
+4. **Missing tables:** `ModuleHealth` plus the `TurnOffPagesWithMissingTables` middleware and a `Gate::before` check. That section shows "temporarily unavailable" and turns itself back on after `migrate`.
+5. **CI:** `.github/workflows/mysql-migrations.yml` runs migrations on MySQL 8.4 for every push and pull request.
+
+All caught errors are reported to Super Admins (bell plus Deploy Error Logs, source `module:…`), at most once per hour each. Local development and the test suite still throw errors as before (`ISOLATE_MODULE_ERRORS` overrides).
+
+Decisions I made without asking, for the owner to confirm or change:
+- The crashed-page screen is a standalone page (logo-less, no sidebar) with Dashboard / Try again / Back buttons. It does not draw the full panel sidebar, because that page must work even when the shared panel parts are what failed.
+- A section with a missing table stays in the menu. Opening it shows "temporarily unavailable" (503) rather than hiding it, so staff can see it exists and is down. Its relation tabs and buttons on other pages are hidden.
+- Reports are throttled to one per hour per section and error.
+
+Limits (cannot be isolated): the database or Redis being down, a broken `.env`, or a PHP syntax error in a file every page loads. Step 5 is the protection for those. **Note:** Coolify deploys `main` as soon as it is pushed, so the new MySQL check only protects us if a branch's checks are green before it is merged or pushed to `main`.
+
+Needs Bangla review (added with a Bangla value, please check the wording): "Module error (the rest of the app keeps working): :section", "This section could not be loaded. The rest of the page keeps working, and the error has been reported.", "This page could not be opened", "There is a problem in this part of the app. The other sections keep working, so you can carry on with them.", "The error has been recorded and reported to the administrators.", "Go to the dashboard", "Try again", "Go back", "This section is temporarily unavailable", "Part of its data is not ready yet (an update did not finish). The other sections keep working, so you can carry on with them."
+
+Verification:
+- New `ModuleGuardTest` (12 tests). Without the guard the "missing `investor_requests`" test reproduces the production 500 (`no such table: investor_requests`). Without the view-state restore, the inline-widget test fails with a `ViewException`.
+- MySQL 8.0 installed in the session container: the old v2.63.0 migration fails with exactly production's error 1059 and leaves the same half state. The fixed migration finishes it. All 219 migrations run from empty with `APP_ENV=production`.
+- Error page checked in headless Chromium at phone width (390px), in Bangla.
+- Full `php artisan test` (plain, no `--env`): 2017 passed, 1 skipped, 0 failed. `npm run build` passes. Pint passes on the changed PHP files (`bootstrap/app.php` and one line in `LowStockProducts.php` were already failing Pint before this change and were left as they were).
+
+Commit status: committed and pushed to `ccr-59b8ca5b-4zc27z`, then to `main` once the branch's MySQL migrations check passed (owner approved 2026-10-09: "হ্যাঁ, কমিট করে পুশ করো এবং মেইন এ পুশ কর").
+
+## 2026-10-09 - Lead CRM sales agent: 5 opt-in intelligence upgrades (proactive mode, objection handling, multi-product cart, cross-sell, personalization)
+
+Owner request, across several turns: make the CRM sales agent behave more like an intelligent human sales agent rather than a generic chatbot. I proposed a list of areas to work on; the owner asked for each one in turn ("do the next task on your list"): proactive mode, objection handling, multi-product cart, cross-sell, personalization. All five were implemented, then lost when this session's container was recycled before they were committed (per CLAUDE.md, nothing is committed without explicit approval, and the uncommitted working tree does not survive a container restart). The owner asked to redo them, and the branch was restarted from the then-current `main` (the branch's own earlier PR #7 was closed, not merged, and `main` had advanced ~50 releases past the branch's old base — see Technical Notes).
+
+What changed — each is a per-company toggle in **Integrations → Auto Messaging**, stored via `AiSettingsService`, off by default so no existing company's agent behavior changes until an admin opts in:
+
+1. **Proactive follow-up questions** (`proactive_mode_enabled`). After fully answering, the agent may also ask one natural next-step question (variant, quantity, delivery area, purchase timeframe) in the same message, to help move the sale forward instead of stopping cold at a bare answer.
+2. **Mild price-objection handling** (`objection_handling_enabled`). "Can you reduce it a bit?" no longer always escalates to a human — the agent may acknowledge it and restate real value from grounded catalog facts, but can never invent, offer or apply a discount. Refunds, complaints and explicit human requests still always hand off, on or off.
+3. **Multi-product cart**. `create_order_link`'s tool schema changed from a single flat item to an `items` array; calling it again with a new item merges into the same still-open `ChatOrderLink` (same product+variant updates its quantity, a new one appends) instead of overwriting the cart. No new toggle — this is a straight capability fix, not a behavior change a company would want to opt out of.
+4. **Grounded cross-sell / upsell** (`cross_sell_enabled`). A new `lookup_related_products` tool — reusing the exact same-category/active/in-stock signal `ProductShowController` already uses for the storefront's own "related products" — is only added to the tools array sent to the model when this is on, so the model cannot call a tool it was never offered.
+5. **Personalization by purchase history** (`personalization_enabled`). `SalesQualificationService::context()` can optionally eager-load past order line items and surface `is_returning_customer`/`lead_source`, so the agent may greet a returning customer naturally — never inventing a specific past-order detail the customer hasn't themselves mentioned.
+
+Important files: `app/Services/Crm/AiSettingsService.php` (DEFAULTS + save()), `app/Filament/Pages/Integrations.php` (fill-state/fields/save wiring for the 4 new toggles), `app/Services/Crm/AiReplyService.php` (keyword split, conditional system-prompt rules, `toolDefinitions($settings)`, `lookupRelatedProducts()`, rewritten `createOrderLink()`/new `mergeCartItems()`), `app/Services/Crm/SalesReplyRenderer.php` (`$allowFollowUpPrompt` param, `related` reply-key type), `app/Services/Crm/SalesQualificationService.php` (`$includePersonalization` param), `tests/Feature/CrmSalesAutomationTest.php` (12 new tests).
+
+Decisions made without asking, for the owner to confirm or change:
+- Multi-product cart has no on/off toggle — treated as a bug fix (the storefront checkout already looped over multiple cart items; only the AI side was artificially limited to one), not a behavior change worth gating.
+- Cross-sell suggests at most one related product per reply, from the same category only, same as the storefront's own related-products widget — no new "related products" concept invented.
+
+Verification:
+- `php artisan test --filter=CrmSalesAutomationTest`: 45 passed (33 pre-existing + 12 new), 0 failed.
+- Full `php artisan test` (plain, no `--env`): 1870 passed, 146 failed, 2 skipped. The 146 failures are pre-existing and unrelated (environment gap: `Vite manifest not found` — no frontend build in this container). Confirmed zero regressions: stashed all changes, re-ran the full suite on a clean `main` (146 failed, 1858 passed — the same 12-test gap), diffed the sorted list of failing test names between both runs — byte-for-byte identical.
+- This container was freshly provisioned and had neither `vendor/` nor PHP 8.4 (the project's composer.lock now requires `^8.4`, the container only shipped 8.3); installed PHP 8.4 + required extensions (gd, imagick, sqlite3, intl, bcmath, zip) via the Sury PHP APT repo for this session, then `composer install`. This is a one-off session setup, not a code change.
+
+Commit status: not yet committed — awaiting the owner's explicit commit/push approval, same policy as every other change in this log.
+
+## 2026-10-08 - Hotfix: admin panel 500 after the investor-portal deploy (MySQL 64-character index name)
+
+The owner reported "500 Server Error" on the live site after today's pushes.
+
+Cause: `2026_10_08_100200_create_agreement_tables` auto-named the unique index on `agreement_acceptances` `agreement_acceptances_agreement_template_id_portal_account_id_unique`. That name is 68 characters, and MySQL's limit is 64 (error 1059). Tests run on SQLite, which has no limit, so they passed. On the server, `deploy:migrate` caught the error. By design it does not fail the deploy, and it reports the error to super admins. The tables `agreement_templates` and `agreement_acceptances` (minus the index) were left behind, the migration was not recorded, and `investor_requests` / `payout_batches` were never created. The navigation badges of `InvestorRequestResource` and `PayoutBatchResource` query those tables on every admin page, which caused the 500.
+
+What changed:
+- The migration gives the index a short explicit name and is safe to re-run on the half-migrated database: an existing table is skipped, and only the missing index is added.
+- New `MigrationIdentifierLengthTest` guards every table and index name against the 64-character limit.
+- The same test found two older index names over the limit: `broadcast_recipients` (68) in `2026_08_28_000300` and `investment_documents` (71) in `2026_09_07_100200`. Both now have explicit short names, so a fresh MySQL install works. On production those migrations failed the same way earlier and were finished by `hasTable` guards (CHANGELOG: "Duplicate column name 'opted_out_at'"), so production has the tables but **not** these two indexes: the duplicate guard on broadcast recipients and a lookup index on documents. That is not urgent and is not fixed here.
+
+After deploy: Coolify's post-deployment `php artisan deploy:migrate` should now finish all pending migrations. To confirm, run `php artisan migrate:status` on the server: `2026_10_08_100200`, `100300` and `100400` should show "Ran". If the 500 remains, `storage/logs/laravel.log` names the actual error.
+
+Verification:
+- `MigrationIdentifierLengthTest` passes. Before the rename it listed exactly the three long names.
+- Simulated production's half-migrated state on a disposable SQLite file in the scratchpad (not the demo database): `agreement_templates` and `agreement_acceptances` existed without the index and the migration was unrecorded. `php artisan migrate` then finished `100200`, `100300` and `100400`, creating `investor_requests`, `payout_batches` and the new index. Not run on a real MySQL server, because none is available in this environment.
+- Full `php artisan test` (plain, no `--env`): 2005 passed, 1 skipped, 0 failed. `npm run build` passes.
+
+Commit status: committed and pushed to `ccr-59b8ca5b-4zc27z` and `main` with the owner's approval (2026-10-08).
+
+## 2026-10-08 - "Open investor portal" button (look-only staff preview of the investor portal)
+
+Owner request (in Bangla): "এডমিন থেকে ইনভেস্টরদের পোর্টালে এক ক্লিকে প্রবেশ করার জন্য ইনভেস্ট ভিউ পেজের হেডারে বাটন যোগ কর … আমাদের এডমিন প্যানেল থেকে এক ক্লিকে ইনভেস্টর পোর্টালে লগিন অপশন থাকতে হবে এবং এটা নতুন ট্যাবে ওপেন হবে।" (The existing Portal access → Invite flow stays as it is.)
+
+What changed:
+- New header button **Open investor portal** next to **Portal access** on the investor's page (and, for consistency, on the channel partner's page). It is a plain link with `target="_blank"`, so the browser opens the new tab itself (no pop-up blocker).
+- The dashboard and the portal are on different hosts and cannot share a login, so the link goes to `GET /admin/investor-portal/{investors|channel-partners}/{id}/open` on the dashboard host, which checks the staff member and redirects the tab to `<portal host>/investor/staff-entry/{one-time token}`. The token lasts 60 seconds, works once, only on that company's portal, and is refused if the staff member lost the permission in the meantime.
+- The tab is a **staff preview**: signed in as the person, with a yellow "Staff preview" bar on every page. It is look-only. The password-change form is hidden, and accepting an agreement, adding a payment account, sending or cancelling a request are hidden and refused on the server (`refuseInStaffPreview()` in `InvestorPortalPage`; every future portal page that writes must call it). It is **not** the person's sign-in (`last_login_at` and the "login" audit entry are untouched). What it records in the audit log (`investor_portal.staff_entry_issued`, `investor_portal.staff_entered`, document downloads) is attributed to the staff user, not the investor.
+- Works even if the person has not set a password yet.
+- Files: `InvestorPortalOpenAction`, `Admin\InvestorPortalOpenController`, `InvestorPortal\InvestorPortalStaffEntryController`, `InvestorPortalStaffEntryService`, `Support\InvestorPortalStaffPreview`, banner view `filament/investor/staff-preview-banner`, `InvestorPortalAccountService::ensureAccount()` (account creation shared with `invite()`), `InvestorPortalAccount::canAccessPanel()`, `AuditLogService`. No migration. 7 new lang keys. Docs: CHANGELOG, `docs/roles-and-permissions.md`, plan §15 build log.
+
+Decisions I made without asking, for the owner to confirm or change:
+1. **Who can use it:** the same permission as "Portal access", `investments.portal_manage` (Super Admin only by default). Staff with only `investments.manage` do not see the button.
+2. **No portal account yet:** the click creates one (status "invited", no invite date, no SMS, no link) so there is someone to look at. It then shows as "Invited" in **Investor Portal Settings** counts, although nobody was invited. The **Portal access** button still says "Invite to the investor portal" for such a person; a real invite reuses the same account.
+3. **Never opened:** a disabled account (enable it first), a person without a phone number, and a phone number that has a portal application waiting for review.
+4. **Look-only** (not "act as"): staff cannot accept agreements or change anything on the person's behalf.
+
+Needs Bangla review (added with a Bangla value, please check the wording): "Open investor portal", "Opens the investor portal in a new tab, signed in as this person. You can look at everything but change nothing.", "Could not open the portal", "This staff link has expired. Open the portal again from the dashboard.", "Staff preview: you are looking at the portal as :name (opened by :staff). Nothing can be changed here, and it does not count as :name signing in.", "A staff preview cannot change a password.", "This phone number has a portal application waiting for review, so the portal cannot be opened as this person yet."
+
+Known gap, not caused by this change: an **unsigned-in** visitor of any plain `/admin/...` route that uses the `auth` middleware (print pages, downloads, this button) gets a 500 ("Route [login] not defined") instead of the sign-in page, because the app does not set `redirectGuestsTo`. No data is exposed. Not fixed here.
+
+Verification:
+- New `InvestorPortalStaffEntryTest` (18 tests): the button on both pages and who sees it; the route's permission, company and refusal rules (disabled, no phone, portal off, application waiting); the token (works once, expires, wrong portal, account disabled or staff member deactivated in between); not counted as a sign-in; audit attribution; the banner; an account with no password is locked out when it is not a preview; every write path is refused in a preview and still works for the person themselves.
+- Checked in headless Chromium against a disposable database (deleted afterwards), twice: before and after merging main's Phase 3–5. Clicking the button on the investor's page opened a new tab on the portal host at the dashboard with the "Staff preview" bar; the Agreements page shows the agreement without the accept button, Payment accounts and Requests have no add / new button, Profile has no password form.
+- Full `php artisan test` (plain, no `--env`) on the merged code: 2004 passed, 1 skipped, 0 failed. `npm run build` passes. Pint passes on the changed PHP files.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর"). Built and tested on top of `origin/main` v2.63.0 (portal Phases 3–5), which was merged into the branch; the only merge conflicts were in `CHANGELOG.md`, `UPDATE_NOTES.md` and `InvestorPortalAccount::canAccessPanel()`.
+
 ## 2026-10-08 - Investor portal, Phase 5 (payout batches)
 
 Owner request (in Bangla): "পরবর্তি কাজ কর" — continue with the next phase of `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md`. Sits on top of the uncommitted Phases 3–4 below (it uses their payment accounts).

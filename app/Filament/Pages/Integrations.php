@@ -253,6 +253,7 @@ class Integrations extends Page
                 'vision_enabled', 'image_model_enabled', 'image_api_format', 'image_provider', 'image_base_url', 'image_model',
                 'voice_enabled', 'voice_provider', 'voice_base_url', 'voice_model',
                 'review_mode', 'daily_run_limit', 'max_run_tokens', 'daily_budget_usd', 'input_cost_per_million', 'output_cost_per_million', 'sales_follow_ups_enabled', 'follow_up_delay_hours', 'follow_up_template', 'follow_up_template_language',
+                'proactive_mode_enabled', 'objection_handling_enabled', 'cross_sell_enabled', 'personalization_enabled',
             ] as $key) {
                 $fill[$prefix.$key] = $ai[$key];
             }
@@ -475,6 +476,10 @@ class Integrations extends Page
                     : 'Stored encrypted per company.')
                 ->visible(fn (Get $get): bool => (bool) $get("{$prefix}voice_enabled"));
             $fields[] = Toggle::make("{$prefix}review_mode")->label('Draft replies for staff review')->helperText('Suggestions appear in CRM → Sales Automation. No automatic reply is sent in this mode.');
+            $fields[] = Toggle::make("{$prefix}proactive_mode_enabled")->label('Proactive follow-up questions')->helperText('After fully answering, the agent may also ask one natural next-step question (size/colour, quantity, delivery area) to help move the sale forward. Off by default: it answers only what was asked.');
+            $fields[] = Toggle::make("{$prefix}objection_handling_enabled")->label('Handle mild price objections')->helperText('A mild "can you reduce it a bit?" message reaches the agent, which may restate value or ask a clarifying question — grounded in real catalog facts, never an invented discount. Off by default: any discount/bargaining language always hands off to a human.');
+            $fields[] = Toggle::make("{$prefix}cross_sell_enabled")->label('Suggest related products (cross-sell)')->helperText('Lets the agent offer one real same-category product alongside its answer. Off by default: the agent only discusses what the customer asked about.');
+            $fields[] = Toggle::make("{$prefix}personalization_enabled")->label('Personalize by purchase history')->helperText('Lets the agent greet a returning customer and reference their past orders. Off by default: no purchase-history signal is shown to the agent.');
             foreach (['daily_run_limit' => 'Daily run limit', 'max_run_tokens' => 'Token budget per run', 'daily_budget_usd' => 'Daily estimated budget (USD)', 'input_cost_per_million' => 'Input price per million tokens (USD)', 'output_cost_per_million' => 'Output price per million tokens (USD)', 'follow_up_delay_hours' => 'Sales follow-up delay (hours)'] as $key => $label) {
                 $fields[] = TextInput::make($prefix.$key)->label($label)->numeric()->minValue(0)->required();
             }
@@ -1393,6 +1398,7 @@ class Integrations extends Page
                         'vision_enabled', 'image_model_enabled', 'image_api_format', 'image_provider', 'image_base_url', 'image_model',
                         'voice_enabled', 'voice_provider', 'voice_base_url', 'voice_model',
                         'review_mode', 'daily_run_limit', 'max_run_tokens', 'daily_budget_usd', 'input_cost_per_million', 'output_cost_per_million', 'sales_follow_ups_enabled', 'follow_up_delay_hours', 'follow_up_template', 'follow_up_template_language',
+                        'proactive_mode_enabled', 'objection_handling_enabled', 'cross_sell_enabled', 'personalization_enabled',
                     ])->mapWithKeys(fn ($key) => [$key => $state[$prefix.$key] ?? null])->all(),
                     'api_key' => $state["{$prefix}api_key"] ?? null,
                     'image_api_key' => $state["{$prefix}image_api_key"] ?? null,

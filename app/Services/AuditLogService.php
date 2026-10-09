@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\AuditLog;
+use App\Models\InvestorPortalAccount;
 use App\Models\User;
+use App\Support\InvestorPortalStaffPreview;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -48,7 +50,17 @@ class AuditLogService
     {
         $actor = Auth::user();
 
-        return $actor instanceof User ? $actor->getKey() : null;
+        if ($actor instanceof User) {
+            return $actor->getKey();
+        }
+
+        // A staff member looking at the investor portal as someone
+        // (InvestorPortalStaffPreview): what is recorded is theirs, not the investor's.
+        if ($actor instanceof InvestorPortalAccount && InvestorPortalStaffPreview::isFor($actor)) {
+            return InvestorPortalStaffPreview::current()['staff_user_id'];
+        }
+
+        return null;
     }
 
     /**
@@ -59,6 +71,10 @@ class AuditLogService
     protected function portalActor(): ?Model
     {
         $actor = Auth::user();
+
+        if ($actor instanceof InvestorPortalAccount && InvestorPortalStaffPreview::isFor($actor)) {
+            return null;
+        }
 
         return $actor instanceof Model && ! $actor instanceof User ? $actor : null;
     }

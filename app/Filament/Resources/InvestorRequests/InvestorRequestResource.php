@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\InvestorRequests;
 
 use App\Filament\Clusters\Investments;
+use App\Filament\Concerns\HasGuardedNavigationBadge;
 use App\Filament\Resources\InvestorRequests\Pages\ListInvestorRequests;
 use App\Models\Investment;
 use App\Models\InvestorCycleElection;
@@ -32,6 +33,8 @@ use Illuminate\Validation\ValidationException;
  */
 class InvestorRequestResource extends Resource
 {
+    use HasGuardedNavigationBadge;
+
     protected static ?string $model = InvestorRequest::class;
 
     protected static ?string $cluster = Investments::class;
@@ -65,7 +68,7 @@ class InvestorRequestResource extends Resource
         return false;
     }
 
-    public static function getNavigationBadge(): ?string
+    protected static function navigationBadge(): ?string
     {
         if (! static::canViewAny()) {
             return null;

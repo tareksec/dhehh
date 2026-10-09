@@ -57,6 +57,9 @@ class Agreements extends Page
 
     public function accept(int $templateId): void
     {
+        // Accepting is the person's own act: never from a staff preview.
+        $this->refuseInStaffPreview();
+
         $template = $this->outstanding()->firstWhere('id', $templateId);
 
         if (! $template) {

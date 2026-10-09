@@ -2,11 +2,13 @@
     @forelse ($this->outstanding() as $template)
         <x-filament::section :heading="$template->title" :description="__('Version :version', ['version' => $template->version])">
             <div class="max-h-96 overflow-y-auto whitespace-pre-line text-sm leading-relaxed">{{ $template->body }}</div>
-            <div class="mt-4">
-                <x-filament::button wire:click="accept({{ $template->getKey() }})" wire:confirm="{{ __('I have read and agree to the :title.', ['title' => $template->title]) }}">
-                    {{ __('I have read and agree') }}
-                </x-filament::button>
-            </div>
+            @unless ($this->isStaffPreview())
+                <div class="mt-4">
+                    <x-filament::button wire:click="accept({{ $template->getKey() }})" wire:confirm="{{ __('I have read and agree to the :title.', ['title' => $template->title]) }}">
+                        {{ __('I have read and agree') }}
+                    </x-filament::button>
+                </div>
+            @endunless
         </x-filament::section>
     @empty
         <x-filament::section>

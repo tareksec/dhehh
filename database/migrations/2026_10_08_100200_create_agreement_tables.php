@@ -8,25 +8,41 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // A first deploy on MySQL stopped half-way (the acceptances' unique
+        // index had a 68-character auto name; MySQL allows 64) and left both
+        // tables behind without recording this migration, so each step only
+        // does what is still missing.
         // The agreement text is entered by staff (never written into the code);
         // a published version is never changed — a change is a new version.
-        Schema::create('agreement_templates', function (Blueprint $table): void {
-            $table->id();
-            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
-            $table->string('kind', 30); // investor_deed | partner_agreement
-            $table->unsignedInteger('version');
-            $table->string('title');
-            $table->longText('body');
-            $table->timestamp('published_at')->nullable();
-            $table->foreignId('published_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->timestamps();
+        if (! Schema::hasTable('agreement_templates')) {
+            Schema::create('agreement_templates', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('company_id')->constrained()->cascadeOnDelete();
+                $table->string('kind', 30); // investor_deed | partner_agreement
+                $table->unsignedInteger('version');
+                $table->string('title');
+                $table->longText('body');
+                $table->timestamp('published_at')->nullable();
+                $table->foreignId('published_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->timestamps();
 
-            $table->unique(['company_id', 'kind', 'version']);
-        });
+                $table->unique(['company_id', 'kind', 'version']);
+            });
+        }
 
         // "I have read and agree" in the portal, with time, IP and device
         // (owner's draft). Never changed after it is written.
+        if (Schema::hasTable('agreement_acceptances')) {
+            if (! Schema::hasIndex('agreement_acceptances', 'agreement_acceptances_template_account_unique')) {
+                Schema::table('agreement_acceptances', function (Blueprint $table): void {
+                    $table->unique(['agreement_template_id', 'portal_account_id'], 'agreement_acceptances_template_account_unique');
+                });
+            }
+
+            return;
+        }
+
         Schema::create('agreement_acceptances', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('company_id')->constrained()->cascadeOnDelete();
@@ -41,7 +57,8 @@ return new class extends Migration
             $table->string('body_sha256', 64);
             $table->timestamps();
 
-            $table->unique(['agreement_template_id', 'portal_account_id']);
+            // Named by hand: the auto name is longer than MySQL's 64 characters.
+            $table->unique(['agreement_template_id', 'portal_account_id'], 'agreement_acceptances_template_account_unique');
         });
     }
 

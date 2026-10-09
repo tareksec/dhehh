@@ -117,6 +117,9 @@ class Profile extends Page
 
     public function save(): void
     {
+        // A staff preview never changes the person's password.
+        $this->refuseInStaffPreview();
+
         $data = $this->form->getState();
         $account = $this->account();
         $key = 'investor-portal-password:'.$account->getKey();

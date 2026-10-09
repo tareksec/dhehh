@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
 use App\Services\CompanyContext;
+use App\Support\InvestorPortalStaffPreview;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasName;
 use Filament\Panel;
@@ -134,8 +135,15 @@ class InvestorPortalAccount extends Model implements AuthenticatableContract, Fi
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        if ($panel->getId() !== 'investor' || blank($this->password)
-            || ! in_array($this->status, [self::STATUS_ACTIVE, self::STATUS_PENDING, self::STATUS_REJECTED], true)) {
+        if ($panel->getId() !== 'investor' || $this->status === self::STATUS_DISABLED) {
+            return false;
+        }
+
+        // The person's own sign-in needs a password and an active or applicant
+        // account. A staff preview (InvestorPortalStaffPreview) may also look at
+        // an account that has not set a password yet.
+        if (! InvestorPortalStaffPreview::isFor($this)
+            && (blank($this->password) || ! in_array($this->status, [self::STATUS_ACTIVE, self::STATUS_PENDING, self::STATUS_REJECTED], true))) {
             return false;
         }
 

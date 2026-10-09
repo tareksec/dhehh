@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\PayoutBatches;
 
 use App\Filament\Clusters\Investments;
+use App\Filament\Concerns\HasGuardedNavigationBadge;
 use App\Filament\Resources\PayoutBatches\Pages\ListPayoutBatches;
 use App\Filament\Resources\PayoutBatches\Pages\ViewPayoutBatch;
 use App\Filament\Resources\PayoutBatches\RelationManagers\ItemsRelationManager;
@@ -27,6 +28,8 @@ use Filament\Tables\Table;
  */
 class PayoutBatchResource extends Resource
 {
+    use HasGuardedNavigationBadge;
+
     protected static ?string $model = PayoutBatch::class;
 
     protected static ?string $cluster = Investments::class;
@@ -77,7 +80,7 @@ class PayoutBatchResource extends Resource
         return false;
     }
 
-    public static function getNavigationBadge(): ?string
+    protected static function navigationBadge(): ?string
     {
         if (! static::canViewAny()) {
             return null;

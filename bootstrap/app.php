@@ -5,6 +5,8 @@ use App\Http\Middleware\PreventDemoModeWrites;
 use App\Http\Middleware\RestrictPortalHosts;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetCurrentCompany;
+use App\Support\ModuleGuard;
+use App\Support\PanelErrorPages;
 use App\Support\StorefrontErrorPages;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Console\Scheduling\Schedule;
@@ -90,6 +92,21 @@ return Application::configure(basePath: dirname(__DIR__))
         // requests are left completely alone — Filament and Laravel's own
         // JSON error handling for those must not be touched.
         $exceptions->render(function (\Throwable $e, Request $request) {
+            // A crashed admin / portal page: "this part has a problem, the rest
+            // keeps working" with links back, instead of the bare 500 page.
+            if (PanelErrorPages::appliesTo($request, $e)) {
+                ModuleGuard::report(PanelErrorPages::section($request), $e);
+
+                $home = PanelErrorPages::panelHome($request);
+                $pageUrl = PanelErrorPages::pageUrl($request);
+
+                return response()->view('panel-errors.module', [
+                    'home' => $home,
+                    'onHome' => rtrim((string) parse_url($pageUrl, PHP_URL_PATH), '/') === $home,
+                    'retryUrl' => $pageUrl,
+                ], 500);
+            }
+
             if (app()->environment('local', 'testing')) {
                 return null;
             }

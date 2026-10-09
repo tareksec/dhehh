@@ -25,7 +25,7 @@ class InvestorPortalAccessAction
     {
         return ActionGroup::make([
             Action::make('portalInvite')
-                ->label(fn (Investor|ChannelPartner $record): string => self::account($record)?->exists
+                ->label(fn (Investor|ChannelPartner $record): string => (($account = self::account($record)) !== null && ($account->invited_at !== null || $account->status === InvestorPortalAccount::STATUS_ACTIVE))
                     ? __('Send a new portal invite').' ('.self::statusText($record).')'
                     : __('Invite to the investor portal'))
                 ->icon(Heroicon::OutlinedPaperAirplane)

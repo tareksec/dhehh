@@ -413,6 +413,11 @@ Phase order versus the draft: the draft builds the calculation engine second. He
 
 ## 15. Build log
 
+### 2026-10-08 — "Open investor portal" (staff preview)
+
+Owner request: a button in the header of the investor's page that opens the investor portal in a new tab, signed in as that investor, in one click. Built as a look-only **staff preview** (`App\Support\InvestorPortalStaffPreview`, `InvestorPortalStaffEntryService`): a one-time token carries the staff member across from the dashboard host to the portal host; the portal session is flagged as a preview, may enter an account with no password yet, never updates the person's last sign-in, cannot change a password, and is attributed to the staff member in the audit log. The button is also on channel partners' pages. If the person has no portal account, one is created without sending an SMS (status "invited", no invite date). Needs `investments.portal_manage`.
+
+
 ### 2026-10-07 — Phases 1 and 2 built
 
 The owner asked to implement the plan ("ইমপ্লিমেন্ট কর"). Phases 1–2 need no new business rule, so they were built with the recommended answers to P1–P6 (shown below). Phases 3–7 still need the owner's material and answers (agreement text, NCC file format, message texts, D1–D10) and were not started.

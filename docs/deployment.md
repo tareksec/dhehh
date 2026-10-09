@@ -47,9 +47,9 @@ APP_DEBUG=false
 APP_URL=https://your-domain.com
 ASSET_URL=https://your-domain.com
 TRUSTED_PROXIES=*
-APP_VERSION=2.63.0
+APP_VERSION=2.66.0
 APP_RELEASE_TYPE=minor
-APP_RELEASE_DATE=2026-10-08
+APP_RELEASE_DATE=2026-10-09
 
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
@@ -188,6 +188,12 @@ The deploy workflow runs tests before SSH deploy. On the server it:
 7. Caches config, routes, and views.
 8. Restarts queues.
 9. Disables maintenance mode.
+
+The separate **MySQL migrations** workflow (`.github/workflows/mysql-migrations.yml`) runs every migration against MySQL 8.4 on every branch push and pull request. The test suite uses SQLite, which accepts things MySQL refuses (for example index names over 64 characters), so check that this workflow is green on the branch before pushing to `main`.
+
+## Error Isolation
+
+In production, a failing sidebar badge, widget, render hook or page does not take the whole panel down. The failing part shows a short notice, and the error is reported to Super Admins under **Settings → Deploy Error Logs**. An admin section whose database table is missing (an unfinished migration) shows "temporarily unavailable" until `migrate` creates the table. See `App\Support\ModuleGuard` and `App\Support\ModuleHealth`. This is on by default everywhere except `local` and `testing`. `ISOLATE_MODULE_ERRORS=false` turns it off (errors then show as plain 500 pages again). Leave it unset in production.
 
 ## Manual Update Deploy
 

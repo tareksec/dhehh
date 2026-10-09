@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\InvestorDrafts;
 
 use App\Filament\Clusters\Investments;
+use App\Filament\Concerns\HasGuardedNavigationBadge;
 use App\Filament\Resources\InvestorDrafts\Pages\EditInvestorDraft;
 use App\Filament\Resources\InvestorDrafts\Pages\ListInvestorDrafts;
 use App\Models\ChannelPartner;
@@ -48,6 +49,8 @@ use Illuminate\Validation\ValidationException;
  */
 class InvestorDraftResource extends Resource
 {
+    use HasGuardedNavigationBadge;
+
     protected static ?string $model = InvestorDraft::class;
 
     protected static ?string $cluster = Investments::class;
@@ -73,7 +76,7 @@ class InvestorDraftResource extends Resource
         return __('investor drafts');
     }
 
-    public static function getNavigationBadge(): ?string
+    protected static function navigationBadge(): ?string
     {
         if (! static::canViewAny()) {
             return null;

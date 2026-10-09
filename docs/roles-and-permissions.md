@@ -73,7 +73,10 @@ investments.payout_batch_approve
 `investments.portal_manage` lets a user switch the investor portal on and
 off (Investments → Investor Portal Settings; the custom domain stays Super
 Admin only) and invite, disable or re-enable an investor's or channel
-partner's portal sign-in (the "Portal access" actions on their pages). No
+partner's portal sign-in (the "Portal access" actions on their pages), and
+use the **Open investor portal** button on their pages, which opens the
+portal in a new tab as that person (look-only; see
+`InvestorPortalStaffEntryService`). No
 built-in role except Super Admin (via `*`) holds it; grant it to a custom
 role from the role editor
 (`15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md`).

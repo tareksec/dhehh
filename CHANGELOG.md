@@ -11,6 +11,77 @@ All notable production changes to Business Dashboard are documented here.
 **Technical Notes:**
 - `InvestorPanelProvider` sets a URL on the `profile` user-menu item. New test `test_the_user_menu_name_links_to_the_profile_page`.
 
+
+## [2.66.0] - 2026-10-09
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **One module's error no longer takes the whole app down** (owner request after the v2.63.0 outage). Errors are kept inside the part that failed:
+  - **Sidebar counts:** if the number next to a menu item (Investor Requests, Payout Batches, Investor Drafts, Reseller Payout Requests, Inbox) cannot be worked out, that count simply does not show. The menu and every page keep working.
+  - **Dashboard and page widgets:** a widget that fails shows a small "This section could not be loaded" card in its place. The rest of the dashboard or page works as normal. Shared parts drawn on every page (sidebar, company switcher, banners, toolbars) leave out only the part that failed.
+  - **A crashed page** in the admin panel or a portal shows "This page could not be opened. The other sections keep working" with **Go to the dashboard**, **Try again** and **Go back** buttons, instead of the bare "500 Server Error". 403/404 pages and sign-in redirects are unchanged.
+  - **Missing database table** (e.g. an update that did not finish): the pages of that one section show "This section is temporarily unavailable", and its tabs and buttons on other pages are hidden. Everything else keeps working. The section turns back on by itself as soon as the update finishes.
+  - Every error caught this way is **reported to Super Admins** (bell notification titled "Module error …" and **Settings → Deploy Error Logs**), at most once an hour per error, so nothing is hidden silently.
+- **New automatic check (GitHub Actions "MySQL migrations")** runs every database update against MySQL 8.4, the production version, on every branch push and pull request. A database update that would fail on the live server now shows up as a red check on its branch, before it reaches `main`.
+
+### Technical Notes
+
+- `App\Support\ModuleGuard::run($section, $callback, $fallback)` catches, logs and reports through `DeploymentErrorReporter` (source `module:<section>`, throttled 1/hour per section and error via `Cache::add`). `ModuleGuard::renderView()` renders a nested view and, on failure, restores the view factory's component/section/stack state that Laravel flushes, so the page around it survives. Isolation is on everywhere except `local` and `testing` (where errors still throw); override with `ISOLATE_MODULE_ERRORS` (`config('app.isolate_module_errors')`).
+- Badges: trait `App\Filament\Concerns\HasGuardedNavigationBadge` (write the count in `navigationBadge()`). Widgets: trait `GuardsWidgetRendering` (all 19 widgets; the widget view is rendered inside the guard in `filament.widgets.guarded`). Render hooks: `App\Support\GuardedViewManager` replaces Filament's `ViewManager` (`AppServiceProvider::register()`, `extend()`), so every render hook of every panel is guarded. Its `renderHook()` copies Filament's; re-check it on a Filament upgrade.
+- Crashed pages: `App\Support\PanelErrorPages` (first path segment `admin` / `investor` / `portal`; Livewire updates use the Referer) renders the self-contained `panel-errors.module` view from `bootstrap/app.php`'s exception renderer, only for real 500s.
+- Missing tables: `App\Support\ModuleHealth` (scoped; table list cached 10 minutes and dropped on `MigrationsEnded`). Admin panel middleware `TurnOffPagesWithMissingTables` answers a resource page whose model table is missing with a 503 page. `Gate::before` denies every ability on such a model (models in `User::MODEL_MODULES`). Off in `local` / `testing`, like `ModuleGuard`.
+- New `ModuleGuardTest` (12 tests). It enforces that every navigation badge and every widget in `app/` goes through the guard, and it reproduces the 2026-10-08 state (dropped `investor_requests` table). Without the guard that state answers 500; with it, `/admin` opens. 10 new lang keys (en + bn).
+- New workflow `.github/workflows/mysql-migrations.yml` (MySQL 8.4 service, `migrate --force` from empty, then checks nothing is pending). Checked locally against MySQL 8.0: all 219 migrations run; the unfixed v2.63.0 agreement migration fails with error 1059 (exit 1), the same error as production; the fixed one also finishes a database left half-migrated by it.
+## [2.65.0] - 2026-10-09
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Lead CRM sales agent: 5 opt-in intelligence upgrades (proactive mode, objection handling, multi-product cart, cross-sell, personalization).** Each is a per-company toggle in **Integrations → Auto Messaging**, off by default, so no existing company's agent behavior changes until an admin turns one on.
+  - **Proactive follow-up questions.** After fully answering, the agent may also ask one natural next-step question (size/colour, quantity, delivery area or purchase timeframe) to help move the sale forward, instead of stopping at a bare answer.
+  - **Mild price-objection handling.** A "can you reduce it a bit?" message no longer always hands off to a human. The agent may acknowledge it and restate real value from grounded facts — it can never invent, offer or apply a discount. Refunds, complaints and explicit human requests still always hand off.
+  - **Multi-product cart.** The customer can add more than one product to the same checkout link across the conversation ("I want 2 shirts" ... later "add a lamp too"), instead of each request for create_order_link replacing the previous one.
+  - **Grounded cross-sell / upsell.** The agent may suggest one real, same-category related product alongside its answer — never invented, never offered on every message.
+  - **Personalization by purchase history.** The agent can greet a returning customer and acknowledge past orders instead of treating every conversation as a first-time visitor.
+
+### Technical Notes
+
+- `AiSettingsService::DEFAULTS` gains `proactive_mode_enabled`, `objection_handling_enabled`, `cross_sell_enabled`, `personalization_enabled` (all `false`), wired through `Integrations.php`'s existing per-tool fill-state/fields/save plumbing.
+- `AiReplyService::systemPrompt()` builds each rule as a ternary on its setting, defaulting to the exact prior rule text when off so the default prompt is byte-for-byte unchanged; two purely additive rules (cross-sell, personalization) are empty strings when off.
+- `AiReplyService::HANDOFF_KEYWORDS` split: refund/complaint/human-request keywords always hard-escalate; a new `OBJECTION_KEYWORDS` (discount/bargaining) escalates too unless `objection_handling_enabled`.
+- `AiReplyService::toolDefinitions()` now takes `$settings` — `lookup_related_products` is only appended to the tools array (not just discouraged by prompt text) when `cross_sell_enabled`, so the model cannot call a tool that was never offered.
+- `create_order_link`'s schema changed from flat `product_id`/`variant_id`/`quantity` to an `items` array; `AiReplyService::createOrderLink()` merges newly-requested items into the conversation's existing open `ChatOrderLink` (same product+variant updates its quantity, otherwise appends a line) instead of always creating/overwriting a single-item link. The storefront checkout (`ChatOrderController`) already looped over `prefill.items`, so no checkout-side change was needed.
+- `lookup_related_products` reuses the exact same-category/active/in-stock signal `ProductShowController` already uses for the storefront's own "related products", rather than inventing a new one.
+- `SalesReplyRenderer::render()` gains an `$allowFollowUpPrompt` parameter (default `false`): off, a `prompt_key` only renders when it's the only thing being said (unchanged); on, it can be appended after a verified answer. Also gains a `related` reply-key type.
+- `SalesQualificationService::context()` gains an `$includePersonalization` parameter (default `false`): off, `recent_orders` keeps its exact original `order_number`/`status`-only shape; on, it eager-loads each order's product names and adds `is_returning_customer`/`lead_source`.
+
+## [2.64.1] - 2026-10-08
+
+**Release type:** Hotfix Update
+
+### Fixed
+
+- **Admin panel showing "500 Server Error" after the v2.63.0 deploy.** On the live MySQL database the migration `2026_10_08_100200_create_agreement_tables` failed. The unique index on `agreement_acceptances` got an automatic name 68 characters long, and MySQL allows at most 64. The deploy's migration stopped halfway: `agreement_templates` and `agreement_acceptances` were created, but the migration was not recorded, and the later `investor_requests` and `payout_batches` tables were never created. The sidebar counts for **Investor Requests** and **Payout Batches** query those tables on every admin page, so every page answered 500. Each later deploy then failed again with "table already exists".
+
+### Technical Notes
+
+- The unique index now has a short explicit name (`agreement_acceptances_template_account_unique`). The migration skips any table that already exists and only adds the missing index, so the next deploy's `deploy:migrate` finishes it on a half-migrated database and then runs `2026_10_08_100300` / `100400`. No data is changed.
+- New `MigrationIdentifierLengthTest` fails when any table or index name is over 64 characters. The test suite runs on SQLite, which has no such limit, so this class of error used to show up only in production.
+- The same test found two older index names over the limit: `broadcast_recipients` (68) in `2026_08_28_000300` and `investment_documents` (71) in `2026_09_07_100200`. Both now have explicit short names, so a fresh MySQL install works. On production those migrations failed the same way earlier and were finished by `hasTable` guards (CHANGELOG: "Duplicate column name 'opted_out_at'"), so production has the tables but **not** these two indexes: the duplicate guard on broadcast recipients and a lookup index on documents. That is not urgent and is not fixed here.
+## [2.64.0] - 2026-10-08
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **"Open investor portal" button on an investor's or channel partner's page.** One click opens the investor portal in a **new tab**, already signed in as that person, so staff can see exactly what the investor sees without asking for a password. It is look-only: staff can see everything but change nothing (they cannot accept an agreement, add a payment account, send or cancel a request, or change a password), the visit is **not** counted as the person signing in, and the audit log shows the staff member as the one who opened it. It works even before the person has set a password. Needs **Investments: Manage Investor Portal Access** (Super Admin by default) and the portal switched on. A yellow "Staff preview" bar at the top of the portal reminds staff whose portal they are in. If the person has no portal account yet, one is created (no SMS is sent; it shows as "Invited" until a real invite is sent). A person whose portal access is disabled, or whose phone number has a portal application waiting for review, cannot be opened.
+
+**Technical Notes:**
+- Staff preview: the dashboard and the portal are on different hosts, so `Admin\InvestorPortalOpenController` (`GET /admin/investor-portal/{investors|channel-partners}/{id}/open`, `auth`, `investments.portal_manage`, same company check as the document downloads) issues a one-time token through `InvestorPortalStaffEntryService` (60 seconds, only its hash is cached, works once, only on the issuing company's portal, re-checks that the staff member is still active and allowed) and redirects to `<portal host>/investor/staff-entry/{token}` (`InvestorPortalStaffEntryController`, throttled). That logs the account in on the `investor` guard without "remember me" and sets `InvestorPortalStaffPreview::SESSION_KEY` in the portal session only. `InvestorPortalAccount::canAccessPanel()` lets a staff preview in with no password set, never a disabled account. `AuditLogService` attributes what a preview records (`investor_portal.staff_entry_issued`, `investor_portal.staff_entered`, document downloads) to the staff user (`user_id`), not to the investor (`actor_*`). `InvestorPortalAccountService::ensureAccount()` is the account creation shared with `invite()`. The token lives in the cache, so the dashboard and portal must share a cache store (they do: same app).
+- Look-only rule for portal pages: anything that changes data calls `refuseInStaffPreview()` (trait `InvestorPortalPage`) and hides its button while `isStaffPreview()`. Done for `Profile::save`, `Agreements::accept`, `BankAccounts` add and `Requests` new / cancel; every new portal page that writes must do the same. No migration. 7 new lang keys (en + bn).
 ## [2.63.0] - 2026-10-08
 
 **Release type:** Minor Feature Update
