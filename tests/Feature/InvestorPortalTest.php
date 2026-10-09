@@ -310,6 +310,18 @@ class InvestorPortalTest extends TestCase
         $this->get('http://investor.pages.example.test/investor/statement/print')->assertOk()->assertSee($investorA->name);
     }
 
+    public function test_the_user_menu_name_links_to_the_profile_page(): void
+    {
+        $company = $this->company('menu.example.test');
+        [$project, $investorA] = $this->settledProject($company, confirm: true);
+        $account = $this->activeAccount($company, $investorA);
+        $this->actingAs($account, 'investor');
+
+        $this->get('http://investor.menu.example.test/investor/dashboard')
+            ->assertOk()
+            ->assertSee('http://investor.menu.example.test/investor/profile', false);
+    }
+
     public function test_another_investors_payout_report_and_documents_are_a_404(): void
     {
         $company = $this->company('scope.example.test');

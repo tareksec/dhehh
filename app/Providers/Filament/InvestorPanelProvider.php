@@ -25,6 +25,7 @@ use App\Http\Middleware\RestrictPortalHosts;
 use App\Models\Company;
 use App\Services\CompanyContext;
 use App\Services\CompanySettingsService;
+use Filament\Actions\Action;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -80,6 +81,10 @@ class InvestorPanelProvider extends PanelProvider
                 Profile::class,
             ])
             ->homeUrl(fn (): string => Dashboard::getUrl())
+            // The name at the top of the user menu opens the Profile page.
+            ->userMenuItems([
+                'profile' => fn (Action $action): Action => $action->url(fn (): string => Profile::getUrl()),
+            ])
             ->routes(function (): void {
                 Route::get('invite/{token}', AcceptInvite::class)->name('invite');
             })
