@@ -2,6 +2,31 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-09 - Lead CRM sales agent: 5 opt-in intelligence upgrades (proactive mode, objection handling, multi-product cart, cross-sell, personalization)
+
+Owner request, across several turns: make the CRM sales agent behave more like an intelligent human sales agent rather than a generic chatbot. I proposed a list of areas to work on; the owner asked for each one in turn ("do the next task on your list"): proactive mode, objection handling, multi-product cart, cross-sell, personalization. All five were implemented, then lost when this session's container was recycled before they were committed (per CLAUDE.md, nothing is committed without explicit approval, and the uncommitted working tree does not survive a container restart). The owner asked to redo them, and the branch was restarted from the then-current `main` (the branch's own earlier PR #7 was closed, not merged, and `main` had advanced ~50 releases past the branch's old base — see Technical Notes).
+
+What changed — each is a per-company toggle in **Integrations → Auto Messaging**, stored via `AiSettingsService`, off by default so no existing company's agent behavior changes until an admin opts in:
+
+1. **Proactive follow-up questions** (`proactive_mode_enabled`). After fully answering, the agent may also ask one natural next-step question (variant, quantity, delivery area, purchase timeframe) in the same message, to help move the sale forward instead of stopping cold at a bare answer.
+2. **Mild price-objection handling** (`objection_handling_enabled`). "Can you reduce it a bit?" no longer always escalates to a human — the agent may acknowledge it and restate real value from grounded catalog facts, but can never invent, offer or apply a discount. Refunds, complaints and explicit human requests still always hand off, on or off.
+3. **Multi-product cart**. `create_order_link`'s tool schema changed from a single flat item to an `items` array; calling it again with a new item merges into the same still-open `ChatOrderLink` (same product+variant updates its quantity, a new one appends) instead of overwriting the cart. No new toggle — this is a straight capability fix, not a behavior change a company would want to opt out of.
+4. **Grounded cross-sell / upsell** (`cross_sell_enabled`). A new `lookup_related_products` tool — reusing the exact same-category/active/in-stock signal `ProductShowController` already uses for the storefront's own "related products" — is only added to the tools array sent to the model when this is on, so the model cannot call a tool it was never offered.
+5. **Personalization by purchase history** (`personalization_enabled`). `SalesQualificationService::context()` can optionally eager-load past order line items and surface `is_returning_customer`/`lead_source`, so the agent may greet a returning customer naturally — never inventing a specific past-order detail the customer hasn't themselves mentioned.
+
+Important files: `app/Services/Crm/AiSettingsService.php` (DEFAULTS + save()), `app/Filament/Pages/Integrations.php` (fill-state/fields/save wiring for the 4 new toggles), `app/Services/Crm/AiReplyService.php` (keyword split, conditional system-prompt rules, `toolDefinitions($settings)`, `lookupRelatedProducts()`, rewritten `createOrderLink()`/new `mergeCartItems()`), `app/Services/Crm/SalesReplyRenderer.php` (`$allowFollowUpPrompt` param, `related` reply-key type), `app/Services/Crm/SalesQualificationService.php` (`$includePersonalization` param), `tests/Feature/CrmSalesAutomationTest.php` (12 new tests).
+
+Decisions made without asking, for the owner to confirm or change:
+- Multi-product cart has no on/off toggle — treated as a bug fix (the storefront checkout already looped over multiple cart items; only the AI side was artificially limited to one), not a behavior change worth gating.
+- Cross-sell suggests at most one related product per reply, from the same category only, same as the storefront's own related-products widget — no new "related products" concept invented.
+
+Verification:
+- `php artisan test --filter=CrmSalesAutomationTest`: 45 passed (33 pre-existing + 12 new), 0 failed.
+- Full `php artisan test` (plain, no `--env`): 1870 passed, 146 failed, 2 skipped. The 146 failures are pre-existing and unrelated (environment gap: `Vite manifest not found` — no frontend build in this container). Confirmed zero regressions: stashed all changes, re-ran the full suite on a clean `main` (146 failed, 1858 passed — the same 12-test gap), diffed the sorted list of failing test names between both runs — byte-for-byte identical.
+- This container was freshly provisioned and had neither `vendor/` nor PHP 8.4 (the project's composer.lock now requires `^8.4`, the container only shipped 8.3); installed PHP 8.4 + required extensions (gd, imagick, sqlite3, intl, bcmath, zip) via the Sury PHP APT repo for this session, then `composer install`. This is a one-off session setup, not a code change.
+
+Commit status: not yet committed — awaiting the owner's explicit commit/push approval, same policy as every other change in this log.
+
 ## 2026-10-08 - Hotfix: admin panel 500 after the investor-portal deploy (MySQL 64-character index name)
 
 The owner reported "500 Server Error" on the live site after today's pushes.

@@ -86,6 +86,25 @@ class AiSettingsService
         'follow_up_delay_hours' => 4,
         'follow_up_template' => '',
         'follow_up_template_language' => 'bn',
+        // Off by default: the agent answers only what was asked, with no
+        // extra follow-up question. On: after a fully-answered question it
+        // may also pick one next-step clarification to move the sale along.
+        'proactive_mode_enabled' => false,
+        // Off by default: discount/bargaining language always hard-escalates
+        // (see AiReplyService::OBJECTION_KEYWORDS). On: a mild price
+        // objection is handed to the agent, which may restate value or ask a
+        // clarifying question, grounded only in real catalog facts/FAQs —
+        // it can never invent or apply a discount.
+        'objection_handling_enabled' => false,
+        // Off by default: lookup_related_products is not even offered to
+        // the model as a tool. On: the agent may suggest one same-category
+        // related product, grounded in a real catalog lookup.
+        'cross_sell_enabled' => false,
+        // Off by default: SalesQualificationService::context() keeps its
+        // existing shape. On: it also surfaces a returning-customer signal
+        // and past order line items so the agent can personalize tone
+        // ("welcome back") without inventing purchase history.
+        'personalization_enabled' => false,
     ];
 
     public function all(Company $company, string $tool): array
@@ -150,6 +169,10 @@ class AiSettingsService
             'follow_up_delay_hours' => max(1, min(168, (int) ($data['follow_up_delay_hours'] ?? $existing['follow_up_delay_hours'] ?? 4))),
             'follow_up_template' => trim((string) ($data['follow_up_template'] ?? $existing['follow_up_template'] ?? '')),
             'follow_up_template_language' => trim((string) ($data['follow_up_template_language'] ?? $existing['follow_up_template_language'] ?? 'bn')),
+            'proactive_mode_enabled' => (bool) ($data['proactive_mode_enabled'] ?? $existing['proactive_mode_enabled'] ?? false),
+            'objection_handling_enabled' => (bool) ($data['objection_handling_enabled'] ?? $existing['objection_handling_enabled'] ?? false),
+            'cross_sell_enabled' => (bool) ($data['cross_sell_enabled'] ?? $existing['cross_sell_enabled'] ?? false),
+            'personalization_enabled' => (bool) ($data['personalization_enabled'] ?? $existing['personalization_enabled'] ?? false),
             'api_key' => filled($data['api_key'] ?? null)
                 ? Crypt::encryptString(trim((string) $data['api_key']))
                 : ($existing['api_key'] ?? null), // keep existing when left blank
