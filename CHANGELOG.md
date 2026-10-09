@@ -11,6 +11,10 @@ All notable production changes to Business Dashboard are documented here.
 - **WhatsApp Web Login (CRM → WhatsApp Web Login).** Link the WhatsApp Business app to the ERP by scanning a QR code, the same way as WhatsApp Web. Every 1:1 chat the phone shares — the full history and every new message, sent or received — is saved into the CRM Inbox with photos, voice notes, videos and documents, and every WhatsApp contact is saved as a customer record linked to the matching customer or lead by phone. The page shows the connection status, the QR code, history sync progress and how many chats, messages and contacts were saved. In English and Bangla.
 - **Chats and customer info survive a ban.** The archive belongs to the ERP: logging out, deleting the channel or WhatsApp banning the number never deletes saved chats, messages or contacts. A "delete for everyone" on WhatsApp keeps the original message in the ERP and marks it **Deleted on WhatsApp** in the Inbox.
 
+### Fixed
+
+- **Connect WhatsApp App (Coexistence) could fail at the last step.** The page only accepted Meta's popup reply from `www.facebook.com`, so when Facebook opened as `web.facebook.com` (common in Bangladesh) the WhatsApp Business Account ID and phone number ID were lost and the connection failed with an unclear error. Any Facebook address is now accepted, the page waits a few seconds for Meta's reply, and if the IDs still do not arrive it says so clearly instead of trying to connect without them.
+
 ### Changed
 
 - WhatsApp Web chats are read-only in the ERP Inbox — reply from the phone app (internal notes still work). The AI auto-reply, read receipts and SMS fallback never run for them.

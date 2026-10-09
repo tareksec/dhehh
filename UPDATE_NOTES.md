@@ -2,6 +2,23 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-09 - Fix Connect WhatsApp App (Coexistence) last step
+
+Reason — owner said Coexistence could not be connected from the ERP, so they stopped going that way. I found two code problems and the owner said "ওকে ঠিক করে দেও" (OK, fix them).
+
+What changed:
+- `connect-whats-app-business-app.blade.php`: the popup listener accepted only `https://www.facebook.com`; Meta can answer from `web.facebook.com` (common in Bangladesh) or `m.facebook.com`, so the WABA ID and phone number ID were dropped. It now accepts any https `facebook.com` host. The FB.login callback also waits up to 5 seconds for the popup's FINISH message, which can arrive after the callback.
+- `ConnectWhatsAppBusinessApp::completeEmbeddedSignup()`: stops with a clear, translated message when the code, WABA ID or phone number ID is empty, before exchanging the code or saving a channel (it used to try anyway and fail with an unclear Meta error).
+- 2 lang keys in en/bn ("Could not complete the connection" was previously untranslated, plus the new explanation).
+
+Not verified: a real Meta popup cannot be run from the cloud session; the owner needs to try the connection again. If it still fails, the owner should report which step fails (no Connect button = no Configuration ID; popup error; or ERP error text).
+
+Needs Bangla review: the 2 new keys.
+
+Tests: new `test_missing_waba_or_phone_number_id_stops_before_exchanging_the_code` in `EmbeddedSignupTest`; `EmbeddedSignupTest` + `TranslationParityTest` pass. Full `php artisan test` (plain, no `--env`): 1684 passed, 2 skipped.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`, then merged with main and pushed to `main`, on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-09). The whole branch (WhatsApp Web archive, rules, this fix) goes to main.
+
 ## 2026-10-06 - WhatsApp terms quoted word for word in the rules file
 
 Reason — owner asked "সব টার্মস গুলো যুক্ত করেছ?" (did you add all the terms?). I said only a summary of the relevant parts was there, two pages had not been read fully, and offered to quote the relevant clauses word for word. Owner: "১ নম্বরটা কর, তারপর কমিট এবং পুশ কর" (do option 1, then commit and push).

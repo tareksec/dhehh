@@ -808,5 +808,7 @@
     "Logged out": "Logged out",
     "Banned by WhatsApp": "Banned by WhatsApp",
     "Opened on another bridge": "Opened on another bridge",
-    "Bridge error": "Bridge error"
+    "Bridge error": "Bridge error",
+    "Could not complete the connection": "Could not complete the connection",
+    "Meta did not send the WhatsApp Business Account ID and phone number ID back to this page. Finish every step in the Meta popup, then try again. If it keeps happening, allow pop-ups for this site and check that the ERP domain is in the Meta app's App Domains.": "Meta did not send the WhatsApp Business Account ID and phone number ID back to this page. Finish every step in the Meta popup, then try again. If it keeps happening, allow pop-ups for this site and check that the ERP domain is in the Meta app's App Domains."
 }
