@@ -27,6 +27,10 @@ class CycleElectionService
             throw new RuntimeException('This payout already has a recorded election.');
         }
 
+        if ($election !== 'withdraw' && ($batch = app(PayoutCompletionService::class)->liveBatchItem($payout)?->batch)) {
+            throw new RuntimeException(__('This payout is in :batch. Take it out of the batch before recording a reinvest.', ['batch' => $batch->label()]));
+        }
+
         $totalPayout = (float) $payout->total_payout;
 
         if ($election === 'reinvest') {

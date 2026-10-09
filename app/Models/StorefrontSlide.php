@@ -3,23 +3,28 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\NotifiesWebsiteOfStorefrontChanges;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
 class StorefrontSlide extends Model
 {
     use BelongsToCompany;
+    use NotifiesWebsiteOfStorefrontChanges;
 
     protected $fillable = [
         'company_id',
+        'storefront_setting_id',
         'theme',
         'template',
         'image',
         'image_mobile',
         'fit_to_frame',
+        'eyebrow',
         'heading',
         'subheading',
         'cta_label',
@@ -45,9 +50,27 @@ class StorefrontSlide extends Model
         static::deleted(fn (StorefrontSlide $slide) => Cache::forget("storefront-home:{$slide->company_id}"));
     }
 
-    public function product(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class)->withoutGlobalScopes();
+    }
+
+    /** The site this slide is limited to; null means it shows on every site of the company. */
+    public function storefrontSetting(): BelongsTo
+    {
+        return $this->belongsTo(StorefrontSetting::class)->withoutGlobalScopes();
+    }
+
+    /** Slides shown on $site: those for all sites plus those limited to this one. */
+    public function scopeForSite(Builder $query, ?StorefrontSetting $site): Builder
+    {
+        return $query->where(function (Builder $q) use ($site): void {
+            $q->whereNull($this->qualifyColumn('storefront_setting_id'));
+
+            if ($site?->getKey()) {
+                $q->orWhere($this->qualifyColumn('storefront_setting_id'), $site->getKey());
+            }
+        });
     }
 
     public function scopeActiveNow(Builder $query): Builder
@@ -74,12 +97,16 @@ class StorefrontSlide extends Model
      * saved before this tagging existed have a null theme/template and stay
      * a fallback for every theme until re-tagged.
      */
-    public static function forCompanyTheme(int $companyId, ?string $theme, ?string $template): Collection
+    public static function forCompanyTheme(int $companyId, ?string $theme, ?string $template, ?StorefrontSetting $site = null): Collection
     {
         $theme = StorefrontThemeRegistry::normalizeTheme($theme);
         $template = StorefrontThemeRegistry::normalizeTemplate($theme, $template);
 
-        $all = static::forCompany($companyId);
+        // The cached list holds every active slide of the company; the site's own are picked here.
+        $all = static::forCompany($companyId)->filter(
+            fn (StorefrontSlide $slide): bool => $slide->storefront_setting_id === null
+                || ($site?->getKey() && (int) $slide->storefront_setting_id === (int) $site->getKey()),
+        );
 
         $matched = $all->where('theme', $theme)->where('template', $template)->values();
 

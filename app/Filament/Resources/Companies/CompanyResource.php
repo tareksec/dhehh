@@ -82,32 +82,6 @@ class CompanyResource extends Resource
                     Toggle::make('is_active')
                         ->label('Active')
                         ->default(true),
-                    Toggle::make('reseller_module_enabled')
-                        ->label('Reseller module enabled')
-                        ->helperText('Lets this company approve resellers, who then get their own curated mini-storefront (a URL under this company\'s domain). Super Admin only.')
-                        ->default(false)
-                        ->visible(fn (): bool => Auth::user()?->isSuperAdmin() ?? false)
-                        ->dehydrated(fn (): bool => Auth::user()?->isSuperAdmin() ?? false),
-                    Toggle::make('reseller_subdomains_enabled')
-                        ->label('Reseller subdomains enabled')
-                        ->helperText('Lets every approved reseller choose "name.<this company\'s domain>" for their store. Needs a wildcard DNS record (*.domain) and a wildcard SSL certificate on the server first -- see docs/deployment.md. Super Admin only.')
-                        ->default(false)
-                        ->visible(fn (): bool => Auth::user()?->isSuperAdmin() ?? false)
-                        ->dehydrated(fn (): bool => Auth::user()?->isSuperAdmin() ?? false),
-                    Toggle::make('reseller_custom_domains_enabled')
-                        ->label('Reseller custom domains enabled')
-                        ->helperText('Lets every approved reseller connect their own domain (e.g. myshop.com) to their store. The server must issue SSL certificates on demand first (a Caddy proxy using /internal/tls-ask) -- see docs/deployment.md. Super Admin only.')
-                        ->default(false)
-                        ->visible(fn (): bool => Auth::user()?->isSuperAdmin() ?? false)
-                        ->dehydrated(fn (): bool => Auth::user()?->isSuperAdmin() ?? false),
-                    TextInput::make('reseller_portal_domain')
-                        ->label('Reseller portal domain')
-                        ->helperText('Leave blank to use "reseller." + this company\'s own domain. Set this only for a fully separate domain (e.g. a dedicated reseller-only website). Super Admin only.')
-                        ->maxLength(255)
-                        ->unique(ignoreRecord: true)
-                        ->dehydrateStateUsing(fn (?string $state): ?string => Company::normalizeDomain($state))
-                        ->visible(fn (): bool => Auth::user()?->isSuperAdmin() ?? false)
-                        ->dehydrated(fn (): bool => Auth::user()?->isSuperAdmin() ?? false),
                 ])
                 ->columns(2),
 

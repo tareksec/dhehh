@@ -25,6 +25,7 @@ class StorefrontCheckoutPolicyService
         StorefrontSetting $setting,
         array $data,
         float $cartTotal,
+        ?string $clientIp = null,
     ): array {
         $mode = (string) ($setting->checkout_policy_mode ?: StorefrontSetting::CHECKOUT_POLICY_OFF);
 
@@ -38,7 +39,10 @@ class StorefrontCheckoutPolicyService
 
         $localPhone = $this->normalizeLocalPhone((string) ($data['phone'] ?? ''));
         $email = $this->normalizeEmail($data['email'] ?? null);
-        $ip = $this->normalizeIp($request->ip());
+        // Behind the headless Next.js site every request reaches the ERP from
+        // that server, so it forwards the visitor's own IP ($clientIp); the
+        // Blade storefront sees the visitor directly.
+        $ip = $this->normalizeIp($clientIp ?? $request->ip());
         $violations = [];
 
         if ($localPhone !== null) {

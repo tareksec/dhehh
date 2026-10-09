@@ -119,7 +119,7 @@
                             <tr class="border-t border-gray-100 dark:border-white/10">
                                 <td class="py-1">{{ $order->order_number }}</td>
                                 <td class="py-1">{{ $order->order_date?->format('d M Y') }}</td>
-                                <td class="py-1 text-right">{{ MoneyFormatter::currency($order->total_amount, $currency) }}</td>
+                                <td class="py-1 text-right">{{ MoneyFormatter::currency($order->buyerTotal(), $currency) }}</td>
                                 <td class="py-1">{{ Order::WORKFLOW_STAGES[$order->workflowStage()] ?? Order::STATUSES[$order->status] ?? $order->status }}</td>
                             </tr>
                         @endforeach

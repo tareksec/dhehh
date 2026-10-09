@@ -33,6 +33,7 @@
     $footerPages = \Illuminate\Support\Facades\Schema::hasTable('storefront_pages')
         ? \App\Models\StorefrontPage::query()
             ->where('company_id', $company->getKey())
+            ->forSite($setting)
             ->published()
             ->orderBy('sort_order')
             ->orderBy('title')
@@ -50,10 +51,12 @@
     // Owner's answer (13_RESELLER_PORTAL_PLAN.md §2.1 Q4): applications now
     // go through the reseller portal, not the old in-storefront /reseller
     // page. Preview has no portal host to link to, so it keeps the old page.
+    $resellerJoinUrl = isset($previewSlug) ? null : $company->resellerJoinUrl();
+    $resellerUrl = $resellerJoinUrl
+        ?: \App\Support\StorefrontUrl::route('reseller.show', [], $previewSlug ?? null);
+    // Someone who already applied goes to the portal (their status), not the guide.
     $resellerPortalHost = isset($previewSlug) ? null : $company->resellerPortalHost();
-    $resellerUrl = $resellerPortalHost
-        ? request()->getScheme().'://'.$resellerPortalHost.'/portal/register'
-        : \App\Support\StorefrontUrl::route('reseller.show', [], $previewSlug ?? null);
+    $resellerStatusUrl = $resellerPortalHost ? request()->getScheme().'://'.$resellerPortalHost.'/portal' : $resellerUrl;
     $pageUrl = fn (string $slug) => \App\Support\StorefrontUrl::route('pages.show', [$slug], $previewSlug ?? null);
 
     $accountsEnabled = (bool) ($setting->customer_accounts_enabled ?? true);
@@ -105,10 +108,12 @@
         : request()->routeIs('storefront.track.*', 'storefront.preview.track.*');
 
     // Admin-managed navigation menus (Storefront Settings → Navigation Menus).
-    $menuCategoryIds = collect([$setting->header_menu, $setting->footer_menu])->flatten(1)->filter()->where('type', 'category')->pluck('category_id')->filter()->unique();
-    $menuPageSlugs = collect([$setting->header_menu, $setting->footer_menu])->flatten(1)->filter()->where('type', 'page')->pluck('page_id')->filter()->unique();
+    // Footer Builder "Custom links" columns hold menu-style links too.
+    $customFooterLinks = collect($setting->footerBlocks())->where('type', 'custom_links')->flatMap(fn ($block) => $block['data']['links'] ?? [])->all();
+    $menuCategoryIds = collect([$setting->header_menu, $setting->footer_menu, $customFooterLinks])->flatten(1)->filter()->where('type', 'category')->pluck('category_id')->filter()->unique();
+    $menuPageSlugs = collect([$setting->header_menu, $setting->footer_menu, $customFooterLinks])->flatten(1)->filter()->where('type', 'page')->pluck('page_id')->filter()->unique();
     $menuCategoryData = $menuCategoryIds->isEmpty() ? collect() : \App\Models\Category::withoutGlobalScopes()->where('company_id', $company->getKey())->whereIn('id', $menuCategoryIds)->where('is_active', true)->get(['id', 'slug', 'icon'])->keyBy('id');
-    $menuPageSlugs = $menuPageSlugs->isEmpty() ? collect() : \App\Models\StorefrontPage::withoutGlobalScopes()->where('company_id', $company->getKey())->whereIn('id', $menuPageSlugs)->where('is_published', true)->pluck('slug', 'id');
+    $menuPageSlugs = $menuPageSlugs->isEmpty() ? collect() : \App\Models\StorefrontPage::withoutGlobalScopes()->where('company_id', $company->getKey())->forSite($setting)->whereIn('id', $menuPageSlugs)->where('is_published', true)->pluck('slug', 'id');
     $resolveMenu = function (?array $items) use ($productsUrl, $trackUrl, $accountOrdersUrl, $resellerUrl, $offersUrl, $previewSlug, $menuCategoryData, $menuPageSlugs, $pageUrl) {
         return collect($items ?? [])->map(function ($item) use ($productsUrl, $trackUrl, $accountOrdersUrl, $resellerUrl, $offersUrl, $previewSlug, $menuCategoryData, $menuPageSlugs, $pageUrl) {
             $label = trim((string) ($item['label'] ?? ''));

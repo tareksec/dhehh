@@ -26,6 +26,11 @@
     ];
 @endphp
 
+@php
+    $report = $this->report();
+    $storeData = $this->showsStoreData();
+@endphp
+
 <x-filament-panels::page>
     <div class="space-y-6">
         {{-- Search --}}
@@ -41,7 +46,9 @@
             </form>
 
             <p class="mx-auto mt-3 max-w-2xl text-center text-xs text-gray-500 dark:text-gray-400">
-                {{ __('Checks the delivery history of this number on your connected couriers (Pathao, Steadfast, RedX).') }}
+                {{ $storeData
+                    ? __('Checks the delivery history of this number on your connected couriers (Pathao, Steadfast, RedX).')
+                    : __('Checks the delivery history of this number on the store\'s couriers.') }}
             </p>
         </x-filament::section>
 
@@ -50,13 +57,14 @@
             {{ __('Checking couriers…') }}
         </div>
 
-        @if ($result !== null)
+        @if ($report)
             @php
-                $summary = $this->summary();
-                $verdict = $this->verdict();
+                $summary = $report->summary();
+                $verdict = $report->verdict();
+                $threshold = $report->threshold();
                 $tone = $tones[$verdict['key']];
-                $history = $this->storeHistory();
-                $blacklist = $this->blacklistEntry();
+                $history = $storeData ? $report->storeHistory() : null;
+                $blacklist = $storeData ? $report->blacklistEntry() : null;
             @endphp
 
             <div wire:loading.remove wire:target="check,refreshCheck" class="space-y-6">
@@ -75,9 +83,11 @@
                         </p>
                     </div>
 
-                    <x-filament::button color="gray" size="sm" icon="heroicon-o-arrow-path" wire:click="refreshCheck">
-                        {{ __('Refresh live data') }}
-                    </x-filament::button>
+                    @if ($this->canRefresh())
+                        <x-filament::button color="gray" size="sm" icon="heroicon-o-arrow-path" wire:click="refreshCheck">
+                            {{ __('Refresh live data') }}
+                        </x-filament::button>
+                    @endif
                 </div>
 
                 @if ($blacklist)
@@ -149,7 +159,7 @@
                     </h3>
 
                     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        @foreach ($this->courierCards() as $driver => $card)
+                        @foreach ($report->courierCards(onlyConfigured: ! $storeData) as $driver => $card)
                             <div class="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
                                 <div class="mb-3 flex items-center justify-between gap-2">
                                     <p class="font-semibold text-gray-950 dark:text-white">{{ $card['label'] }}</p>
@@ -161,8 +171,8 @@
                                     @elseif ($card['ratio'] === null)
                                         <x-filament::badge color="gray">{{ __('No history') }}</x-filament::badge>
                                     @else
-                                        <x-filament::badge :color="$card['ratio'] < $this->threshold() ? 'danger' : 'success'">
-                                            {{ $card['ratio'] < $this->threshold() ? __('Risky') : __('Trusted') }}
+                                        <x-filament::badge :color="$card['ratio'] < $threshold ? 'danger' : 'success'">
+                                            {{ $card['ratio'] < $threshold ? __('Risky') : __('Trusted') }}
                                         </x-filament::badge>
                                     @endif
                                 </div>
@@ -189,7 +199,7 @@
                                     </div>
                                     <div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-white/10">
                                         <div
-                                            class="h-full rounded-full {{ $card['ratio'] === null ? 'bg-gray-400' : ($card['ratio'] < $this->threshold() ? 'bg-danger-500' : 'bg-success-500') }}"
+                                            class="h-full rounded-full {{ $card['ratio'] === null ? 'bg-gray-400' : ($card['ratio'] < $threshold ? 'bg-danger-500' : 'bg-success-500') }}"
                                             style="width: {{ min(100, max(0, (float) ($card['ratio'] ?? 0))) }}%"
                                         ></div>
                                     </div>
@@ -206,7 +216,9 @@
                                     <a href="{{ \App\Filament\Resources\CourierProviders\CourierProviderResource::getUrl() }}" class="mt-2 inline-block text-sm font-medium text-primary-600 underline dark:text-primary-400">{{ __('Open Providers') }}</a>
                                 @else
                                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                                        {{ __('The courier did not answer. Check its login on Courier → Providers, then refresh.') }}
+                                        {{ $storeData
+                                            ? __('The courier did not answer. Check its login on Courier → Providers, then refresh.')
+                                            : __('The courier did not answer. Try again later.') }}
                                     </p>
                                 @endif
                             </div>
@@ -215,6 +227,7 @@
                 </div>
 
                 {{-- This store's own history --}}
+                @if ($storeData)
                 <x-filament::section icon="heroicon-o-building-storefront" :heading="__('Your store history')">
                     @if ($history)
                         <p class="mb-3 text-sm">
@@ -240,6 +253,7 @@
                         <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('This number has not ordered from your store yet.') }}</p>
                     @endif
                 </x-filament::section>
+                @endif
             </div>
         @endif
     </div>

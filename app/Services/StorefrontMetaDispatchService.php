@@ -68,9 +68,9 @@ class StorefrontMetaDispatchService
     public function dispatchForTransition(OrderStatusTransition $transition): void
     {
         $order = Order::withoutGlobalScopes()
-            ->with('company.storefrontSetting')
+            ->with('storefrontSetting', 'company.storefrontSetting')
             ->find($transition->order_id);
-        $setting = $order?->company?->storefrontSetting;
+        $setting = $order?->siteSetting();
 
         if (! $order || ! $setting || $order->source !== Order::SOURCE_STOREFRONT) {
             return;

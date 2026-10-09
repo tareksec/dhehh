@@ -8,10 +8,9 @@
         $slides = $slides ?? collect();
         $productsUrl = \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null);
         $categoryUrl = fn ($category) => \App\Support\StorefrontUrl::route('categories.show', [$category->slug], $previewSlug ?? null);
-        $resellerPortalHost = isset($previewSlug) ? null : $company->resellerPortalHost();
-        $resellerUrl = $resellerPortalHost
-            ? request()->getScheme().'://'.$resellerPortalHost.'/portal/register'
-            : \App\Support\StorefrontUrl::route('reseller.show', [], $previewSlug ?? null);
+        $resellerJoinUrl = isset($previewSlug) ? null : $company->resellerJoinUrl();
+        $resellerUrl = $resellerJoinUrl
+            ?: \App\Support\StorefrontUrl::route('reseller.show', [], $previewSlug ?? null);
         $whatsappDigits = preg_replace('/\D+/', '', (string) $setting->whatsapp_number);
         $quoteUrl = $whatsappDigits !== '' ? 'https://wa.me/'.$whatsappDigits : $productsUrl;
         // Campaign copy is owner-entered only (Storefront Settings →

@@ -31,6 +31,508 @@ All notable production changes to Business Dashboard are documented here.
 - Rules for WhatsApp Web channels, with the relevant clauses of WhatsApp's Terms of Service, Business App terms, Messaging Guidelines and Business Messaging Policy quoted word for word (checked 2026-10-06), are in `docs/whatsapp-web-rules.md` and referenced from `CLAUDE.md`.
 - New `WhatsAppWebArchiveTest` (12 tests) and bridge unit tests (`npm test` in `whatsapp-bridge/`, 10 tests).
 
+## [2.66.1] - 2026-10-09
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Investor portal: the profile in the top-right menu now opens the Profile page.** The name at the top of the user menu was plain text; it is now a link to the Profile page.
+
+**Technical Notes:**
+- `InvestorPanelProvider` sets a URL on the `profile` user-menu item. New test `test_the_user_menu_name_links_to_the_profile_page`.
+## [2.66.0] - 2026-10-09
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **One module's error no longer takes the whole app down** (owner request after the v2.63.0 outage). Errors are kept inside the part that failed:
+  - **Sidebar counts:** if the number next to a menu item (Investor Requests, Payout Batches, Investor Drafts, Reseller Payout Requests, Inbox) cannot be worked out, that count simply does not show. The menu and every page keep working.
+  - **Dashboard and page widgets:** a widget that fails shows a small "This section could not be loaded" card in its place. The rest of the dashboard or page works as normal. Shared parts drawn on every page (sidebar, company switcher, banners, toolbars) leave out only the part that failed.
+  - **A crashed page** in the admin panel or a portal shows "This page could not be opened. The other sections keep working" with **Go to the dashboard**, **Try again** and **Go back** buttons, instead of the bare "500 Server Error". 403/404 pages and sign-in redirects are unchanged.
+  - **Missing database table** (e.g. an update that did not finish): the pages of that one section show "This section is temporarily unavailable", and its tabs and buttons on other pages are hidden. Everything else keeps working. The section turns back on by itself as soon as the update finishes.
+  - Every error caught this way is **reported to Super Admins** (bell notification titled "Module error …" and **Settings → Deploy Error Logs**), at most once an hour per error, so nothing is hidden silently.
+- **New automatic check (GitHub Actions "MySQL migrations")** runs every database update against MySQL 8.4, the production version, on every branch push and pull request. A database update that would fail on the live server now shows up as a red check on its branch, before it reaches `main`.
+
+### Technical Notes
+
+- `App\Support\ModuleGuard::run($section, $callback, $fallback)` catches, logs and reports through `DeploymentErrorReporter` (source `module:<section>`, throttled 1/hour per section and error via `Cache::add`). `ModuleGuard::renderView()` renders a nested view and, on failure, restores the view factory's component/section/stack state that Laravel flushes, so the page around it survives. Isolation is on everywhere except `local` and `testing` (where errors still throw); override with `ISOLATE_MODULE_ERRORS` (`config('app.isolate_module_errors')`).
+- Badges: trait `App\Filament\Concerns\HasGuardedNavigationBadge` (write the count in `navigationBadge()`). Widgets: trait `GuardsWidgetRendering` (all 19 widgets; the widget view is rendered inside the guard in `filament.widgets.guarded`). Render hooks: `App\Support\GuardedViewManager` replaces Filament's `ViewManager` (`AppServiceProvider::register()`, `extend()`), so every render hook of every panel is guarded. Its `renderHook()` copies Filament's; re-check it on a Filament upgrade.
+- Crashed pages: `App\Support\PanelErrorPages` (first path segment `admin` / `investor` / `portal`; Livewire updates use the Referer) renders the self-contained `panel-errors.module` view from `bootstrap/app.php`'s exception renderer, only for real 500s.
+- Missing tables: `App\Support\ModuleHealth` (scoped; table list cached 10 minutes and dropped on `MigrationsEnded`). Admin panel middleware `TurnOffPagesWithMissingTables` answers a resource page whose model table is missing with a 503 page. `Gate::before` denies every ability on such a model (models in `User::MODEL_MODULES`). Off in `local` / `testing`, like `ModuleGuard`.
+- New `ModuleGuardTest` (12 tests). It enforces that every navigation badge and every widget in `app/` goes through the guard, and it reproduces the 2026-10-08 state (dropped `investor_requests` table). Without the guard that state answers 500; with it, `/admin` opens. 10 new lang keys (en + bn).
+- New workflow `.github/workflows/mysql-migrations.yml` (MySQL 8.4 service, `migrate --force` from empty, then checks nothing is pending). Checked locally against MySQL 8.0: all 219 migrations run; the unfixed v2.63.0 agreement migration fails with error 1059 (exit 1), the same error as production; the fixed one also finishes a database left half-migrated by it.
+## [2.65.0] - 2026-10-09
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Lead CRM sales agent: 5 opt-in intelligence upgrades (proactive mode, objection handling, multi-product cart, cross-sell, personalization).** Each is a per-company toggle in **Integrations → Auto Messaging**, off by default, so no existing company's agent behavior changes until an admin turns one on.
+  - **Proactive follow-up questions.** After fully answering, the agent may also ask one natural next-step question (size/colour, quantity, delivery area or purchase timeframe) to help move the sale forward, instead of stopping at a bare answer.
+  - **Mild price-objection handling.** A "can you reduce it a bit?" message no longer always hands off to a human. The agent may acknowledge it and restate real value from grounded facts — it can never invent, offer or apply a discount. Refunds, complaints and explicit human requests still always hand off.
+  - **Multi-product cart.** The customer can add more than one product to the same checkout link across the conversation ("I want 2 shirts" ... later "add a lamp too"), instead of each request for create_order_link replacing the previous one.
+  - **Grounded cross-sell / upsell.** The agent may suggest one real, same-category related product alongside its answer — never invented, never offered on every message.
+  - **Personalization by purchase history.** The agent can greet a returning customer and acknowledge past orders instead of treating every conversation as a first-time visitor.
+
+### Technical Notes
+
+- `AiSettingsService::DEFAULTS` gains `proactive_mode_enabled`, `objection_handling_enabled`, `cross_sell_enabled`, `personalization_enabled` (all `false`), wired through `Integrations.php`'s existing per-tool fill-state/fields/save plumbing.
+- `AiReplyService::systemPrompt()` builds each rule as a ternary on its setting, defaulting to the exact prior rule text when off so the default prompt is byte-for-byte unchanged; two purely additive rules (cross-sell, personalization) are empty strings when off.
+- `AiReplyService::HANDOFF_KEYWORDS` split: refund/complaint/human-request keywords always hard-escalate; a new `OBJECTION_KEYWORDS` (discount/bargaining) escalates too unless `objection_handling_enabled`.
+- `AiReplyService::toolDefinitions()` now takes `$settings` — `lookup_related_products` is only appended to the tools array (not just discouraged by prompt text) when `cross_sell_enabled`, so the model cannot call a tool that was never offered.
+- `create_order_link`'s schema changed from flat `product_id`/`variant_id`/`quantity` to an `items` array; `AiReplyService::createOrderLink()` merges newly-requested items into the conversation's existing open `ChatOrderLink` (same product+variant updates its quantity, otherwise appends a line) instead of always creating/overwriting a single-item link. The storefront checkout (`ChatOrderController`) already looped over `prefill.items`, so no checkout-side change was needed.
+- `lookup_related_products` reuses the exact same-category/active/in-stock signal `ProductShowController` already uses for the storefront's own "related products", rather than inventing a new one.
+- `SalesReplyRenderer::render()` gains an `$allowFollowUpPrompt` parameter (default `false`): off, a `prompt_key` only renders when it's the only thing being said (unchanged); on, it can be appended after a verified answer. Also gains a `related` reply-key type.
+- `SalesQualificationService::context()` gains an `$includePersonalization` parameter (default `false`): off, `recent_orders` keeps its exact original `order_number`/`status`-only shape; on, it eager-loads each order's product names and adds `is_returning_customer`/`lead_source`.
+
+## [2.64.1] - 2026-10-08
+
+**Release type:** Hotfix Update
+
+### Fixed
+
+- **Admin panel showing "500 Server Error" after the v2.63.0 deploy.** On the live MySQL database the migration `2026_10_08_100200_create_agreement_tables` failed. The unique index on `agreement_acceptances` got an automatic name 68 characters long, and MySQL allows at most 64. The deploy's migration stopped halfway: `agreement_templates` and `agreement_acceptances` were created, but the migration was not recorded, and the later `investor_requests` and `payout_batches` tables were never created. The sidebar counts for **Investor Requests** and **Payout Batches** query those tables on every admin page, so every page answered 500. Each later deploy then failed again with "table already exists".
+
+### Technical Notes
+
+- The unique index now has a short explicit name (`agreement_acceptances_template_account_unique`). The migration skips any table that already exists and only adds the missing index, so the next deploy's `deploy:migrate` finishes it on a half-migrated database and then runs `2026_10_08_100300` / `100400`. No data is changed.
+- New `MigrationIdentifierLengthTest` fails when any table or index name is over 64 characters. The test suite runs on SQLite, which has no such limit, so this class of error used to show up only in production.
+- The same test found two older index names over the limit: `broadcast_recipients` (68) in `2026_08_28_000300` and `investment_documents` (71) in `2026_09_07_100200`. Both now have explicit short names, so a fresh MySQL install works. On production those migrations failed the same way earlier and were finished by `hasTable` guards (CHANGELOG: "Duplicate column name 'opted_out_at'"), so production has the tables but **not** these two indexes: the duplicate guard on broadcast recipients and a lookup index on documents. That is not urgent and is not fixed here.
+## [2.64.0] - 2026-10-08
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **"Open investor portal" button on an investor's or channel partner's page.** One click opens the investor portal in a **new tab**, already signed in as that person, so staff can see exactly what the investor sees without asking for a password. It is look-only: staff can see everything but change nothing (they cannot accept an agreement, add a payment account, send or cancel a request, or change a password), the visit is **not** counted as the person signing in, and the audit log shows the staff member as the one who opened it. It works even before the person has set a password. Needs **Investments: Manage Investor Portal Access** (Super Admin by default) and the portal switched on. A yellow "Staff preview" bar at the top of the portal reminds staff whose portal they are in. If the person has no portal account yet, one is created (no SMS is sent; it shows as "Invited" until a real invite is sent). A person whose portal access is disabled, or whose phone number has a portal application waiting for review, cannot be opened.
+
+**Technical Notes:**
+- Staff preview: the dashboard and the portal are on different hosts, so `Admin\InvestorPortalOpenController` (`GET /admin/investor-portal/{investors|channel-partners}/{id}/open`, `auth`, `investments.portal_manage`, same company check as the document downloads) issues a one-time token through `InvestorPortalStaffEntryService` (60 seconds, only its hash is cached, works once, only on the issuing company's portal, re-checks that the staff member is still active and allowed) and redirects to `<portal host>/investor/staff-entry/{token}` (`InvestorPortalStaffEntryController`, throttled). That logs the account in on the `investor` guard without "remember me" and sets `InvestorPortalStaffPreview::SESSION_KEY` in the portal session only. `InvestorPortalAccount::canAccessPanel()` lets a staff preview in with no password set, never a disabled account. `AuditLogService` attributes what a preview records (`investor_portal.staff_entry_issued`, `investor_portal.staff_entered`, document downloads) to the staff user (`user_id`), not to the investor (`actor_*`). `InvestorPortalAccountService::ensureAccount()` is the account creation shared with `invite()`. The token lives in the cache, so the dashboard and portal must share a cache store (they do: same app).
+- Look-only rule for portal pages: anything that changes data calls `refuseInStaffPreview()` (trait `InvestorPortalPage`) and hides its button while `isStaffPreview()`. Done for `Profile::save`, `Agreements::accept`, `BankAccounts` add and `Requests` new / cancel; every new portal page that writes must do the same. No migration. 7 new lang keys (en + bn).
+## [2.63.0] - 2026-10-08
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investor portal: sign-up through a channel partner's invite link.** On a channel partner's page, **Portal access → Turn on invite link** gives the partner a personal sign-up link (shown in their portal under **Invite investors**, with Copy and WhatsApp share). A new investor applies with it: their details, nominee, NID copy and photo, and a password. The application lands in **Investor Drafts** (source "Investor portal sign-up") with the uploaded documents; **Confirm** creates the investor and opens their portal account (the documents move to the investor), **Reject application** turns it down with a reason the applicant sees when they sign in. While waiting, the applicant sees only their application status. Money, the deposit and the signed deed are still handled at the office.
+- **Payment accounts.** Investors and partners add a bank account (with 9-digit BEFTN routing number) or bKash/Nagad/Rocket number in the portal; it waits for approval on their page's new **Payment accounts** tab (approve / reject with reason; staff can also add one, approved at once). The approved account becomes the one payments go to; an approved account is never edited — a change is a new account. Account numbers are stored encrypted.
+- **Portal agreements.** **Investments → Portal agreements**: staff write the investor agreement and the channel partner agreement, then publish them. A published version cannot be changed (a change is a new version, which everyone is asked to accept again). In the portal, **Agreements** shows the text and records "I have read and agree" with time, IP, device and a fingerprint of the exact text. This sits beside the signed paper deed, which stays the contract of record.
+- **Investor requests.** In the portal, **Requests → New request**: add money to an open project (top-up), a withdrawal notice, what to do with an unpaid payout (withdraw / reinvest / partial reinvest), or a question. **Investments → Investor Requests** (badge = pending) lets staff approve or reject with a note the investor sees. Approving runs the existing flow: a top-up adds the investment and its pending capital voucher (only after the money has arrived), a withdrawal records the 60-day notice from the day the investor sent it, a payout choice records the cycle election (needs the settle permission). One pending request per kind and project/payout.
+- **Payout batches.** **Investments → Payout Batches → New payout batch** picks the pending investor and channel-partner payouts of confirmed settlements and sends each to the payee's approved payment account (payouts without one, or with a reinvest choice, are listed as left out). A **different user** approves the batch (even a Super Admin cannot approve their own). Then **Make payment list** produces a CSV of payee, bank, branch, routing number, account number / mobile number and amount to pay from the bank or by hand; the file is stored, fingerprinted (SHA-256) and every download is logged. Payments that bounced are marked **failed** with a reason (the payout is free for a new batch); **Record as paid** marks the rest paid with the bank reference and books **one** pending investor-payout voucher for the batch. Trashing that voucher makes the payouts unpaid again, as before. A batch can be cancelled until it is recorded paid. New permissions **Investments: Make Payout Batches** and **Investments: Approve Payout Batches** (Super Admin only by default). The NCC Bank BEFTN upload file is not built yet: it waits for the bank's own file template.
+
+### Changed
+
+- **Mark as Paid** on a settlement's investor or partner payout now refuses a payout that is in a live payout batch, and a reinvest can no longer be recorded on such a payout (take it out of the batch first).
+- The audit log no longer copies a record's hidden fields (such as encrypted account numbers) into its old/new values. Payment accounts, investor requests, portal agreements and payout batches are now recorded in the audit log.
+
+### Technical Notes
+
+- Plan: `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md` Phases 3–4 (§15 build log). Migrations: `2026_10_08_100000_add_investor_portal_onboarding` (`channel_partners.invite_code` / `invite_enabled`, `investor_drafts.portal_account_id`, `investor_portal_accounts.investor_draft_id` / `rejection_reason`), `2026_10_08_100100_create_investor_bank_accounts_table`, `2026_10_08_100200_create_agreement_tables` (`agreement_templates`, `agreement_acceptances`), `2026_10_08_100300_create_investor_requests_table`. Additive; nothing backfilled.
+- New models `InvestorBankAccount`, `AgreementTemplate`, `AgreementAcceptance` (immutable), `InvestorRequest` (all company-scoped, in `User::MODEL_MODULES` as investments and in `MultiCompanyIsolationTest`). New services `InvestorOnboardingService` (sign-up → draft; `InvestorImportService::confirm()` calls `draftConfirmed()`; deleting a portal draft rejects the application), `InvestorBankAccountService`, `AgreementService`, `InvestorRequestService`. Portal accounts gain statuses `pending` / `rejected` (applicants may sign in to see their status only; new page role `holder`). New portal pages Register, Agreements, Payment accounts, Requests, Invite investors; new admin `AgreementTemplateResource`, `InvestorRequestResource`, `BankAccountsRelationManager` (investor and partner pages).
+- `InvestmentDocument` gains the `investor_photo` category (sensitive) and no longer writes a portal user's id into `uploaded_by` (staff only).
+- New `InvestorPortalOnboardingTest` (13 tests). 154 new lang keys (en + bn).
+- Payout batches (Phase 5): migration `2026_10_08_100400_create_payout_batches_tables` (`payout_batches`, `payout_batch_items` — payable and payee morphs, a copy of the payment account with the number encrypted). New models `PayoutBatch`, `PayoutBatchItem` (company-scoped, in `User::MODEL_MODULES` and `MultiCompanyIsolationTest`), `PayoutBatchService` (create / remove item / approve / export / mark failed / complete / cancel; permission and maker ≠ checker checked in the service), `PayoutCompletionService` (shared by the single-row Mark as Paid and batches: payout status, voucher, settlement `paid_out`). `VoucherLinkedPayoutsService::voucherRestored()` skips a payout that has joined a new live batch. New `PayoutBatchResource` (list with the New batch modal, view with Approve / Make payment list / Record as paid / Cancel, items with Take out / Mark failed). The payment list is a CSV (UTF-8, formula-like cells neutralised) on the private disk under `payout-batches/{company}/`.
+- New `PayoutBatchTest` (13 tests). 72 new lang keys (en + bn).
+
+- **Investors list: project picker on the table toolbar.** On **Investments → Investors** there is now a **project dropdown** ("All projects" or one project) at the top left of the table. Picking a project shows only the investors who invested in it. It works through the same "Project" filter as the filter menu, so the filter badge, the "Active filters" chip and "Reset filters" all follow it. The existing search box is unchanged.
+
+**Technical Notes:**
+- `InvestorResource::projectFilterOptions()` feeds both the filter menu and the toolbar picker. `ListInvestors::setProjectFilter()` writes the chosen project into `tableFilters` / `tableDeferredFilters` (an id that is not one of the company's projects is ignored). The toolbar is `resources/views/filament/investors/list-toolbar.blade.php`, hooked on `TablesRenderHook::TOOLBAR_START` scoped to `ListInvestors` in `AdminPanelProvider`. No migration. 3 new `lang` keys (en + bn).
+## [2.62.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investor portal (first part).** Investors and channel partners can now sign in to their own portal at `investor.<company domain>/investor` (or a custom domain) from a phone. An investor sees their investments with each project's status and result, a statement of every investment, profit or loss, payment and reinvestment (printable / save as PDF), their payouts with the printable payout report, and their documents (their own papers plus their project's contract and cost receipts). A channel partner sees the investors they brought in (by the name used on shared papers only, no phone or NID) and their commissions, paid and due. Profit only appears once staff confirm the settlement.
+- Sign-in by phone + password, or phone + a 6-digit SMS code (when the company's SMS gateway is set up); "forgot password" by SMS code. Nobody can sign in until staff invite them: **Portal access → Invite to the investor portal** on an investor's or channel partner's page sends an SMS link (valid 7 days) to set a password. Staff can disable access (the person is signed out at once) and enable it again. One person who is both an investor and a partner gets one sign-in that shows both.
+- **Investments → Investor Portal Settings:** turn the portal on or off and see its address; the custom domain is Super Admin only. New permission **Investments: Manage Investor Portal Access** (`investments.portal_manage`), held only by Super Admin by default.
+- The Audit Log now shows actions done by portal users (investor portal and reseller portal), marked "(portal)".
+
+### Technical Notes
+
+- Plan: `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md` (Phases 1–2 built; §15 lists the answers assumed and where the build differs from the plan). Phases 3–7 (self sign-up/KYC, requests, payout batches, notifications, period pool engine) wait for the owner's answers.
+- Migrations: `2026_10_07_130000_add_investor_portal_to_companies_table` (`investor_portal_enabled` default false, `investor_portal_domain` unique), `2026_10_07_130100_create_investor_portal_accounts_table`, `2026_10_07_130200_add_actor_to_audit_logs_table` (nullable `actor_type` / `actor_id`). Additive; nothing is backfilled.
+- New Filament panel `investor` (`InvestorPanelProvider`, guard `investor`, provider `investor_portal_accounts`, theme `resources/css/filament/investor/theme.css` — `npm run build` needed on deploy). New `InvestorPortalAccount` model (company-scoped), `InvestorPortalAccountService` (invite, password, SMS codes: hashed, 10 min, 5 tries, 1 send/min), `InvestorPortalService` (every portal query, pinned to the signed-in investor/partner), `ResolveCompanyFromInvestorPortalDomain`, `Company::forInvestorPortalHost()` / `investorPortalHost()` / `investorPortalUrl()`, portal download/report controllers with ownership checks (`InvestmentReportController::investorPayoutView()` is shared).
+- `RestrictResellerPortalHost` renamed `RestrictPortalHosts` and now guards both portal hosts. `AuditLogService` writes non-staff actors to the new actor columns. "investor"/"investors" added to the reserved reseller subdomain labels; the investor portal domain counts as taken for reseller custom domains.
+- New `InvestorPortalTest` (19 tests); `MultiCompanyIsolationTest` covers `InvestorPortalAccount`. 120 new lang keys (en + bn). DNS/Coolify steps: `docs/deployment.md` → Investor Portal Domain.
+## [2.61.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **The Next.js site's home page, header and footer follow the approved design, and every part of it is customised from the dashboard (owner request).** A new **Website Design** tab on the Next.js site's row in Site → Storefront Settings (the Blade storefront has no such tab) holds:
+  - **Home Page Builder** — add, remove, hide and reorder the home page sections: *Hero slider* (banner height, seconds per slide, dots, arrows), *Trust strip* (icon, title and subtitle for up to 6 highlights, 16 icons), *Shop by category* (heading, chosen categories in the order picked, how many, cards with icon and tagline or round pictures, product count), *Deals banner* (the gradient "Best deals today" banner with the biggest discounts, a collection or trending/new products, its own colours and link), *Product row* (latest, one category, biggest discounts, or a Flash Sale / Trending / New Arrivals collection; 1–24 products; 4, 5 or 6 columns; its own "View all"), *Flash sale band* (badge, heading, text, countdown, button, background colour — title, text and end time default to the Flash Sale offer's own), *Image banners* (upload up to 6 images with links), *Shop on mobile* (WhatsApp / call buttons and phone pictures with products), *Text block*, *SEO text with Read more* (supports `{company_name}`, `{address}`, `{products_count}`, `{categories_count}`) and the *Business account callout*. Until an owner saves their own order, the default layout is hero, trust strip, categories, deals, latest products, flash sale, trending and new arrivals. A section's heading left blank uses the website's own default heading; the default layout carries no copy of its own.
+  - **Top Bar** (the thin dark strip: social icons, a short message, up to 6 quick links with small icons, background colour), **Header** (tagline, search hint, which icons to show, support label and phone, the "All categories" button and its label, sticky or not), **Product Cards** (price and discount-badge colours; show or hide the stock label, Add to cart, wishlist heart, quick view and star rating) and the **Floating Help Button** ("Need help?" — its text and link, else a WhatsApp chat with the WhatsApp number).
+- **Footer Builder: build any footer you need.** Four new section types — **Custom links column** (a heading and links to pages, categories, tracking, the account or any URL — for example *Customer Service*), **Custom text** (heading, text, button), **Payment badges** (bKash, Nagad, Rocket, Cards … in a colour each) and **Image / badge** (an uploaded picture with a link, for example a trade licence). The **Contact info** section can now show an address, email, several phone numbers, the support hours and a trade-licence line (blank fields use the company's own details), **Brand & about** a tagline, and the **Bottom bar** a middle and a right-hand text (`{heart}` shows a red heart, as in "Developed with ♥ for Bangladesh"). Small sections (social links, text, payments, image) sit under the column before them unless **Show as its own column** is on, and the footer's background colour is chosen on the Next.js row. The new sections show on the Blade storefront's footer too.
+- **Category tagline** — a short line (for example "Earbuds · TWS · Headsets") under a category's name on the Next.js site's category cards (Categories → Tagline). **Hero slide texts** — the slide form now offers the small label above the heading, heading, sub-heading and button label that the slide already supported; leave them empty for a clean image banner.
+- **Dashboard edits reach the website within seconds.** Saving storefront settings (home page, header, footer, menus), a hero slide, a page, a category or an offer now sends a `storefront.updated` webhook to the company's website (about 5 seconds later, at most once per 5 seconds), so the Next.js site refreshes instead of waiting for its cache to expire. Nothing is sent when no website webhook is set up.
+- **The product list can sort by biggest discount and show only products on sale** (used by the home page's "Biggest discounts" and "View all promotions"). A product card tells the website which live collections the product is in, which drives its "New" badge.
+
+### Technical Notes
+
+- Migration `2026_10_08_100000_add_site_design_to_storefront_settings_and_tagline_to_categories`: `storefront_settings.home_sections` and `site_design` (JSON, NULL = defaults), `categories.tagline` (80), `storefront_slides.eyebrow` (60). New `App\Support\StorefrontSiteDesign` cleans everything before it leaves the ERP (unknown section types dropped, text trimmed and cut, numbers clamped, colours `#RRGGBB` only, links only a path / http(s) / mailto: / tel: — never `javascript:`, `data:` or `//host`); `StorefrontSetting::homeSections()` / `siteDesign()` use it. `StorefrontSiteConfigService` adds `design` and `home_sections` to `GET /site` (category ids → slugs, banner / footer images resolved only inside the company's own storage, sections that would be empty dropped, SEO tokens filled) and cleans/resolves the footer blocks (custom links → slugs, contact blanks → the company's details). `GET /categories` adds `tagline`, `GET /slides` adds `eyebrow`, product cards add `collection_kinds`, `GET /products` takes `sort=discount` and `on_sale=1`, menu items carry `icon` (top bar). New concern `NotifiesWebsiteOfStorefrontChanges` (StorefrontSetting, StorefrontSlide, StorefrontPage, Category, Offer) → `WebsiteWebhookDispatcher::dispatchStorefrontUpdated()` (cache-debounced, queued with a 5 s delay); documented in `docs/api/website-integration.md`. Admin: `Filament\Resources\StorefrontSettings\Schemas\NextjsDesignSections` (new `nextjs_design` tab, Next.js row only; the Blade row never stores `home_sections` / `site_design`), the Footer Builder in `StorefrontSettingResource`, Blade partials `footer-blocks/{custom_links,custom_text,payment_methods,image}` plus tagline / contact / bottom-bar additions. Contract: `docs/api/storefront-api.md`.
+- Tests: new `NextjsSiteDesignTest` (22: defaults, cleaning and clamping, slug / image resolution and company isolation, trust-strip fallback, SEO tokens, top bar links, footer blocks and fallbacks, tagline, discount sort, collection kinds, admin form opens with the effective layout and saves, Blade row has no tab and stores nothing, Blade footer renders the new blocks). About 200 new keys in `lang/en.json` and `lang/bn.json`.
+- **The website (`zamzamint-new-website-theme`) must be deployed with this release:** it reads `design`, `home_sections`, the new footer blocks, `tagline`, `eyebrow` and `collection_kinds`; an older website simply ignores them.
+## [2.60.4] - 2026-10-07
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **A rejected or cancelled payout voucher now makes the payout unpaid again.** Until now only moving the voucher to trash did this. When the voucher created by **Mark as Paid** is rejected or cancelled, the investor payout, channel-partner payout or reseller withdrawal goes back to **pending** (**approved** for reseller requests), and a settlement that was fully paid out goes back to **confirmed**. The payout can then be paid again with a new voucher. Restoring a rejected or cancelled voucher from trash doesn't mark the payout paid again.
+
+**Technical Notes:**
+- `VoucherLinkedPayoutsService::voucherVoided()` is called from `VoucherService::reject()` and `cancel()`, and from trash (`voucherTrashed()` calls it). No migration.
+## [2.60.3] - 2026-10-07
+
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **Orders from a reseller's online store are now invoiced in the reseller's name too (owner rule).** Until now only the orders a reseller placed from the reseller portal showed the reseller's store name and logo; an order a customer placed on the reseller's own store (`/store/<name>`, the reseller's subdomain or own domain) still printed the company's name, logo, contact details and the internal "Storefront checkout" note. Now every order that belongs to a reseller carries the reseller's store name and logo and none of the company's details, on the printed invoice, the bulk print, the PDF invoice, the courier cut-slip and the order summary card. Amounts are unchanged (the customer already paid the reseller's price). Orders without a reseller keep the company invoice.
+
+### Technical Notes
+
+- `Order::showsResellerBranding()` is now simply "the order has a reseller" (`reseller_customer_id` set — portal orders and reseller-store checkouts). New `ResellerCommissionTest::test_an_order_from_the_resellers_store_is_invoiced_in_the_resellers_name` (real checkout on `/store/<slug>`, then print and summary card); `ResellerOwnCourierOrderTest`'s company-invoice test now uses an order without a reseller. No migration, no new lang keys.
+## [2.60.2] - 2026-10-07
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Every reseller-portal order is now invoiced in the reseller's name (owner rule).** Orders a reseller placed from the portal for the store to deliver (cash on delivery) still printed the company's name, logo, email and address and the internal "Reseller portal order" note. Now every order from the reseller portal — store-delivered or own courier — shows the reseller's store name and logo and none of the company's contact details or the internal note, on the printed invoice, the "Print invoices" bulk print, the PDF invoice, the courier cut-slip and the order summary card. Amounts are unchanged: on a store-delivered order the customer still sees the reseller's price, the delivery charge and the due amount. Orders from other sources keep the company invoice.
+
+### Technical Notes
+
+- New `Order::showsResellerBranding()` (a reseller order whose `source` is `reseller_portal`, or any own-courier order) decides the invoice brand; `showsResellerPricesToBuyer()` (own courier only) still decides the prices. Used in `orders/partials/invoice.blade.php`, `orders/pdf.blade.php`, `OrderPdfController` (reseller logo) and `OrderSummaryCardService`. `ResellerOwnCourierOrderTest`: the store-delivered invoice test now expects the reseller's brand (print, bulk print, PDF, summary card), plus a new test that a non-portal order keeps the company invoice. No migration, no new lang keys.
+## [2.60.1] - 2026-10-07
+
+**Release type:** Security Update
+
+### Security
+
+- **Staff only see and edit the users of their own companies.** Before, the Users page listed every user in the system, so someone with "Users: Manage" could open and change (name, email, password, active status) a user who works only in another company. Now, apart from a Super Admin, the Users page shows only users who share at least one company with you (and yourself), and opening any other user shows "not found". A Super Admin still sees everyone.
+
+### Technical Notes
+
+- `User::canSeeUser()` and the `User::visibleTo()` query scope. `UserResource::getEloquentQuery()` applies the scope (list, view, edit, bulk actions, global search), and `Gate::before` denies every ability on a `User` the signed-in user can't see. `UserManagementEscalationTest` gains 3 tests (16 total); its test manager now shares the factory's default company unless a test gives it one.
+## [2.60.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller guide page (owner request).** A public page on the reseller portal (`reseller.<company domain>/portal/guide`) that a new reseller reads before joining: how the program works in four steps, pricing and commission, withdrawals, their own store (subdomain / custom domain only when switched on), the two delivery options (the own-courier rules only when the store has a payment method), the store's own **rules and regulations**, and **Apply now** / **Sign in** buttons at the top, in the header and at the bottom. Modern layout with the store's colour, logo and dark mode, phone friendly, English and Bangla. Managed on **Resellers → Reseller Settings → Reseller guide page**: turn the page on or off, write the introduction, add, reorder and remove rules, and choose whether to show the minimum withdrawal and packaging charge (off by default; reseller costs are never shown). While the page is on, the storefront's **Become a reseller** links open it instead of the application form, and the portal's application form links to it; someone who has already applied still goes to the portal.
+
+### Technical Notes
+
+- Reseller guide: migration `2026_10_07_110000_add_reseller_guide_to_storefront_settings_table` adds `reseller_guide_enabled` (default on), `reseller_guide_intro`, `reseller_guide_rules` (JSON list of `{title, body}`) and `reseller_guide_show_figures` (default off) to the Blade storefront row. New `Reseller\ResellerGuideController` + `resources/views/reseller/guide.blade.php` at `GET /portal/guide` (route `reseller.portal.guide`, portal host only via `ResolveCompanyFromResellerPortalDomain` / `RestrictResellerPortalHost`; 404 when the page is off). New `Company::resellerJoinUrl()` used by the storefront layout, Marketplace Pro home and account profile; the header's "Reseller status" link for someone who already applied goes to the portal. `ResellerPanelProvider` adds the guide link above the application form (`AUTH_REGISTER_FORM_BEFORE`). 70 new lang keys. New `ResellerGuidePageTest` (5 tests).
+
+## [2.59.1] - 2026-10-07
+
+**Release type:** Security Update
+
+### Security
+
+- **Staff can only give access to their own companies.** Before, anyone with "Users: Manage" could give a user (themselves included) access to any company in the system. Now, apart from a Super Admin, the company list on a user's page shows only the companies the editor can access themselves, and only those can be added, removed or made the default. If a user also has access to companies the editor can't see, that access stays as it is. A Super Admin can still assign any company.
+
+### Technical Notes
+
+- `User::assignableCompanyIds()` (all active companies for a Super Admin, otherwise the user's own active companies) and `User::resolveCompanyAccessChange()`, used by `CreateUser`/`EditUser`. `UserForm` limits both company fields' options and their loaded values to the assignable companies. A request naming another company fails Filament's option validation; the target's other companies and their default are carried over on save. `UserManagementEscalationTest` gains 5 tests.
+## [2.59.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Hero slides and custom pages can be limited to one site (owner decision).** Each slide and page has a new **Show on** choice: *All sites* (what every existing slide and page keeps being) or one of the company's sites — the Blade storefront (reseller store) or the Next.js site (main storefront). The Blade storefront and the Next.js site each show only their own and the shared ones; menu items and footer links to a page that belongs to the other site are left out. The Slides and Pages lists show where each one appears, and picking a site on a slide follows that site's theme and homepage template. Offers were already separate: landing-page offers belong to the Blade storefront and Collections (Flash Sale, Trending, New Arrivals) to the Next.js site.
+
+### Changed
+
+- **WooCommerce, CRM messaging and lead follow-up reminders now use the Next.js site's settings (owner decision).** Once a company has a Next.js site it is the main storefront, so these company-level features read its settings (the WooCommerce tab on Integrations, the SMS/WhatsApp details and the *Lead Follow-up Reminders* section live on that site); a company without one keeps using its Blade storefront. The reseller store/program and the Blade abandoned-cart reminders stay on the Blade storefront settings.
+
+### Technical Notes
+
+- Migration `2026_10_07_120000_add_storefront_setting_id_to_slides_and_pages`: nullable `storefront_setting_id` (NULL = all sites) on `storefront_slides` and `storefront_pages`, `nullOnDelete` (deleting a site returns its slides/pages to all sites). `StorefrontSlide::forCompanyTheme()` takes the site (the cached company list is filtered in memory, so the cache key is unchanged); `StorefrontPage::forSite()` is used by the Blade page route, layout menus/footer, the API pages, and the API menu/footer resolution.
+- `StorefrontSetting::primaryFor()` (Next.js row else Blade) and `isPrimary()` are read by `WooCommerceImportService`, `WooCommerceOrderSyncService`, `WooCommerceWebhookController`, the Integrations page, `Crm\BroadcastService`, `Crm\ConversationMessengerService` and `SendLeadFollowUpReminders`.
+- Tests: new `StorefrontSiteContentTest` (8); new cases in `StorefrontApiTest`, `WooCommerceOrderWebhookTest`, `LeadFollowUpReminderTest`; `IntegrationsPageTest` updated for the primary-row WooCommerce tab. 3 new lang keys in `lang/en.json` and `lang/bn.json`.
+## [2.58.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Changed
+
+- **All reseller settings in one place: Resellers → Reseller Settings (owner rule).** A new page under the Resellers menu controls the whole reseller program for the current company: the module and its domains (**Reseller module enabled**, **Reseller subdomains enabled**, **Reseller custom domains enabled**, **Reseller portal domain** — Super Admin only, as before), the money rules (**Reseller cost per unit**, **Packaging charge per piece (own courier)**, **Minimum reseller withdrawal**), **Show reseller program** on the storefront, and the list of payment channels resellers pay own-courier advances into (with a link to Payment Methods, which the storefront checkout shares). These settings were removed from the company form and from Storefront Settings (its Reseller Settings section and the Footer Builder toggle). Opening the page needs the Settings: Manage permission.
+
+### Technical Notes
+
+- New `App\Filament\Pages\ResellerSettings` (Resellers cluster) writes `companies.reseller_*` (only for a Super Admin; the section is disabled for others and ignored on save) and `storefront_settings.reseller_*`; the portal domain is normalised and must be unique. `CompanyResource` and `StorefrontSettingResource` no longer have these fields; `HasStorefrontSettingsNavigation` drops the `reseller` section. No migration. New `ResellerSettingsPageTest` (5 tests); `ResellerCommissionTest` and `PhaseFourAdminPagesTest` updated. `docs/deployment.md` and `13_RESELLER_PORTAL_PLAN.md` point to the new page.
+## [2.57.1] - 2026-10-07
+
+**Release type:** Security Update
+
+### Security
+
+- **Signing up now needs an SMS code.** A new storefront account takes over the customer record (and order history) of the same phone number, so before, anyone who knew a customer's number could sign up with it and see that customer's past orders and address. Now, when the store has an SMS gateway, the sign-up form (Blade storefront and the Next.js site's API) texts a 6-digit code to the number and the account is created only after the code is entered. The code is valid for 10 minutes; five wrong codes throw it away; asking again within a minute does not send a second SMS. A taken phone or email is refused before any code is sent. Without an SMS gateway, a brand-new number still signs up in one step, but a number that already has a customer record cannot sign up (the visitor is asked to contact the store). In English and Bangla.
+
+### Technical Notes
+
+- `CustomerAccountService`: new `ensureCanRegister()`, `registrationVerification()` (`VERIFY_SMS` / `VERIFY_NONE` / `VERIFY_UNAVAILABLE`), `sendRegistrationCode()` / `verifyRegistrationCode()` (hashed code in the cache, keyed per company and normalized phone); `register()` accepts `password_hash`. Blade: `AccountAuthController::register()` keeps only the password hash in the session, new `account/register/verify` (GET/POST) and `account/register/resend` routes (domain + preview), new view `storefront/account/register-verify`. API: `POST /account/register` takes `code`; answers `202 verification_required`, `422 otp_invalid`, `422 verification_unavailable` (`docs/api/storefront-api.md`). Offer checkout's automatic account (random password) is unchanged. 11 new lang keys. `StorefrontApiAccountTest` +4, `StorefrontCustomerAuthTest` +2 (existing sign-up tests now go through the code). No migrations.
+- **The Next.js website must handle `202 verification_required` (show a code field and resend the form with `code`)**; until it does, sign-up on the Next.js site fails on a store with an SMS gateway.
+## [2.57.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **The Blade storefront and the Next.js site now have separate storefront settings (owner decision).** In Site → Storefront Settings a company has one row per site: the **Blade storefront** (the reseller store) and the **Next.js site** (the main storefront). Each is customised on its own — colours, fonts, content, menus, footer, contact details, checkout and delivery rules, payment gateway, notifications and Meta pixel. The list shows one row per site with a **Site** badge and that site's own domain. The Next.js row keeps the *Enable Next.js site API* switch, the Next.js domain and its verified flag; the Blade domain stays where it was.
+- **New site → Site type.** Creating a storefront setting asks which kind of site it is; a company can have at most one of each. A new Next.js site can **start as a copy of the Blade storefront settings** (colours, content, checkout rules, integrations; credentials are carried over intact) or from blank defaults.
+- **Integrations → Site.** When a company has both sites, the Integrations page asks which site's payment gateway, Meta pixel and website webhook settings you are editing. WooCommerce and the AI tools remain company-wide (WooCommerce uses the Blade row).
+
+### Changed
+
+- **Existing Next.js setup is split automatically.** Companies that had already switched on the Next.js site or given it a domain get their own Next.js row (a copy of their Blade settings, carrying the switch and domain); the Blade row loses those fields. Nothing changes for the Blade storefront, the reseller program or any existing order.
+- The Next.js site API (`/api/v1/storefront/*`) now reads **only the company's Next.js row**; a company with just a Blade row answers `403 nextjs_site_disabled`.
+- Website webhooks are sent for every site that has one configured (once per distinct URL).
+
+### Technical Notes
+
+- Migration `2026_10_07_100000_add_site_type_to_storefront_settings_table`: `storefront_settings.site_type` (`blade` default | `nextjs`), `unique(company_id, site_type)` replacing `unique(company_id)`, nullable `storefront_setting_id` on `orders` and `storefront_payments` (NULL = Blade storefront, every existing record), and the data split above (idempotent). Reversible.
+- `Company::storefrontSetting()` is now the **Blade** row (all earlier code keeps working); new `Company::nextjsSetting()` / `storefrontSettings()`, `StorefrontSetting::bladeFor()` / `nextjsFor()` / `siteDomain()` / `recordedSiteId()`, `Order::siteSetting()` and `StorefrontPayment::siteSetting()` (own Next.js row, else Blade). `StorefrontCheckoutService::createOrder()` takes the site; ZiniPay/PayStation webhooks, Meta conversions/dispatch and the website webhook dispatcher read the order's or payment's own site. Abandoned-cart reminders, CRM messaging, lead reminders, WooCommerce and the slide pages stay on the Blade row.
+- Tests: `NextjsSiteSettingsTest` rewritten (17 tests: separate rows, one per type, domain handling never touching the company domain, per-site sections, list, create with/without copy, migration split); new cases in `StorefrontApiTest`, `StorefrontApiCheckoutTest`, `StorefrontMetaTrackingTest`, `StorefrontPaystationPaymentTest`, `WebsiteWebhookDispatchTest`, `IntegrationsPageTest`. 9 new lang keys in `lang/en.json` and `lang/bn.json`.
+## [2.56.0] - 2026-10-06
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Packaging charge on reseller own-courier orders.** New setting **Packaging charge per piece (own courier)** under Site → Storefront Settings → Reseller Settings. When a reseller sends an order with their own courier, this amount times the number of pieces is added to the order as a **Packaging charge** (shown on Create order's summary, in the reseller's order details, and on the admin order page and edit form). It is part of the total the reseller pays in advance and is never shown to the reseller's customer. Orders the store delivers never carry it. With the setting at 0 nothing changes.
+- **A reseller's customer only ever sees the reseller's price and store (owner rules).** On an own-courier order the reseller sets the price their customer pays for each product (**Your customer's price**, at least the store price); the store still charges the reseller its own price. Everything the customer can see shows only the reseller's side: the printed invoice and the PDF invoice carry the reseller's **store name and logo** (not the company's name, logo, hotline, e-mail, address, website or social links), items and totals at the reseller's price, and a **Due Amount** equal to that total (also on the courier slip); no store price, packaging charge, advance or internal note; the courier and parcel ID are the reseller's. The shareable order summary card shows the reseller's store name with Total and Due. The reseller's portal shows their own sale as the **Sale amount** and, separately, **You pay the store**.
+- **Resellers can change their own-courier orders (owner rules).** A **Change** button on the portal's Orders list opens the order until the store verifies any of the advance (and never once the parcel is packed or the order is closed). The reseller can add products, raise quantities, change their customer's prices, and correct the courier name, parcel ID and their customer's name, phone and address. Products already on the order cannot be removed or lowered. When the total goes up, the page shows the extra and asks for its payment details; the reseller sends **only the extra**, which is listed beside the first payment. Staff verify each payment in turn from the order page, and **Mark parcel packed** appears only once the whole total is verified. A rejected payment is sent again for the unpaid part only. The admin order page lists every payment and what is **Still to receive**; the portal's order details list them with what is **Still to send**.
+
+- **Reseller deposit (owner rule).** When paying for an own-courier order the reseller can enter the **Amount sent** (blank means exactly what is owed; never less). When staff verify a payment they confirm the **Amount received** (they can correct it). Whatever the verified payments hold above the order's total goes to the reseller's **Deposit**, shown in the portal's top bar on every page. The deposit pays the advance of the reseller's next own-courier orders (and the extra after a change) automatically, before anything else; only the rest has to be sent, and when the deposit covers it all no payment details are asked. The deposit cannot be withdrawn. If less arrived than was owed, the order shows **Part received — send the rest** and the reseller sends the remainder.
+
+### Changed
+
+- **Staff can no longer add or change items on a reseller's own-courier order.** The Items list on the admin edit form is locked on these orders, with a note that only the reseller can change them from the portal (they have paid for these items in advance). Other order fields stay editable.
+
+### Fixed
+
+- **Confirming an order with too little stock did nothing.** Change status → Confirmed (on the order page or in bulk) on a draft whose products are short left the order as a draft with no visible message. It now names each short product with the ordered and in-stock quantities, and bulk Change status lists every skipped order with its reason.
+- **Mark parcel packed on a reseller's draft order took no stock.** Packing now confirms the draft first, so the packed products leave stock; when stock is short it says which products and marks nothing.
+
+### Technical Notes
+
+- Migration `2026_10_06_100000_add_reseller_packaging_cost`: `storefront_settings.reseller_packaging_cost_per_unit`, `orders.packaging_fee` (both default 0) and `order_items.reseller_retail_price` (nullable). `OrderWorkflowService::sync()` and the admin order form's live total now add `packaging_fee`. New `Order::showsResellerPricesToBuyer()` / `buyerTotal()` and `OrderItem::buyerUnitPrice()` / `buyerSubtotal()` are used by every buyer-facing view (invoice partial, `orders.pdf`, `OrderSummaryCardService`, storefront account and tracking pages). Run migrations on deploy.
+- Reseller order edits: `ResellerOrderPlacementService::quoteEdit()` / `updateOwnCourierOrder()`; new portal page `App\Filament\Reseller\Pages\EditOrder` (`/portal/orders/{record}/edit`). New `Order::resellerAdvancePayments()`; `ResellerOwnCourierService` gains `sentAmount()`, `outstandingAmount()`, `canEdit()`, and `submitPayment()` now records only the outstanding amount; `paymentState()` / `canMarkPacked()` look at all advance payments. `OrderPdfController` passes the reseller's logo. No new migration for this part.
+- Migration `2026_10_06_110000_create_reseller_deposit_entries_table` (new company-owned `ResellerDepositEntry`: +overpayment / −used, balance = sum). `ResellerOwnCourierService::depositBalance()`, `applyDeposit()` (a completed `StorefrontPayment` with gateway `reseller_deposit` plus an `OrderPayment` with no account — the cash was already posted with the earlier order's payment, which records the full amount received), `verifyPayment(..., $received)` credits the overpayment, new payment state `short`. Deposit payments do not lock an order for the reseller's changes. `OrderPayment` sets `received_by` only for a staff `User` (a reseller signed in to the portal is a `Customer`). Top-bar badge via `PanelsRenderHook::USER_MENU_BEFORE` on the reseller panel. Run migrations on deploy.
+- `OrderStatusWorkflowService` checks stock (`OrderStockCheckService::shortages()`) before moving an order into an accounted status and reports it under `stage`; `ResellerOwnCourierService::markPacked()` confirms a draft inside the same transaction.
+- Tests: `ResellerOwnCourierOrderTest` (now 30 tests); `MultiCompanyIsolationTest` lists `ResellerDepositEntry`. New lang keys in `lang/en.json` and `lang/bn.json`.
+## [2.55.0] - 2026-10-06
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Fraud check card on the Create order form.** Picking a customer still runs the courier fraud check, but the result is now a card in the same style as the **Fraud Checker** page: Safe / Risky / No courier history with the delivery rate, total / delivered / cancelled parcels, one line per connected courier, fraud reports from other merchants, a blacklist warning (with its reason) and this store's earlier orders for the number. **Full report** opens the Fraud Checker page for that number in a new tab, already checked. The **Courier Fraud Check** button (skips the 24-hour cache) stays. Now in English and Bangla.
+- **Fraud Checker for resellers.** The reseller portal has a new **Fraud Checker** menu item with the same page, and its **Create order** page shows the same card as soon as the customer's phone number is typed. The check runs on the store's own courier accounts. Resellers see only the courier history and the verdict: never the store's customer names, order history or blacklist reasons, no "set up this courier" cards, and no **Refresh live data** button, so a reseller always gets the 24-hour cached result and cannot make the store's courier panels log in again and again.
+
+### Technical Notes
+
+- New `App\Support\FraudCheckReport` (summary, verdict, courier cards, store history, blacklist) and `App\Filament\Concerns\ChecksCourierFraud` (shared page logic; `showsStoreData()` / `canRefresh()` decide the differences), used by the admin `FraudChecker`, the new `App\Filament\Reseller\Pages\FraudChecker` and both create-order forms. Views moved to `resources/views/filament/fraud-check/` (`page`, new `compact`); the reseller theme now scans that folder. The page accepts `?phone=` and checks it on open. `OrderForm`'s inline-styled result table replaced by the compact card. 6 new lang keys. New `ResellerFraudCheckerTest` (6 tests); `FraudCheckerPageTest` +2 (10 total). No migrations.
+## [2.54.1] - 2026-10-06
+
+**Release type:** Security Update
+
+### Security
+
+- **Order details could be opened by any staff login.** The storefront preview's order-confirmation pages (`/storefront/<store>/checkout/success/<id>` and the offer thank-you page) had no check, so any signed-in staff member, whatever their role, could show a customer's name, phone and address by trying order numbers 1, 2, 3… These pages now need the same permission as opening the order in the admin panel ("Sales: View").
+- **Staff could preview another company's storefront.** Eight storefront preview pages (pages, contact, complaints, cart, checkout, order tracking, reviews, account orders) did not check the company. A staff member of one company could open another company's preview by its address and even send a complaint into it. They now return "not found" unless the staff member belongs to that company (Super Admin still sees all).
+- **Changing or resetting a customer password now signs out their other devices.** Before, an old login (for example on a shared or lost phone) stayed signed in, and "remember me" kept working, after the password was changed. The device that made the change stays signed in.
+- **Only a Super Admin can change permissions now.** Before, a custom role with the "Users: Manage" permission could change any user's role (its own included, even to Super Admin), create roles, and change what each role may do. It could also edit, delete or reset the password of a Super Admin account. Now only a Super Admin can change a user's role, create a role or open the role permissions screen ("Manage Roles"), and only a Super Admin can change a Super Admin's account. Other staff with "Users: Manage" can still add users and edit names, emails, passwords, active status and companies. They see the role but cannot change it, and a user they add starts as Sales Staff until a Super Admin sets the role.
+- **Limits on repeated tries:** the storefront preview's sign-in, register, forgot/reset-password and change-password forms, the live storefront's change-password form, and the Meta (Facebook/Instagram) message webhook now limit how many requests one address can send per minute, like the other sign-in forms already did.
+- **Extra browser protection headers:** every page now tells the browser to use HTTPS only (sent on HTTPS pages only), and a basic Content-Security-Policy blocks other sites from framing the app, `<base>` tag hijacking and browser plugins. Scripts are not restricted yet, so nothing on the site changes.
+- **Security updates for third-party packages:** Laravel 13.23 → 13.34 (debug-page XSS), Filament 5.7.5 → 5.8.4 (an already-used two-factor code could be used again), league/commonmark 2.8.3 → 2.10.3 (several denial-of-service and filter-bypass issues), league/flysystem 3.35 → 3.36. In the browser bundle, `@grpc/grpc-js` (pulled in by Firebase) is forced to 1.14.5. `composer audit` and `npm audit` now report no known vulnerabilities.
+
+### Fixed
+
+- **Storefront preview: the order-confirmation page crashed.** Links built for preview pages used the wrong parameter name, so the preview "Order placed" page showed an error instead of the order.
+
+### Technical Notes
+
+- New `App\Http\Middleware\InvalidateStaleCustomerSession` (appended to the `web` group): stamps `password_hash_customer` (same key and format as the reseller panel's `AuthenticateSession`) after each request and signs the customer guard out when it no longer matches. Only the customer guard is touched, so a staff session in the same browser is kept. `CustomerAccountService::updatePassword()` / `resetPassword()` also rotate `remember_token`.
+- Each storefront controller's `previewStorefront()` now applies the same `canAccessCompany()` check as `PreviewController::previewCompany()`.
+- `StorefrontUrl::prepend()` used the key `slug` for the preview route's `{company}` parameter (it also clashed with a route's own `{slug}`); it now uses `company`.
+- Dependencies: `composer update` of only the affected packages (no `--with-dependencies`, so no major bumps of Guzzle etc.); `package.json` gains an `overrides` entry for `@grpc/grpc-js`. Filament's published assets in `public/` were refreshed by `filament:upgrade`.
+- `SecurityHeaders`: `Content-Security-Policy: frame-ancestors 'self'; base-uri 'self'; object-src 'none'` (not set when the response already has its own policy) and `Strict-Transport-Security: max-age=31536000` on secure requests (no `includeSubDomains`, since not every company/reseller domain is guaranteed HTTPS). A script-level CSP is still a separate pass (plan 09 step 3.4).
+- `User::canChangePermissions()` (Super Admin only) and `canModifyUser()`. `Gate::before` denies every ability except `view`/`viewAny` on a Super Admin `User` record for non-Super-Admins. In `UserForm` the role field is disabled and the inline "Create role" refuses (403) for non-Super-Admins. `CreateUser` forces `User::defaultRole()` and `EditUser` drops `role` from the save, so a hand-crafted request can't change it. `UserRoleResource::canAccess()` requires a Super Admin (it used to be `canManageUsers()`). The users table's `DeleteBulkAction` now uses `authorizeIndividualRecords('delete')`; it previously deleted the whole selection with no per-record check. New `tests/Feature/UserManagementEscalationTest.php` (8 tests).
+- Throttles: preview `account/login`, `register`, `forgot-password` (5/min), `reset-password`, `password` and the domain `account/password` at 10/min; `POST /webhooks/meta` at 600/min.
+- New `tests/Feature/StorefrontPreviewAndSessionSecurityTest.php` (5 tests). `SecurityHardeningTest` gains 4 tests (CSP, own CSP kept, HSTS only on HTTPS, throttled routes).
+## [2.54.0] - 2026-10-06
+
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **"Already booked" for an order that was never booked.** Book courier treated an order as already booked whenever its **Delivery status** was anything but "Not booked". That field can move without any courier booking — chosen on the Create order form, or set to "In transit" by **Change status → Shipping** — so such an order was skipped by bulk Book courier ("0 order(s) booked · 1 already booked"), and its own Book courier button was hidden. Booking is now decided by the order's actual courier booking: an order with no live booking can be booked (including after a cancelled or failed booking). Orders that really cannot be booked are still skipped: a live booking exists, the order is delivered / partly delivered / returned, the order is cancelled / returned / refunded, or the reseller ships it with their own courier.
+- **Bulk Book courier now says why each order was skipped**, one line per order with its number (for example "Already booked (tracking ID …)" or "The order is Cancelled."), instead of a single "already booked" count. The popup text is updated to match. In English and Bangla.
+- **Order list: "Delivered" / "Returned" buttons read like a status.** Right after an order is booked, its row showed a green **Delivered** button (and a red **Returned** one). These are quick actions that mark the parcel delivered or returned by hand, not the order's status, but they looked like the order had been delivered. They are now **Mark delivered** / **Mark returned** (also on the order page), and the confirmation says it moves the order to Delivered without asking the courier. Booking itself never marks an order delivered: it stays at its order status with Delivery = Booking pending until the courier reports progress.
+- **Courier callbacks that were turned away left no trace.** A callback with a missing or wrong Auth token (or when no token is saved on the provider) was rejected silently, so a Callback URL / token mismatch looked exactly like the courier never calling. Each rejected call is now listed in **Courier → Webhook Logs** as **Rejected**, with the reason and what to fix.
+- **Courier actions that failed silently** — Sync courier status, Update status, Cancel booking, Mark delivered / returned — now show a success or failure message with the reason. A courier's HTTP error during a status sync becomes a readable reason (also in the scheduled sync's last error).
+- **Steadfast callbacks are answered the way Steadfast's webhook guide shows** (200 with `{"status":"success","message":"Webhook received successfully."}` instead of 202).
+
+### Added
+
+- **Webhook Logs: Process now, and a warning when callbacks are stuck.** A saved callback is applied by the queue worker. When callbacks wait more than 5 minutes, the Webhook Logs page now says the queue worker does not seem to be running, and each waiting or failed callback has a **Process now** button.
+- **Cancel booking explains itself:** the confirmation says it only marks the booking cancelled in this app and that the parcel must also be cancelled in the courier's own panel.
+
+### Technical Notes
+
+- New `Order::courierBookingBlocker()` (reads `latestCourierBooking`, which the orders list eager-loads). `OrdersTable::canBookCourier()` / new `courierBookingBlocker()` (adds the current-company check) and `ViewOrder::canBookCourier()` use it; `bookCourierBulk()` lists per-order skip reasons. 10 new lang keys. `OrderCourierBookingFeedbackTest` +4 tests (10 total). No migrations.
+- `CourierWebhookController` logs rejected calls (`status = rejected`, deduped per body, payload kept only up to 16 KB) and answers Steadfast with 200. `CourierWebhookLogResource::processNowAction()` runs `ProcessCourierWebhook` inline; `ListCourierWebhookLogs::getSubheading()` warns on pending logs older than 5 minutes. `CourierBookingFeedback::run()` wraps the other courier actions. Status-sync client calls also go through `CourierService::callCourier()`. New `CourierStatusFlowAuditTest` (6 tests); `SteadfastApiGuideTest` / `CourierIntegrationTest` updated for the 200 response and the rejected-call log. 14 more lang keys.
+## [2.53.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Next.js site in Site → Storefront Settings.** A new **Next.js Site** section lets you switch the headless Next.js website (for example zamzamint.com) on or off, enter its domain and mark the domain verified. The settings list has a new **Sites** column that shows each company's Blade storefront and its Next.js site side by side. Both sites keep reading the same storefront settings (theme colours, fonts, contact details, menus, footer, banners, payment and delivery rules), so nothing is configured twice. A domain can't be reused by another company, a reseller's store or another Next.js site.
+- **Collections in Offers.** **Offers** now has a third type, **Collection**, for **Flash Sale**, **Trending** and **New Arrivals**. Pick the products in display order, set when the collection starts and ends (a Flash Sale needs an end time, which runs its countdown) and optionally a **deal price** per product. Collections are only product lists for the Next.js site: they never appear as offer landing pages, in the `/offers` list or in the offer checkout, and aren't offered when generating AI images or videos.
+- **Storefront API for the Next.js website** (`/api/v1/storefront/…`). The website, which has no backend of its own, reads site settings, categories, products (with images, variations, ratings, minimum order quantity and wholesale quantity prices), hero slides, live collections and content pages from the ERP. It uses the company's existing API key and works only while *Enable Next.js site API* is on. See `docs/api/storefront-api.md`.
+- **Checkout for the Next.js website.** The website can now take real orders through the ERP (`POST /api/v1/storefront/checkout/quote`, `…/checkout`, `…/checkout/payments/{payment}/finalize`, `GET …/orders/{order_number}`). The website sends only the product, quantity and customer details; the ERP works out every price, delivery charge (inside/outside Dhaka from the address), VAT, new-customer delivery advance, pre-order advance, courier-risk advance, checkout-policy block and the payment options exactly as the Blade checkout does, and starts the ZiniPay/PayStation payment when an advance or full online payment is needed. The order is created only after the gateway confirms the payment. A double click or a retry never places a second order, a changed total is refused with the new total, and a stale cart (minimum order quantity, stock) is reported instead of being changed silently.
+- **Wholesale price rule for the website (owner decision):** a live Flash Sale / Trending / New Arrivals **deal price** wins over wholesale quantity prices; otherwise the quantity price reached applies; otherwise the normal selling price. A variation always keeps its own price, and a deal that is not lower than the selling price is ignored.
+- **Customer accounts, order tracking and reviews for the Next.js website.** Customers of the website can create an account, sign in with a password or with a 6-digit code sent by SMS or email, reset a forgotten password by SMS, see their order history, follow an order's status and courier updates, order the same items again, change their profile and password, and review the products of an order once it is completed. It works like the Blade storefront's account pages and uses the same **Customer accounts** switch in Storefront Settings, the same SMS gateway and the same rules (a registration reuses the customer record of the same phone number, so earlier orders appear straight away). Anyone can also track an order without an account with the order number and the phone number it was placed with, or with the link on the order confirmation. A new review waits in **Product Reviews** until you approve it, exactly as before.
+
+### Fixed
+
+- **Signing in with an e-mail address ignored capital letters inconsistently.** The password sign-in compared the e-mail exactly while the one-time-code sign-in did not, so `Name@Example.com` worked for one and not the other. Both now ignore capitals.
+
+### Security
+
+- **A password-reset code can no longer be guessed.** Five wrong reset codes now lock that account's reset until the code's 15-minute window ends (before, the 6 digits could be tried without limit). This protects both the Blade storefront and the new website.
+
+### Technical Notes
+
+- `CLAUDE.md` (agent memory) now records that zamzamint.com is the wholesale ZamZam International site and zamzamgadgetbd.com the retail ZamZam Gadget site, and the owner's decisions for the Next.js website. `Company::CORE_COMPANIES` and `docs/storefront-go-live.md` still carry the old "Gift Items / Gadget Items" labels (not changed here).
+- New migrations (run `php artisan migrate --force`; both only add columns, existing rows are unchanged): `2026_10_03_100000_add_nextjs_site_to_storefront_settings_table` (`nextjs_site_enabled` default off, unique `nextjs_site_domain`, `nextjs_site_domain_verified`) and `2026_10_03_110000_add_collection_fields_to_offers_tables` (`offers.collection_kind`, `starts_at`, `ends_at`; `offer_items.deal_price`).
+- `Offer::TYPE_COLLECTION`; scopes `landingPages()`, `collections()`, `liveCollections()`. `OfferController`, `OfferCheckoutController` and the image/video generation offer pickers now use `landingPages()`. Switching an offer away from *Collection* clears its kind and schedule.
+- `StorefrontSetting::nextjsDomainConflict()` / `nextjsDomainTaken()`; `Company::hostIsTakenByThePlatform()` also treats a Next.js domain as taken. Server-side checks live in `HandlesNextjsSiteDomain` (Create/Edit pages) in addition to the form rules.
+- New `EnsureNextjsSiteEnabled` middleware (403 `nextjs_site_disabled`), the `storefront-api` rate limiter (600/min per API token + 3000/min per IP; defined in `AppServiceProvider`), `StorefrontController`, `StorefrontCatalogService` and `StorefrontSiteConfigService`. `Product::reviews()` relation added. No new company-owned model, so `MultiCompanyIsolationTest` is unchanged; `StorefrontApiTest` covers isolation between two companies.
+- The existing server-to-server `/api/v1` routes are untouched and are not gated by the Next.js switch.
+- **Phase 2 (checkout) —** the Blade `Storefront\CheckoutController` now delegates to the new shared `StorefrontCheckoutService::process()` (totals, checkout policy, advance eligibility, online/full payment, order creation) with no behaviour change; the API controller `Api\V1\StorefrontCheckoutController` calls the same method. New: `CheckoutOutcome`, `StorefrontApiCartResolver` (Blade line rules without silent changes), `ForceJsonResponse` middleware (storefront API only), `Support\StorefrontApi\{Signing,OrderSummary}`, `StorefrontCatalogService::unitPrice()` / `dealFor()`, `StorefrontMetaTrackingService::contextFromClient()`, and an optional `$clientIp` argument on `StorefrontCheckoutPolicyService::evaluate()`.
+- No migration and no new model. Payment `ref` and order `token` are HMACs of the payment/order id and company derived from `APP_KEY` (rotating `APP_KEY` invalidates links already sent to customers). `return_url`/`cancel_url` must be https on the company's `nextjs_site_domain` (localhost allowed only in `local`/`testing`). Visitor IP comes from the website (`client_ip`); without it IP rules are skipped.
+- Tests: new `StorefrontApiCheckoutTest` (26) and a deal-rule case in `StorefrontApiTest`; the existing Blade checkout, payment and policy tests pass unchanged.
+- 32 new translation keys in `lang/en.json` and `lang/bn.json`.
+- **Phase 3 (accounts, tracking, reviews).** Migration `2026_10_06_100000_create_storefront_customer_tokens_table` (run `php artisan migrate --force`; a new table, nothing existing changes): `storefront_customer_tokens` (company, customer, SHA-256 token hash, expiry, last use) with the company-scoped model `StorefrontCustomerToken`, added to `MultiCompanyIsolationTest`. The website's server sends the token as `X-Customer-Token` next to the company API key (`AuthenticateStorefrontCustomer`, `EnsureStorefrontAccountsEnabled` middleware, `StorefrontCustomerSession`).
+- New `Api\V1\StorefrontAccountAuthController`, `StorefrontAccountController` and `StorefrontOrderTrackingController`; `Support\StorefrontApi\{AccountPayload,TrackingSummary,Phone}`; `OrderSummary` gains `status_label`, `order_date` and the product `slug` per item. The `storefront-auth` rate limiter (20/min per visitor — the `client_ip` the website forwards, not its own address).
+- New shared `StorefrontOrderTrackingService` (status history + courier) now also feeds the Blade tracking page, whose output is unchanged. `CustomerAccountService::resetPassword()` gained the attempt lock and `resetLockedFor()`; `attemptLogin()` matches e-mail case-insensitively.
+- Phones from the website are normalised to the local `01XXXXXXXXX` form (the same as checkout) before any lookup, so `+880…` and `01…` are one customer and one lockout counter.
+- Tests: new `StorefrontApiAccountTest` (33) — gates, registration, sign-in, lockouts, codes, reset, profile/password, orders, reorder, reviews, tracking, cross-company and per-visitor limits.
+- No new translation keys in the ERP: the API answers with stable error codes and the website words them.
+## [2.52.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **Book courier did nothing when the booking failed.** Clicking **Book courier** (order list or order page) or **Book Steadfast** showed nothing and booked nothing when the booking could not go through. When the courier refused it (wrong phone, wrong API keys, duplicate invoice, ...), the courier's error was not caught at all. A customer-risk block or a provider mismatch was hidden because it matched no field in the popup. Now a successful booking shows **Courier booked** with the tracking ID. A failed one shows **Courier booking failed** with the reason — the courier's own message, "could not reach the courier", or the risk review that blocks it — and the popup stays open so the courier or details can be changed. In English and Bangla.
+- **Bulk Book courier stopped at a refused order.** A courier refusal on one order no longer stops the rest of the batch. The result now lists each failed order with its reason (it used to say "see Status Logs", where nothing was recorded).
+
+### Added
+
+- **Upsell filter on the orders list.** New **Upsell items** filter: **With upsell items** shows orders that had an item added after they were created, **Without upsell items** the rest. Admin-only, like the Upsell tag. In English and Bangla.
+
+### Technical Notes
+
+- `CourierService::callCourier()` wraps the Steadfast / Pathao / RedX / E-Courier create calls and turns `RequestException` / `ConnectionException` into a `ValidationException` (key `courier`) with the courier's message. New `Orders\Actions\CourierBookingFeedback` (notifications + `halt()`), used by the order list's **Book courier** and the order page's **Book courier** / **Book Steadfast**; `bookCourierBulk()` reports per-order reasons. `TernaryFilter has_upsell` on `OrdersTable` (`whereHas('items', is_upsell)`). New `OrderCourierBookingFeedbackTest` (6 tests). No migrations.
+## [2.51.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **Items could not be added to an order after it was created.** On a confirmed order, adding an item failed with "Insufficient stock" — even after stock was added to the new item's product. The block came from one of the order's *existing* items: when that product's stock had gone below zero (for example after a WooCommerce sale, which is never blocked), every save re-checked the unchanged line and refused it. Lines whose quantity does not go up are no longer blocked, and adding stock to a product that is below zero is no longer refused either; only stock actually being taken out must be available.
+
+### Added
+
+- **"Not enough stock" popup when editing an order.** Raising a quantity or adding an item on a confirmed / processing / completed order now shows the same popup as Create order when something is short, asking only for the stock beyond what the order already took ("Adding · In stock · Short by"). **Add stock and save order** adds the stock and saves. If a product is already below zero, the popup asks for enough to cover that too. WooCommerce orders are never stopped. In English and Bangla.
+- **Upsell tag.** An item added to an order after it was created is saved as an upsell and shows an **Upsell** badge under the product on the order's edit and view pages. The tag is admin-only — the invoice, PDF, storefront tracking and the customer's account do not show it.
+
+### Technical Notes
+
+- `StockMovementService::validate()` blocks negative stock only when the movement lowers stock compared with what it booked before (new `takesStock()`). `OrderStockCheckService::shortages()` takes the saved order and subtracts its booked sale quantities; `short` now covers stock already below zero. Popup moved from `CreateOrder` into the new `Pages/Concerns/HandlesStockShortages` trait, used by `CreateOrder::beforeCreate()` and `EditOrder::beforeSave()`. Migration `2026_10_05_110000_add_is_upsell_to_order_items_table` adds `order_items.is_upsell` (boolean, default false); the order form's items repeater sets it on rows created on the edit page. New `OrderUpsellTest` (6 tests); `OrderStockShortageTest` now 11 tests.
+## [2.50.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller portal: Forgot password.** The portal sign-in page now has a **Forgot password?** link. The reseller enters their phone number and gets a 6-digit code by SMS (valid for 15 minutes, the same reset code as the storefront account), then sets a new password and is signed straight in. **Send a new code** goes back to the phone step. A code is sent only to a pending or approved reseller of that company, and the reply is the same for any number, so the form does not reveal who is a reseller. Needs the store's SMS settings (Storefront → Notifications); without them the page says reset by SMS is not available and to contact the store.
+
+### Technical Notes
+
+- New `App\Filament\Reseller\Pages\Auth\ForgotPassword` (extends Filament's `RequestPasswordReset`, both steps on one page) registered with `->passwordReset()` on the reseller panel; reuses `CustomerAccountService::sendPasswordResetCode()` / `resetPassword()`. Filament's e-mailed link is not used. Tests: `ResellerPortalPasswordResetTest` (includes a run through the real portal Livewire endpoint).
+## [2.49.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Next.js site in Site → Storefront Settings.** A new **Next.js Site** section lets you switch the headless Next.js website (for example zamzamint.com) on or off, enter its domain and mark the domain verified. The settings list has a new **Sites** column that shows each company's Blade storefront and its Next.js site side by side. Both sites keep reading the same storefront settings (theme colours, fonts, contact details, menus, footer, banners, payment and delivery rules), so nothing is configured twice. A domain can't be reused by another company, a reseller's store or another Next.js site.
+- **Collections in Offers.** **Offers** now has a third type, **Collection**, for **Flash Sale**, **Trending** and **New Arrivals**. Pick the products in display order, set when the collection starts and ends (a Flash Sale needs an end time, which runs its countdown) and optionally a **deal price** per product. Collections are only product lists for the Next.js site: they never appear as offer landing pages, in the `/offers` list or in the offer checkout, and aren't offered when generating AI images or videos.
+- **Storefront API for the Next.js website** (`/api/v1/storefront/…`). The website, which has no backend of its own, reads site settings, categories, products (with images, variations, ratings, minimum order quantity and wholesale quantity prices), hero slides, live collections and content pages from the ERP. It uses the company's existing API key and works only while *Enable Next.js site API* is on. See `docs/api/storefront-api.md`.
+- **Checkout for the Next.js website.** The website can now take real orders through the ERP (`POST /api/v1/storefront/checkout/quote`, `…/checkout`, `…/checkout/payments/{payment}/finalize`, `GET …/orders/{order_number}`). The website sends only the product, quantity and customer details; the ERP works out every price, delivery charge (inside/outside Dhaka from the address), VAT, new-customer delivery advance, pre-order advance, courier-risk advance, checkout-policy block and the payment options exactly as the Blade checkout does, and starts the ZiniPay/PayStation payment when an advance or full online payment is needed. The order is created only after the gateway confirms the payment. A double click or a retry never places a second order, a changed total is refused with the new total, and a stale cart (minimum order quantity, stock) is reported instead of being changed silently.
+- **Wholesale price rule for the website (owner decision):** a live Flash Sale / Trending / New Arrivals **deal price** wins over wholesale quantity prices; otherwise the quantity price reached applies; otherwise the normal selling price. A variation always keeps its own price, and a deal that is not lower than the selling price is ignored.
+
+### Technical Notes
+- `CLAUDE.md` (agent memory) now records that zamzamint.com is the wholesale ZamZam International site and zamzamgadgetbd.com the retail ZamZam Gadget site, and the owner's decisions for the Next.js website. `Company::CORE_COMPANIES` and `docs/storefront-go-live.md` still carry the old "Gift Items / Gadget Items" labels (not changed here).
+- New migrations (run `php artisan migrate --force`; both only add columns, existing rows are unchanged): `2026_10_03_100000_add_nextjs_site_to_storefront_settings_table` (`nextjs_site_enabled` default off, unique `nextjs_site_domain`, `nextjs_site_domain_verified`) and `2026_10_03_110000_add_collection_fields_to_offers_tables` (`offers.collection_kind`, `starts_at`, `ends_at`; `offer_items.deal_price`).
+- `Offer::TYPE_COLLECTION`; scopes `landingPages()`, `collections()`, `liveCollections()`. `OfferController`, `OfferCheckoutController` and the image/video generation offer pickers now use `landingPages()`. Switching an offer away from *Collection* clears its kind and schedule.
+- `StorefrontSetting::nextjsDomainConflict()` / `nextjsDomainTaken()`; `Company::hostIsTakenByThePlatform()` also treats a Next.js domain as taken. Server-side checks live in `HandlesNextjsSiteDomain` (Create/Edit pages) in addition to the form rules.
+- New `EnsureNextjsSiteEnabled` middleware (403 `nextjs_site_disabled`), the `storefront-api` rate limiter (600/min per API token + 3000/min per IP; defined in `AppServiceProvider`), `StorefrontController`, `StorefrontCatalogService` and `StorefrontSiteConfigService`. `Product::reviews()` relation added. No new company-owned model, so `MultiCompanyIsolationTest` is unchanged; `StorefrontApiTest` covers isolation between two companies.
+- The existing server-to-server `/api/v1` routes are untouched and are not gated by the Next.js switch.
+- **Phase 2 (checkout) —** the Blade `Storefront\CheckoutController` now delegates to the new shared `StorefrontCheckoutService::process()` (totals, checkout policy, advance eligibility, online/full payment, order creation) with no behaviour change; the API controller `Api\V1\StorefrontCheckoutController` calls the same method. New: `CheckoutOutcome`, `StorefrontApiCartResolver` (Blade line rules without silent changes), `ForceJsonResponse` middleware (storefront API only), `Support\StorefrontApi\{Signing,OrderSummary}`, `StorefrontCatalogService::unitPrice()` / `dealFor()`, `StorefrontMetaTrackingService::contextFromClient()`, and an optional `$clientIp` argument on `StorefrontCheckoutPolicyService::evaluate()`.
+- No migration and no new model. Payment `ref` and order `token` are HMACs of the payment/order id and company derived from `APP_KEY` (rotating `APP_KEY` invalidates links already sent to customers). `return_url`/`cancel_url` must be https on the company's `nextjs_site_domain` (localhost allowed only in `local`/`testing`). Visitor IP comes from the website (`client_ip`); without it IP rules are skipped.
+- Tests: new `StorefrontApiCheckoutTest` (26) and a deal-rule case in `StorefrontApiTest`; the existing Blade checkout, payment and policy tests pass unchanged.
+- 32 new translation keys in `lang/en.json` and `lang/bn.json`.
+## [2.48.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller orders with the reseller's own courier.** On **Create order** a reseller now chooses **The store delivers (cash on delivery)** or **My own courier (I pay the full amount in advance)**. With their own courier they enter the courier name and the parcel/consignment ID they booked, and the advance payment details: which of the store's payment methods they paid to (the active send-money/bank methods from Storefront → Payment Methods), the number or account they paid from, and the transaction ID. These orders are charged at the store's price (the base price; the normal price for a product with no wholesale rate), with no delivery charge and no commission — the reseller pays that total in advance. The same parcel ID cannot be used on two of the reseller's orders. If the store has no payment method set up, the option is shown but disabled.
+- **Checking and packing these orders (admin).** The order page shows a **Reseller's own courier** section with the parcel ID in large type, the courier, the payment state and transaction details, and when it was packed; the store's courier booking is hidden for these orders. **Verify reseller payment** (choosing the account the money arrived in) records it in the order's Payments History so the order shows as paid; **Reject reseller payment** sends it back to the reseller. **Mark parcel packed** is available only after the payment is verified. The order list has a **Reseller's own courier** filter and a hideable **Reseller parcel ID** column (searchable). The advance also appears on Storefront → Payments as **Reseller advance (own courier)** with a **Check on order** link.
+- **Reseller's view.** The portal **Orders** list shows the parcel ID with the payment state (waiting, verified, rejected) or **Packed**, and the order details show the courier, parcel ID, payment and packing. A rejected payment can be sent again with **Send payment again**.
+
+### Changed
+
+- **Reseller portal: Create order is a button.** **Create order** is no longer in the portal menu; it opens from a **Create order** button at the top of the **Orders** page.
+
+### Technical Notes
+
+- Migration `2026_10_05_100000_add_reseller_own_courier_to_orders_table`: `orders.reseller_own_courier`, `reseller_courier_name`, `reseller_parcel_id`, `reseller_parcel_packed_at` (+ index on reseller and parcel ID). Run migrations on deploy.
+- The advance is a manual `StorefrontPayment` with the new purpose `reseller_advance` (`Order::resellerAdvancePayment()`); new `App\Services\ResellerOwnCourierService` (submit, verify, reject, mark packed). `ResellerOrderPlacementService::place()` takes an optional own-courier array. Own-courier orders get no default courier provider and skip the courier fraud check. Tests: `ResellerOwnCourierOrderTest`.
+## [2.47.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **Orders with two or more items would not save.** When a confirmed (or processing / completed) order had an item that was out of stock, saving did nothing visible: the "Insufficient stock" error had no field to show on, and the order was left half-saved with only some of its stock taken out. The order is now saved all-or-nothing, and a stock error while saving or editing an order is shown as a message.
+
+### Added
+
+- **"Not enough stock" popup on Create order.** Placing a confirmed / processing / completed order now checks every item first. If any product (or variation) is short, a popup lists each one with how many were ordered, how many are in stock and how many are missing. Staff who can add stock can type how many to add (at least the missing amount) and press **Add stock and place order** — the stock is added as a stock adjustment ("Stock added from the order form") and the order is placed. Others see the list and go back to change the items. Draft orders do not take stock out, so they are saved without the popup. In English and Bangla.
+
+### Technical Notes
+
+- New `App\Services\OrderStockCheckService` (`shortages()` totals lines per product + variant like `OrderWorkflowService::syncStockMovements()`; `addStock()` books an `adjustment` movement). `CreateOrder::beforeCreate()` mounts the `stockShortage` action and halts. `CreateOrder` and `EditOrder` now use database transactions and the new `ReportsStockErrors` trait. New `OrderStockShortageTest` (7 tests). No migrations.
 ## [2.46.0] - 2026-10-04
 
 **Release type:** Minor Feature Update

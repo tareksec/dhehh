@@ -7,6 +7,7 @@ use App\Models\Lead;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\StorefrontSetting;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Queues an outbound webhook to an external website whenever something it
@@ -57,26 +58,52 @@ class WebsiteWebhookDispatcher
     }
 
     /**
+     * Storefront content changed (settings, slides, pages, categories,
+     * offers). One delivery per company per few seconds, sent a moment after
+     * the first change, so a form that saves several records at once — or
+     * several quick edits — refreshes the website once and with the final data.
+     */
+    public function dispatchStorefrontUpdated(?int $companyId): void
+    {
+        if (! $companyId || ! Cache::add("website-webhook:storefront:{$companyId}", true, now()->addSeconds(5))) {
+            return;
+        }
+
+        $this->dispatch($companyId, 'storefront.updated', ['updated_at' => now()->toIso8601String()], delaySeconds: 5);
+    }
+
+    /**
      * Also used for the Integrations page's "Send test webhook" action, with
      * event 'ping' and an empty payload.
      */
-    public function dispatch(?int $companyId, string $event, array $data): void
+    public function dispatch(?int $companyId, string $event, array $data, int $delaySeconds = 0): void
     {
         if (! $companyId) {
             return;
         }
 
-        $setting = StorefrontSetting::withoutGlobalScopes()->where('company_id', $companyId)->first();
-        $credentials = $setting?->website_api_credentials ?? [];
+        // Each site (Blade, Next.js) can have its own webhook; two sites sharing
+        // one URL and secret are notified once.
+        $sent = [];
 
-        $url = (string) ($credentials['webhook_url'] ?? '');
-        $secret = (string) ($credentials['webhook_secret'] ?? '');
-        $enabled = (bool) ($credentials['is_enabled'] ?? false);
+        foreach (StorefrontSetting::withoutGlobalScopes()->where('company_id', $companyId)->orderBy('id')->get() as $setting) {
+            $credentials = $setting->website_api_credentials ?? [];
 
-        if (! $enabled || $url === '' || $secret === '') {
-            return;
+            $url = (string) ($credentials['webhook_url'] ?? '');
+            $secret = (string) ($credentials['webhook_secret'] ?? '');
+            $enabled = (bool) ($credentials['is_enabled'] ?? false);
+
+            if (! $enabled || $url === '' || $secret === '' || isset($sent[$url.'|'.$secret])) {
+                continue;
+            }
+
+            $sent[$url.'|'.$secret] = true;
+
+            $pending = DispatchWebsiteWebhookJob::dispatch($url, $secret, $event, $data);
+
+            if ($delaySeconds > 0) {
+                $pending->delay(now()->addSeconds($delaySeconds));
+            }
         }
-
-        DispatchWebsiteWebhookJob::dispatch($url, $secret, $event, $data);
     }
 }

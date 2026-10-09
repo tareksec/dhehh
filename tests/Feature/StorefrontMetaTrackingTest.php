@@ -852,6 +852,32 @@ class StorefrontMetaTrackingTest extends TestCase
         $this->assertDatabaseCount('storefront_meta_events', 2);
     }
 
+    public function test_the_purchase_pixel_comes_from_the_site_the_order_was_placed_on(): void
+    {
+        [$company] = $this->store('Two Sites', 'twosites.example.test');
+        $nextjs = StorefrontSetting::query()->create([
+            'company_id' => $company->getKey(),
+            'site_type' => StorefrontSetting::SITE_NEXTJS,
+            'nextjs_site_enabled' => true,
+            'meta_tracking_enabled' => true,
+            'meta_consent_required' => false,
+            'meta_capi_enabled' => true,
+            'meta_pixel_id' => '1122334455667788',
+            'meta_tracking_credentials' => ['access_token' => 'nextjs-token'],
+        ]);
+        Http::fake(['graph.facebook.com/*' => Http::response(['events_received' => 1, 'fbtrace_id' => 'trace-1'], 200)]);
+
+        $fromNextjs = Order::query()->create(['customer_name' => 'Next Buyer', 'status' => 'draft', 'source' => Order::SOURCE_STOREFRONT, 'storefront_setting_id' => $nextjs->getKey()]);
+        $fromBlade = Order::query()->create(['customer_name' => 'Blade Buyer', 'status' => 'draft', 'source' => Order::SOURCE_STOREFRONT]);
+
+        $this->assertTrue(app(StorefrontMetaConversionsService::class)->sendPurchase($fromNextjs->fresh(), []));
+        $this->assertFalse(app(StorefrontMetaConversionsService::class)->sendPurchase($fromBlade->fresh(), []), 'The Blade row has no pixel configured.');
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/1122334455667788/events')
+            && $request->data()['access_token'] === 'nextjs-token');
+    }
+
     private function store(string $name, string $domain): array
     {
         $company = Company::query()->create([

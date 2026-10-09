@@ -21,7 +21,9 @@ class OrderItem extends Model
         'unit_price',
         'unit_cost',
         'reseller_base_price',
+        'reseller_retail_price',
         'subtotal',
+        'is_upsell',
     ];
 
     protected $casts = [
@@ -29,7 +31,9 @@ class OrderItem extends Model
         'unit_price' => 'decimal:2',
         'unit_cost' => 'decimal:2',
         'reseller_base_price' => 'decimal:2',
+        'reseller_retail_price' => 'decimal:2',
         'subtotal' => 'decimal:2',
+        'is_upsell' => 'boolean',
     ];
 
     protected static function booted(): void
@@ -61,6 +65,20 @@ class OrderItem extends Model
                 app(ResellerCommissionService::class)->sync($item->order);
             }
         });
+    }
+
+    /**
+     * The unit price the buyer may see: on a reseller's own-courier order
+     * that is the reseller's retail price, never the store's price.
+     */
+    public function buyerUnitPrice(): float
+    {
+        return (float) ($this->reseller_retail_price ?? $this->unit_price);
+    }
+
+    public function buyerSubtotal(): float
+    {
+        return round($this->buyerUnitPrice() * (int) $this->quantity, 2);
     }
 
     public function order(): BelongsTo

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages\IntegrationWidgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Filament\Resources\CourierProviders\CourierProviderResource;
 use App\Filament\Resources\MetaAdAccounts\MetaAdAccountResource;
 use App\Models\CourierProvider;
@@ -24,6 +25,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  */
 class IntegrationStatusWidget extends StatsOverviewWidget
 {
+    use GuardsWidgetRendering;
+
     protected function getColumns(): int|array|null
     {
         return ['default' => 1, 'md' => 2];

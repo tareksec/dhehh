@@ -4,12 +4,11 @@ namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Storefront\Concerns\MatchesCustomerPhone;
-use App\Models\AuditLog;
 use App\Models\Company;
-use App\Models\CourierBooking;
 use App\Models\Order;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
+use App\Services\StorefrontOrderTrackingService;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,7 +19,10 @@ class OrderTrackController extends Controller
 {
     use MatchesCustomerPhone;
 
-    public function __construct(protected CompanyContext $context) {}
+    public function __construct(
+        protected CompanyContext $context,
+        protected StorefrontOrderTrackingService $tracking,
+    ) {}
 
     public function index(Request $request): View|RedirectResponse
     {
@@ -107,48 +109,20 @@ class OrderTrackController extends Controller
 
     protected function trackingUpdates(Order $order)
     {
-        $auditUpdates = AuditLog::query()
-            ->where('auditable_type', Order::class)
-            ->where('auditable_id', $order->getKey())
-            ->where('action', 'updated')
-            ->latest()
-            ->get()
-            ->flatMap(function (AuditLog $log): array {
-                $updates = [];
-
-                if (array_key_exists('delivery_status', $log->new_values ?? [])) {
-                    $updates[] = [
-                        'time' => $log->created_at,
-                        'type' => 'delivery',
-                        'title' => 'Delivery status updated',
-                        'message' => 'Delivery status updated to '.(Order::DELIVERY_STATUSES[$log->new_values['delivery_status']] ?? str((string) $log->new_values['delivery_status'])->headline()).'.',
-                    ];
-                }
-
-                if (array_key_exists('status', $log->new_values ?? [])) {
-                    $updates[] = [
-                        'time' => $log->created_at,
-                        'type' => 'order',
-                        'title' => 'Order status updated',
-                        'message' => 'Order status updated to '.(Order::STATUSES[$log->new_values['status']] ?? str((string) $log->new_values['status'])->headline()).'.',
-                    ];
-                }
-
-                return $updates;
-            });
-
-        $courierUpdates = $order->latestCourierBooking?->statusLogs
-            ->map(fn ($log): array => [
-                'time' => $log->created_at,
-                'type' => 'courier',
-                'title' => 'Courier status updated',
-                'message' => trim((CourierBooking::STATUSES[$log->to_status] ?? str((string) $log->to_status)->headline()).($log->note ? ': '.$log->note : '.')),
-            ]) ?? collect();
-
-        return $auditUpdates
-            ->merge($courierUpdates)
-            ->sortByDesc('time')
-            ->values();
+        return $this->tracking->updates($order)->map(fn (array $update): array => [
+            'time' => $update['time'],
+            'type' => $update['type'],
+            'title' => match ($update['type']) {
+                StorefrontOrderTrackingService::TYPE_DELIVERY => 'Delivery status updated',
+                StorefrontOrderTrackingService::TYPE_ORDER => 'Order status updated',
+                default => 'Courier status updated',
+            },
+            'message' => match ($update['type']) {
+                StorefrontOrderTrackingService::TYPE_DELIVERY => 'Delivery status updated to '.$update['label'].'.',
+                StorefrontOrderTrackingService::TYPE_ORDER => 'Order status updated to '.$update['label'].'.',
+                default => trim($update['label'].($update['note'] ? ': '.$update['note'] : '.')),
+            },
+        ]);
     }
 
     /**
@@ -227,6 +201,13 @@ class OrderTrackController extends Controller
     protected function previewStorefront(Company $company): StorefrontSetting
     {
         abort_unless(app()->environment(['local', 'testing']) || auth()->check(), 404);
+
+        // Same gate as PreviewController::previewCompany(): a signed-in staff
+        // member may only preview their own company/companies, never another
+        // company's by slug (set() below would otherwise switch the scope).
+        if (auth()->check()) {
+            abort_unless(auth()->user()->canAccessCompany($company->getKey()), 404);
+        }
 
         $this->context->set($company);
 

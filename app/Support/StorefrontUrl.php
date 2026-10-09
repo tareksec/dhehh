@@ -91,6 +91,6 @@ class StorefrontUrl
             return [$slug, ...$parameters];
         }
 
-        return ['slug' => $slug, ...$parameters];
+        return ['company' => $slug, ...$parameters];
     }
 }

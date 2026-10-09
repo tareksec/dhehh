@@ -5,7 +5,7 @@ namespace App\Filament\Resources\ProjectSettlements\RelationManagers;
 use App\Filament\Resources\ChannelPartners\ChannelPartnerResource;
 use App\Filament\Resources\Vouchers\VoucherResource;
 use App\Models\ChannelPartnerPayout;
-use App\Services\Investment\InvestmentLedgerService;
+use App\Services\Investment\PayoutCompletionService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -14,6 +14,7 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Validation\ValidationException;
 
 class ChannelPartnerPayoutsRelationManager extends RelationManager
 {
@@ -48,14 +49,14 @@ class ChannelPartnerPayoutsRelationManager extends RelationManager
                     Select::make('payment_method')->options(['cash' => 'Cash', 'bkash' => 'bKash', 'bank' => 'Bank', 'other' => 'Other'])->required(),
                     TextInput::make('payment_reference'),
                 ])->requiresConfirmation()->action(function (ChannelPartnerPayout $record, array $data): void {
-                    $record->update([...$data, 'payment_status' => 'paid', 'paid_at' => now()->toDateString()]);
-                    app(InvestmentLedgerService::class)->recordChannelPartnerPayoutPaid($record, (int) auth()->id());
-                    $settlement = $this->getOwnerRecord();
-                    if ($settlement->status === 'confirmed'
-                        && ! $settlement->payouts()->where('payment_status', 'pending')->exists()
-                        && ! $settlement->channelPartnerPayouts()->where('payment_status', 'pending')->exists()) {
-                        $settlement->update(['status' => 'paid_out']);
+                    try {
+                        app(PayoutCompletionService::class)->markPaid($record, auth()->user(), $data);
+                    } catch (ValidationException $exception) {
+                        Notification::make()->danger()->title(__('Could not mark the payout paid'))->body(collect($exception->errors())->flatten()->first())->send();
+
+                        return;
                     }
+
                     Notification::make()->success()->title('Channel payout marked paid')->send();
                 }),
         ]);

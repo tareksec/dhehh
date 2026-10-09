@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Filament\Resources\Accounts\AccountResource;
 use App\Filament\Resources\Customers\CustomerResource;
 use App\Filament\Resources\Expenses\ExpenseResource;
@@ -35,6 +36,7 @@ use Illuminate\Support\Collection;
  */
 class BusinessOverview extends StatsOverviewWidget implements HasActions
 {
+    use GuardsWidgetRendering;
     use InteractsWithActions;
 
     protected ?string $heading = 'Business Overview';

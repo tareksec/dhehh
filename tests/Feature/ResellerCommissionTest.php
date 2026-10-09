@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\ResellerSettings;
 use App\Filament\Resources\ResellerCommissions\Pages\ListResellerCommissions;
 use App\Filament\Resources\ResellerPayoutRequests\Pages\ListResellerPayoutRequests;
-use App\Filament\Resources\StorefrontSettings\Pages\EditStorefrontSetting;
 use App\Models\Account;
 use App\Models\Company;
 use App\Models\CourierBooking;
@@ -22,6 +22,7 @@ use App\Models\StorefrontSetting;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Services\CompanyContext;
+use App\Services\OrderSummaryCardService;
 use App\Services\ResellerCommissionService;
 use App\Services\VoucherService;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -255,14 +256,13 @@ class ResellerCommissionTest extends TestCase
         [$company] = $this->setUpStore('settings.example.test');
         $setting = $company->storefrontSetting;
 
-        $this->actingAs(User::factory()->create(['role' => 'super_admin', 'is_active' => true]));
+        $this->actingAs(User::factory()->create(['role' => 'super_admin', 'is_active' => true]))
+            ->withSession(['current_company_id' => $company->getKey()]);
 
-        Livewire::test(EditStorefrontSetting::class, ['record' => $setting->getKey()])
-            ->call('selectSection', 'reseller')
+        Livewire::test(ResellerSettings::class)
             ->assertSee(__('Reseller cost per unit'))
             ->assertSee(__('Minimum reseller withdrawal'))
-            ->set('data.reseller_cost_per_unit', 35)
-            ->set('data.reseller_min_withdrawal', 250)
+            ->fillForm(['reseller_cost_per_unit' => 35, 'reseller_min_withdrawal' => 250])
             ->call('save')
             ->assertHasNoFormErrors();
 
@@ -323,6 +323,34 @@ class ResellerCommissionTest extends TestCase
         ]);
 
         return [$company, $reseller, $product];
+    }
+
+    public function test_an_order_from_the_resellers_store_is_invoiced_in_the_resellers_name(): void
+    {
+        // Owner rule (2026-10-07): orders customers place on a reseller's store
+        // carry the reseller's name and logo, like the portal's orders.
+        [$company, $reseller, $product] = $this->setUpStore('store-invoice.example.test', resellerPrice: 550);
+        $company->update(['email' => 'office@store-invoice.example.test']);
+        $reseller->update(['reseller_store_name' => 'Margin Boutique', 'reseller_logo' => 'resellers/margin-logo.png']);
+        $order = $this->placeResellerOrder('store-invoice.example.test', $product);
+
+        $this->assertSame($reseller->getKey(), $order->reseller_customer_id);
+        $this->assertTrue($order->showsResellerBranding());
+        $this->assertFalse($order->showsResellerPricesToBuyer());
+
+        $this->actingAs(User::factory()->create(['role' => 'super_admin', 'is_active' => true]))
+            ->withSession(['current_company_id' => $company->getKey()]);
+        app(CompanyContext::class)->set($company);
+
+        $html = $this->get('http://localhost'.route('orders.print', ['order' => $order], false))->assertOk()->getContent();
+        $this->assertStringContainsString('<h1>Margin Boutique</h1>', $html);
+        $this->assertStringContainsString('margin-logo.png', $html);
+        $this->assertStringContainsString('550', $html); // the reseller's price, unchanged
+        $this->assertStringNotContainsString('Commission store-invoice', $html);
+        $this->assertStringNotContainsString('office@store-invoice', $html);
+        $this->assertStringNotContainsString('Storefront checkout', $html); // internal note
+
+        $this->assertSame('Margin Boutique', app(OrderSummaryCardService::class)->build($order->fresh())['company']);
     }
 
     protected function placeResellerOrder(string $domain, Product $product): Order

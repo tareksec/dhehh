@@ -9,6 +9,7 @@ use App\Filament\Resources\StorefrontPages\Pages\CreateStorefrontPage;
 use App\Filament\Resources\StorefrontPages\Pages\EditStorefrontPage;
 use App\Filament\Resources\StorefrontPages\Pages\ListStorefrontPages;
 use App\Models\StorefrontPage;
+use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
 use App\Support\CompanyMedia;
 use BackedEnum;
@@ -31,6 +32,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
+use Illuminate\Validation\Rule;
 
 class StorefrontPageResource extends Resource
 {
@@ -65,6 +67,15 @@ class StorefrontPageResource extends Resource
                         ->searchable()
                         ->preload()
                         ->live(),
+                    Select::make('storefront_setting_id')
+                        ->label(__('Show on'))
+                        ->options(fn (Get $get, ?StorefrontPage $record): array => StorefrontSetting::siteChoicesFor(
+                            (int) ($get('company_id') ?? $record?->company_id ?? app(CompanyContext::class)->id()) ?: null,
+                        ))
+                        ->rule(fn (Get $get, ?StorefrontPage $record) => Rule::exists('storefront_settings', 'id')
+                            ->where('company_id', (int) ($get('company_id') ?? $record?->company_id ?? app(CompanyContext::class)->id())))
+                        ->placeholder(__('All sites'))
+                        ->helperText(__('Leave on "All sites" to show it on both the Blade storefront and the Next.js site, or pick one site to keep it off the other.')),
                     Toggle::make('is_published')
                         ->label('Published')
                         ->default(false)
@@ -136,6 +147,15 @@ class StorefrontPageResource extends Resource
                     ->label('Company')
                     ->searchable()
                     ->sortable(),
+                TextColumn::make('show_on')
+                    ->label(__('Show on'))
+                    ->state(fn (StorefrontPage $record): string => $record->storefrontSetting?->siteTypeLabel() ?? __('All sites'))
+                    ->badge()
+                    ->color(fn (StorefrontPage $record): string => match (true) {
+                        $record->storefront_setting_id === null => 'gray',
+                        (bool) $record->storefrontSetting?->isNextjs() => 'success',
+                        default => 'info',
+                    }),
                 IconColumn::make('is_published')
                     ->label('Published')
                     ->boolean()

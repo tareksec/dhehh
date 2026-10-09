@@ -265,9 +265,7 @@ class ConversationMessengerService
         }
 
         try {
-            $setting = StorefrontSetting::withoutGlobalScopes()
-                ->where('company_id', $conversation->company_id)
-                ->first();
+            $setting = StorefrontSetting::primaryFor((int) $conversation->company_id);
 
             if (! $setting || ! $this->notifications->smsConfigured($setting)) {
                 return;

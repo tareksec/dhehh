@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\ExpenseScanImageController;
 use App\Http\Controllers\Admin\InvestmentDocumentDownloadController;
 use App\Http\Controllers\Admin\InvestmentReportController;
 use App\Http\Controllers\Admin\InvestorContractDownloadController;
+use App\Http\Controllers\Admin\InvestorPortalOpenController;
 use App\Http\Controllers\Admin\LegacyAdminClusterRedirectController;
 use App\Http\Controllers\Admin\OrderPdfController;
 use App\Http\Controllers\Admin\ProductCsvController;
@@ -27,6 +28,7 @@ use App\Http\Controllers\MetaWebhookController;
 use App\Http\Controllers\MobileCrashReportController;
 use App\Http\Controllers\PayStationWebhookController;
 use App\Http\Controllers\QuotationPublicController;
+use App\Http\Controllers\Reseller\ResellerGuideController;
 use App\Http\Controllers\Reseller\ResellerProductPhotosController;
 use App\Http\Controllers\Storefront\AccountAuthController as StorefrontAccountAuthController;
 use App\Http\Controllers\Storefront\AccountController as StorefrontAccountController;
@@ -80,6 +82,7 @@ Route::get('/internal/tls-ask', \App\Http\Controllers\TlsAskController::class)
 Route::get('/webhooks/meta', [MetaWebhookController::class, 'verify'])
     ->name('webhooks.meta.verify');
 Route::post('/webhooks/meta', [MetaWebhookController::class, 'handle'])
+    ->middleware('throttle:600,1')
     ->name('webhooks.meta.handle');
 
 // Signed (HMAC) by the self-hosted whatsapp-bridge; see WhatsAppWebWebhookController.
@@ -177,8 +180,10 @@ Route::prefix('/storefront/{company:slug}')->group(function (): void {
     Route::get('/account/activity', [StorefrontAccountController::class, 'activityPreview'])
         ->name('storefront.preview.account.activity');
     Route::get('/account/login', [StorefrontAccountAuthController::class, 'showLoginPreview'])
+        ->middleware('throttle:10,1')
         ->name('storefront.preview.account.login');
     Route::post('/account/login', [StorefrontAccountAuthController::class, 'loginPreview'])
+        ->middleware('throttle:10,1')
         ->name('storefront.preview.account.login.store');
     Route::get('/account/otp', [StorefrontAccountAuthController::class, 'showOtpPreview'])
         ->middleware('throttle:10,1')
@@ -195,14 +200,26 @@ Route::prefix('/storefront/{company:slug}')->group(function (): void {
     Route::get('/account/register', [StorefrontAccountAuthController::class, 'showRegisterPreview'])
         ->name('storefront.preview.account.register');
     Route::post('/account/register', [StorefrontAccountAuthController::class, 'registerPreview'])
+        ->middleware('throttle:10,1')
         ->name('storefront.preview.account.register.store');
+    Route::get('/account/register/verify', [StorefrontAccountAuthController::class, 'showRegisterVerifyPreview'])
+        ->middleware('throttle:10,1')
+        ->name('storefront.preview.account.register.verify');
+    Route::post('/account/register/verify', [StorefrontAccountAuthController::class, 'verifyRegisterPreview'])
+        ->middleware('throttle:10,1')
+        ->name('storefront.preview.account.register.verify.store');
+    Route::post('/account/register/resend', [StorefrontAccountAuthController::class, 'resendRegisterCodePreview'])
+        ->middleware('throttle:5,1')
+        ->name('storefront.preview.account.register.resend');
     Route::get('/account/forgot-password', [StorefrontAccountAuthController::class, 'showForgotPasswordPreview'])
         ->name('storefront.preview.account.forgot-password');
     Route::post('/account/forgot-password', [StorefrontAccountAuthController::class, 'forgotPasswordPreview'])
+        ->middleware('throttle:5,1')
         ->name('storefront.preview.account.forgot-password.store');
     Route::get('/account/reset-password', [StorefrontAccountAuthController::class, 'showResetPasswordPreview'])
         ->name('storefront.preview.account.reset-password');
     Route::post('/account/reset-password', [StorefrontAccountAuthController::class, 'resetPasswordPreview'])
+        ->middleware('throttle:10,1')
         ->name('storefront.preview.account.reset-password.store');
     Route::post('/account/logout', [StorefrontAccountAuthController::class, 'logoutPreview'])
         ->name('storefront.preview.account.logout');
@@ -211,6 +228,7 @@ Route::prefix('/storefront/{company:slug}')->group(function (): void {
     Route::patch('/account/profile', [StorefrontAccountProfileController::class, 'updatePreview'])
         ->name('storefront.preview.account.profile.update');
     Route::put('/account/password', [StorefrontAccountProfileController::class, 'updatePasswordPreview'])
+        ->middleware('throttle:10,1')
         ->name('storefront.preview.account.password.update');
     Route::get('/account/reseller', [ResellerStoreController::class, 'editPreview'])
         ->name('storefront.preview.account.reseller');
@@ -334,6 +352,10 @@ Route::middleware(ResolveCompanyFromDomain::class)->group(function (): void {
             ->name('storefront.account.register');
         Route::post('/account/register', [StorefrontAccountAuthController::class, 'register'])
             ->name('storefront.account.register.store');
+        Route::get('/account/register/verify', [StorefrontAccountAuthController::class, 'showRegisterVerify'])
+            ->name('storefront.account.register.verify');
+        Route::post('/account/register/verify', [StorefrontAccountAuthController::class, 'verifyRegister'])
+            ->name('storefront.account.register.verify.store');
         Route::get('/account/reset-password', [StorefrontAccountAuthController::class, 'showResetPassword'])
             ->name('storefront.account.reset-password');
         Route::post('/account/reset-password', [StorefrontAccountAuthController::class, 'resetPassword'])
@@ -347,6 +369,8 @@ Route::middleware(ResolveCompanyFromDomain::class)->group(function (): void {
             ->name('storefront.account.forgot-password.store');
         Route::post('/account/otp', [StorefrontAccountAuthController::class, 'sendOtp'])
             ->name('storefront.account.otp.send');
+        Route::post('/account/register/resend', [StorefrontAccountAuthController::class, 'resendRegisterCode'])
+            ->name('storefront.account.register.resend');
     });
 
     Route::post('/account/logout', [StorefrontAccountAuthController::class, 'logout'])
@@ -362,6 +386,7 @@ Route::middleware(ResolveCompanyFromDomain::class)->group(function (): void {
     Route::patch('/account/profile', [StorefrontAccountProfileController::class, 'update'])
         ->name('storefront.account.profile.update');
     Route::put('/account/password', [StorefrontAccountProfileController::class, 'updatePassword'])
+        ->middleware('throttle:10,1')
         ->name('storefront.account.password.update');
     Route::get('/account/reseller', [ResellerStoreController::class, 'edit'])
         ->name('storefront.account.reseller');
@@ -439,13 +464,19 @@ Route::middleware([ResolveCompanyFromDomain::class, ResolveResellerFromSlug::cla
 
 // The reseller portal's own product-photos download (Phase 4 of
 // 13_RESELLER_PORTAL_PLAN.md). Path-prefixed with "portal" so
-// RestrictResellerPortalHost's allow-list lets it through on the portal
+// RestrictPortalHosts's allow-list lets it through on the portal
 // host; it needs the portal's own company resolution and login, which the
 // Filament panel's middleware stack normally provides, so both are applied
 // explicitly here since this is a plain route, not a panel page.
 Route::get('/portal/products/{product}/photos', ResellerProductPhotosController::class)
     ->middleware([ResolveCompanyFromResellerPortalDomain::class, 'auth:customer'])
     ->name('reseller.portal.products.photos');
+
+// The public reseller guide (rules before applying), on the portal host only;
+// RestrictPortalHosts keeps "/portal/*" off every other host.
+Route::get('/portal/guide', ResellerGuideController::class)
+    ->middleware(ResolveCompanyFromResellerPortalDomain::class)
+    ->name('reseller.portal.guide');
 
 Route::view('/pricing', 'marketing.pricing')->name('marketing.pricing');
 
@@ -666,6 +697,17 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/admin/investment-documents/{document}/download', InvestmentDocumentDownloadController::class)
         ->whereNumber('document')
         ->name('investment-documents.download');
+
+    // "Open investor portal" on an investor's / channel partner's page: opens in a new tab and sends it on to the portal host with a one-time token.
+    Route::get('/admin/investor-portal/investors/{investor}/open', [InvestorPortalOpenController::class, 'investor'])
+        ->whereNumber('investor')
+        ->middleware('throttle:30,1')
+        ->name('investor-portal.open-investor');
+
+    Route::get('/admin/investor-portal/channel-partners/{partner}/open', [InvestorPortalOpenController::class, 'partner'])
+        ->whereNumber('partner')
+        ->middleware('throttle:30,1')
+        ->name('investor-portal.open-partner');
 
     Route::get('/admin/investments/settlement-payouts/{payout}/report', [InvestmentReportController::class, 'investorPayout'])
         ->whereNumber('payout')

@@ -41,7 +41,7 @@ class PreviewController extends Controller
                 ->take(23)
                 ->get(),
             'carousels' => ProductCarousel::forHomepage(),
-            'slides' => StorefrontSlide::forCompanyTheme($company->getKey(), $setting->storefrontTheme(), $setting->homepageTemplate()),
+            'slides' => StorefrontSlide::forCompanyTheme($company->getKey(), $setting->storefrontTheme(), $setting->homepageTemplate(), $setting),
         ]);
     }
 
@@ -125,6 +125,7 @@ class PreviewController extends Controller
         }
 
         $company ??= StorefrontSetting::query()
+            ->blade()
             ->where('is_published', true)
             ->with('company')
             ->first()

@@ -259,6 +259,18 @@ class ResellerPortalCreateOrderTest extends TestCase
             ->assertHasFormErrors(['items.0.price']);
     }
 
+    public function test_create_order_is_not_in_the_menu_but_the_orders_page_has_a_button_to_it(): void
+    {
+        $this->assertFalse(CreateOrder::shouldRegisterNavigation());
+
+        $this->actingAs($this->reseller, 'customer');
+        $html = $this->get('http://reseller.order-co.example.test/portal/orders')->assertOk()->getContent();
+
+        // One link to the page: the button (the sidebar no longer lists it).
+        $this->assertSame(1, substr_count($html, 'href="http://reseller.order-co.example.test/portal/create-order"'));
+        $this->assertStringContainsString('Create order', $html);
+    }
+
     public function test_the_create_order_page_renders_over_http_for_an_approved_reseller_only(): void
     {
         $this->actingAs($this->reseller, 'customer');

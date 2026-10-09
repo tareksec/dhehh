@@ -80,8 +80,14 @@
                             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ optional($order->order_date)->format('d M Y') }}</p>
                         </div>
                         <div class="text-right">
-                            <div class="text-xs font-medium text-gray-400">Total due</div>
-                            <div class="mt-1 text-xl font-semibold text-gray-950 dark:text-white">{{ \App\Support\MoneyFormatter::currency((float) $order->due_amount, $currency) }}</div>
+                            @if ($order->showsResellerPricesToBuyer())
+                                {{-- A reseller's customer only ever sees the reseller's prices. --}}
+                                <div class="text-xs font-medium text-gray-400">{{ __('Order total') }}</div>
+                                <div class="mt-1 text-xl font-semibold text-gray-950 dark:text-white">{{ \App\Support\MoneyFormatter::currency($order->buyerTotal(), $currency) }}</div>
+                            @else
+                                <div class="text-xs font-medium text-gray-400">Total due</div>
+                                <div class="mt-1 text-xl font-semibold text-gray-950 dark:text-white">{{ \App\Support\MoneyFormatter::currency((float) $order->due_amount, $currency) }}</div>
+                            @endif
                         </div>
                     </div>
 
@@ -212,7 +218,7 @@
                                         <div class="font-medium">{{ $item->product?->name ?? 'Product' }}</div>
                                         <div class="mt-1 text-gray-500">Qty {{ $item->quantity }}</div>
                                     </div>
-                                    <div class="font-semibold">{{ \App\Support\MoneyFormatter::currency((float) $order->due_amount, $currency) }}</div>
+                                    <div class="font-semibold">{{ \App\Support\MoneyFormatter::currency($order->showsResellerPricesToBuyer() ? $item->buyerSubtotal() : (float) $order->due_amount, $currency) }}</div>
                                 </div>
                             @endforeach
                         </div>

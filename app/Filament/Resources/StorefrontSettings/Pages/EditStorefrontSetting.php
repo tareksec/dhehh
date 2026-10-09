@@ -3,15 +3,19 @@
 namespace App\Filament\Resources\StorefrontSettings\Pages;
 
 use App\Filament\Concerns\HasStickyHeaderFormActions;
+use App\Filament\Resources\StorefrontSettings\Pages\Concerns\HandlesNextjsSiteDomain;
 use App\Filament\Resources\StorefrontSettings\Pages\Concerns\HasStorefrontSettingsNavigation;
 use App\Filament\Resources\StorefrontSettings\StorefrontSettingResource;
 use App\Models\Company;
+use App\Models\StorefrontSetting;
+use App\Support\StorefrontSiteDesign;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Validation\ValidationException;
 
 class EditStorefrontSetting extends EditRecord
 {
+    use HandlesNextjsSiteDomain;
     use HasStickyHeaderFormActions;
     use HasStorefrontSettingsNavigation;
 
@@ -28,13 +32,32 @@ class EditStorefrontSetting extends EditRecord
         $this->normalizeActiveSection();
     }
 
-    protected function mutateFormDataBeforeSave(array $data): array
+    /**
+     * The Next.js row opens with the layout and options the website really
+     * uses: the default home sections while nothing is saved, and every
+     * design switch at its effective value (not blank).
+     */
+    protected function mutateFormDataBeforeFill(array $data): array
     {
-        $this->syncCompanyDomain($this->domainSyncData($data));
-
-        unset($data['company_domain'], $data['company_domain_verified']);
+        if ($this->record->isNextjs()) {
+            $data['home_sections'] = StorefrontSiteDesign::homeSections($this->record->home_sections, forForm: true);
+            $data['site_design'] = $this->record->siteDesign();
+        }
 
         return $data;
+    }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        $siteType = $this->record->isNextjs() ? StorefrontSetting::SITE_NEXTJS : StorefrontSetting::SITE_BLADE;
+
+        if ($siteType === StorefrontSetting::SITE_BLADE) {
+            $this->syncCompanyDomain($this->domainSyncData($data));
+        }
+
+        unset($data['company_domain'], $data['company_domain_verified'], $data['site_type'], $data['copy_from_blade']);
+
+        return $this->applySiteFields($data, $this->record, (int) ($data['company_id'] ?? $this->record->company_id), $siteType);
     }
 
     protected function domainSyncData(array $data): array
@@ -79,6 +102,8 @@ class EditStorefrontSetting extends EditRecord
         if (! $domain) {
             return;
         }
+
+        $this->assertBladeDomainIsNotNextjs($domain);
 
         $exists = Company::withoutGlobalScopes()
             ->where('domain', $domain)

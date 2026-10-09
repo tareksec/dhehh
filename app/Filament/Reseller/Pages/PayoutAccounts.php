@@ -39,7 +39,7 @@ class PayoutAccounts extends Page implements HasTable
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCreditCard;
 
-    protected static ?int $navigationSort = 7;
+    protected static ?int $navigationSort = 6;
 
     protected string $view = 'filament.reseller.pages.payout-accounts';
 

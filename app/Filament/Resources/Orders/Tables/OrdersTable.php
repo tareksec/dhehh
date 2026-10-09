@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Orders\Tables;
 
 use App\Filament\Resources\Orders\Actions\ChangeOrderWorkflowAction;
+use App\Filament\Resources\Orders\Actions\CourierBookingFeedback;
 use App\Livewire\OrderTrashTable;
 use App\Models\CourierBooking;
 use App\Models\CourierProvider;
@@ -30,6 +31,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -72,6 +74,13 @@ class OrdersTable
                     ->placeholder('-')
                     ->copyable()
                     ->toggleable(),
+
+                TextColumn::make('reseller_parcel_id')
+                    ->label(__('Reseller parcel ID'))
+                    ->placeholder('-')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('order_date')
                     ->label('Sale Date')
@@ -171,6 +180,20 @@ class OrdersTable
                 SelectFilter::make('source')
                     ->options(Order::SOURCES),
 
+                TernaryFilter::make('reseller_own_courier')
+                    ->label(__('Reseller\'s own courier')),
+
+                // Orders with an item added after they were created (see
+                // OrderItem::$is_upsell) — admin-only, like the Upsell tag.
+                TernaryFilter::make('has_upsell')
+                    ->label(__('Upsell items'))
+                    ->trueLabel(__('With upsell items'))
+                    ->falseLabel(__('Without upsell items'))
+                    ->queries(
+                        true: fn (Builder $query): Builder => $query->whereHas('items', fn (Builder $items): Builder => $items->where('is_upsell', true)),
+                        false: fn (Builder $query): Builder => $query->whereDoesntHave('items', fn (Builder $items): Builder => $items->where('is_upsell', true)),
+                    ),
+
                 SelectFilter::make('customer_id')
                     ->label('Customer')
                     ->relationship('customer', 'name')
@@ -186,20 +209,22 @@ class OrdersTable
                     ->visible(fn (Order $record): bool => self::canBookCourier($record))
                     ->schema(fn (Order $record): array => self::unifiedBookingForm($record))
                     ->fillForm(fn (Order $record): array => app(CourierService::class)->bookingFormDefaults($record))
-                    ->action(function (Order $record, array $data): void {
+                    ->action(function (Action $action, Order $record, array $data): void {
                         $provider = CourierProvider::query()->findOrFail($data['courier_provider_id']);
                         $payload = self::bookingPayloadFor($provider, $data);
 
-                        match ($provider->driver) {
+                        CourierBookingFeedback::book($action, fn (): CourierBooking => match ($provider->driver) {
                             CourierProvider::DRIVER_STEADFAST => app(CourierService::class)->createSteadfastBooking($record, $provider, $payload),
                             CourierProvider::DRIVER_PATHAO => app(CourierService::class)->createPathaoBooking($record, $provider, $payload),
                             CourierProvider::DRIVER_REDX => app(CourierService::class)->createRedxBooking($record, $provider, $payload),
                             CourierProvider::DRIVER_ECOURIER => app(CourierService::class)->createECourierBooking($record, $provider, $payload),
                             default => app(CourierService::class)->createManualBooking($record, $payload),
-                        };
+                        });
                     }),
+                // "Mark …": a bare green "Delivered" button next to a freshly
+                // booked order read like its status (owner report 2026-10-06).
                 Action::make('markDelivered')
-                    ->label('Delivered')
+                    ->label(__('Mark delivered'))
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
                     ->visible(fn (Order $record): bool => filled($record->latestCourierBooking) && ! in_array($record->delivery_status, [
@@ -208,11 +233,12 @@ class OrdersTable
                         CourierBooking::STATUS_CANCELLED,
                     ], true))
                     ->requiresConfirmation()
-                    ->action(function (Order $record): void {
-                        app(CourierService::class)->updateStatus($record->latestCourierBooking, CourierBooking::STATUS_DELIVERED, 'Marked delivered from order list.');
+                    ->modalDescription(__('Only when the customer has received the parcel. This moves the order to Delivered without asking the courier.'))
+                    ->action(function (Action $action, Order $record): void {
+                        CourierBookingFeedback::run($action, fn () => app(CourierService::class)->updateStatus($record->latestCourierBooking, CourierBooking::STATUS_DELIVERED, 'Marked delivered from order list.'), __('Marked delivered'));
                     }),
                 Action::make('markReturned')
-                    ->label('Returned')
+                    ->label(__('Mark returned'))
                     ->icon('heroicon-o-arrow-uturn-left')
                     ->color('danger')
                     ->visible(fn (Order $record): bool => filled($record->latestCourierBooking) && ! in_array($record->delivery_status, [
@@ -221,8 +247,8 @@ class OrdersTable
                         CourierBooking::STATUS_CANCELLED,
                     ], true))
                     ->requiresConfirmation()
-                    ->action(function (Order $record): void {
-                        app(CourierService::class)->updateStatus($record->latestCourierBooking, CourierBooking::STATUS_RETURNED, 'Marked returned from order list.');
+                    ->action(function (Action $action, Order $record): void {
+                        CourierBookingFeedback::run($action, fn () => app(CourierService::class)->updateStatus($record->latestCourierBooking, CourierBooking::STATUS_RETURNED, 'Marked returned from order list.'), __('Marked returned'));
                     }),
                 Action::make('print')
                     ->url(fn (Order $record): string => route('orders.print', ['order' => $record, 'print' => 1]))
@@ -252,7 +278,7 @@ class OrdersTable
                         ->deselectRecordsAfterCompletion()
                         ->action(function (Collection $records, array $data): void {
                             $updated = 0;
-                            $skipped = 0;
+                            $skipped = [];
 
                             foreach ($records as $record) {
                                 try {
@@ -263,18 +289,20 @@ class OrdersTable
                                         'bulk',
                                     );
                                     $updated++;
-                                } catch (ValidationException) {
-                                    $skipped++;
+                                } catch (ValidationException $exception) {
+                                    // Each skipped order with its own reason (a transition that is not
+                                    // allowed, or not enough stock), never a bare count.
+                                    $skipped[] = $record->order_number.': '.collect($exception->errors())->flatten()->implode(' ');
                                 }
                             }
 
                             $notification = Notification::make()
                                 ->title("{$updated} order(s) updated")
-                                ->body($skipped > 0 ? "{$skipped} order(s) were skipped because that transition is not allowed." : null);
+                                ->body($skipped !== [] ? __(':count order(s) were skipped:', ['count' => count($skipped)]).' '.implode(' | ', $skipped) : null);
 
                             if ($updated === 0) {
                                 $notification->danger();
-                            } elseif ($skipped > 0) {
+                            } elseif ($skipped !== []) {
                                 $notification->warning();
                             } else {
                                 $notification->success();
@@ -289,7 +317,7 @@ class OrdersTable
                         ->visible(fn (): bool => Auth::user()?->hasPermission('sales.update') ?? false)
                         ->schema(fn (): array => self::bulkBookingForm())
                         ->requiresConfirmation()
-                        ->modalDescription('Books every selected, not-yet-booked order through the chosen courier. Orders that are already booked are skipped.')
+                        ->modalDescription(__('Books every selected, not-yet-booked order through the chosen courier. Orders that cannot be booked are skipped, each with the reason.'))
                         ->deselectRecordsAfterCompletion()
                         ->action(fn (Collection $records, array $data) => self::bookCourierBulk($records, $data)),
                     BulkAction::make('printInvoicesBulk')
@@ -458,13 +486,15 @@ class OrdersTable
         $provider = CourierProvider::query()->findOrFail($data['courier_provider_id']);
 
         $booked = 0;
-        $skippedAlreadyBooked = 0;
-        $skippedFailed = 0;
+        $skipped = [];
+        $failures = [];
 
         foreach ($records as $record) {
             /** @var Order $record */
-            if (! self::canBookCourier($record)) {
-                $skippedAlreadyBooked++;
+            // Each skipped order says why — it used to say "already booked"
+            // for every reason, including orders that had never been booked.
+            if (($blocker = self::courierBookingBlocker($record)) !== null) {
+                $skipped[] = $record->order_number.': '.$blocker;
 
                 continue;
             }
@@ -475,19 +505,25 @@ class OrdersTable
                     default => app(CourierService::class)->createManualBooking($record, ['courier_provider_id' => $provider->getKey()]),
                 };
                 $booked++;
-            } catch (ValidationException) {
-                $skippedFailed++;
+            } catch (ValidationException $exception) {
+                // Nothing reaches the Status Logs when a booking is refused,
+                // so say which order failed and why.
+                $failures[] = CourierBookingFeedback::failureLine($exception, (string) $record->order_number);
             }
         }
 
         $notes = array_filter([
-            $skippedAlreadyBooked > 0 ? "{$skippedAlreadyBooked} already booked" : null,
-            $skippedFailed > 0 ? "{$skippedFailed} failed — see Status Logs" : null,
+            $skipped !== [] ? __(':count skipped', ['count' => count($skipped)]) : null,
+            $failures !== [] ? __(':count failed', ['count' => count($failures)]) : null,
         ]);
 
         $notification = Notification::make()
-            ->title("{$booked} order(s) booked")
-            ->body($notes === [] ? null : implode('; ', $notes).'.');
+            ->title(__(':count order(s) booked', ['count' => $booked]))
+            ->body($notes === [] ? null : new HtmlString(collect([implode('; ', $notes).'.', ...$skipped, ...$failures])->map(fn (string $line): string => e($line))->implode('<br>')));
+
+        if ($skipped !== [] || $failures !== []) {
+            $notification->persistent();
+        }
 
         if ($booked === 0) {
             $notification->danger();
@@ -769,8 +805,19 @@ class OrdersTable
 
     protected static function canBookCourier(Order $record): bool
     {
-        return $record->delivery_status === CourierBooking::STATUS_NOT_BOOKED
-            && app(CompanyContext::class)->hasCompany()
-            && (int) app(CompanyContext::class)->id() === (int) $record->company_id;
+        return self::courierBookingBlocker($record) === null;
+    }
+
+    /** Why this order cannot be booked from here, or null when it can (see Order::courierBookingBlocker()). */
+    protected static function courierBookingBlocker(Order $record): ?string
+    {
+        $context = app(CompanyContext::class);
+
+        // Couriers belong to a company: book from inside the order's own company.
+        if (! $context->hasCompany() || (int) $context->id() !== (int) $record->company_id) {
+            return __('Switch to the order\'s company to book its courier.');
+        }
+
+        return $record->courierBookingBlocker();
     }
 }

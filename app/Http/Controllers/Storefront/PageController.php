@@ -37,6 +37,7 @@ class PageController extends Controller
     ): View {
         $page = StorefrontPage::query()
             ->where('company_id', $company->getKey())
+            ->forSite($setting)
             ->where('slug', StorefrontPage::normalizeSlug($slug))
             ->published()
             ->firstOrFail();
@@ -55,6 +56,7 @@ class PageController extends Controller
 
         if (! $company instanceof Company && app()->environment(['local', 'testing'])) {
             $company = StorefrontSetting::query()
+                ->blade()
                 ->where('is_published', true)
                 ->whereHas('company', fn ($query) => $query->where('is_active', true))
                 ->with('company')
@@ -77,6 +79,13 @@ class PageController extends Controller
     protected function previewStorefront(Company $company): StorefrontSetting
     {
         abort_unless(app()->environment(['local', 'testing']) || auth()->check(), 404);
+
+        // Same gate as PreviewController::previewCompany(): a signed-in staff
+        // member may only preview their own company/companies, never another
+        // company's by slug (set() below would otherwise switch the scope).
+        if (auth()->check()) {
+            abort_unless(auth()->user()->canAccessCompany($company->getKey()), 404);
+        }
 
         $this->context->set($company);
 

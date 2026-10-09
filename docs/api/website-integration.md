@@ -86,7 +86,14 @@ X-ZamZam-Signature: <hex-encoded HMAC-SHA256 of the raw request body>
 ```
 
 Events sent: `order.status_updated`, `product.updated`,
-`lead.status_updated`, and `ping` (test webhook only).
+`lead.status_updated`, `storefront.updated` and `ping` (test webhook only).
+
+`storefront.updated` (empty `data` except `updated_at`) means storefront content
+changed — settings (home page, header, footer, menus), hero slides, pages,
+categories, offers/collections. It is sent about 5 seconds after the first change
+and at most once per 5 seconds per company, so the website can refresh its cache
+and show a dashboard edit within seconds. The headless Next.js site
+(`/api/erp/webhook`) refreshes everything it caches on it.
 
 `lead.status_updated` is sent only for leads you created with an
 `external_reference` (your own quote id) on `POST /leads` — that is how you

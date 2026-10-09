@@ -273,6 +273,9 @@ class User extends Authenticatable implements FilamentUser
         'investments.settle' => 'Investments: Calculate Settlements and Pay Payouts',
         'investments.manage_channel_partner' => 'Investments: Change Assigned Channel Partner',
         'investments.override_investment_window' => 'Investments: Add Investment After Window Closes',
+        'investments.portal_manage' => 'Investments: Manage Investor Portal Access',
+        'investments.payout_batch_create' => 'Investments: Make Payout Batches',
+        'investments.payout_batch_approve' => 'Investments: Approve Payout Batches',
         'marketing.view' => 'Marketing/Ads: View',
         'marketing.create' => 'Marketing/Ads: Create',
         'marketing.update' => 'Marketing/Ads: Update',
@@ -319,6 +322,13 @@ class User extends Authenticatable implements FilamentUser
         SettlementPayout::class => 'investments',
         ChannelPartner::class => 'investments',
         ChannelPartnerPayout::class => 'investments',
+        InvestorPortalAccount::class => 'investments',
+        InvestorBankAccount::class => 'investments',
+        AgreementTemplate::class => 'investments',
+        AgreementAcceptance::class => 'investments',
+        InvestorRequest::class => 'investments',
+        PayoutBatch::class => 'investments',
+        PayoutBatchItem::class => 'investments',
         MetaAdAccount::class => 'marketing',
         MetaAdCampaign::class => 'marketing',
         MetaAdSet::class => 'marketing',
@@ -395,6 +405,110 @@ class User extends Authenticatable implements FilamentUser
     public function canManageUsers(): bool
     {
         return $this->isSuperAdmin() || $this->hasPermission('users.manage');
+    }
+
+    /**
+     * Owner's rule: only a Super Admin changes permissions — a user's role
+     * (their own included) and what each role is allowed to do. "Users:
+     * Manage" still covers everything else about user accounts.
+     */
+    public function canChangePermissions(): bool
+    {
+        return $this->isSuperAdmin();
+    }
+
+    /**
+     * Companies this user may give (or take away) access to on the Users
+     * screen: every active company for a Super Admin, otherwise only their
+     * own active companies.
+     *
+     * @return list<int>
+     */
+    public function assignableCompanyIds(): array
+    {
+        $query = $this->isSuperAdmin()
+            ? Company::query()->where('is_active', true)->pluck('id')
+            : $this->companies()->where('companies.is_active', true)->pluck('companies.id');
+
+        return $query->map(fn ($id): int => (int) $id)->values()->all();
+    }
+
+    /**
+     * Applies the owner's rule (2026-10-07) to a company-access change made by
+     * this user: a non-Super-Admin can only add or remove companies they can
+     * access themselves. The target's access to any other company is kept as
+     * it was, and the default company only moves to one of this user's own.
+     *
+     * @param  list<int>  $requestedIds
+     * @return array{0: list<int>, 1: ?int}
+     */
+    public function resolveCompanyAccessChange(array $requestedIds, ?int $requestedDefault, ?User $target = null): array
+    {
+        if ($this->isSuperAdmin()) {
+            return [$requestedIds, $requestedDefault];
+        }
+
+        $allowed = $this->assignableCompanyIds();
+        $kept = [];
+        $currentDefault = null;
+
+        if ($target?->exists) {
+            $kept = array_diff(
+                $target->companies()->pluck('companies.id')->map(fn ($id): int => (int) $id)->all(),
+                $allowed,
+            );
+            $currentDefault = $target->companies()->wherePivot('is_default', true)->value('companies.id');
+            $currentDefault = $currentDefault === null ? null : (int) $currentDefault;
+        }
+
+        $default = match (true) {
+            $requestedDefault !== null && in_array($requestedDefault, $allowed, true) => $requestedDefault,
+            $currentDefault !== null && in_array($currentDefault, $kept, true) => $currentDefault,
+            default => null,
+        };
+
+        return [
+            array_values(array_unique([...array_intersect($requestedIds, $allowed), ...$kept])),
+            $default,
+        ];
+    }
+
+    /**
+     * Owner's rule (2026-10-07): apart from a Super Admin, a user only sees and
+     * edits the users of their own companies (and themselves).
+     */
+    public function canSeeUser(User $target): bool
+    {
+        if ($this->isSuperAdmin() || $this->is($target)) {
+            return true;
+        }
+
+        return $target->companies()->whereIn('companies.id', $this->assignableCompanyIds())->exists();
+    }
+
+    /**
+     * Narrows a users query to the ones this user may see (see canSeeUser()).
+     */
+    public function scopeVisibleTo(Builder $query, User $viewer): Builder
+    {
+        if ($viewer->isSuperAdmin()) {
+            return $query;
+        }
+
+        $companyIds = $viewer->assignableCompanyIds();
+
+        return $query->where(fn (Builder $query) => $query
+            ->whereKey($viewer->getKey())
+            ->orWhereHas('companies', fn (Builder $companies) => $companies->whereIn('companies.id', $companyIds)));
+    }
+
+    /**
+     * "Users: Manage" must not be a path to taking over a Super Admin: only a
+     * Super Admin may change, delete or reset the password of one.
+     */
+    public function canModifyUser(User $target): bool
+    {
+        return ! $target->isSuperAdmin() || $this->isSuperAdmin();
     }
 
     public function canEditPayments(): bool

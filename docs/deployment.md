@@ -47,9 +47,9 @@ APP_DEBUG=false
 APP_URL=https://your-domain.com
 ASSET_URL=https://your-domain.com
 TRUSTED_PROXIES=*
-APP_VERSION=2.46.0
-APP_RELEASE_TYPE=minor
-APP_RELEASE_DATE=2026-10-04
+APP_VERSION=2.66.1
+APP_RELEASE_TYPE=patch
+APP_RELEASE_DATE=2026-10-09
 
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
@@ -188,6 +188,12 @@ The deploy workflow runs tests before SSH deploy. On the server it:
 7. Caches config, routes, and views.
 8. Restarts queues.
 9. Disables maintenance mode.
+
+The separate **MySQL migrations** workflow (`.github/workflows/mysql-migrations.yml`) runs every migration against MySQL 8.4 on every branch push and pull request. The test suite uses SQLite, which accepts things MySQL refuses (for example index names over 64 characters), so check that this workflow is green on the branch before pushing to `main`.
+
+## Error Isolation
+
+In production, a failing sidebar badge, widget, render hook or page does not take the whole panel down. The failing part shows a short notice, and the error is reported to Super Admins under **Settings → Deploy Error Logs**. An admin section whose database table is missing (an unfinished migration) shows "temporarily unavailable" until `migrate` creates the table. See `App\Support\ModuleGuard` and `App\Support\ModuleHealth`. This is on by default everywhere except `local` and `testing`. `ISOLATE_MODULE_ERRORS=false` turns it off (errors then show as plain 500 pages again). Leave it unset in production.
 
 ## Manual Update Deploy
 
@@ -518,9 +524,23 @@ For each company:
 
 Behaviour to expect: on the portal host every non-portal path redirects to the portal, and `/portal` returns 404 on every other host. Resellers who open the old **My Account → Your Store** page are redirected to the portal (they sign in again there — it is a separate login on a different host). Applications now go through the portal's own **Become a reseller** form. Store links (`{company-domain}/store/{slug}`) do not change.
 
+## Investor Portal Domain
+
+A company that turns the investor portal on (**Investments → Investor Portal Settings**) gets it at `https://investor.<company-domain>/investor` (for example `investor.tasneemknitindustry.com/investor`), or at a fully custom domain (Super Admin only, same page). Investors and channel partners sign in there with their phone; it is a separate login from the admin panel, the shop and the reseller portal (`SESSION_DOMAIN` stays empty). No new environment variables. Plan: `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md`.
+
+For each company:
+
+1. **DNS:** add an `A` (or `CNAME`) record `investor` pointing to the same server as the company's main domain. For a separate domain, point that whole domain at the server.
+2. **Coolify:** add `https://investor.<domain>` (or the custom domain) to the application's **Domains** list so Traefik issues its SSL certificate.
+3. **Admin:** **Investments → Investor Portal Settings** → turn the portal on (custom domain only if one is used). Nobody can sign in until staff press **Portal access → Invite to the investor portal** on an investor's or channel partner's page; the invite goes by SMS through the company's storefront SMS gateway (the Next.js site's settings when the company has one, else the Blade site's). Without an SMS gateway the invite link is shown to staff to share by hand, and sign-in works with a password only.
+4. **Migrations:** `php artisan migrate --force` adds `companies.investor_portal_enabled` / `investor_portal_domain`, the `investor_portal_accounts` table and `audit_logs.actor_type` / `actor_id`. Nothing is backfilled; the portal stays off for every company until it is turned on.
+5. **Build assets:** the portal has its own Filament theme (`resources/css/filament/investor/theme.css`), so `npm run build` must run on deploy.
+
+Behaviour to expect: on the investor host every other path redirects to `/investor`, and `/investor` returns 404 on every other host (the same rule as the reseller portal, both kept by `RestrictPortalHosts`).
+
 ### Reseller store subdomains (`name.<company-domain>`)
 
-Optional, per company. Needs two things on the server before **Company Management → Reseller subdomains enabled** is switched on:
+Optional, per company. Needs two things on the server before **Resellers → Reseller Settings → Reseller subdomains enabled** is switched on:
 
 1. **Wildcard DNS:** an `A` record `*.<company-domain>` pointing at the same server. Explicit records (`reseller`, `www`) keep working because they are more specific.
 2. **Wildcard SSL:** a `*.<company-domain>` certificate. Let's Encrypt only issues wildcards through a DNS challenge, so Traefik/Coolify needs your DNS provider's API token for that domain. Without it, subdomains open with a certificate warning.
@@ -529,7 +549,7 @@ No environment variables, no per-reseller server work: once both are in place a 
 
 ### Reseller custom domains (`myshop.com`)
 
-Optional, per company (**Reseller custom domains enabled**). The app side is finished: it verifies DNS, resolves the domain to the reseller's store, and answers `GET /internal/tls-ask?domain=<host>` with `200` only for a verified reseller domain (otherwise `404`). What the server needs is a proxy that gets an SSL certificate **on demand** and asks that endpoint first. Caddy does this:
+Optional, per company (**Resellers → Reseller Settings → Reseller custom domains enabled**). The app side is finished: it verifies DNS, resolves the domain to the reseller's store, and answers `GET /internal/tls-ask?domain=<host>` with `200` only for a verified reseller domain (otherwise `404`). What the server needs is a proxy that gets an SSL certificate **on demand** and asks that endpoint first. Caddy does this:
 
 ```
 {

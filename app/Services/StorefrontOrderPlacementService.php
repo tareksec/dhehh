@@ -81,6 +81,7 @@ class StorefrontOrderPlacementService
             }
 
             $order = Order::query()->create([
+                'storefront_setting_id' => $payment->storefront_setting_id,
                 'customer_id' => $customer->getKey(),
                 'reseller_customer_id' => $data['reseller_customer_id'] ?? null,
                 'customer_name' => $customer->name,
@@ -140,7 +141,7 @@ class StorefrontOrderPlacementService
 
             $this->metaDispatch->captureOrder(
                 $order,
-                $company->storefrontSetting,
+                $payment->siteSetting(),
                 (array) ($data['meta_tracking_context'] ?? []),
                 isset($data['courier_success_ratio']) ? (float) $data['courier_success_ratio'] : $attempt?->courier_success_ratio,
                 $cartRecordId ?: null,

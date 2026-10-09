@@ -22,8 +22,36 @@
     $shippingFee = (float) $order->shipping_fee;
     $paid = (float) $order->paid_amount;
     $due = (float) $order->due_amount;
+    $subTotal = (float) $order->subtotal;
+    $grandTotal = (float) $order->total_amount;
     $deliveryPartner = $order->latestCourierBooking?->provider?->name;
     $parcelId = $order->latestCourierBooking?->provider_reference;
+    $brandName = $company['name'];
+    $invoiceLogoUrl = $company['logo_url'] ?? $company['dark_logo_url'] ?? null;
+    // A reseller's own-courier order goes to the reseller's customer, who must
+    // only ever see the reseller's retail prices (owner rule) -- never the
+    // store's price, the packaging charge, the advance or the internal note.
+    // The invoice carries the reseller's store name and logo instead of the
+    // company's, and none of the company's contact details; the customer
+    // owes the whole retail total (owner rules, 2026-10-06).
+    // Every reseller-portal order (also store-delivered, cash on delivery) is
+    // invoiced in the reseller's name with none of the company's details or
+    // the internal note (owner rule, 2026-10-07).
+    $buyerView = $order->showsResellerPricesToBuyer();
+    $resellerBrand = $order->showsResellerBranding();
+    if ($buyerView) {
+        $discount = $vat = $shippingFee = $paid = 0.0;
+        $subTotal = $grandTotal = $due = $order->buyerTotal();
+        $deliveryPartner = $order->reseller_courier_name;
+        $parcelId = $order->reseller_parcel_id;
+    }
+    if ($resellerBrand) {
+        $brandName = $order->reseller?->resellerStoreName() ?? '';
+        $invoiceLogoUrl = $order->reseller?->resellerLogoUrl();
+        $invoice = [...$invoice, 'hotline' => null, 'support_hotline' => null, 'facebook_url' => null, 'facebook_label' => null,
+            'whatsapp' => null, 'website' => null, 'thank_you' => null];
+        $company = [...$company, 'email' => null, 'address' => null];
+    }
     $invoiceDate = optional($order->order_date)->format($company['date_format'] ?? 'd M Y');
     $customerName = $order->customer?->name ?? $order->customer_name;
     $customerPhone = $order->customer?->phone;
@@ -34,18 +62,17 @@
     $barcodeSvg = $showBarcode ? Code128::svg($order->order_number) : '';
     $columnCount = 5 + ($showImages ? 1 : 0) + ($showWeight ? 1 : 0);
     $websiteLabel = preg_replace('#^https?://#', '', rtrim((string) ($invoice['website'] ?? ''), '/'));
-    $invoiceLogoUrl = $company['logo_url'] ?? $company['dark_logo_url'] ?? null;
 @endphp
 <div class="invoice-page">
     <main class="invoice">
         <header class="inv-header">
             <div class="logo">
                 @if (filled($invoiceLogoUrl))
-                    <img src="{{ $invoiceLogoUrl }}" alt="{{ $company['name'] }} logo" data-invoice-logo="main" decoding="sync" loading="eager">
+                    <img src="{{ $invoiceLogoUrl }}" alt="{{ $brandName }} logo" data-invoice-logo="main" decoding="sync" loading="eager">
                 @endif
             </div>
             <div class="title">
-                <h1>{{ $company['name'] }}</h1>
+                <h1>{{ $brandName }}</h1>
                 @if (filled($invoice['hotline'] ?? null))
                     <div class="hotline">Hotline: {{ $invoice['hotline'] }}</div>
                 @endif
@@ -117,9 +144,9 @@
                                 {{ $item->product?->weight_kg ? rtrim(rtrim(number_format((float) $item->product->weight_kg, 3), '0'), '.').' kg' : '—' }}
                             </td>
                         @endif
-                        <td class="num">{{ $money((float) $item->unit_price) }}</td>
+                        <td class="num">{{ $money($buyerView ? $item->buyerUnitPrice() : (float) $item->unit_price) }}</td>
                         <td class="center">{{ $item->quantity }}</td>
-                        <td class="num">{{ $money((float) $item->subtotal) }}</td>
+                        <td class="num">{{ $money($buyerView ? $item->buyerSubtotal() : (float) $item->subtotal) }}</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -139,7 +166,7 @@
                 @if (! empty($company['address']))
                     <p><span class="contact-icon">&#9906;</span>{{ $company['address'] }}</p>
                 @endif
-                @if ($order->note)
+                @if ($order->note && ! $resellerBrand)
                     <p><strong>Note:</strong> {{ $order->note }}</p>
                 @endif
             </div>
@@ -147,7 +174,7 @@
                 <table class="totals">
                     <tr class="row">
                         <td class="t-label">Sub Total</td>
-                        <td class="num">{{ $money((float) $order->subtotal) }}</td>
+                        <td class="num">{{ $money($subTotal) }}</td>
                     </tr>
                     @if ($discount > 0)
                         <tr class="row">
@@ -169,7 +196,7 @@
                     @endif
                     <tr class="row">
                         <td class="t-label">Grand Total</td>
-                        <td class="num">{{ $money((float) $order->total_amount) }}</td>
+                        <td class="num">{{ $money($grandTotal) }}</td>
                     </tr>
                     @if ($paid > 0)
                         <tr class="row">
@@ -215,11 +242,11 @@
                     <div class="slip-header">
                         <div class="logo">
                             @if (filled($invoiceLogoUrl))
-                                <img src="{{ $invoiceLogoUrl }}" alt="{{ $company['name'] }} logo" data-invoice-logo="slip" decoding="sync" loading="eager">
+                                <img src="{{ $invoiceLogoUrl }}" alt="{{ $brandName }} logo" data-invoice-logo="slip" decoding="sync" loading="eager">
                             @endif
                         </div>
                         <div class="title">
-                            <h2>{{ $company['name'] }}</h2>
+                            <h2>{{ $brandName }}</h2>
                             @if (filled($invoice['hotline'] ?? null))
                                 <div class="hotline">Hotline: {{ $invoice['hotline'] }}</div>
                             @endif

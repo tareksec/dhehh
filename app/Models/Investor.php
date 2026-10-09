@@ -92,6 +92,11 @@ class Investor extends Model
         return $this->morphMany(InvestmentDocument::class, 'documentable');
     }
 
+    public function bankAccounts()
+    {
+        return $this->morphMany(InvestorBankAccount::class, 'holder');
+    }
+
     /** 60-day written exit notices (v3 P2.4). */
     public function withdrawalNotices()
     {

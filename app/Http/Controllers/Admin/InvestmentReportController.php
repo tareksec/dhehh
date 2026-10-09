@@ -26,10 +26,22 @@ class InvestmentReportController extends Controller
             ->findOrFail($payout);
 
         $company = $this->authorizeCompany($request, $context, $record);
+
+        return self::investorPayoutView($record, $settings->profile($company), $request->query('print') === '1');
+    }
+
+    /**
+     * The per-investor payout report. Shared with the investor portal
+     * (InvestorPortalReportController), which checks ownership itself: the
+     * report shows only this investor's own figures and the project's costs.
+     */
+    public static function investorPayoutView(SettlementPayout $record, array $companyProfile, bool $autoPrint): View
+    {
+        $record->loadMissing(['settlement.project.costItems', 'settlement.project.investments', 'investor']);
         $project = $record->settlement->project;
 
         return view('investments.reports.investor-payout', [
-            'company' => $settings->profile($company),
+            'company' => $companyProfile,
             'payout' => $record,
             'settlement' => $record->settlement,
             'project' => $project,
@@ -37,7 +49,7 @@ class InvestmentReportController extends Controller
             'landedCosts' => $project->costItems->where('category', 'landed_cost')->values(),
             'localExpenses' => $project->costItems->where('category', 'local_expense')->values(),
             'grossProfit' => round((float) $record->settlement->total_revenue - $project->totalLandedCost(), 2),
-            'autoPrint' => $request->query('print') === '1',
+            'autoPrint' => $autoPrint,
         ]);
     }
 

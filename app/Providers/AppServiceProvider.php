@@ -9,6 +9,7 @@ use App\Filament\Resources\Products\Pages\CreateProduct;
 use App\Filament\Resources\Products\Pages\EditProduct;
 use App\Filament\Resources\Products\Pages\ListProducts;
 use App\Models\Account;
+use App\Models\AgreementTemplate;
 use App\Models\Category;
 use App\Models\ChannelPartner;
 use App\Models\ChannelPartnerPayout;
@@ -24,12 +25,16 @@ use App\Models\InvestmentProject;
 use App\Models\InvestmentWithdrawalNotice;
 use App\Models\InvestmentWitness;
 use App\Models\Investor;
+use App\Models\InvestorBankAccount;
 use App\Models\InvestorCycleElection;
+use App\Models\InvestorRequest;
 use App\Models\InvestorSecurityInstrument;
 use App\Models\Order;
 use App\Models\OrderCost;
 use App\Models\OrderItem;
 use App\Models\OrderPayment;
+use App\Models\PayoutBatch;
+use App\Models\PayoutBatchItem;
 use App\Models\Product;
 use App\Models\ProjectCostItem;
 use App\Models\ProjectSettlement;
@@ -52,16 +57,24 @@ use App\Services\ResellerPricing;
 use App\Services\StorageSettingsService;
 use App\Support\DefaultTableSort;
 use App\Support\FileUploadClearAction;
+use App\Support\GuardedViewManager;
+use App\Support\ModuleHealth;
 use App\Support\MoneyFormatter;
 use Filament\Forms\Components\FileUpload;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Livewire\Notifications;
+use Filament\Support\View\ViewManager;
 use Filament\Tables\Columns\Summarizers\Summarizer;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Events\MigrationsEnded;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
@@ -76,10 +89,39 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(StorageSettingsService::class);
         $this->app->singleton(CompanyStorageService::class);
         $this->app->scoped(ResellerPricing::class);
+        $this->app->scoped(ModuleHealth::class);
+
+        // Every Filament render hook runs through ModuleGuard: one failing hook
+        // must not break every page (extend() works whichever provider binds first).
+        $this->app->extend(ViewManager::class, fn (): GuardedViewManager => new GuardedViewManager);
     }
 
     public function boot(): void
     {
+        // A migration run may have created a missing table: re-check (ModuleHealth).
+        Event::listen(MigrationsEnded::class, function (): void {
+            ModuleHealth::forget();
+        });
+
+        // The headless Next.js storefront reads the catalog from ONE server, so
+        // the default per-IP limiter would put every visitor in a single bucket.
+        // Bucket by the presented API token instead (this runs before the key is
+        // resolved, so a wrong key is throttled too) and keep a high per-IP
+        // ceiling as a backstop against anyone hammering the endpoint.
+        RateLimiter::for('storefront-api', fn (Request $request): array => [
+            Limit::perMinute(600)->by('storefront-api:token:'.sha1((string) $request->bearerToken())),
+            Limit::perMinute(3000)->by('storefront-api:ip:'.$request->ip()),
+        ]);
+
+        // Sign-in, registration, one-time codes and password resets from the
+        // Next.js site: every visitor reaches the ERP from the website's one
+        // server address, so the limit is per VISITOR (the IP the website
+        // forwards as client_ip), not per caller. Wrong passwords, codes and
+        // resets are additionally counted per account (CustomerAccountService).
+        RateLimiter::for('storefront-auth', fn (Request $request): Limit => Limit::perMinute(20)->by(
+            'storefront-auth:'.sha1((string) $request->bearerToken()).':'.($request->input('client_ip') ?: $request->ip())
+        ));
+
         TextColumn::macro('moneyWithoutTrailingZeroes', function (string|\BackedEnum|\Closure|null $currency = null, int|\Closure $divideBy = 0, string|\BackedEnum|\Closure|null $locale = null, int|\Closure|null $decimalPlaces = null): static {
             $this->formatStateUsing(static function (TextColumn $column, $state) use ($currency, $divideBy, $decimalPlaces): ?string {
                 if (blank($state)) {
@@ -206,6 +248,20 @@ class AppServiceProvider extends ServiceProvider
                 return null;
             }
 
+            // A model whose table is missing (e.g. a failed migration) has its
+            // pages turned off instead of failing; super admins are told.
+            if (! app(ModuleHealth::class)->modelAvailable($modelClass)) {
+                return false;
+            }
+
+            if ($subject instanceof User && ! $user->canSeeUser($subject)) {
+                return false;
+            }
+
+            if ($subject instanceof User && ! in_array($ability, ['view', 'viewAny'], true) && ! $user->canModifyUser($subject)) {
+                return false;
+            }
+
             return $user->canPerformModelAbility($ability, $modelClass);
         });
 
@@ -231,6 +287,11 @@ class AppServiceProvider extends ServiceProvider
             SettlementPayout::class,
             ChannelPartner::class,
             ChannelPartnerPayout::class,
+            InvestorBankAccount::class,
+            InvestorRequest::class,
+            AgreementTemplate::class,
+            PayoutBatch::class,
+            PayoutBatchItem::class,
             Order::class,
             OrderItem::class,
             OrderPayment::class,

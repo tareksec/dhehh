@@ -51,7 +51,7 @@
                                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ optional($order->order_date)->format('d M Y') }} &middot; {{ $order->items->sum('quantity') }} items</p>
                             </div>
                             <div class="shrink-0 text-right">
-                                <p class="text-sm font-semibold">{{ \App\Support\MoneyFormatter::currency((float) $order->total_amount, $company->currency ?: 'BDT') }}</p>
+                                <p class="text-sm font-semibold">{{ \App\Support\MoneyFormatter::currency($order->buyerTotal(), $company->currency ?: 'BDT') }}</p>
                                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ App\Models\Order::STATUSES[$order->status] ?? str($order->status)->headline() }}</p>
                             </div>
                         </a>

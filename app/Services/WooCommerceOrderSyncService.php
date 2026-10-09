@@ -402,7 +402,7 @@ class WooCommerceOrderSyncService
             return;
         }
 
-        $setting = $order->company?->storefrontSetting;
+        $setting = StorefrontSetting::primaryFor((int) $order->company_id);
         $baseUrl = rtrim((string) $setting?->woocommerce_base_url, '/');
         $key = (string) data_get($setting instanceof StorefrontSetting ? $setting->woocommerce_credentials : null, 'consumer_key');
         $secret = (string) data_get($setting instanceof StorefrontSetting ? $setting->woocommerce_credentials : null, 'consumer_secret');

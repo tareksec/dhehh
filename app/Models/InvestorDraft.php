@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Services\InvestorOnboardingService;
 use App\Support\InvestorIdentity;
 use Illuminate\Database\Eloquent\Model;
 
@@ -21,10 +22,13 @@ class InvestorDraft extends Model
 
     public const SOURCE_TEXT = 'text';
 
+    /** Self sign-up on the investor portal through a channel partner's invite link. */
+    public const SOURCE_PORTAL = 'portal';
+
     /** Columns copied onto the Investor when the draft is confirmed. */
     public const INVESTOR_FIELDS = ['name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
 
-    protected $fillable = ['company_id', 'batch_id', 'source', 'source_name', 'source_row', 'name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address', 'existing_investor_id', 'project_id', 'investment_amount', 'payment_method', 'invested_at', 'import_notes', 'created_by'];
+    protected $fillable = ['company_id', 'batch_id', 'source', 'source_name', 'source_row', 'name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address', 'existing_investor_id', 'project_id', 'investment_amount', 'payment_method', 'invested_at', 'import_notes', 'created_by', 'portal_account_id'];
 
     protected $casts = ['date_of_birth' => 'date', 'nid_number' => 'encrypted', 'nominee_nid_or_passport' => 'encrypted', 'import_notes' => 'array', 'investment_amount' => 'decimal:2', 'invested_at' => 'date'];
 
@@ -33,11 +37,31 @@ class InvestorDraft extends Model
 
     protected static function booted(): void
     {
+        // A portal sign-up discarded without "Reject application" is still
+        // turned down, so the applicant is never left waiting forever.
+        static::deleting(function (self $draft): void {
+            if ($draft->portal_account_id) {
+                app(InvestorOnboardingService::class)->reject($draft, null);
+            }
+        });
+
         static::saving(function (self $draft): void {
             if ($draft->isDirty('nid_number') || ($draft->nid_number && ! $draft->nid_hash)) {
                 $draft->nid_hash = InvestorIdentity::hash($draft->nid_number);
             }
         });
+    }
+
+    /** The portal sign-in of a self sign-up. */
+    public function portalAccount()
+    {
+        return $this->belongsTo(InvestorPortalAccount::class, 'portal_account_id');
+    }
+
+    /** KYC files uploaded with a portal sign-up; moved to the investor on confirm. */
+    public function documents()
+    {
+        return $this->morphMany(InvestmentDocument::class, 'documentable');
     }
 
     public function channelPartner()
@@ -219,6 +243,7 @@ class InvestorDraft extends Model
             self::SOURCE_EXCEL => __('Excel'),
             self::SOURCE_CSV => __('CSV'),
             self::SOURCE_TEXT => __('Pasted text'),
+            self::SOURCE_PORTAL => __('Investor portal sign-up'),
             default => (string) $source,
         };
     }

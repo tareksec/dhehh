@@ -54,7 +54,7 @@ class AuditLogResource extends Resource
                     ->columnSpanFull()
                     ->schema([
                         TextEntry::make('created_at')->label('Date')->dateTime(),
-                        TextEntry::make('user.name')->label('User')->placeholder('System'),
+                        TextEntry::make('actor_label')->label('User')->state(fn (AuditLog $record): ?string => $record->actorLabel())->placeholder('System'),
                         TextEntry::make('action')->badge(),
                         TextEntry::make('auditable_type')
                             ->label('Model')
@@ -89,6 +89,7 @@ class AuditLogResource extends Resource
 
                 TextColumn::make('user.name')
                     ->label('User')
+                    ->state(fn (AuditLog $record): ?string => $record->actorLabel())
                     ->placeholder('System')
                     ->searchable(),
 

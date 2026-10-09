@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Models\CourierBooking;
 use App\Models\CourierProvider;
 use App\Models\CourierWebhookLog;
@@ -13,6 +14,8 @@ use Illuminate\Support\Facades\Schema;
 
 class CourierHealthWidget extends StatsOverviewWidget
 {
+    use GuardsWidgetRendering;
+
     protected ?string $heading = 'Courier Health';
 
     protected static ?int $sort = 2;

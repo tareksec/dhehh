@@ -34,6 +34,7 @@ use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class StorefrontSlideResource extends Resource
 {
@@ -65,6 +66,25 @@ class StorefrontSlideResource extends Resource
                         ->searchable()
                         ->preload()
                         ->live(),
+                    Select::make('storefront_setting_id')
+                        ->label(__('Show on'))
+                        ->options(fn (Get $get, ?StorefrontSlide $record): array => StorefrontSetting::siteChoicesFor(
+                            (int) ($get('company_id') ?? $record?->company_id ?? app(CompanyContext::class)->id()) ?: null,
+                        ))
+                        ->rule(fn (Get $get, ?StorefrontSlide $record) => Rule::exists('storefront_settings', 'id')
+                            ->where('company_id', (int) ($get('company_id') ?? $record?->company_id ?? app(CompanyContext::class)->id())))
+                        ->placeholder(__('All sites'))
+                        ->live()
+                        ->afterStateUpdated(function (Set $set, mixed $state): void {
+                            // A banner is prepared for one site's theme and template, so follow the chosen site.
+                            $site = $state ? StorefrontSetting::withoutGlobalScopes()->find($state) : null;
+
+                            if ($site) {
+                                $set('theme', $site->storefrontTheme());
+                                $set('template', $site->homepageTemplate());
+                            }
+                        })
+                        ->helperText(__('Leave on "All sites" to show it on both the Blade storefront and the Next.js site, or pick one site to keep it off the other.')),
                     Select::make('theme')
                         ->label('Theme')
                         ->options(StorefrontThemeRegistry::themeOptions())
@@ -120,6 +140,20 @@ class StorefrontSlideResource extends Resource
                         ->label('Fit to frame (never crop the image)')
                         ->helperText('On: the whole banner image is always shown, with a small strip of the banner background above/below if it is not the exact ratio — nothing is ever cut off. Off (default): the image fills the banner edge to edge and is cropped to fit.')
                         ->default(false),
+                    TextInput::make('eyebrow')
+                        ->label(__('Small label above the heading'))
+                        ->maxLength(60)
+                        ->helperText(__('Optional text shown over the banner image (Next.js site). Leave all four text fields empty for a clean image banner.')),
+                    TextInput::make('heading')
+                        ->label(__('Heading'))
+                        ->maxLength(255),
+                    TextInput::make('subheading')
+                        ->label(__('Sub-heading'))
+                        ->maxLength(255),
+                    TextInput::make('cta_label')
+                        ->label(__('Button label'))
+                        ->maxLength(255)
+                        ->helperText(__('The button opens the banner link below (or the linked product).')),
                     TextInput::make('cta_url')
                         ->label('Banner link (optional)')
                         ->url()
@@ -173,6 +207,15 @@ class StorefrontSlideResource extends Resource
                     ->label('Company')
                     ->searchable()
                     ->sortable(),
+                TextColumn::make('show_on')
+                    ->label(__('Show on'))
+                    ->state(fn (StorefrontSlide $record): string => $record->storefrontSetting?->siteTypeLabel() ?? __('All sites'))
+                    ->badge()
+                    ->color(fn (StorefrontSlide $record): string => match (true) {
+                        $record->storefront_setting_id === null => 'gray',
+                        (bool) $record->storefrontSetting?->isNextjs() => 'success',
+                        default => 'info',
+                    }),
                 TextColumn::make('theme')
                     ->label('Theme')
                     ->formatStateUsing(fn (?string $state): string => $state === null
@@ -209,7 +252,7 @@ class StorefrontSlideResource extends Resource
         $companyId = app(CompanyContext::class)->id();
 
         $setting = $companyId
-            ? StorefrontSetting::withoutGlobalScopes()->where('company_id', $companyId)->first()
+            ? StorefrontSetting::bladeFor($companyId)
             : null;
 
         return $setting?->storefrontTheme() ?? StorefrontThemeRegistry::BUILT_IN;

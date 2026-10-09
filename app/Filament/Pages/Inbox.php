@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Clusters\Crm;
+use App\Filament\Concerns\HasGuardedNavigationBadge;
 use App\Jobs\RefreshMessengerProfileJob;
 use App\Models\ChatOrderLink;
 use App\Models\Conversation;
@@ -32,6 +33,7 @@ use Throwable;
 
 class Inbox extends Page
 {
+    use HasGuardedNavigationBadge;
     use WithPagination;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChatBubbleLeftRight;
@@ -90,7 +92,7 @@ class Inbox extends Page
 
     public bool $showQuickReplyPanel = false;
 
-    public static function getNavigationBadge(): ?string
+    protected static function navigationBadge(): ?string
     {
         $unread = (int) Conversation::query()->sum('unread_count');
 
