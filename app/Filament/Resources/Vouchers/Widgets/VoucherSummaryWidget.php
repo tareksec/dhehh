@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Vouchers\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Filament\Concerns\HasDrilldownStatCards;
 use App\Filament\Resources\Vouchers\VoucherResource;
 use App\Models\FundTransfer;
@@ -44,6 +45,7 @@ use Illuminate\Support\Collection;
  */
 class VoucherSummaryWidget extends StatsOverviewWidget implements HasActions
 {
+    use GuardsWidgetRendering;
     use HasDrilldownStatCards;
     use InteractsWithActions;
 

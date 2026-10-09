@@ -1610,5 +1610,15 @@
     "Payout marked failed": "পেমেন্ট ব্যর্থ হিসেবে চিহ্নিত হয়েছে",
     "Could not mark the payout paid": "পেমেন্টকে পরিশোধিত হিসেবে চিহ্নিত করা যায়নি",
     "Exported": "এক্সপোর্ট হয়েছে",
-    "Payment list (CSV)": "পেমেন্ট তালিকা (CSV)"
+    "Payment list (CSV)": "পেমেন্ট তালিকা (CSV)",
+    "Module error (the rest of the app keeps working): :section": "মডিউল এরর (অ্যাপের বাকি অংশ চালু আছে): :section",
+    "This section could not be loaded. The rest of the page keeps working, and the error has been reported.": "এই অংশটি লোড করা যায়নি। পেজের বাকি অংশ চালু আছে, আর এররটি রিপোর্ট করা হয়েছে।",
+    "This page could not be opened": "এই পেজটি খোলা যায়নি",
+    "There is a problem in this part of the app. The other sections keep working, so you can carry on with them.": "অ্যাপের এই অংশে একটি সমস্যা হয়েছে। অন্য অংশগুলো চালু আছে, সেগুলোতে কাজ চালিয়ে যেতে পারেন।",
+    "The error has been recorded and reported to the administrators.": "এররটি রেকর্ড করা হয়েছে এবং অ্যাডমিনদের জানানো হয়েছে।",
+    "Go to the dashboard": "ড্যাশবোর্ডে যান",
+    "Try again": "আবার চেষ্টা করুন",
+    "Go back": "পেছনে যান",
+    "This section is temporarily unavailable": "এই অংশটি সাময়িকভাবে বন্ধ আছে",
+    "Part of its data is not ready yet (an update did not finish). The other sections keep working, so you can carry on with them.": "এর কিছু ডেটা এখনো প্রস্তুত নয় (একটি আপডেট শেষ হয়নি)। অন্য অংশগুলো চালু আছে, সেগুলোতে কাজ চালিয়ে যেতে পারেন।"
 }

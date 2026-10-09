@@ -2,6 +2,7 @@
 
 namespace App\Filament\Investor\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Models\InvestorPortalAccount;
 use App\Services\InvestorPortalService;
 use Carbon\Carbon;
@@ -17,6 +18,8 @@ use Filament\Widgets\ChartWidget;
  */
 class ProfitTrend extends ChartWidget
 {
+    use GuardsWidgetRendering;
+
     protected function getData(): array
     {
         $account = Filament::auth()->user();

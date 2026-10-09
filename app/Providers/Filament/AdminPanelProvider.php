@@ -15,6 +15,7 @@ use App\Http\Middleware\PreventAdminPageCaching;
 use App\Http\Middleware\RestrictPortalHosts;
 use App\Http\Middleware\SetCurrentCompany;
 use App\Http\Middleware\SyncAppUpdates;
+use App\Http\Middleware\TurnOffPagesWithMissingTables;
 use App\Models\Company;
 use App\Services\AppUpdateService;
 use App\Services\CompanyContext;
@@ -514,6 +515,7 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
                 SyncAppUpdates::class,
+                TurnOffPagesWithMissingTables::class,
             ]);
     }
 

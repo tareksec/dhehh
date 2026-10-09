@@ -49,6 +49,12 @@ These rules are mandatory for any AI agent working in this repository.
 - Every new company-owned model must use `BelongsToCompany` + `CompanyScope` and be added to `MultiCompanyIsolationTest::test_every_company_owned_model_uses_the_company_scope_contract`.
 - `SetCurrentCompany` must stay pinned before `SubstituteBindings` in `bootstrap/app.php`; new queued jobs set/clear `CompanyContext` explicitly; scheduled commands loop per company.
 
+## Error isolation (owner request 2026-10-08)
+
+- One module's error must not take the whole app down. A new sidebar badge is written as `navigationBadge()` with `HasGuardedNavigationBadge`; a new widget uses `GuardsWidgetRendering`; anything else drawn on every page goes through `App\Support\ModuleGuard::run()`. `ModuleGuardTest` enforces the badge and widget rules.
+- Caught errors are reported to Super Admins (Deploy Error Logs), never swallowed silently. Isolation is off in `local` / `testing`, so tests still see real errors.
+- Migrations must also pass on MySQL 8.4 (`.github/workflows/mysql-migrations.yml`): name long indexes explicitly (64-character limit, `MigrationIdentifierLengthTest`). Coolify deploys `main` on push, so the branch's checks must be green before pushing to `main`.
+
 ## Test runs must never touch demo/dev data
 
 - Running tests must NEVER refresh, reseed, or otherwise modify the demo/development database.

@@ -1610,5 +1610,15 @@
     "Payout marked failed": "Payout marked failed",
     "Could not mark the payout paid": "Could not mark the payout paid",
     "Exported": "Exported",
-    "Payment list (CSV)": "Payment list (CSV)"
+    "Payment list (CSV)": "Payment list (CSV)",
+    "Module error (the rest of the app keeps working): :section": "Module error (the rest of the app keeps working): :section",
+    "This section could not be loaded. The rest of the page keeps working, and the error has been reported.": "This section could not be loaded. The rest of the page keeps working, and the error has been reported.",
+    "This page could not be opened": "This page could not be opened",
+    "There is a problem in this part of the app. The other sections keep working, so you can carry on with them.": "There is a problem in this part of the app. The other sections keep working, so you can carry on with them.",
+    "The error has been recorded and reported to the administrators.": "The error has been recorded and reported to the administrators.",
+    "Go to the dashboard": "Go to the dashboard",
+    "Try again": "Try again",
+    "Go back": "Go back",
+    "This section is temporarily unavailable": "This section is temporarily unavailable",
+    "Part of its data is not ready yet (an update did not finish). The other sections keep working, so you can carry on with them.": "Part of its data is not ready yet (an update did not finish). The other sections keep working, so you can carry on with them."
 }

@@ -2,6 +2,36 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-08 - Keep one module's error inside that module (error isolation)
+
+Owner request (in Bangla), after the v2.63.0 outage: if a module or part of the app has a problem or error, it must not affect the whole app. Only that specific module or part should show the error. The owner approved all five steps proposed, one after another.
+
+What changed:
+1. **Sidebar badges:** `HasGuardedNavigationBadge` on the 5 badges (Inbox, Investor Drafts, Investor Requests, Payout Batches, Reseller Payout Requests). On an error the badge is hidden.
+2. **Render hooks and widgets:** `GuardedViewManager` guards every Filament render hook in every panel. `GuardsWidgetRendering` covers all 19 widgets, which show a "could not load" card on an error.
+3. **Crashed pages:** `PanelErrorPages` plus the `panel-errors.module` view show a clear page with buttons instead of "500 | Server Error". This covers the admin panel and the portals, including Livewire actions sent from them.
+4. **Missing tables:** `ModuleHealth` plus the `TurnOffPagesWithMissingTables` middleware and a `Gate::before` check. That section shows "temporarily unavailable" and turns itself back on after `migrate`.
+5. **CI:** `.github/workflows/mysql-migrations.yml` runs migrations on MySQL 8.4 for every push and pull request.
+
+All caught errors are reported to Super Admins (bell plus Deploy Error Logs, source `module:…`), at most once per hour each. Local development and the test suite still throw errors as before (`ISOLATE_MODULE_ERRORS` overrides).
+
+Decisions I made without asking, for the owner to confirm or change:
+- The crashed-page screen is a standalone page (logo-less, no sidebar) with Dashboard / Try again / Back buttons. It does not draw the full panel sidebar, because that page must work even when the shared panel parts are what failed.
+- A section with a missing table stays in the menu. Opening it shows "temporarily unavailable" (503) rather than hiding it, so staff can see it exists and is down. Its relation tabs and buttons on other pages are hidden.
+- Reports are throttled to one per hour per section and error.
+
+Limits (cannot be isolated): the database or Redis being down, a broken `.env`, or a PHP syntax error in a file every page loads. Step 5 is the protection for those. **Note:** Coolify deploys `main` as soon as it is pushed, so the new MySQL check only protects us if a branch's checks are green before it is merged or pushed to `main`.
+
+Needs Bangla review (added with a Bangla value, please check the wording): "Module error (the rest of the app keeps working): :section", "This section could not be loaded. The rest of the page keeps working, and the error has been reported.", "This page could not be opened", "There is a problem in this part of the app. The other sections keep working, so you can carry on with them.", "The error has been recorded and reported to the administrators.", "Go to the dashboard", "Try again", "Go back", "This section is temporarily unavailable", "Part of its data is not ready yet (an update did not finish). The other sections keep working, so you can carry on with them."
+
+Verification:
+- New `ModuleGuardTest` (12 tests). Without the guard the "missing `investor_requests`" test reproduces the production 500 (`no such table: investor_requests`). Without the view-state restore, the inline-widget test fails with a `ViewException`.
+- MySQL 8.0 installed in the session container: the old v2.63.0 migration fails with exactly production's error 1059 and leaves the same half state. The fixed migration finishes it. All 219 migrations run from empty with `APP_ENV=production`.
+- Error page checked in headless Chromium at phone width (390px), in Bangla.
+- Full `php artisan test` (plain, no `--env`): 2017 passed, 1 skipped, 0 failed. `npm run build` passes. Pint passes on the changed PHP files (`bootstrap/app.php` and one line in `LowStockProducts.php` were already failing Pint before this change and were left as they were).
+
+Commit status: committed and pushed to `ccr-59b8ca5b-4zc27z`, then to `main` once the branch's MySQL migrations check passed (owner approved 2026-10-09: "হ্যাঁ, কমিট করে পুশ করো এবং মেইন এ পুশ কর").
+
 ## 2026-10-08 - Hotfix: admin panel 500 after the investor-portal deploy (MySQL 64-character index name)
 
 The owner reported "500 Server Error" on the live site after today's pushes.

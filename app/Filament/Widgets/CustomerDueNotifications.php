@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Filament\Resources\Customers\CustomerResource;
 use App\Models\Customer;
 use App\Services\CustomerDueAlertService;
@@ -15,6 +16,8 @@ use Illuminate\Support\Facades\Auth;
 
 class CustomerDueNotifications extends TableWidget
 {
+    use GuardsWidgetRendering;
+
     protected int|string|array $columnSpan = 'full';
 
     protected static bool $isLazy = false;

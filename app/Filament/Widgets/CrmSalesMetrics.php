@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Models\ChatOrderLink;
 use App\Models\CrmAiRun;
 use App\Models\CrmSalesFollowUp;
@@ -13,6 +14,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class CrmSalesMetrics extends StatsOverviewWidget
 {
+    use GuardsWidgetRendering;
+
     protected static bool $isDiscovered = false;
 
     protected ?string $heading = 'Sales automation — last 30 days';

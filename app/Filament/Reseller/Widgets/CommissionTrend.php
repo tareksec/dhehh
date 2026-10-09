@@ -2,6 +2,7 @@
 
 namespace App\Filament\Reseller\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Models\Customer;
 use App\Models\ResellerCommission;
 use Filament\Facades\Filament;
@@ -19,6 +20,8 @@ use Filament\Widgets\ChartWidget;
  */
 class CommissionTrend extends ChartWidget
 {
+    use GuardsWidgetRendering;
+
     protected function getData(): array
     {
         $reseller = Filament::auth()->user();

@@ -4,6 +4,27 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **One module's error no longer takes the whole app down** (owner request after the v2.63.0 outage). Errors are kept inside the part that failed:
+  - **Sidebar counts:** if the number next to a menu item (Investor Requests, Payout Batches, Investor Drafts, Reseller Payout Requests, Inbox) cannot be worked out, that count simply does not show. The menu and every page keep working.
+  - **Dashboard and page widgets:** a widget that fails shows a small "This section could not be loaded" card in its place. The rest of the dashboard or page works as normal. Shared parts drawn on every page (sidebar, company switcher, banners, toolbars) leave out only the part that failed.
+  - **A crashed page** in the admin panel or a portal shows "This page could not be opened. The other sections keep working" with **Go to the dashboard**, **Try again** and **Go back** buttons, instead of the bare "500 Server Error". 403/404 pages and sign-in redirects are unchanged.
+  - **Missing database table** (e.g. an update that did not finish): the pages of that one section show "This section is temporarily unavailable", and its tabs and buttons on other pages are hidden. Everything else keeps working. The section turns back on by itself as soon as the update finishes.
+  - Every error caught this way is **reported to Super Admins** (bell notification titled "Module error …" and **Settings → Deploy Error Logs**), at most once an hour per error, so nothing is hidden silently.
+- **New automatic check (GitHub Actions "MySQL migrations")** runs every database update against MySQL 8.4, the production version, on every branch push and pull request. A database update that would fail on the live server now shows up as a red check on its branch, before it reaches `main`.
+
+### Technical Notes
+
+- `App\Support\ModuleGuard::run($section, $callback, $fallback)` catches, logs and reports through `DeploymentErrorReporter` (source `module:<section>`, throttled 1/hour per section and error via `Cache::add`). `ModuleGuard::renderView()` renders a nested view and, on failure, restores the view factory's component/section/stack state that Laravel flushes, so the page around it survives. Isolation is on everywhere except `local` and `testing` (where errors still throw); override with `ISOLATE_MODULE_ERRORS` (`config('app.isolate_module_errors')`).
+- Badges: trait `App\Filament\Concerns\HasGuardedNavigationBadge` (write the count in `navigationBadge()`). Widgets: trait `GuardsWidgetRendering` (all 19 widgets; the widget view is rendered inside the guard in `filament.widgets.guarded`). Render hooks: `App\Support\GuardedViewManager` replaces Filament's `ViewManager` (`AppServiceProvider::register()`, `extend()`), so every render hook of every panel is guarded. Its `renderHook()` copies Filament's; re-check it on a Filament upgrade.
+- Crashed pages: `App\Support\PanelErrorPages` (first path segment `admin` / `investor` / `portal`; Livewire updates use the Referer) renders the self-contained `panel-errors.module` view from `bootstrap/app.php`'s exception renderer, only for real 500s.
+- Missing tables: `App\Support\ModuleHealth` (scoped; table list cached 10 minutes and dropped on `MigrationsEnded`). Admin panel middleware `TurnOffPagesWithMissingTables` answers a resource page whose model table is missing with a 503 page. `Gate::before` denies every ability on such a model (models in `User::MODEL_MODULES`). Off in `local` / `testing`, like `ModuleGuard`.
+- New `ModuleGuardTest` (12 tests). It enforces that every navigation badge and every widget in `app/` goes through the guard, and it reproduces the 2026-10-08 state (dropped `investor_requests` table). Without the guard that state answers 500; with it, `/admin` opens. 10 new lang keys (en + bn).
+- New workflow `.github/workflows/mysql-migrations.yml` (MySQL 8.4 service, `migrate --force` from empty, then checks nothing is pending). Checked locally against MySQL 8.0: all 219 migrations run; the unfixed v2.63.0 agreement migration fails with error 1059 (exit 1), the same error as production; the fixed one also finishes a database left half-migrated by it.
+
 ## [2.64.1] - 2026-10-08
 
 **Release type:** Hotfix Update

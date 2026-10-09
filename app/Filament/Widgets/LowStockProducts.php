@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Filament\Resources\Products\ProductResource;
 use App\Models\Product;
 use App\Services\LowStockAlertService;
@@ -15,6 +16,8 @@ use Illuminate\Support\Facades\Auth;
 
 class LowStockProducts extends TableWidget
 {
+    use GuardsWidgetRendering;
+
     protected int | string | array $columnSpan = 'full';
 
     protected static bool $isLazy = false;

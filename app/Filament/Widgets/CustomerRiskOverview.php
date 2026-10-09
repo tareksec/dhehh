@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Models\CustomerRiskProfile;
 use App\Models\CustomerRiskReview;
 use Filament\Support\Icons\Heroicon;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Schema;
 
 class CustomerRiskOverview extends StatsOverviewWidget
 {
+    use GuardsWidgetRendering;
+
     protected ?string $heading = 'Customer Success & Risk';
 
     protected static ?int $sort = 1;
