@@ -4,14 +4,16 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.66.1] - 2026-10-09
+
+**Release type:** Patch/Fix Update
+
 ### Fixed
 
 - **Investor portal: the profile in the top-right menu now opens the Profile page.** The name at the top of the user menu was plain text; it is now a link to the Profile page.
 
 **Technical Notes:**
 - `InvestorPanelProvider` sets a URL on the `profile` user-menu item. New test `test_the_user_menu_name_links_to_the_profile_page`.
-
-
 ## [2.66.0] - 2026-10-09
 
 **Release type:** Minor Feature Update
