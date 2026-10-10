@@ -2,6 +2,49 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-10 - Marketplace Pro phase 5a: listing page + product card
+
+Reason — the owner said "পরবর্তি ধাপের কাজ শুরু কর" (start the next phase). The plan's phase 5 is the shopping path (listing, product, cart, checkout, success, track). This is the first part: listing and product card. The branch was restarted from the latest `main`, because the previous work was already merged there.
+
+What changed:
+- Marketplace Pro listing/category/search page (`themes/marketplace-pro/products/index.blade.php`). Desktop: a 260px filter sidebar. Mobile: a slide-in filter panel (Esc and the backdrop close it). Also a sort menu, breadcrumb, product count and an empty state with category chips.
+- Filters: `in_stock`, `min_price`, `max_price` (query string; `StorefrontListingFilters`). Filtered pages skip the listing cache. Filtered, sorted and later pages get `noindex, follow`.
+- Marketplace Pro product card, used on the home and listing pages.
+- Bug fix: the shared card's struck-through price showed the selling price, not the original price.
+- 28 lang keys in en.json and bn.json.
+
+Needs Bangla review: "Availability" → "স্টক", "MOQ :count :unit" → "সর্বনিম্ন অর্ডার :count :unit", "Breadcrumb" → "ব্রেডক্রাম্ব".
+
+Verified: `StorefrontMarketplaceProPagesTest` (7). Full `php artisan test` (plain, no `--env`): 2050 passed, 1 skipped. `npm run build` passes and Pint passes. Playwright at 360/768/1366px on a scratchpad SQLite database showed 0px horizontal overflow.
+
+### Phase 5b: product page (owner: "ওকে এখন পরবর্তি কাজ কর", 2026-10-10)
+
+- Marketplace Pro `products/show`:
+  - gallery and buy box: price, original price, "Save", VAT note, stock pill, bulk pricing table, variant rows, quantity, Add to cart / Buy now, WhatsApp;
+  - delivery time box and admin trust items;
+  - description, related products with Marketplace Pro cards, and a sticky buy bar on phones.
+- The shared logic moved to `StorefrontProductPage`. The script and pixel event moved to partials. The Built-in and Noor Solar product pages use the same partials and look the same as before.
+- Bug fix (all themes): variant rows showed the product price, but the cart charges the variant's own price. They now show the variant price.
+- 23 more lang keys. Needs Bangla review: "Save :amount" → ":amount সাশ্রয়", "Unit price" → "একক দাম".
+- `StorefrontThemeTest` fallback check now uses a page Marketplace Pro does not override (Noor Solar cart).
+
+Verified: `StorefrontMarketplaceProPagesTest` has 12 tests. The 5 product page tests check the add to cart and Buy now form posts. Full `php artisan test`: 2054 passed and 1 skipped. The one failure was the expected fallback check above, which I fixed; after that `StorefrontThemeTest` passes 16/16. Pint and `npm run build` pass. Playwright at 360px and 1366px showed 0px overflow, and the variant counter reads "Add to cart (2)".
+
+### Phase 5c: cart page (owner: "পরবর্তি কাজ কর", 2026-10-10)
+
+- Marketplace Pro `cart/show`: breadcrumb, title and item count, one card per row (photo, category, name, option, price each, stock pill, MOQ, line total, quantity stepper, Update, Remove), a sticky order summary on desktop (items, subtotal, delivery "Calculated at checkout", VAT note, Proceed to checkout, Continue shopping), a sticky subtotal and checkout bar above the bottom navigation on phones, and an empty state with "Browse products".
+- Wholesale hint per row: "Add N more to pay ৳X each" (nearest tier above the quantity that is cheaper than today's price; base products only, as variants never get tier prices). It is hidden under a reseller price, because `normalizedTiers()` hides tiers there.
+- New `StorefrontCartLine` (shared logic). The shared cart view uses it too. The ViewCart pixel event and the double-submit script moved to partials.
+- Bug fix (all themes except Marketplace Pro): the shared cart row printed the unit price where the line total belongs. A regression test fails on the old view.
+- 20 more lang keys. Needs Bangla review: "Add :count more to pay :price each" → "আরও :countটি নিলে প্রতিটি :price", ":vat is added at checkout" → "চেকআউটে :vat যোগ হবে", "Prices include :vat" → "দামে :vat ধরা আছে", "Calculated at checkout" → "চেকআউটে হিসাব হবে".
+- The shared cart page's own text is still hardcoded English; it is translated only for Marketplace Pro in this phase.
+
+Verified: `StorefrontMarketplaceProPagesTest` has 19 tests (7 new for the cart). Playwright at 360/768/1366px: 0px horizontal overflow, the stepper, Update (5 pieces switched to the 5+ wholesale price) and Remove (with the confirm) work, and the empty state renders. Full `php artisan test` (plain, no `--env`): 2062 passed, 1 skipped. Pint and `npm run build` pass.
+
+Next in phase 5: checkout and success, then track.
+
+Commit status: committed and pushed to `claude/erpf-marketplace-pro-customization-5m95cn` (phases 5a, 5b and 5c together) on owner approval ("ওকে কমিট এবং পুশ কর", 2026-10-10). Not pushed to `main`.
+
 ## 2026-10-09 - Fix Connect WhatsApp App (Coexistence) last step
 
 Reason — owner said Coexistence could not be connected from the ERP, so they stopped going that way. I found two code problems and the owner said "ওকে ঠিক করে দেও" (OK, fix them).

@@ -156,6 +156,7 @@
         {{-- Preview URLs (/storefront/{slug}/...) must never compete with the live domain in search results. --}}
         <meta name="robots" content="noindex, nofollow">
     @endif
+    @stack('head')
     <meta property="og:title" content="{{ $title }}">
     <meta property="og:description" content="{{ $description }}">
     <meta property="og:type" content="website">

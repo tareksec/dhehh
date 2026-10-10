@@ -114,7 +114,7 @@
                     </div>
                     <div class="marketplace-product-grid marketplace-product-grid-dense mt-4">
                         @forelse ($visibleProducts as $product)
-                            @include('storefront.partials.product-card', ['product' => $product])
+                            @include('storefront.themes.marketplace-pro.partials.product-card', ['product' => $product])
                         @empty
                             <p class="col-span-full rounded-xl bg-[var(--storefront-surface)] p-8 text-center dark:bg-[var(--storefront-dark-surface)]">{{ __('No products are available yet.') }}</p>
                         @endforelse
@@ -149,7 +149,7 @@
                     <div class="marketplace-section-heading"><h2 id="marketplace-deals-title">{{ $template === \App\Support\StorefrontThemeRegistry::MARKETPLACE_CAMPAIGN ? __('Flash deals') : __('Featured offers') }}</h2><a class="marketplace-link-arrow" href="{{ $productsUrl }}">{{ __('See all') }} @include('storefront.partials.arrow-right-icon')</a></div>
                     <div class="marketplace-product-grid">
                         @forelse ($visibleProducts->take(5) as $product)
-                            @include('storefront.partials.product-card', ['product' => $product])
+                            @include('storefront.themes.marketplace-pro.partials.product-card', ['product' => $product])
                         @empty
                             <p class="col-span-full rounded-xl bg-[var(--storefront-surface)] p-8 text-center dark:bg-[var(--storefront-dark-surface)]">{{ __('No products are available yet.') }}</p>
                         @endforelse
@@ -187,10 +187,10 @@
                 <div class="marketplace-section-heading"><h2 id="marketplace-products-title">{{ __('Recommended for you') }}</h2><a class="marketplace-link-arrow" href="{{ $productsUrl }}">{{ __('View all products') }} @include('storefront.partials.arrow-right-icon')</a></div>
                 <div class="marketplace-product-grid">
                     @forelse ($visibleProducts->skip(5)->take(5) as $product)
-                        @include('storefront.partials.product-card', ['product' => $product])
+                        @include('storefront.themes.marketplace-pro.partials.product-card', ['product' => $product])
                     @empty
                         @foreach ($visibleProducts->take(5) as $product)
-                            @include('storefront.partials.product-card', ['product' => $product])
+                            @include('storefront.themes.marketplace-pro.partials.product-card', ['product' => $product])
                         @endforeach
                     @endforelse
                 </div>

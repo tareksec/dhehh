@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\ResellerProduct;
 use App\Support\StorefrontListingCache;
+use App\Support\StorefrontListingFilters;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -38,6 +39,7 @@ class ProductIndexController extends Controller
 
         $sort = $request->string('sort')->value();
         $search = trim((string) $request->string('q'));
+        $filters = StorefrontListingFilters::fromRequest($request);
 
         $productsQuery = Product::query()
             ->with('category')
@@ -52,18 +54,19 @@ class ProductIndexController extends Controller
             )
             ->when($category, fn ($query) => $query->whereBelongsTo($category))
             ->when($search !== '', fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")))
+            ->tap(fn ($query) => $filters->apply($query))
             ->when($sort === 'price_asc', fn ($query) => $query->orderByRaw('COALESCE(sale_price, price) asc'))
             ->when($sort === 'price_desc', fn ($query) => $query->orderByRaw('COALESCE(sale_price, price) desc'))
             ->when(! in_array($sort, ['price_asc', 'price_desc'], true), fn ($query) => $query->latest());
 
         // A plain category/sort/page browse is identical for every visitor
-        // and worth caching on a busy storefront; a search or a reseller's
-        // filtered catalog is per-request/per-customer, so those always hit
-        // the database instead of growing the cache with one-off keys.
+        // and worth caching on a busy storefront; a search, a stock/price
+        // filter or a reseller's catalog is per-request/per-customer, so
+        // those always hit the database instead of growing the cache with one-off keys.
         // withQueryString() is applied after the cache lookup (not inside the
         // cached closure) so a cache hit still reflects *this* request's
         // query string rather than whatever first populated the cache entry.
-        $cacheable = ! $reseller instanceof Customer && $search === '';
+        $cacheable = ! $reseller instanceof Customer && $search === '' && ! $filters->active();
 
         $products = ($cacheable
             ? StorefrontListingCache::listing(
@@ -87,6 +90,7 @@ class ProductIndexController extends Controller
             'products' => $products,
             'sort' => $sort,
             'search' => $search,
+            'filters' => $filters,
         ]);
     }
 }

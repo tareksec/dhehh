@@ -4,6 +4,41 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Marketplace Pro product listing page.** The product list, category and search pages have their own Marketplace Pro design: breadcrumb, page title with product count, a filter sidebar on desktop and a slide-in filter panel on phones (categories, "In stock only", and a minimum/maximum price), a sort menu, and an empty state that suggests categories. Other themes keep their current listing page.
+- **Stock and price filters on the product list.** `in_stock=1`, `min_price` and `max_price` in the address work without JavaScript and can be shared as a link. Filtered, sorted and later pages tell search engines not to index them (`noindex, follow`).
+- **Marketplace Pro product page.** The page has:
+  - a gallery with thumbnails, zoom on hover and the discount badge;
+  - a buy box with the price, the struck-through original price, "Save ৳X", the VAT note, a stock pill (in stock / only N left / pre-order / out of stock) and the bulk pricing table;
+  - variant rows with quantity steppers, "Add to cart" and "Buy now" buttons, and "Ask on WhatsApp";
+  - delivery time and the admin trust items under the buy box;
+  - the description, "You may also like" with Marketplace Pro cards, and a sticky buy bar above the bottom navigation on phones.
+
+  The cart form, field names and routes are the same as before.
+- **Marketplace Pro product card** on the home and listing pages: discount badge, stock badge, orange quick-add button, "Only N left", and the minimum order quantity. All text is in English and Bangla.
+- **Marketplace Pro cart page.** Each cart row shows the photo, category, name, the chosen option, the price of one piece, a stock pill (in stock / only N left / pre-order), the minimum order quantity and the line total, with a quantity stepper, Update and Remove. For a product with wholesale prices it also says how many more pieces unlock the next price ("Add 6 more to pay ৳140 each"). The order summary shows the items, the subtotal, "Delivery: calculated at checkout" and the VAT note, with "Proceed to checkout" and "Continue shopping". On phones the subtotal and checkout button stay above the bottom navigation. The empty cart offers "Browse products". The update, remove and checkout routes are unchanged, and all text is in English and Bangla.
+
+### Fixed
+
+- The struck-through old price on the shared product card showed the selling price instead of the original price.
+- On the product page, each variant row showed the product's price instead of the variant's own price. The cart charges the variant price, so the page now shows that.
+- On the shared cart page (every theme except Marketplace Pro), the amount at the end of each row was the price of one piece, so a line of 2 pieces at ৳150 showed ৳150 instead of ৳300. It now shows the line total.
+
+### Technical Notes
+
+- New `App\Support\StorefrontListingFilters`, used by `ProductIndexController` and the preview listing. Filtered listings skip `StorefrontListingCache`. Price bounds are cast to `DECIMAL`, so SQLite compares them as numbers.
+- New `StorefrontUrl::home()` helper and a `@stack('head')` in the storefront layout.
+- The quick-add double-submit script moved to `storefront/partials/quick-add-script.blade.php`. The listing Meta Pixel events moved to `storefront/products/partials/listing-meta-events.blade.php`. Both are shared by every theme.
+- New `App\\Support\\StorefrontProductPage` holds the purchase facts every theme's `products.show` shows: gallery URLs, variants, stock, MOQ, quantity bounds, tiers and discount.
+- The product page script moved to `storefront/products/partials/product-page-script.blade.php`. Its button text comes from `data-count-label`, so it can be translated. The ViewContent pixel event moved to `product-meta-events.blade.php`.
+- New views: `themes/marketplace-pro/products/show.blade.php`, `themes/marketplace-pro/partials/product-card.blade.php` and `themes/marketplace-pro/products/index.blade.php`. 51 new lang keys in `en.json` and `bn.json`.
+- New `App\Support\StorefrontCartLine` holds what one cart row shows and allows: stock, pre-order, quantity bounds, photo URL, line total and the next wholesale step. The shared and Marketplace Pro `cart.show` both read it.
+- The cart Meta Pixel ViewCart event and the double-submit script moved to `storefront/cart/partials/cart-meta-events.blade.php` and `cart-script.blade.php`, shared by every theme. New view `themes/marketplace-pro/cart/show.blade.php`; 20 more lang keys.
+- New `StorefrontMarketplaceProPagesTest` (19 tests).
+
 ## [2.67.0] - 2026-10-09
 
 **Release type:** Minor Feature Update
