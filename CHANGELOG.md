@@ -4,7 +4,9 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Minor
+## [2.68.0] - 2026-10-10
+
+**Release type:** Minor Feature Update
 
 ### Added
 
@@ -14,7 +16,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - Subdomain set-up: migration `2026_10_10_100000_add_reseller_subdomain_status` (`customers.reseller_subdomain_changed_at` / `reseller_subdomain_live_at`, `storefront_settings.reseller_subdomain_setup_minutes` default 10). Subdomains chosen before it (no `changed_at`) count as live. `Customer::resellerSubdomainIsReady()` / `resellerSubdomainReadyAt()`; `resellerStoreUrl()` uses the subdomain only once it is ready. New `App\Services\ResellerSubdomainProbe` (DNS points at the company domain's IPs + an HTTPS request that succeeds), polled by `MyStore::checkSubdomain()`. `TlsAskController` also answers 200 for approved resellers' subdomains. Profile link: `ResellerPanelProvider` `userMenuItems(['profile' => ...->url(Profile::getUrl())])`. Tests: `ResellerSubdomainTest` +5, `ResellerPortalDashboardTest` +1, `ResellerSettingsPageTest` updated. 7 new lang keys (en + bn). `docs/deployment.md` updated.
-
 ## [2.67.0] - 2026-10-09
 
 **Release type:** Minor Feature Update
