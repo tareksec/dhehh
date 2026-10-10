@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.70.0] - 2026-10-10
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -52,7 +54,6 @@ All notable production changes to Business Dashboard are documented here.
 - New `App\Support\StorefrontTrackPage` holds what the tracking page shows about a found order: the progress steps and their state, the order and delivery status labels, the courier parcel, the items with the buyer's prices (`showsResellerPricesToBuyer()`), the amounts and the delivery area and time. The shared and Marketplace Pro `track.show` both read it.
 - `OrderTrackController::trackingUpdates()` now wraps its titles and messages in `__()`; the English text is unchanged. New view `themes/marketplace-pro/track/show.blade.php`; 44 more lang keys (including the courier status labels In Transit, Picked Up, Booked, Not Booked and Booking Pending).
 - `StorefrontMarketplaceProPagesTest` now has 42 tests (9 new for tracking).
-
 ## [2.69.4] - 2026-10-10
 
 **Release type:** Patch/Fix Update
