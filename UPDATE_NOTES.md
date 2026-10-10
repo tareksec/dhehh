@@ -2,6 +2,43 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-10 - Marketplace Pro phase 5f: order track page
+
+Reason — the owner said "পরবর্তি কাজ কর" (do the next task) after the checkout and success pages. The order track page is the last page of phase 5.
+
+What changed:
+- Marketplace Pro `track/show`: breadcrumb, the lookup form (order number and the phone used on the order), a "not found" alert, and for a found order: the order number, date, status pill and total; a four-step progress bar (Order placed, Confirmed, On the way, Delivered; vertical on phones, horizontal from 640px); the delivery update with courier name, tracking ID and booking status; the tracking updates as a timeline with the latest marked; the items with photos; a summary (subtotal, discount, VAT, delivery, packaging, total, paid, due); delivery area and time; buttons for a complaint, the helpline and more shopping.
+- Progress rules (`StorefrontTrackPage`): Placed is current for a draft order; Confirmed when the order is confirmed or processing, or a courier booking exists; On the way when the delivery status is picked up, in transit or partial delivered; Delivered when the delivery status is delivered or the order is completed. A cancelled, returned or refunded order (or a returned delivery) stops after the first step and shows "This order was cancelled/returned/refunded." A failed or cancelled courier booking is not treated as a failed order.
+- Privacy and reseller rules are unchanged: the lookup still needs the order's phone (a signed link or the owning signed-in customer needs none). A reseller's own-courier customer sees item lines and one total at the reseller's prices; the page never prints the store's subtotal, delivery, paid or due for them. The page does not show the customer's name or address.
+- Shared logic: new `StorefrontTrackPage`. `OrderTrackController::trackingUpdates()` now translates its titles and messages.
+- Bug fix (all themes except Marketplace Pro): the shared track page printed the order's amount due on every item line. Each line now shows its own line total. The shared page's text is now translated (it was English only).
+- 44 more lang keys. Needs Bangla review: "On the way" → "পথে আছে", "In Transit" → "ট্রানজিটে আছে", "Picked Up" → "কুরিয়ার সংগ্রহ করেছে", "Admin confirmed" → "অ্যাডমিন নিশ্চিত করেছে", "Total due" → "মোট বাকি", "Delivery status updated to :status." → "ডেলিভারি স্ট্যাটাস আপডেট হয়ে :status হয়েছে।".
+
+Verified: `StorefrontMarketplaceProPagesTest` has 42 tests (9 new for tracking: own view and lookup, shared view and per-line prices, phone required and unknown order, the success-page link without a phone, progress steps, cancelled order, courier and updates, reseller prices, Bangla). The shared per-line test fails on the old view and passes now. Playwright at 360/768/1366px against the scratchpad SQLite database (placed, on the way with a courier parcel, delivered, not found, empty): 0px horizontal overflow and no console errors in any state.
+
+Next: phase 5 is complete. Not requested yet: AJAX mini-cart, multi-size images, caching/SEO, Lighthouse CI.
+
+Commit status: committed and pushed with the owner's approval (2026-10-10: "যত টুকু কাজ হয়েছে পুরোটা কমিট করে পুশ কর এবং মেইনে পুশ কর"). One commit carries phases 5d, 5e and 5f.
+
+## 2026-10-10 - Marketplace Pro phase 5d + 5e: checkout and success pages
+
+Reason — the owner said "চেকআউট শুরু কর" (start checkout) after phases 5a-5c were committed as `2a6d67e`.
+
+What changed:
+- Marketplace Pro `checkout/show`: four numbered cards (contact, delivery address with the detected area, payment method with the manual/online instructions, order note), an order summary with thumbnails, VAT, parcel weight, live delivery charge, delivery time and total, the advance notes, and a phone bar with the live total and the order button. Ordering stays blocked without a payment path or when a pre-order has no online payment.
+- Marketplace Pro `checkout/success`: order number, status (a draft order reads "Awaiting confirmation"), items with unit price and line total, subtotal, discount, VAT, delivery, packaging, total, paid and due, the delivery details with the area's delivery time, the payment box, WhatsApp group, complaint, Track this order, Continue shopping.
+- Shared logic: `StorefrontCheckoutPage` and `StorefrontOrderSuccessPage`. The Alpine state (kept character for character, so the `vat: 95` test still holds), the form script and the pixel events are partials under `storefront/checkout/partials/`. The shared pages use them too. No checkout rule changed: prices, delivery, VAT, advances and payments still come from `StorefrontCheckoutService`.
+- Bug fix (all themes except Marketplace Pro): the shared success page printed the order total on every item line, the subtotal and the delivery charge. It now prints the real values and the amount due.
+- Bug fix (all themes): an empty address after a failed submit reached the page script as `null`, which blanked the delivery charge and total. It is now a string.
+- 56 more lang keys. Needs Bangla review: "Send Money to" → "সেন্ড মানি করুন", "Awaiting confirmation" → "নিশ্চিতকরণের অপেক্ষায়", "Place order / continue to payment" → "অর্ডার করুন / পেমেন্টে যান", "Weight-based rate:" → "ওজন অনুযায়ী রেট:", ":actual kg (charged as :billed kg)" → ":actual কেজি (হিসাব হবে :billed কেজি)", "Your sender number" → "আপনার সেন্ডার নম্বর".
+- The success page's WhatsApp group text still comes from `StorefrontSetting::whatsappGroupMessage()`, whose default is Bangla text kept in the model constant. I did not change it.
+
+Verified: `StorefrontMarketplaceProPagesTest` has 33 tests (14 new for checkout and success). The two regression tests for the shared success amounts and the empty address fail on the old code. The 66 existing shared checkout tests pass unchanged. Playwright at 360/768/1366px on a scratchpad SQLite database: 0px overflow, the area detection moves the delivery charge (70 inside Dhaka, 110 outside), the total and the phone bar follow, an order was placed through the page and the success page shows the right amounts, and the server-side error state focuses the error box and marks 4 fields invalid. Full `php artisan test` (plain, no `--env`): 2076 passed, 1 skipped. Pint and `npm run build` pass.
+
+Next in phase 5: the order track page.
+
+Commit status: committed together with phase 5f (see above) with the owner's approval.
+
 ## 2026-10-10 - Marketplace Pro phase 5a: listing page + product card
 
 Reason — the owner said "পরবর্তি ধাপের কাজ শুরু কর" (start the next phase). The plan's phase 5 is the shopping path (listing, product, cart, checkout, success, track). This is the first part: listing and product card. The branch was restarted from the latest `main`, because the previous work was already merged there.
