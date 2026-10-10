@@ -184,6 +184,28 @@ class InvestorPortalAccountService
         $this->audit->record('investor_portal.invite_accepted', $account);
     }
 
+    /**
+     * Staff set the portal password for an investor or partner directly (no
+     * SMS needed): opens the account if there is none, makes it active, and
+     * signs the person out everywhere. The same checks as an invite apply.
+     */
+    public function setPasswordByStaff(Investor|ChannelPartner $holder, string $password, ?User $by = null): InvestorPortalAccount
+    {
+        $account = $this->ensureAccount($holder);
+
+        $account->forceFill([
+            'password' => $password,
+            'status' => InvestorPortalAccount::STATUS_ACTIVE,
+            'invite_token_hash' => null,
+            'invite_expires_at' => null,
+            'remember_token' => Str::random(60),
+        ])->save();
+
+        $this->audit->record('investor_portal.password_set_by_staff', $account, null, ['by' => $by?->getKey()]);
+
+        return $account;
+    }
+
     /** A sign-in candidate for this company's portal by phone (any spelling of the number). */
     public function findByPhone(string $phone): ?InvestorPortalAccount
     {

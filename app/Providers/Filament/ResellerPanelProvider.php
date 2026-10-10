@@ -23,6 +23,7 @@ use App\Models\Customer;
 use App\Services\CompanyContext;
 use App\Services\CompanySettingsService;
 use App\Services\ResellerOwnCourierService;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -80,6 +81,10 @@ class ResellerPanelProvider extends PanelProvider
                 Profile::class,
             ])
             ->homeUrl(Dashboard::class)
+            // The name at the top of the user menu opens the Profile page (owner request, 2026-10-10).
+            ->userMenuItems([
+                'profile' => fn (Action $action): Action => $action->url(fn (): string => Profile::getUrl()),
+            ])
             // The reseller's deposit, beside the user menu on every page (owner rule, 2026-10-06).
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn (): View|string => $this->depositBadge())
             // "Read the rules first" above the application form, while the guide is on.

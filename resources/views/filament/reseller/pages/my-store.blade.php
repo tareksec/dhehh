@@ -20,6 +20,43 @@
         </x-filament::section>
     @endif
 
+    @if ($subdomain = $this->subdomainStatus())
+        <x-filament::section>
+            @if ($subdomain['live'])
+                <div class="text-sm font-medium text-success-600 dark:text-success-400">
+                    {{ __('Your store address :host is live.', ['host' => $subdomain['host']]) }}
+                </div>
+            @else
+                <div
+                    wire:poll.15s="checkSubdomain"
+                    x-data="{
+                        readyAt: new Date(@js($subdomain['ready_at'])).getTime(),
+                        left: 0,
+                        tick() { this.left = Math.max(0, Math.floor((this.readyAt - Date.now()) / 1000)) },
+                        get clock() { return String(Math.floor(this.left / 60)).padStart(2, '0') + ':' + String(this.left % 60).padStart(2, '0') },
+                    }"
+                    x-init="tick(); setInterval(() => tick(), 1000)"
+                    class="space-y-2 text-sm"
+                >
+                    <div class="flex items-center gap-2 font-medium">
+                        <x-filament::loading-indicator class="h-4 w-4" />
+                        {{ __('Setting up :host (DNS and SSL)', ['host' => $subdomain['host']]) }}
+                    </div>
+                    <div x-show="left > 0">
+                        {{ __('Expected to be live in') }}
+                        <span class="font-mono text-base font-semibold" x-text="clock"></span>
+                    </div>
+                    <div x-show="left === 0" x-cloak class="text-warning-600 dark:text-warning-400">
+                        {{ __('This is taking longer than usual. We keep checking automatically.') }}
+                    </div>
+                    <div class="text-gray-500 dark:text-gray-400">
+                        {{ __('Nothing to do on your side. Until it is ready, share your store link above; it switches to the new address on its own.') }}
+                    </div>
+                </div>
+            @endif
+        </x-filament::section>
+    @endif
+
     @if ($status = $this->customDomainStatus())
         <x-filament::section>
             <div class="space-y-2 text-sm">

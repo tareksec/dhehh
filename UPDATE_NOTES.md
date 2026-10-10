@@ -82,6 +82,77 @@ Next in phase 5: checkout and success, then track.
 
 Commit status: committed and pushed to `claude/erpf-marketplace-pro-customization-5m95cn` (phases 5a, 5b and 5c together) on owner approval ("ওকে কমিট এবং পুশ কর", 2026-10-10). Not pushed to `main`.
 
+## 2026-10-10 - SMS gateway moved to Integrations
+
+Owner instruction: "sms gateway ইন্টিগ্রেশন টা সাইট সেটিংস থেকে সরিয়ে integration পেজে sms gateway এর সেটিংস যুক্ত কর।"
+
+- Storefront Settings no longer has the SMS URL template / API key / sender ID fields; Settings → Integrations has a new **SMS Gateway** tab (per site via the Site picker).
+- Saving Integrations merges only the three SMS keys into `notification_credentials`; `EditStorefrontSetting` re-adds the stored SMS keys so Storefront Settings cannot wipe them. No migration.
+- Needs Bangla review: the 8 new SMS Gateway strings in `lang/bn.json`.
+- Verified: IntegrationsPageTest, TranslationParityTest, NextjsSiteSettingsTest, LeadFollowUpReminderTest, StorefrontResellerAndAbandonedCartTest passed. Full suite on the working branch: 2061 passed, 8 failed — all online-payment tests (`StorefrontApiCheckoutTest` x7, `StorefrontPaystationPaymentTest` x1) on files this change does not touch.
+
+Commit status: committed and pushed to main with owner approval (2026-10-10).
+
+## 2026-10-10 - Orders: shipping fee now reaches Total amount while typing
+
+Owner report (in Bangla, with a phone screenshot of Create Order): Shipping Fee showed ৳110 but Total amount / Due amount stayed at the products' ৳200 — the shipping amount was not added. Fix it and add a separate test.
+
+Root cause (reproduced in a real mobile Chromium against a scratch SQLite database): `shipping_fee` (and discount, vat, paid_amount, item quantity, item unit price) were `live(onBlur: true)`, so the totals were recalculated only when the field lost focus. On a phone the keyboard is usually closed without a blur, so no request was sent and Total/Due stayed stale. A Livewire test cannot see this because it never blurs a field; the form maths in `setOrderTotals()` was already correct and the saved order was never wrong (`OrderWorkflowService::sync()` recomputes it after every save).
+
+What changed:
+- `OrderForm`: those six inputs are now `live(debounce: OrderForm::TOTALS_DEBOUNCE_MS)` (500 ms), so the totals update about half a second after typing stops, with or without a blur. Applies to Create and Edit Order (same schema).
+- Browser check after the fix: type 110 into Shipping Fee, do nothing else → Total and Due go from ৳200 to ৳310 after ~0.5 s.
+- Tests (`OrderFormTest`): `test_shipping_fee_is_added_to_the_total_amount_on_the_live_create_form` (shipping typed last, typed first, with quantity/discount/vat/paid changes, and the saved order's total/due) and `test_inputs_feeding_the_order_totals_recalculate_while_typing_not_only_on_blur` (fails on the old `live(onBlur: true)`, verified).
+- No new strings (nothing to translate), no migration.
+
+Noticed, not changed: choosing a customer again resets Shipping Fee to the detected zone's fee (৳0 if the address matches no zone), wiping a fee that was typed by hand earlier. That is the existing `setShippingFee()` behaviour; say if it should keep a manual fee.
+
+Verification: `php artisan test tests/Feature/OrderFormTest.php` — 6 passed. Full `php artisan test` (plain, no `--env`) — **2052 passed, 2 skipped, 0 failed** (18698 assertions, ~522 s). Pint passed on the changed PHP files. `npm run build` not needed — no frontend source changed (it was only built locally to run the real-browser check).
+
+Commit status: committed and pushed to the branch `claude/optimistic-knuth-m5okxp` on owner approval ("কমিট ও পুশ কর", 2026-10-10). Not pushed to main.
+
+## 2026-10-12 - Investor portal: sign-in logo size
+
+Owner request (in Bangla): the logo on the portal sign-in page became small; make it a standard size. Investor theme CSS (`.fi-simple-layout .fi-logo`, 4rem high). Follow-up (owner): the signed-in header logo was also tiny, so the panel now uses `brandLogoHeight('2.75rem')`. No strings.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-12).
+
+## 2026-10-11 - Investor portal: sign-in heading
+
+Owner request (in Bangla): write "Investor Dashboard" under the company logo on the portal login page. `Login::getHeading()` returns it. Needs Bangla review: "ইনভেস্টর ড্যাশবোর্ড".
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-11).
+
+## 2026-10-10 - Investor portal: staff-set password and forgot-password link
+
+Owner request (in Bangla): a super admin can create a password so the person can sign in to the investor portal, and add Forgot password on the login page. Added **Portal access → Set a portal password** (`InvestorPortalAccountService::setPasswordByStaff`) and the "Forgot your password?" link on the portal login (the reset page itself already existed; the custom login form had dropped Filament's link). Tests added. Needs Bangla review: the 6 new keys (e.g. "Set a portal password").
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-10).
+
+## 2026-10-10 - Reseller portal: profile link in the user menu, subdomain set-up countdown
+
+Owner request (in Bangla, with a screenshot of the portal's user menu): link the profile page from the profile icon; and after a reseller sets a subdomain, DNS and SSL should be created and connected automatically, with a time shown for when the domain will be live.
+
+What changed:
+- The reseller's name at the top of the portal's user menu opens **Profile** (`/portal/profile`).
+- **My Store**: after a reseller saves a new subdomain, a card shows "Setting up <host> (DNS and SSL)" with a live countdown, checks the address every 15 seconds (`ResellerSubdomainProbe`: DNS points at the company domain's server and HTTPS answers with a valid certificate), and shows "Your store address <host> is live." once it opens. If the countdown ends first it says it is taking longer and keeps checking.
+- Until then the reseller's store link (dashboard, share buttons) stays the long `/store/<slug>` link; it switches to the subdomain once the check passes or the set-up time has passed. Subdomains chosen before this change count as live.
+- The countdown length is a Super Admin setting: **Reseller Settings → Subdomain set-up time (minutes)**, default **10** (my estimate; change it to what the server really takes).
+- `/internal/tls-ask` now also says yes to every approved reseller's subdomain, so an on-demand SSL proxy (Caddy) can issue each subdomain's certificate on its first visit without a wildcard certificate or a DNS provider token.
+
+What "automatic" needs on the server (one time, not per reseller; `docs/deployment.md`):
+1. Wildcard DNS `*.<company domain>` → the server (for offer.zamzamint.com that is `*.offer.zamzamint.com`). This one record covers every future subdomain, so no DNS work per reseller.
+2. SSL: either a wildcard certificate in Traefik (needs the DNS provider's API token), or the Caddy on-demand proxy that asks `/internal/tls-ask`.
+3. The app server must be able to reach its own public address (the live check calls the subdomain over HTTPS).
+Creating a separate DNS record per subdomain through a DNS provider's API was not built: the wildcard record makes it unnecessary, and which DNS provider is used is not known.
+
+Needs Bangla review: the 7 new keys ("Your store address :host is live.", "Setting up :host (DNS and SSL)", "Expected to be live in", "This is taking longer than usual. We keep checking automatically.", "Nothing to do on your side. …", "Subdomain set-up time (minutes)", and its helper text).
+
+Tests: `ResellerSubdomainTest` +5 (countdown and long link while pending, live check, change restarts set-up, legacy counts as live, tls-ask for subdomains), `ResellerPortalDashboardTest` +1 (profile link), `ResellerSettingsPageTest` (setting saved by Super Admin only). Full `php artisan test` (plain, no `--env`, after merging main): **2049 passed, 1 skipped, 0 failed** (13 investor-portal tests only failed until `npm run build` refreshed the Vite manifest). `npm run build` OK.
+
+Deploy: `php artisan migrate` (new migration `2026_10_10_100000_add_reseller_subdomain_status`) and `npm run build`.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-10).
 ## 2026-10-09 - Fix Connect WhatsApp App (Coexistence) last step
 
 Reason — owner said Coexistence could not be connected from the ERP, so they stopped going that way. I found two code problems and the owner said "ওকে ঠিক করে দেও" (OK, fix them).

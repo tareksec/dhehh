@@ -53,6 +53,70 @@ All notable production changes to Business Dashboard are documented here.
 - `OrderTrackController::trackingUpdates()` now wraps its titles and messages in `__()`; the English text is unchanged. New view `themes/marketplace-pro/track/show.blade.php`; 44 more lang keys (including the courier status labels In Transit, Picked Up, Booked, Not Booked and Booking Pending).
 - `StorefrontMarketplaceProPagesTest` now has 42 tests (9 new for tracking).
 
+## [2.69.4] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **The SMS gateway moved from Storefront Settings to Settings → Integrations → SMS Gateway.** The URL template, API key and sender ID are now edited there, per site (use the Site picker, like Payment Gateway). Values already saved keep working — nothing needs to be re-entered. Saving Storefront Settings no longer touches the SMS keys.
+
+### Technical Notes
+
+- SMS keys (`sms_api_url`, `sms_api_key`, `sms_sender_id`; `StorefrontNotificationService::SMS_CREDENTIAL_KEYS`) still live in the encrypted `storefront_settings.notification_credentials`; no migration. `Integrations::save()` merges only these keys into the stored array, and `EditStorefrontSetting::mutateFormDataBeforeSave()` re-adds them so the Storefront Settings form (which no longer has the fields) cannot wipe them. Tests: `IntegrationsPageTest` (+2).
+## [2.69.3] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Create/Edit Order: Total amount and Due amount now include the Shipping Fee as soon as you type it.** Before, the totals only recalculated when the field lost focus, so on a phone (where closing the keyboard leaves the field focused) a typed Shipping Fee of ৳110 never reached the Total amount, which kept showing only the products' ৳200. Shipping Fee, Discount, Vat, Paid amount and each item's Quantity and Unit price now update the totals about half a second after you stop typing.
+
+**Technical Notes:**
+- `OrderForm`: the six totals inputs changed from `live(onBlur: true)` to `live(debounce: OrderForm::TOTALS_DEBOUNCE_MS)` (500 ms). The saved order was never wrong (`OrderWorkflowService::sync()` recomputes it from items + fees after every save); only the on-screen total was stale. New tests in `OrderFormTest`: `test_shipping_fee_is_added_to_the_total_amount_on_the_live_create_form` and `test_inputs_feeding_the_order_totals_recalculate_while_typing_not_only_on_blur`. No migration, no new strings.
+## [2.69.2] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Investor portal sign-in, sign-up and password-reset pages: the company logo is now a standard size** (4rem high) instead of the tiny sidebar size. The logo in the signed-in header is also a standard size now (2.75rem high instead of Filament's tiny 1.5rem).
+
+**Technical Notes:**
+- `brandLogoHeight('2.75rem')` on the investor panel; rule added to `resources/css/filament/investor/theme.css` (`.fi-simple-layout .fi-logo`); `!important` is needed because Filament sets the height inline.
+## [2.69.1] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **Investor portal sign-in page:** the heading under the company logo now reads **Investor Dashboard**, so it is clear which sign-in this is.
+
+**Technical Notes:**
+- `Login::getHeading()`; 1 new lang key (en + bn); assertion added to `test_the_login_page_has_a_forgot_password_link`.
+## [2.69.0] - 2026-10-10
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investor portal: staff can set a password.** On an investor's or channel partner's page, **Portal access → Set a portal password** (needs `investments.portal_manage`) opens the portal account if there is none, sets the password and makes it active, so the person can sign in with their phone number and that password at once, without an SMS. Audited as `investor_portal.password_set_by_staff`; not offered for a disabled account.
+- **Investor portal sign-in: "Forgot your password?" link** under the password field, opening the existing SMS-code reset page.
+
+**Technical Notes:**
+- `InvestorPortalAccountService::setPasswordByStaff()`; link added to `Login::form()`. New tests in `InvestorPortalTest`. 6 new lang keys (en + bn).
+## [2.68.0] - 2026-10-10
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **A reseller's new store subdomain sets itself up and shows when it will be live.** After a reseller picks a subdomain on **My Store**, the page shows "Setting up <name>.<domain> (DNS and SSL)" with a countdown, checks every 15 seconds whether the address already opens over HTTPS, and switches to "Your store address … is live." on its own. Nothing to do on the reseller's side and no per-reseller server work: the wildcard DNS record covers every name, and the SSL certificate comes from the wildcard certificate or, new, from an on-demand proxy, because `/internal/tls-ask` now also approves the subdomain of every approved reseller. Until the address is ready the reseller's shared store link stays the long `/store/<slug>` link, so nobody gets a link that does not open yet. The countdown length is **Resellers → Reseller Settings → Subdomain set-up time (minutes)** (Super Admin, default 10).
+- **The name at the top of the reseller portal's user menu now opens the Profile page.**
+
+### Technical Notes
+
+- Subdomain set-up: migration `2026_10_10_100000_add_reseller_subdomain_status` (`customers.reseller_subdomain_changed_at` / `reseller_subdomain_live_at`, `storefront_settings.reseller_subdomain_setup_minutes` default 10). Subdomains chosen before it (no `changed_at`) count as live. `Customer::resellerSubdomainIsReady()` / `resellerSubdomainReadyAt()`; `resellerStoreUrl()` uses the subdomain only once it is ready. New `App\Services\ResellerSubdomainProbe` (DNS points at the company domain's IPs + an HTTPS request that succeeds), polled by `MyStore::checkSubdomain()`. `TlsAskController` also answers 200 for approved resellers' subdomains. Profile link: `ResellerPanelProvider` `userMenuItems(['profile' => ...->url(Profile::getUrl())])`. Tests: `ResellerSubdomainTest` +5, `ResellerPortalDashboardTest` +1, `ResellerSettingsPageTest` updated. 7 new lang keys (en + bn). `docs/deployment.md` updated.
 ## [2.67.0] - 2026-10-09
 
 **Release type:** Minor Feature Update
@@ -249,6 +313,7 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `Order::showsResellerBranding()` is now simply "the order has a reseller" (`reseller_customer_id` set — portal orders and reseller-store checkouts). New `ResellerCommissionTest::test_an_order_from_the_resellers_store_is_invoiced_in_the_resellers_name` (real checkout on `/store/<slug>`, then print and summary card); `ResellerOwnCourierOrderTest`'s company-invoice test now uses an order without a reseller. No migration, no new lang keys.
+
 ## [2.60.2] - 2026-10-07
 
 **Release type:** Patch/Fix Update

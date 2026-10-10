@@ -47,9 +47,9 @@ APP_DEBUG=false
 APP_URL=https://your-domain.com
 ASSET_URL=https://your-domain.com
 TRUSTED_PROXIES=*
-APP_VERSION=2.67.0
-APP_RELEASE_TYPE=minor
-APP_RELEASE_DATE=2026-10-09
+APP_VERSION=2.69.4
+APP_RELEASE_TYPE=patch
+APP_RELEASE_DATE=2026-10-10
 
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
@@ -543,9 +543,13 @@ Behaviour to expect: on the investor host every other path redirects to `/invest
 Optional, per company. Needs two things on the server before **Resellers → Reseller Settings → Reseller subdomains enabled** is switched on:
 
 1. **Wildcard DNS:** an `A` record `*.<company-domain>` pointing at the same server. Explicit records (`reseller`, `www`) keep working because they are more specific.
-2. **Wildcard SSL:** a `*.<company-domain>` certificate. Let's Encrypt only issues wildcards through a DNS challenge, so Traefik/Coolify needs your DNS provider's API token for that domain. Without it, subdomains open with a certificate warning.
+2. **SSL, one of:**
+   - a **wildcard** `*.<company-domain>` certificate. Let's Encrypt only issues wildcards through a DNS challenge, so Traefik/Coolify needs your DNS provider's API token for that domain; or
+   - the same **on-demand** proxy as custom domains below (Caddy asking `/internal/tls-ask`). The endpoint also answers `200` for the subdomain of every approved reseller, so each subdomain gets its own certificate on its first visit, with no DNS provider token.
 
-No environment variables, no per-reseller server work: once both are in place a reseller's chosen subdomain is live the moment they save it. Custom domains of their own (e.g. `myshop.com`) are a separate, later step.
+   Without either, subdomains open with a certificate warning.
+
+No environment variables, no per-reseller server work: the wildcard DNS record already covers every future name, so once both are in place a reseller's chosen subdomain works as soon as the certificate is issued. The portal's **My Store** page shows "Setting up … (DNS and SSL)" with a countdown (**Reseller Settings → Subdomain set-up time**, default 10 minutes), checks every 15 seconds whether the address opens over HTTPS, and then shows it as live. Until then the reseller's shared store link stays the long `/store/<slug>` link; it switches to the subdomain once the check passes or the set-up time has passed. The check calls the subdomain from the app server itself, so the server must be able to reach its own public address. Custom domains of their own (e.g. `myshop.com`) are a separate step.
 
 ### Reseller custom domains (`myshop.com`)
 

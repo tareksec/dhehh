@@ -68,6 +68,8 @@ class InvestorPanelProvider extends PanelProvider
             ->passwordReset(ForgotPassword::class, ForgotPassword::class)
             ->brandName(fn (): string => app(CompanySettingsService::class)->name($this->portalCompany()))
             ->brandLogo(fn (): ?string => app(CompanySettingsService::class)->logoUrl($this->portalCompany()))
+            // Header logo at a standard size (Filament's 1.5rem default is tiny); the sign-in pages use a larger one from the theme CSS.
+            ->brandLogoHeight('2.75rem')
             ->darkModeBrandLogo(fn (): ?string => app(CompanySettingsService::class)->darkLogoUrl(company: $this->portalCompany()))
             ->pages([
                 Dashboard::class,

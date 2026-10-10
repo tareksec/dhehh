@@ -82,6 +82,7 @@ class ResellerSettings extends Page
             'reseller_subdomains_enabled' => (bool) $company->reseller_subdomains_enabled,
             'reseller_custom_domains_enabled' => (bool) $company->reseller_custom_domains_enabled,
             'reseller_portal_domain' => $company->reseller_portal_domain,
+            'reseller_subdomain_setup_minutes' => (int) ($setting?->reseller_subdomain_setup_minutes ?? 10),
             'reseller_cost_per_unit' => (float) ($setting?->reseller_cost_per_unit ?? 0),
             'reseller_packaging_cost_per_unit' => (float) ($setting?->reseller_packaging_cost_per_unit ?? 0),
             'reseller_min_withdrawal' => (float) ($setting?->reseller_min_withdrawal ?? 0),
@@ -117,6 +118,14 @@ class ResellerSettings extends Page
                         Toggle::make('reseller_custom_domains_enabled')
                             ->label(__('Reseller custom domains enabled'))
                             ->helperText(__('Lets every approved reseller connect their own domain (e.g. myshop.com) to their store. The server must issue SSL certificates on demand first (a Caddy proxy using /internal/tls-ask) -- see docs/deployment.md.')),
+                        TextInput::make('reseller_subdomain_setup_minutes')
+                            ->label(__('Subdomain set-up time (minutes)'))
+                            ->numeric()
+                            ->integer()
+                            ->minValue(1)
+                            ->maxValue(1440)
+                            ->required()
+                            ->helperText(__('After a reseller picks a subdomain, their My Store page counts down this long while the address is set up, and their store link switches to it once it opens over HTTPS (checked automatically) or this time has passed.')),
                         TextInput::make('reseller_portal_domain')
                             ->label(__('Reseller portal domain'))
                             ->helperText(__('Leave blank to use "reseller." + this company\'s own domain. Set this only for a fully separate domain (e.g. a dedicated reseller-only website).'))
@@ -252,6 +261,11 @@ class ResellerSettings extends Page
         }
 
         $setting = $company->storefrontSetting ?? StorefrontSetting::query()->create(['company_id' => $company->getKey(), 'site_type' => StorefrontSetting::SITE_BLADE]);
+
+        if (static::isSuperAdmin()) {
+            $setting->reseller_subdomain_setup_minutes = (int) $data['reseller_subdomain_setup_minutes'];
+        }
+
         $setting->forceFill([
             'reseller_cost_per_unit' => round((float) $data['reseller_cost_per_unit'], 2),
             'reseller_packaging_cost_per_unit' => round((float) $data['reseller_packaging_cost_per_unit'], 2),
