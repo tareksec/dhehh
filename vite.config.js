@@ -9,6 +9,7 @@ export default defineConfig({
                 'resources/css/app.css',
                 'resources/css/filament/admin/theme.css',
                 'resources/css/filament/reseller/theme.css',
+                'resources/css/filament/investor/theme.css',
                 'resources/js/app.js',
                 'resources/js/app-updater.js',
                 'resources/js/push-notifications.js',

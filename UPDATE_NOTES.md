@@ -21,11 +21,320 @@ Creating a separate DNS record per subdomain through a DNS provider's API was no
 
 Needs Bangla review: the 7 new keys ("Your store address :host is live.", "Setting up :host (DNS and SSL)", "Expected to be live in", "This is taking longer than usual. We keep checking automatically.", "Nothing to do on your side. …", "Subdomain set-up time (minutes)", and its helper text).
 
-Tests: `ResellerSubdomainTest` +5 (countdown and long link while pending, live check, change restarts set-up, legacy counts as live, tls-ask for subdomains), `ResellerPortalDashboardTest` +1 (profile link), `ResellerSettingsPageTest` (setting saved by Super Admin only). Full `php artisan test` (plain, no `--env`): **1922 passed, 1 skipped, 0 failed**. `npm run build` OK.
+Tests: `ResellerSubdomainTest` +5 (countdown and long link while pending, live check, change restarts set-up, legacy counts as live, tls-ask for subdomains), `ResellerPortalDashboardTest` +1 (profile link), `ResellerSettingsPageTest` (setting saved by Super Admin only). Full `php artisan test` (plain, no `--env`, after merging main): **2049 passed, 1 skipped, 0 failed** (13 investor-portal tests only failed until `npm run build` refreshed the Vite manifest). `npm run build` OK.
 
 Deploy: `php artisan migrate` (new migration `2026_10_10_100000_add_reseller_subdomain_status`) and `npm run build`.
 
 Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-10).
+## 2026-10-09 - Fix Connect WhatsApp App (Coexistence) last step
+
+Reason — owner said Coexistence could not be connected from the ERP, so they stopped going that way. I found two code problems and the owner said "ওকে ঠিক করে দেও" (OK, fix them).
+
+What changed:
+- `connect-whats-app-business-app.blade.php`: the popup listener accepted only `https://www.facebook.com`; Meta can answer from `web.facebook.com` (common in Bangladesh) or `m.facebook.com`, so the WABA ID and phone number ID were dropped. It now accepts any https `facebook.com` host. The FB.login callback also waits up to 5 seconds for the popup's FINISH message, which can arrive after the callback.
+- `ConnectWhatsAppBusinessApp::completeEmbeddedSignup()`: stops with a clear, translated message when the code, WABA ID or phone number ID is empty, before exchanging the code or saving a channel (it used to try anyway and fail with an unclear Meta error).
+- 2 lang keys in en/bn ("Could not complete the connection" was previously untranslated, plus the new explanation).
+
+Not verified: a real Meta popup cannot be run from the cloud session; the owner needs to try the connection again. If it still fails, the owner should report which step fails (no Connect button = no Configuration ID; popup error; or ERP error text).
+
+Needs Bangla review: the 2 new keys.
+
+Tests: new `test_missing_waba_or_phone_number_id_stops_before_exchanging_the_code` in `EmbeddedSignupTest`; `EmbeddedSignupTest` + `TranslationParityTest` pass. Full `php artisan test` (plain, no `--env`): 1684 passed, 2 skipped.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`, then merged with main and pushed to `main`, on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-09). The whole branch (WhatsApp Web archive, rules, this fix) goes to main.
+
+## 2026-10-06 - WhatsApp terms quoted word for word in the rules file
+
+Reason — owner asked "সব টার্মস গুলো যুক্ত করেছ?" (did you add all the terms?). I said only a summary of the relevant parts was there, two pages had not been read fully, and offered to quote the relevant clauses word for word. Owner: "১ নম্বরটা কর, তারপর কমিট এবং পুশ কর" (do option 1, then commit and push).
+
+What changed (docs only): `docs/whatsapp-web-rules.md` "What WhatsApp's terms say" now quotes, word for word with links and dates:
+- WhatsApp Terms for WhatsApp Business App (effective 2026-09-23): Restrictions (a)–(h), Compliance (opt-in, opt-out), Acceptable Use (e)–(h), (l), (m), Enforcement, section 12 Termination. (The 2026-10-05 version used a search-result summary because the page URL I had was 404; the right URL was found.)
+- WhatsApp Terms of Service (effective 2021-01-04): Our Terms And Policies, Legal And Acceptable Use, Harm To WhatsApp Or Our Users, termination.
+- WhatsApp Messaging Guidelines (2026-09-23): "… scrape data, or use unofficial clients …".
+- WhatsApp Business Messaging Policy (2026-09-23): opt-in, opt-out, at-scale messaging, permanent prohibition.
+- Help Center "About unofficial apps" is listed as not quoted: its body loads only in a browser and could not be read from the cloud session.
+Every quote fragment (25) was checked by script against the downloaded page text.
+
+New finding for the owner: Business App terms section 12 says that when the terms end the company must "delete any user information Company obtained in breach of these Business App Terms". Archived chats may count as obtained in breach. The file says so; rule 1 (keep the archive) stays because the owner asked for it, and any deletion after a ban is the owner's legal decision.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7` on owner approval ("১ নম্বরটা কর, তারপর কমিট এবং পুশ কর", 2026-10-06), together with the two entries below.
+
+## 2026-10-05 - WhatsApp Web rules + terms check (before ERP sending)
+
+Reason — owner asked whether the ERP can also send text/image/voice/video/files through the WhatsApp Web channel, then said (Bangla) "add the rules first, and first check WhatsApp's terms".
+
+What changed (docs only, no code):
+- New `docs/whatsapp-web-rules.md`: summary of WhatsApp Terms of Service, Business App terms, the unofficial-apps help page and the Business Messaging Policy (checked 2026-10-05, with links), and 9 rules for web channels (permanent archive; sending off by default; reply only to customers who messaged first; no bulk/automation/AI; honour opt-out; one-at-a-time with admin-set limits; stop on ban/logout; save and attribute every sent message; no SMS fallback).
+- `CLAUDE.md`: new "WhatsApp Web (QR) channel rule" section pointing to that file.
+
+Terms finding to tell the owner: linking an unofficial WhatsApp Web client breaks WhatsApp's terms even for read-only use; sending raises the risk. The official no-risk way to send media from the ERP is the Cloud API / Coexistence channel the app already has.
+
+Open owner decisions: build ERP sending on the web channel or not; if yes, the pause and per-minute/per-hour limits (rule 6).
+
+Commit status: committed and pushed on owner approval (2026-10-06), with the entry above.
+
+## 2026-10-05 - WhatsApp Web (QR) login: full chat archive that survives a ban
+
+Reason — owner asked (Bangla): add WhatsApp Web login so all WhatsApp Business app messages load, everything sent in the app so far is saved in the ERP, customer messages are not lost even if the WhatsApp Business number is banned, and all customer info is saved in our database.
+
+What changed:
+- New `whatsapp-bridge/` Node.js service (Baileys 7.0.0-rc14): QR login as a linked device ("Desktop" identity + all history sync types, so WhatsApp sends the full history), archives 1:1 chats only (groups/status/channels skipped), contacts, media, and "delete for everyone" markers. Disk-backed outbox: events are kept until the ERP answers 2xx. Read-only — never sends WhatsApp messages. Dockerfile + README.
+- ERP: new CRM page **WhatsApp Web Login** (super admin; bridge URL + encrypted API key, link device / show QR, status, history progress, chats/messages/contacts saved, log out). Webhook `WhatsAppWebWebhookController` (HMAC-signed, per-channel secret in `app_secret`), jobs `ImportWhatsAppWebMessagesJob` / `SyncWhatsAppWebContactsJob`, `WhatsAppWebArchiveService`, `WhatsAppWebBridgeClient`, `WhatsAppWebSettingsService`, model `WhatsAppContact` (+ isolation test entry), migration (channel web_* columns, `conversation_messages.revoked_at`, `whatsapp_contacts`).
+- Inbox shows **Deleted on WhatsApp** on revoked messages. `ConversationMessengerService` refuses to send on web-archive chats (before creating a message, so no SMS fallback fires) and skips read receipts. Channels list hides Test & Subscribe / Edit for web channels.
+
+My decisions (say if you want different):
+- Read-only archive: replies stay on the phone. Sending through an unofficial WhatsApp Web client raises the ban risk the owner is worried about. Can be added later.
+- History import links chats to existing customers/leads by phone but does **not** create leads (thousands of old chats would flood the lead pipeline); every chat's number is still saved in `whatsapp_contacts`. Live incoming messages from unknown numbers create a lead (channel `auto_create_leads`).
+- Only 1:1 chats; groups are skipped.
+- If the same number is also connected by Coexistence, its chats appear under both channels (separate conversations).
+- Risk to tell the owner: WhatsApp Web automation is unofficial (not a Meta API); WhatsApp may unlink or restrict the number. Data already saved is unaffected.
+
+Deploy needs: a separate bridge app with a persistent volume and `BRIDGE_API_KEY`, a running queue worker, and PHP/web server body limits big enough for media.
+
+Needs Bangla review: 49 new keys in `lang/bn.json` (WhatsApp Web Login page, statuses, Inbox "Deleted on WhatsApp", read-only error).
+
+Tests: new `tests/Feature/WhatsAppWebArchiveTest.php` (12) and `whatsapp-bridge` `npm test` (10) pass. Full `php artisan test` (plain, no `--env`): 1683 passed, 2 skipped. `npm run build` clean. Bridge smoke-started locally (health, session API, outbox persisted events while the ERP was unreachable); a real QR scan could not be tested from the cloud sandbox (no WhatsApp network access).
+
+Commit status: committed and pushed on owner approval (2026-10-06), with the entries above.
+
+## 2026-10-09 - Investor portal: user menu opens Profile
+
+Owner request (in Bangla): in the investor portal, clicking the profile name in the header's popup should open the Profile page. `InvestorPanelProvider` now gives the `profile` user-menu item the Profile page URL. Test added in `InvestorPortalTest`. No new strings.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-09).
+
+## 2026-10-08 - Keep one module's error inside that module (error isolation)
+
+Owner request (in Bangla), after the v2.63.0 outage: if a module or part of the app has a problem or error, it must not affect the whole app. Only that specific module or part should show the error. The owner approved all five steps proposed, one after another.
+
+What changed:
+1. **Sidebar badges:** `HasGuardedNavigationBadge` on the 5 badges (Inbox, Investor Drafts, Investor Requests, Payout Batches, Reseller Payout Requests). On an error the badge is hidden.
+2. **Render hooks and widgets:** `GuardedViewManager` guards every Filament render hook in every panel. `GuardsWidgetRendering` covers all 19 widgets, which show a "could not load" card on an error.
+3. **Crashed pages:** `PanelErrorPages` plus the `panel-errors.module` view show a clear page with buttons instead of "500 | Server Error". This covers the admin panel and the portals, including Livewire actions sent from them.
+4. **Missing tables:** `ModuleHealth` plus the `TurnOffPagesWithMissingTables` middleware and a `Gate::before` check. That section shows "temporarily unavailable" and turns itself back on after `migrate`.
+5. **CI:** `.github/workflows/mysql-migrations.yml` runs migrations on MySQL 8.4 for every push and pull request.
+
+All caught errors are reported to Super Admins (bell plus Deploy Error Logs, source `module:…`), at most once per hour each. Local development and the test suite still throw errors as before (`ISOLATE_MODULE_ERRORS` overrides).
+
+Decisions I made without asking, for the owner to confirm or change:
+- The crashed-page screen is a standalone page (logo-less, no sidebar) with Dashboard / Try again / Back buttons. It does not draw the full panel sidebar, because that page must work even when the shared panel parts are what failed.
+- A section with a missing table stays in the menu. Opening it shows "temporarily unavailable" (503) rather than hiding it, so staff can see it exists and is down. Its relation tabs and buttons on other pages are hidden.
+- Reports are throttled to one per hour per section and error.
+
+Limits (cannot be isolated): the database or Redis being down, a broken `.env`, or a PHP syntax error in a file every page loads. Step 5 is the protection for those. **Note:** Coolify deploys `main` as soon as it is pushed, so the new MySQL check only protects us if a branch's checks are green before it is merged or pushed to `main`.
+
+Needs Bangla review (added with a Bangla value, please check the wording): "Module error (the rest of the app keeps working): :section", "This section could not be loaded. The rest of the page keeps working, and the error has been reported.", "This page could not be opened", "There is a problem in this part of the app. The other sections keep working, so you can carry on with them.", "The error has been recorded and reported to the administrators.", "Go to the dashboard", "Try again", "Go back", "This section is temporarily unavailable", "Part of its data is not ready yet (an update did not finish). The other sections keep working, so you can carry on with them."
+
+Verification:
+- New `ModuleGuardTest` (12 tests). Without the guard the "missing `investor_requests`" test reproduces the production 500 (`no such table: investor_requests`). Without the view-state restore, the inline-widget test fails with a `ViewException`.
+- MySQL 8.0 installed in the session container: the old v2.63.0 migration fails with exactly production's error 1059 and leaves the same half state. The fixed migration finishes it. All 219 migrations run from empty with `APP_ENV=production`.
+- Error page checked in headless Chromium at phone width (390px), in Bangla.
+- Full `php artisan test` (plain, no `--env`): 2017 passed, 1 skipped, 0 failed. `npm run build` passes. Pint passes on the changed PHP files (`bootstrap/app.php` and one line in `LowStockProducts.php` were already failing Pint before this change and were left as they were).
+
+Commit status: committed and pushed to `ccr-59b8ca5b-4zc27z`, then to `main` once the branch's MySQL migrations check passed (owner approved 2026-10-09: "হ্যাঁ, কমিট করে পুশ করো এবং মেইন এ পুশ কর").
+
+## 2026-10-09 - Lead CRM sales agent: 5 opt-in intelligence upgrades (proactive mode, objection handling, multi-product cart, cross-sell, personalization)
+
+Owner request, across several turns: make the CRM sales agent behave more like an intelligent human sales agent rather than a generic chatbot. I proposed a list of areas to work on; the owner asked for each one in turn ("do the next task on your list"): proactive mode, objection handling, multi-product cart, cross-sell, personalization. All five were implemented, then lost when this session's container was recycled before they were committed (per CLAUDE.md, nothing is committed without explicit approval, and the uncommitted working tree does not survive a container restart). The owner asked to redo them, and the branch was restarted from the then-current `main` (the branch's own earlier PR #7 was closed, not merged, and `main` had advanced ~50 releases past the branch's old base — see Technical Notes).
+
+What changed — each is a per-company toggle in **Integrations → Auto Messaging**, stored via `AiSettingsService`, off by default so no existing company's agent behavior changes until an admin opts in:
+
+1. **Proactive follow-up questions** (`proactive_mode_enabled`). After fully answering, the agent may also ask one natural next-step question (variant, quantity, delivery area, purchase timeframe) in the same message, to help move the sale forward instead of stopping cold at a bare answer.
+2. **Mild price-objection handling** (`objection_handling_enabled`). "Can you reduce it a bit?" no longer always escalates to a human — the agent may acknowledge it and restate real value from grounded catalog facts, but can never invent, offer or apply a discount. Refunds, complaints and explicit human requests still always hand off, on or off.
+3. **Multi-product cart**. `create_order_link`'s tool schema changed from a single flat item to an `items` array; calling it again with a new item merges into the same still-open `ChatOrderLink` (same product+variant updates its quantity, a new one appends) instead of overwriting the cart. No new toggle — this is a straight capability fix, not a behavior change a company would want to opt out of.
+4. **Grounded cross-sell / upsell** (`cross_sell_enabled`). A new `lookup_related_products` tool — reusing the exact same-category/active/in-stock signal `ProductShowController` already uses for the storefront's own "related products" — is only added to the tools array sent to the model when this is on, so the model cannot call a tool it was never offered.
+5. **Personalization by purchase history** (`personalization_enabled`). `SalesQualificationService::context()` can optionally eager-load past order line items and surface `is_returning_customer`/`lead_source`, so the agent may greet a returning customer naturally — never inventing a specific past-order detail the customer hasn't themselves mentioned.
+
+Important files: `app/Services/Crm/AiSettingsService.php` (DEFAULTS + save()), `app/Filament/Pages/Integrations.php` (fill-state/fields/save wiring for the 4 new toggles), `app/Services/Crm/AiReplyService.php` (keyword split, conditional system-prompt rules, `toolDefinitions($settings)`, `lookupRelatedProducts()`, rewritten `createOrderLink()`/new `mergeCartItems()`), `app/Services/Crm/SalesReplyRenderer.php` (`$allowFollowUpPrompt` param, `related` reply-key type), `app/Services/Crm/SalesQualificationService.php` (`$includePersonalization` param), `tests/Feature/CrmSalesAutomationTest.php` (12 new tests).
+
+Decisions made without asking, for the owner to confirm or change:
+- Multi-product cart has no on/off toggle — treated as a bug fix (the storefront checkout already looped over multiple cart items; only the AI side was artificially limited to one), not a behavior change worth gating.
+- Cross-sell suggests at most one related product per reply, from the same category only, same as the storefront's own related-products widget — no new "related products" concept invented.
+
+Verification:
+- `php artisan test --filter=CrmSalesAutomationTest`: 45 passed (33 pre-existing + 12 new), 0 failed.
+- Full `php artisan test` (plain, no `--env`): 1870 passed, 146 failed, 2 skipped. The 146 failures are pre-existing and unrelated (environment gap: `Vite manifest not found` — no frontend build in this container). Confirmed zero regressions: stashed all changes, re-ran the full suite on a clean `main` (146 failed, 1858 passed — the same 12-test gap), diffed the sorted list of failing test names between both runs — byte-for-byte identical.
+- This container was freshly provisioned and had neither `vendor/` nor PHP 8.4 (the project's composer.lock now requires `^8.4`, the container only shipped 8.3); installed PHP 8.4 + required extensions (gd, imagick, sqlite3, intl, bcmath, zip) via the Sury PHP APT repo for this session, then `composer install`. This is a one-off session setup, not a code change.
+
+Commit status: not yet committed — awaiting the owner's explicit commit/push approval, same policy as every other change in this log.
+
+## 2026-10-08 - Hotfix: admin panel 500 after the investor-portal deploy (MySQL 64-character index name)
+
+The owner reported "500 Server Error" on the live site after today's pushes.
+
+Cause: `2026_10_08_100200_create_agreement_tables` auto-named the unique index on `agreement_acceptances` `agreement_acceptances_agreement_template_id_portal_account_id_unique`. That name is 68 characters, and MySQL's limit is 64 (error 1059). Tests run on SQLite, which has no limit, so they passed. On the server, `deploy:migrate` caught the error. By design it does not fail the deploy, and it reports the error to super admins. The tables `agreement_templates` and `agreement_acceptances` (minus the index) were left behind, the migration was not recorded, and `investor_requests` / `payout_batches` were never created. The navigation badges of `InvestorRequestResource` and `PayoutBatchResource` query those tables on every admin page, which caused the 500.
+
+What changed:
+- The migration gives the index a short explicit name and is safe to re-run on the half-migrated database: an existing table is skipped, and only the missing index is added.
+- New `MigrationIdentifierLengthTest` guards every table and index name against the 64-character limit.
+- The same test found two older index names over the limit: `broadcast_recipients` (68) in `2026_08_28_000300` and `investment_documents` (71) in `2026_09_07_100200`. Both now have explicit short names, so a fresh MySQL install works. On production those migrations failed the same way earlier and were finished by `hasTable` guards (CHANGELOG: "Duplicate column name 'opted_out_at'"), so production has the tables but **not** these two indexes: the duplicate guard on broadcast recipients and a lookup index on documents. That is not urgent and is not fixed here.
+
+After deploy: Coolify's post-deployment `php artisan deploy:migrate` should now finish all pending migrations. To confirm, run `php artisan migrate:status` on the server: `2026_10_08_100200`, `100300` and `100400` should show "Ran". If the 500 remains, `storage/logs/laravel.log` names the actual error.
+
+Verification:
+- `MigrationIdentifierLengthTest` passes. Before the rename it listed exactly the three long names.
+- Simulated production's half-migrated state on a disposable SQLite file in the scratchpad (not the demo database): `agreement_templates` and `agreement_acceptances` existed without the index and the migration was unrecorded. `php artisan migrate` then finished `100200`, `100300` and `100400`, creating `investor_requests`, `payout_batches` and the new index. Not run on a real MySQL server, because none is available in this environment.
+- Full `php artisan test` (plain, no `--env`): 2005 passed, 1 skipped, 0 failed. `npm run build` passes.
+
+Commit status: committed and pushed to `ccr-59b8ca5b-4zc27z` and `main` with the owner's approval (2026-10-08).
+
+## 2026-10-08 - "Open investor portal" button (look-only staff preview of the investor portal)
+
+Owner request (in Bangla): "এডমিন থেকে ইনভেস্টরদের পোর্টালে এক ক্লিকে প্রবেশ করার জন্য ইনভেস্ট ভিউ পেজের হেডারে বাটন যোগ কর … আমাদের এডমিন প্যানেল থেকে এক ক্লিকে ইনভেস্টর পোর্টালে লগিন অপশন থাকতে হবে এবং এটা নতুন ট্যাবে ওপেন হবে।" (The existing Portal access → Invite flow stays as it is.)
+
+What changed:
+- New header button **Open investor portal** next to **Portal access** on the investor's page (and, for consistency, on the channel partner's page). It is a plain link with `target="_blank"`, so the browser opens the new tab itself (no pop-up blocker).
+- The dashboard and the portal are on different hosts and cannot share a login, so the link goes to `GET /admin/investor-portal/{investors|channel-partners}/{id}/open` on the dashboard host, which checks the staff member and redirects the tab to `<portal host>/investor/staff-entry/{one-time token}`. The token lasts 60 seconds, works once, only on that company's portal, and is refused if the staff member lost the permission in the meantime.
+- The tab is a **staff preview**: signed in as the person, with a yellow "Staff preview" bar on every page. It is look-only. The password-change form is hidden, and accepting an agreement, adding a payment account, sending or cancelling a request are hidden and refused on the server (`refuseInStaffPreview()` in `InvestorPortalPage`; every future portal page that writes must call it). It is **not** the person's sign-in (`last_login_at` and the "login" audit entry are untouched). What it records in the audit log (`investor_portal.staff_entry_issued`, `investor_portal.staff_entered`, document downloads) is attributed to the staff user, not the investor.
+- Works even if the person has not set a password yet.
+- Files: `InvestorPortalOpenAction`, `Admin\InvestorPortalOpenController`, `InvestorPortal\InvestorPortalStaffEntryController`, `InvestorPortalStaffEntryService`, `Support\InvestorPortalStaffPreview`, banner view `filament/investor/staff-preview-banner`, `InvestorPortalAccountService::ensureAccount()` (account creation shared with `invite()`), `InvestorPortalAccount::canAccessPanel()`, `AuditLogService`. No migration. 7 new lang keys. Docs: CHANGELOG, `docs/roles-and-permissions.md`, plan §15 build log.
+
+Decisions I made without asking, for the owner to confirm or change:
+1. **Who can use it:** the same permission as "Portal access", `investments.portal_manage` (Super Admin only by default). Staff with only `investments.manage` do not see the button.
+2. **No portal account yet:** the click creates one (status "invited", no invite date, no SMS, no link) so there is someone to look at. It then shows as "Invited" in **Investor Portal Settings** counts, although nobody was invited. The **Portal access** button still says "Invite to the investor portal" for such a person; a real invite reuses the same account.
+3. **Never opened:** a disabled account (enable it first), a person without a phone number, and a phone number that has a portal application waiting for review.
+4. **Look-only** (not "act as"): staff cannot accept agreements or change anything on the person's behalf.
+
+Needs Bangla review (added with a Bangla value, please check the wording): "Open investor portal", "Opens the investor portal in a new tab, signed in as this person. You can look at everything but change nothing.", "Could not open the portal", "This staff link has expired. Open the portal again from the dashboard.", "Staff preview: you are looking at the portal as :name (opened by :staff). Nothing can be changed here, and it does not count as :name signing in.", "A staff preview cannot change a password.", "This phone number has a portal application waiting for review, so the portal cannot be opened as this person yet."
+
+Known gap, not caused by this change: an **unsigned-in** visitor of any plain `/admin/...` route that uses the `auth` middleware (print pages, downloads, this button) gets a 500 ("Route [login] not defined") instead of the sign-in page, because the app does not set `redirectGuestsTo`. No data is exposed. Not fixed here.
+
+Verification:
+- New `InvestorPortalStaffEntryTest` (18 tests): the button on both pages and who sees it; the route's permission, company and refusal rules (disabled, no phone, portal off, application waiting); the token (works once, expires, wrong portal, account disabled or staff member deactivated in between); not counted as a sign-in; audit attribution; the banner; an account with no password is locked out when it is not a preview; every write path is refused in a preview and still works for the person themselves.
+- Checked in headless Chromium against a disposable database (deleted afterwards), twice: before and after merging main's Phase 3–5. Clicking the button on the investor's page opened a new tab on the portal host at the dashboard with the "Staff preview" bar; the Agreements page shows the agreement without the accept button, Payment accounts and Requests have no add / new button, Profile has no password form.
+- Full `php artisan test` (plain, no `--env`) on the merged code: 2004 passed, 1 skipped, 0 failed. `npm run build` passes. Pint passes on the changed PHP files.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর"). Built and tested on top of `origin/main` v2.63.0 (portal Phases 3–5), which was merged into the branch; the only merge conflicts were in `CHANGELOG.md`, `UPDATE_NOTES.md` and `InvestorPortalAccount::canAccessPanel()`.
+
+## 2026-10-08 - Investor portal, Phase 5 (payout batches)
+
+Owner request (in Bangla): "পরবর্তি কাজ কর" — continue with the next phase of `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md`. Sits on top of the uncommitted Phases 3–4 below (it uses their payment accounts).
+
+What changed:
+- **Investments → Payout Batches.** New payout batch: pending investor and channel-partner payouts of confirmed settlements, each to the payee's approved default payment account; payouts without one, or with a reinvest choice, are listed as left out. A different user approves (never the maker, even Super Admin). Make payment list: a CSV (payee, bank, branch, routing, account number or mobile number, amount), stored privately with its SHA-256; every download is logged and a changed file is refused. Mark failed (with reason) frees a payout for a new batch; Record as paid marks the rest paid with the bank reference and books one pending investor-payout voucher for the batch (fund source chosen on the batch, or the projects' shared payout fund source). Trashing that voucher makes the payouts unpaid again (existing rule). Cancel until recorded paid.
+- New permissions `investments.payout_batch_create` / `investments.payout_batch_approve` (Super Admin only by default).
+- The settlement page's Mark as Paid (investor and partner) now goes through the new `PayoutCompletionService` and refuses a payout in a live batch; a reinvest cannot be recorded on such a payout.
+- Audit log: hidden model fields (encrypted account numbers) are no longer copied into the log; payment accounts, investor requests, portal agreements and payout batches are now audited.
+
+My reading, used here (say if any is wrong):
+- P10 is still open: **no NCC BEFTN file was built** — only the CSV list. Send NCC Bank's BEFTN bulk-upload template or a sample file and the company account details, and the bank file will be added.
+- A payout with a reinvest / partial-reinvest choice stays on the settlement page (not in batches), because today its voucher is booked for the full amount while the reinvestment books its own.
+- Recording paid is allowed straight after approval (for a batch paid by hand through bKash/Nagad without a file).
+
+Needs Bangla review: the 72 new `lang/bn.json` keys (written by me).
+
+Tests: new `PayoutBatchTest` (13 tests: only approved accounts offered, full flow with one voucher and `paid_out`, maker ≠ checker for Super Admin, permissions, a payout in a live batch is not offered / not paid by hand / no reinvest, failed item freed and left out of the voucher, voucher trash/restore, cancel and take out, stored file hash + audited downloads + tamper refused, CSV formula cells neutralised, account number encrypted and kept out of the audit log, channel-partner payout, admin pages). `MultiCompanyIsolationTest` covers the 2 new models. Full `php artisan test` (plain, no `--env`): **1983 passed, 2 skipped, 0 failed** (17994 assertions). No frontend asset changed (no `npm run build` needed).
+
+Commit status: committed and pushed to the branch and main on owner approval ("ওকে যে পর্যন্ত কাজ হইছে সেটা কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-08).
+
+## 2026-10-08 - Investor portal, Phases 3–4 (sign-up, payment accounts, agreements, requests)
+
+Owner request (in Bangla): "পরবর্তি কাজ কর" — continue with the next phases of `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md`.
+
+What changed:
+- **Sign-up through a partner's invite link** (owner's draft: "the investor self-registers through a referrer's invite link and the admin verifies"). Staff turn the link on per partner (Portal access → Turn on invite link). The application becomes an Investor Draft (source portal) with the NID copy and photo; Confirm creates the investor and activates the account (documents move to the investor); Reject application keeps a reason the applicant sees. Applicants can sign in but see only their status.
+- **Payment accounts** (bank with 9-digit routing number, or bKash/Nagad/Rocket): added in the portal, approved/rejected on the investor's or partner's page (new tab); approval makes it the default; approved accounts are locked; numbers encrypted.
+- **Portal agreements**: staff write and publish the investor and partner agreement texts (Investments → Portal agreements); published versions are immutable; acceptance records time, IP, device and a hash of the text. Beside the paper deed, not instead of it.
+- **Requests**: top-up, withdrawal notice, payout choice (withdraw/reinvest/partial), question. Staff queue at Investments → Investor Requests. Approval runs the existing flows (new investment + pending capital voucher; 60-day withdrawal notice from the request date; `CycleElectionService`), each needing that flow's permission (manage / settle; questions need portal_manage).
+
+My reading of the open questions, used here (say if any is wrong):
+- P7: sign-up only with a partner's invite link (the draft says so); the applicant uploads NID copy (both sides) and photo, nominee NID optional; staff review in Investor Drafts. No separate "KYC verified" flag: confirming the draft is the verification, and every existing investor counts as verified (their paper KYC is done).
+- P8: the portal agreement sits **beside** the paper deed. No agreement text was written by me — staff paste it.
+- P9: a top-up is only a request; the investment is added when staff approve after the money arrives (amount, date, method confirmed by staff). The deed/cheque/witness steps stay at the office.
+- Partners' existing inline payout details (on the partner record) were not copied into payment accounts; partners can add one in the portal or staff add one on their page.
+- Still not built: payout batches / NCC file (P10), SMS/WhatsApp notifications (P11), the period pool engine (D1–D10).
+
+Needs Bangla review: the 154 new `lang/bn.json` keys (written by me).
+
+Tests: new `InvestorPortalOnboardingTest` (13 tests: sign-up → draft with documents, invite code required, confirm activates + moves documents, reject/discard shows reason, payment accounts approval + default + lock + routing check, agreement publish/accept/hash/immutability/new version, top-up → investment, withdrawal → 60-day notice, reinvest → election only on own pending payout and only with the settle permission, support answer + cancel, portal and admin pages open). `MultiCompanyIsolationTest` covers the 4 new models. `npm run build` OK; new pages checked at 375 px. Full `php artisan test` (plain, no `--env`): **1970 passed, 2 skipped, 0 failed** (17633 assertions).
+
+Commit status: committed and pushed to the branch and main on owner approval ("ওকে যে পর্যন্ত কাজ হইছে সেটা কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-08).
+
+## 2026-10-08 - Investors list: project picker on the table toolbar
+
+Owner request (in Bangla), with a screenshot of the investor list and a red box at the top left of the table: "image এর চিহ্নিত জায়গায় প্রজেক্ট ভিত্তিক ফিল্টার অপশন যুক্ত কর এবং তার পাশে একটা সার্চ বার যুক্ত কর।"
+
+Follow-up from the owner after seeing two search boxes: "দুইটা সার্চ বক্স চলে আসছে, আগে থেকে ডিফল্টে একটা ছিল আমি খেয়াল করিনি। নতুন টা ডিলিট করে দেও। আগেরটা ঠিক ঠাক কাজ করছে।" So the search box I added is removed; the table's own search box stays as it was.
+
+What changed (final):
+- The left side of the table toolbar now holds a **project dropdown** ("All projects" + every project, newest first).
+- The dropdown writes into the existing "Project" filter (`tableFilters.project.values`), so the funnel badge, the "Active filters" chip and "Reset filters" follow it. Removing the chip puts the dropdown back to "All projects". If several projects were chosen in the filter menu, the dropdown shows "Several projects".
+- Files: `InvestorResource::projectFilterOptions()` (shared option list), `ListInvestors::setProjectFilter()`, new view `resources/views/filament/investors/list-toolbar.blade.php`, hook in `AdminPanelProvider` (scoped to `ListInvestors`, so no other table changes). 3 new keys in `lang/en.json` and `lang/bn.json`. No migration.
+
+Needs Bangla review (added with a Bangla value, please check the wording): "Filter by project", "All projects", "Several projects".
+
+Verification:
+- Tests in `InvestorIdentityAndDocumentsTest`: the picker filters through the project filter (pick, clear, unknown id ignored); the investor list page renders the picker and no second search box, and another list page (investment projects) has no picker.
+- Before the search box was removed, the picker and search were checked in headless Chromium against a disposable database (since deleted): picking a project cut 3 rows to 2, the chip and "All projects" restored 3 rows, and the layout held at 1500, 1280 and 390 px wide. After removing the search box I re-ran the tests only; I did not look at the page in a browser again.
+- Full `php artisan test` (plain, no `--env`) before the removal: 1919 passed, 1 skipped, 0 failed (it included one fix to `config/release.php`, see below). After the removal: **1919 passed, 1 skipped, 0 failed**.
+- `config/release.php` here is main's copy (2.62.0) because this branch's `CHANGELOG.md` starts from main's; without it `ReleaseNotesTest` fails on the version mismatch. It is not part of this feature and matches main until the branch merges main.
+- `npm run build` and Pint pass.
+
+Commit status: Committed (`babe627`) and merged with `origin/main` (`31399f6`), pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর"). Full suite on the merged state: 1960 passed, 1 skipped, 0 failed.
+
+## 2026-10-07 - Investor portal, Phases 1–2 (portal, sign-in, read-only pages)
+
+Owner requests (in Bangla): (1) read the shared draft "12 — Investor Portal (Mudarabah) Module Plan" and write a detailed implementation plan; (2) "ইমপ্লিমেন্ট কর" — implement it.
+
+What changed:
+- New `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md` (the plan, owner questions P1–P11 / D1–D10 in Bangla, and §15 build log).
+- Phases 1–2 built: a third Filament panel `investor` at `investor.<company domain>/investor` (or a custom domain), off until **Investments → Investor Portal Settings** turns it on. Staff invite an investor or channel partner from their page (**Portal access**, SMS link valid 7 days); the person sets a password, then signs in with phone + password or phone + SMS code; reset by SMS code. Pages: Dashboard, My investments, Statement (printable), Payouts (with the existing payout report), Documents, My investors and Commissions (partners), Profile. Every query is pinned to the signed-in investor/partner (`InvestorPortalService`); settlement figures appear only once confirmed.
+- `RestrictResellerPortalHost` → `RestrictPortalHosts` (both portals). `audit_logs.actor_type/actor_id` record portal users. New permission `investments.portal_manage` (Super Admin only by default).
+- Migrations: 3 additive (`companies` + 2 columns, `investor_portal_accounts`, `audit_logs` + actor). No backfill; nothing changes for any company until the portal is turned on.
+- Docs: `docs/deployment.md` (Investor Portal Domain: DNS, Coolify, admin steps), `PROJECT_GUIDE.md`, `docs/roles-and-permissions.md`, CHANGELOG `[Unreleased]` (Minor Feature Update).
+
+My reading of the open questions, used for Phases 1–2 (say if any is wrong; details in the plan §15):
+- P1 address `investor.<domain>/investor`; P2 password + SMS code (SMS only when the gateway is set); P3 invite by SMS link; P4 a partner sees investor display name, capital at work and join date only; P5 "Channel partner"; P6 an investor downloads their project's contract, cost receipts and purchase documents, not settlement sheets/investor reports/bank slips.
+- The statement is built from the records each time (no stored ledger yet) and has no running balance, because whether a reinvested payout is also marked paid is up to staff today.
+- Not built (need owner input first): self sign-up and KYC, bank accounts, agreements (P7–P8), requests (P9), payout batches / NCC (P10), SMS/WhatsApp texts (P11), the period pool engine (D1–D10).
+
+Needs Bangla review: the 120 new `lang/bn.json` keys for the portal (written by me; please check the wording, especially the SMS texts "Your :company investor portal …").
+
+Tests: new `InvestorPortalTest` (19 tests: host boundary, reseller portal unaffected, invite → set password once, expired link, one account for investor + partner, password / SMS-code sign-in, 5 wrong codes, disabled account locked out at once, other company refused, draft settlement hidden, all pages open, another investor's document/report is 404, partner sees no contact details, admin settings + invite action, permission). `MultiCompanyIsolationTest` covers `InvestorPortalAccount`. Reseller portal suites pass unchanged. `npm run build` OK. Phone-width (375 px) screenshots checked for every page. Full `php artisan test` (plain, no `--env`): **1934 passed, 2 skipped, 0 failed** (15896 assertions); the affected files were re-run after the last layout tweaks.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07).
+
+## 2026-10-08 - Next.js home page, header and footer follow the approved design; everything is customised from the dashboard
+
+Owner request (in Bangla, with a screenshot of the design from the upstream repo `sajiduzzaman-im/zamzam-international`): the forked site had drifted to a Blade-theme look — the home page must be exactly that design, the dashboard must have every option to customise it, header and footer must match, and the Footer Builder must be able to build a custom footer.
+
+What changed (details in CHANGELOG `[Unreleased]`):
+- New **Website Design** tab on the Next.js row (Home Page Builder, Top Bar, Header, Product Cards, Floating Help Button). The Blade row has no such tab and never stores it.
+- Footer Builder: Custom links column, Custom text, Payment badges, Image / badge; richer Contact info and Bottom bar; footer background colour; Blade footer renders the new blocks too.
+- API: `design`, `home_sections`, cleaned footer blocks, category `tagline`, slide `eyebrow`, product `collection_kinds`, `sort=discount`, `on_sale=1`. New `StorefrontSiteDesign` cleans everything (colours, links, numbers) — never raw admin input.
+- Website repo (`bhd4232/zamzamint-new-website-theme`): top bar, header, hero, trust strip, category cards, deals banner, product rows, flash-sale band, WhatsApp section, SEO text, dark footer, floating help — all driven by the above.
+
+My decisions (say if you want different):
+- The upstream repo is not reachable from this session (private; add_repo was refused), and the fork only carries its first commit, which is an older design than the screenshot. The design was rebuilt **from the screenshot** (spacing, colours, card layout, sections); fonts come from the ERP typography setting (the screenshot's font could not be identified) — pick a font in Storefront Settings → Storefront Typography.
+- The screenshot's "Inventory not synced yet / Sync now" line was a mock-data leftover and is not rebuilt (the ERP is the live source).
+- The default home layout has no per-category rows and no WhatsApp / SEO text sections (those need copy only the owner can write); the owner adds them in the Home Page Builder. The category cards show categories alphabetically unless the owner picks categories (the pick order is kept) — categories have no sort number.
+- "New" badge = the product is in a live **New Arrivals** collection (no automatic "new" rule, per the earlier owner rule). Prices on cards are orange by default (changeable).
+
+Needs Bangla review: all ~200 new admin labels in `lang/bn.json` (Website Design tab, Home Page Builder sections, Footer Builder blocks) and the website's new interface strings (`home.*`, `help.*`, `footer.*`, `product.new`).
+
+Also: saving settings / slides / pages / categories / offers now sends a debounced `storefront.updated` webhook (5 s delay, once per 5 s) so the Next.js site shows dashboard edits within seconds (the website's webhook route already accepts it); set the webhook URL and secret under Integrations → Website API.
+
+Tests: new `NextjsSiteDesignTest` (22). Full plain `php artisan test`: **1923 passed, 1 skipped, 0 failed**; website `tsc --noEmit` and `npm run build` clean. Browser checks on a throwaway database: desktop 1920 / 1440 / 1100, tablet, phone, dark mode, Bangla; mobile menu, categories dropdown, add to cart, Read more, link safety, sticky header; admin Website Design tab.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট ও পুশ কর এবং মেইনে পুশ কর", 2026-10-07), in both repositories; ERP `origin/main` (v2.60.3) merged first.
+
+## 2026-09-29 - Rejected or cancelled payout vouchers make the payout unpaid (missing part of the earlier voucher-trash work)
+
+Reason — owner: "পেআউটের ভাউচার রিজেক্ট হলে পেআউট অপরিশোধিত হবে- এটাকি ইমপ্লিমেন্ট করেছিলে?" — the owner asked whether the rule "a rejected payout voucher makes the payout unpaid" had been implemented.
+
+It had not. When I asked about trashed payout vouchers, I left rejected and cancelled ones out on purpose and said so ("পেআউটের ভাউচার রিজেক্ট বা ক্যানসেল হলে পেআউট এখনো পরিশোধিত-ই থাকে"). The owner's answer to the trash question was yes; this asked for the same rule for reject. It is now done.
+
+What changed:
+- `VoucherService::reject()` and `cancel()` call `VoucherLinkedPayoutsService::voucherVoided()` next to the withdrawal hook. Trash calls the same method, so all three paths behave the same way.
+- Effect: `SettlementPayout` / `ChannelPartnerPayout` go from paid to pending with `paid_at` cleared. A `paid_out` settlement goes back to `confirmed`. A `ResellerPayoutRequest` goes from paid to approved.
+- Restoring a rejected or cancelled voucher from trash does not mark anything paid again (already the case through `isVoid()`).
+
+Verification:
+- New test in `VoucherTrashTest`: reject and cancel for two investor payouts (only the affected one turns pending, and the settlement goes back to confirmed), a restore after reject that does not re-pay, and reseller withdrawals rejected and cancelled.
+- `VoucherTrashTest` + `InvestmentWithdrawalTest`: 15 passed. Full `php artisan test` (plain, no `--env`): **1557 passed, 0 failed**. Pint passes.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
 
 ## 2026-10-07 - Reseller-store orders invoiced in the reseller's name too
 

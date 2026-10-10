@@ -65,7 +65,19 @@
                         }
 
                         window.addEventListener('message', (event) => {
-                            if (event.origin !== 'https://www.facebook.com' || typeof event.data !== 'string') {
+                            // Meta may answer from www., web. or m.facebook.com
+                            // (web.facebook.com is common in Bangladesh), so accept
+                            // any https facebook.com host, not one exact origin.
+                            let originHost = '';
+
+                            try {
+                                const origin = new URL(event.origin);
+                                originHost = origin.protocol === 'https:' ? origin.hostname : '';
+                            } catch (error) {
+                                return;
+                            }
+
+                            if (! (originHost === 'facebook.com' || originHost.endsWith('.facebook.com')) || typeof event.data !== 'string') {
                                 return;
                             }
 
@@ -96,14 +108,28 @@
                                 return;
                             }
 
-                            const data = this._signupData ?? {};
+                            // The popup's FINISH message can arrive just after
+                            // this callback; wait up to 5 seconds for it.
+                            let waited = 0;
+                            const submit = () => {
+                                const data = this._signupData ?? {};
 
-                            $wire.completeEmbeddedSignup(
-                                code,
-                                data.waba_id ?? '',
-                                data.phone_number_id ?? '',
-                                data.business_name ?? null,
-                            );
+                                if ((! data.waba_id || ! data.phone_number_id) && waited < 5000) {
+                                    waited += 250;
+                                    setTimeout(submit, 250);
+
+                                    return;
+                                }
+
+                                $wire.completeEmbeddedSignup(
+                                    code,
+                                    data.waba_id ?? '',
+                                    data.phone_number_id ?? '',
+                                    data.business_name ?? null,
+                                );
+                            };
+
+                            submit();
                         }, {
                             config_id: @js($settings['config_id']),
                             response_type: 'code',

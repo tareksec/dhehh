@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Vouchers\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Models\FundTransfer;
 use App\Services\FundTransferService;
 use Filament\Actions\Action;
@@ -17,6 +18,8 @@ use Livewire\Attributes\Url;
 
 class FundTransfersWidget extends TableWidget
 {
+    use GuardsWidgetRendering;
+
     protected int|string|array $columnSpan = 'full';
 
     protected static bool $isLazy = false;

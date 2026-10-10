@@ -84,6 +84,22 @@ class ConnectWhatsAppBusinessApp extends Page
         $company = $this->company();
         abort_unless($company !== null, 404);
 
+        $wabaId = trim($wabaId);
+        $phoneNumberId = trim($phoneNumberId);
+
+        // Meta's popup reports these through a separate window message. When
+        // it never reaches the page the code exchange cannot succeed, so stop
+        // here with a clear reason instead of saving a channel with no IDs.
+        if ($code === '' || $wabaId === '' || $phoneNumberId === '') {
+            Notification::make()
+                ->title(__('Could not complete the connection'))
+                ->body(__('Meta did not send the WhatsApp Business Account ID and phone number ID back to this page. Finish every step in the Meta popup, then try again. If it keeps happening, allow pop-ups for this site and check that the ERP domain is in the Meta app\'s App Domains.'))
+                ->danger()
+                ->send();
+
+            return;
+        }
+
         try {
             $channel = app(EmbeddedSignupService::class)->complete($company, $code, $wabaId, $phoneNumberId, $businessName);
         } catch (MetaGraphException $exception) {

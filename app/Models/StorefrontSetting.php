@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\NotifiesWebsiteOfStorefrontChanges;
 use App\Services\StorefrontMetaTrackingService;
 use App\Support\StorefrontListingCache;
+use App\Support\StorefrontSiteDesign;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -13,6 +15,7 @@ use Illuminate\Support\Facades\Cache;
 class StorefrontSetting extends Model
 {
     use BelongsToCompany;
+    use NotifiesWebsiteOfStorefrontChanges;
 
     /**
      * A company can run more than one storefront, each with its own settings
@@ -297,6 +300,10 @@ class StorefrontSetting extends Model
         'contact_info' => 'Contact info',
         'social_links' => 'Social links',
         'bottom_bar' => 'Bottom bar (copyright & legal links)',
+        'custom_links' => 'Custom links column',
+        'custom_text' => 'Custom text',
+        'payment_methods' => 'Payment badges',
+        'image' => 'Image / badge',
     ];
 
     // Backward-compatible default: every company created before the footer
@@ -473,6 +480,8 @@ class StorefrontSetting extends Model
         'header_menu',
         'footer_menu',
         'footer_blocks',
+        'home_sections',
+        'site_design',
         'reseller_program_enabled',
         'reseller_cost_per_unit',
         'reseller_packaging_cost_per_unit',
@@ -559,6 +568,8 @@ class StorefrontSetting extends Model
         'header_menu' => 'array',
         'footer_menu' => 'array',
         'footer_blocks' => 'array',
+        'home_sections' => 'array',
+        'site_design' => 'array',
         'reseller_program_enabled' => 'boolean',
         'reseller_cost_per_unit' => 'decimal:2',
         'reseller_packaging_cost_per_unit' => 'decimal:2',
@@ -596,6 +607,24 @@ class StorefrontSetting extends Model
     public function footerBlocks(): array
     {
         return $this->footer_blocks ?: self::DEFAULT_FOOTER_BLOCKS;
+    }
+
+    /**
+     * The Next.js home page's sections in order (Home Page Builder), clean and
+     * bounded; the default layout while nothing is saved. The Blade storefront
+     * does not read this.
+     *
+     * @return list<array{type: string, data: array<string, mixed>}>
+     */
+    public function homeSections(): array
+    {
+        return StorefrontSiteDesign::homeSections($this->home_sections);
+    }
+
+    /** Top bar, header, footer colours and floating help button of the Next.js site, defaults filled in. */
+    public function siteDesign(): array
+    {
+        return StorefrontSiteDesign::design($this->site_design);
     }
 
     public function isNextjs(): bool

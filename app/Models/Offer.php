@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\NotifiesWebsiteOfStorefrontChanges;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,6 +12,7 @@ use Illuminate\Support\Str;
 class Offer extends Model
 {
     use BelongsToCompany;
+    use NotifiesWebsiteOfStorefrontChanges;
 
     public const TYPE_SINGLE = 'single';
 

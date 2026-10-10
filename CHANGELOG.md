@@ -11,6 +11,199 @@ All notable production changes to Business Dashboard are documented here.
 - **A reseller's new store subdomain sets itself up and shows when it will be live.** After a reseller picks a subdomain on **My Store**, the page shows "Setting up <name>.<domain> (DNS and SSL)" with a countdown, checks every 15 seconds whether the address already opens over HTTPS, and switches to "Your store address … is live." on its own. Nothing to do on the reseller's side and no per-reseller server work: the wildcard DNS record covers every name, and the SSL certificate comes from the wildcard certificate or, new, from an on-demand proxy, because `/internal/tls-ask` now also approves the subdomain of every approved reseller. Until the address is ready the reseller's shared store link stays the long `/store/<slug>` link, so nobody gets a link that does not open yet. The countdown length is **Resellers → Reseller Settings → Subdomain set-up time (minutes)** (Super Admin, default 10).
 - **The name at the top of the reseller portal's user menu now opens the Profile page.**
 
+### Technical Notes
+
+- Subdomain set-up: migration `2026_10_10_100000_add_reseller_subdomain_status` (`customers.reseller_subdomain_changed_at` / `reseller_subdomain_live_at`, `storefront_settings.reseller_subdomain_setup_minutes` default 10). Subdomains chosen before it (no `changed_at`) count as live. `Customer::resellerSubdomainIsReady()` / `resellerSubdomainReadyAt()`; `resellerStoreUrl()` uses the subdomain only once it is ready. New `App\Services\ResellerSubdomainProbe` (DNS points at the company domain's IPs + an HTTPS request that succeeds), polled by `MyStore::checkSubdomain()`. `TlsAskController` also answers 200 for approved resellers' subdomains. Profile link: `ResellerPanelProvider` `userMenuItems(['profile' => ...->url(Profile::getUrl())])`. Tests: `ResellerSubdomainTest` +5, `ResellerPortalDashboardTest` +1, `ResellerSettingsPageTest` updated. 7 new lang keys (en + bn). `docs/deployment.md` updated.
+
+## [2.67.0] - 2026-10-09
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **WhatsApp Web Login (CRM → WhatsApp Web Login).** Link the WhatsApp Business app to the ERP by scanning a QR code, the same way as WhatsApp Web. Every 1:1 chat the phone shares — the full history and every new message, sent or received — is saved into the CRM Inbox with photos, voice notes, videos and documents, and every WhatsApp contact is saved as a customer record linked to the matching customer or lead by phone. The page shows the connection status, the QR code, history sync progress and how many chats, messages and contacts were saved. In English and Bangla.
+- **Chats and customer info survive a ban.** The archive belongs to the ERP: logging out, deleting the channel or WhatsApp banning the number never deletes saved chats, messages or contacts. A "delete for everyone" on WhatsApp keeps the original message in the ERP and marks it **Deleted on WhatsApp** in the Inbox.
+
+### Fixed
+
+- **Connect WhatsApp App (Coexistence) could fail at the last step.** The page only accepted Meta's popup reply from `www.facebook.com`, so when Facebook opened as `web.facebook.com` (common in Bangladesh) the WhatsApp Business Account ID and phone number ID were lost and the connection failed with an unclear error. Any Facebook address is now accepted, the page waits a few seconds for Meta's reply, and if the IDs still do not arrive it says so clearly instead of trying to connect without them.
+
+### Changed
+
+- WhatsApp Web chats are read-only in the ERP Inbox — reply from the phone app (internal notes still work). The AI auto-reply, read receipts and SMS fallback never run for them.
+
+### Security
+
+- The bridge API key is stored encrypted per company; every webhook from the bridge is HMAC-SHA256 signed with a per-channel secret and rejected otherwise.
+
+### Technical Notes
+
+- **New service to deploy:** `whatsapp-bridge/` (Node.js 20+, Baileys `7.0.0-rc14`, Dockerfile included). It needs `BRIDGE_API_KEY` and a **persistent** `DATA_DIR` volume; run it as its own Coolify app. See `whatsapp-bridge/README.md`. Unofficial WhatsApp Web client — not a Meta API.
+- Migration `2026_10_05_100000_add_whatsapp_web_archive_support`: `conversation_channels.web_status/web_phone/web_connected_at/web_disconnected_at/web_history_synced_at`, `conversation_messages.revoked_at`, new company-owned `whatsapp_contacts` table (channel_id nullOnDelete). `connection_type = 'web'` marks these channels.
+- New routes `POST /webhooks/whatsapp-web/{channel}` and `/media` (CSRF-exempt, throttle 600/min). Messages are archived by queued `ImportWhatsAppWebMessagesJob` / `SyncWhatsAppWebContactsJob` (idempotent on `waweb:{channel}:{id}`), so a queue worker must run. Media uploads need PHP `post_max_size` large enough for the attachments.
+- Rules for WhatsApp Web channels, with the relevant clauses of WhatsApp's Terms of Service, Business App terms, Messaging Guidelines and Business Messaging Policy quoted word for word (checked 2026-10-06), are in `docs/whatsapp-web-rules.md` and referenced from `CLAUDE.md`.
+- New `WhatsAppWebArchiveTest` (12 tests) and bridge unit tests (`npm test` in `whatsapp-bridge/`, 10 tests).
+## [2.66.1] - 2026-10-09
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Investor portal: the profile in the top-right menu now opens the Profile page.** The name at the top of the user menu was plain text; it is now a link to the Profile page.
+
+**Technical Notes:**
+- `InvestorPanelProvider` sets a URL on the `profile` user-menu item. New test `test_the_user_menu_name_links_to_the_profile_page`.
+## [2.66.0] - 2026-10-09
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **One module's error no longer takes the whole app down** (owner request after the v2.63.0 outage). Errors are kept inside the part that failed:
+  - **Sidebar counts:** if the number next to a menu item (Investor Requests, Payout Batches, Investor Drafts, Reseller Payout Requests, Inbox) cannot be worked out, that count simply does not show. The menu and every page keep working.
+  - **Dashboard and page widgets:** a widget that fails shows a small "This section could not be loaded" card in its place. The rest of the dashboard or page works as normal. Shared parts drawn on every page (sidebar, company switcher, banners, toolbars) leave out only the part that failed.
+  - **A crashed page** in the admin panel or a portal shows "This page could not be opened. The other sections keep working" with **Go to the dashboard**, **Try again** and **Go back** buttons, instead of the bare "500 Server Error". 403/404 pages and sign-in redirects are unchanged.
+  - **Missing database table** (e.g. an update that did not finish): the pages of that one section show "This section is temporarily unavailable", and its tabs and buttons on other pages are hidden. Everything else keeps working. The section turns back on by itself as soon as the update finishes.
+  - Every error caught this way is **reported to Super Admins** (bell notification titled "Module error …" and **Settings → Deploy Error Logs**), at most once an hour per error, so nothing is hidden silently.
+- **New automatic check (GitHub Actions "MySQL migrations")** runs every database update against MySQL 8.4, the production version, on every branch push and pull request. A database update that would fail on the live server now shows up as a red check on its branch, before it reaches `main`.
+
+### Technical Notes
+
+- `App\Support\ModuleGuard::run($section, $callback, $fallback)` catches, logs and reports through `DeploymentErrorReporter` (source `module:<section>`, throttled 1/hour per section and error via `Cache::add`). `ModuleGuard::renderView()` renders a nested view and, on failure, restores the view factory's component/section/stack state that Laravel flushes, so the page around it survives. Isolation is on everywhere except `local` and `testing` (where errors still throw); override with `ISOLATE_MODULE_ERRORS` (`config('app.isolate_module_errors')`).
+- Badges: trait `App\Filament\Concerns\HasGuardedNavigationBadge` (write the count in `navigationBadge()`). Widgets: trait `GuardsWidgetRendering` (all 19 widgets; the widget view is rendered inside the guard in `filament.widgets.guarded`). Render hooks: `App\Support\GuardedViewManager` replaces Filament's `ViewManager` (`AppServiceProvider::register()`, `extend()`), so every render hook of every panel is guarded. Its `renderHook()` copies Filament's; re-check it on a Filament upgrade.
+- Crashed pages: `App\Support\PanelErrorPages` (first path segment `admin` / `investor` / `portal`; Livewire updates use the Referer) renders the self-contained `panel-errors.module` view from `bootstrap/app.php`'s exception renderer, only for real 500s.
+- Missing tables: `App\Support\ModuleHealth` (scoped; table list cached 10 minutes and dropped on `MigrationsEnded`). Admin panel middleware `TurnOffPagesWithMissingTables` answers a resource page whose model table is missing with a 503 page. `Gate::before` denies every ability on such a model (models in `User::MODEL_MODULES`). Off in `local` / `testing`, like `ModuleGuard`.
+- New `ModuleGuardTest` (12 tests). It enforces that every navigation badge and every widget in `app/` goes through the guard, and it reproduces the 2026-10-08 state (dropped `investor_requests` table). Without the guard that state answers 500; with it, `/admin` opens. 10 new lang keys (en + bn).
+- New workflow `.github/workflows/mysql-migrations.yml` (MySQL 8.4 service, `migrate --force` from empty, then checks nothing is pending). Checked locally against MySQL 8.0: all 219 migrations run; the unfixed v2.63.0 agreement migration fails with error 1059 (exit 1), the same error as production; the fixed one also finishes a database left half-migrated by it.
+## [2.65.0] - 2026-10-09
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Lead CRM sales agent: 5 opt-in intelligence upgrades (proactive mode, objection handling, multi-product cart, cross-sell, personalization).** Each is a per-company toggle in **Integrations → Auto Messaging**, off by default, so no existing company's agent behavior changes until an admin turns one on.
+  - **Proactive follow-up questions.** After fully answering, the agent may also ask one natural next-step question (size/colour, quantity, delivery area or purchase timeframe) to help move the sale forward, instead of stopping at a bare answer.
+  - **Mild price-objection handling.** A "can you reduce it a bit?" message no longer always hands off to a human. The agent may acknowledge it and restate real value from grounded facts — it can never invent, offer or apply a discount. Refunds, complaints and explicit human requests still always hand off.
+  - **Multi-product cart.** The customer can add more than one product to the same checkout link across the conversation ("I want 2 shirts" ... later "add a lamp too"), instead of each request for create_order_link replacing the previous one.
+  - **Grounded cross-sell / upsell.** The agent may suggest one real, same-category related product alongside its answer — never invented, never offered on every message.
+  - **Personalization by purchase history.** The agent can greet a returning customer and acknowledge past orders instead of treating every conversation as a first-time visitor.
+
+### Technical Notes
+
+- `AiSettingsService::DEFAULTS` gains `proactive_mode_enabled`, `objection_handling_enabled`, `cross_sell_enabled`, `personalization_enabled` (all `false`), wired through `Integrations.php`'s existing per-tool fill-state/fields/save plumbing.
+- `AiReplyService::systemPrompt()` builds each rule as a ternary on its setting, defaulting to the exact prior rule text when off so the default prompt is byte-for-byte unchanged; two purely additive rules (cross-sell, personalization) are empty strings when off.
+- `AiReplyService::HANDOFF_KEYWORDS` split: refund/complaint/human-request keywords always hard-escalate; a new `OBJECTION_KEYWORDS` (discount/bargaining) escalates too unless `objection_handling_enabled`.
+- `AiReplyService::toolDefinitions()` now takes `$settings` — `lookup_related_products` is only appended to the tools array (not just discouraged by prompt text) when `cross_sell_enabled`, so the model cannot call a tool that was never offered.
+- `create_order_link`'s schema changed from flat `product_id`/`variant_id`/`quantity` to an `items` array; `AiReplyService::createOrderLink()` merges newly-requested items into the conversation's existing open `ChatOrderLink` (same product+variant updates its quantity, otherwise appends a line) instead of always creating/overwriting a single-item link. The storefront checkout (`ChatOrderController`) already looped over `prefill.items`, so no checkout-side change was needed.
+- `lookup_related_products` reuses the exact same-category/active/in-stock signal `ProductShowController` already uses for the storefront's own "related products", rather than inventing a new one.
+- `SalesReplyRenderer::render()` gains an `$allowFollowUpPrompt` parameter (default `false`): off, a `prompt_key` only renders when it's the only thing being said (unchanged); on, it can be appended after a verified answer. Also gains a `related` reply-key type.
+- `SalesQualificationService::context()` gains an `$includePersonalization` parameter (default `false`): off, `recent_orders` keeps its exact original `order_number`/`status`-only shape; on, it eager-loads each order's product names and adds `is_returning_customer`/`lead_source`.
+
+## [2.64.1] - 2026-10-08
+
+**Release type:** Hotfix Update
+
+### Fixed
+
+- **Admin panel showing "500 Server Error" after the v2.63.0 deploy.** On the live MySQL database the migration `2026_10_08_100200_create_agreement_tables` failed. The unique index on `agreement_acceptances` got an automatic name 68 characters long, and MySQL allows at most 64. The deploy's migration stopped halfway: `agreement_templates` and `agreement_acceptances` were created, but the migration was not recorded, and the later `investor_requests` and `payout_batches` tables were never created. The sidebar counts for **Investor Requests** and **Payout Batches** query those tables on every admin page, so every page answered 500. Each later deploy then failed again with "table already exists".
+
+### Technical Notes
+
+- The unique index now has a short explicit name (`agreement_acceptances_template_account_unique`). The migration skips any table that already exists and only adds the missing index, so the next deploy's `deploy:migrate` finishes it on a half-migrated database and then runs `2026_10_08_100300` / `100400`. No data is changed.
+- New `MigrationIdentifierLengthTest` fails when any table or index name is over 64 characters. The test suite runs on SQLite, which has no such limit, so this class of error used to show up only in production.
+- The same test found two older index names over the limit: `broadcast_recipients` (68) in `2026_08_28_000300` and `investment_documents` (71) in `2026_09_07_100200`. Both now have explicit short names, so a fresh MySQL install works. On production those migrations failed the same way earlier and were finished by `hasTable` guards (CHANGELOG: "Duplicate column name 'opted_out_at'"), so production has the tables but **not** these two indexes: the duplicate guard on broadcast recipients and a lookup index on documents. That is not urgent and is not fixed here.
+## [2.64.0] - 2026-10-08
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **"Open investor portal" button on an investor's or channel partner's page.** One click opens the investor portal in a **new tab**, already signed in as that person, so staff can see exactly what the investor sees without asking for a password. It is look-only: staff can see everything but change nothing (they cannot accept an agreement, add a payment account, send or cancel a request, or change a password), the visit is **not** counted as the person signing in, and the audit log shows the staff member as the one who opened it. It works even before the person has set a password. Needs **Investments: Manage Investor Portal Access** (Super Admin by default) and the portal switched on. A yellow "Staff preview" bar at the top of the portal reminds staff whose portal they are in. If the person has no portal account yet, one is created (no SMS is sent; it shows as "Invited" until a real invite is sent). A person whose portal access is disabled, or whose phone number has a portal application waiting for review, cannot be opened.
+
+**Technical Notes:**
+- Staff preview: the dashboard and the portal are on different hosts, so `Admin\InvestorPortalOpenController` (`GET /admin/investor-portal/{investors|channel-partners}/{id}/open`, `auth`, `investments.portal_manage`, same company check as the document downloads) issues a one-time token through `InvestorPortalStaffEntryService` (60 seconds, only its hash is cached, works once, only on the issuing company's portal, re-checks that the staff member is still active and allowed) and redirects to `<portal host>/investor/staff-entry/{token}` (`InvestorPortalStaffEntryController`, throttled). That logs the account in on the `investor` guard without "remember me" and sets `InvestorPortalStaffPreview::SESSION_KEY` in the portal session only. `InvestorPortalAccount::canAccessPanel()` lets a staff preview in with no password set, never a disabled account. `AuditLogService` attributes what a preview records (`investor_portal.staff_entry_issued`, `investor_portal.staff_entered`, document downloads) to the staff user (`user_id`), not to the investor (`actor_*`). `InvestorPortalAccountService::ensureAccount()` is the account creation shared with `invite()`. The token lives in the cache, so the dashboard and portal must share a cache store (they do: same app).
+- Look-only rule for portal pages: anything that changes data calls `refuseInStaffPreview()` (trait `InvestorPortalPage`) and hides its button while `isStaffPreview()`. Done for `Profile::save`, `Agreements::accept`, `BankAccounts` add and `Requests` new / cancel; every new portal page that writes must do the same. No migration. 7 new lang keys (en + bn).
+## [2.63.0] - 2026-10-08
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investor portal: sign-up through a channel partner's invite link.** On a channel partner's page, **Portal access → Turn on invite link** gives the partner a personal sign-up link (shown in their portal under **Invite investors**, with Copy and WhatsApp share). A new investor applies with it: their details, nominee, NID copy and photo, and a password. The application lands in **Investor Drafts** (source "Investor portal sign-up") with the uploaded documents; **Confirm** creates the investor and opens their portal account (the documents move to the investor), **Reject application** turns it down with a reason the applicant sees when they sign in. While waiting, the applicant sees only their application status. Money, the deposit and the signed deed are still handled at the office.
+- **Payment accounts.** Investors and partners add a bank account (with 9-digit BEFTN routing number) or bKash/Nagad/Rocket number in the portal; it waits for approval on their page's new **Payment accounts** tab (approve / reject with reason; staff can also add one, approved at once). The approved account becomes the one payments go to; an approved account is never edited — a change is a new account. Account numbers are stored encrypted.
+- **Portal agreements.** **Investments → Portal agreements**: staff write the investor agreement and the channel partner agreement, then publish them. A published version cannot be changed (a change is a new version, which everyone is asked to accept again). In the portal, **Agreements** shows the text and records "I have read and agree" with time, IP, device and a fingerprint of the exact text. This sits beside the signed paper deed, which stays the contract of record.
+- **Investor requests.** In the portal, **Requests → New request**: add money to an open project (top-up), a withdrawal notice, what to do with an unpaid payout (withdraw / reinvest / partial reinvest), or a question. **Investments → Investor Requests** (badge = pending) lets staff approve or reject with a note the investor sees. Approving runs the existing flow: a top-up adds the investment and its pending capital voucher (only after the money has arrived), a withdrawal records the 60-day notice from the day the investor sent it, a payout choice records the cycle election (needs the settle permission). One pending request per kind and project/payout.
+- **Payout batches.** **Investments → Payout Batches → New payout batch** picks the pending investor and channel-partner payouts of confirmed settlements and sends each to the payee's approved payment account (payouts without one, or with a reinvest choice, are listed as left out). A **different user** approves the batch (even a Super Admin cannot approve their own). Then **Make payment list** produces a CSV of payee, bank, branch, routing number, account number / mobile number and amount to pay from the bank or by hand; the file is stored, fingerprinted (SHA-256) and every download is logged. Payments that bounced are marked **failed** with a reason (the payout is free for a new batch); **Record as paid** marks the rest paid with the bank reference and books **one** pending investor-payout voucher for the batch. Trashing that voucher makes the payouts unpaid again, as before. A batch can be cancelled until it is recorded paid. New permissions **Investments: Make Payout Batches** and **Investments: Approve Payout Batches** (Super Admin only by default). The NCC Bank BEFTN upload file is not built yet: it waits for the bank's own file template.
+
+### Changed
+
+- **Mark as Paid** on a settlement's investor or partner payout now refuses a payout that is in a live payout batch, and a reinvest can no longer be recorded on such a payout (take it out of the batch first).
+- The audit log no longer copies a record's hidden fields (such as encrypted account numbers) into its old/new values. Payment accounts, investor requests, portal agreements and payout batches are now recorded in the audit log.
+
+### Technical Notes
+
+- Plan: `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md` Phases 3–4 (§15 build log). Migrations: `2026_10_08_100000_add_investor_portal_onboarding` (`channel_partners.invite_code` / `invite_enabled`, `investor_drafts.portal_account_id`, `investor_portal_accounts.investor_draft_id` / `rejection_reason`), `2026_10_08_100100_create_investor_bank_accounts_table`, `2026_10_08_100200_create_agreement_tables` (`agreement_templates`, `agreement_acceptances`), `2026_10_08_100300_create_investor_requests_table`. Additive; nothing backfilled.
+- New models `InvestorBankAccount`, `AgreementTemplate`, `AgreementAcceptance` (immutable), `InvestorRequest` (all company-scoped, in `User::MODEL_MODULES` as investments and in `MultiCompanyIsolationTest`). New services `InvestorOnboardingService` (sign-up → draft; `InvestorImportService::confirm()` calls `draftConfirmed()`; deleting a portal draft rejects the application), `InvestorBankAccountService`, `AgreementService`, `InvestorRequestService`. Portal accounts gain statuses `pending` / `rejected` (applicants may sign in to see their status only; new page role `holder`). New portal pages Register, Agreements, Payment accounts, Requests, Invite investors; new admin `AgreementTemplateResource`, `InvestorRequestResource`, `BankAccountsRelationManager` (investor and partner pages).
+- `InvestmentDocument` gains the `investor_photo` category (sensitive) and no longer writes a portal user's id into `uploaded_by` (staff only).
+- New `InvestorPortalOnboardingTest` (13 tests). 154 new lang keys (en + bn).
+- Payout batches (Phase 5): migration `2026_10_08_100400_create_payout_batches_tables` (`payout_batches`, `payout_batch_items` — payable and payee morphs, a copy of the payment account with the number encrypted). New models `PayoutBatch`, `PayoutBatchItem` (company-scoped, in `User::MODEL_MODULES` and `MultiCompanyIsolationTest`), `PayoutBatchService` (create / remove item / approve / export / mark failed / complete / cancel; permission and maker ≠ checker checked in the service), `PayoutCompletionService` (shared by the single-row Mark as Paid and batches: payout status, voucher, settlement `paid_out`). `VoucherLinkedPayoutsService::voucherRestored()` skips a payout that has joined a new live batch. New `PayoutBatchResource` (list with the New batch modal, view with Approve / Make payment list / Record as paid / Cancel, items with Take out / Mark failed). The payment list is a CSV (UTF-8, formula-like cells neutralised) on the private disk under `payout-batches/{company}/`.
+- New `PayoutBatchTest` (13 tests). 72 new lang keys (en + bn).
+
+- **Investors list: project picker on the table toolbar.** On **Investments → Investors** there is now a **project dropdown** ("All projects" or one project) at the top left of the table. Picking a project shows only the investors who invested in it. It works through the same "Project" filter as the filter menu, so the filter badge, the "Active filters" chip and "Reset filters" all follow it. The existing search box is unchanged.
+
+**Technical Notes:**
+- `InvestorResource::projectFilterOptions()` feeds both the filter menu and the toolbar picker. `ListInvestors::setProjectFilter()` writes the chosen project into `tableFilters` / `tableDeferredFilters` (an id that is not one of the company's projects is ignored). The toolbar is `resources/views/filament/investors/list-toolbar.blade.php`, hooked on `TablesRenderHook::TOOLBAR_START` scoped to `ListInvestors` in `AdminPanelProvider`. No migration. 3 new `lang` keys (en + bn).
+## [2.62.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investor portal (first part).** Investors and channel partners can now sign in to their own portal at `investor.<company domain>/investor` (or a custom domain) from a phone. An investor sees their investments with each project's status and result, a statement of every investment, profit or loss, payment and reinvestment (printable / save as PDF), their payouts with the printable payout report, and their documents (their own papers plus their project's contract and cost receipts). A channel partner sees the investors they brought in (by the name used on shared papers only, no phone or NID) and their commissions, paid and due. Profit only appears once staff confirm the settlement.
+- Sign-in by phone + password, or phone + a 6-digit SMS code (when the company's SMS gateway is set up); "forgot password" by SMS code. Nobody can sign in until staff invite them: **Portal access → Invite to the investor portal** on an investor's or channel partner's page sends an SMS link (valid 7 days) to set a password. Staff can disable access (the person is signed out at once) and enable it again. One person who is both an investor and a partner gets one sign-in that shows both.
+- **Investments → Investor Portal Settings:** turn the portal on or off and see its address; the custom domain is Super Admin only. New permission **Investments: Manage Investor Portal Access** (`investments.portal_manage`), held only by Super Admin by default.
+- The Audit Log now shows actions done by portal users (investor portal and reseller portal), marked "(portal)".
+
+### Technical Notes
+
+- Plan: `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md` (Phases 1–2 built; §15 lists the answers assumed and where the build differs from the plan). Phases 3–7 (self sign-up/KYC, requests, payout batches, notifications, period pool engine) wait for the owner's answers.
+- Migrations: `2026_10_07_130000_add_investor_portal_to_companies_table` (`investor_portal_enabled` default false, `investor_portal_domain` unique), `2026_10_07_130100_create_investor_portal_accounts_table`, `2026_10_07_130200_add_actor_to_audit_logs_table` (nullable `actor_type` / `actor_id`). Additive; nothing is backfilled.
+- New Filament panel `investor` (`InvestorPanelProvider`, guard `investor`, provider `investor_portal_accounts`, theme `resources/css/filament/investor/theme.css` — `npm run build` needed on deploy). New `InvestorPortalAccount` model (company-scoped), `InvestorPortalAccountService` (invite, password, SMS codes: hashed, 10 min, 5 tries, 1 send/min), `InvestorPortalService` (every portal query, pinned to the signed-in investor/partner), `ResolveCompanyFromInvestorPortalDomain`, `Company::forInvestorPortalHost()` / `investorPortalHost()` / `investorPortalUrl()`, portal download/report controllers with ownership checks (`InvestmentReportController::investorPayoutView()` is shared).
+- `RestrictResellerPortalHost` renamed `RestrictPortalHosts` and now guards both portal hosts. `AuditLogService` writes non-staff actors to the new actor columns. "investor"/"investors" added to the reserved reseller subdomain labels; the investor portal domain counts as taken for reseller custom domains.
+- New `InvestorPortalTest` (19 tests); `MultiCompanyIsolationTest` covers `InvestorPortalAccount`. 120 new lang keys (en + bn). DNS/Coolify steps: `docs/deployment.md` → Investor Portal Domain.
+## [2.61.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **The Next.js site's home page, header and footer follow the approved design, and every part of it is customised from the dashboard (owner request).** A new **Website Design** tab on the Next.js site's row in Site → Storefront Settings (the Blade storefront has no such tab) holds:
+  - **Home Page Builder** — add, remove, hide and reorder the home page sections: *Hero slider* (banner height, seconds per slide, dots, arrows), *Trust strip* (icon, title and subtitle for up to 6 highlights, 16 icons), *Shop by category* (heading, chosen categories in the order picked, how many, cards with icon and tagline or round pictures, product count), *Deals banner* (the gradient "Best deals today" banner with the biggest discounts, a collection or trending/new products, its own colours and link), *Product row* (latest, one category, biggest discounts, or a Flash Sale / Trending / New Arrivals collection; 1–24 products; 4, 5 or 6 columns; its own "View all"), *Flash sale band* (badge, heading, text, countdown, button, background colour — title, text and end time default to the Flash Sale offer's own), *Image banners* (upload up to 6 images with links), *Shop on mobile* (WhatsApp / call buttons and phone pictures with products), *Text block*, *SEO text with Read more* (supports `{company_name}`, `{address}`, `{products_count}`, `{categories_count}`) and the *Business account callout*. Until an owner saves their own order, the default layout is hero, trust strip, categories, deals, latest products, flash sale, trending and new arrivals. A section's heading left blank uses the website's own default heading; the default layout carries no copy of its own.
+  - **Top Bar** (the thin dark strip: social icons, a short message, up to 6 quick links with small icons, background colour), **Header** (tagline, search hint, which icons to show, support label and phone, the "All categories" button and its label, sticky or not), **Product Cards** (price and discount-badge colours; show or hide the stock label, Add to cart, wishlist heart, quick view and star rating) and the **Floating Help Button** ("Need help?" — its text and link, else a WhatsApp chat with the WhatsApp number).
+- **Footer Builder: build any footer you need.** Four new section types — **Custom links column** (a heading and links to pages, categories, tracking, the account or any URL — for example *Customer Service*), **Custom text** (heading, text, button), **Payment badges** (bKash, Nagad, Rocket, Cards … in a colour each) and **Image / badge** (an uploaded picture with a link, for example a trade licence). The **Contact info** section can now show an address, email, several phone numbers, the support hours and a trade-licence line (blank fields use the company's own details), **Brand & about** a tagline, and the **Bottom bar** a middle and a right-hand text (`{heart}` shows a red heart, as in "Developed with ♥ for Bangladesh"). Small sections (social links, text, payments, image) sit under the column before them unless **Show as its own column** is on, and the footer's background colour is chosen on the Next.js row. The new sections show on the Blade storefront's footer too.
+- **Category tagline** — a short line (for example "Earbuds · TWS · Headsets") under a category's name on the Next.js site's category cards (Categories → Tagline). **Hero slide texts** — the slide form now offers the small label above the heading, heading, sub-heading and button label that the slide already supported; leave them empty for a clean image banner.
+- **Dashboard edits reach the website within seconds.** Saving storefront settings (home page, header, footer, menus), a hero slide, a page, a category or an offer now sends a `storefront.updated` webhook to the company's website (about 5 seconds later, at most once per 5 seconds), so the Next.js site refreshes instead of waiting for its cache to expire. Nothing is sent when no website webhook is set up.
+- **The product list can sort by biggest discount and show only products on sale** (used by the home page's "Biggest discounts" and "View all promotions"). A product card tells the website which live collections the product is in, which drives its "New" badge.
+
+### Technical Notes
+
+- Migration `2026_10_08_100000_add_site_design_to_storefront_settings_and_tagline_to_categories`: `storefront_settings.home_sections` and `site_design` (JSON, NULL = defaults), `categories.tagline` (80), `storefront_slides.eyebrow` (60). New `App\Support\StorefrontSiteDesign` cleans everything before it leaves the ERP (unknown section types dropped, text trimmed and cut, numbers clamped, colours `#RRGGBB` only, links only a path / http(s) / mailto: / tel: — never `javascript:`, `data:` or `//host`); `StorefrontSetting::homeSections()` / `siteDesign()` use it. `StorefrontSiteConfigService` adds `design` and `home_sections` to `GET /site` (category ids → slugs, banner / footer images resolved only inside the company's own storage, sections that would be empty dropped, SEO tokens filled) and cleans/resolves the footer blocks (custom links → slugs, contact blanks → the company's details). `GET /categories` adds `tagline`, `GET /slides` adds `eyebrow`, product cards add `collection_kinds`, `GET /products` takes `sort=discount` and `on_sale=1`, menu items carry `icon` (top bar). New concern `NotifiesWebsiteOfStorefrontChanges` (StorefrontSetting, StorefrontSlide, StorefrontPage, Category, Offer) → `WebsiteWebhookDispatcher::dispatchStorefrontUpdated()` (cache-debounced, queued with a 5 s delay); documented in `docs/api/website-integration.md`. Admin: `Filament\Resources\StorefrontSettings\Schemas\NextjsDesignSections` (new `nextjs_design` tab, Next.js row only; the Blade row never stores `home_sections` / `site_design`), the Footer Builder in `StorefrontSettingResource`, Blade partials `footer-blocks/{custom_links,custom_text,payment_methods,image}` plus tagline / contact / bottom-bar additions. Contract: `docs/api/storefront-api.md`.
+- Tests: new `NextjsSiteDesignTest` (22: defaults, cleaning and clamping, slug / image resolution and company isolation, trust-strip fallback, SEO tokens, top bar links, footer blocks and fallbacks, tagline, discount sort, collection kinds, admin form opens with the effective layout and saves, Blade row has no tab and stores nothing, Blade footer renders the new blocks). About 200 new keys in `lang/en.json` and `lang/bn.json`.
+- **The website (`zamzamint-new-website-theme`) must be deployed with this release:** it reads `design`, `home_sections`, the new footer blocks, `tagline`, `eyebrow` and `collection_kinds`; an older website simply ignores them.
+## [2.60.4] - 2026-10-07
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **A rejected or cancelled payout voucher now makes the payout unpaid again.** Until now only moving the voucher to trash did this. When the voucher created by **Mark as Paid** is rejected or cancelled, the investor payout, channel-partner payout or reseller withdrawal goes back to **pending** (**approved** for reseller requests), and a settlement that was fully paid out goes back to **confirmed**. The payout can then be paid again with a new voucher. Restoring a rejected or cancelled voucher from trash doesn't mark the payout paid again.
+
+**Technical Notes:**
+- `VoucherLinkedPayoutsService::voucherVoided()` is called from `VoucherService::reject()` and `cancel()`, and from trash (`voucherTrashed()` calls it). No migration.
+## [2.60.3] - 2026-10-07
+
+**Release type:** Patch/Fix Update
+
 ### Changed
 
 - **Orders from a reseller's online store are now invoiced in the reseller's name too (owner rule).** Until now only the orders a reseller placed from the reseller portal showed the reseller's store name and logo; an order a customer placed on the reseller's own store (`/store/<name>`, the reseller's subdomain or own domain) still printed the company's name, logo, contact details and the internal "Storefront checkout" note. Now every order that belongs to a reseller carries the reseller's store name and logo and none of the company's details, on the printed invoice, the bulk print, the PDF invoice, the courier cut-slip and the order summary card. Amounts are unchanged (the customer already paid the reseller's price). Orders without a reseller keep the company invoice.
@@ -18,7 +211,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `Order::showsResellerBranding()` is now simply "the order has a reseller" (`reseller_customer_id` set — portal orders and reseller-store checkouts). New `ResellerCommissionTest::test_an_order_from_the_resellers_store_is_invoiced_in_the_resellers_name` (real checkout on `/store/<slug>`, then print and summary card); `ResellerOwnCourierOrderTest`'s company-invoice test now uses an order without a reseller. No migration, no new lang keys.
-- Subdomain set-up: migration `2026_10_10_100000_add_reseller_subdomain_status` (`customers.reseller_subdomain_changed_at` / `reseller_subdomain_live_at`, `storefront_settings.reseller_subdomain_setup_minutes` default 10). Subdomains chosen before it (no `changed_at`) count as live. `Customer::resellerSubdomainIsReady()` / `resellerSubdomainReadyAt()`; `resellerStoreUrl()` uses the subdomain only once it is ready. New `App\Services\ResellerSubdomainProbe` (DNS points at the company domain's IPs + an HTTPS request that succeeds), polled by `MyStore::checkSubdomain()`. `TlsAskController` also answers 200 for approved resellers' subdomains. Profile link: `ResellerPanelProvider` `userMenuItems(['profile' => ...->url(Profile::getUrl())])`. Tests: `ResellerSubdomainTest` +5, `ResellerPortalDashboardTest` +1, `ResellerSettingsPageTest` updated. 7 new lang keys (en + bn). `docs/deployment.md` updated.
 
 ## [2.60.2] - 2026-10-07
 

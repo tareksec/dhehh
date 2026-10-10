@@ -225,6 +225,8 @@ class ConversationChannelResource extends Resource
                     ? 'Test & Subscribe'
                     : 'Test & Subscribe')
                 ->icon(Heroicon::OutlinedSignal)
+                // WhatsApp Web (QR) channels are managed from the WhatsApp Web Login page.
+                ->hidden(fn (ConversationChannel $record): bool => $record->isWeb())
                 ->action(function (ConversationChannel $record): void {
                     try {
                         app(MetaGraphService::class)->testAndSubscribe($record);
@@ -250,7 +252,8 @@ class ConversationChannelResource extends Resource
                             ->send();
                     }
                 }),
-            EditAction::make(),
+            EditAction::make()
+                ->hidden(fn (ConversationChannel $record): bool => $record->isWeb()),
         ]);
     }
 

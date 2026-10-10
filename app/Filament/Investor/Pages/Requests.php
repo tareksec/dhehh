@@ -1,0 +1,187 @@
+<?php
+
+namespace App\Filament\Investor\Pages;
+
+use App\Filament\Investor\Concerns\InvestorPortalPage;
+use App\Models\Investment;
+use App\Models\InvestorCycleElection;
+use App\Models\InvestorRequest;
+use App\Models\SettlementPayout;
+use App\Services\InvestorRequestService;
+use App\Support\MoneyFormatter;
+use BackedEnum;
+use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use Filament\Schemas\Components\Text;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Table;
+
+/**
+ * Page 6 of §6.1: the investor's requests and their answers, and a form for
+ * a new one: add money (top-up), withdrawal notice, what to do with a
+ * payout (withdraw / reinvest), or a question. The company decides each one.
+ */
+class Requests extends Page implements HasTable
+{
+    use InteractsWithTable;
+    use InvestorPortalPage;
+
+    protected static ?string $portalRole = 'investor';
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChatBubbleLeftRight;
+
+    protected static ?int $navigationSort = 6;
+
+    protected string $view = 'filament.investor.pages.table';
+
+    public static function getNavigationLabel(): string
+    {
+        return __('Requests');
+    }
+
+    public function getTitle(): string
+    {
+        return __('Requests');
+    }
+
+    protected function getHeaderActions(): array
+    {
+        $currency = $this->currency();
+        $isType = fn (string ...$types): \Closure => fn (Get $get): bool => in_array($get('type'), $types, true);
+
+        return [
+            Action::make('new')
+                ->label(__('New request'))
+                ->icon(Heroicon::OutlinedPlus)
+                ->hidden(fn (): bool => $this->isStaffPreview())
+                ->schema([
+                    Select::make('type')
+                        ->label(__('What is it about?'))
+                        ->options(collect(InvestorRequest::TYPES)->map(fn (string $label): string => __($label))->all())
+                        ->required()
+                        ->live(),
+
+                    // Top-up
+                    Select::make('project_id')
+                        ->label(__('Project'))
+                        ->options(fn (): array => app(InvestorRequestService::class)->openProjects()->mapWithKeys(fn ($project): array => [$project->getKey() => $this->portal()->projectLabel($project)])->all())
+                        ->required()
+                        ->visible($isType(InvestorRequest::TYPE_TOP_UP)),
+                    TextInput::make('amount')->label(__('Amount'))->numeric()->minValue(1)->prefix($currency)->required()->visible($isType(InvestorRequest::TYPE_TOP_UP)),
+                    Select::make('payment_method')->label(__('How you sent the money'))->options(collect(Investment::PAYMENT_METHODS)->map(fn (string $label): string => __($label))->all())->required()->visible($isType(InvestorRequest::TYPE_TOP_UP)),
+                    TextInput::make('payment_reference')->label(__('Transaction / slip reference'))->maxLength(100)->visible($isType(InvestorRequest::TYPE_TOP_UP)),
+                    DatePicker::make('sent_on')->label(__('Sent on'))->maxDate(now())->visible($isType(InvestorRequest::TYPE_TOP_UP)),
+                    Text::make(__('The investment is added once the company confirms the money has arrived. The deed, cheque and witnesses are completed at the office as before.'))->visible($isType(InvestorRequest::TYPE_TOP_UP)),
+
+                    // Withdrawal notice
+                    Select::make('withdrawal_project_id')
+                        ->label(__('Project'))
+                        ->options(fn (): array => $this->portal()->investments($this->account())
+                            ->where('status', Investment::STATUS_ACTIVE)->with('project')->get()
+                            ->mapWithKeys(fn (Investment $investment): array => [$investment->project_id => $this->portal()->projectLabel($investment->project)])->all())
+                        ->required()
+                        ->visible($isType(InvestorRequest::TYPE_WITHDRAWAL)),
+                    Text::make(__('Under the deed, a withdrawal needs 60 days\' written notice. Once the company accepts this request, the notice runs from the day you sent it.'))->visible($isType(InvestorRequest::TYPE_WITHDRAWAL)),
+
+                    // Payout choice
+                    Select::make('settlement_payout_id')
+                        ->label(__('Payout'))
+                        ->options(fn (): array => $this->portal()->payouts($this->account())
+                            ->where('payment_status', 'pending')->whereDoesntHave('cycleElection')->with('settlement.project')->get()
+                            ->mapWithKeys(fn (SettlementPayout $payout): array => [$payout->getKey() => $this->portal()->projectLabel($payout->settlement?->project).' — '.MoneyFormatter::currency($payout->total_payout, $currency)])->all())
+                        ->required()
+                        ->visible($isType(InvestorRequest::TYPE_REINVEST)),
+                    Select::make('election')
+                        ->label(__('Your choice'))
+                        ->options(collect(InvestorCycleElection::ELECTIONS)->map(fn (string $label): string => __($label))->all())
+                        ->required()
+                        ->live()
+                        ->visible($isType(InvestorRequest::TYPE_REINVEST)),
+                    Select::make('next_project_id')
+                        ->label(__('Reinvest into'))
+                        ->options(fn (): array => app(InvestorRequestService::class)->openProjects()->mapWithKeys(fn ($project): array => [$project->getKey() => $this->portal()->projectLabel($project)])->all())
+                        ->required()
+                        ->visible(fn (Get $get): bool => $get('type') === InvestorRequest::TYPE_REINVEST && in_array($get('election'), ['reinvest', 'partial_reinvest'], true)),
+                    TextInput::make('reinvest_amount')
+                        ->label(__('Amount to reinvest'))
+                        ->numeric()->minValue(1)->prefix($currency)->required()
+                        ->visible(fn (Get $get): bool => $get('type') === InvestorRequest::TYPE_REINVEST && $get('election') === 'partial_reinvest'),
+
+                    Textarea::make('message')
+                        ->label(fn (Get $get): string => $get('type') === InvestorRequest::TYPE_SUPPORT ? __('Your question') : __('Note (optional)'))
+                        ->required($isType(InvestorRequest::TYPE_SUPPORT))
+                        ->rows(3)
+                        ->maxLength(2000),
+                ])
+                ->action(function (array $data): void {
+                    $this->refuseInStaffPreview();
+                    $type = (string) $data['type'];
+
+                    if ($type === InvestorRequest::TYPE_WITHDRAWAL) {
+                        $data['project_id'] = $data['withdrawal_project_id'] ?? null;
+                    }
+
+                    if ($type === InvestorRequest::TYPE_REINVEST) {
+                        $data['amount'] = $data['reinvest_amount'] ?? null;
+                    }
+
+                    app(InvestorRequestService::class)->create($this->account(), $type, $data);
+                    Notification::make()->title(__('Request sent. The company will answer here.'))->success()->send();
+                }),
+        ];
+    }
+
+    public function table(Table $table): Table
+    {
+        $currency = $this->currency();
+
+        return $table
+            ->query(fn () => InvestorRequest::query()->where('portal_account_id', $this->account()->getKey())->with('project'))
+            ->defaultSort('id', 'desc')
+            ->columns([
+                TextColumn::make('type')
+                    ->label(__('Request'))
+                    ->formatStateUsing(fn (string $state): string => InvestorRequest::typeLabel($state))
+                    ->description(fn (InvestorRequest $record): ?string => collect([
+                        $record->project ? $this->portal()->projectLabel($record->project) : null,
+                        filled($record->admin_note) ? __('Company\'s answer').': '.$record->admin_note : null,
+                    ])->filter()->implode(' · ') ?: null)
+                    ->wrap(),
+                TextColumn::make('amount')->label(__('Amount'))->formatStateUsing(fn ($state): string => MoneyFormatter::currency($state, $currency))->placeholder('-')->visibleFrom('md'),
+                TextColumn::make('created_at')->label(__('Sent'))->date('d M Y')->visibleFrom('md'),
+                TextColumn::make('status')
+                    ->label(__('Status'))
+                    ->badge()
+                    ->formatStateUsing(fn (string $state): string => InvestorRequest::statusLabel($state))
+                    ->color(fn (string $state): string => match ($state) {
+                        InvestorRequest::STATUS_APPROVED => 'success',
+                        InvestorRequest::STATUS_REJECTED => 'danger',
+                        InvestorRequest::STATUS_CANCELLED => 'gray',
+                        default => 'warning',
+                    }),
+                TextColumn::make('admin_note')->label(__('Company\'s answer'))->placeholder('-')->wrap()->visibleFrom('lg'),
+            ])
+            ->recordActions([
+                Action::make('cancel')
+                    ->label(__('Cancel'))
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->visible(fn (InvestorRequest $record): bool => $record->isPending() && ! $this->isStaffPreview())
+                    ->action(function (InvestorRequest $record): void {
+                        $this->refuseInStaffPreview();
+                        app(InvestorRequestService::class)->cancel($this->account(), $record);
+                    }),
+            ])
+            ->emptyStateHeading(__('No requests yet.'))
+            ->paginated([10, 25, 50]);
+    }
+}

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Products\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Filament\Resources\Products\Pages\BulkUpdateStock;
 use App\Models\Product;
 use App\Models\ProductVariant;
@@ -45,6 +46,8 @@ use Filament\Widgets\Widget;
  */
 class ProductStatsOverview extends Widget
 {
+    use GuardsWidgetRendering;
+
     protected static bool $isLazy = false;
 
     // Plain Widget defaults to a single header-grid column. The card grid

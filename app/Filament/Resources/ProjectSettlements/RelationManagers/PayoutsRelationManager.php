@@ -7,7 +7,7 @@ use App\Models\InvestmentProject;
 use App\Models\InvestorCycleElection;
 use App\Models\SettlementPayout;
 use App\Services\Investment\CycleElectionService;
-use App\Services\Investment\InvestmentLedgerService;
+use App\Services\Investment\PayoutCompletionService;
 use App\Support\MoneyFormatter;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -19,6 +19,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class PayoutsRelationManager extends RelationManager
@@ -138,9 +139,14 @@ class PayoutsRelationManager extends RelationManager
                 ->requiresConfirmation()
                 ->modalDescription('Confirm the payout has actually been sent to the investor.')
                 ->action(function (SettlementPayout $record): void {
-                    $record->update(['payment_status' => 'paid', 'paid_at' => now()->toDateString()]);
-                    app(InvestmentLedgerService::class)->recordInvestorPayoutPaid($record, (int) auth()->id());
-                    $this->syncSettlementStatus();
+                    try {
+                        app(PayoutCompletionService::class)->markPaid($record, auth()->user());
+                    } catch (ValidationException $exception) {
+                        Notification::make()->danger()->title(__('Could not mark the payout paid'))->body(collect($exception->errors())->flatten()->first())->send();
+
+                        return;
+                    }
+
                     Notification::make()->success()->title('Investor payout marked paid')->send();
                 }),
         ]);
@@ -150,15 +156,5 @@ class PayoutsRelationManager extends RelationManager
     private function payoutsUnlocked(): bool
     {
         return $this->getOwnerRecord()->status === 'confirmed';
-    }
-
-    private function syncSettlementStatus(): void
-    {
-        $settlement = $this->getOwnerRecord();
-        if ($settlement->status === 'confirmed'
-            && ! $settlement->payouts()->where('payment_status', 'pending')->exists()
-            && ! $settlement->channelPartnerPayouts()->where('payment_status', 'pending')->exists()) {
-            $settlement->update(['status' => 'paid_out']);
-        }
     }
 }

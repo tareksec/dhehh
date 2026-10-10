@@ -213,6 +213,7 @@ class VoucherService
                 'approved_at' => now(),
             ]);
             app(InvestmentWithdrawalService::class)->voucherVoided($lockedVoucher);
+            app(VoucherLinkedPayoutsService::class)->voucherVoided($lockedVoucher);
 
             $voucher->setRawAttributes($lockedVoucher->getAttributes());
         });
@@ -231,6 +232,7 @@ class VoucherService
 
             $lockedVoucher->update(['status' => Voucher::STATUS_CANCELLED]);
             app(InvestmentWithdrawalService::class)->voucherVoided($lockedVoucher);
+            app(VoucherLinkedPayoutsService::class)->voucherVoided($lockedVoucher);
 
             $voucher->setRawAttributes($lockedVoucher->getAttributes());
         });

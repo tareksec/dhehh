@@ -8,6 +8,7 @@ use App\Models\Investor;
 use App\Models\InvestorDraft;
 use App\Models\InvestorSecurityInstrument;
 use App\Services\CompanyContext;
+use App\Services\InvestorOnboardingService;
 use App\Support\InvestorIdentity;
 use DateTimeImmutable;
 use DateTimeInterface;
@@ -202,6 +203,9 @@ class InvestorImportService
                     ]);
                 }
             }
+
+            // A portal sign-up: its sign-in and KYC files move to the new investor.
+            app(InvestorOnboardingService::class)->draftConfirmed($draft, $investor);
 
             $draft->delete();
 

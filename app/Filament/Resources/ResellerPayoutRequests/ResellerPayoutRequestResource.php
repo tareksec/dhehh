@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ResellerPayoutRequests;
 
 use App\Filament\Clusters\Resellers;
+use App\Filament\Concerns\HasGuardedNavigationBadge;
 use App\Filament\Resources\ResellerPayoutRequests\Pages\ListResellerPayoutRequests;
 use App\Filament\Resources\Resellers\ResellerResource;
 use App\Models\ExpenseCategory;
@@ -30,6 +31,8 @@ use Illuminate\Support\Facades\Auth;
  */
 class ResellerPayoutRequestResource extends Resource
 {
+    use HasGuardedNavigationBadge;
+
     protected static ?string $model = ResellerPayoutRequest::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowUpTray;
@@ -55,7 +58,7 @@ class ResellerPayoutRequestResource extends Resource
         return __('Withdrawal requests');
     }
 
-    public static function getNavigationBadge(): ?string
+    protected static function navigationBadge(): ?string
     {
         if (! static::canViewAny()) {
             return null;

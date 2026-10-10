@@ -1,0 +1,77 @@
+name: MySQL migrations
+
+# The test suite runs on SQLite, which accepts things production's MySQL
+# refuses (2026-10-08: a 68-character index name stopped the deploy's
+# migrations half-way and the admin panel answered 500). This runs every
+# migration against MySQL 8.4, the production version, on every branch push
+# and pull request, so such a migration is caught on its branch before it
+# reaches main (Coolify deploys main as soon as it is pushed).
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: business_dashboard
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      APP_ENV: production
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: business_dashboard
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: curl, dom, fileinfo, gd, intl, mbstring, pdo_mysql, xml, zip
+          coverage: none
+
+      - name: Install PHP dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress --no-scripts --ignore-platform-req=ext-imagick
+
+      - name: Prepare Laravel environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --ansi --force
+          php artisan package:discover --ansi
+
+      # Every migration from an empty database, exactly as production runs it.
+      - name: Run all migrations on MySQL
+        run: php artisan migrate --force
+
+      # A second run must find nothing to do.
+      - name: Check nothing is left pending
+        run: |
+          php artisan migrate --force
+          if php artisan migrate:status | grep -q Pending; then
+            php artisan migrate:status
+            echo "::error::Migrations are still pending after migrate."
+            exit 1
+          fi

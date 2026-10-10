@@ -8,6 +8,7 @@ use App\Filament\Concerns\SelectableFromMediaHub;
 use App\Filament\Resources\StorefrontSettings\Pages\CreateStorefrontSetting;
 use App\Filament\Resources\StorefrontSettings\Pages\EditStorefrontSetting;
 use App\Filament\Resources\StorefrontSettings\Pages\ListStorefrontSettings;
+use App\Filament\Resources\StorefrontSettings\Schemas\NextjsDesignSections;
 use App\Models\Category;
 use App\Models\Company;
 use App\Models\ConversationChannel;
@@ -17,6 +18,7 @@ use App\Models\StorefrontSetting;
 use App\Models\StorefrontSlide;
 use App\Services\CompanyContext;
 use App\Support\CompanyMedia;
+use App\Support\StorefrontSiteDesign;
 use App\Support\StorefrontThemeRegistry;
 use BackedEnum;
 use Closure;
@@ -1159,7 +1161,7 @@ class StorefrontSettingResource extends Resource
 
             Section::make('Footer Builder')
                 ->columnSpanFull()
-                ->description('Add, remove, and reorder the sections shown in the public footer. Leave empty to use the automatic default footer (brand, quick links, contact, bottom bar).')
+                ->description(__('Add, remove, and reorder the sections shown in the public footer. Leave empty to use the automatic default footer (brand, quick links, contact, bottom bar). Use "Custom links column", "Custom text", "Payment badges" and "Image / badge" to build any extra column you need.'))
                 ->schema([
                     Repeater::make('social_links')
                         ->label('Social links')
@@ -1180,6 +1182,12 @@ class StorefrontSettingResource extends Resource
                         ])
                         ->columns(2),
 
+                    ColorPicker::make('site_design.footer.background')
+                        ->label(__('Footer background colour'))
+                        ->default(StorefrontSiteDesign::DEFAULT_FOOTER_BACKGROUND)
+                        ->helperText(__('Used by the Next.js site. The text colour adjusts to stay readable.'))
+                        ->visible(fn (Get $get): bool => ($get('site_type') ?: StorefrontSetting::SITE_BLADE) === StorefrontSetting::SITE_NEXTJS),
+
                     Repeater::make('footer_blocks')
                         ->label('Footer sections')
                         ->columnSpanFull()
@@ -1187,28 +1195,107 @@ class StorefrontSettingResource extends Resource
                         ->collapsible()
                         ->defaultItems(0)
                         ->default(StorefrontSetting::DEFAULT_FOOTER_BLOCKS)
-                        ->itemLabel(fn (array $state): ?string => StorefrontSetting::FOOTER_BLOCK_TYPES[$state['type'] ?? ''] ?? null)
+                        ->itemLabel(fn (array $state): ?string => isset(StorefrontSetting::FOOTER_BLOCK_TYPES[$state['type'] ?? '']) ? __(StorefrontSetting::FOOTER_BLOCK_TYPES[$state['type']]) : null)
                         ->addActionLabel('Add footer section')
                         ->schema([
                             Select::make('type')
-                                ->options(StorefrontSetting::FOOTER_BLOCK_TYPES)
+                                ->options(fn (): array => array_map(fn (string $label): string => __($label), StorefrontSetting::FOOTER_BLOCK_TYPES))
                                 ->live()
                                 ->required(),
 
                             TextInput::make('data.heading')
                                 ->label('Heading')
                                 ->maxLength(100)
-                                ->visible(fn (Get $get): bool => in_array($get('type'), ['quick_links', 'contact_info', 'social_links'], true)),
+                                ->visible(fn (Get $get): bool => in_array($get('type'), ['quick_links', 'contact_info', 'social_links', 'custom_links', 'custom_text', 'payment_methods', 'image'], true)),
+
+                            Toggle::make('data.own_column')
+                                ->label(__('Show as its own column'))
+                                ->helperText(__('Off: on the Next.js site this block sits under the column before it.'))
+                                ->visible(fn (Get $get): bool => in_array($get('type'), ['social_links', 'custom_text', 'payment_methods', 'image'], true)),
 
                             Toggle::make('data.show_logo')
                                 ->label('Show logo instead of company name')
                                 ->visible(fn (Get $get): bool => $get('type') === 'brand_about'),
                             Textarea::make('data.text')
-                                ->label('About text')
-                                ->rows(2)
-                                ->maxLength(500)
-                                ->placeholder('Browse curated products, place direct orders, and track storefront purchases from {company name}.')
+                                ->label(fn (Get $get): string => $get('type') === 'brand_about' ? 'About text' : __('Text'))
+                                ->rows(3)
+                                ->maxLength(1000)
+                                ->placeholder(fn (Get $get): ?string => $get('type') === 'brand_about' ? 'Browse curated products, place direct orders, and track storefront purchases from {company name}.' : null)
+                                ->visible(fn (Get $get): bool => in_array($get('type'), ['brand_about', 'custom_text'], true)),
+                            TextInput::make('data.tagline')
+                                ->label(__('Tagline'))
+                                ->maxLength(80)
+                                ->helperText(__('Shown under the site name on the Next.js site. Leave blank to use the header tagline.'))
                                 ->visible(fn (Get $get): bool => $get('type') === 'brand_about'),
+
+                            Textarea::make('data.address')
+                                ->label(__('Address'))
+                                ->rows(2)
+                                ->maxLength(300)
+                                ->helperText(__('Leave blank to use the company address.'))
+                                ->visible(fn (Get $get): bool => $get('type') === 'contact_info'),
+                            TextInput::make('data.email')
+                                ->label(__('Email'))
+                                ->email()
+                                ->maxLength(120)
+                                ->helperText(__('Leave blank to use the support email.'))
+                                ->visible(fn (Get $get): bool => $get('type') === 'contact_info'),
+                            Textarea::make('data.phones')
+                                ->label(__('Phone numbers'))
+                                ->rows(2)
+                                ->helperText(__('One per line, up to 4. Leave blank to use the support number and helpline.'))
+                                ->formatStateUsing(fn ($state): ?string => is_array($state) ? implode("\n", $state) : $state)
+                                ->visible(fn (Get $get): bool => $get('type') === 'contact_info'),
+                            TextInput::make('data.trade_license')
+                                ->label(__('Trade licence line'))
+                                ->maxLength(120)
+                                ->placeholder('Trade License: ...')
+                                ->visible(fn (Get $get): bool => $get('type') === 'contact_info'),
+                            Toggle::make('data.show_hours')
+                                ->label(__('Show the support hours'))
+                                ->visible(fn (Get $get): bool => $get('type') === 'contact_info'),
+
+                            NextjsDesignSections::linkRepeater('data.links', __('Links'), 12)
+                                ->visible(fn (Get $get): bool => $get('type') === 'custom_links'),
+
+                            TextInput::make('data.button_label')
+                                ->label(__('Button label'))
+                                ->maxLength(40)
+                                ->visible(fn (Get $get): bool => $get('type') === 'custom_text'),
+                            TextInput::make('data.button_url')
+                                ->label(__('Button link'))
+                                ->maxLength(500)
+                                ->visible(fn (Get $get): bool => $get('type') === 'custom_text'),
+
+                            Repeater::make('data.items')
+                                ->label(__('Badges'))
+                                ->columnSpanFull()
+                                ->reorderable()
+                                ->defaultItems(0)
+                                ->maxItems(8)
+                                ->itemLabel(fn (array $state): ?string => $state['label'] ?? null)
+                                ->addActionLabel(__('Add badge'))
+                                ->schema([
+                                    TextInput::make('label')->label(__('Label'))->required()->maxLength(24),
+                                    Select::make('tone')
+                                        ->label(__('Colour'))
+                                        ->options(fn (): array => array_map(fn (string $label): string => __($label), StorefrontSiteDesign::PAYMENT_TONES))
+                                        ->default('neutral')
+                                        ->native(false),
+                                ])
+                                ->columns(2)
+                                ->visible(fn (Get $get): bool => $get('type') === 'payment_methods'),
+
+                            static::designImageUpload('data.image', __('Image'))
+                                ->visible(fn (Get $get): bool => $get('type') === 'image'),
+                            TextInput::make('data.alt')
+                                ->label(__('Description of the image'))
+                                ->maxLength(120)
+                                ->visible(fn (Get $get): bool => $get('type') === 'image'),
+                            TextInput::make('data.url')
+                                ->label(__('Link'))
+                                ->maxLength(500)
+                                ->visible(fn (Get $get): bool => $get('type') === 'image'),
 
                             TextInput::make('data.copyright_text')
                                 ->label('Copyright text')
@@ -1216,6 +1303,18 @@ class StorefrontSettingResource extends Resource
                                 ->placeholder('© {year} {company_name}. All rights reserved.')
                                 ->helperText('Supports {year} and {company_name} tokens.')
                                 ->columnSpanFull()
+                                ->visible(fn (Get $get): bool => $get('type') === 'bottom_bar'),
+                            TextInput::make('data.center_text')
+                                ->label(__('Middle text'))
+                                ->maxLength(160)
+                                ->placeholder(__('Developed by ...'))
+                                ->helperText(__('Shown in the middle of the bottom bar on the Next.js site.'))
+                                ->visible(fn (Get $get): bool => $get('type') === 'bottom_bar'),
+                            TextInput::make('data.right_text')
+                                ->label(__('Right-hand text'))
+                                ->maxLength(160)
+                                ->placeholder(__('Developed with {heart} for Bangladesh'))
+                                ->helperText(__('Use {heart} for a red heart.'))
                                 ->visible(fn (Get $get): bool => $get('type') === 'bottom_bar'),
                             Repeater::make('data.legal_links')
                                 ->label('Legal links')
@@ -1292,6 +1391,8 @@ class StorefrontSettingResource extends Resource
                 ])
                 ->columns(2)
                 ->collapsible(),
+
+            ...NextjsDesignSections::sections(),
         ];
 
         $sectionKeys = [
@@ -1316,6 +1417,11 @@ class StorefrontSettingResource extends Resource
             'navigation_seo',
             'navigation_seo',
             'nextjs_site',
+            'nextjs_design',
+            'nextjs_design',
+            'nextjs_design',
+            'nextjs_design',
+            'nextjs_design',
         ];
 
         foreach ($components as $index => $component) {
@@ -1330,6 +1436,31 @@ class StorefrontSettingResource extends Resource
         }
 
         return $schema->columns(1)->components($components);
+    }
+
+    /**
+     * An image field for the Home Page Builder and the Footer Builder: stored
+     * under the company's own public folder, so another company's path can
+     * never be picked up (the API only turns the company's own paths into URLs).
+     */
+    public static function designImageUpload(string $name, string $label): FileUpload
+    {
+        return FileUpload::make($name)
+            ->label($label)
+            ->image()
+            ->maxSize(2048)
+            ->tap(static::browserImagePrecompression())
+            ->saveUploadedFileUsing(static::optimizeImageUpload())
+            ->disk(fn (): string => CompanyMedia::publicDiskName())
+            ->directory(fn (?StorefrontSetting $record): string => CompanyMedia::publicDirectory('storefront/design', $record))
+            ->fetchFileInformation(false)
+            ->getUploadedFileUsing(CompanyMedia::publicFileMetadataCallback())
+            ->getOpenableFileUrlUsing(CompanyMedia::publicFileUrlCallback())
+            ->getDownloadableFileUrlUsing(CompanyMedia::publicFileUrlCallback())
+            ->disabled(fn (?StorefrontSetting $record): bool => ! CompanyMedia::canResolve($record))
+            ->imageEditor()
+            ->downloadable()
+            ->openable();
     }
 
     protected static function menuRepeater(string $name, string $label): Repeater
@@ -1528,7 +1659,7 @@ class StorefrontSettingResource extends Resource
     public static function sectionAppliesToSite(string $section, string $siteType): bool
     {
         return match ($section) {
-            'nextjs_site' => $siteType === StorefrontSetting::SITE_NEXTJS,
+            'nextjs_site', 'nextjs_design' => $siteType === StorefrontSetting::SITE_NEXTJS,
             default => true,
         };
     }
