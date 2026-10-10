@@ -1018,7 +1018,7 @@ class StorefrontSettingResource extends Resource
 
             Section::make('Customer Notifications & Reminders')
                 ->columnSpanFull()
-                ->description('Company-specific SMS credentials are shared by customer login OTP, password recovery, and abandoned-cart reminders. WhatsApp reminders run hourly via the scheduler.')
+                ->description(__('The SMS gateway (login OTP, password recovery, abandoned-cart reminders) is set up in Settings → Integrations → SMS Gateway. WhatsApp reminders run hourly via the scheduler.'))
                 ->schema([
                     Toggle::make('abandoned_cart_reminders_enabled')
                         ->label('Enable reminders')
@@ -1063,20 +1063,6 @@ class StorefrontSettingResource extends Resource
                     TextInput::make('notification_credentials.mail_from_name')
                         ->label('From name')
                         ->maxLength(255),
-                    TextInput::make('notification_credentials.sms_api_url')
-                        ->label('SMS gateway URL template')
-                        ->maxLength(500)
-                        ->placeholder('http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}')
-                        ->helperText('Used for login OTP, password reset, and cart reminders. Use {api_key}, {sender_id}, {phone}, {message} placeholders.')
-                        ->columnSpanFull(),
-                    TextInput::make('notification_credentials.sms_api_key')
-                        ->label('SMS API key')
-                        ->password()
-                        ->revealable()
-                        ->maxLength(255),
-                    TextInput::make('notification_credentials.sms_sender_id')
-                        ->label('SMS sender ID')
-                        ->maxLength(100),
                     Select::make('notification_credentials.whatsapp_channel_id')
                         ->label('WhatsApp Chat Channel')
                         ->options(function (Get $get, ?StorefrontSetting $record): array {
@@ -1127,7 +1113,7 @@ class StorefrontSettingResource extends Resource
                 ->columnSpanFull()
                 // Read from the company's primary row (the Next.js site once it has one), so it is not offered on the other.
                 ->visible(fn (?StorefrontSetting $record): bool => ! $record || $record->isPrimary())
-                ->description('When a lead\'s next follow-up date arrives, the assigned staff member is notified in-app, and (when enabled here) the lead is messaged over WhatsApp with an SMS fallback. Runs every 15 minutes via the scheduler. Uses the same SMS gateway and WhatsApp Chat Channel configured above.')
+                ->description('When a lead\'s next follow-up date arrives, the assigned staff member is notified in-app, and (when enabled here) the lead is messaged over WhatsApp with an SMS fallback. Runs every 15 minutes via the scheduler. Uses the SMS gateway from Settings → Integrations and the WhatsApp Chat Channel configured above.')
                 ->schema([
                     Toggle::make('lead_follow_up_reminders_enabled')
                         ->label('Message the lead automatically')

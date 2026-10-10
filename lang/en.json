@@ -1684,5 +1684,13 @@
     "Nothing to do on your side. Until it is ready, share your store link above; it switches to the new address on its own.": "Nothing to do on your side. Until it is ready, share your store link above; it switches to the new address on its own.",
     "Subdomain set-up time (minutes)": "Subdomain set-up time (minutes)",
     "After a reseller picks a subdomain, their My Store page counts down this long while the address is set up, and their store link switches to it once it opens over HTTPS (checked automatically) or this time has passed.": "After a reseller picks a subdomain, their My Store page counts down this long while the address is set up, and their store link switches to it once it opens over HTTPS (checked automatically) or this time has passed.",
-    "Investor Dashboard": "Investor Dashboard"
+    "Investor Dashboard": "Investor Dashboard",
+    "The SMS gateway (login OTP, password recovery, abandoned-cart reminders) is set up in Settings → Integrations → SMS Gateway. WhatsApp reminders run hourly via the scheduler.": "The SMS gateway (login OTP, password recovery, abandoned-cart reminders) is set up in Settings → Integrations → SMS Gateway. WhatsApp reminders run hourly via the scheduler.",
+    "SMS Gateway": "SMS Gateway",
+    "One SMS gateway per site. It sends login OTP codes, password recovery codes, abandoned-cart reminders, and (from the company's main site) CRM and lead follow-up SMS.": "One SMS gateway per site. It sends login OTP codes, password recovery codes, abandoned-cart reminders, and (from the company's main site) CRM and lead follow-up SMS.",
+    "SMS gateway URL template": "SMS gateway URL template",
+    "Use the {api_key}, {sender_id}, {phone} and {message} placeholders. Leave empty to turn SMS off for this site.": "Use the {api_key}, {sender_id}, {phone} and {message} placeholders. Leave empty to turn SMS off for this site.",
+    "SMS API key": "SMS API key",
+    "Stored encrypted.": "Stored encrypted.",
+    "SMS sender ID": "SMS sender ID"
 }

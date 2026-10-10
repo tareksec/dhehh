@@ -8,9 +8,11 @@ use App\Filament\Resources\StorefrontSettings\Pages\Concerns\HasStorefrontSettin
 use App\Filament\Resources\StorefrontSettings\StorefrontSettingResource;
 use App\Models\Company;
 use App\Models\StorefrontSetting;
+use App\Services\StorefrontNotificationService;
 use App\Support\StorefrontSiteDesign;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
 
 class EditStorefrontSetting extends EditRecord
@@ -56,6 +58,12 @@ class EditStorefrontSetting extends EditRecord
         }
 
         unset($data['company_domain'], $data['company_domain_verified'], $data['site_type'], $data['copy_from_blade']);
+
+        // The SMS gateway is edited on Integrations, so this form no longer carries it; keep what is stored.
+        $data['notification_credentials'] = array_merge(
+            Arr::only((array) $this->record->notification_credentials, StorefrontNotificationService::SMS_CREDENTIAL_KEYS),
+            (array) ($data['notification_credentials'] ?? []),
+        );
 
         return $this->applySiteFields($data, $this->record, (int) ($data['company_id'] ?? $this->record->company_id), $siteType);
     }

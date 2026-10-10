@@ -12,6 +12,7 @@ use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
 use App\Services\Crm\AiSettingsService;
 use App\Services\PayStationClient;
+use App\Services\StorefrontNotificationService;
 use App\Services\StorefrontMetaTrackingService;
 use App\Services\WooCommerceImportService;
 use App\Services\WooCommerceOrderSyncService;
@@ -47,7 +48,10 @@ use Livewire\Attributes\Locked;
  * Single, complete editable settings page for every integration this app
  * connects to: AI Integration (one config per AI-powered tool), WooCommerce
  * (credentials, order-webhook test/sync, and the full product import),
- * Payment Gateway (ZiniPay/PayStation credentials and base URLs), and the
+ * Payment Gateway (ZiniPay/PayStation credentials and base URLs), SMS Gateway
+ * (URL template, API key, sender ID — stored in the SMS keys of
+ * `notification_credentials`, merged so the mail/WhatsApp keys edited on
+ * Storefront Settings are kept), and the
  * entire Meta Pixel & Conversions API configuration — connection, consent,
  * browser/status events, purchase timing, and the Event Log & Retries table
  * (embedded via App\Livewire\MetaEventLogTable, the same
@@ -125,6 +129,7 @@ class Integrations extends Page
             'online_payment_enabled' => $setting?->online_payment_enabled ?? false,
             'online_payment_gateway' => $setting?->online_payment_gateway ?? 'zinipay',
             'payment_credentials' => $setting?->payment_credentials ?? [],
+            'notification_credentials' => Arr::only((array) $setting?->notification_credentials, StorefrontNotificationService::SMS_CREDENTIAL_KEYS),
             ...array_merge($this->metaFieldDefaults(), $setting?->only($this->metaFields()) ?? []),
         ]);
     }
@@ -1146,6 +1151,31 @@ class Integrations extends Page
                             ])
                             ->columns(2),
 
+                        Tab::make(__('SMS Gateway'))
+                            ->icon(Heroicon::OutlinedDevicePhoneMobile)
+                            ->schema([
+                                Placeholder::make('sms_gateway_note')
+                                    ->hiddenLabel()
+                                    ->content(__('One SMS gateway per site. It sends login OTP codes, password recovery codes, abandoned-cart reminders, and (from the company\'s main site) CRM and lead follow-up SMS.'))
+                                    ->columnSpanFull(),
+                                TextInput::make('notification_credentials.sms_api_url')
+                                    ->label(__('SMS gateway URL template'))
+                                    ->maxLength(500)
+                                    ->placeholder('http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}')
+                                    ->helperText(__('Use the {api_key}, {sender_id}, {phone} and {message} placeholders. Leave empty to turn SMS off for this site.'))
+                                    ->columnSpanFull(),
+                                TextInput::make('notification_credentials.sms_api_key')
+                                    ->label(__('SMS API key'))
+                                    ->password()
+                                    ->revealable()
+                                    ->maxLength(255)
+                                    ->helperText(__('Stored encrypted.')),
+                                TextInput::make('notification_credentials.sms_sender_id')
+                                    ->label(__('SMS sender ID'))
+                                    ->maxLength(100),
+                            ])
+                            ->columns(2),
+
                         Tab::make('Meta Pixel & CAPI')
                             ->icon(Heroicon::OutlinedSignal)
                             ->schema([
@@ -1409,11 +1439,18 @@ class Integrations extends Page
 
         $active = $this->activeSetting();
 
+        // notification_credentials also holds mail/WhatsApp keys edited on Storefront Settings; only touch the SMS ones.
+        $state['notification_credentials'] = array_merge(
+            (array) $active?->notification_credentials,
+            Arr::only((array) ($state['notification_credentials'] ?? []), StorefrontNotificationService::SMS_CREDENTIAL_KEYS),
+        );
+
         StorefrontSetting::withoutGlobalScopes()->updateOrCreate(
             $active
                 ? ['id' => $active->getKey(), 'company_id' => $company->getKey()]
                 : ['company_id' => $company->getKey(), 'site_type' => StorefrontSetting::SITE_BLADE],
             Arr::only($state, [
+                'notification_credentials',
                 'woocommerce_base_url',
                 'woocommerce_credentials',
                 'website_api_credentials',

@@ -2,6 +2,17 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-10 - SMS gateway moved to Integrations
+
+Owner instruction: "sms gateway ইন্টিগ্রেশন টা সাইট সেটিংস থেকে সরিয়ে integration পেজে sms gateway এর সেটিংস যুক্ত কর।"
+
+- Storefront Settings no longer has the SMS URL template / API key / sender ID fields; Settings → Integrations has a new **SMS Gateway** tab (per site via the Site picker).
+- Saving Integrations merges only the three SMS keys into `notification_credentials`; `EditStorefrontSetting` re-adds the stored SMS keys so Storefront Settings cannot wipe them. No migration.
+- Needs Bangla review: the 8 new SMS Gateway strings in `lang/bn.json`.
+- Verified: IntegrationsPageTest, TranslationParityTest, NextjsSiteSettingsTest, LeadFollowUpReminderTest, StorefrontResellerAndAbandonedCartTest passed. Full suite on the working branch: 2061 passed, 8 failed — all online-payment tests (`StorefrontApiCheckoutTest` x7, `StorefrontPaystationPaymentTest` x1) on files this change does not touch.
+
+Commit status: committed and pushed to main with owner approval (2026-10-10).
+
 ## 2026-10-10 - Orders: shipping fee now reaches Total amount while typing
 
 Owner report (in Bangla, with a phone screenshot of Create Order): Shipping Fee showed ৳110 but Total amount / Due amount stayed at the products' ৳200 — the shipping amount was not added. Fix it and add a separate test.
