@@ -11,13 +11,16 @@ All notable production changes to Business Dashboard are documented here.
 **Technical Notes:**
 - `brandLogoHeight('2.75rem')` on the investor panel; rule added to `resources/css/filament/investor/theme.css` (`.fi-simple-layout .fi-logo`); `!important` is needed because Filament sets the height inline.
 
+## [2.69.1] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
 ### Changed
 
 - **Investor portal sign-in page:** the heading under the company logo now reads **Investor Dashboard**, so it is clear which sign-in this is.
 
 **Technical Notes:**
 - `Login::getHeading()`; 1 new lang key (en + bn); assertion added to `test_the_login_page_has_a_forgot_password_link`.
-
 ## [2.69.0] - 2026-10-10
 
 **Release type:** Minor Feature Update
