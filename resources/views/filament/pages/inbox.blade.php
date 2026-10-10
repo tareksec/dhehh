@@ -612,20 +612,9 @@
                                         </div>
                                     </div>
 
-                                    <div class="flex items-center justify-between gap-3">
-                                        <div>
-                                            <h3 class="text-sm font-semibold">AI Assistant</h3>
-                                            <p class="text-xs text-gray-500 dark:text-gray-400">
-                                                {{ $conversation->ai_enabled ? 'Enabled' : 'Paused' }}
-                                            </p>
-                                        </div>
-                                        <x-filament::toggle
-                                            wire:key="mobile-ai-toggle-{{ $conversation->getKey() }}"
-                                            :state="$conversation->ai_enabled ? 'true' : 'false'"
-                                            wire:click="toggleAi"
-                                            aria-label="Toggle AI assistant"
-                                            on-icon="heroicon-m-check"
-                                        />
+                                    <div class="space-y-2">
+                                        <h3 class="text-sm font-semibold">{{ __('AI or team') }}</h3>
+                                        @include('filament.pages.partials.inbox-ai-mode', ['conversation' => $conversation, 'keyPrefix' => 'mobile'])
                                     </div>
                                 @endif
 
@@ -1192,19 +1181,10 @@
                             <x-filament::section
                                 compact
                                 icon="heroicon-o-sparkles"
-                                heading="AI assistant"
-                                description="Pause automation whenever a human takes over."
+                                :heading="__('AI or team')"
+                                :description="__('Take the chat when a person should answer. It goes back to the AI when the time is up.')"
                             >
-                                <div class="flex items-center justify-between gap-3">
-                                    <span class="text-sm font-medium">{{ $conversation->ai_enabled ? 'Enabled' : 'Paused' }}</span>
-                                    <x-filament::toggle
-                                        wire:key="desktop-ai-toggle-{{ $conversation->getKey() }}"
-                                        :state="$conversation->ai_enabled ? 'true' : 'false'"
-                                        wire:click="toggleAi"
-                                        aria-label="Toggle AI assistant"
-                                        on-icon="heroicon-m-check"
-                                    />
-                                </div>
+                                @include('filament.pages.partials.inbox-ai-mode', ['conversation' => $conversation, 'keyPrefix' => 'desktop'])
                             </x-filament::section>
                         @endif
 

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Account;
 use App\Models\AgreementAcceptance;
 use App\Models\AgreementTemplate;
+use App\Models\AttentionItem;
 use App\Models\AuditLog;
 use App\Models\Broadcast;
 use App\Models\Category;
@@ -18,6 +19,7 @@ use App\Models\Concerns\BelongsToCompany;
 use App\Models\Container;
 use App\Models\Conversation;
 use App\Models\ConversationChannel;
+use App\Models\ConversationModeEvent;
 use App\Models\CourierBooking;
 use App\Models\CourierProvider;
 use App\Models\CourierReturn;
@@ -127,7 +129,7 @@ class MultiCompanyIsolationTest extends TestCase
             VoucherAttachment::class, FundTransfer::class,
             StorefrontSlide::class,
             Lead::class, Quotation::class, QuotationItem::class,
-            Conversation::class, ConversationChannel::class,
+            AttentionItem::class, Conversation::class, ConversationChannel::class, ConversationModeEvent::class,
             ChatOrderLink::class, CompanyFaq::class, QuickReply::class,
             CompanyApiKey::class, StorefrontCustomerToken::class,
             InvestmentProject::class, Investor::class, InvestorDraft::class, InvestorPortalAccount::class, InvestorBankAccount::class, AgreementTemplate::class, AgreementAcceptance::class, InvestorRequest::class, PayoutBatch::class, PayoutBatchItem::class,

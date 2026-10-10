@@ -61,7 +61,7 @@ class SalesFollowUpService
             }
             if ($settings['review_mode']) {
                 $followUp->update(['status' => 'review', 'reason' => 'Staff review mode enabled.']);
-                app(AiReplyService::class)->escalate($conversation, 'Sales follow-up is ready for staff review.');
+                app(AiReplyService::class)->escalate($conversation, 'Sales follow-up is ready for staff review.', 'other');
 
                 return;
             }
@@ -81,7 +81,7 @@ class SalesFollowUpService
                 // A transport timeout can occur after provider acceptance: never retry blindly.
                 $message->update(['delivery_status' => 'unknown']);
                 $followUp->update(['status' => 'unknown', 'reason' => 'Provider result uncertain; review before resending.']);
-                app(AiReplyService::class)->escalate($conversation, 'Sales follow-up delivery needs manual reconciliation.');
+                app(AiReplyService::class)->escalate($conversation, 'Sales follow-up delivery needs manual reconciliation.', 'other', false);
 
                 return;
             }

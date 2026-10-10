@@ -13,6 +13,7 @@ use App\Models\Product;
 use App\Models\QuickReply;
 use App\Services\CompanyContext;
 use App\Services\Crm\ConversationMessengerService;
+use App\Services\Crm\ConversationModeService;
 use App\Support\CompanyMedia;
 use App\Support\MoneyFormatter;
 use BackedEnum;
@@ -581,19 +582,60 @@ class Inbox extends Page
         $this->deselectConversation();
     }
 
+    /** Switch: AI chat -> team with no time limit; team chat -> back to the AI. */
     public function toggleAi(): void
+    {
+        $conversation = $this->selectedConversation;
+
+        $conversation?->isHumanMode() ? $this->backToAi() : $this->takeOver(null, true);
+    }
+
+    /**
+     * Take the chat for the team. $minutes null = the company's takeover
+     * time; only the Inbox timer choices are accepted.
+     */
+    public function takeOver(?int $minutes = null, bool $permanent = false): void
     {
         $this->authorizeInboxManagement();
         $conversation = $this->selectedConversation;
 
-        if ($conversation) {
-            $enabled = ! $conversation->ai_enabled;
-            $conversation->update([
-                'ai_enabled' => $enabled,
-                ...($enabled ? ['human_handled_until' => null, 'status' => 'open'] : []),
-            ]);
-            $this->forgetInboxComputedProperties();
+        if (! $conversation) {
+            return;
         }
+
+        $minutes = in_array($minutes, [30, 60, 360], true) ? $minutes : null;
+        app(ConversationModeService::class)->toHuman($conversation, 'dashboard', auth()->user(), $minutes, $permanent);
+        $this->forgetInboxComputedProperties();
+    }
+
+    public function backToAi(): void
+    {
+        $this->authorizeInboxManagement();
+        $conversation = $this->selectedConversation;
+
+        if (! $conversation) {
+            return;
+        }
+
+        app(ConversationModeService::class)->toAi($conversation, 'dashboard', auth()->user());
+        $this->forgetInboxComputedProperties();
+    }
+
+    /** "I'll handle this one": assign the chat to me and keep it with the team. */
+    public function claimConversation(): void
+    {
+        $this->authorizeInboxManagement();
+        $conversation = $this->selectedConversation;
+
+        if (! $conversation) {
+            return;
+        }
+
+        $conversation->forceFill(['assigned_to' => auth()->id()])->saveQuietly();
+        if (! $conversation->isHumanMode()) {
+            app(ConversationModeService::class)->toHuman($conversation, 'dashboard', auth()->user());
+        }
+        $this->forgetInboxComputedProperties();
     }
 
     public function sendReply(): void

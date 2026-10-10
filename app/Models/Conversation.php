@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 
 class Conversation extends Model
@@ -36,18 +37,40 @@ class Conversation extends Model
         'closed' => 'Closed',
     ];
 
+    /** Who answers the chat now. Change it only through ConversationModeService. */
+    public const MODE_AI = 'ai';
+
+    public const MODE_HUMAN = 'human';
+
+    /** Why the AI handed a chat to the team (shown in the Inbox and the Activity log). */
+    public const HANDOVER_REASONS = [
+        'discount_requested' => 'Asked for a discount',
+        'complaint' => 'Complaint',
+        'refund' => 'Refund',
+        'human_requested' => 'Asked for a person',
+        'out_of_scope' => 'Outside what the AI knows',
+        'angry' => 'Angry customer',
+        'ready_to_buy' => 'Ready to buy',
+        'ai_error' => 'AI could not reply',
+        'other' => 'Other',
+    ];
+
     protected $fillable = [
         'company_id', 'channel_id', 'provider', 'entry_point', 'ad_referral_id',
         'external_contact_id', 'contact_name', 'contact_phone', 'lead_id', 'customer_id',
-        'status', 'ai_enabled', 'human_handled_until', 'assigned_to',
+        'status', 'ai_enabled', 'automation_mode', 'handover_reason', 'human_handled_until',
+        'mode_changed_at', 'mode_changed_by', 'assigned_to',
         'last_message_at', 'unread_count',
     ];
+
+    protected $attributes = ['automation_mode' => self::MODE_AI];
 
     protected $casts = [
         'last_message_at' => 'datetime',
         'unread_count' => 'integer',
         'ai_enabled' => 'boolean',
         'human_handled_until' => 'datetime',
+        'mode_changed_at' => 'datetime',
     ];
 
     public function profileDisplayName(): string
@@ -86,6 +109,22 @@ class Conversation extends Model
     public function assignedUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    public function modeEvents(): HasMany
+    {
+        return $this->hasMany(ConversationModeEvent::class);
+    }
+
+    public function isHumanMode(): bool
+    {
+        return $this->automation_mode === self::MODE_HUMAN;
+    }
+
+    /** When a human chat goes back to the AI on its own; null = AI chat, or held with no time limit. */
+    public function revertAt(): ?Carbon
+    {
+        return $this->isHumanMode() ? $this->human_handled_until : null;
     }
 
     public function markRead(): void

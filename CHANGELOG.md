@@ -4,6 +4,40 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **AI or team: every chat now shows who answers it, and goes back to the AI on its own** (16_AI_INBOX_CONTROL_PLANE_PLAN.md, phase 1, modelled on AiPraktor). The Inbox's "AI assistant" switch is replaced by an **AI or team** panel: **Take over** (for the company's takeover time), **Keep with the team for** 30 min / 1 hour / 6 hours / No time limit, **Back to AI**, and **Claim** (assign to me). It shows when the chat returns to the AI and, when the AI handed it over, why.
+- **The AI hands over with a reason.** When the AI gives a chat to the team it records one reason from a fixed list (asked for a discount, complaint, refund, asked for a person, outside what the AI knows, angry customer, ready to buy, AI could not reply, other). The chat goes back to the AI when the takeover time is up, unless someone keeps it with no time limit.
+- **Type "." from the page inbox** (Messenger / Business Suite) to take a chat for the team; another "." gives it back to the AI.
+- **CRM → AI / Team Activity**: every switch between the AI and the team, from every source (Dashboard, AI, Auto-revert, Answered, Page inbox, Dot command), with filters and CSV export.
+- **New Auto Messaging settings** (Integrations → Auto Messaging): team time before a chat returns to the AI (default 360 minutes, like AiPraktor), wait before answering (0–15 seconds, default 3, unchanged), tell the customer when a person takes over (off by default), neatly arranged replies (off by default), and how the AI addresses the customer in Bangla (no title / Sir–Madam / Bhaiya–Apu, default no title).
+- **Neatly arranged replies (opt-in).** Product facts go on their own lines with small labels: 💰 price, 📏 sizes/colours in stock (never a stock count), ✅/❌ in stock, 🚚 delivery charge per zone, 🛒 order link, followed by "which one would you like?" for products with options. With an address style chosen, a Bangla reply can open with "জ্বি স্যার," / "জ্বি আপু," when the customer's words or name make it clear.
+- **CRM → Needs attention** (plan 16, phase 2): every chat the AI handed to the team, with its reason, how long it waited for a person's first reply, who answered, and how it ended — answered, given back to the AI, never answered (went back to the AI on its own with no reply), or closed without a reply. Filters for open / done, reason, outcome, late only and "given to me"; **Claim** and **Done** buttons; the menu shows the number still open, red when one is late.
+- **Reply target for handed-over chats** (Integrations → Auto Messaging, minutes, 0–1440): a handed-over chat with no reply from a person within this time is marked late. Default 0 = no target, so nothing is marked late until the owner sets one.
+- **CRM → AI Inbox Report** (plan 16, phase 3), for today / 7 / 30 / 90 days:
+  - chats with customer messages, and the share the AI handled alone;
+  - AI replies and team replies;
+  - AI handovers and team takeovers, and chats that went back to the AI on their own;
+  - average and median first reply after a handover;
+  - late share, never answered, and waiting now (with the longest wait);
+  - why the AI handed over;
+  - a by-channel table.
+
+### Changed
+
+- **A staff reply now keeps the chat with the team for the company's takeover time (default 6 hours) instead of a fixed 24 hours**, and a reply typed in the page's own inbox does the same. A chat the AI handed over now returns to the AI after that time instead of staying off until someone switches it back.
+
+### Technical Notes
+
+- New `conversations` columns `automation_mode` (`ai` | `human`), `handover_reason`, `mode_changed_at`, `mode_changed_by`; `human_handled_until` keeps its meaning and is the return-to-AI time (NULL = no time limit). Migration backfills `human` for every chat with AI switched off or held until a future time. New company-owned table `conversation_mode_events` (`ConversationModeEvent`, in `MultiCompanyIsolationTest`).
+- `App\Services\Crm\ConversationModeService` is the only writer of the mode (`toHuman()`, `toAi()`, `staffAnswered()`, `revertDue()`); it keeps `ai_enabled` in step (false while the team has the chat) so existing checks keep working, and writes one event per switch. `AiReplyService::escalate()` takes a reason code and switches through it; `escalate_to_human` gained a required `reason_code` enum.
+- New command `crm:revert-conversations`, scheduled every minute, loops per company.
+- `AiAutoReplyJob::dispatchAfterWait()` replaces the fixed 3-second delay with `reply_delay_seconds`.
+- `SalesReplyRenderer::render()` gained a `$style` argument (`rich`, `address_style`) and `submit_reply` an optional `salutation` (sir | maam | none); `handoverNotice()` renders the handover message in the chat's language. Defaults leave every existing reply byte-for-byte unchanged.
+- Tests: `ConversationModeTest` (14 tests); `InboxPageTest` updated for the new panel keys.
+- New company-owned table `attention_items` (`AttentionItem`, in `MultiCompanyIsolationTest`): `kind`, `conversation_id`, `reason`, `note`, `opened_at`, `due_at`, `first_response_at`/`_by`, `resolved_at`/`_by`, `outcome`. `App\Services\Crm\AttentionQueueService` keeps at most one open item per chat; `ConversationModeService` opens it when the AI hands over (source `ai`), records the first staff reply in `staffAnswered()`, and closes it on every switch back to the AI. A takeover from the dashboard, a staff reply or "." opens nothing. The push alert from `AiReplyService::escalate()` is unchanged. New setting `response_target_minutes`. Tests: `AttentionQueueTest` (7 tests).
+- `App\Services\Crm\AiInboxReportService` computes the report on request from `conversation_messages`, `conversation_mode_events` and `attention_items` in the current company's scope; nothing new is stored. Page `AiInboxReport`. Tests: `AiInboxReportTest` (3 tests).
+
 ## [2.65.0] - 2026-10-09
 
 **Release type:** Minor Feature Update

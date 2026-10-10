@@ -334,15 +334,16 @@ class ConversationMessengerService
     {
         $updates = ['last_message_at' => now()];
 
-        if ($sender !== null) {
-            $updates['human_handled_until'] = now()->addHours(24);
-
-            if ($conversation->status === 'pending') {
-                $updates['status'] = 'open';
-            }
+        if ($sender !== null && $conversation->status === 'pending') {
+            $updates['status'] = 'open';
         }
 
         $conversation->forceFill($updates)->saveQuietly();
+
+        // A staff reply keeps the chat with the team for the takeover time.
+        if ($sender !== null) {
+            app(ConversationModeService::class)->staffAnswered($conversation, 'staff_reply', $sender);
+        }
     }
 
     protected function safeMessage(Throwable $exception): string

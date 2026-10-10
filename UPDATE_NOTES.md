@@ -2,6 +2,29 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-09 - AI inbox control plane, phase 1: AI or team, return to AI, activity log, neat replies
+
+Built from `16_AI_INBOX_CONTROL_PLANE_PLAN.md` after a read-only walk through AiPraktor's dashboard, home page and help page (119 answers). Owner instruction: "aipraktor এর মত করে বিল্ড কর" — so the AiPraktor behaviour is the rule: takeover time 6 hours by default (owner can change it), timer choices 30 min / 1 hour / 6 hours / no limit, return to the AI on its own when the time is up, "." from the page inbox switches the chat, AI hands over with a reason from a fixed list.
+
+- Inbox: "AI or team" panel replaces the AI on/off switch (Take over, timer, Back to AI, Claim; shows return time and handover reason).
+- AI handover records a reason and goes through `ConversationModeService`; optional customer notice ("বিষয়টা আমাদের একজন প্রতিনিধি এখনই দেখছেন, একটু অপেক্ষা করুন।"), off by default because the existing tests and earlier design said a handover sends nothing.
+- Staff reply / page-inbox reply: team keeps the chat for the takeover time (was a fixed 24 hours).
+- `crm:revert-conversations` every minute; CRM → AI / Team Activity page with CSV.
+- Settings: takeover minutes, wait before answering, handover notice, neat replies, address style.
+- Neat replies (opt-in) follow AiPraktor's reply layout: labelled lines for price, options in stock, stock, delivery, order link; optional "জ্বি স্যার," opening.
+- Phase 2 (same day, owner: "ওকে পরের কাজ কর"): CRM → Needs attention page (`attention_items`, `AttentionQueueService`, `NeedsAttention`) — one record per AI handover with first-reply time and outcome (answered / given back to the AI / never answered / closed without a reply); setting "Reply target for handed-over chats", default 0 = no target. Only AI handovers go in the queue for now (O3); payment proof, website leads and follow-up events are not added — they need the owner's list. The reply target number (O2) is the owner's to set; business hours are not applied.
+
+- Phase 3 (owner: "পরবর্তি কাজ কর"): CRM → AI Inbox Report (`AiInboxReportService`, `AiInboxReport` page).
+  - It shows the share of chats the AI handled alone, AI and team replies, handovers, takeovers and auto-returns.
+  - It shows average and median first reply, late share, never answered, waiting now, handover reasons, and a by-channel table.
+  - Nothing is stored; the numbers are worked out when the page opens. "Handled by the AI alone" means a chat with customer messages in the period and no switch to the team in the period.
+
+Not done yet (next phases of the plan): Agent Desk with draft/test/publish (4), knowledge base (5), Meta "Seen"/typing indicator, customer product cards/carousel (Messenger templates).
+
+Needs Bangla review: the new Inbox/Activity/settings strings in `lang/bn.json` (51 keys) the Needs attention strings (19 keys) and the AI Inbox Report strings (26 keys) were written by the agent.
+
+Commit status: committed and pushed on branch `feature/ai-inbox-control-plane` (owner approved 2026-10-10: "কমিট এবং পুশ কর ফিচার ব্রাঞ্ছে"). Phases 1-3 are in this one commit. Not merged to `main`; the 8 PayStation/Storefront checkout tests that fail on this working tree belong to other uncommitted work, not to this branch.
+
 ## 2026-10-09 - Lead CRM sales agent: 5 opt-in intelligence upgrades (proactive mode, objection handling, multi-product cart, cross-sell, personalization)
 
 Owner request, across several turns: make the CRM sales agent behave more like an intelligent human sales agent rather than a generic chatbot. I proposed a list of areas to work on; the owner asked for each one in turn ("do the next task on your list"): proactive mode, objection handling, multi-product cart, cross-sell, personalization. All five were implemented, then lost when this session's container was recycled before they were committed (per CLAUDE.md, nothing is committed without explicit approval, and the uncommitted working tree does not survive a container restart). The owner asked to redo them, and the branch was restarted from the then-current `main` (the branch's own earlier PR #7 was closed, not merged, and `main` had advanced ~50 releases past the branch's old base — see Technical Notes).

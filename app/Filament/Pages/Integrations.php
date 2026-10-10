@@ -259,6 +259,8 @@ class Integrations extends Page
             }
             $fill["{$prefix}api_key"] = '';
             $fill["{$prefix}has_api_key"] = filled($ai['api_key']);
+                'takeover_minutes', 'reply_delay_seconds', 'handover_notice_enabled', 'rich_replies_enabled', 'address_style',
+                'response_target_minutes',
             $fill["{$prefix}image_api_key"] = '';
             $fill["{$prefix}image_has_api_key"] = filled($ai['image_api_key']);
             $fill["{$prefix}voice_api_key"] = '';
@@ -484,6 +486,23 @@ class Integrations extends Page
                 $fields[] = TextInput::make($prefix.$key)->label($label)->numeric()->minValue(0)->required();
             }
             $fields[] = Toggle::make("{$prefix}sales_follow_ups_enabled")->label('Enable sales follow-ups')->helperText('One approved-template follow-up per checkout link or sent quotation; stops after reply, purchase, opt-out or handoff.');
+            $fields[] = TextInput::make("{$prefix}takeover_minutes")->label(__('Team time before the chat returns to the AI (minutes)'))
+                ->numeric()->minValue(30)->maxValue(1440)->required()
+                ->helperText(__('Used when someone takes over a chat, answers it, or the AI hands it over. When the time is up the chat goes back to the AI on its own. 360 = 6 hours.'));
+            $fields[] = TextInput::make("{$prefix}response_target_minutes")->label(__('Reply target for handed-over chats (minutes)'))
+                ->numeric()->minValue(0)->maxValue(1440)->required()
+                ->helperText(__('A chat the AI hands to the team should get a first reply from a person within this time. Late chats are marked on the Needs attention page. 0 = no target.'));
+            $fields[] = TextInput::make("{$prefix}reply_delay_seconds")->label(__('Wait before answering (seconds)'))
+                ->numeric()->minValue(0)->maxValue(15)->required()
+                ->helperText(__('The AI waits this long after a message, so two quick messages get one combined answer. 0 answers every message on its own.'));
+            $fields[] = Toggle::make("{$prefix}handover_notice_enabled")->label(__('Tell the customer when a person takes over'))
+                ->helperText(__('When the AI hands a chat to the team it sends one short message saying a colleague is looking into it. It never promises a time.'));
+            $fields[] = Toggle::make("{$prefix}rich_replies_enabled")->label(__('Neatly arranged replies'))
+                ->helperText(__('Product facts go on their own lines with small labels: price, sizes, stock, delivery charge. Off: compact one-line replies.'));
+            $fields[] = Select::make("{$prefix}address_style")->label(__('How the AI addresses the customer in Bangla'))
+                ->options(['none' => __('No title, only "apni"'), 'sir_maam' => __('Sir / Madam'), 'bhaiya_apu' => __('Bhaiya / Apu')])
+                ->required()->native(false)
+                ->helperText(__('The AI picks the title from what the customer wrote or their name. If it cannot tell, it uses no title.'));
             $fields[] = TextInput::make("{$prefix}follow_up_template")->label('Approved WhatsApp follow-up template')->helperText('Template must accept one body parameter: customer name.');
             $fields[] = TextInput::make("{$prefix}follow_up_template_language")->label('Template language')->maxLength(20);
             $fields[] = TextInput::make("{$prefix}confidence_threshold")
@@ -1429,6 +1448,8 @@ class Integrations extends Page
         $this->mount($aiSettings);
 
         Notification::make()
+                        'takeover_minutes', 'reply_delay_seconds', 'handover_notice_enabled', 'rich_replies_enabled', 'address_style',
+                        'response_target_minutes',
             ->title('Integration settings saved')
             ->success()
             ->send();

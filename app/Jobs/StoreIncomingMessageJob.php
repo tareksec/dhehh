@@ -8,6 +8,7 @@ use App\Models\ConversationMessage;
 use App\Models\Customer;
 use App\Models\Lead;
 use App\Services\CompanyContext;
+use App\Services\Crm\ConversationModeService;
 use App\Services\Meta\MetaGraphService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -358,15 +359,20 @@ class StoreIncomingMessageJob implements ShouldQueue
                 'body' => data_get($event, 'message.text'), 'delivery_status' => 'sent',
                 'generated_by' => 'page', 'raw_payload' => $event, 'sent_at' => $sentAt,
             ]);
-            $pauseUntil = $sentAt->copy()->addDay();
-            $updates = [];
             if (! $conversation->last_message_at || $sentAt->greaterThan($conversation->last_message_at)) {
-                $updates['last_message_at'] = $sentAt;
+                $conversation->forceFill(['last_message_at' => $sentAt])->saveQuietly();
             }
-            if ($pauseUntil->isFuture() && (! $conversation->human_handled_until || $pauseUntil->greaterThan($conversation->human_handled_until))) {
-                $updates['human_handled_until'] = $pauseUntil;
+            // A reply typed in the page's own inbox keeps the chat with the
+            // team for the takeover time. A lone "." switches the chat: to
+            // the team, or back to the AI when the team already has it.
+            $modes = app(ConversationModeService::class);
+            if (trim((string) data_get($event, 'message.text')) === '.' && $sentAt->greaterThan(now()->subMinutes(10))) {
+                $conversation->isHumanMode()
+                    ? $modes->toAi($conversation, 'dot_command')
+                    : $modes->toHuman($conversation, 'dot_command');
+            } else {
+                $modes->staffAnswered($conversation, 'page_reply', null, $sentAt);
             }
-            $conversation->forceFill($updates)->saveQuietly();
 
             return $message;
         });
@@ -628,7 +634,7 @@ class StoreIncomingMessageJob implements ShouldQueue
         if ($message->type === 'text'
             && filled($message->body)
             && ! data_get($message->raw_payload, '_local.ai_processed_at')) {
-            AiAutoReplyJob::dispatch($conversation->getKey(), $message->getKey())->delay(now()->addSeconds(3));
+            AiAutoReplyJob::dispatchAfterWait($conversation->getKey(), $message->getKey());
         }
     }
 

@@ -105,7 +105,30 @@ class AiSettingsService
         // and past order line items so the agent can personalize tone
         // ("welcome back") without inventing purchase history.
         'personalization_enabled' => false,
+        // AI inbox control plane (16_AI_INBOX_CONTROL_PLANE_PLAN.md). How
+        // long a chat stays with the team after someone takes it over or the
+        // AI hands it over, before it returns to the AI on its own. 6 hours
+        // is AiPraktor's default for a new page; the owner changes it here.
+        'takeover_minutes' => 360,
+        // Seconds to wait after a customer message before the AI answers, so
+        // two quick messages get one combined reply (0-15).
+        'reply_delay_seconds' => 3,
+        // Off by default: on handover the customer is not told anything. On:
+        // one short "a colleague is looking into this" message is sent.
+        'handover_notice_enabled' => false,
+        // Off by default: compact one-line facts. On: product facts on their
+        // own lines with small labels (price, sizes, stock, delivery).
+        'rich_replies_enabled' => false,
+        // none | sir_maam | bhaiya_apu — how the AI addresses the customer
+        // in Bangla replies.
+        'address_style' => 'none',
+        // Minutes a chat the AI handed over may wait for a person's first
+        // reply before the Needs attention page marks it late. 0 = no
+        // target (nothing is marked late) until the owner sets one.
+        'response_target_minutes' => 0,
     ];
+
+    public const ADDRESS_STYLES = ['none', 'sir_maam', 'bhaiya_apu'];
 
     public function all(Company $company, string $tool): array
     {
@@ -173,6 +196,14 @@ class AiSettingsService
             'objection_handling_enabled' => (bool) ($data['objection_handling_enabled'] ?? $existing['objection_handling_enabled'] ?? false),
             'cross_sell_enabled' => (bool) ($data['cross_sell_enabled'] ?? $existing['cross_sell_enabled'] ?? false),
             'personalization_enabled' => (bool) ($data['personalization_enabled'] ?? $existing['personalization_enabled'] ?? false),
+            'takeover_minutes' => max(30, min(1440, (int) ($data['takeover_minutes'] ?? $existing['takeover_minutes'] ?? self::DEFAULTS['takeover_minutes']))),
+            'reply_delay_seconds' => max(0, min(15, (int) ($data['reply_delay_seconds'] ?? $existing['reply_delay_seconds'] ?? self::DEFAULTS['reply_delay_seconds']))),
+            'handover_notice_enabled' => (bool) ($data['handover_notice_enabled'] ?? $existing['handover_notice_enabled'] ?? false),
+            'rich_replies_enabled' => (bool) ($data['rich_replies_enabled'] ?? $existing['rich_replies_enabled'] ?? false),
+            'address_style' => in_array($data['address_style'] ?? $existing['address_style'] ?? 'none', self::ADDRESS_STYLES, true)
+                ? ($data['address_style'] ?? $existing['address_style'] ?? 'none')
+                : 'none',
+            'response_target_minutes' => max(0, min(1440, (int) ($data['response_target_minutes'] ?? $existing['response_target_minutes'] ?? self::DEFAULTS['response_target_minutes']))),
             'api_key' => filled($data['api_key'] ?? null)
                 ? Crypt::encryptString(trim((string) $data['api_key']))
                 : ($existing['api_key'] ?? null), // keep existing when left blank
