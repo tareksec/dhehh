@@ -4,6 +4,10 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.69.4] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
 ### Changed
 
 - **The SMS gateway moved from Storefront Settings to Settings → Integrations → SMS Gateway.** The URL template, API key and sender ID are now edited there, per site (use the Site picker, like Payment Gateway). Values already saved keep working — nothing needs to be re-entered. Saving Storefront Settings no longer touches the SMS keys.
@@ -11,7 +15,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - SMS keys (`sms_api_url`, `sms_api_key`, `sms_sender_id`; `StorefrontNotificationService::SMS_CREDENTIAL_KEYS`) still live in the encrypted `storefront_settings.notification_credentials`; no migration. `Integrations::save()` merges only these keys into the stored array, and `EditStorefrontSetting::mutateFormDataBeforeSave()` re-adds them so the Storefront Settings form (which no longer has the fields) cannot wipe them. Tests: `IntegrationsPageTest` (+2).
-
 ## [2.69.3] - 2026-10-10
 
 **Release type:** Patch/Fix Update
