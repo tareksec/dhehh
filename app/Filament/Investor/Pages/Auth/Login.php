@@ -152,6 +152,12 @@ class Login extends BaseLogin
         $this->resetErrorBag();
     }
 
+    /** Shown under the company logo so it is clear which sign-in this is. */
+    public function getHeading(): string|Htmlable|null
+    {
+        return __('Investor Dashboard');
+    }
+
     /** No "sign up" link here: sign-up works only through a partner's invite link. */
     public function getSubheading(): string|Htmlable|null
     {

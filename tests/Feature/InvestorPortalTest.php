@@ -435,6 +435,7 @@ class InvestorPortalTest extends TestCase
 
         $this->get('http://investor.forgot.example.test/investor/login')
             ->assertOk()
+            ->assertSee(__('Investor Dashboard'))
             ->assertSee(__('Forgot your password?'))
             ->assertSee('/investor/password-reset/request', false);
     }

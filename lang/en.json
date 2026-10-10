@@ -1683,5 +1683,6 @@
     "This is taking longer than usual. We keep checking automatically.": "This is taking longer than usual. We keep checking automatically.",
     "Nothing to do on your side. Until it is ready, share your store link above; it switches to the new address on its own.": "Nothing to do on your side. Until it is ready, share your store link above; it switches to the new address on its own.",
     "Subdomain set-up time (minutes)": "Subdomain set-up time (minutes)",
-    "After a reseller picks a subdomain, their My Store page counts down this long while the address is set up, and their store link switches to it once it opens over HTTPS (checked automatically) or this time has passed.": "After a reseller picks a subdomain, their My Store page counts down this long while the address is set up, and their store link switches to it once it opens over HTTPS (checked automatically) or this time has passed."
+    "After a reseller picks a subdomain, their My Store page counts down this long while the address is set up, and their store link switches to it once it opens over HTTPS (checked automatically) or this time has passed.": "After a reseller picks a subdomain, their My Store page counts down this long while the address is set up, and their store link switches to it once it opens over HTTPS (checked automatically) or this time has passed.",
+    "Investor Dashboard": "Investor Dashboard"
 }

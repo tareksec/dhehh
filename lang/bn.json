@@ -1683,5 +1683,6 @@
     "This is taking longer than usual. We keep checking automatically.": "স্বাভাবিকের চেয়ে বেশি সময় লাগছে। আমরা নিজে থেকেই বারবার চেক করছি।",
     "Nothing to do on your side. Until it is ready, share your store link above; it switches to the new address on its own.": "আপনাকে কিছু করতে হবে না। তৈরি না হওয়া পর্যন্ত ওপরের স্টোর লিংকটা শেয়ার করুন; ঠিকানা চালু হলে লিংক নিজে থেকেই নতুন ঠিকানায় বদলে যাবে।",
     "Subdomain set-up time (minutes)": "সাব-ডোমেইন সেটআপের সময় (মিনিট)",
-    "After a reseller picks a subdomain, their My Store page counts down this long while the address is set up, and their store link switches to it once it opens over HTTPS (checked automatically) or this time has passed.": "রিসেলার সাব-ডোমেইন বেছে নেওয়ার পর ঠিকানা সেটআপ হওয়ার সময় তাদের My Store পেজে এই সময় ধরে কাউন্টডাউন চলে। ঠিকানা HTTPS-এ খুললে (নিজে থেকে চেক হয়) অথবা এই সময় পার হলে তাদের স্টোর লিংক নতুন ঠিকানায় বদলে যায়।"
+    "After a reseller picks a subdomain, their My Store page counts down this long while the address is set up, and their store link switches to it once it opens over HTTPS (checked automatically) or this time has passed.": "রিসেলার সাব-ডোমেইন বেছে নেওয়ার পর ঠিকানা সেটআপ হওয়ার সময় তাদের My Store পেজে এই সময় ধরে কাউন্টডাউন চলে। ঠিকানা HTTPS-এ খুললে (নিজে থেকে চেক হয়) অথবা এই সময় পার হলে তাদের স্টোর লিংক নতুন ঠিকানায় বদলে যায়।",
+    "Investor Dashboard": "ইনভেস্টর ড্যাশবোর্ড"
 }

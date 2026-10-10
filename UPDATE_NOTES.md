@@ -2,6 +2,12 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-11 - Investor portal: sign-in heading
+
+Owner request (in Bangla): write "Investor Dashboard" under the company logo on the portal login page. `Login::getHeading()` returns it. Needs Bangla review: "ইনভেস্টর ড্যাশবোর্ড".
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-11).
+
 ## 2026-10-10 - Investor portal: staff-set password and forgot-password link
 
 Owner request (in Bangla): a super admin can create a password so the person can sign in to the investor portal, and add Forgot password on the login page. Added **Portal access → Set a portal password** (`InvestorPortalAccountService::setPasswordByStaff`) and the "Forgot your password?" link on the portal login (the reset page itself already existed; the custom login form had dropped Filament's link). Tests added. Needs Bangla review: the 6 new keys (e.g. "Set a portal password").
