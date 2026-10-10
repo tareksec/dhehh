@@ -65,7 +65,7 @@ return Application::configure(basePath: dirname(__DIR__))
             at: env('TRUSTED_PROXIES', '*'),
             headers: SymfonyRequest::HEADER_X_FORWARDED_TRAEFIK,
         );
-        $middleware->validateCsrfTokens(except: ['webhooks/couriers/*', 'webhooks/zinipay/*', 'webhooks/woocommerce/*', 'webhooks/meta', 'webhooks/mobile-crash-reports']);
+        $middleware->validateCsrfTokens(except: ['webhooks/couriers/*', 'webhooks/zinipay/*', 'webhooks/woocommerce/*', 'webhooks/meta', 'webhooks/whatsapp-web/*', 'webhooks/mobile-crash-reports']);
         // Must run before anything else in the group: on a reseller-portal
         // host it redirects every non-portal path to the portal, and on any
         // other host it 404s the portal path -- see 13_RESELLER_PORTAL_PLAN.md

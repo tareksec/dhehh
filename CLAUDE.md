@@ -37,6 +37,10 @@ These rules are mandatory for any AI agent working in this repository.
 - **Price rule (owner decision 2026-10-04):** the server charges variation price → live Collection **deal price** → wholesale **tier price** → selling price. A live deal wins over tiers; a deal not lower than the selling price is ignored; variations never get a product-level deal. The Next.js checkout re-prices every line on the server (`StorefrontCatalogService::unitPrice()`), and the visitor's IP is forwarded as `client_ip` (never the Next.js server's). Admin-entered content (product names, descriptions, banners) is not translated yet — that is `docs/i18n-bangla-english-plan.md` Phase 4, so the Next.js site shows it as entered, with only its interface text in Bangla + English.
 - The Next.js site's colour/fonts come from the ERP (`/site` → `theme`); its brand colour scale is derived from the primary colour. Background/surface/text palette parity with the Blade site is not done yet.
 
+## WhatsApp Web (QR) channel rule
+
+- Any work on WhatsApp channels with `connection_type = 'web'` (the `whatsapp-bridge` service) must follow `docs/whatsapp-web-rules.md`: the archive is never deleted; sending is off by default and only allowed as a staff reply to a customer who messaged first; no bulk, broadcast, follow-up or AI sending; honour opt-out; admin-set rate limits; stop on ban/logout; no SMS fallback.
+
 ## Bilingual (Bangla + English) rule
 
 - Follow `docs/i18n-bangla-english-plan.md` (section 0 applies to every task, not only i18n work).

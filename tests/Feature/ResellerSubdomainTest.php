@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ResellerProduct;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
+use App\Services\ResellerSubdomainProbe;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -203,6 +204,112 @@ class ResellerSubdomainTest extends TestCase
             ->call('save');
 
         $this->assertNull($reseller->fresh()->reseller_subdomain);
+    }
+
+    public function test_a_new_subdomain_counts_down_and_keeps_the_long_link_until_it_is_ready(): void
+    {
+        $company = $this->company('sub-setup.example.test');
+        $company->storefrontSetting->update(['reseller_subdomain_setup_minutes' => 5]);
+        $reseller = $this->reseller($company, null, 'alice-shop');
+        $this->asPortal($company, $reseller);
+        $this->fakeProbe(false);
+
+        Livewire::test(MyStore::class)
+            ->fillForm(['reseller_subdomain' => 'alice'])
+            ->call('save')
+            ->assertSee('Setting up alice.sub-setup.example.test (DNS and SSL)')
+            ->assertSee('Expected to be live in');
+
+        $reseller->refresh();
+        $this->assertNotNull($reseller->reseller_subdomain_changed_at);
+        $this->assertNull($reseller->reseller_subdomain_live_at);
+        $this->assertSame(now()->addMinutes(5)->timestamp, $reseller->resellerSubdomainReadyAt()->timestamp);
+        $this->assertSame('https://sub-setup.example.test/store/alice-shop/products', $reseller->resellerStoreUrl());
+
+        $this->travel(6)->minutes();
+
+        $this->assertSame('https://alice.sub-setup.example.test', $reseller->fresh()->resellerStoreUrl());
+    }
+
+    public function test_the_status_check_marks_the_subdomain_live_once_it_opens(): void
+    {
+        $company = $this->company('sub-probe.example.test');
+        $reseller = $this->reseller($company, null, 'alice-shop');
+        $this->asPortal($company, $reseller);
+        $this->fakeProbe(false);
+
+        $page = Livewire::test(MyStore::class)
+            ->fillForm(['reseller_subdomain' => 'alice'])
+            ->call('save')
+            ->call('checkSubdomain');
+
+        $this->assertNull($reseller->fresh()->reseller_subdomain_live_at);
+
+        $this->fakeProbe(true);
+        $page->call('checkSubdomain')
+            ->assertSee('Your store address alice.sub-probe.example.test is live.')
+            ->assertDontSee('Expected to be live in');
+
+        $this->assertNotNull($reseller->fresh()->reseller_subdomain_live_at);
+        $this->assertSame('https://alice.sub-probe.example.test', $reseller->fresh()->resellerStoreUrl());
+    }
+
+    public function test_changing_a_live_subdomain_starts_the_set_up_again(): void
+    {
+        $company = $this->company('sub-change.example.test');
+        $reseller = $this->reseller($company, 'alice', 'alice-shop');
+        $reseller->forceFill(['reseller_subdomain_changed_at' => now()->subDay(), 'reseller_subdomain_live_at' => now()->subDay()])->save();
+        $this->asPortal($company, $reseller);
+        $this->fakeProbe(false);
+
+        Livewire::test(MyStore::class)->fillForm(['reseller_store_name' => 'Renamed'])->call('save');
+        $this->assertNotNull($reseller->fresh()->reseller_subdomain_live_at);
+
+        Livewire::test(MyStore::class)->fillForm(['reseller_subdomain' => 'alice-two'])->call('save');
+        $reseller->refresh();
+        $this->assertNull($reseller->reseller_subdomain_live_at);
+        $this->assertTrue($reseller->reseller_subdomain_changed_at->isAfter(now()->subMinute()));
+
+        Livewire::test(MyStore::class)->fillForm(['reseller_subdomain' => ''])->call('save');
+        $this->assertNull($reseller->fresh()->reseller_subdomain_changed_at);
+    }
+
+    public function test_a_subdomain_chosen_before_tracking_counts_as_live(): void
+    {
+        $company = $this->company('sub-legacy.example.test');
+        $reseller = $this->reseller($company, 'alice', 'alice-shop');
+        $this->asPortal($company, $reseller);
+
+        $this->assertTrue($reseller->fresh()->resellerSubdomainIsReady());
+        Livewire::test(MyStore::class)->assertSee('Your store address alice.sub-legacy.example.test is live.');
+    }
+
+    public function test_the_tls_ask_endpoint_approves_approved_reseller_subdomains_only(): void
+    {
+        $company = $this->company('sub-ask.example.test');
+        $this->reseller($company, 'alice', 'alice-shop');
+        $this->reseller($company, 'pend', 'pend-shop', 'pending');
+
+        $this->get('http://sub-ask.example.test/internal/tls-ask?domain=alice.sub-ask.example.test')->assertOk();
+        $this->get('http://sub-ask.example.test/internal/tls-ask?domain=pend.sub-ask.example.test')->assertNotFound();
+        $this->get('http://sub-ask.example.test/internal/tls-ask?domain=nobody.sub-ask.example.test')->assertNotFound();
+        $this->get('http://sub-ask.example.test/internal/tls-ask?domain=admin.sub-ask.example.test')->assertNotFound();
+
+        $company->update(['reseller_subdomains_enabled' => false]);
+        $this->get('http://sub-ask.example.test/internal/tls-ask?domain=alice.sub-ask.example.test')->assertNotFound();
+    }
+
+    protected function fakeProbe(bool $live): void
+    {
+        $this->app->instance(ResellerSubdomainProbe::class, new class($live) extends ResellerSubdomainProbe
+        {
+            public function __construct(protected bool $live) {}
+
+            public function isLive(string $host, Company $company): bool
+            {
+                return $this->live;
+            }
+        });
     }
 
     protected function company(string $domain): Company

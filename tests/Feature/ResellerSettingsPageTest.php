@@ -57,6 +57,7 @@ class ResellerSettingsPageTest extends TestCase
                 'reseller_subdomains_enabled' => true,
                 'reseller_custom_domains_enabled' => true,
                 'reseller_portal_domain' => 'HTTPS://Partners.Example.test/',
+                'reseller_subdomain_setup_minutes' => 20,
                 'reseller_cost_per_unit' => 15,
                 'reseller_packaging_cost_per_unit' => 5,
                 'reseller_min_withdrawal' => 300,
@@ -76,6 +77,7 @@ class ResellerSettingsPageTest extends TestCase
         $this->assertSame('5.00', $setting->reseller_packaging_cost_per_unit);
         $this->assertSame('300.00', $setting->reseller_min_withdrawal);
         $this->assertFalse($setting->reseller_program_enabled);
+        $this->assertSame(20, $setting->reseller_subdomain_setup_minutes);
     }
 
     public function test_the_portal_domain_cannot_be_used_by_two_companies(): void
@@ -102,6 +104,7 @@ class ResellerSettingsPageTest extends TestCase
             ->assertFormFieldIsEnabled('reseller_cost_per_unit')
             ->set('data.reseller_module_enabled', true)
             ->set('data.reseller_portal_domain', 'forged.example.test')
+            ->set('data.reseller_subdomain_setup_minutes', 99)
             ->fillForm(['reseller_cost_per_unit' => 12])
             ->call('save')
             ->assertHasNoFormErrors();
@@ -109,6 +112,7 @@ class ResellerSettingsPageTest extends TestCase
         $this->assertFalse($this->company->fresh()->reseller_module_enabled);
         $this->assertNull($this->company->fresh()->reseller_portal_domain);
         $this->assertSame('12.00', $this->company->fresh()->storefrontSetting->reseller_cost_per_unit);
+        $this->assertSame(10, $this->company->fresh()->storefrontSetting->reseller_subdomain_setup_minutes);
     }
 
     public function test_staff_without_settings_permission_cannot_open_the_page(): void

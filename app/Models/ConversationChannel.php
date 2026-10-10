@@ -21,10 +21,25 @@ class ConversationChannel extends Model
     public const CONNECTION_TYPES = [
         'cloud_api' => 'Cloud API (manual)',
         'coexistence' => 'WhatsApp Business App (Coexistence)',
+        'web' => 'WhatsApp Web (QR login archive)',
+    ];
+
+    // Lifecycle reported by the whatsapp-bridge service for 'web' channels.
+    public const WEB_STATUSES = [
+        'pending' => 'Waiting for QR scan',
+        'qr' => 'Scan the QR code',
+        'qr_expired' => 'QR code expired',
+        'connected' => 'Connected',
+        'logged_out' => 'Logged out',
+        'banned' => 'Banned by WhatsApp',
+        'replaced' => 'Opened on another bridge',
+        'error' => 'Bridge error',
     ];
 
     protected $fillable = [
-        'company_id', 'provider', 'connection_type', 'external_id', 'waba_id', 'display_name',
+        'company_id', 'provider', 'connection_type',
+        'web_status', 'web_phone', 'web_connected_at', 'web_disconnected_at', 'web_history_synced_at',
+        'external_id', 'waba_id', 'display_name',
         'access_token', 'app_secret', 'verify_token',
         'auto_create_leads', 'is_active',
         'webhook_verified_at', 'webhook_subscribed_at', 'last_webhook_at',
@@ -50,6 +65,9 @@ class ConversationChannel extends Model
         'last_outbound_at' => 'datetime',
         'last_health_at' => 'datetime',
         'last_error_at' => 'datetime',
+        'web_connected_at' => 'datetime',
+        'web_disconnected_at' => 'datetime',
+        'web_history_synced_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -83,6 +101,12 @@ class ConversationChannel extends Model
     public function isCoexistence(): bool
     {
         return $this->connection_type === 'coexistence';
+    }
+
+    /** Linked by WhatsApp Web QR login: a read-only archive of the phone app's chats. */
+    public function isWeb(): bool
+    {
+        return $this->connection_type === 'web';
     }
 
     public function verifySignature(string $payload, ?string $signatureHeader): bool
@@ -165,6 +189,10 @@ class ConversationChannel extends Model
     {
         if (! $this->is_active) {
             return 'Inactive';
+        }
+
+        if ($this->isWeb()) {
+            return self::WEB_STATUSES[$this->web_status ?? 'pending'] ?? 'Not tested';
         }
 
         if (filled($this->last_error)) {

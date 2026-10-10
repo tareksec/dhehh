@@ -8,6 +8,101 @@ Owner request (in Bangla): a super admin can create a password so the person can
 
 Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-10).
 
+## 2026-10-10 - Reseller portal: profile link in the user menu, subdomain set-up countdown
+
+Owner request (in Bangla, with a screenshot of the portal's user menu): link the profile page from the profile icon; and after a reseller sets a subdomain, DNS and SSL should be created and connected automatically, with a time shown for when the domain will be live.
+
+What changed:
+- The reseller's name at the top of the portal's user menu opens **Profile** (`/portal/profile`).
+- **My Store**: after a reseller saves a new subdomain, a card shows "Setting up <host> (DNS and SSL)" with a live countdown, checks the address every 15 seconds (`ResellerSubdomainProbe`: DNS points at the company domain's server and HTTPS answers with a valid certificate), and shows "Your store address <host> is live." once it opens. If the countdown ends first it says it is taking longer and keeps checking.
+- Until then the reseller's store link (dashboard, share buttons) stays the long `/store/<slug>` link; it switches to the subdomain once the check passes or the set-up time has passed. Subdomains chosen before this change count as live.
+- The countdown length is a Super Admin setting: **Reseller Settings → Subdomain set-up time (minutes)**, default **10** (my estimate; change it to what the server really takes).
+- `/internal/tls-ask` now also says yes to every approved reseller's subdomain, so an on-demand SSL proxy (Caddy) can issue each subdomain's certificate on its first visit without a wildcard certificate or a DNS provider token.
+
+What "automatic" needs on the server (one time, not per reseller; `docs/deployment.md`):
+1. Wildcard DNS `*.<company domain>` → the server (for offer.zamzamint.com that is `*.offer.zamzamint.com`). This one record covers every future subdomain, so no DNS work per reseller.
+2. SSL: either a wildcard certificate in Traefik (needs the DNS provider's API token), or the Caddy on-demand proxy that asks `/internal/tls-ask`.
+3. The app server must be able to reach its own public address (the live check calls the subdomain over HTTPS).
+Creating a separate DNS record per subdomain through a DNS provider's API was not built: the wildcard record makes it unnecessary, and which DNS provider is used is not known.
+
+Needs Bangla review: the 7 new keys ("Your store address :host is live.", "Setting up :host (DNS and SSL)", "Expected to be live in", "This is taking longer than usual. We keep checking automatically.", "Nothing to do on your side. …", "Subdomain set-up time (minutes)", and its helper text).
+
+Tests: `ResellerSubdomainTest` +5 (countdown and long link while pending, live check, change restarts set-up, legacy counts as live, tls-ask for subdomains), `ResellerPortalDashboardTest` +1 (profile link), `ResellerSettingsPageTest` (setting saved by Super Admin only). Full `php artisan test` (plain, no `--env`, after merging main): **2049 passed, 1 skipped, 0 failed** (13 investor-portal tests only failed until `npm run build` refreshed the Vite manifest). `npm run build` OK.
+
+Deploy: `php artisan migrate` (new migration `2026_10_10_100000_add_reseller_subdomain_status`) and `npm run build`.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-10).
+## 2026-10-09 - Fix Connect WhatsApp App (Coexistence) last step
+
+Reason — owner said Coexistence could not be connected from the ERP, so they stopped going that way. I found two code problems and the owner said "ওকে ঠিক করে দেও" (OK, fix them).
+
+What changed:
+- `connect-whats-app-business-app.blade.php`: the popup listener accepted only `https://www.facebook.com`; Meta can answer from `web.facebook.com` (common in Bangladesh) or `m.facebook.com`, so the WABA ID and phone number ID were dropped. It now accepts any https `facebook.com` host. The FB.login callback also waits up to 5 seconds for the popup's FINISH message, which can arrive after the callback.
+- `ConnectWhatsAppBusinessApp::completeEmbeddedSignup()`: stops with a clear, translated message when the code, WABA ID or phone number ID is empty, before exchanging the code or saving a channel (it used to try anyway and fail with an unclear Meta error).
+- 2 lang keys in en/bn ("Could not complete the connection" was previously untranslated, plus the new explanation).
+
+Not verified: a real Meta popup cannot be run from the cloud session; the owner needs to try the connection again. If it still fails, the owner should report which step fails (no Connect button = no Configuration ID; popup error; or ERP error text).
+
+Needs Bangla review: the 2 new keys.
+
+Tests: new `test_missing_waba_or_phone_number_id_stops_before_exchanging_the_code` in `EmbeddedSignupTest`; `EmbeddedSignupTest` + `TranslationParityTest` pass. Full `php artisan test` (plain, no `--env`): 1684 passed, 2 skipped.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`, then merged with main and pushed to `main`, on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-09). The whole branch (WhatsApp Web archive, rules, this fix) goes to main.
+
+## 2026-10-06 - WhatsApp terms quoted word for word in the rules file
+
+Reason — owner asked "সব টার্মস গুলো যুক্ত করেছ?" (did you add all the terms?). I said only a summary of the relevant parts was there, two pages had not been read fully, and offered to quote the relevant clauses word for word. Owner: "১ নম্বরটা কর, তারপর কমিট এবং পুশ কর" (do option 1, then commit and push).
+
+What changed (docs only): `docs/whatsapp-web-rules.md` "What WhatsApp's terms say" now quotes, word for word with links and dates:
+- WhatsApp Terms for WhatsApp Business App (effective 2026-09-23): Restrictions (a)–(h), Compliance (opt-in, opt-out), Acceptable Use (e)–(h), (l), (m), Enforcement, section 12 Termination. (The 2026-10-05 version used a search-result summary because the page URL I had was 404; the right URL was found.)
+- WhatsApp Terms of Service (effective 2021-01-04): Our Terms And Policies, Legal And Acceptable Use, Harm To WhatsApp Or Our Users, termination.
+- WhatsApp Messaging Guidelines (2026-09-23): "… scrape data, or use unofficial clients …".
+- WhatsApp Business Messaging Policy (2026-09-23): opt-in, opt-out, at-scale messaging, permanent prohibition.
+- Help Center "About unofficial apps" is listed as not quoted: its body loads only in a browser and could not be read from the cloud session.
+Every quote fragment (25) was checked by script against the downloaded page text.
+
+New finding for the owner: Business App terms section 12 says that when the terms end the company must "delete any user information Company obtained in breach of these Business App Terms". Archived chats may count as obtained in breach. The file says so; rule 1 (keep the archive) stays because the owner asked for it, and any deletion after a ban is the owner's legal decision.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7` on owner approval ("১ নম্বরটা কর, তারপর কমিট এবং পুশ কর", 2026-10-06), together with the two entries below.
+
+## 2026-10-05 - WhatsApp Web rules + terms check (before ERP sending)
+
+Reason — owner asked whether the ERP can also send text/image/voice/video/files through the WhatsApp Web channel, then said (Bangla) "add the rules first, and first check WhatsApp's terms".
+
+What changed (docs only, no code):
+- New `docs/whatsapp-web-rules.md`: summary of WhatsApp Terms of Service, Business App terms, the unofficial-apps help page and the Business Messaging Policy (checked 2026-10-05, with links), and 9 rules for web channels (permanent archive; sending off by default; reply only to customers who messaged first; no bulk/automation/AI; honour opt-out; one-at-a-time with admin-set limits; stop on ban/logout; save and attribute every sent message; no SMS fallback).
+- `CLAUDE.md`: new "WhatsApp Web (QR) channel rule" section pointing to that file.
+
+Terms finding to tell the owner: linking an unofficial WhatsApp Web client breaks WhatsApp's terms even for read-only use; sending raises the risk. The official no-risk way to send media from the ERP is the Cloud API / Coexistence channel the app already has.
+
+Open owner decisions: build ERP sending on the web channel or not; if yes, the pause and per-minute/per-hour limits (rule 6).
+
+Commit status: committed and pushed on owner approval (2026-10-06), with the entry above.
+
+## 2026-10-05 - WhatsApp Web (QR) login: full chat archive that survives a ban
+
+Reason — owner asked (Bangla): add WhatsApp Web login so all WhatsApp Business app messages load, everything sent in the app so far is saved in the ERP, customer messages are not lost even if the WhatsApp Business number is banned, and all customer info is saved in our database.
+
+What changed:
+- New `whatsapp-bridge/` Node.js service (Baileys 7.0.0-rc14): QR login as a linked device ("Desktop" identity + all history sync types, so WhatsApp sends the full history), archives 1:1 chats only (groups/status/channels skipped), contacts, media, and "delete for everyone" markers. Disk-backed outbox: events are kept until the ERP answers 2xx. Read-only — never sends WhatsApp messages. Dockerfile + README.
+- ERP: new CRM page **WhatsApp Web Login** (super admin; bridge URL + encrypted API key, link device / show QR, status, history progress, chats/messages/contacts saved, log out). Webhook `WhatsAppWebWebhookController` (HMAC-signed, per-channel secret in `app_secret`), jobs `ImportWhatsAppWebMessagesJob` / `SyncWhatsAppWebContactsJob`, `WhatsAppWebArchiveService`, `WhatsAppWebBridgeClient`, `WhatsAppWebSettingsService`, model `WhatsAppContact` (+ isolation test entry), migration (channel web_* columns, `conversation_messages.revoked_at`, `whatsapp_contacts`).
+- Inbox shows **Deleted on WhatsApp** on revoked messages. `ConversationMessengerService` refuses to send on web-archive chats (before creating a message, so no SMS fallback fires) and skips read receipts. Channels list hides Test & Subscribe / Edit for web channels.
+
+My decisions (say if you want different):
+- Read-only archive: replies stay on the phone. Sending through an unofficial WhatsApp Web client raises the ban risk the owner is worried about. Can be added later.
+- History import links chats to existing customers/leads by phone but does **not** create leads (thousands of old chats would flood the lead pipeline); every chat's number is still saved in `whatsapp_contacts`. Live incoming messages from unknown numbers create a lead (channel `auto_create_leads`).
+- Only 1:1 chats; groups are skipped.
+- If the same number is also connected by Coexistence, its chats appear under both channels (separate conversations).
+- Risk to tell the owner: WhatsApp Web automation is unofficial (not a Meta API); WhatsApp may unlink or restrict the number. Data already saved is unaffected.
+
+Deploy needs: a separate bridge app with a persistent volume and `BRIDGE_API_KEY`, a running queue worker, and PHP/web server body limits big enough for media.
+
+Needs Bangla review: 49 new keys in `lang/bn.json` (WhatsApp Web Login page, statuses, Inbox "Deleted on WhatsApp", read-only error).
+
+Tests: new `tests/Feature/WhatsAppWebArchiveTest.php` (12) and `whatsapp-bridge` `npm test` (10) pass. Full `php artisan test` (plain, no `--env`): 1683 passed, 2 skipped. `npm run build` clean. Bridge smoke-started locally (health, session API, outbox persisted events while the ERP was unreachable); a real QR scan could not be tested from the cloud sandbox (no WhatsApp network access).
+
+Commit status: committed and pushed on owner approval (2026-10-06), with the entries above.
+
 ## 2026-10-09 - Investor portal: user menu opens Profile
 
 Owner request (in Bangla): in the investor portal, clicking the profile name in the header's popup should open the Profile page. `InvestorPanelProvider` now gives the `profile` user-menu item the Profile page URL. Test added in `InvestorPortalTest`. No new strings.

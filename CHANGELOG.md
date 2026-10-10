@@ -12,14 +12,56 @@ All notable production changes to Business Dashboard are documented here.
 **Technical Notes:**
 - `InvestorPortalAccountService::setPasswordByStaff()`; link added to `Login::form()`. New tests in `InvestorPortalTest`. 6 new lang keys (en + bn).
 
+## [2.68.0] - 2026-10-10
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **A reseller's new store subdomain sets itself up and shows when it will be live.** After a reseller picks a subdomain on **My Store**, the page shows "Setting up <name>.<domain> (DNS and SSL)" with a countdown, checks every 15 seconds whether the address already opens over HTTPS, and switches to "Your store address … is live." on its own. Nothing to do on the reseller's side and no per-reseller server work: the wildcard DNS record covers every name, and the SSL certificate comes from the wildcard certificate or, new, from an on-demand proxy, because `/internal/tls-ask` now also approves the subdomain of every approved reseller. Until the address is ready the reseller's shared store link stays the long `/store/<slug>` link, so nobody gets a link that does not open yet. The countdown length is **Resellers → Reseller Settings → Subdomain set-up time (minutes)** (Super Admin, default 10).
+- **The name at the top of the reseller portal's user menu now opens the Profile page.**
+
+### Technical Notes
+
+- Subdomain set-up: migration `2026_10_10_100000_add_reseller_subdomain_status` (`customers.reseller_subdomain_changed_at` / `reseller_subdomain_live_at`, `storefront_settings.reseller_subdomain_setup_minutes` default 10). Subdomains chosen before it (no `changed_at`) count as live. `Customer::resellerSubdomainIsReady()` / `resellerSubdomainReadyAt()`; `resellerStoreUrl()` uses the subdomain only once it is ready. New `App\Services\ResellerSubdomainProbe` (DNS points at the company domain's IPs + an HTTPS request that succeeds), polled by `MyStore::checkSubdomain()`. `TlsAskController` also answers 200 for approved resellers' subdomains. Profile link: `ResellerPanelProvider` `userMenuItems(['profile' => ...->url(Profile::getUrl())])`. Tests: `ResellerSubdomainTest` +5, `ResellerPortalDashboardTest` +1, `ResellerSettingsPageTest` updated. 7 new lang keys (en + bn). `docs/deployment.md` updated.
+## [2.67.0] - 2026-10-09
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **WhatsApp Web Login (CRM → WhatsApp Web Login).** Link the WhatsApp Business app to the ERP by scanning a QR code, the same way as WhatsApp Web. Every 1:1 chat the phone shares — the full history and every new message, sent or received — is saved into the CRM Inbox with photos, voice notes, videos and documents, and every WhatsApp contact is saved as a customer record linked to the matching customer or lead by phone. The page shows the connection status, the QR code, history sync progress and how many chats, messages and contacts were saved. In English and Bangla.
+- **Chats and customer info survive a ban.** The archive belongs to the ERP: logging out, deleting the channel or WhatsApp banning the number never deletes saved chats, messages or contacts. A "delete for everyone" on WhatsApp keeps the original message in the ERP and marks it **Deleted on WhatsApp** in the Inbox.
+
+### Fixed
+
+- **Connect WhatsApp App (Coexistence) could fail at the last step.** The page only accepted Meta's popup reply from `www.facebook.com`, so when Facebook opened as `web.facebook.com` (common in Bangladesh) the WhatsApp Business Account ID and phone number ID were lost and the connection failed with an unclear error. Any Facebook address is now accepted, the page waits a few seconds for Meta's reply, and if the IDs still do not arrive it says so clearly instead of trying to connect without them.
+
+### Changed
+
+- WhatsApp Web chats are read-only in the ERP Inbox — reply from the phone app (internal notes still work). The AI auto-reply, read receipts and SMS fallback never run for them.
+
+### Security
+
+- The bridge API key is stored encrypted per company; every webhook from the bridge is HMAC-SHA256 signed with a per-channel secret and rejected otherwise.
+
+### Technical Notes
+
+- **New service to deploy:** `whatsapp-bridge/` (Node.js 20+, Baileys `7.0.0-rc14`, Dockerfile included). It needs `BRIDGE_API_KEY` and a **persistent** `DATA_DIR` volume; run it as its own Coolify app. See `whatsapp-bridge/README.md`. Unofficial WhatsApp Web client — not a Meta API.
+- Migration `2026_10_05_100000_add_whatsapp_web_archive_support`: `conversation_channels.web_status/web_phone/web_connected_at/web_disconnected_at/web_history_synced_at`, `conversation_messages.revoked_at`, new company-owned `whatsapp_contacts` table (channel_id nullOnDelete). `connection_type = 'web'` marks these channels.
+- New routes `POST /webhooks/whatsapp-web/{channel}` and `/media` (CSRF-exempt, throttle 600/min). Messages are archived by queued `ImportWhatsAppWebMessagesJob` / `SyncWhatsAppWebContactsJob` (idempotent on `waweb:{channel}:{id}`), so a queue worker must run. Media uploads need PHP `post_max_size` large enough for the attachments.
+- Rules for WhatsApp Web channels, with the relevant clauses of WhatsApp's Terms of Service, Business App terms, Messaging Guidelines and Business Messaging Policy quoted word for word (checked 2026-10-06), are in `docs/whatsapp-web-rules.md` and referenced from `CLAUDE.md`.
+- New `WhatsAppWebArchiveTest` (12 tests) and bridge unit tests (`npm test` in `whatsapp-bridge/`, 10 tests).
+## [2.66.1] - 2026-10-09
+
+**Release type:** Patch/Fix Update
+
 ### Fixed
 
 - **Investor portal: the profile in the top-right menu now opens the Profile page.** The name at the top of the user menu was plain text; it is now a link to the Profile page.
 
 **Technical Notes:**
 - `InvestorPanelProvider` sets a URL on the `profile` user-menu item. New test `test_the_user_menu_name_links_to_the_profile_page`.
-
-
 ## [2.66.0] - 2026-10-09
 
 **Release type:** Minor Feature Update
@@ -178,6 +220,7 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `Order::showsResellerBranding()` is now simply "the order has a reseller" (`reseller_customer_id` set — portal orders and reseller-store checkouts). New `ResellerCommissionTest::test_an_order_from_the_resellers_store_is_invoiced_in_the_resellers_name` (real checkout on `/store/<slug>`, then print and summary card); `ResellerOwnCourierOrderTest`'s company-invoice test now uses an order without a reseller. No migration, no new lang keys.
+
 ## [2.60.2] - 2026-10-07
 
 **Release type:** Patch/Fix Update

@@ -135,4 +135,25 @@ class EmbeddedSignupTest extends TestCase
 
         $this->assertSame(0, ConversationChannel::withoutGlobalScopes()->where('external_id', '9990001111')->count());
     }
+
+    public function test_missing_waba_or_phone_number_id_stops_before_exchanging_the_code(): void
+    {
+        [$company, $user] = $this->makeCompanyAndUser();
+        $this->actingAs($user)->withSession(['current_company_id' => $company->id]);
+
+        app(EmbeddedSignupSettingsService::class)->save($company, [
+            'app_id' => '123456789', 'config_id' => 'config-abc', 'verify_token' => 'verify-xyz', 'app_secret' => 'app-secret-value',
+        ]);
+
+        Http::fake();
+
+        Livewire::test(ConnectWhatsAppBusinessApp::class)
+            ->call('completeEmbeddedSignup', 'auth-code-1', '', '9990001111')
+            ->assertNotified(__('Could not complete the connection'))
+            ->call('completeEmbeddedSignup', 'auth-code-1', 'waba-1', '  ')
+            ->assertNotified(__('Could not complete the connection'));
+
+        Http::assertNothingSent();
+        $this->assertSame(0, ConversationChannel::withoutGlobalScopes()->count());
+    }
 }

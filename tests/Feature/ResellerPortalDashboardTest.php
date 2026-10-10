@@ -44,6 +44,19 @@ class ResellerPortalDashboardTest extends TestCase
             ->assertSee($reseller->reseller_slug);
     }
 
+    public function test_the_name_in_the_user_menu_opens_the_profile_page(): void
+    {
+        [$company, $reseller] = $this->setUpCompany('menu-profile.example.test');
+        app(CompanyContext::class)->set($company);
+        Filament::setCurrentPanel(Filament::getPanel('reseller'));
+        $this->actingAs($reseller, 'customer');
+
+        $profile = Filament::getCurrentPanel()->getUserMenuItems()['profile'];
+
+        $this->assertSame('Test Shop', $profile->getLabel());
+        $this->assertStringEndsWith('/portal/profile', (string) $profile->getUrl());
+    }
+
     public function test_the_orders_page_only_lists_orders_credited_to_this_reseller(): void
     {
         [$company, $reseller] = $this->setUpCompany('orders-scope.example.test');
