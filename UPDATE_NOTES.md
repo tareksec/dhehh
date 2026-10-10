@@ -2,6 +2,31 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-10 - Reseller portal: profile link in the user menu, subdomain set-up countdown
+
+Owner request (in Bangla, with a screenshot of the portal's user menu): link the profile page from the profile icon; and after a reseller sets a subdomain, DNS and SSL should be created and connected automatically, with a time shown for when the domain will be live.
+
+What changed:
+- The reseller's name at the top of the portal's user menu opens **Profile** (`/portal/profile`).
+- **My Store**: after a reseller saves a new subdomain, a card shows "Setting up <host> (DNS and SSL)" with a live countdown, checks the address every 15 seconds (`ResellerSubdomainProbe`: DNS points at the company domain's server and HTTPS answers with a valid certificate), and shows "Your store address <host> is live." once it opens. If the countdown ends first it says it is taking longer and keeps checking.
+- Until then the reseller's store link (dashboard, share buttons) stays the long `/store/<slug>` link; it switches to the subdomain once the check passes or the set-up time has passed. Subdomains chosen before this change count as live.
+- The countdown length is a Super Admin setting: **Reseller Settings → Subdomain set-up time (minutes)**, default **10** (my estimate; change it to what the server really takes).
+- `/internal/tls-ask` now also says yes to every approved reseller's subdomain, so an on-demand SSL proxy (Caddy) can issue each subdomain's certificate on its first visit without a wildcard certificate or a DNS provider token.
+
+What "automatic" needs on the server (one time, not per reseller; `docs/deployment.md`):
+1. Wildcard DNS `*.<company domain>` → the server (for offer.zamzamint.com that is `*.offer.zamzamint.com`). This one record covers every future subdomain, so no DNS work per reseller.
+2. SSL: either a wildcard certificate in Traefik (needs the DNS provider's API token), or the Caddy on-demand proxy that asks `/internal/tls-ask`.
+3. The app server must be able to reach its own public address (the live check calls the subdomain over HTTPS).
+Creating a separate DNS record per subdomain through a DNS provider's API was not built: the wildcard record makes it unnecessary, and which DNS provider is used is not known.
+
+Needs Bangla review: the 7 new keys ("Your store address :host is live.", "Setting up :host (DNS and SSL)", "Expected to be live in", "This is taking longer than usual. We keep checking automatically.", "Nothing to do on your side. …", "Subdomain set-up time (minutes)", and its helper text).
+
+Tests: `ResellerSubdomainTest` +5 (countdown and long link while pending, live check, change restarts set-up, legacy counts as live, tls-ask for subdomains), `ResellerPortalDashboardTest` +1 (profile link), `ResellerSettingsPageTest` (setting saved by Super Admin only). Full `php artisan test` (plain, no `--env`): **1922 passed, 1 skipped, 0 failed**. `npm run build` OK.
+
+Deploy: `php artisan migrate` (new migration `2026_10_10_100000_add_reseller_subdomain_status`) and `npm run build`.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-10).
+
 ## 2026-10-07 - Reseller-store orders invoiced in the reseller's name too
 
 Owner answer (in Bangla): yes, invoice the reseller-store orders in the reseller's name as well.

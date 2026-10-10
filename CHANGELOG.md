@@ -4,7 +4,12 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Patch
+**Release type:** Minor
+
+### Added
+
+- **A reseller's new store subdomain sets itself up and shows when it will be live.** After a reseller picks a subdomain on **My Store**, the page shows "Setting up <name>.<domain> (DNS and SSL)" with a countdown, checks every 15 seconds whether the address already opens over HTTPS, and switches to "Your store address … is live." on its own. Nothing to do on the reseller's side and no per-reseller server work: the wildcard DNS record covers every name, and the SSL certificate comes from the wildcard certificate or, new, from an on-demand proxy, because `/internal/tls-ask` now also approves the subdomain of every approved reseller. Until the address is ready the reseller's shared store link stays the long `/store/<slug>` link, so nobody gets a link that does not open yet. The countdown length is **Resellers → Reseller Settings → Subdomain set-up time (minutes)** (Super Admin, default 10).
+- **The name at the top of the reseller portal's user menu now opens the Profile page.**
 
 ### Changed
 
@@ -13,6 +18,7 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `Order::showsResellerBranding()` is now simply "the order has a reseller" (`reseller_customer_id` set — portal orders and reseller-store checkouts). New `ResellerCommissionTest::test_an_order_from_the_resellers_store_is_invoiced_in_the_resellers_name` (real checkout on `/store/<slug>`, then print and summary card); `ResellerOwnCourierOrderTest`'s company-invoice test now uses an order without a reseller. No migration, no new lang keys.
+- Subdomain set-up: migration `2026_10_10_100000_add_reseller_subdomain_status` (`customers.reseller_subdomain_changed_at` / `reseller_subdomain_live_at`, `storefront_settings.reseller_subdomain_setup_minutes` default 10). Subdomains chosen before it (no `changed_at`) count as live. `Customer::resellerSubdomainIsReady()` / `resellerSubdomainReadyAt()`; `resellerStoreUrl()` uses the subdomain only once it is ready. New `App\Services\ResellerSubdomainProbe` (DNS points at the company domain's IPs + an HTTPS request that succeeds), polled by `MyStore::checkSubdomain()`. `TlsAskController` also answers 200 for approved resellers' subdomains. Profile link: `ResellerPanelProvider` `userMenuItems(['profile' => ...->url(Profile::getUrl())])`. Tests: `ResellerSubdomainTest` +5, `ResellerPortalDashboardTest` +1, `ResellerSettingsPageTest` updated. 7 new lang keys (en + bn). `docs/deployment.md` updated.
 
 ## [2.60.2] - 2026-10-07
 

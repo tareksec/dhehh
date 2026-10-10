@@ -1053,5 +1053,12 @@
     "Rule": "Rule",
     "Details (optional)": "Details (optional)",
     "What a new reseller reads before applying.": "What a new reseller reads before applying.",
-    "It goes live once the reseller module is on and the company has a domain.": "It goes live once the reseller module is on and the company has a domain."
+    "It goes live once the reseller module is on and the company has a domain.": "It goes live once the reseller module is on and the company has a domain.",
+    "Your store address :host is live.": "Your store address :host is live.",
+    "Setting up :host (DNS and SSL)": "Setting up :host (DNS and SSL)",
+    "Expected to be live in": "Expected to be live in",
+    "This is taking longer than usual. We keep checking automatically.": "This is taking longer than usual. We keep checking automatically.",
+    "Nothing to do on your side. Until it is ready, share your store link above; it switches to the new address on its own.": "Nothing to do on your side. Until it is ready, share your store link above; it switches to the new address on its own.",
+    "Subdomain set-up time (minutes)": "Subdomain set-up time (minutes)",
+    "After a reseller picks a subdomain, their My Store page counts down this long while the address is set up, and their store link switches to it once it opens over HTTPS (checked automatically) or this time has passed.": "After a reseller picks a subdomain, their My Store page counts down this long while the address is set up, and their store link switches to it once it opens over HTTPS (checked automatically) or this time has passed."
 }
