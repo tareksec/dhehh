@@ -2,6 +2,12 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-12 - Investor portal: sign-in logo size
+
+Owner request (in Bangla): the logo on the portal sign-in page became small; make it a standard size. Investor theme CSS (`.fi-simple-layout .fi-logo`, 4rem high). Follow-up (owner): the signed-in header logo was also tiny, so the panel now uses `brandLogoHeight('2.75rem')`. No strings.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-12).
+
 ## 2026-10-11 - Investor portal: sign-in heading
 
 Owner request (in Bangla): write "Investor Dashboard" under the company logo on the portal login page. `Login::getHeading()` returns it. Needs Bangla review: "ইনভেস্টর ড্যাশবোর্ড".
