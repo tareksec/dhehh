@@ -4,13 +4,16 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.69.2] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
 ### Fixed
 
 - **Investor portal sign-in, sign-up and password-reset pages: the company logo is now a standard size** (4rem high) instead of the tiny sidebar size. The logo in the signed-in header is also a standard size now (2.75rem high instead of Filament's tiny 1.5rem).
 
 **Technical Notes:**
 - `brandLogoHeight('2.75rem')` on the investor panel; rule added to `resources/css/filament/investor/theme.css` (`.fi-simple-layout .fi-logo`); `!important` is needed because Filament sets the height inline.
-
 ## [2.69.1] - 2026-10-10
 
 **Release type:** Patch/Fix Update
