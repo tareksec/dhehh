@@ -11,6 +11,10 @@ All notable production changes to Business Dashboard are documented here.
 **Technical Notes:**
 - `Login::getHeading()`; 1 new lang key (en + bn); assertion added to `test_the_login_page_has_a_forgot_password_link`.
 
+## [2.69.0] - 2026-10-10
+
+**Release type:** Minor Feature Update
+
 ### Added
 
 - **Investor portal: staff can set a password.** On an investor's or channel partner's page, **Portal access → Set a portal password** (needs `investments.portal_manage`) opens the portal account if there is none, sets the password and makes it active, so the person can sign in with their phone number and that password at once, without an SMS. Audited as `investor_portal.password_set_by_staff`; not offered for a disabled account.
@@ -18,7 +22,6 @@ All notable production changes to Business Dashboard are documented here.
 
 **Technical Notes:**
 - `InvestorPortalAccountService::setPasswordByStaff()`; link added to `Login::form()`. New tests in `InvestorPortalTest`. 6 new lang keys (en + bn).
-
 ## [2.68.0] - 2026-10-10
 
 **Release type:** Minor Feature Update
