@@ -4,13 +4,16 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.69.3] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
 ### Fixed
 
 - **Create/Edit Order: Total amount and Due amount now include the Shipping Fee as soon as you type it.** Before, the totals only recalculated when the field lost focus, so on a phone (where closing the keyboard leaves the field focused) a typed Shipping Fee of ৳110 never reached the Total amount, which kept showing only the products' ৳200. Shipping Fee, Discount, Vat, Paid amount and each item's Quantity and Unit price now update the totals about half a second after you stop typing.
 
 **Technical Notes:**
 - `OrderForm`: the six totals inputs changed from `live(onBlur: true)` to `live(debounce: OrderForm::TOTALS_DEBOUNCE_MS)` (500 ms). The saved order was never wrong (`OrderWorkflowService::sync()` recomputes it from items + fees after every save); only the on-screen total was stale. New tests in `OrderFormTest`: `test_shipping_fee_is_added_to_the_total_amount_on_the_live_create_form` and `test_inputs_feeding_the_order_totals_recalculate_while_typing_not_only_on_blur`. No migration, no new strings.
-
 ## [2.69.2] - 2026-10-10
 
 **Release type:** Patch/Fix Update
