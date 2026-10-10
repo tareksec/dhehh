@@ -2,6 +2,24 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-10 - Orders: shipping fee now reaches Total amount while typing
+
+Owner report (in Bangla, with a phone screenshot of Create Order): Shipping Fee showed ৳110 but Total amount / Due amount stayed at the products' ৳200 — the shipping amount was not added. Fix it and add a separate test.
+
+Root cause (reproduced in a real mobile Chromium against a scratch SQLite database): `shipping_fee` (and discount, vat, paid_amount, item quantity, item unit price) were `live(onBlur: true)`, so the totals were recalculated only when the field lost focus. On a phone the keyboard is usually closed without a blur, so no request was sent and Total/Due stayed stale. A Livewire test cannot see this because it never blurs a field; the form maths in `setOrderTotals()` was already correct and the saved order was never wrong (`OrderWorkflowService::sync()` recomputes it after every save).
+
+What changed:
+- `OrderForm`: those six inputs are now `live(debounce: OrderForm::TOTALS_DEBOUNCE_MS)` (500 ms), so the totals update about half a second after typing stops, with or without a blur. Applies to Create and Edit Order (same schema).
+- Browser check after the fix: type 110 into Shipping Fee, do nothing else → Total and Due go from ৳200 to ৳310 after ~0.5 s.
+- Tests (`OrderFormTest`): `test_shipping_fee_is_added_to_the_total_amount_on_the_live_create_form` (shipping typed last, typed first, with quantity/discount/vat/paid changes, and the saved order's total/due) and `test_inputs_feeding_the_order_totals_recalculate_while_typing_not_only_on_blur` (fails on the old `live(onBlur: true)`, verified).
+- No new strings (nothing to translate), no migration.
+
+Noticed, not changed: choosing a customer again resets Shipping Fee to the detected zone's fee (৳0 if the address matches no zone), wiping a fee that was typed by hand earlier. That is the existing `setShippingFee()` behaviour; say if it should keep a manual fee.
+
+Verification: `php artisan test tests/Feature/OrderFormTest.php` — 6 passed. Full `php artisan test` (plain, no `--env`) — **2052 passed, 2 skipped, 0 failed** (18698 assertions, ~522 s). Pint passed on the changed PHP files. `npm run build` not needed — no frontend source changed (it was only built locally to run the real-browser check).
+
+Commit status: committed and pushed to the branch `claude/optimistic-knuth-m5okxp` on owner approval ("কমিট ও পুশ কর", 2026-10-10). Not pushed to main.
+
 ## 2026-10-12 - Investor portal: sign-in logo size
 
 Owner request (in Bangla): the logo on the portal sign-in page became small; make it a standard size. Investor theme CSS (`.fi-simple-layout .fi-logo`, 4rem high). Follow-up (owner): the signed-in header logo was also tiny, so the panel now uses `brandLogoHeight('2.75rem')`. No strings.
