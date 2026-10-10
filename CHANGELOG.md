@@ -4,6 +4,14 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Investor portal: staff can set a password.** On an investor's or channel partner's page, **Portal access → Set a portal password** (needs `investments.portal_manage`) opens the portal account if there is none, sets the password and makes it active, so the person can sign in with their phone number and that password at once, without an SMS. Audited as `investor_portal.password_set_by_staff`; not offered for a disabled account.
+- **Investor portal sign-in: "Forgot your password?" link** under the password field, opening the existing SMS-code reset page.
+
+**Technical Notes:**
+- `InvestorPortalAccountService::setPasswordByStaff()`; link added to `Login::form()`. New tests in `InvestorPortalTest`. 6 new lang keys (en + bn).
+
 ### Fixed
 
 - **Investor portal: the profile in the top-right menu now opens the Profile page.** The name at the top of the user menu was plain text; it is now a link to the Profile page.

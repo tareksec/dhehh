@@ -1620,5 +1620,11 @@
     "Try again": "আবার চেষ্টা করুন",
     "Go back": "পেছনে যান",
     "This section is temporarily unavailable": "এই অংশটি সাময়িকভাবে বন্ধ আছে",
-    "Part of its data is not ready yet (an update did not finish). The other sections keep working, so you can carry on with them.": "এর কিছু ডেটা এখনো প্রস্তুত নয় (একটি আপডেট শেষ হয়নি)। অন্য অংশগুলো চালু আছে, সেগুলোতে কাজ চালিয়ে যেতে পারেন।"
+    "Part of its data is not ready yet (an update did not finish). The other sections keep working, so you can carry on with them.": "এর কিছু ডেটা এখনো প্রস্তুত নয় (একটি আপডেট শেষ হয়নি)। অন্য অংশগুলো চালু আছে, সেগুলোতে কাজ চালিয়ে যেতে পারেন।",
+    "Forgot your password?": "পাসওয়ার্ড ভুলে গেছেন?",
+    "Set a portal password": "পোর্টালের পাসওয়ার্ড সেট করুন",
+    "Choose a password for this person. They can sign in to the investor portal with their phone number and this password at once; no SMS is needed. Tell it to them yourself, and ask them to change it from Profile.": "এই ব্যক্তির জন্য একটি পাসওয়ার্ড দিন। তিনি সঙ্গে সঙ্গে ফোন নম্বর ও এই পাসওয়ার্ড দিয়ে ইনভেস্টর পোর্টালে সাইন ইন করতে পারবেন; SMS লাগবে না। পাসওয়ার্ডটি আপনি নিজে তাঁকে জানান এবং প্রোফাইল থেকে বদলে নিতে বলুন।",
+    "Could not set the password": "পাসওয়ার্ড সেট করা যায়নি",
+    "Portal password set": "পোর্টালের পাসওয়ার্ড সেট হয়েছে",
+    "They can sign in with their phone number and this password.": "তিনি ফোন নম্বর ও এই পাসওয়ার্ড দিয়ে সাইন ইন করতে পারবেন।"
 }

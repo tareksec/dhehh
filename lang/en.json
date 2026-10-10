@@ -1620,5 +1620,11 @@
     "Try again": "Try again",
     "Go back": "Go back",
     "This section is temporarily unavailable": "This section is temporarily unavailable",
-    "Part of its data is not ready yet (an update did not finish). The other sections keep working, so you can carry on with them.": "Part of its data is not ready yet (an update did not finish). The other sections keep working, so you can carry on with them."
+    "Part of its data is not ready yet (an update did not finish). The other sections keep working, so you can carry on with them.": "Part of its data is not ready yet (an update did not finish). The other sections keep working, so you can carry on with them.",
+    "Forgot your password?": "Forgot your password?",
+    "Set a portal password": "Set a portal password",
+    "Choose a password for this person. They can sign in to the investor portal with their phone number and this password at once; no SMS is needed. Tell it to them yourself, and ask them to change it from Profile.": "Choose a password for this person. They can sign in to the investor portal with their phone number and this password at once; no SMS is needed. Tell it to them yourself, and ask them to change it from Profile.",
+    "Could not set the password": "Could not set the password",
+    "Portal password set": "Portal password set",
+    "They can sign in with their phone number and this password.": "They can sign in with their phone number and this password."
 }

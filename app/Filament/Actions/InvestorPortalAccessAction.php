@@ -10,8 +10,10 @@ use App\Services\AuditLogService;
 use App\Services\InvestorPortalAccountService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -54,6 +56,38 @@ class InvestorPortalAccessAction
                         ->body(__('Invite link (share it only with this person): :link', ['link' => $link]))
                         ->persistent()
                         ->send();
+                }),
+            Action::make('portalSetPassword')
+                ->label(__('Set a portal password'))
+                ->icon(Heroicon::OutlinedLockClosed)
+                ->visible(fn (Investor|ChannelPartner $record): bool => self::account($record)?->status !== InvestorPortalAccount::STATUS_DISABLED)
+                ->modalDescription(__('Choose a password for this person. They can sign in to the investor portal with their phone number and this password at once; no SMS is needed. Tell it to them yourself, and ask them to change it from Profile.'))
+                ->schema([
+                    TextInput::make('password')
+                        ->label(__('Password'))
+                        ->password()
+                        ->revealable()
+                        ->required()
+                        ->rule(Password::default())
+                        ->confirmed(),
+                    TextInput::make('password_confirmation')
+                        ->label(__('Confirm password'))
+                        ->password()
+                        ->revealable()
+                        ->required(),
+                ])
+                ->action(function (array $data, Investor|ChannelPartner $record): void {
+                    abort_unless(auth()->user()?->hasPermission('investments.portal_manage'), 403);
+
+                    try {
+                        app(InvestorPortalAccountService::class)->setPasswordByStaff($record, (string) $data['password'], auth()->user());
+                    } catch (ValidationException $exception) {
+                        Notification::make()->danger()->title(__('Could not set the password'))->body(collect($exception->errors())->flatten()->first())->send();
+
+                        return;
+                    }
+
+                    Notification::make()->success()->title(__('Portal password set'))->body(__('They can sign in with their phone number and this password.'))->send();
                 }),
             Action::make('portalDisable')
                 ->label(__('Disable portal access'))

@@ -405,6 +405,40 @@ class InvestorPortalTest extends TestCase
         $this->assertSame($this->staff->id, (int) AuditLog::query()->withoutGlobalScopes()->where('action', 'investor_portal.invited')->value('user_id'));
     }
 
+    public function test_staff_set_a_portal_password_and_the_investor_signs_in_with_it(): void
+    {
+        $company = $this->company('setpw.example.test');
+        $investor = $this->investor($company, 'No Sms', '01711000040');
+        app(CompanyContext::class)->set($company);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->actingAs($this->staff);
+
+        Livewire::test(ViewInvestor::class, ['record' => $investor->getKey()])
+            ->callAction('portalSetPassword', ['password' => 'a-strong-password-1', 'password_confirmation' => 'a-strong-password-1'])
+            ->assertHasNoErrors();
+
+        $account = InvestorPortalAccount::query()->withoutGlobalScopes()->where('investor_id', $investor->id)->firstOrFail();
+        $this->assertSame(InvestorPortalAccount::STATUS_ACTIVE, $account->status);
+        $this->assertNotNull(app(InvestorPortalAccountService::class)->attemptPasswordLogin('01711000040', 'a-strong-password-1'));
+        $this->assertSame(1, AuditLog::query()->withoutGlobalScopes()->where('action', 'investor_portal.password_set_by_staff')->count());
+
+        // Not for a disabled account.
+        app(InvestorPortalAccountService::class)->disable($account);
+        Livewire::test(ViewInvestor::class, ['record' => $investor->getKey()])
+            ->assertActionHidden('portalSetPassword');
+    }
+
+    public function test_the_login_page_has_a_forgot_password_link(): void
+    {
+        $company = $this->company('forgot.example.test');
+        $this->onPortal($company);
+
+        $this->get('http://investor.forgot.example.test/investor/login')
+            ->assertOk()
+            ->assertSee(__('Forgot your password?'))
+            ->assertSee('/investor/password-reset/request', false);
+    }
+
     public function test_staff_without_the_portal_permission_cannot_open_the_settings_page(): void
     {
         $company = $this->company('no-permission.example.test');
