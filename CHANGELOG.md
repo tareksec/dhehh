@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.72.0] - 2026-10-11
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -29,7 +31,6 @@ All notable production changes to Business Dashboard are documented here.
 - The Marketplace Pro listing no longer pushes its own robots tag.
 - New `StorefrontSeoTest` (24 tests) and 2 reseller-host tests in `ResellerSubdomainTest`. 2 new lang keys ("Shop products from :name", "Contact us").
 - Not done: `hreflang` (visitors cannot switch language by address yet, so Bangla and English share one address), product and category meta fields in the admin (the title and description come from the product or category itself), and a canonical host for `www` against the bare domain (set a redirect on the web server).
-
 ## [2.71.0] - 2026-10-11
 
 **Release type:** Minor Feature Update
