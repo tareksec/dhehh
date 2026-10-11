@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.71.0] - 2026-10-11
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -24,7 +26,6 @@ All notable production changes to Business Dashboard are documented here.
 - 2 new lang keys in `en.json` and `bn.json`. New `ProductVariantWeightTest` (8 tests).
 - New `App\Support\WooCommerceDescription` converts the WooCommerce description to the HTML the rich editor stores: it removes comments, scripts, styles and `[caption]` wrappers, adds the `<p>` and `<br>` that WordPress only adds on display (`wpautop`), then renders through Filament's `RichContentRenderer` (sanitised). Markup the editor cannot parse falls back to plain text instead of failing the import.
 - `WooCommerceImportService` reads `weight` of each variation (kg, like the product weight; only a value above 0 is set). New `WooCommerceDescriptionTest` (7 tests); `WooCommerceImportTest` now expects the description as HTML and checks the variation weights.
-
 ## [2.70.0] - 2026-10-10
 
 **Release type:** Minor Feature Update
