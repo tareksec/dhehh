@@ -7,10 +7,16 @@
     $cornerRadii = $setting->appearanceCornerRadii();
     $logoUrl = \App\Support\CompanyMedia::publicUrl($setting->logo, $company);
     $logoDarkUrl = \App\Support\CompanyMedia::publicUrl($setting->logo_dark, $company);
-    $title = $setting->meta_title ?: $company->name;
-    $description = $setting->meta_description ?: 'Shop products from '.$company->name;
+    // The controller fills StorefrontSeo with the page's own title, description,
+    // image, indexing and structured data; the site-wide values are the fallback.
+    $seo = \App\Support\StorefrontSeo::current();
+    $siteTitle = $setting->meta_title ?: $company->name;
+    $title = $seo->documentTitle($siteTitle);
+    $description = $seo->description($setting->meta_description ?: __('Shop products from :name', ['name' => $company->name]));
     $bannerImage = \App\Models\StorefrontSlide::forCompany($company->getKey())->first()?->image;
-    $shareImageUrl = \App\Support\CompanyMedia::publicUrl($bannerImage, $company) ?: ($logoUrl ?: null);
+    $shareImageUrl = $seo->image(\App\Support\CompanyMedia::publicUrl($bannerImage, $company) ?: ($logoUrl ?: null));
+    // Staff preview URLs must never compete with the live domain in search results.
+    $robots = isset($previewSlug) ? 'noindex, nofollow' : $seo->robots();
     $previewSlug = $previewSlug ?? null; // isset() stays false when null
     $resellerStoreSlug = \App\Support\StorefrontUrl::currentResellerSlug();
     // Inside a reseller's own store the header carries only that reseller's
@@ -152,14 +158,18 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="{{ $description }}">
-    @if (isset($previewSlug))
-        {{-- Preview URLs (/storefront/{slug}/...) must never compete with the live domain in search results. --}}
-        <meta name="robots" content="noindex, nofollow">
+    @if ($robots !== null)
+        <meta name="robots" content="{{ $robots }}">
+    @else
+        <link rel="canonical" href="{{ $seo->canonicalUrl() }}">
+        <meta property="og:url" content="{{ $seo->canonicalUrl() }}">
     @endif
     @stack('head')
+    <meta property="og:site_name" content="{{ $siteTitle }}">
+    <meta property="og:locale" content="{{ app()->getLocale() === 'bn' ? 'bn_BD' : 'en_US' }}">
     <meta property="og:title" content="{{ $title }}">
     <meta property="og:description" content="{{ $description }}">
-    <meta property="og:type" content="website">
+    <meta property="og:type" content="{{ $seo->ogType() }}">
     @if ($shareImageUrl)
         <meta property="og:image" content="{{ $shareImageUrl }}">
     @endif
@@ -189,6 +199,11 @@
             document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
         })();
     </script>
+    @if ($robots === null)
+        @foreach ($seo->structuredData() as $block)
+            <script type="application/ld+json">{!! json_encode($block, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
+        @endforeach
+    @endif
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @include('storefront.partials.meta-pixel')
     @stack('meta-events')

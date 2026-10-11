@@ -7,6 +7,8 @@ use App\Models\Company;
 use App\Models\StorefrontPage;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
+use App\Support\CompanyMedia;
+use App\Support\StorefrontSeo;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -41,6 +43,14 @@ class PageController extends Controller
             ->where('slug', StorefrontPage::normalizeSlug($slug))
             ->published()
             ->firstOrFail();
+
+        StorefrontSeo::current()
+            ->page(
+                $page->meta_title ?: $page->title,
+                $page->meta_description ?: ($page->excerpt ?: StorefrontSeo::excerpt($page->content)),
+                CompanyMedia::publicUrl($page->cover_image, $company),
+            )
+            ->index();
 
         return StorefrontThemeRegistry::page('pages.show', [
             'company' => $company,

@@ -20,13 +20,6 @@
     $priceValue = fn (?float $price) => $price === null ? '' : rtrim(rtrim(number_format($price, 2, '.', ''), '0'), '.');
 @endphp
 
-@if (! isset($previewSlug) && ($filters->active() || $sort !== '' || request()->integer('page', 1) > 1))
-    {{-- Sorted, filtered and later pages repeat the main listing; keep them out of the index. --}}
-    @push('head')
-        <meta name="robots" content="noindex, follow">
-    @endpush
-@endif
-
 @section('content')
     <div class="mp-shell py-4 sm:py-6" x-data="{ filtersOpen: false }" @keydown.escape.window="filtersOpen = false">
         <nav class="mp-breadcrumb" aria-label="{{ __('Breadcrumb') }}">

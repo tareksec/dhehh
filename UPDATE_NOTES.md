@@ -2,6 +2,32 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-10 - Storefront SEO: page titles, canonical, robots.txt, sitemap and structured data
+
+Reason — the owner said "পরবর্তী কাজ কর" (do the next task) after phase 5 was pushed to `main`. The remaining items were AJAX mini-cart, multi-size images, caching/SEO and Lighthouse CI; SEO was the recommendation. A look at the storefront found that every page, including every product, had the home page's `<title>` and description, and that there was no canonical address, sitemap or structured data.
+
+What changed:
+- **Titles and descriptions:** product (name + start of the description, photo), category (name + description or tagline, photo), listing ("All products", or "Results for ..."), custom page (meta title/description, else title and excerpt), offer (meta title/description, else title and short description), offers list and contact page ("Contact us"). The title reads "page | site title"; the home page keeps the site title.
+- **Indexing:** a page is private unless its controller calls `index()`. Indexed: home, shop, category, product, custom page, offer, offers list, contact. Search results, sorted, filtered and later listing pages and the offers type filter are `noindex, follow` (all themes; Marketplace Pro's own push is gone). Cart, checkout, track, account, complaints and previews are `noindex, nofollow`.
+- **Canonical + Open Graph:** canonical = the page's address without its query string, on the host that was visited. `og:url`, `og:site_name`, `og:locale` (`en_US` / `bn_BD`) and `og:type` (`product` on product pages).
+- **robots.txt:** now a route. A storefront domain disallows `/admin`, `/livewire`, `/cart`, `/checkout`, `/account`, `/track`, `/complaints`, `/store/*/cart`, `/store/*/checkout` and names `Sitemap:`. The app's domain keeps `/admin` and `/livewire`. `public/robots.txt` is deleted and the `location = /robots.txt` block is removed from `nginx.template.conf` (a static file would shadow the route, and that nginx block would turn the missing file into a 404 that crawlers ignore; `SecurityHardeningTest` guards both). **The nginx change takes effect at the next Coolify deploy** (Nixpacks re-renders the template).
+- **sitemap.xml:** home, shop, contact, categories with available products, available products (`lastmod`), published pages (this site), published offer landing pages and the offers list. A reseller's own store (subdomain or custom domain) has no sitemap. Cached 10 minutes with the company's listing-cache generation, so a product or category save refreshes it. More than 45,000 addresses split into `/sitemap-{n}.xml` behind an index.
+- **JSON-LD:** `Product` (name, photos, SKU, brand, `Offer`/`AggregateOffer`, currency, stock) with no price when the product has none; `BreadcrumbList` on product and category pages; `Organization` (name, logo, phone, email, social profiles; WhatsApp links left out) and `WebSite` with the product search on the home page. No `aggregateRating`: the product page shows no reviews and search engines require markup to match what the page shows. A reseller's store gets no price markup (reseller price differs from the company's). `</script>` in a product name cannot break out of the tag.
+- Default meta description is now translated. 2 lang keys: "Shop products from :name" → ":name থেকে পণ্য কিনুন", "Contact us" → "যোগাযোগ করুন".
+
+Needs Bangla review: "Shop products from :name", "Contact us".
+
+Decisions to confirm with the owner:
+- **Reseller stores stay indexable** (as before) with their own canonical address, but are not in the sitemap and publish no price markup. If resellers should not appear in search at all, say so and they become `noindex`.
+- **`hreflang` not added:** Bangla and English share one address (the visitor's language is not in the URL), so there is nothing to point between.
+- **Product/category meta title and description fields** do not exist; the title and description come from the product or category itself. Adding admin fields needs a migration and Filament form changes — only on request.
+- **`www` vs bare domain:** the canonical uses the host the visitor used. If both open the site, set a redirect from one to the other at Coolify/DNS.
+- After deploy, submit `https://<domain>/sitemap.xml` in Google Search Console and check a product with the Rich Results Test.
+
+Verified: `StorefrontSeoTest` (24 tests), 2 new reseller-host tests and the changed `SecurityHardeningTest` pass. Full suite (plain `php artisan test`): 2123 passed, 1 skipped, 0 failed (2097 before this change). Pint is clean on the new files; `routes/web.php` and `SecurityHardeningTest` already failed Pint before this change (not reformatted). No CSS/JS changed, so no `npm run build`.
+
+Commit status: committed and pushed with the owner's approval (2026-10-11: "কমিট এবং পুশ কর এবং মেইন এ পুশ কর").
+
 ## 2026-10-10 - Marketplace Pro phase 5f: order track page
 
 Reason — the owner said "পরবর্তি কাজ কর" (do the next task) after the checkout and success pages. The order track page is the last page of phase 5.

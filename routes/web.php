@@ -50,6 +50,7 @@ use App\Http\Controllers\Storefront\ProductReviewController as StorefrontProduct
 use App\Http\Controllers\Storefront\ProductShowController as StorefrontProductShowController;
 use App\Http\Controllers\Storefront\ResellerController;
 use App\Http\Controllers\Storefront\ResellerStoreController;
+use App\Http\Controllers\Storefront\SeoFilesController;
 use App\Http\Controllers\WhatsAppWebWebhookController;
 use App\Http\Controllers\WooCommerceWebhookController;
 use App\Http\Controllers\ZiniPayWebhookController;
@@ -105,6 +106,14 @@ Route::middleware('throttle:30,1')->group(function (): void {
 Route::middleware(ResolveCompanyFromDomain::class.':optional')
     ->get('/pages/{slug}', [StorefrontPageController::class, 'show'])
     ->name('storefront.pages.show');
+
+// robots.txt and the sitemap answer for whichever domain asks; the app's own
+// domain has no company, so it keeps the admin-only rules and has no sitemap.
+Route::middleware(ResolveCompanyFromDomain::class.':optional')->group(function (): void {
+    Route::get('/robots.txt', [SeoFilesController::class, 'robots'])->name('storefront.robots');
+    Route::get('/sitemap.xml', [SeoFilesController::class, 'sitemap'])->name('storefront.sitemap');
+    Route::get('/sitemap-{page}.xml', [SeoFilesController::class, 'sitemap'])->whereNumber('page')->name('storefront.sitemap.page');
+});
 
 Route::get('/storefront', [StorefrontPreviewController::class, 'home'])
     ->name('storefront.preview.index');

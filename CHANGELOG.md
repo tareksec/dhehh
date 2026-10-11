@@ -4,6 +4,32 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **A title and description for every public page.** Until now every storefront page, including every product, showed the home page's title and description in browser tabs, Google results and link previews. Now a product page reads "Steel Bolt | Your Store" with the start of the product description; a category, a custom page, an offer and the contact page do the same, using the page's own meta title and meta description where the admin entered them. The product and category photo, and the page or offer cover, become the share picture. The home page keeps the site title.
+- **Canonical address on every indexable page.** Each page names its own address without tracking parameters (`?utm_source=...`), so a shared or advertised link does not split the page into duplicates in search results.
+- **`robots.txt` per domain.** A storefront domain now tells crawlers to skip the cart, checkout, account, order tracking and complaint pages, and names its sitemap. The app's own domain keeps the admin-only rules.
+- **`sitemap.xml` per storefront domain.** It lists the home page, the shop, the contact page, categories that have products, available products (with their last-changed date), published pages and published offer landing pages. Draft pages and offers, coming-soon and inactive products and empty categories are not listed. A reseller's own store has no sitemap, because it repeats the company's catalog at other prices. The list is cached for 10 minutes and refreshed when a product or category changes; a catalog over 45,000 addresses is split behind a sitemap index.
+- **Structured data (JSON-LD) so results can show price and stock.** A product page carries the product's name, photos, SKU, brand, price (or the cheapest and dearest variant), currency and stock (in stock, pre-order, out of stock); a product with no price publishes no price. Product and category pages carry a breadcrumb trail. The home page carries the organisation (name, logo, phone, email and the social profiles the admin entered) and the site search. No star rating is published, because the product page shows no reviews. A reseller's own store publishes no price markup.
+- **Share previews know the site.** Pages now send the site name, the page address and the language (`en_US` or `bn_BD`) to Facebook and other link previews, and a product page is typed as a product.
+
+### Changed
+
+- **Only the plain shop, category and offer lists are indexed.** Search results, sorted, filtered and later pages, and the single/combo filter on the offers page tell search engines not to index them (`noindex, follow`) in every theme; before, only Marketplace Pro did this, and search results were not covered.
+- **Private pages are never indexed.** A page is kept out of search results unless its controller says it may be indexed, so the cart, checkout, order tracking, account, complaint and every new page start out private.
+- The default meta description ("Shop products from ...") is now translated.
+
+### Technical Notes
+
+- New `App\Support\StorefrontSeo` (kept on the request, so one request never inherits another's values), `StorefrontSchema` (JSON-LD builders) and `StorefrontSitemap`; new `Storefront\SeoFilesController` for `/robots.txt`, `/sitemap.xml` and `/sitemap-{n}.xml`, behind `ResolveCompanyFromDomain:optional`. The storefront layout prints the tags; `HomeController`, `ProductIndexController`, `ProductShowController`, `PageController`, `OfferController` and `ContactController` fill them in once for every theme.
+- `public/robots.txt` is deleted and the `location = /robots.txt` block is removed from `nginx.template.conf`: the route answers instead. A static file would shadow the route, and that nginx block (no fallback) would turn the missing file into a 404 that crawlers read as "no rules" even though Laravel produced the body. `SecurityHardeningTest` now fails if either comes back. The robots rules for the admin (`/admin`, `/livewire`) are unchanged.
+- `StorefrontListingCache::sitemap()` reuses the per-company generation that product and category saves already bump.
+- The Marketplace Pro listing no longer pushes its own robots tag.
+- New `StorefrontSeoTest` (24 tests) and 2 reseller-host tests in `ResellerSubdomainTest`. 2 new lang keys ("Shop products from :name", "Contact us").
+- Not done: `hreflang` (visitors cannot switch language by address yet, so Bangla and English share one address), product and category meta fields in the admin (the title and description come from the product or category itself), and a canonical host for `www` against the bare domain (set a redirect on the web server).
+
 ## [2.70.0] - 2026-10-10
 
 **Release type:** Minor Feature Update
