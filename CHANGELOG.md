@@ -4,6 +4,27 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Weight field on product variations.** In the product form, under Variations, each variation now has a "Variation weight (kg)" field. Leave it empty and the variation uses the product's weight. A filled weight is used for:
+  - the storefront delivery charge (weight-based) on the Blade checkout, the website checkout and landing-page offers;
+  - the Weight column on the printed invoice and PDF, and the item weight and Total Weight on the order page;
+  - the website API (`variants[].weight_kg` on the product detail).
+- **WooCommerce import keeps the variation weight and the description format.**
+  - A variation's weight comes across with the variation. An empty weight in WooCommerce stays empty, so the variation uses the product weight.
+  - The full description is imported as formatted text instead of plain text: headings, bold and italic, lists, links, tables, images, paragraphs and line breaks appear in the product form's description box and on the storefront as they were on the old site. Scripts and unsupported markup are removed.
+  - Products imported before this change keep their plain-text description until the import is run again (`php artisan woocommerce:import-products {company-slug}`), which also refreshes their prices and weights from WooCommerce.
+
+### Technical Notes
+
+- New migration `2026_10_11_100000_add_weight_kg_to_product_variants` adds nullable `product_variants.weight_kg` (`decimal(8,3)`, same as `products.weight_kg`). Existing variations stay NULL, so nothing changes for them until a weight is entered.
+- New `ProductVariant::effectiveWeightKg()` and `OrderItem::unitWeightKg()` (variation weight, else product weight). `StorefrontDeliveryService::quote()` reads the line's `variant` when present; `OfferCheckoutController` now passes the offer item's variation to it.
+- 2 new lang keys in `en.json` and `bn.json`. New `ProductVariantWeightTest` (8 tests).
+- New `App\Support\WooCommerceDescription` converts the WooCommerce description to the HTML the rich editor stores: it removes comments, scripts, styles and `[caption]` wrappers, adds the `<p>` and `<br>` that WordPress only adds on display (`wpautop`), then renders through Filament's `RichContentRenderer` (sanitised). Markup the editor cannot parse falls back to plain text instead of failing the import.
+- `WooCommerceImportService` reads `weight` of each variation (kg, like the product weight; only a value above 0 is set). New `WooCommerceDescriptionTest` (7 tests); `WooCommerceImportTest` now expects the description as HTML and checks the variation weights.
+
 ## [2.70.0] - 2026-10-10
 
 **Release type:** Minor Feature Update

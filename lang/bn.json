@@ -1863,5 +1863,7 @@
     "Use the {api_key}, {sender_id}, {phone} and {message} placeholders. Leave empty to turn SMS off for this site.": "{api_key}, {sender_id}, {phone} ও {message} প্লেসহোল্ডার ব্যবহার করুন। এই সাইটের SMS বন্ধ রাখতে খালি রাখুন।",
     "SMS API key": "SMS API কী",
     "Stored encrypted.": "এনক্রিপ্ট করে সংরক্ষিত।",
-    "SMS sender ID": "SMS সেন্ডার আইডি"
+    "SMS sender ID": "SMS সেন্ডার আইডি",
+    "Variation weight (kg)": "ভেরিয়েশনের ওজন (কেজি)",
+    "Leave empty to use the product weight.": "খালি রাখলে প্রোডাক্টের ওজন ব্যবহার হবে।"
 }

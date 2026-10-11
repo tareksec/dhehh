@@ -111,7 +111,7 @@
                     @endif
                     <td>{{ $item->product?->name }}</td>
                     @if ($showWeight)
-                        <td class="right">{{ $item->product?->weight_kg ? rtrim(rtrim(number_format((float) $item->product->weight_kg, 3), '0'), '.').' kg' : '—' }}</td>
+                        <td class="right">{{ $item->unitWeightKg() ? rtrim(rtrim(number_format($item->unitWeightKg(), 3), '0'), '.').' kg' : '—' }}</td>
                     @endif
                     <td class="right">{{ $item->quantity }}</td>
                     <td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($buyerView ? $item->buyerUnitPrice() : (float) $item->unit_price) }}</td>

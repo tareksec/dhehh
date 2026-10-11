@@ -1863,5 +1863,7 @@
     "Use the {api_key}, {sender_id}, {phone} and {message} placeholders. Leave empty to turn SMS off for this site.": "Use the {api_key}, {sender_id}, {phone} and {message} placeholders. Leave empty to turn SMS off for this site.",
     "SMS API key": "SMS API key",
     "Stored encrypted.": "Stored encrypted.",
-    "SMS sender ID": "SMS sender ID"
+    "SMS sender ID": "SMS sender ID",
+    "Variation weight (kg)": "Variation weight (kg)",
+    "Leave empty to use the product weight.": "Leave empty to use the product weight."
 }

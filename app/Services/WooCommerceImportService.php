@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\StorefrontSetting;
+use App\Support\WooCommerceDescription;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -116,8 +117,10 @@ class WooCommerceImportService
         $salePrice = $this->toPrice($payload['sale_price'] ?? null) ?? $regularPrice;
 
         // Full description first — the short description alone loses most of
-        // the product information written on the old site.
-        $description = trim(strip_tags((string) (($payload['description'] ?? '') ?: ($payload['short_description'] ?? '')))) ?: null;
+        // the product information written on the old site. Kept as HTML (what
+        // the product form's rich editor stores) so headings, lists, bold,
+        // links, tables and line breaks come across as written.
+        $description = WooCommerceDescription::toHtml((string) (($payload['description'] ?? '') ?: ($payload['short_description'] ?? '')));
 
         $attributes = [
             'name' => $name,
@@ -129,8 +132,8 @@ class WooCommerceImportService
             'category_id' => $this->resolveCategory($payload['categories'] ?? [])?->getKey(),
         ];
 
-        if (is_numeric($payload['weight'] ?? null) && (float) $payload['weight'] > 0) {
-            $attributes['weight_kg'] = (float) $payload['weight'];
+        if (($weight = $this->toWeight($payload['weight'] ?? null)) !== null) {
+            $attributes['weight_kg'] = $weight;
         }
 
         if ($brand = $this->resolveBrand($payload)) {
@@ -279,6 +282,12 @@ class WooCommerceImportService
             'sort_order' => (int) ($variation['menu_order'] ?? $sortOrder) ?: $sortOrder,
         ];
 
+        // WooCommerce sends an empty weight when the variation inherits the
+        // product's — same as an empty weight here, so only a real one is set.
+        if (($weight = $this->toWeight($variation['weight'] ?? null)) !== null) {
+            $attributes['weight_kg'] = $weight;
+        }
+
         if ($variant) {
             $variant->fill($attributes);
         } else {
@@ -380,6 +389,12 @@ class WooCommerceImportService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /** The weight as sent by WooCommerce (kg, like the product weight); null when empty or zero. */
+    protected function toWeight(mixed $value): ?float
+    {
+        return is_numeric($value) && (float) $value > 0 ? (float) $value : null;
     }
 
     protected function toPrice(mixed $value): ?float
