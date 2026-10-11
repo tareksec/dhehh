@@ -28,6 +28,28 @@ Verified: `StorefrontSeoTest` (24 tests), 2 new reseller-host tests and the chan
 
 Commit status: committed and pushed with the owner's approval (2026-10-11: "কমিট এবং পুশ কর এবং মেইন এ পুশ কর").
 
+## 2026-10-11 - Weight field on product variations
+
+Reason — the owner asked (in Bangla) to add a weight field to the variation part of the product form.
+
+What changed:
+- Product form → Variations: each variation has a new "Variation weight (kg)" field (numeric, 0 or more, 3 decimals, `kg` suffix). Empty = use the product's weight.
+- New nullable column `product_variants.weight_kg` (migration `2026_10_11_100000_add_weight_kg_to_product_variants`). Existing variations stay empty, so nothing changes for them.
+- Where the weight is used (variation weight, else product weight): `StorefrontDeliveryService::quote()` (Blade checkout, website checkout API and landing-page offers — `OfferCheckoutController` now passes the offer item's variation), the invoice and PDF weight column, the order page item weight and Total Weight (`OrderItem::unitWeightKg()`), and the website API product detail (`variants[].weight_kg`, documented in `docs/api/storefront-api.md`).
+- Not changed: the reseller order flow has no variations.
+- 2 lang keys in `en.json` and `bn.json`. Needs Bangla review: "Variation weight (kg)" → "ভেরিয়েশনের ওজন (কেজি)", "Leave empty to use the product weight." → "খালি রাখলে প্রোডাক্টের ওজন ব্যবহার হবে।".
+
+Second request the same day — the owner asked that the WooCommerce import bring the variation weight and the full product description "in the exact format" (today the description is plain text), suggesting markdown in the Filament description box:
+- Variation weight: `WooCommerceImportService::importVariation()` now reads the variation's `weight` (kg, same assumption as the product weight; empty or 0 is not set).
+- Description: kept as **HTML**, not markdown. The product form's description box is a rich editor that stores HTML and the storefront renders HTML, so markdown text would show up as literal `**` and `#` signs. New `App\Support\WooCommerceDescription` adds the paragraph and line-break tags WordPress only adds on display, removes scripts/styles/comments/`[caption]`, and passes the result through Filament's sanitising `RichContentRenderer`. Headings, bold/italic, lists, links, tables, images and alignment survive (checked); Bangla text survives.
+- Known limits: images inside a description still point at the old site (not downloaded), so they break if the old site goes away; page-builder shortcodes (Elementor, Divi) other than `[caption]` stay as text, as before; the weight is read as kg without checking the WooCommerce weight unit setting (existing behaviour for the product weight). Already imported products keep their plain-text description until the import is run again (this also refreshes their price and weight).
+
+Verified: new `WooCommerceDescriptionTest` (7 tests); `WooCommerceImportTest` updated (description now HTML, variation weights checked); new `ProductVariantWeightTest` (8 tests: fallback to product weight, form saves the weight, form rejects a negative weight, delivery quote with a mixed cart, order item weight, invoice shows the variation weight, API variants carry the weight).
+
+Commit status:
+
+- Not committed. Commit and push require explicit user approval.
+
 ## 2026-10-10 - Marketplace Pro phase 5f: order track page
 
 Reason — the owner said "পরবর্তি কাজ কর" (do the next task) after the checkout and success pages. The order track page is the last page of phase 5.

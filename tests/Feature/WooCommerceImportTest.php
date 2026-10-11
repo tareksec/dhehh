@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\StorefrontSetting;
+use App\Services\CompanyContext;
 use App\Services\WooCommerceImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -56,7 +57,7 @@ class WooCommerceImportTest extends TestCase
         $this->assertSame(1350.0, (float) $fan->sale_price);
         $this->assertSame(1500.0, (float) $fan->price);
         $this->assertSame(0, (int) $fan->stock);
-        $this->assertSame('A nice fan.', $fan->description);
+        $this->assertSame('<p>A nice fan.</p>', $fan->description);
         $this->assertNotNull(Category::withoutGlobalScopes()->where('name', 'Fans')->where('company_id', $company->getKey())->first());
 
         // Re-running updates instead of duplicating.
@@ -124,6 +125,7 @@ class WooCommerceImportTest extends TestCase
                 'sku' => 'WOO-HOODIE-M',
                 'regular_price' => '900',
                 'sale_price' => '850',
+                'weight' => '2.5',
                 'status' => 'publish',
                 'menu_order' => 0,
                 'attributes' => [['name' => 'Size', 'option' => 'M']],
@@ -134,6 +136,7 @@ class WooCommerceImportTest extends TestCase
                 'sku' => '',
                 'regular_price' => '950',
                 'sale_price' => '',
+                'weight' => '',
                 'status' => 'publish',
                 'menu_order' => 1,
                 'attributes' => [['name' => 'Size', 'option' => 'L']],
@@ -153,7 +156,7 @@ class WooCommerceImportTest extends TestCase
         $this->assertNotNull($product);
         $this->assertTrue((bool) $product->has_variants);
         $this->assertSame(['Size' => ['M', 'L']], $product->variant_attributes);
-        $this->assertSame('Full hoodie description with all the details.', $product->description);
+        $this->assertSame('<p>Full hoodie description with all the details.</p>', $product->description);
         $this->assertSame('ZamZam', $product->brand);
 
         $variants = ProductVariant::withoutGlobalScopes()->where('product_id', $product->getKey())->orderBy('sort_order')->get();
@@ -161,6 +164,8 @@ class WooCommerceImportTest extends TestCase
         $this->assertSame('WOO-HOODIE-M', $variants[0]->sku);
         $this->assertSame(['Size' => 'M'], $variants[0]->options);
         $this->assertSame(850.0, (float) $variants[0]->sale_price);
+        $this->assertSame(2.5, $variants[0]->effectiveWeightKg());
+        $this->assertNull($variants[1]->weight_kg, 'An empty WooCommerce variation weight stays empty (uses the product weight).');
         $this->assertNull($variants[1]->sku);
         $this->assertSame(['Size' => 'L'], $variants[1]->options);
         $this->assertSame(950.0, (float) $variants[1]->sale_price);
@@ -197,7 +202,7 @@ class WooCommerceImportTest extends TestCase
                 ->push($payloadFor('WOO-SPEAKER-B')),
         ]);
         app(WooCommerceImportService::class)->importProducts($companyA, downloadImages: false);
-        app(\App\Services\CompanyContext::class)->clear();
+        app(CompanyContext::class)->clear();
         app(WooCommerceImportService::class)->importProducts($companyB, downloadImages: false);
 
         $categoryA = Category::withoutGlobalScopes()->where('company_id', $companyA->getKey())->where('slug', 'audio')->first();

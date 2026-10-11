@@ -18,6 +18,7 @@ class ProductVariant extends Model
         'cost_price',
         'sale_price',
         'stock',
+        'weight_kg',
         'images',
         'is_active',
         'sort_order',
@@ -28,6 +29,7 @@ class ProductVariant extends Model
         'images' => 'array',
         'cost_price' => 'decimal:2',
         'sale_price' => 'decimal:2',
+        'weight_kg' => 'decimal:3',
         'stock' => 'integer',
         'is_active' => 'boolean',
         'sort_order' => 'integer',
@@ -77,6 +79,17 @@ class ProductVariant extends Model
     public function effectiveCostPrice(): float
     {
         return (float) ($this->cost_price ?? $this->product?->cost_price ?? 0);
+    }
+
+    /**
+     * Effective weight in kg — falls back to the parent product's weight.
+     * Null when neither has a weight.
+     */
+    public function effectiveWeightKg(): ?float
+    {
+        $weight = $this->weight_kg ?? $this->product?->weight_kg;
+
+        return $weight !== null ? (float) $weight : null;
     }
 
     public function syncProductStock(): void

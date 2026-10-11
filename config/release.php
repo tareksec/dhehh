@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'version' => env('APP_VERSION', '2.70.0'),
+    'version' => env('APP_VERSION', '2.71.0'),
 
     /*
     |--------------------------------------------------------------------------
@@ -14,7 +14,7 @@ return [
     */
     'type' => env('APP_RELEASE_TYPE', 'minor'),
 
-    'date' => env('APP_RELEASE_DATE', '2026-10-10'),
+    'date' => env('APP_RELEASE_DATE', '2026-10-11'),
 
     'commit' => env('SOURCE_COMMIT')
         ?: env('COOLIFY_GIT_COMMIT_SHA')

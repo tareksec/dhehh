@@ -179,7 +179,7 @@ class OrderInfolist
                         TextEntry::make('total_weight')
                             ->label('Total Weight')
                             ->state(fn (Order $record): string => number_format(
-                                $record->items->sum(fn (OrderItem $item): float => (int) $item->quantity * (float) ($item->product?->weight_kg ?? 0)),
+                                $record->items->sum(fn (OrderItem $item): float => (int) $item->quantity * ($item->unitWeightKg() ?? 0.0)),
                                 3
                             ).' kg'),
                         TextEntry::make('total_cost')
@@ -217,8 +217,9 @@ class OrderInfolist
                                 TextEntry::make('quantity')
                                     ->badge(),
 
-                                TextEntry::make('product.weight_kg')
+                                TextEntry::make('unit_weight')
                                     ->label('Weight (kg)')
+                                    ->state(fn (OrderItem $record): ?float => $record->unitWeightKg())
                                     ->placeholder('-'),
 
                                 TextEntry::make('unit_price')
