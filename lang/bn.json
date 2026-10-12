@@ -1877,7 +1877,6 @@
     "No description yet.": "এখনও কোনো বিবরণ নেই।",
     "Variations": "ভ্যারিয়েশন",
     "Variation": "ভ্যারিয়েশন",
-    "Variations are sold at their own price, with no reseller price or commission.": "ভ্যারিয়েশনগুলো নিজের দামে বিক্রি হয়; এতে রিসেলারের দাম বা কমিশন নেই।",
     "View in my store": "আমার স্টোরে দেখুন",
     "Good morning": "সুপ্রভাত",
     "Good afternoon": "শুভ অপরাহ্ন",
@@ -1938,5 +1937,19 @@
     "Verify and apply": "যাচাই করে আবেদন করুন",
     "Use a different number": "অন্য নম্বর ব্যবহার করুন",
     "This phone number already belongs to a customer of the store, so it has to be confirmed by SMS first. Please apply here: :url": "এই ফোন নম্বরটি স্টোরের একজন কাস্টমারের, তাই আগে এসএমএসে যাচাই করতে হবে। অনুগ্রহ করে এখানে আবেদন করুন: :url",
-    "This phone number already belongs to a customer of the store. Please contact the store to become a reseller.": "এই ফোন নম্বরটি স্টোরের একজন কাস্টমারের। রিসেলার হতে স্টোরের সঙ্গে যোগাযোগ করুন।"
+    "This phone number already belongs to a customer of the store. Please contact the store to become a reseller.": "এই ফোন নম্বরটি স্টোরের একজন কাস্টমারের। রিসেলার হতে স্টোরের সঙ্গে যোগাযোগ করুন।",
+    "From :amount": ":amount থেকে",
+    "Per variation": "ভেরিয়েশন অনুযায়ী",
+    "Variation prices": "ভেরিয়েশনের দাম",
+    "Variation prices: :name": "ভেরিয়েশনের দাম: :name",
+    "Set the price your customer pays for each variation, never below what you pay the store. Leave a price empty to use the suggested price. A variation without a store price sells at its normal price with no commission.": "প্রতিটি ভেরিয়েশনে আপনার কাস্টমার যে দাম দেবে তা লিখুন; স্টোরকে আপনি যা দেন তার নিচে নয়। দাম ফাঁকা রাখলে প্রস্তাবিত দাম ধরা হবে। স্টোরের দাম নেই এমন ভেরিয়েশন স্বাভাবিক দামে বিক্রি হয়, কোনো কমিশন নেই।",
+    "No store price: sells at :price with no commission.": "স্টোরের দাম নেই: :price দামে বিক্রি হবে, কোনো কমিশন নেই।",
+    "You pay :cost. Suggested price :suggested.": "আপনি দেন :cost। প্রস্তাবিত দাম :suggested।",
+    "Your price for :variation must be at least :amount.": ":variation এর জন্য আপনার দাম কমপক্ষে :amount হতে হবে।",
+    "Variation prices saved.": "ভেরিয়েশনের দাম সংরক্ষণ হয়েছে।",
+    "A variation with a cost is sold at the price you set, and the difference is your commission. A variation without one sells at its normal price with no commission. Set your prices with Variation prices.": "যে ভেরিয়েশনের খরচ আছে তা আপনার ঠিক করা দামে বিক্রি হয় এবং পার্থক্যটুকু আপনার কমিশন। যার খরচ নেই তা স্বাভাবিক দামে বিক্রি হয়, কমিশন নেই। দাম ঠিক করতে ভেরিয়েশনের দাম ব্যবহার করুন।",
+    "Choose an option.": "একটি অপশন বেছে নিন।",
+    "Option": "অপশন",
+    "Reseller price": "রিসেলার প্রাইস",
+    "What a reseller pays for this variation. Resellers set their own customer price at or above it and keep the difference. It is never shown on a reseller's store. Leave empty to sell this variation at its normal price with no reseller commission.": "এই ভেরিয়েশনের জন্য রিসেলারকে যা দিতে হয়। রিসেলাররা এর সমান বা বেশি নিজের কাস্টমার প্রাইস ঠিক করে পার্থক্যটুকু রাখে। রিসেলারের স্টোরে এটি কখনো দেখানো হয় না। ফাঁকা রাখলে ভেরিয়েশনটি স্বাভাবিক দামে বিক্রি হবে, রিসেলার কমিশন থাকবে না।"
 }

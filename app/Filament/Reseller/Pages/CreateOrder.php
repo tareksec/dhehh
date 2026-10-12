@@ -4,6 +4,7 @@ namespace App\Filament\Reseller\Pages;
 
 use App\Filament\Reseller\Concerns\ForApprovedResellers;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\StorefrontPaymentMethod;
 use App\Services\ExternalCourierFraudService;
 use App\Services\ResellerOrderPlacementService;
@@ -70,7 +71,7 @@ class CreateOrder extends Page
     {
         $this->form->fill([
             'delivery_method' => 'store',
-            'items' => [['product_id' => null, 'quantity' => 1, 'price' => null]],
+            'items' => [['product_id' => null, 'variant_id' => null, 'quantity' => 1, 'price' => null]],
         ]);
     }
 
@@ -83,18 +84,24 @@ class CreateOrder extends Page
         $ownCourier = fn (Get $get): bool => $get('delivery_method') === 'own';
         // Own courier and something left to send after the reseller's deposit.
         $mustPay = fn (Get $get): bool => $ownCourier($get) && ($this->summary()['to_send'] ?? 1) > 0;
+        // The variation a line has chosen; null for a product without variations.
+        $lineVariant = fn (Get $get): ?ProductVariant => ($product = $products->get((int) $get('product_id'))) && $product->has_variants
+            ? $product->activeVariants->firstWhere('id', (int) $get('variant_id'))
+            : null;
+        $hasVariants = fn (Get $get): bool => (bool) $products->get((int) $get('product_id'))?->has_variants;
         // Lowest price allowed on a line, or null when the price is fixed.
-        $minPrice = function (Get $get) use ($products, $service, $reseller): ?float {
+        $minPrice = function (Get $get) use ($products, $service, $reseller, $lineVariant, $hasVariants): ?float {
             $product = $products->get((int) $get('product_id'));
 
-            if (! $product) {
+            if (! $product || ($hasVariants($get) && ! $lineVariant($get))) {
                 return null;
             }
 
-            $base = $service->basePrice($reseller, $product);
+            $variant = $lineVariant($get);
+            $base = $service->basePrice($reseller, $product, $variant);
 
             return $get('../../delivery_method') === 'own'
-                ? round($base ?? $product->baseSellingPrice(), 2)
+                ? round($base ?? $service->suggestedPrice($product, $variant), 2)
                 : $base;
         };
 
@@ -204,7 +211,25 @@ class CreateOrder extends Page
                                     ->live()
                                     ->afterStateUpdated(function (Set $set, ?string $state) use ($products, $service, $reseller): void {
                                         $product = $products->get((int) $state);
-                                        $set('price', $product ? $service->defaultPrice($reseller, $product) : null);
+                                        // A product with variations is priced once an option is chosen.
+                                        $set('variant_id', null);
+                                        $set('price', $product && ! $product->has_variants ? $service->defaultPrice($reseller, $product) : null);
+                                    })
+                                    ->columnSpan(3),
+                                Select::make('variant_id')
+                                    ->label(__('Option'))
+                                    ->options(fn (Get $get): array => ($product = $products->get((int) $get('product_id'))) && $product->has_variants
+                                        ? $product->activeVariants->mapWithKeys(fn (ProductVariant $variant): array => [
+                                            $variant->getKey() => ($variant->label() ?: ($variant->sku ?: '#'.$variant->getKey())).' ('.__('Stock').': '.(int) $variant->stock.')',
+                                        ])->all()
+                                        : [])
+                                    ->visible($hasVariants)
+                                    ->required($hasVariants)
+                                    ->live()
+                                    ->afterStateUpdated(function (Set $set, Get $get, ?string $state) use ($products, $service, $reseller): void {
+                                        $product = $products->get((int) $get('product_id'));
+                                        $variant = $product?->activeVariants->firstWhere('id', (int) $state);
+                                        $set('price', $product && $variant ? $service->defaultPrice($reseller, $product, $variant) : null);
                                     })
                                     ->columnSpan(3),
                                 TextInput::make('quantity')
@@ -230,7 +255,7 @@ class CreateOrder extends Page
                                     ->live(onBlur: true)
                                     ->columnSpan(2),
                                 // A photo of the chosen product, so the right one is picked.
-                                Html::make(fn (Get $get): HtmlString => $this->productPreview($products->get((int) $get('product_id'))))
+                                Html::make(fn (Get $get): HtmlString => $this->productPreview($products->get((int) $get('product_id')), $lineVariant($get)))
                                     ->columnSpanFull(),
                             ])
                             ->columns(6),
@@ -238,15 +263,16 @@ class CreateOrder extends Page
             ]);
     }
 
-    protected function productPreview(?Product $product): HtmlString
+    protected function productPreview(?Product $product, ?ProductVariant $variant = null): HtmlString
     {
         if (! $product) {
             return new HtmlString('');
         }
 
-        $path = $product->image ?: Arr::first($product->gallery_images ?? []);
+        // The chosen option's own photo, else the product's.
+        $path = Arr::first($variant?->images ?? []) ?: $product->image ?: Arr::first($product->gallery_images ?? []);
         $url = CompanyMedia::filamentPublicUrl($path, $product);
-        $details = collect([$product->sku, $product->brand])->filter()->implode(' · ');
+        $details = collect([$variant?->label(), $variant?->sku ?: $product->sku, $product->brand])->filter()->implode(' · ');
 
         return new HtmlString(
             '<div class="flex items-center gap-3 text-sm">'

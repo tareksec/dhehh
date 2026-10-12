@@ -138,29 +138,35 @@
                     <tr class="text-gray-500 dark:text-gray-400">
                         <th class="pb-1">{{ __('Variation') }}</th>
                         <th class="pb-1">{{ __('SKU') }}</th>
-                        <th class="pb-1 text-right">{{ __('Price') }}</th>
+                        <th class="pb-1 text-right">{{ __('Suggested price') }}</th>
+                        <th class="pb-1 text-right">{{ __('Your cost') }}</th>
+                        <th class="pb-1 text-right">{{ __('Your price') }}</th>
+                        <th class="pb-1 text-right">{{ __('Commission per unit') }}</th>
                         <th class="pb-1 text-right">{{ __('Stock') }}</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach ($activeVariants as $variant)
+                    @foreach ($variationRows as $row)
                         <tr class="border-t border-gray-100 dark:border-white/10">
                             <td class="py-1.5">
                                 <div class="flex items-center gap-2">
-                                    @foreach (array_slice($variant->images ?? [], 0, 2) as $path)
+                                    @foreach (array_slice($row['variant']->images ?? [], 0, 2) as $path)
                                         <img src="{{ $url($path) }}" alt="" loading="lazy" class="h-10 w-10 rounded object-cover ring-1 ring-gray-950/10 dark:ring-white/10">
                                     @endforeach
-                                    <span>{{ $variant->label() ?: '—' }}</span>
+                                    <span>{{ $row['variant']->label() ?: '—' }}</span>
                                 </div>
                             </td>
-                            <td class="py-1.5">{{ $variant->sku ?: '—' }}</td>
-                            <td class="py-1.5 text-right">{{ $money($variant->effectiveSalePrice()) }}</td>
-                            <td class="py-1.5 text-right">{{ (int) $variant->stock }}</td>
+                            <td class="py-1.5">{{ $row['variant']->sku ?: '—' }}</td>
+                            <td class="py-1.5 text-right">{{ $money($row['suggested']) }}</td>
+                            <td class="py-1.5 text-right">{{ $row['cost'] === null ? '—' : $money($row['cost']) }}</td>
+                            <td class="py-1.5 text-right">{{ $row['price'] === null ? '—' : $money($row['price']) }}</td>
+                            <td class="py-1.5 text-right">{{ $row['commission'] === null ? '—' : $money($row['commission']) }}</td>
+                            <td class="py-1.5 text-right">{{ (int) $row['variant']->stock }}</td>
                         </tr>
                     @endforeach
                 </tbody>
             </table>
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ __('Variations are sold at their own price, with no reseller price or commission.') }}</p>
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ __('A variation with a cost is sold at the price you set, and the difference is your commission. A variation without one sells at its normal price with no commission. Set your prices with Variation prices.') }}</p>
         </div>
     @endif
 

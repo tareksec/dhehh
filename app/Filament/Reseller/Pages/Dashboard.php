@@ -238,7 +238,7 @@ class Dashboard extends Page
         $path = $product ? ($product->image ?: Arr::first($product->gallery_images ?? [])) : null;
 
         return [
-            'name' => $product?->name ?? '—',
+            'name' => $product ? $product->name.($first->variant_label ? ' ('.$first->variant_label.')' : '') : '—',
             'image' => $product ? CompanyMedia::filamentPublicUrl($path, $product) : null,
             'more' => max(0, $order->items->count() - 1),
         ];

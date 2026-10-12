@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Services\ResellerPricing;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -17,6 +18,7 @@ class ProductVariant extends Model
         'options',
         'cost_price',
         'sale_price',
+        'reseller_price',
         'stock',
         'weight_kg',
         'images',
@@ -29,6 +31,7 @@ class ProductVariant extends Model
         'images' => 'array',
         'cost_price' => 'decimal:2',
         'sale_price' => 'decimal:2',
+        'reseller_price' => 'decimal:2',
         'weight_kg' => 'decimal:3',
         'stock' => 'integer',
         'is_active' => 'boolean',
@@ -66,11 +69,31 @@ class ProductVariant extends Model
     }
 
     /**
-     * Effective sale price — falls back to the parent product's price.
+     * Effective sale price — falls back to the parent product's price. A
+     * storefront visitor shopping through a reseller sees that reseller's
+     * price for the variations they sell (see ResellerPricing); everywhere
+     * else — admin, reports, jobs — that is never active.
      */
     public function effectiveSalePrice(): float
     {
+        return app(ResellerPricing::class)->variantPriceFor($this) ?? $this->baseSalePrice();
+    }
+
+    /** The variation's own sale price, ignoring any reseller price. */
+    public function baseSalePrice(): float
+    {
         return (float) ($this->sale_price ?? $this->product?->sale_price ?? 0);
+    }
+
+    /**
+     * What a reseller pays for this variation (the admin's reseller price),
+     * or null when it has none and so is not reseller-priced.
+     */
+    public function resellerCost(): ?float
+    {
+        return $this->reseller_price !== null && (float) $this->reseller_price > 0
+            ? round((float) $this->reseller_price, 2)
+            : null;
     }
 
     /**

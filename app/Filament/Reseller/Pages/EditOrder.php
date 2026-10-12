@@ -6,6 +6,7 @@ use App\Filament\Reseller\Concerns\ForApprovedResellers;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\StorefrontPaymentMethod;
 use App\Services\ResellerOrderPlacementService;
 use App\Services\ResellerOwnCourierService;
@@ -93,6 +94,7 @@ class EditOrder extends Page
             'items' => $order->items->map(fn (OrderItem $item): array => [
                 'item_id' => $item->getKey(),
                 'product_id' => $item->product_id,
+                'variant_id' => $item->product_variant_id,
                 'quantity' => (int) $item->quantity,
                 'price' => $item->buyerUnitPrice(),
             ])->all(),
@@ -119,15 +121,26 @@ class EditOrder extends Page
         ]))->all();
         $paymentMethods = app(ResellerOwnCourierService::class)->paymentMethods($reseller->company)->keyBy('id');
         $existing = fn (Get $get): ?OrderItem => filled($get('item_id')) ? $items->get((int) $get('item_id')) : null;
+        // The variation a new line has chosen; null for a product without variations.
+        $lineVariant = fn (Get $get): ?ProductVariant => ($product = $catalog->get((int) $get('product_id'))) && $product->has_variants
+            ? $product->activeVariants->firstWhere('id', (int) $get('variant_id'))
+            : null;
+        $hasVariants = fn (Get $get): bool => $existing($get) ? $existing($get)->product_variant_id !== null : (bool) $catalog->get((int) $get('product_id'))?->has_variants;
         // Lowest customer price on a line: the store price it was or will be charged at.
-        $minPrice = function (Get $get) use ($existing, $catalog, $service, $reseller): ?float {
+        $minPrice = function (Get $get) use ($existing, $catalog, $service, $reseller, $lineVariant, $hasVariants): ?float {
             if ($item = $existing($get)) {
                 return (float) $item->unit_price;
             }
 
             $product = $catalog->get((int) $get('product_id'));
 
-            return $product ? round($service->basePrice($reseller, $product) ?? $product->baseSellingPrice(), 2) : null;
+            if (! $product || ($hasVariants($get) && ! $lineVariant($get))) {
+                return null;
+            }
+
+            $variant = $lineVariant($get);
+
+            return round($service->basePrice($reseller, $product, $variant) ?? $service->suggestedPrice($product, $variant), 2);
         };
         $owesExtra = fn (): bool => ($this->summary()['to_send'] ?? 0) > 0;
 
@@ -190,7 +203,35 @@ class EditOrder extends Page
                                     ->dehydrated()
                                     ->afterStateUpdated(function (Set $set, ?string $state) use ($catalog, $service, $reseller): void {
                                         $product = $catalog->get((int) $state);
-                                        $set('price', $product ? $service->defaultPrice($reseller, $product) : null);
+                                        // A product with variations is priced once an option is chosen.
+                                        $set('variant_id', null);
+                                        $set('price', $product && ! $product->has_variants ? $service->defaultPrice($reseller, $product) : null);
+                                    })
+                                    ->columnSpan(3),
+                                Select::make('variant_id')
+                                    ->label(__('Option'))
+                                    ->options(function (Get $get) use ($existing, $catalog): array {
+                                        if ($item = $existing($get)) {
+                                            return $item->product_variant_id ? [$item->product_variant_id => $item->variant_label ?: '#'.$item->product_variant_id] : [];
+                                        }
+
+                                        $product = $catalog->get((int) $get('product_id'));
+
+                                        return $product?->has_variants
+                                            ? $product->activeVariants->mapWithKeys(fn (ProductVariant $variant): array => [
+                                                $variant->getKey() => ($variant->label() ?: ($variant->sku ?: '#'.$variant->getKey())).' ('.__('Stock').': '.(int) $variant->stock.')',
+                                            ])->all()
+                                            : [];
+                                    })
+                                    ->visible($hasVariants)
+                                    ->required($hasVariants)
+                                    ->live()
+                                    ->disabled(fn (Get $get): bool => $existing($get) !== null)
+                                    ->dehydrated()
+                                    ->afterStateUpdated(function (Set $set, Get $get, ?string $state) use ($catalog, $service, $reseller): void {
+                                        $product = $catalog->get((int) $get('product_id'));
+                                        $variant = $product?->activeVariants->firstWhere('id', (int) $state);
+                                        $set('price', $product && $variant ? $service->defaultPrice($reseller, $product, $variant) : null);
                                     })
                                     ->columnSpan(3),
                                 TextInput::make('quantity')

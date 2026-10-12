@@ -1877,7 +1877,6 @@
     "No description yet.": "No description yet.",
     "Variations": "Variations",
     "Variation": "Variation",
-    "Variations are sold at their own price, with no reseller price or commission.": "Variations are sold at their own price, with no reseller price or commission.",
     "View in my store": "View in my store",
     "Good morning": "Good morning",
     "Good afternoon": "Good afternoon",
@@ -1938,5 +1937,19 @@
     "Verify and apply": "Verify and apply",
     "Use a different number": "Use a different number",
     "This phone number already belongs to a customer of the store, so it has to be confirmed by SMS first. Please apply here: :url": "This phone number already belongs to a customer of the store, so it has to be confirmed by SMS first. Please apply here: :url",
-    "This phone number already belongs to a customer of the store. Please contact the store to become a reseller.": "This phone number already belongs to a customer of the store. Please contact the store to become a reseller."
+    "This phone number already belongs to a customer of the store. Please contact the store to become a reseller.": "This phone number already belongs to a customer of the store. Please contact the store to become a reseller.",
+    "From :amount": "From :amount",
+    "Per variation": "Per variation",
+    "Variation prices": "Variation prices",
+    "Variation prices: :name": "Variation prices: :name",
+    "Set the price your customer pays for each variation, never below what you pay the store. Leave a price empty to use the suggested price. A variation without a store price sells at its normal price with no commission.": "Set the price your customer pays for each variation, never below what you pay the store. Leave a price empty to use the suggested price. A variation without a store price sells at its normal price with no commission.",
+    "No store price: sells at :price with no commission.": "No store price: sells at :price with no commission.",
+    "You pay :cost. Suggested price :suggested.": "You pay :cost. Suggested price :suggested.",
+    "Your price for :variation must be at least :amount.": "Your price for :variation must be at least :amount.",
+    "Variation prices saved.": "Variation prices saved.",
+    "A variation with a cost is sold at the price you set, and the difference is your commission. A variation without one sells at its normal price with no commission. Set your prices with Variation prices.": "A variation with a cost is sold at the price you set, and the difference is your commission. A variation without one sells at its normal price with no commission. Set your prices with Variation prices.",
+    "Choose an option.": "Choose an option.",
+    "Option": "Option",
+    "Reseller price": "Reseller price",
+    "What a reseller pays for this variation. Resellers set their own customer price at or above it and keep the difference. It is never shown on a reseller's store. Leave empty to sell this variation at its normal price with no reseller commission.": "What a reseller pays for this variation. Resellers set their own customer price at or above it and keep the difference. It is never shown on a reseller's store. Leave empty to sell this variation at its normal price with no reseller commission."
 }

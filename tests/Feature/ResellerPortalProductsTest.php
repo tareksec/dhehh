@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ResellerProduct;
 use App\Services\CompanyContext;
+use App\Support\MoneyFormatter;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -347,7 +348,7 @@ class ResellerPortalProductsTest extends TestCase
             'sku' => Str::upper(Str::random(8)),
             'price' => $sellingPrice,
             'sale_price' => $sellingPrice,
-            'cost_price' => $tierPrice,
+            'cost_price' => $tierPrice ?? 0,
             'stock' => 10,
             'reorder_level' => 1,
             'unit' => 'pcs',
@@ -356,6 +357,145 @@ class ResellerPortalProductsTest extends TestCase
             'status' => Product::STATUS_AVAILABLE,
             'tier_prices' => $tierPrice === null ? [] : [['min_qty' => 1, 'price' => $tierPrice]],
         ]);
+    }
+
+    public function test_a_product_with_variations_is_priced_per_variation_never_below_what_the_reseller_pays(): void
+    {
+        [$company, $reseller] = $this->setUpCompany('products-variations.example.test');
+        [$product, $medium, $large, $extraLarge] = $this->makeVariationProduct($company);
+        $this->asPortal($company, $reseller);
+
+        // Not in the store yet: nothing to price.
+        Livewire::test(Products::class)->assertTableActionHidden('variationPrices', $product);
+
+        ResellerProduct::query()->create(['customer_id' => $reseller->getKey(), 'product_id' => $product->getKey(), 'is_active' => true]);
+        $page = Livewire::test(Products::class);
+
+        // The product row is priced per variation: cost from the lowest store price, no single price.
+        $page->assertTableColumnStateSet('your_cost', 'From '.MoneyFormatter::currency(433, 'BDT'), $product)
+            ->assertTableColumnStateSet('suggested_price', 'From '.MoneyFormatter::currency(691, 'BDT'), $product)
+            ->assertTableColumnStateSet('commission_per_unit', MoneyFormatter::number(212).' – '.MoneyFormatter::currency(258, 'BDT'), $product)
+            ->assertTableActionVisible('variationPrices', $product);
+
+        // A price below what the reseller pays is refused and nothing is saved.
+        $page->callTableAction('variationPrices', $product, data: ['price_'.$medium->getKey() => 400])
+            ->assertHasTableActionErrors();
+        $this->assertNull(ResellerProduct::query()->where('product_id', $product->getKey())->value('variant_prices'));
+
+        // Good prices are saved; a variation without a store price cannot be priced; blank = suggested.
+        Livewire::test(Products::class)->callTableAction('variationPrices', $product, data: [
+            'price_'.$medium->getKey() => 700,
+            'price_'.$large->getKey() => '',
+            'price_'.$extraLarge->getKey() => 999,
+        ]);
+        $saved = ResellerProduct::query()->where('product_id', $product->getKey())->value('variant_prices');
+        $this->assertEquals([$medium->getKey() => 700.0], $saved);
+
+        // The listing now shows the reseller's own commission: M 700-433 = 267, L (suggested 733) 733-521 = 212.
+        Livewire::test(Products::class)
+            ->assertTableColumnStateSet('commission_per_unit', MoneyFormatter::number(212).' – '.MoneyFormatter::currency(267, 'BDT'), $product);
+    }
+
+    public function test_one_resellers_variation_prices_never_reach_another_reseller(): void
+    {
+        [$company, $reseller] = $this->setUpCompany('products-variations-iso.example.test');
+        [$product, $medium] = $this->makeVariationProduct($company);
+        $other = Customer::query()->create([
+            'company_id' => $company->getKey(), 'name' => 'Other Reseller', 'phone' => '01955555555', 'reseller_status' => 'approved',
+            'reseller_slug' => 'other-'.Str::random(5), 'business_name' => 'Other Shop', 'password' => Hash::make('secret-password'), 'is_active' => true,
+        ]);
+        ResellerProduct::query()->create(['customer_id' => $reseller->getKey(), 'product_id' => $product->getKey(), 'is_active' => true, 'variant_prices' => [$medium->getKey() => 777]]);
+        ResellerProduct::query()->create(['customer_id' => $other->getKey(), 'product_id' => $product->getKey(), 'is_active' => true, 'variant_prices' => [$medium->getKey() => 888]]);
+
+        $this->asPortal($company, $reseller);
+        $page = Livewire::test(Products::class)->mountTableAction('viewDetails', $product);
+        $html = $this->detailsHtml($page, $product);
+
+        $this->assertStringContainsString('777', $html);
+        $this->assertStringNotContainsString('888', $html);
+
+        // Saving as the first reseller leaves the other's prices alone.
+        Livewire::test(Products::class)->callTableAction('variationPrices', $product, data: ['price_'.$medium->getKey() => 650]);
+        $this->assertEquals([$medium->getKey() => 650.0], ResellerProduct::query()->where('customer_id', $reseller->getKey())->value('variant_prices'));
+        $this->assertEquals([$medium->getKey() => 888.0], ResellerProduct::query()->where('customer_id', $other->getKey())->value('variant_prices'));
+    }
+
+    public function test_the_details_show_each_variations_cost_price_and_commission_to_its_own_reseller(): void
+    {
+        [$company, $reseller] = $this->setUpCompany('products-variations-details.example.test');
+        [$product, $medium] = $this->makeVariationProduct($company);
+        ResellerProduct::query()->create(['customer_id' => $reseller->getKey(), 'product_id' => $product->getKey(), 'is_active' => true, 'variant_prices' => [$medium->getKey() => 650]]);
+        $this->asPortal($company, $reseller);
+
+        $html = $this->detailsHtml(Livewire::test(Products::class)->mountTableAction('viewDetails', $product), $product);
+
+        $this->assertStringContainsString('Size: M', $html);
+        $this->assertStringContainsString('433', $html);   // what the reseller pays for M
+        $this->assertStringContainsString('650', $html);   // their price for M
+        $this->assertStringContainsString('217', $html);   // commission 650 - 433
+        $this->assertStringContainsString('877', $html);   // XL: normal price, no commission
+        $this->assertStringNotContainsString('300', $html); // the company's purchase cost is never printed
+    }
+
+    public function test_the_bulk_percent_prices_every_priced_variation_of_products_in_the_store(): void
+    {
+        [$company, $reseller] = $this->setUpCompany('products-variations-bulk.example.test');
+        [$inStore, $medium, $large, $extraLarge] = $this->makeVariationProduct($company);
+        [$notInStore] = $this->makeVariationProduct($company, 'Not In Store Shirt');
+        ResellerProduct::query()->create(['customer_id' => $reseller->getKey(), 'product_id' => $inStore->getKey(), 'is_active' => true]);
+        $this->asPortal($company, $reseller);
+
+        Livewire::test(Products::class)
+            ->callTableBulkAction('setPriceFromSuggested', [$inStore, $notInStore], data: ['percent' => 10]);
+
+        // 691 +10% = 760.10, 733 +10% = 806.30; XL has no store price so it is left out.
+        $this->assertEquals(
+            [$medium->getKey() => 760.1, $large->getKey() => 806.3],
+            ResellerProduct::query()->where('product_id', $inStore->getKey())->value('variant_prices'),
+        );
+        $this->assertDatabaseMissing('reseller_products', ['customer_id' => $reseller->getKey(), 'product_id' => $notInStore->getKey()]);
+
+        // A big cut never goes below the store price: 691 -90% would be 69.10, so M stays at 433.
+        Livewire::test(Products::class)
+            ->callTableBulkAction('setPriceFromSuggested', [$inStore], data: ['percent' => -90]);
+        $this->assertEquals(
+            [$medium->getKey() => 433.0, $large->getKey() => 521.0],
+            ResellerProduct::query()->where('product_id', $inStore->getKey())->value('variant_prices'),
+        );
+    }
+
+    public function test_the_no_wholesale_rate_filter_follows_the_variations_store_prices(): void
+    {
+        [$company, $reseller] = $this->setUpCompany('products-variations-filter.example.test');
+        [$priced] = $this->makeVariationProduct($company, 'Priced Shirt');
+        [$unpriced] = $this->makeVariationProduct($company, 'Unpriced Shirt');
+        $unpriced->variants()->update(['reseller_price' => null]);
+        $plain = $this->makeProduct($company, 'Plain With Rate');
+        $noRate = $this->makeProduct($company, 'Plain Without Rate', tierPrice: null);
+        $this->asPortal($company, $reseller);
+
+        Livewire::test(Products::class)
+            ->filterTable('no_wholesale_rate', true)
+            ->assertCanSeeTableRecords([$unpriced, $noRate])
+            ->assertCanNotSeeTableRecords([$priced, $plain]);
+    }
+
+    /**
+     * A product with three variations: M and L have a store (reseller) price,
+     * XL has none. Distinctive numbers so any leak shows up in HTML.
+     *
+     * @return array{0: Product, 1: ProductVariant, 2: ProductVariant, 3: ProductVariant}
+     */
+    protected function makeVariationProduct(Company $company, string $name = 'Polo Shirt'): array
+    {
+        $product = $this->makeProduct($company, $name, tierPrice: null, sellingPrice: 650);
+        $product->forceFill(['has_variants' => true, 'cost_price' => 300])->save();
+        $make = fn (string $size, float $sale, ?float $reseller): ProductVariant => ProductVariant::query()->create([
+            'company_id' => $company->getKey(), 'product_id' => $product->getKey(), 'sku' => Str::upper(Str::random(6)),
+            'options' => ['Size' => $size], 'sale_price' => $sale, 'cost_price' => 300, 'reseller_price' => $reseller, 'stock' => 5, 'is_active' => true,
+        ]);
+
+        return [$product->fresh(), $make('M', 691, 433), $make('L', 733, 521), $make('XL', 877, null)];
     }
 
     /** The details slide-over's content for $product, as the mounted page builds it. */

@@ -6,6 +6,7 @@ use App\Filament\Concerns\OptimizesUploadedImages;
 use App\Filament\Concerns\SelectableFromMediaHub;
 use App\Filament\Forms\Components\AttachedVideoPreview;
 use App\Filament\Resources\Categories\Schemas\CategoryForm;
+use App\Filament\Resources\Resellers\ResellerResource;
 use App\Models\Category;
 use App\Models\Product;
 use App\Support\CompanyMedia;
@@ -283,6 +284,13 @@ class ProductForm
                                     ->numeric()
                                     ->prefix('৳')
                                     ->minValue(0),
+                                TextInput::make('reseller_price')
+                                    ->label(__('Reseller price'))
+                                    ->numeric()
+                                    ->prefix('৳')
+                                    ->minValue(0)
+                                    ->visible(fn (): bool => ResellerResource::resellerModuleEnabledForCurrentContext())
+                                    ->helperText(__('What a reseller pays for this variation. Resellers set their own customer price at or above it and keep the difference. It is never shown on a reseller\'s store. Leave empty to sell this variation at its normal price with no reseller commission.')),
                                 TextInput::make('stock')
                                     ->label('Stock')
                                     ->integer()

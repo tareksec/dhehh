@@ -2,6 +2,29 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-12 - Reseller program: products with variations (owner decision 1)
+
+Owner decision (asked one by one, in Bangla): for variations the admin sets the price the reseller pays; the reseller can change their own customer price; the wholesale price never shows on a reseller storefront; the portal can order variations.
+
+What changed:
+1. **Admin → Products → Variations**: a new **Reseller price** field on each variation (only shown when the reseller module is on). It is exactly what the reseller pays. Empty = the variation sells at its normal price with no reseller commission (as before).
+2. **Reseller portal → Products**: a product with variations shows "From ৳X" for cost / suggested price and a commission range; the **Variation prices** action sets the customer price per variation (never below the reseller price; blank = the suggested price); the bulk "Set price = suggested + %" works per variation; the details slide-over lists cost, price and commission per variation. The "No wholesale rate" filter now follows the variations' reseller prices.
+3. **Reseller's store**: each variation shows the reseller's price; the cart / checkout charge it and record the commission (customer price − reseller price). The reseller price is not output on the store at all (tested, including the page's hidden JSON).
+4. **Reseller portal → Create order / Change order**: products with variations can be ordered. Each line has an **Option** picker; stock is the variation's own; the same rules as ordinary products (price at least the reseller price, one line per option, own-courier orders charge the reseller price + packaging with no commission, adding a variation to an own-courier order asks only for the extra). Recent orders on the dashboard show the option.
+
+Deploy: `php artisan migrate` (`2026_10_12_120000_add_reseller_prices_to_variants`: two nullable columns). `npm run build` is not needed for this step.
+
+**Please confirm (readings of the owner's words):**
+- **"Exactly that price"**: I did **not** add the company-wide "Reseller cost per unit" to a variation's reseller price (ordinary products still add it to the wholesale tier). If the per-unit cost should also apply to variations, say so — it is one line.
+- A variation **without** a reseller price can still be ordered in the portal and sold on the store at its normal price, with no commission (like a product without a wholesale rate). If such variations should instead be hidden from resellers, say so.
+- The older storefront account page for resellers (`/account/reseller`, before the portal) still prices only ordinary products; the portal is the place for variations.
+
+Needs Bangla review (new keys): Reseller price (রিসেলার প্রাইস) and its long helper text, Variation prices, Per variation, the two long sentences in the Variation prices modal and the details note.
+
+Tests: `ResellerVariationPricingTest` (8): the price rules (chosen / normal / none, never below cost, no per-unit cost added), no change outside a reseller session, another reseller's or company's data never used, the storefront shows the reseller's prices and never the reseller price (in the HTML and the JSON), an order through the reseller store records price / base / commission, the plain store records none, staff set and keep the reseller price. `ResellerVariationOrderTest` (14): the portal order with commission, option required and valid, price floor, the variation's own stock (and pre-order), duplicates, catalog rules, outside-store products refused, another reseller's price ignored, the option picker and pricing in the form, own-courier orders, the buyer-facing price, adding a variation to an own-courier order, stock and duplicates on edit. `ResellerPortalProductsTest` +5: per-variation prices and the floor, isolation, details, bulk %, the filter. Full suite (plain `php artisan test`, no `--env`) after all five items: **2229 passed, 1 skipped, 0 failed** (540 s).
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Not on `main`: the owner checks first.
+
 ## 2026-10-12 - Reseller application: SMS code proves ownership of an existing number (owner decision 5) — also a security fix
 
 Owner decision (asked one by one, in Bangla): applying with a phone number that already belongs to a customer must prove the number with an SMS code before the old record is used.
@@ -60,7 +83,7 @@ Decision I had to make (not from the owner — please confirm): **a deduction la
 
 Needs Bangla review (new keys): Returned (order cancelled) (ফেরত (অর্ডার বাতিল)), Adjusted by staff (স্টাফ সমন্বয় করেছেন), Done by (যিনি করেছেন), Sent above an order total (অর্ডারের মোটের বেশি পাঠানো), Reason / note (কারণ / নোট), Deposit entry / Deposit entries (জমার এন্ট্রি), and the two modal headings.
 
-Tests: new `ResellerDepositAdminTest` (13): reason / staff member / positive entry, deduct and empty, over-deduction refused and nothing changes, reason / amount / direction required, audit log row with the staff member, the page lists every entry with type / reason / who, add + deduct from the page and the reason is mandatory, over-deduction from the page notifies and changes nothing, another company's resellers and entries are never listed or adjustable, only approved resellers, view-only staff do not get the buttons, the Resellers list and page show the deposit. Full suite is run once at the end of the batch (see the last entry).
+Tests: new `ResellerDepositAdminTest` (13): reason / staff member / positive entry, deduct and empty, over-deduction refused and nothing changes, reason / amount / direction required, audit log row with the staff member, the page lists every entry with type / reason / who, add + deduct from the page and the reason is mandatory, over-deduction from the page notifies and changes nothing, another company's resellers and entries are never listed or adjustable, only approved resellers, view-only staff do not get the buttons, the Resellers list and page show the deposit. Full suite (plain `php artisan test`, no `--env`) after all five items: **2229 passed, 1 skipped, 0 failed** (540 s).
 
 Note: while writing this I ran `php artisan migrate` once by mistake on the local development SQLite file (not the test database): it only added this one column, no data was touched. Tests use their own in-memory database.
 
@@ -84,7 +107,7 @@ Questions for the owner:
 - If the reseller already **sent money to the store** for a cancelled order, who refunds it, and how? Today staff would use the new deposit adjustment page (next item) to add it to the deposit, or pay it back outside the system.
 - Should **Returned** and **Refunded** orders also give the deposit part back? (Only Cancelled does now.)
 
-Tests: 5 new in `ResellerOwnCourierOrderTest` (36 in the file, all passing): deposit part only, once only however often saved, not cancelled / nothing from the deposit, another reseller's deposit untouched, staff see the returned amount. Full suite is run once at the end of the batch (see the last entry).
+Tests: 5 new in `ResellerOwnCourierOrderTest` (36 in the file, all passing): deposit part only, once only however often saved, not cancelled / nothing from the deposit, another reseller's deposit untouched, staff see the returned amount. Full suite (plain `php artisan test`, no `--env`) after all five items: **2229 passed, 1 skipped, 0 failed** (540 s).
 
 Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval ("এরপর শেষের কাজ গুলো একে একে শেষ করে ফেল ... তোমার কাজের ব্রাঞ্ছে কমিট এবং পুশ করবে", 2026-10-12). Not on `main`: the owner checks first.
 

@@ -5,6 +5,7 @@ namespace App\Filament\Reseller\Pages;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\ResellerProduct;
 use App\Services\CompanyContext;
 use App\Services\ResellerPricing;
@@ -60,7 +61,7 @@ class Products extends Page implements HasTable
         return __('Products');
     }
 
-    /** @var array<int, array{is_active: bool, price: ?float}> */
+    /** @var array<int, array{is_active: bool, price: ?float, variant_prices: array<int, float>}> */
     public array $picks = [];
 
     public static function canAccess(array $parameters = []): bool
@@ -105,11 +106,15 @@ class Products extends Page implements HasTable
     {
         $this->picks = ResellerProduct::query()
             ->where('customer_id', $this->reseller()->getKey())
-            ->get(['product_id', 'is_active', 'price'])
+            ->get(['product_id', 'is_active', 'price', 'variant_prices'])
             ->mapWithKeys(fn (ResellerProduct $row): array => [
                 (int) $row->product_id => [
                     'is_active' => (bool) $row->is_active,
                     'price' => $row->price === null ? null : (float) $row->price,
+                    'variant_prices' => collect($row->variant_prices ?? [])
+                        ->filter(fn ($price): bool => is_numeric($price))
+                        ->mapWithKeys(fn ($price, $variantId): array => [(int) $variantId => (float) $price])
+                        ->all(),
                 ],
             ])
             ->all();
@@ -154,32 +159,60 @@ class Products extends Page implements HasTable
 
                 TextColumn::make('suggested_price')
                     ->label(__('Suggested price'))
-                    ->state(fn (Product $record): string => MoneyFormatter::currency($record->baseSellingPrice(), $currency)),
+                    ->state(function (Product $record) use ($currency): string {
+                        if ($record->has_variants && ($rows = $this->variationRows($record)) !== []) {
+                            return __('From :amount', ['amount' => MoneyFormatter::currency(min(array_column($rows, 'suggested')), $currency)]);
+                        }
+
+                        return MoneyFormatter::currency($record->baseSellingPrice(), $currency);
+                    }),
 
                 TextColumn::make('your_cost')
                     ->label(__('Your cost'))
                     ->state(function (Product $record) use ($costPerUnit, $currency): string {
+                        if ($record->has_variants) {
+                            $costs = array_filter(array_column($this->variationRows($record), 'cost'), fn ($cost): bool => $cost !== null);
+
+                            return $costs === [] ? __('No wholesale rate') : __('From :amount', ['amount' => MoneyFormatter::currency(min($costs), $currency)]);
+                        }
+
                         $base = ResellerPricing::basePrice($record, $costPerUnit);
 
                         return $base === null ? __('No wholesale rate') : MoneyFormatter::currency($base, $currency);
                     }),
 
+                // A product with variations is priced per variation (the Variation prices action).
                 TextInputColumn::make('your_price')
                     ->label(__('Your price'))
                     ->type('number')
+                    ->placeholder(fn (Product $record): ?string => $record->has_variants ? __('Per variation') : null)
                     ->rules(['nullable', 'numeric', 'min:0'])
                     ->getStateUsing(fn (Product $record): ?float => $this->picks[$record->getKey()]['price'] ?? null)
                     ->updateStateUsing(function (Product $record, mixed $state) use ($costPerUnit): ?float {
                         return $this->setPrice($record, $state === null || $state === '' ? null : (float) $state, $costPerUnit);
                     })
                     ->disabled(fn (Product $record): bool => ! ($this->picks[$record->getKey()]['is_active'] ?? false)
+                        || $record->has_variants
                         || ResellerPricing::basePrice($record, $costPerUnit) === null),
 
                 TextColumn::make('commission_per_unit')
                     ->label(__('Commission per unit'))
                     ->state(function (Product $record) use ($costPerUnit, $currency): string {
-                        $base = ResellerPricing::basePrice($record, $costPerUnit);
                         $pick = $this->picks[$record->getKey()] ?? null;
+
+                        if ($record->has_variants) {
+                            $commissions = array_filter(array_column($this->variationRows($record), 'commission'), fn ($commission): bool => $commission !== null);
+
+                            if (! ($pick['is_active'] ?? false) || $commissions === []) {
+                                return '—';
+                            }
+
+                            return min($commissions) === max($commissions)
+                                ? MoneyFormatter::currency(min($commissions), $currency)
+                                : MoneyFormatter::number(min($commissions)).' – '.MoneyFormatter::currency(max($commissions), $currency);
+                        }
+
+                        $base = ResellerPricing::basePrice($record, $costPerUnit);
 
                         if ($base === null || ! ($pick['is_active'] ?? false)) {
                             return '—';
@@ -209,9 +242,12 @@ class Products extends Page implements HasTable
                 Filter::make('no_wholesale_rate')
                     ->label(__('No wholesale rate'))
                     ->query(fn (Builder $query): Builder => $query->where(fn (Builder $q) => $q
-                        ->where('has_variants', true)
-                        ->orWhereNull('tier_prices')
-                        ->orWhereJsonLength('tier_prices', 0)))
+                        ->where(fn (Builder $plain) => $plain
+                            ->where('has_variants', false)
+                            ->where(fn (Builder $tiers) => $tiers->whereNull('tier_prices')->orWhereJsonLength('tier_prices', 0)))
+                        ->orWhere(fn (Builder $variable) => $variable
+                            ->where('has_variants', true)
+                            ->whereDoesntHave('variants', fn (Builder $variants) => $variants->where('is_active', true)->where('reseller_price', '>', 0)))))
                     ->toggle(),
             ])
             ->toolbarActions([
@@ -262,6 +298,14 @@ class Products extends Page implements HasTable
                                 $base = ResellerPricing::basePrice($record, $costPerUnit);
                                 $inStore = $this->picks[$record->getKey()]['is_active'] ?? false;
 
+                                if ($record->has_variants) {
+                                    // Each variation that has a store price gets the suggested price + the percent.
+                                    $priced = $inStore ? $this->setVariationPricesFromSuggested($record, $percent) : false;
+                                    $priced ? $updated++ : $skipped++;
+
+                                    continue;
+                                }
+
                                 if (! $inStore || $base === null) {
                                     $skipped++;
 
@@ -292,6 +336,16 @@ class Products extends Page implements HasTable
                     ->modalContent(fn (Product $record) => view('filament.reseller.pages.partials.product-details', $this->detailsFor($record)))
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel(__('Close')),
+
+                Action::make('variationPrices')
+                    ->label(__('Variation prices'))
+                    ->icon(Heroicon::OutlinedAdjustmentsHorizontal)
+                    ->visible(fn (Product $record): bool => $record->has_variants && ($this->picks[$record->getKey()]['is_active'] ?? false))
+                    ->modalHeading(fn (Product $record): string => __('Variation prices: :name', ['name' => $record->name]))
+                    ->modalDescription(__('Set the price your customer pays for each variation, never below what you pay the store. Leave a price empty to use the suggested price. A variation without a store price sells at its normal price with no commission.'))
+                    ->schema(fn (Product $record): array => $this->variationFields($record))
+                    ->fillForm(fn (Product $record): array => $this->variationFormState($record))
+                    ->action(fn (Product $record, array $data) => $this->saveVariationPrices($record, $data)),
 
                 Action::make('copyLink')
                     ->label(__('Copy link'))
@@ -341,6 +395,7 @@ class Products extends Page implements HasTable
             'currency' => $this->company()->currency ?: 'BDT',
             'images' => $record->allImagePaths(),
             'activeVariants' => $record->variants->where('is_active', true)->values(),
+            'variationRows' => $this->variationRows($record),
             'cost' => $base,
             'suggested' => $suggested,
             'inStore' => $inStore,
@@ -348,6 +403,144 @@ class Products extends Page implements HasTable
             'commission' => $base !== null && $yourPrice !== null ? max(0, $yourPrice - $base) : null,
             'storeUrl' => $this->storeProductUrl($record),
         ];
+    }
+
+    /**
+     * What this reseller sees for each active variation of $record: the
+     * suggested (normal) price, what they pay the store (null = no store
+     * price, so it sells at its normal price with no commission), their own
+     * customer price and the commission per unit. Only this reseller's own
+     * saved prices are read.
+     *
+     * @return list<array{variant: ProductVariant, suggested: float, cost: ?float, price: ?float, commission: ?float}>
+     */
+    protected function variationRows(Product $record): array
+    {
+        $pick = $this->picks[$record->getKey()] ?? null;
+        $inStore = (bool) ($pick['is_active'] ?? false);
+
+        return $record->variants
+            ->where('is_active', true)
+            ->map(function (ProductVariant $variant) use ($pick, $inStore): array {
+                $cost = $variant->resellerCost();
+                $price = $inStore ? ResellerPricing::variantPrice($variant, $pick['variant_prices'][$variant->getKey()] ?? null) : null;
+
+                return [
+                    'variant' => $variant,
+                    'suggested' => $variant->baseSalePrice(),
+                    'cost' => $cost,
+                    'price' => $inStore ? ($price ?? $variant->baseSalePrice()) : null,
+                    'commission' => $cost !== null && $price !== null ? max(0.0, round($price - $cost, 2)) : null,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /** @return list<TextInput> */
+    protected function variationFields(Product $record): array
+    {
+        $currency = $this->company()->currency ?: 'BDT';
+
+        return collect($this->variationRows($record))
+            ->map(fn (array $row): TextInput => TextInput::make('price_'.$row['variant']->getKey())
+                ->label($row['variant']->label() ?: ($row['variant']->sku ?: '#'.$row['variant']->getKey()))
+                ->numeric()
+                ->prefix($currency)
+                ->minValue($row['cost'])
+                ->disabled($row['cost'] === null)
+                ->placeholder(MoneyFormatter::number($row['suggested']))
+                ->helperText($row['cost'] === null
+                    ? __('No store price: sells at :price with no commission.', ['price' => MoneyFormatter::currency($row['suggested'], $currency)])
+                    : __('You pay :cost. Suggested price :suggested.', ['cost' => MoneyFormatter::currency($row['cost'], $currency), 'suggested' => MoneyFormatter::currency($row['suggested'], $currency)])))
+            ->all();
+    }
+
+    /** @return array<string, ?float> */
+    protected function variationFormState(Product $record): array
+    {
+        $saved = $this->picks[$record->getKey()]['variant_prices'] ?? [];
+
+        return collect($this->variationRows($record))
+            ->mapWithKeys(fn (array $row): array => ['price_'.$row['variant']->getKey() => $row['cost'] === null ? null : ($saved[$row['variant']->getKey()] ?? null)])
+            ->all();
+    }
+
+    /**
+     * Saves the reseller's customer price for each variation that has a
+     * store price. A price below it is refused; a blank one goes back to the
+     * suggested price. Only this reseller's own pick is changed.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function saveVariationPrices(Product $record, array $data): void
+    {
+        $pick = ResellerProduct::query()
+            ->where('customer_id', $this->reseller()->getKey())
+            ->where('product_id', $record->getKey())
+            ->first();
+
+        if (! $pick) {
+            Notification::make()->title(__('Add this product to your store first.'))->warning()->send();
+
+            return;
+        }
+
+        $prices = [];
+
+        foreach ($record->variants->where('is_active', true) as $variant) {
+            $cost = $variant->resellerCost();
+            $raw = $data['price_'.$variant->getKey()] ?? null;
+
+            if ($cost === null || $raw === null || $raw === '') {
+                continue;
+            }
+
+            $price = round((float) $raw, 2);
+
+            if ($price < $cost) {
+                Notification::make()
+                    ->title(__('Your price for :variation must be at least :amount.', ['variation' => $variant->label(), 'amount' => MoneyFormatter::number($cost)]))
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+
+            $prices[$variant->getKey()] = $price;
+        }
+
+        $pick->update(['variant_prices' => $prices === [] ? null : $prices]);
+        $this->reloadPicks();
+
+        $this->notifyDone(__('Variation prices saved.'));
+    }
+
+    /** Sets every priced variation to its suggested price + $percent (never below its store price). */
+    protected function setVariationPricesFromSuggested(Product $record, float $percent): bool
+    {
+        $pick = ResellerProduct::query()
+            ->where('customer_id', $this->reseller()->getKey())
+            ->where('product_id', $record->getKey())
+            ->first();
+        $prices = [];
+
+        foreach ($record->variants->where('is_active', true) as $variant) {
+            $cost = $variant->resellerCost();
+
+            if ($cost !== null) {
+                $prices[$variant->getKey()] = max(round($variant->baseSalePrice() * (1 + $percent / 100), 2), $cost);
+            }
+        }
+
+        if (! $pick || $prices === []) {
+            return false;
+        }
+
+        $pick->update(['variant_prices' => $prices]);
+        $this->reloadPicks();
+
+        return true;
     }
 
     protected function setInStore(Product $record, bool $inStore): void
