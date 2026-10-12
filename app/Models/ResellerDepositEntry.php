@@ -24,6 +24,16 @@ class ResellerDepositEntry extends Model
 
     public const TYPE_REFUND = 'refund';
 
+    public const TYPE_ADJUSTMENT = 'adjustment';
+
+    /** Shown in the admin deposit list; run through __() where displayed. */
+    public const TYPES = [
+        self::TYPE_OVERPAYMENT => 'Sent above an order total',
+        self::TYPE_USED => 'Used on an order',
+        self::TYPE_REFUND => 'Returned (order cancelled)',
+        self::TYPE_ADJUSTMENT => 'Adjusted by staff',
+    ];
+
     protected $fillable = [
         'company_id',
         'customer_id',
@@ -32,6 +42,7 @@ class ResellerDepositEntry extends Model
         'type',
         'amount',
         'note',
+        'created_by',
     ];
 
     protected function casts(): array
@@ -49,5 +60,11 @@ class ResellerDepositEntry extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    /** The member of staff behind a manual adjustment; NULL for entries the system made. */
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }

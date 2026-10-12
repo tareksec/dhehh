@@ -2,6 +2,28 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-12 - Admin: Resellers → Deposits (list + add / deduct with a reason) (owner decision 3)
+
+Owner decision (asked one by one, in Bangla): the admin has a page with each reseller's deposit and every entry, and can add or deduct with a required reason, all logged. Built as decided.
+
+What changed (Admin → Resellers → Deposits):
+1. **Deposits** page: every deposit entry with date, reseller (+ phone), type (sent above an order total / used on an order / returned when an order was cancelled / adjusted by staff), amount (+ green, − red), order, reason / note and who did it ("Automatic" for system entries). Filters: reseller, type.
+2. **Add to deposit** / **Deduct from deposit** buttons: pick an approved reseller, amount, **reason (required)**. The form shows the deposit now. Each adjustment is one entry with the reason and the staff member, and also goes to the **Audit Logs** page.
+3. The **Resellers** list has a sortable **Deposit** column; a reseller's page shows the deposit.
+4. Permissions follow Sales: **sales.view** sees the page, **sales.update** gets the two buttons. Super admin has both.
+
+Deploy: `php artisan migrate` (`2026_10_12_100000_add_created_by_to_reseller_deposit_entries`, one nullable column). No setting.
+
+Decision I had to make (not from the owner — please confirm): **a deduction larger than the deposit is refused** ("The deposit holds only X, so Y cannot be deducted"), so a deposit never goes negative. Entries are never edited or deleted; a mistake is corrected by another adjustment.
+
+Needs Bangla review (new keys): Returned (order cancelled) (ফেরত (অর্ডার বাতিল)), Adjusted by staff (স্টাফ সমন্বয় করেছেন), Done by (যিনি করেছেন), Sent above an order total (অর্ডারের মোটের বেশি পাঠানো), Reason / note (কারণ / নোট), Deposit entry / Deposit entries (জমার এন্ট্রি), and the two modal headings.
+
+Tests: new `ResellerDepositAdminTest` (13): reason / staff member / positive entry, deduct and empty, over-deduction refused and nothing changes, reason / amount / direction required, audit log row with the staff member, the page lists every entry with type / reason / who, add + deduct from the page and the reason is mandatory, over-deduction from the page notifies and changes nothing, another company's resellers and entries are never listed or adjustable, only approved resellers, view-only staff do not get the buttons, the Resellers list and page show the deposit. Full suite is run once at the end of the batch (see the last entry).
+
+Note: while writing this I ran `php artisan migrate` once by mistake on the local development SQLite file (not the test database): it only added this one column, no data was touched. Tests use their own in-memory database.
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Not on `main`: the owner checks first.
+
 ## 2026-10-12 - Reseller deposit: a cancelled order gives the money back (owner decision 2)
 
 Owner decision (asked one by one, in Bangla): a cancelled order that was paid from the reseller's deposit returns the money to the deposit automatically. Built as decided, nothing added.

@@ -40,6 +40,7 @@ use App\Models\ProjectCostItem;
 use App\Models\ProjectSettlement;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
+use App\Models\ResellerDepositEntry;
 use App\Models\SettlementPayout;
 use App\Models\StockMovement;
 use App\Models\StorefrontPage;
@@ -299,6 +300,7 @@ class AppServiceProvider extends ServiceProvider
             Product::class,
             Purchase::class,
             PurchaseItem::class,
+            ResellerDepositEntry::class,
             StockMovement::class,
             StorefrontPage::class,
             StorefrontSetting::class,
