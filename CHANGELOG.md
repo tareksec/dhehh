@@ -10,6 +10,7 @@ All notable production changes to Business Dashboard are documented here.
 
 **Technical Notes:**
 - `brandLogoHeight('2.75rem')` on the investor panel; rule added to `resources/css/filament/investor/theme.css` (`.fi-simple-layout .fi-logo`); `!important` is needed because Filament sets the height inline.
+- Maintenance: added `16_INVESTOR_GROUPS_PLAN.md`, the approved plan for group-based investment (investors join groups, each group runs a new project every calendar 2 months, payment screenshot on payouts, portal progress bar). Planning document only; no code or data changes.
 
 ## [2.69.1] - 2026-10-10
 

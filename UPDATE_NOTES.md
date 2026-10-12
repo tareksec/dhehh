@@ -2,6 +2,12 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-12 - Investor groups: the plan (`16_INVESTOR_GROUPS_PLAN.md`)
+
+Owner request (in Bangla): the investment module must be group-based (investors join a group; a group runs Project-1, 2, 3 … every calendar 2 months; manual payout with a payment screenshot; closed projects move to the Payouts page). After the owner answered the questions, the owner approved the plan: "প্ল্যানের ফাইল কমিট করে কাজ শুরু করে এক এক করে শেষ কর, টেস্ট যোগ করবে ক্রিটিকাল ক্যালকুলেশনে যাতে ডিপ্লয়ের আগেই ধরা পড়ে।" This entry is the plan document only; each build phase (G1–G6) gets its own entry below.
+
+Commit status: committed locally on owner approval (2026-10-12). Not pushed; the owner has not said to push.
+
 ## 2026-10-12 - Investor portal: sign-in logo size
 
 Owner request (in Bangla): the logo on the portal sign-in page became small; make it a standard size. Investor theme CSS (`.fi-simple-layout .fi-logo`, 4rem high). Follow-up (owner): the signed-in header logo was also tiny, so the panel now uses `brandLogoHeight('2.75rem')`. No strings.
