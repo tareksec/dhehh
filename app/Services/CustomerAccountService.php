@@ -113,6 +113,32 @@ class CustomerAccountService
     }
 
     /**
+     * The customer record already using $phone, whatever way the number was
+     * typed (+880…, 880…, 01…), in the current company.
+     */
+    public function findByPhone(string $phone): ?Customer
+    {
+        return Customer::query()->tap(fn (Builder $query) => $this->wherePhoneMatches($query, $phone))->first();
+    }
+
+    /**
+     * How a reseller application for $phone must prove the number is the
+     * applicant's (owner decision 2026-10-12): a brand-new number needs no
+     * code, but a number that already belongs to a customer — whose record
+     * the application would reuse, and whose password it would set — must be
+     * proven with an SMS code first. With no SMS gateway such a number can't
+     * be proven at all (VERIFY_UNAVAILABLE).
+     */
+    public function applicationVerification(StorefrontSetting $setting, string $phone): string
+    {
+        if ($this->findByPhone($phone) === null) {
+            return self::VERIFY_NONE;
+        }
+
+        return $this->notifications->smsConfigured($setting) ? self::VERIFY_SMS : self::VERIFY_UNAVAILABLE;
+    }
+
+    /**
      * Texts a 6-digit sign-up code to $phone, valid for 10 minutes and five
      * tries. Asking again within a minute keeps the code already sent, so
      * a double click or the website's "resend" can't flood the number.

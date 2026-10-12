@@ -1930,5 +1930,13 @@
     "Send-money / account number": "সেন্ড-মানি / অ্যাকাউন্ট নম্বর",
     "Instructions": "নির্দেশনা",
     "No payment method is available to resellers yet: they cannot place own-courier orders until one is chosen or added.": "রিসেলারদের জন্য এখনো কোনো পেমেন্ট মেথড নেই: একটি বেছে নেওয়া বা যোগ না করা পর্যন্ত তারা নিজস্ব কুরিয়ারের অর্ডার দিতে পারবে না।",
-    "Two reseller-only payment methods cannot have the same name.": "দুটি রিসেলার-অনলি পেমেন্ট মেথডের নাম এক হতে পারবে না।"
+    "Two reseller-only payment methods cannot have the same name.": "দুটি রিসেলার-অনলি পেমেন্ট মেথডের নাম এক হতে পারবে না।",
+    "This number already belongs to a customer of the store, so we sent a 6-digit code by SMS to :phone. It expires in 10 minutes.": "এই নম্বরটি স্টোরের একজন কাস্টমারের, তাই আমরা :phone নম্বরে এসএমএসে একটি ৬ সংখ্যার কোড পাঠিয়েছি। কোডটি ১০ মিনিট পর্যন্ত চলবে।",
+    "This phone number already belongs to a customer of the store, and it can't be verified by SMS right now. Please contact the store to become a reseller.": "এই ফোন নম্বরটি স্টোরের একজন কাস্টমারের, এবং এখন এসএমএসে যাচাই করা যাচ্ছে না। রিসেলার হতে স্টোরের সঙ্গে যোগাযোগ করুন।",
+    "We sent a 6-digit code to your phone. Enter it to finish applying.": "আমরা আপনার ফোনে একটি ৬ সংখ্যার কোড পাঠিয়েছি। আবেদন শেষ করতে কোডটি দিন।",
+    "Sign up": "সাইন আপ",
+    "Verify and apply": "যাচাই করে আবেদন করুন",
+    "Use a different number": "অন্য নম্বর ব্যবহার করুন",
+    "This phone number already belongs to a customer of the store, so it has to be confirmed by SMS first. Please apply here: :url": "এই ফোন নম্বরটি স্টোরের একজন কাস্টমারের, তাই আগে এসএমএসে যাচাই করতে হবে। অনুগ্রহ করে এখানে আবেদন করুন: :url",
+    "This phone number already belongs to a customer of the store. Please contact the store to become a reseller.": "এই ফোন নম্বরটি স্টোরের একজন কাস্টমারের। রিসেলার হতে স্টোরের সঙ্গে যোগাযোগ করুন।"
 }

@@ -1930,5 +1930,13 @@
     "Send-money / account number": "Send-money / account number",
     "Instructions": "Instructions",
     "No payment method is available to resellers yet: they cannot place own-courier orders until one is chosen or added.": "No payment method is available to resellers yet: they cannot place own-courier orders until one is chosen or added.",
-    "Two reseller-only payment methods cannot have the same name.": "Two reseller-only payment methods cannot have the same name."
+    "Two reseller-only payment methods cannot have the same name.": "Two reseller-only payment methods cannot have the same name.",
+    "This number already belongs to a customer of the store, so we sent a 6-digit code by SMS to :phone. It expires in 10 minutes.": "This number already belongs to a customer of the store, so we sent a 6-digit code by SMS to :phone. It expires in 10 minutes.",
+    "This phone number already belongs to a customer of the store, and it can't be verified by SMS right now. Please contact the store to become a reseller.": "This phone number already belongs to a customer of the store, and it can't be verified by SMS right now. Please contact the store to become a reseller.",
+    "We sent a 6-digit code to your phone. Enter it to finish applying.": "We sent a 6-digit code to your phone. Enter it to finish applying.",
+    "Sign up": "Sign up",
+    "Verify and apply": "Verify and apply",
+    "Use a different number": "Use a different number",
+    "This phone number already belongs to a customer of the store, so it has to be confirmed by SMS first. Please apply here: :url": "This phone number already belongs to a customer of the store, so it has to be confirmed by SMS first. Please apply here: :url",
+    "This phone number already belongs to a customer of the store. Please contact the store to become a reseller.": "This phone number already belongs to a customer of the store. Please contact the store to become a reseller."
 }

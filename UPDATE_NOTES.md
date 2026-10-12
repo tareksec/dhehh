@@ -2,6 +2,28 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-12 - Reseller application: SMS code proves ownership of an existing number (owner decision 5) — also a security fix
+
+Owner decision (asked one by one, in Bangla): applying with a phone number that already belongs to a customer must prove the number with an SMS code before the old record is used.
+
+**Why it mattered:** the portal's Become a reseller page found any customer by phone and **set a new password on that record**. Anyone who knew an approved reseller's number could apply with it, choose a password and sign in as that reseller (their orders, balance and withdrawals). The older plain `/reseller` form likewise overwrote an existing person's name and business name. Both are closed now.
+
+What changed (Reseller portal → Become a reseller; storefront /reseller):
+1. **New number:** applies exactly as before, no code.
+2. **Number that already has a customer record** (storefront account, past orders, or a reseller): the form sends a 6-digit SMS code to that number (10 minutes, five tries, one SMS a minute, hashed, per company + number) and shows a code step with **Send a new code** and **Use a different number**. Only after the right code does it use the old record, set the password and sign in; until then the old record is not touched at all. Any spelling of the number (+880…, 880…, 01…) counts.
+3. **No SMS gateway:** such a number cannot be proven; the form says to contact the store, and nothing changes.
+4. The older plain storefront form (`/reseller`) no longer reuses an existing number: it shows an error and the portal application link (or "contact the store" when the company has no portal host).
+
+I assumed the code is needed **only when the number already exists** (as written in the decision); a brand-new number is not asked for a code. Tell me if every applicant should be verified when SMS is on.
+
+Deploy: nothing to run. It needs the company's SMS gateway (Integrations) for the code; each code costs one SMS.
+
+Needs Bangla review (new keys): the code-step helper text, "Verification code", "Verify and apply", "Use a different number", and the four error / notice sentences.
+
+Tests: new `ResellerApplicationVerificationTest` (9): new number needs no code; an existing number is untouched until the code (the password hash only waits in the session); wrong code changes nothing and five wrong codes burn the code; knowing an approved reseller's number cannot replace their password; other spellings need the code and never duplicate; no SMS gateway means no takeover; resend once a minute and change the number; another company's number is a new number here; the plain storefront form never takes over a number. The old "approved reseller stays approved on re-application" test was rewritten for the new rule.
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Not on `main`: the owner checks first.
+
 ## 2026-10-12 - Reseller Settings: payment methods for the advance (owner decision 4)
 
 Owner decision (asked one by one, in Bangla): the admin chooses which payment methods resellers send the advance to, from the existing list; Reseller Settings can also add methods only for the reseller panel; the reseller sees both; the storefront's list does not change the reseller-only ones.
