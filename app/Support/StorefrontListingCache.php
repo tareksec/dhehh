@@ -55,6 +55,16 @@ final class StorefrontListingCache
         );
     }
 
+    /** The sitemap's addresses depend on the host they are served from, so each host has its own entry. */
+    public static function sitemap(int $companyId, string $host, Closure $callback): mixed
+    {
+        return Cache::remember(
+            sprintf('storefront-sitemap:%d:g%d:%s', $companyId, self::generation($companyId), $host),
+            now()->addMinutes(self::TTL_MINUTES),
+            $callback,
+        );
+    }
+
     /**
      * Invalidate every cached home/category/listing entry for a company.
      * Call this from a model's saved/deleted hook whenever storefront-visible

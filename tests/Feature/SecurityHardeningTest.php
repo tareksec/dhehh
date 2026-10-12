@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Support\StorefrontErrorPages;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Tests\TestCase;
@@ -72,16 +71,18 @@ class SecurityHardeningTest extends TestCase
         }
     }
 
-    public function test_robots_txt_disallows_admin_and_livewire(): void
+    public function test_robots_txt_is_served_by_the_app_not_as_a_static_file(): void
     {
-        // public/robots.txt is served directly by the web server in
-        // production, not routed through Laravel — read it as a static
-        // asset rather than an HTTP round trip (same pattern as other tests
-        // that assert on a published view/asset file's raw content).
-        $robots = File::get(public_path('robots.txt'));
+        // /robots.txt answers per domain (SeoFilesController): the app's own
+        // domain keeps "Disallow: /admin" and "/livewire", a storefront domain
+        // adds its sitemap (StorefrontSeoTest). A static public/robots.txt
+        // must not come back -- the web server would serve it instead of the route.
+        $this->assertFileDoesNotExist(public_path('robots.txt'));
 
-        $this->assertStringContainsString('Disallow: /admin', $robots);
-        $this->assertStringContainsString('Disallow: /livewire', $robots);
+        // Nor may nginx answer it: a "location = /robots.txt" block without a fallback
+        // turns the missing file into a 404 that crawlers read as "no rules",
+        // even though Laravel (via error_page 404 /index.php) produced the body.
+        $this->assertStringNotContainsString('location = /robots.txt {', (string) file_get_contents(base_path('nginx.template.conf')));
     }
 
     public function test_an_unhandled_storefront_exception_in_production_shows_a_generic_page_not_a_stack_trace(): void

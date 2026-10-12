@@ -96,6 +96,7 @@ class OfferCheckoutController extends Controller
         $lines = $this->pricing->explodeToOrderLines($offer, $quantity);
         $deliveryItems = $offer->items->map(fn (OfferItem $item): array => [
             'product' => $item->product,
+            'variant' => $item->productVariant,
             'quantity' => $item->quantity * $quantity,
         ]);
         $quote = $this->delivery->quote($deliveryItems, $deliveryArea, $setting);

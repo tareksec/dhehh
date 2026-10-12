@@ -8,8 +8,6 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Added
 
-- **A reseller's new store subdomain sets itself up and shows when it will be live.** After a reseller picks a subdomain on **My Store**, the page shows "Setting up <name>.<domain> (DNS and SSL)" with a countdown, checks every 15 seconds whether the address already opens over HTTPS, and switches to "Your store address … is live." on its own. Nothing to do on the reseller's side and no per-reseller server work: the wildcard DNS record covers every name, and the SSL certificate comes from the wildcard certificate or, new, from an on-demand proxy, because `/internal/tls-ask` now also approves the subdomain of every approved reseller. Until the address is ready the reseller's shared store link stays the long `/store/<slug>` link, so nobody gets a link that does not open yet. The countdown length is **Resellers → Reseller Settings → Subdomain set-up time (minutes)** (Super Admin, default 10).
-- **The name at the top of the reseller portal's user menu now opens the Profile page.**
 - **Reseller portal: product details.** A reseller reported that their dashboard did not show the product details and images. On **Products**, a new **Details** button (also opened by clicking a row) shows a slide-over with a large photo gallery, the product video, the description (with a **Copy description** button for posting), brand, SKU, category, unit, weight, stock, minimum order quantity and the variations with their own photos, price and stock, plus the reseller's own cost, suggested price, own price and commission per unit. It shows only that reseller's own figures: another reseller's price or store is never visible, and the company's purchase cost and wholesale tiers are not shown.
 - **Reseller portal: bigger list photos and a fuller photo download.** The Products list thumbnail is larger and falls back to the first gallery photo when there is no main image. **Download photos** now also includes the photos of the product's variations, and the button shows whenever any photo exists. **Create order** shows the chosen product's photo, name, SKU and brand under the product field.
 - **Reseller portal: a modern front page.** The Dashboard is redesigned. A welcome banner in the store's own colour shows the reseller's name and the money they can withdraw now, with **Withdraw** and **Create order** buttons and their pending, in-process and already-withdrawn amounts. Below it: one-tap shortcuts (create an order, add products, withdraw, share the store link with the phone's share sheet); four overview cards (parcels waiting, this month's orders, sales and commission) with a ▲/▼ percentage against the same days of last month and a 14-day trend line; a store card where the link looks like a browser address bar (copy, visit, share on WhatsApp / Facebook) with a QR code to scan and a "Live" or "Setting up your store address" badge; an **Order pipeline** (Confirmed, Processing, Shipping, Completed, plus Cancelled and Returned) where each step opens the Orders page already filtered to that stage; recent orders with the first product's photo, a coloured status badge and the amount; and the commission chart as a smooth filled line. It works on phones and in dark mode, and every number is only the signed-in reseller's own.
@@ -23,13 +21,175 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - Product details: `Products::detailsFor()` builds the slide-over data (partial `filament.reseller.pages.partials.product-details`) from the table's own company-scoped, active+available query and `$this->picks` (this reseller's rows only). New `Product::allImagePaths()` (main + gallery + active variation photos, no repeats) feeds the zip (`ResellerProductPhotosController`) and the button. `CreateOrder::productPreview()`. 15 new lang keys (en + bn). `ResellerPortalProductsTest` +6 (details content, hidden cost/tiers, variations, thumbnail fallback, two-reseller isolation, zip with variation photos), `ResellerPortalCreateOrderTest` +1. No migration.
-- Subdomain set-up: migration `2026_10_10_100000_add_reseller_subdomain_status` (`customers.reseller_subdomain_changed_at` / `reseller_subdomain_live_at`, `storefront_settings.reseller_subdomain_setup_minutes` default 10). Subdomains chosen before it (no `changed_at`) count as live. `Customer::resellerSubdomainIsReady()` / `resellerSubdomainReadyAt()`; `resellerStoreUrl()` uses the subdomain only once it is ready. New `App\Services\ResellerSubdomainProbe` (DNS points at the company domain's IPs + an HTTPS request that succeeds), polled by `MyStore::checkSubdomain()`. `TlsAskController` also answers 200 for approved resellers' subdomains. Profile link: `ResellerPanelProvider` `userMenuItems(['profile' => ...->url(Profile::getUrl())])`. Tests: `ResellerSubdomainTest` +5, `ResellerPortalDashboardTest` +1, `ResellerSettingsPageTest` updated. 7 new lang keys (en + bn). `docs/deployment.md` updated.
 - Dashboard redesign: `Dashboard::kpis()` (this month to date against the same days of last month, 14-day series, from one orders query and one commissions query for this reseller only), `pipeline()` (one grouped query, stage decided by `Order::workflowStage()`), `recentOrders()` / `orderSummary()` (first product's photo through `CompanyMedia::filamentPublicUrl`), `greeting()` (company time zone), `storeQrCode()` / `subdomainIsSettingUp()`. The old `thisMonth*()` helpers were folded into `kpis()`. New partial `filament.reseller.pages.partials.sparkline`. `CommissionTrend` is now a filled `line` chart with no hard-coded colour, so it follows the brand colour.
 - Stage filter: `Order::scopeInWorkflowStage()` mirrors `workflowStage()` in SQL (new `Order::SHIPPING_DELIVERY_STATUSES`, also used by `workflowStage()`); `Orders` has a `#[Url] $stage` property with `activeStage()` / `clearStage()`.
 - QR code: `App\Support\QrCodeSvg` draws an inline SVG data URI on the server with `chillerlan/php-qrcode`, which `filament/filament` already requires (not a new package, but not a direct `composer.json` dependency either); it returns null on any failure so the page just hides the QR. No third-party QR service sees the store link.
 - Theme: `ResellerPanelProvider::brandColorStyle()` (HEAD_END hook inside `ModuleGuard::run`) writes `--primary-50..950` from `storefrontSetting->normalizedThemeColor()` through the existing `DynamicColorService`, and `->font('Hind Siliguri', provider: LocalFontProvider::class)` names the face; `@font-face` rules and the rounded/frosted polish live in `resources/css/filament/reseller/theme.css`. Font files and `OFL.txt` are in `resources/fonts/hind-siliguri/` (400/500/600/700, Bangla + Latin subsets). Run `npm run build` on deploy.
 - Tests: new `ResellerPortalDashboardRedesignTest` (18 tests: month comparison, no-percentage case, two resellers in one company and a reseller of another company, pipeline, the SQL stage scope against `workflowStage()` for 42 status/courier combinations, the stage filter and its isolation, front page content, subdomain badge, greeting by time zone, order rows, chart, brand colour per company and its default, QR helper, sparkline).
 
+## [2.72.0] - 2026-10-11
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **A title and description for every public page.** Until now every storefront page, including every product, showed the home page's title and description in browser tabs, Google results and link previews. Now a product page reads "Steel Bolt | Your Store" with the start of the product description; a category, a custom page, an offer and the contact page do the same, using the page's own meta title and meta description where the admin entered them. The product and category photo, and the page or offer cover, become the share picture. The home page keeps the site title.
+- **Canonical address on every indexable page.** Each page names its own address without tracking parameters (`?utm_source=...`), so a shared or advertised link does not split the page into duplicates in search results.
+- **`robots.txt` per domain.** A storefront domain now tells crawlers to skip the cart, checkout, account, order tracking and complaint pages, and names its sitemap. The app's own domain keeps the admin-only rules.
+- **`sitemap.xml` per storefront domain.** It lists the home page, the shop, the contact page, categories that have products, available products (with their last-changed date), published pages and published offer landing pages. Draft pages and offers, coming-soon and inactive products and empty categories are not listed. A reseller's own store has no sitemap, because it repeats the company's catalog at other prices. The list is cached for 10 minutes and refreshed when a product or category changes; a catalog over 45,000 addresses is split behind a sitemap index.
+- **Structured data (JSON-LD) so results can show price and stock.** A product page carries the product's name, photos, SKU, brand, price (or the cheapest and dearest variant), currency and stock (in stock, pre-order, out of stock); a product with no price publishes no price. Product and category pages carry a breadcrumb trail. The home page carries the organisation (name, logo, phone, email and the social profiles the admin entered) and the site search. No star rating is published, because the product page shows no reviews. A reseller's own store publishes no price markup.
+- **Share previews know the site.** Pages now send the site name, the page address and the language (`en_US` or `bn_BD`) to Facebook and other link previews, and a product page is typed as a product.
+
+### Changed
+
+- **Only the plain shop, category and offer lists are indexed.** Search results, sorted, filtered and later pages, and the single/combo filter on the offers page tell search engines not to index them (`noindex, follow`) in every theme; before, only Marketplace Pro did this, and search results were not covered.
+- **Private pages are never indexed.** A page is kept out of search results unless its controller says it may be indexed, so the cart, checkout, order tracking, account, complaint and every new page start out private.
+- The default meta description ("Shop products from ...") is now translated.
+
+### Technical Notes
+
+- New `App\Support\StorefrontSeo` (kept on the request, so one request never inherits another's values), `StorefrontSchema` (JSON-LD builders) and `StorefrontSitemap`; new `Storefront\SeoFilesController` for `/robots.txt`, `/sitemap.xml` and `/sitemap-{n}.xml`, behind `ResolveCompanyFromDomain:optional`. The storefront layout prints the tags; `HomeController`, `ProductIndexController`, `ProductShowController`, `PageController`, `OfferController` and `ContactController` fill them in once for every theme.
+- `public/robots.txt` is deleted and the `location = /robots.txt` block is removed from `nginx.template.conf`: the route answers instead. A static file would shadow the route, and that nginx block (no fallback) would turn the missing file into a 404 that crawlers read as "no rules" even though Laravel produced the body. `SecurityHardeningTest` now fails if either comes back. The robots rules for the admin (`/admin`, `/livewire`) are unchanged.
+- `StorefrontListingCache::sitemap()` reuses the per-company generation that product and category saves already bump.
+- The Marketplace Pro listing no longer pushes its own robots tag.
+- New `StorefrontSeoTest` (24 tests) and 2 reseller-host tests in `ResellerSubdomainTest`. 2 new lang keys ("Shop products from :name", "Contact us").
+- Not done: `hreflang` (visitors cannot switch language by address yet, so Bangla and English share one address), product and category meta fields in the admin (the title and description come from the product or category itself), and a canonical host for `www` against the bare domain (set a redirect on the web server).
+## [2.71.0] - 2026-10-11
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Weight field on product variations.** In the product form, under Variations, each variation now has a "Variation weight (kg)" field. Leave it empty and the variation uses the product's weight. A filled weight is used for:
+  - the storefront delivery charge (weight-based) on the Blade checkout, the website checkout and landing-page offers;
+  - the Weight column on the printed invoice and PDF, and the item weight and Total Weight on the order page;
+  - the website API (`variants[].weight_kg` on the product detail).
+- **WooCommerce import keeps the variation weight and the description format.**
+  - A variation's weight comes across with the variation. An empty weight in WooCommerce stays empty, so the variation uses the product weight.
+  - The full description is imported as formatted text instead of plain text: headings, bold and italic, lists, links, tables, images, paragraphs and line breaks appear in the product form's description box and on the storefront as they were on the old site. Scripts and unsupported markup are removed.
+  - Products imported before this change keep their plain-text description until the import is run again (`php artisan woocommerce:import-products {company-slug}`), which also refreshes their prices and weights from WooCommerce.
+
+### Technical Notes
+
+- New migration `2026_10_11_100000_add_weight_kg_to_product_variants` adds nullable `product_variants.weight_kg` (`decimal(8,3)`, same as `products.weight_kg`). Existing variations stay NULL, so nothing changes for them until a weight is entered.
+- New `ProductVariant::effectiveWeightKg()` and `OrderItem::unitWeightKg()` (variation weight, else product weight). `StorefrontDeliveryService::quote()` reads the line's `variant` when present; `OfferCheckoutController` now passes the offer item's variation to it.
+- 2 new lang keys in `en.json` and `bn.json`. New `ProductVariantWeightTest` (8 tests).
+- New `App\Support\WooCommerceDescription` converts the WooCommerce description to the HTML the rich editor stores: it removes comments, scripts, styles and `[caption]` wrappers, adds the `<p>` and `<br>` that WordPress only adds on display (`wpautop`), then renders through Filament's `RichContentRenderer` (sanitised). Markup the editor cannot parse falls back to plain text instead of failing the import.
+- `WooCommerceImportService` reads `weight` of each variation (kg, like the product weight; only a value above 0 is set). New `WooCommerceDescriptionTest` (7 tests); `WooCommerceImportTest` now expects the description as HTML and checks the variation weights.
+## [2.70.0] - 2026-10-10
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Marketplace Pro product listing page.** The product list, category and search pages have their own Marketplace Pro design: breadcrumb, page title with product count, a filter sidebar on desktop and a slide-in filter panel on phones (categories, "In stock only", and a minimum/maximum price), a sort menu, and an empty state that suggests categories. Other themes keep their current listing page.
+- **Stock and price filters on the product list.** `in_stock=1`, `min_price` and `max_price` in the address work without JavaScript and can be shared as a link. Filtered, sorted and later pages tell search engines not to index them (`noindex, follow`).
+- **Marketplace Pro product page.** The page has:
+  - a gallery with thumbnails, zoom on hover and the discount badge;
+  - a buy box with the price, the struck-through original price, "Save ৳X", the VAT note, a stock pill (in stock / only N left / pre-order / out of stock) and the bulk pricing table;
+  - variant rows with quantity steppers, "Add to cart" and "Buy now" buttons, and "Ask on WhatsApp";
+  - delivery time and the admin trust items under the buy box;
+  - the description, "You may also like" with Marketplace Pro cards, and a sticky buy bar above the bottom navigation on phones.
+
+  The cart form, field names and routes are the same as before.
+- **Marketplace Pro product card** on the home and listing pages: discount badge, stock badge, orange quick-add button, "Only N left", and the minimum order quantity. All text is in English and Bangla.
+- **Marketplace Pro cart page.** Each cart row shows the photo, category, name, the chosen option, the price of one piece, a stock pill (in stock / only N left / pre-order), the minimum order quantity and the line total, with a quantity stepper, Update and Remove. For a product with wholesale prices it also says how many more pieces unlock the next price ("Add 6 more to pay ৳140 each"). The order summary shows the items, the subtotal, "Delivery: calculated at checkout" and the VAT note, with "Proceed to checkout" and "Continue shopping". On phones the subtotal and checkout button stay above the bottom navigation. The empty cart offers "Browse products". The update, remove and checkout routes are unchanged, and all text is in English and Bangla.
+
+- **Marketplace Pro checkout page.** The checkout is one numbered flow: contact details, delivery address, payment method and an optional order note, with an order summary beside it (thumbnails, subtotal, VAT, parcel weight, delivery charge, delivery time and the total). Typing the address detects Inside or Outside Dhaka and updates the delivery charge, the delivery time and the total at once. The new-customer delivery advance note, the verified-advance note, the pre-order advance, the manual payment instructions (account number, sender number, transaction ID) and the online gateway note all appear as before, and ordering stays blocked when there is no usable payment path. On phones the live total and "Place order" stay above the bottom navigation. Every form field, field name and the checkout rules are unchanged, and all text is in English and Bangla.
+- **Marketplace Pro order-success page.** After an order it shows the order number, a status ("Awaiting confirmation" until the team confirms), every item with its price and line total, the subtotal, discount, VAT, delivery charge, packaging fee, total, the amount paid and the amount due, the delivery details with the delivery time for the customer's area, the payment made at checkout (and whether it is still being verified), the WhatsApp group, the complaint link, "Track this order" and "Continue shopping". All text is in English and Bangla.
+- **Marketplace Pro order-tracking page.** Customers type the order number and the phone used on the order (the same two-factor lookup as before; a link from the success page or a signed-in customer needs no phone). The found order shows a four-step progress bar (Order placed, Confirmed, On the way, Delivered) that follows the order and delivery status; a cancelled, returned or refunded order stops after the first step and says so. Below it: the delivery update with the courier name, tracking ID and booking status, the tracking updates as a timeline with the latest one marked, the items with their photos, and a summary with the subtotal, discount, VAT, delivery charge, packaging fee, total, amount paid and amount due, the delivery area and time, and buttons for a complaint, the helpline and more shopping. A reseller's customer still sees only the reseller's prices: item lines and one total, never the store's breakdown. All text is in English and Bangla.
+
+### Fixed
+
+- The struck-through old price on the shared product card showed the selling price instead of the original price.
+- On the product page, each variant row showed the product's price instead of the variant's own price. The cart charges the variant price, so the page now shows that.
+- On the shared cart page (every theme except Marketplace Pro), the amount at the end of each row was the price of one piece, so a line of 2 pieces at ৳150 showed ৳150 instead of ৳300. It now shows the line total.
+- On the shared order-success page (every theme except Marketplace Pro), every item line, the subtotal, the delivery charge and the amount due all printed the order total. They now show the item's own line total, the real subtotal, the real delivery charge and the amount still due (VAT, discount and packaging fee rows appear when they apply), and the payment box shows the payment's own amount.
+- On the checkout page (every theme), sending the form with an empty address and getting an error back left the delivery charge, delivery time and total blank, because the address reached the page's script as nothing instead of text. It is now always text.
+- On the shared order-tracking page (every theme except Marketplace Pro), every item line printed the amount due of the whole order, so an order with two products showed the same amount twice. Each line now shows its own line total (or the reseller's price for a reseller's customer).
+- The shared order-tracking page and its tracking-update lines were English only. They now go through the translation files, so they follow the visitor's language.
+
+### Technical Notes
+
+- New `App\Support\StorefrontListingFilters`, used by `ProductIndexController` and the preview listing. Filtered listings skip `StorefrontListingCache`. Price bounds are cast to `DECIMAL`, so SQLite compares them as numbers.
+- New `StorefrontUrl::home()` helper and a `@stack('head')` in the storefront layout.
+- The quick-add double-submit script moved to `storefront/partials/quick-add-script.blade.php`. The listing Meta Pixel events moved to `storefront/products/partials/listing-meta-events.blade.php`. Both are shared by every theme.
+- New `App\\Support\\StorefrontProductPage` holds the purchase facts every theme's `products.show` shows: gallery URLs, variants, stock, MOQ, quantity bounds, tiers and discount.
+- The product page script moved to `storefront/products/partials/product-page-script.blade.php`. Its button text comes from `data-count-label`, so it can be translated. The ViewContent pixel event moved to `product-meta-events.blade.php`.
+- New views: `themes/marketplace-pro/products/show.blade.php`, `themes/marketplace-pro/partials/product-card.blade.php` and `themes/marketplace-pro/products/index.blade.php`. 51 new lang keys in `en.json` and `bn.json`.
+- New `App\Support\StorefrontCartLine` holds what one cart row shows and allows: stock, pre-order, quantity bounds, photo URL, line total and the next wholesale step. The shared and Marketplace Pro `cart.show` both read it.
+- The cart Meta Pixel ViewCart event and the double-submit script moved to `storefront/cart/partials/cart-meta-events.blade.php` and `cart-script.blade.php`, shared by every theme. New view `themes/marketplace-pro/cart/show.blade.php`; 20 more lang keys.
+- New `App\Support\StorefrontCheckoutPage` (payment choices, the default one, whether ordering is blocked, delivery charges, the signed-in customer, the autosave URL) and `App\Support\StorefrontOrderSuccessPage` (the order's real amounts, the payment made, the links, the status label). The shared and Marketplace Pro `checkout.show` and `checkout.success` read them, so a theme only changes the design.
+- The checkout page's Alpine state, form script (autosave, leave-page guard, double-submit lock) and Meta Pixel InitiateCheckout event, and the success page's Purchase event, moved to `storefront/checkout/partials/` and are shared by every theme. The submit buttons take their sending text from `data-pending-label`, and the script handles more than one button.
+- New views `themes/marketplace-pro/checkout/show.blade.php` and `success.blade.php`; 56 more lang keys.
+- New `StorefrontMarketplaceProPagesTest`.
+- New `App\Support\StorefrontTrackPage` holds what the tracking page shows about a found order: the progress steps and their state, the order and delivery status labels, the courier parcel, the items with the buyer's prices (`showsResellerPricesToBuyer()`), the amounts and the delivery area and time. The shared and Marketplace Pro `track.show` both read it.
+- `OrderTrackController::trackingUpdates()` now wraps its titles and messages in `__()`; the English text is unchanged. New view `themes/marketplace-pro/track/show.blade.php`; 44 more lang keys (including the courier status labels In Transit, Picked Up, Booked, Not Booked and Booking Pending).
+- `StorefrontMarketplaceProPagesTest` now has 42 tests (9 new for tracking).
+## [2.69.4] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **The SMS gateway moved from Storefront Settings to Settings → Integrations → SMS Gateway.** The URL template, API key and sender ID are now edited there, per site (use the Site picker, like Payment Gateway). Values already saved keep working — nothing needs to be re-entered. Saving Storefront Settings no longer touches the SMS keys.
+
+### Technical Notes
+
+- SMS keys (`sms_api_url`, `sms_api_key`, `sms_sender_id`; `StorefrontNotificationService::SMS_CREDENTIAL_KEYS`) still live in the encrypted `storefront_settings.notification_credentials`; no migration. `Integrations::save()` merges only these keys into the stored array, and `EditStorefrontSetting::mutateFormDataBeforeSave()` re-adds them so the Storefront Settings form (which no longer has the fields) cannot wipe them. Tests: `IntegrationsPageTest` (+2).
+## [2.69.3] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Create/Edit Order: Total amount and Due amount now include the Shipping Fee as soon as you type it.** Before, the totals only recalculated when the field lost focus, so on a phone (where closing the keyboard leaves the field focused) a typed Shipping Fee of ৳110 never reached the Total amount, which kept showing only the products' ৳200. Shipping Fee, Discount, Vat, Paid amount and each item's Quantity and Unit price now update the totals about half a second after you stop typing.
+
+**Technical Notes:**
+- `OrderForm`: the six totals inputs changed from `live(onBlur: true)` to `live(debounce: OrderForm::TOTALS_DEBOUNCE_MS)` (500 ms). The saved order was never wrong (`OrderWorkflowService::sync()` recomputes it from items + fees after every save); only the on-screen total was stale. New tests in `OrderFormTest`: `test_shipping_fee_is_added_to_the_total_amount_on_the_live_create_form` and `test_inputs_feeding_the_order_totals_recalculate_while_typing_not_only_on_blur`. No migration, no new strings.
+## [2.69.2] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Investor portal sign-in, sign-up and password-reset pages: the company logo is now a standard size** (4rem high) instead of the tiny sidebar size. The logo in the signed-in header is also a standard size now (2.75rem high instead of Filament's tiny 1.5rem).
+
+**Technical Notes:**
+- `brandLogoHeight('2.75rem')` on the investor panel; rule added to `resources/css/filament/investor/theme.css` (`.fi-simple-layout .fi-logo`); `!important` is needed because Filament sets the height inline.
+## [2.69.1] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **Investor portal sign-in page:** the heading under the company logo now reads **Investor Dashboard**, so it is clear which sign-in this is.
+
+**Technical Notes:**
+- `Login::getHeading()`; 1 new lang key (en + bn); assertion added to `test_the_login_page_has_a_forgot_password_link`.
+## [2.69.0] - 2026-10-10
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investor portal: staff can set a password.** On an investor's or channel partner's page, **Portal access → Set a portal password** (needs `investments.portal_manage`) opens the portal account if there is none, sets the password and makes it active, so the person can sign in with their phone number and that password at once, without an SMS. Audited as `investor_portal.password_set_by_staff`; not offered for a disabled account.
+- **Investor portal sign-in: "Forgot your password?" link** under the password field, opening the existing SMS-code reset page.
+
+**Technical Notes:**
+- `InvestorPortalAccountService::setPasswordByStaff()`; link added to `Login::form()`. New tests in `InvestorPortalTest`. 6 new lang keys (en + bn).
+## [2.68.0] - 2026-10-10
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **A reseller's new store subdomain sets itself up and shows when it will be live.** After a reseller picks a subdomain on **My Store**, the page shows "Setting up <name>.<domain> (DNS and SSL)" with a countdown, checks every 15 seconds whether the address already opens over HTTPS, and switches to "Your store address … is live." on its own. Nothing to do on the reseller's side and no per-reseller server work: the wildcard DNS record covers every name, and the SSL certificate comes from the wildcard certificate or, new, from an on-demand proxy, because `/internal/tls-ask` now also approves the subdomain of every approved reseller. Until the address is ready the reseller's shared store link stays the long `/store/<slug>` link, so nobody gets a link that does not open yet. The countdown length is **Resellers → Reseller Settings → Subdomain set-up time (minutes)** (Super Admin, default 10).
+- **The name at the top of the reseller portal's user menu now opens the Profile page.**
+
+### Technical Notes
+
+- Subdomain set-up: migration `2026_10_10_100000_add_reseller_subdomain_status` (`customers.reseller_subdomain_changed_at` / `reseller_subdomain_live_at`, `storefront_settings.reseller_subdomain_setup_minutes` default 10). Subdomains chosen before it (no `changed_at`) count as live. `Customer::resellerSubdomainIsReady()` / `resellerSubdomainReadyAt()`; `resellerStoreUrl()` uses the subdomain only once it is ready. New `App\Services\ResellerSubdomainProbe` (DNS points at the company domain's IPs + an HTTPS request that succeeds), polled by `MyStore::checkSubdomain()`. `TlsAskController` also answers 200 for approved resellers' subdomains. Profile link: `ResellerPanelProvider` `userMenuItems(['profile' => ...->url(Profile::getUrl())])`. Tests: `ResellerSubdomainTest` +5, `ResellerPortalDashboardTest` +1, `ResellerSettingsPageTest` updated. 7 new lang keys (en + bn). `docs/deployment.md` updated.
 ## [2.67.0] - 2026-10-09
 
 **Release type:** Minor Feature Update

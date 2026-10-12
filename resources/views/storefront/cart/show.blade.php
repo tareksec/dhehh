@@ -1,21 +1,6 @@
 @extends(\App\Support\StorefrontThemeRegistry::layoutView($setting->storefrontTheme()))
 
-@push('meta-events')
-    @php
-        $metaTracking = app(\App\Services\StorefrontMetaTrackingService::class);
-    @endphp
-    @if (! isset($previewSlug) && $metaTracking->browserEventEnabled($setting, 'ViewCart', request()))
-        <script>
-            fbq('track', 'ViewCart', {{ Illuminate\Support\Js::from([
-                'content_ids' => collect($items)->map(fn ($item) => (string) $item['product']->getKey())->unique()->values()->all(),
-                'content_type' => 'product',
-                'currency' => 'BDT',
-                'value' => round((float) $subtotal, 2),
-                'num_items' => collect($items)->sum('quantity'),
-            ]) }}, {eventID: {{ Illuminate\Support\Js::from($metaTracking->eventId('view-cart')) }}});
-        </script>
-    @endif
-@endpush
+@include('storefront.cart.partials.cart-meta-events')
 
 @section('content')
     <section class="border-b border-gray-200 dark:border-white/10">
@@ -31,15 +16,14 @@
         <div class="space-y-4">
             @forelse ($items as $item)
                 @php
-                    $product = $item['product'];
-                    $variant = $item['variant'] ?? null;
-                    $lineStock = $variant ? (int) $variant->stock : (int) $product->stock;
-                    $isPreorderLine = ! $variant && (bool) $product->is_preorder;
-                    $lineMax = $isPreorderLine
-                        ? max($lineStock, \App\Services\StorefrontCart::PREORDER_STOCK_CEILING)
-                        : max(1, $lineStock);
-                    $lineMin = min($product->effectiveMoq(), $lineMax);
-                    $lineImage = $variant && filled($variant->images) ? collect($variant->images)->first() : $product->image;
+                    $line = \App\Support\StorefrontCartLine::make($item, $company);
+                    $product = $line->product;
+                    $variant = $line->variant;
+                    $lineStock = $line->stock;
+                    $isPreorderLine = $line->isPreorder;
+                    $lineMax = $line->maxQuantity;
+                    $lineMin = $line->minQuantity;
+                    $lineImage = $line->imageUrl;
                     $updateUrl = \App\Support\StorefrontUrl::route('cart.update', [$product->slug], $previewSlug ?? null);
                     $removeUrl = \App\Support\StorefrontUrl::route('cart.remove', [$product->slug], $previewSlug ?? null);
                     $productUrl = \App\Support\StorefrontUrl::route('products.show', [$product->slug], $previewSlug ?? null);
@@ -47,7 +31,7 @@
                 <article class="grid grid-cols-[80px_minmax(0,1fr)] gap-3 rounded-lg border border-gray-200 bg-white p-3 sm:grid-cols-[96px_minmax(0,1fr)] sm:gap-4 sm:p-4 dark:border-gray-800 dark:bg-gray-900">
                     <a href="{{ $productUrl }}" class="h-20 w-20 overflow-hidden rounded-lg bg-gray-100 sm:h-24 sm:w-24 dark:bg-white/5">
                         @if ($lineImage)
-                            <img class="aspect-square h-full w-full object-cover" src="{{ \App\Support\CompanyMedia::publicUrl($lineImage, $company) }}" alt="{{ $product->name }}" width="192" height="192" loading="lazy" decoding="async">
+                            <img class="aspect-square h-full w-full object-cover" src="{{ $lineImage }}" alt="{{ $product->name }}" width="192" height="192" loading="lazy" decoding="async">
                         @else
                             <div class="grid aspect-square h-full w-full place-items-center text-3xl font-semibold text-[var(--storefront-brand)]">{{ mb_substr($product->name, 0, 1) }}</div>
                         @endif
@@ -98,7 +82,7 @@
                                 @endif
                                 <button class="inline-flex min-h-11 items-center rounded-lg border border-gray-300 px-3 text-xs font-medium text-gray-600 transition hover:border-red-400 hover:text-red-600 disabled:cursor-wait disabled:opacity-60 dark:border-white/15 dark:text-gray-300" type="submit" data-pending-label="Removing&hellip;">Remove</button>
                             </form>
-                            <div class="w-full text-right text-base font-semibold text-gray-950 dark:text-white">BDT {{ \App\Support\MoneyFormatter::number($item['unit_price']) }}</div>
+                            <div class="w-full text-right text-base font-semibold text-gray-950 dark:text-white">BDT {{ \App\Support\MoneyFormatter::number($item['subtotal']) }}</div>
                         </div>
                     </div>
                 </article>
@@ -145,31 +129,5 @@
         </aside>
     </section>
 
-    <script>
-        document.addEventListener('submit', function (event) {
-            var form = event.target.closest && event.target.closest('[data-cart-line-form]');
-            if (!form) return;
-
-            if (form.dataset.submitting === 'true') {
-                event.preventDefault();
-                return;
-            }
-
-            form.dataset.submitting = 'true';
-
-            window.setTimeout(function () {
-                if (event.defaultPrevented) {
-                    delete form.dataset.submitting;
-                    return;
-                }
-
-                form.setAttribute('aria-busy', 'true');
-                form.querySelectorAll('button[type="submit"]').forEach(function (button) {
-                    button.disabled = true;
-                    button.setAttribute('aria-busy', 'true');
-                    button.textContent = button.getAttribute('data-pending-label') || 'Working…';
-                });
-            }, 0);
-        });
-    </script>
+    @include('storefront.cart.partials.cart-script')
 @endsection

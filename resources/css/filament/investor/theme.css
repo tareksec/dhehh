@@ -9,3 +9,15 @@
  */
 @source '../../../../app/Filament/Investor/**/*';
 @source '../../../../resources/views/filament/investor/**/*';
+
+/*
+ * Sign-in, sign-up and password-reset pages: Filament shows the brand logo at
+ * 1.5rem (the sidebar size), which is tiny above a form. Use a standard
+ * logo size here; the panel's own header keeps the default.
+ */
+.fi-simple-layout .fi-logo {
+    height: 4rem !important;
+    max-width: 100%;
+    width: auto;
+    object-fit: contain;
+}

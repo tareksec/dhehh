@@ -16,6 +16,8 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 use SensitiveParameter;
 
@@ -53,6 +55,9 @@ class Login extends BaseLogin
                 ->revealable(filament()->arePasswordsRevealable())
                 ->autocomplete('current-password')
                 ->required()
+                ->hint(filament()->hasPasswordReset()
+                    ? new HtmlString(Blade::render('<x-filament::link :href="filament()->getRequestPasswordResetUrl()" tabindex="3">{{ __(\'Forgot your password?\') }}</x-filament::link>'))
+                    : null)
                 ->visible(fn (): bool => $this->mode === 'password'),
             TextInput::make('code')
                 ->label(__('SMS code'))
@@ -145,6 +150,12 @@ class Login extends BaseLogin
         $this->mode = 'password';
         $this->codePhone = null;
         $this->resetErrorBag();
+    }
+
+    /** Shown under the company logo so it is clear which sign-in this is. */
+    public function getHeading(): string|Htmlable|null
+    {
+        return __('Investor Dashboard');
     }
 
     /** No "sign up" link here: sign-up works only through a partner's invite link. */

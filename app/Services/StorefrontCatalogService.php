@@ -147,6 +147,7 @@ class StorefrontCatalogService
                 'label' => $variant->label(),
                 'price' => $variant->effectiveSalePrice(),
                 'stock' => (int) $variant->stock,
+                'weight_kg' => $variant->effectiveWeightKg(),
                 'image_urls' => Media::urls($variant->images ?? [], $this->company),
             ])->values()->all(),
             'min_order_quantity' => min($product->effectiveMoq(), $maxOrderQuantity),

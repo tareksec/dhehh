@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\CompanyFaq;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
+use App\Support\StorefrontSeo;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -35,6 +36,8 @@ class ContactController extends Controller
             ->where('is_active', true)
             ->orderBy('question')
             ->get();
+
+        StorefrontSeo::current()->page(__('Contact us'))->index();
 
         return StorefrontThemeRegistry::page('contact.show', [
             'company' => $company,

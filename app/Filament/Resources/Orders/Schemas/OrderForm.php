@@ -39,6 +39,15 @@ use Illuminate\Support\HtmlString;
 
 class OrderForm
 {
+    /**
+     * Every input that feeds Total amount / Due amount recalculates this many
+     * milliseconds after typing stops. They used to recalculate only on blur
+     * (`live(onBlur: true)`), but on a phone the keyboard is usually dismissed
+     * without the field losing focus, so a typed Shipping Fee never reached
+     * the Total amount (owner report, 2026-10-10).
+     */
+    public const TOTALS_DEBOUNCE_MS = 500;
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -291,7 +300,7 @@ class OrderForm
                                     ->minValue(1)
                                     ->default(1)
                                     ->required()
-                                    ->live(onBlur: true)
+                                    ->live(debounce: self::TOTALS_DEBOUNCE_MS)
                                     ->afterStateUpdated(function (Get $get, Set $set): void {
                                         self::setItemSubtotal($get, $set);
                                         self::setOrderTotalsFromRepeater($get, $set);
@@ -302,7 +311,7 @@ class OrderForm
                                     ->prefix('৳')
                                     ->minValue(0)
                                     ->required()
-                                    ->live(onBlur: true)
+                                    ->live(debounce: self::TOTALS_DEBOUNCE_MS)
                                     ->afterStateUpdated(function (Get $get, Set $set): void {
                                         self::setItemSubtotal($get, $set);
                                         self::setOrderTotalsFromRepeater($get, $set);
@@ -343,7 +352,7 @@ class OrderForm
                             ->default(0)
                             ->minValue(0)
                             ->required()
-                            ->live(onBlur: true)
+                            ->live(debounce: self::TOTALS_DEBOUNCE_MS)
                             ->afterStateUpdated(fn (Get $get, Set $set) => self::setOrderTotals($get, $set)),
 
                         TextInput::make('vat')
@@ -352,7 +361,7 @@ class OrderForm
                             ->default(0)
                             ->minValue(0)
                             ->required()
-                            ->live(onBlur: true)
+                            ->live(debounce: self::TOTALS_DEBOUNCE_MS)
                             ->afterStateUpdated(fn (Get $get, Set $set) => self::setOrderTotals($get, $set)),
 
                         Hidden::make('shipping_zone'),
@@ -364,7 +373,7 @@ class OrderForm
                             ->default(0)
                             ->minValue(0)
                             ->required()
-                            ->live(onBlur: true)
+                            ->live(debounce: self::TOTALS_DEBOUNCE_MS)
                             ->helperText(fn (Get $get): ?string => $get('shipping_zone')
                                 ? 'Auto-detected zone: '.ucfirst($get('shipping_zone')).'. Adjust if needed.'
                                 : 'Could not detect a zone from the customer address — set manually if needed.')
@@ -391,7 +400,7 @@ class OrderForm
                             ->default(0)
                             ->minValue(0)
                             ->required()
-                            ->live(onBlur: true)
+                            ->live(debounce: self::TOTALS_DEBOUNCE_MS)
                             ->afterStateUpdated(fn (Get $get, Set $set) => self::setOrderTotals($get, $set))
                             // Once the order exists, paid_amount is derived from the
                             // Payments History ledger (OrderPayment rows, recomputed by

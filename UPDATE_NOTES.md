@@ -70,6 +70,181 @@ Owner instruction (in Bangla): write into the plan that this is to be done with 
 
 Commit status: committed and pushed to the branch and main on owner approval ("যে কাজ গুলো হয়ে সেগুলো কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-12).
 
+## 2026-10-10 - Storefront SEO: page titles, canonical, robots.txt, sitemap and structured data
+
+Reason — the owner said "পরবর্তী কাজ কর" (do the next task) after phase 5 was pushed to `main`. The remaining items were AJAX mini-cart, multi-size images, caching/SEO and Lighthouse CI; SEO was the recommendation. A look at the storefront found that every page, including every product, had the home page's `<title>` and description, and that there was no canonical address, sitemap or structured data.
+
+What changed:
+- **Titles and descriptions:** product (name + start of the description, photo), category (name + description or tagline, photo), listing ("All products", or "Results for ..."), custom page (meta title/description, else title and excerpt), offer (meta title/description, else title and short description), offers list and contact page ("Contact us"). The title reads "page | site title"; the home page keeps the site title.
+- **Indexing:** a page is private unless its controller calls `index()`. Indexed: home, shop, category, product, custom page, offer, offers list, contact. Search results, sorted, filtered and later listing pages and the offers type filter are `noindex, follow` (all themes; Marketplace Pro's own push is gone). Cart, checkout, track, account, complaints and previews are `noindex, nofollow`.
+- **Canonical + Open Graph:** canonical = the page's address without its query string, on the host that was visited. `og:url`, `og:site_name`, `og:locale` (`en_US` / `bn_BD`) and `og:type` (`product` on product pages).
+- **robots.txt:** now a route. A storefront domain disallows `/admin`, `/livewire`, `/cart`, `/checkout`, `/account`, `/track`, `/complaints`, `/store/*/cart`, `/store/*/checkout` and names `Sitemap:`. The app's domain keeps `/admin` and `/livewire`. `public/robots.txt` is deleted and the `location = /robots.txt` block is removed from `nginx.template.conf` (a static file would shadow the route, and that nginx block would turn the missing file into a 404 that crawlers ignore; `SecurityHardeningTest` guards both). **The nginx change takes effect at the next Coolify deploy** (Nixpacks re-renders the template).
+- **sitemap.xml:** home, shop, contact, categories with available products, available products (`lastmod`), published pages (this site), published offer landing pages and the offers list. A reseller's own store (subdomain or custom domain) has no sitemap. Cached 10 minutes with the company's listing-cache generation, so a product or category save refreshes it. More than 45,000 addresses split into `/sitemap-{n}.xml` behind an index.
+- **JSON-LD:** `Product` (name, photos, SKU, brand, `Offer`/`AggregateOffer`, currency, stock) with no price when the product has none; `BreadcrumbList` on product and category pages; `Organization` (name, logo, phone, email, social profiles; WhatsApp links left out) and `WebSite` with the product search on the home page. No `aggregateRating`: the product page shows no reviews and search engines require markup to match what the page shows. A reseller's store gets no price markup (reseller price differs from the company's). `</script>` in a product name cannot break out of the tag.
+- Default meta description is now translated. 2 lang keys: "Shop products from :name" → ":name থেকে পণ্য কিনুন", "Contact us" → "যোগাযোগ করুন".
+
+Needs Bangla review: "Shop products from :name", "Contact us".
+
+Decisions to confirm with the owner:
+- **Reseller stores stay indexable** (as before) with their own canonical address, but are not in the sitemap and publish no price markup. If resellers should not appear in search at all, say so and they become `noindex`.
+- **`hreflang` not added:** Bangla and English share one address (the visitor's language is not in the URL), so there is nothing to point between.
+- **Product/category meta title and description fields** do not exist; the title and description come from the product or category itself. Adding admin fields needs a migration and Filament form changes — only on request.
+- **`www` vs bare domain:** the canonical uses the host the visitor used. If both open the site, set a redirect from one to the other at Coolify/DNS.
+- After deploy, submit `https://<domain>/sitemap.xml` in Google Search Console and check a product with the Rich Results Test.
+
+Verified: `StorefrontSeoTest` (24 tests), 2 new reseller-host tests and the changed `SecurityHardeningTest` pass. Full suite (plain `php artisan test`): 2123 passed, 1 skipped, 0 failed (2097 before this change). Pint is clean on the new files; `routes/web.php` and `SecurityHardeningTest` already failed Pint before this change (not reformatted). No CSS/JS changed, so no `npm run build`.
+
+Commit status: committed and pushed with the owner's approval (2026-10-11: "কমিট এবং পুশ কর এবং মেইন এ পুশ কর").
+
+## 2026-10-11 - Weight field on product variations
+
+Reason — the owner asked (in Bangla) to add a weight field to the variation part of the product form.
+
+What changed:
+- Product form → Variations: each variation has a new "Variation weight (kg)" field (numeric, 0 or more, 3 decimals, `kg` suffix). Empty = use the product's weight.
+- New nullable column `product_variants.weight_kg` (migration `2026_10_11_100000_add_weight_kg_to_product_variants`). Existing variations stay empty, so nothing changes for them.
+- Where the weight is used (variation weight, else product weight): `StorefrontDeliveryService::quote()` (Blade checkout, website checkout API and landing-page offers — `OfferCheckoutController` now passes the offer item's variation), the invoice and PDF weight column, the order page item weight and Total Weight (`OrderItem::unitWeightKg()`), and the website API product detail (`variants[].weight_kg`, documented in `docs/api/storefront-api.md`).
+- Not changed: the reseller order flow has no variations.
+- 2 lang keys in `en.json` and `bn.json`. Needs Bangla review: "Variation weight (kg)" → "ভেরিয়েশনের ওজন (কেজি)", "Leave empty to use the product weight." → "খালি রাখলে প্রোডাক্টের ওজন ব্যবহার হবে।".
+
+Second request the same day — the owner asked that the WooCommerce import bring the variation weight and the full product description "in the exact format" (today the description is plain text), suggesting markdown in the Filament description box:
+- Variation weight: `WooCommerceImportService::importVariation()` now reads the variation's `weight` (kg, same assumption as the product weight; empty or 0 is not set).
+- Description: kept as **HTML**, not markdown. The product form's description box is a rich editor that stores HTML and the storefront renders HTML, so markdown text would show up as literal `**` and `#` signs. New `App\Support\WooCommerceDescription` adds the paragraph and line-break tags WordPress only adds on display, removes scripts/styles/comments/`[caption]`, and passes the result through Filament's sanitising `RichContentRenderer`. Headings, bold/italic, lists, links, tables, images and alignment survive (checked); Bangla text survives.
+- Known limits: images inside a description still point at the old site (not downloaded), so they break if the old site goes away; page-builder shortcodes (Elementor, Divi) other than `[caption]` stay as text, as before; the weight is read as kg without checking the WooCommerce weight unit setting (existing behaviour for the product weight). Already imported products keep their plain-text description until the import is run again (this also refreshes their price and weight).
+
+Verified: new `WooCommerceDescriptionTest` (7 tests); `WooCommerceImportTest` updated (description now HTML, variation weights checked); new `ProductVariantWeightTest` (8 tests: fallback to product weight, form saves the weight, form rejects a negative weight, delivery quote with a mixed cart, order item weight, invoice shows the variation weight, API variants carry the weight).
+
+Commit status:
+
+- Not committed. Commit and push require explicit user approval.
+
+## 2026-10-10 - Marketplace Pro phase 5f: order track page
+
+Reason — the owner said "পরবর্তি কাজ কর" (do the next task) after the checkout and success pages. The order track page is the last page of phase 5.
+
+What changed:
+- Marketplace Pro `track/show`: breadcrumb, the lookup form (order number and the phone used on the order), a "not found" alert, and for a found order: the order number, date, status pill and total; a four-step progress bar (Order placed, Confirmed, On the way, Delivered; vertical on phones, horizontal from 640px); the delivery update with courier name, tracking ID and booking status; the tracking updates as a timeline with the latest marked; the items with photos; a summary (subtotal, discount, VAT, delivery, packaging, total, paid, due); delivery area and time; buttons for a complaint, the helpline and more shopping.
+- Progress rules (`StorefrontTrackPage`): Placed is current for a draft order; Confirmed when the order is confirmed or processing, or a courier booking exists; On the way when the delivery status is picked up, in transit or partial delivered; Delivered when the delivery status is delivered or the order is completed. A cancelled, returned or refunded order (or a returned delivery) stops after the first step and shows "This order was cancelled/returned/refunded." A failed or cancelled courier booking is not treated as a failed order.
+- Privacy and reseller rules are unchanged: the lookup still needs the order's phone (a signed link or the owning signed-in customer needs none). A reseller's own-courier customer sees item lines and one total at the reseller's prices; the page never prints the store's subtotal, delivery, paid or due for them. The page does not show the customer's name or address.
+- Shared logic: new `StorefrontTrackPage`. `OrderTrackController::trackingUpdates()` now translates its titles and messages.
+- Bug fix (all themes except Marketplace Pro): the shared track page printed the order's amount due on every item line. Each line now shows its own line total. The shared page's text is now translated (it was English only).
+- 44 more lang keys. Needs Bangla review: "On the way" → "পথে আছে", "In Transit" → "ট্রানজিটে আছে", "Picked Up" → "কুরিয়ার সংগ্রহ করেছে", "Admin confirmed" → "অ্যাডমিন নিশ্চিত করেছে", "Total due" → "মোট বাকি", "Delivery status updated to :status." → "ডেলিভারি স্ট্যাটাস আপডেট হয়ে :status হয়েছে।".
+
+Verified: `StorefrontMarketplaceProPagesTest` has 42 tests (9 new for tracking: own view and lookup, shared view and per-line prices, phone required and unknown order, the success-page link without a phone, progress steps, cancelled order, courier and updates, reseller prices, Bangla). The shared per-line test fails on the old view and passes now. Playwright at 360/768/1366px against the scratchpad SQLite database (placed, on the way with a courier parcel, delivered, not found, empty): 0px horizontal overflow and no console errors in any state.
+
+Next: phase 5 is complete. Not requested yet: AJAX mini-cart, multi-size images, caching/SEO, Lighthouse CI.
+
+Commit status: committed and pushed with the owner's approval (2026-10-10: "যত টুকু কাজ হয়েছে পুরোটা কমিট করে পুশ কর এবং মেইনে পুশ কর"). One commit carries phases 5d, 5e and 5f.
+
+## 2026-10-10 - Marketplace Pro phase 5d + 5e: checkout and success pages
+
+Reason — the owner said "চেকআউট শুরু কর" (start checkout) after phases 5a-5c were committed as `2a6d67e`.
+
+What changed:
+- Marketplace Pro `checkout/show`: four numbered cards (contact, delivery address with the detected area, payment method with the manual/online instructions, order note), an order summary with thumbnails, VAT, parcel weight, live delivery charge, delivery time and total, the advance notes, and a phone bar with the live total and the order button. Ordering stays blocked without a payment path or when a pre-order has no online payment.
+- Marketplace Pro `checkout/success`: order number, status (a draft order reads "Awaiting confirmation"), items with unit price and line total, subtotal, discount, VAT, delivery, packaging, total, paid and due, the delivery details with the area's delivery time, the payment box, WhatsApp group, complaint, Track this order, Continue shopping.
+- Shared logic: `StorefrontCheckoutPage` and `StorefrontOrderSuccessPage`. The Alpine state (kept character for character, so the `vat: 95` test still holds), the form script and the pixel events are partials under `storefront/checkout/partials/`. The shared pages use them too. No checkout rule changed: prices, delivery, VAT, advances and payments still come from `StorefrontCheckoutService`.
+- Bug fix (all themes except Marketplace Pro): the shared success page printed the order total on every item line, the subtotal and the delivery charge. It now prints the real values and the amount due.
+- Bug fix (all themes): an empty address after a failed submit reached the page script as `null`, which blanked the delivery charge and total. It is now a string.
+- 56 more lang keys. Needs Bangla review: "Send Money to" → "সেন্ড মানি করুন", "Awaiting confirmation" → "নিশ্চিতকরণের অপেক্ষায়", "Place order / continue to payment" → "অর্ডার করুন / পেমেন্টে যান", "Weight-based rate:" → "ওজন অনুযায়ী রেট:", ":actual kg (charged as :billed kg)" → ":actual কেজি (হিসাব হবে :billed কেজি)", "Your sender number" → "আপনার সেন্ডার নম্বর".
+- The success page's WhatsApp group text still comes from `StorefrontSetting::whatsappGroupMessage()`, whose default is Bangla text kept in the model constant. I did not change it.
+
+Verified: `StorefrontMarketplaceProPagesTest` has 33 tests (14 new for checkout and success). The two regression tests for the shared success amounts and the empty address fail on the old code. The 66 existing shared checkout tests pass unchanged. Playwright at 360/768/1366px on a scratchpad SQLite database: 0px overflow, the area detection moves the delivery charge (70 inside Dhaka, 110 outside), the total and the phone bar follow, an order was placed through the page and the success page shows the right amounts, and the server-side error state focuses the error box and marks 4 fields invalid. Full `php artisan test` (plain, no `--env`): 2076 passed, 1 skipped. Pint and `npm run build` pass.
+
+Next in phase 5: the order track page.
+
+Commit status: committed together with phase 5f (see above) with the owner's approval.
+
+## 2026-10-10 - Marketplace Pro phase 5a: listing page + product card
+
+Reason — the owner said "পরবর্তি ধাপের কাজ শুরু কর" (start the next phase). The plan's phase 5 is the shopping path (listing, product, cart, checkout, success, track). This is the first part: listing and product card. The branch was restarted from the latest `main`, because the previous work was already merged there.
+
+What changed:
+- Marketplace Pro listing/category/search page (`themes/marketplace-pro/products/index.blade.php`). Desktop: a 260px filter sidebar. Mobile: a slide-in filter panel (Esc and the backdrop close it). Also a sort menu, breadcrumb, product count and an empty state with category chips.
+- Filters: `in_stock`, `min_price`, `max_price` (query string; `StorefrontListingFilters`). Filtered pages skip the listing cache. Filtered, sorted and later pages get `noindex, follow`.
+- Marketplace Pro product card, used on the home and listing pages.
+- Bug fix: the shared card's struck-through price showed the selling price, not the original price.
+- 28 lang keys in en.json and bn.json.
+
+Needs Bangla review: "Availability" → "স্টক", "MOQ :count :unit" → "সর্বনিম্ন অর্ডার :count :unit", "Breadcrumb" → "ব্রেডক্রাম্ব".
+
+Verified: `StorefrontMarketplaceProPagesTest` (7). Full `php artisan test` (plain, no `--env`): 2050 passed, 1 skipped. `npm run build` passes and Pint passes. Playwright at 360/768/1366px on a scratchpad SQLite database showed 0px horizontal overflow.
+
+### Phase 5b: product page (owner: "ওকে এখন পরবর্তি কাজ কর", 2026-10-10)
+
+- Marketplace Pro `products/show`:
+  - gallery and buy box: price, original price, "Save", VAT note, stock pill, bulk pricing table, variant rows, quantity, Add to cart / Buy now, WhatsApp;
+  - delivery time box and admin trust items;
+  - description, related products with Marketplace Pro cards, and a sticky buy bar on phones.
+- The shared logic moved to `StorefrontProductPage`. The script and pixel event moved to partials. The Built-in and Noor Solar product pages use the same partials and look the same as before.
+- Bug fix (all themes): variant rows showed the product price, but the cart charges the variant's own price. They now show the variant price.
+- 23 more lang keys. Needs Bangla review: "Save :amount" → ":amount সাশ্রয়", "Unit price" → "একক দাম".
+- `StorefrontThemeTest` fallback check now uses a page Marketplace Pro does not override (Noor Solar cart).
+
+Verified: `StorefrontMarketplaceProPagesTest` has 12 tests. The 5 product page tests check the add to cart and Buy now form posts. Full `php artisan test`: 2054 passed and 1 skipped. The one failure was the expected fallback check above, which I fixed; after that `StorefrontThemeTest` passes 16/16. Pint and `npm run build` pass. Playwright at 360px and 1366px showed 0px overflow, and the variant counter reads "Add to cart (2)".
+
+### Phase 5c: cart page (owner: "পরবর্তি কাজ কর", 2026-10-10)
+
+- Marketplace Pro `cart/show`: breadcrumb, title and item count, one card per row (photo, category, name, option, price each, stock pill, MOQ, line total, quantity stepper, Update, Remove), a sticky order summary on desktop (items, subtotal, delivery "Calculated at checkout", VAT note, Proceed to checkout, Continue shopping), a sticky subtotal and checkout bar above the bottom navigation on phones, and an empty state with "Browse products".
+- Wholesale hint per row: "Add N more to pay ৳X each" (nearest tier above the quantity that is cheaper than today's price; base products only, as variants never get tier prices). It is hidden under a reseller price, because `normalizedTiers()` hides tiers there.
+- New `StorefrontCartLine` (shared logic). The shared cart view uses it too. The ViewCart pixel event and the double-submit script moved to partials.
+- Bug fix (all themes except Marketplace Pro): the shared cart row printed the unit price where the line total belongs. A regression test fails on the old view.
+- 20 more lang keys. Needs Bangla review: "Add :count more to pay :price each" → "আরও :countটি নিলে প্রতিটি :price", ":vat is added at checkout" → "চেকআউটে :vat যোগ হবে", "Prices include :vat" → "দামে :vat ধরা আছে", "Calculated at checkout" → "চেকআউটে হিসাব হবে".
+- The shared cart page's own text is still hardcoded English; it is translated only for Marketplace Pro in this phase.
+
+Verified: `StorefrontMarketplaceProPagesTest` has 19 tests (7 new for the cart). Playwright at 360/768/1366px: 0px horizontal overflow, the stepper, Update (5 pieces switched to the 5+ wholesale price) and Remove (with the confirm) work, and the empty state renders. Full `php artisan test` (plain, no `--env`): 2062 passed, 1 skipped. Pint and `npm run build` pass.
+
+Next in phase 5: checkout and success, then track.
+
+Commit status: committed and pushed to `claude/erpf-marketplace-pro-customization-5m95cn` (phases 5a, 5b and 5c together) on owner approval ("ওকে কমিট এবং পুশ কর", 2026-10-10). Not pushed to `main`.
+
+## 2026-10-10 - SMS gateway moved to Integrations
+
+Owner instruction: "sms gateway ইন্টিগ্রেশন টা সাইট সেটিংস থেকে সরিয়ে integration পেজে sms gateway এর সেটিংস যুক্ত কর।"
+
+- Storefront Settings no longer has the SMS URL template / API key / sender ID fields; Settings → Integrations has a new **SMS Gateway** tab (per site via the Site picker).
+- Saving Integrations merges only the three SMS keys into `notification_credentials`; `EditStorefrontSetting` re-adds the stored SMS keys so Storefront Settings cannot wipe them. No migration.
+- Needs Bangla review: the 8 new SMS Gateway strings in `lang/bn.json`.
+- Verified: IntegrationsPageTest, TranslationParityTest, NextjsSiteSettingsTest, LeadFollowUpReminderTest, StorefrontResellerAndAbandonedCartTest passed. Full suite on the working branch: 2061 passed, 8 failed — all online-payment tests (`StorefrontApiCheckoutTest` x7, `StorefrontPaystationPaymentTest` x1) on files this change does not touch.
+
+Commit status: committed and pushed to main with owner approval (2026-10-10).
+
+## 2026-10-10 - Orders: shipping fee now reaches Total amount while typing
+
+Owner report (in Bangla, with a phone screenshot of Create Order): Shipping Fee showed ৳110 but Total amount / Due amount stayed at the products' ৳200 — the shipping amount was not added. Fix it and add a separate test.
+
+Root cause (reproduced in a real mobile Chromium against a scratch SQLite database): `shipping_fee` (and discount, vat, paid_amount, item quantity, item unit price) were `live(onBlur: true)`, so the totals were recalculated only when the field lost focus. On a phone the keyboard is usually closed without a blur, so no request was sent and Total/Due stayed stale. A Livewire test cannot see this because it never blurs a field; the form maths in `setOrderTotals()` was already correct and the saved order was never wrong (`OrderWorkflowService::sync()` recomputes it after every save).
+
+What changed:
+- `OrderForm`: those six inputs are now `live(debounce: OrderForm::TOTALS_DEBOUNCE_MS)` (500 ms), so the totals update about half a second after typing stops, with or without a blur. Applies to Create and Edit Order (same schema).
+- Browser check after the fix: type 110 into Shipping Fee, do nothing else → Total and Due go from ৳200 to ৳310 after ~0.5 s.
+- Tests (`OrderFormTest`): `test_shipping_fee_is_added_to_the_total_amount_on_the_live_create_form` (shipping typed last, typed first, with quantity/discount/vat/paid changes, and the saved order's total/due) and `test_inputs_feeding_the_order_totals_recalculate_while_typing_not_only_on_blur` (fails on the old `live(onBlur: true)`, verified).
+- No new strings (nothing to translate), no migration.
+
+Noticed, not changed: choosing a customer again resets Shipping Fee to the detected zone's fee (৳0 if the address matches no zone), wiping a fee that was typed by hand earlier. That is the existing `setShippingFee()` behaviour; say if it should keep a manual fee.
+
+Verification: `php artisan test tests/Feature/OrderFormTest.php` — 6 passed. Full `php artisan test` (plain, no `--env`) — **2052 passed, 2 skipped, 0 failed** (18698 assertions, ~522 s). Pint passed on the changed PHP files. `npm run build` not needed — no frontend source changed (it was only built locally to run the real-browser check).
+
+Commit status: committed and pushed to the branch `claude/optimistic-knuth-m5okxp` on owner approval ("কমিট ও পুশ কর", 2026-10-10). Not pushed to main.
+
+## 2026-10-12 - Investor portal: sign-in logo size
+
+Owner request (in Bangla): the logo on the portal sign-in page became small; make it a standard size. Investor theme CSS (`.fi-simple-layout .fi-logo`, 4rem high). Follow-up (owner): the signed-in header logo was also tiny, so the panel now uses `brandLogoHeight('2.75rem')`. No strings.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-12).
+
+## 2026-10-11 - Investor portal: sign-in heading
+
+Owner request (in Bangla): write "Investor Dashboard" under the company logo on the portal login page. `Login::getHeading()` returns it. Needs Bangla review: "ইনভেস্টর ড্যাশবোর্ড".
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-11).
+
+## 2026-10-10 - Investor portal: staff-set password and forgot-password link
+
+Owner request (in Bangla): a super admin can create a password so the person can sign in to the investor portal, and add Forgot password on the login page. Added **Portal access → Set a portal password** (`InvestorPortalAccountService::setPasswordByStaff`) and the "Forgot your password?" link on the portal login (the reset page itself already existed; the custom login form had dropped Filament's link). Tests added. Needs Bangla review: the 6 new keys (e.g. "Set a portal password").
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-10).
+
 ## 2026-10-10 - Reseller portal: profile link in the user menu, subdomain set-up countdown
 
 Owner request (in Bangla, with a screenshot of the portal's user menu): link the profile page from the profile icon; and after a reseller sets a subdomain, DNS and SSL should be created and connected automatically, with a time shown for when the domain will be live.
