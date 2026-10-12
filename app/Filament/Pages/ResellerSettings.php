@@ -5,11 +5,14 @@ namespace App\Filament\Pages;
 use App\Filament\Clusters\Resellers;
 use App\Filament\Resources\StorefrontPaymentMethods\StorefrontPaymentMethodResource;
 use App\Models\Company;
+use App\Models\StorefrontPayment;
 use App\Models\StorefrontPaymentMethod;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
 use App\Services\ResellerOwnCourierService;
 use BackedEnum;
+use Filament\Forms\Components\CheckboxList;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -20,6 +23,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 use Illuminate\Support\HtmlString;
@@ -91,7 +95,60 @@ class ResellerSettings extends Page
             'reseller_guide_intro' => $setting?->reseller_guide_intro,
             'reseller_guide_show_figures' => (bool) ($setting?->reseller_guide_show_figures ?? false),
             'reseller_guide_rules' => $setting?->reseller_guide_rules ?? [],
+            ...$this->paymentFormState($setting),
         ]);
+    }
+
+    /**
+     * The own-courier payment fields: the ticked store methods and the
+     * reseller-only rows (with their ids, so a second save updates them).
+     *
+     * @return array<string, mixed>
+     */
+    protected function paymentFormState(?StorefrontSetting $setting): array
+    {
+        return [
+            'reseller_payment_method_ids' => $this->chosenStoreMethodIds($setting),
+            'reseller_only_payment_methods' => StorefrontPaymentMethod::query()
+                ->where('reseller_only', true)
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get()
+                ->map(fn (StorefrontPaymentMethod $method): array => [
+                    'id' => $method->getKey(),
+                    'name' => $method->name,
+                    'account_number' => $method->account_number,
+                    'instructions' => $method->instructions,
+                    'is_active' => (bool) $method->is_active,
+                ])
+                ->all(),
+        ];
+    }
+
+    /** The store's manual methods an admin can let resellers use (active, not reseller-only). */
+    protected function storeMethods(): Collection
+    {
+        return StorefrontPaymentMethod::query()
+            ->forStore()
+            ->where('type', StorefrontPaymentMethod::TYPE_MANUAL)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * What is ticked: the saved choice, or every store method until the admin
+     * has saved one (that is what resellers see until then).
+     *
+     * @return list<int>
+     */
+    protected function chosenStoreMethodIds(?StorefrontSetting $setting): array
+    {
+        $available = $this->storeMethods()->modelKeys();
+        $chosen = $setting?->reseller_payment_method_ids;
+
+        return $chosen === null ? array_map('intval', $available) : array_values(array_intersect($available, array_map('intval', $chosen)));
     }
 
     protected static function isSuperAdmin(): bool
@@ -205,8 +262,48 @@ class ResellerSettings extends Page
                     ->columns(2),
 
                 Section::make(__('Own-courier advance payments'))
-                    ->description(__('Resellers pay the advance of their own-courier orders into these channels. They are the store\'s manual payment methods (also used at the storefront checkout), so they are managed on the Payment Methods page.'))
+                    ->description(__('Resellers pay the advance of their own-courier orders into these channels. Tick the store\'s payment methods they may use, and add channels that exist only for resellers. The store\'s checkout never shows the reseller-only channels.'))
                     ->schema([
+                        CheckboxList::make('reseller_payment_method_ids')
+                            ->label(__('Store payment methods resellers can use'))
+                            ->options(fn (): array => $this->storeMethods()
+                                ->mapWithKeys(fn (StorefrontPaymentMethod $method): array => [
+                                    $method->getKey() => trim($method->name.($method->account_number ? ' — '.$method->account_number : '')),
+                                ])
+                                ->all())
+                            ->columns(2)
+                            ->helperText(__('Only active manual (send-money / bank) methods from the store\'s Payment Methods list. A method you add there later stays hidden from resellers until you tick it here.'))
+                            ->columnSpanFull(),
+                        Repeater::make('reseller_only_payment_methods')
+                            ->label(__('Reseller-only payment methods'))
+                            ->helperText(__('Shown to resellers only. Changing the store\'s payment methods never changes these. A method that was already used for a payment is switched off instead of deleted.'))
+                            ->addActionLabel(__('Add reseller-only method'))
+                            ->reorderable()
+                            ->collapsible()
+                            ->itemLabel(fn (array $state): ?string => $state['name'] ?? null)
+                            ->default([])
+                            ->schema([
+                                Hidden::make('id'),
+                                TextInput::make('name')
+                                    ->label(__('Name'))
+                                    ->required()
+                                    ->maxLength(255)
+                                    ->placeholder('e.g. bKash (Reseller)'),
+                                TextInput::make('account_number')
+                                    ->label(__('Send-money / account number'))
+                                    ->required()
+                                    ->maxLength(255),
+                                Textarea::make('instructions')
+                                    ->label(__('Instructions'))
+                                    ->rows(2)
+                                    ->maxLength(500)
+                                    ->columnSpanFull(),
+                                Toggle::make('is_active')
+                                    ->label(__('Active'))
+                                    ->default(true),
+                            ])
+                            ->columns(2)
+                            ->columnSpanFull(),
                         Text::make(fn (): HtmlString => $this->paymentMethodsSummary()),
                     ]),
             ]);
@@ -216,11 +313,11 @@ class ResellerSettings extends Page
     {
         $company = $this->company();
         $methods = $company ? app(ResellerOwnCourierService::class)->paymentMethods($company) : collect();
-        $list = $methods->isEmpty()
-            ? '<p>'.e(__('No active payment method yet: resellers cannot place own-courier orders until one is added.')).'</p>'
-            : '<ul class="list-disc ps-5">'.$methods->map(fn (StorefrontPaymentMethod $method): string => '<li>'.e(trim($method->name.($method->account_number ? ' — '.$method->account_number : ''))).'</li>')->implode('').'</ul>';
+        $warning = $methods->isEmpty()
+            ? '<p class="mb-2">'.e(__('No payment method is available to resellers yet: they cannot place own-courier orders until one is chosen or added.')).'</p>'
+            : '';
 
-        return new HtmlString($list.'<p class="mt-2"><a class="text-primary-600 underline" href="'.e(StorefrontPaymentMethodResource::getUrl()).'">'.e(__('Manage payment methods')).'</a></p>');
+        return new HtmlString($warning.'<p><a class="text-primary-600 underline" href="'.e(StorefrontPaymentMethodResource::getUrl()).'">'.e(__('Manage payment methods')).'</a></p>');
     }
 
     protected function guideDescription(): HtmlString
@@ -235,6 +332,65 @@ class ResellerSettings extends Page
         $url = request()->getScheme().'://'.$host.'/portal/guide';
 
         return new HtmlString($text.' <a class="text-primary-600 underline" href="'.e($url).'" target="_blank" rel="noopener">'.e($url).'</a>');
+    }
+
+    /**
+     * Keeps the ticked store methods and syncs the reseller-only rows: rows
+     * are updated in place, new ones created, and a removed one is deleted
+     * unless a payment already points at it (then it is only switched off).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function savePaymentMethods(StorefrontSetting $setting, array $data): void
+    {
+        $items = collect($data['reseller_only_payment_methods'] ?? [])->values();
+        $names = $items->map(fn (array $item): string => mb_strtolower(trim((string) $item['name'])));
+
+        if ($names->count() !== $names->unique()->count()) {
+            throw ValidationException::withMessages(['data.reseller_only_payment_methods' => __('Two reseller-only payment methods cannot have the same name.')]);
+        }
+
+        $setting->forceFill([
+            'reseller_payment_method_ids' => array_values($this->storeMethods()
+                ->whereIn('id', array_map('intval', $data['reseller_payment_method_ids'] ?? []))
+                ->modelKeys()),
+        ])->save();
+
+        $existing = StorefrontPaymentMethod::query()->where('reseller_only', true)->get()->keyBy('id');
+        $kept = [];
+
+        foreach ($items as $position => $item) {
+            $attributes = [
+                'name' => trim((string) $item['name']),
+                'account_number' => trim((string) $item['account_number']),
+                'instructions' => filled($item['instructions'] ?? null) ? trim($item['instructions']) : null,
+                'is_active' => (bool) ($item['is_active'] ?? true),
+                'sort_order' => $position,
+            ];
+            $method = $existing->get((int) ($item['id'] ?? 0));
+
+            if ($method) {
+                $method->update($attributes);
+            } else {
+                $method = StorefrontPaymentMethod::query()->create($attributes + [
+                    'company_id' => $setting->company_id,
+                    'type' => StorefrontPaymentMethod::TYPE_MANUAL,
+                    'reseller_only' => true,
+                ]);
+            }
+
+            $kept[] = $method->getKey();
+        }
+
+        foreach ($existing->except($kept) as $method) {
+            if (StorefrontPayment::query()->where('storefront_payment_method_id', $method->getKey())->exists()) {
+                $method->update(['is_active' => false]);
+            } else {
+                $method->delete();
+            }
+        }
+
+        $this->form->fill([...$this->data, ...$this->paymentFormState($setting)]);
     }
 
     public function save(): void
@@ -280,6 +436,8 @@ class ResellerSettings extends Page
                 ->values()
                 ->all(),
         ])->save();
+
+        $this->savePaymentMethods($setting, $data);
 
         Notification::make()->title(__('Reseller settings saved'))->success()->send();
     }

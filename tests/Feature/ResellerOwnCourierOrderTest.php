@@ -903,6 +903,50 @@ class ResellerOwnCourierOrderTest extends TestCase
             ->assertSee('Returned to the reseller\'s deposit');
     }
 
+    public function test_a_reseller_can_pay_the_advance_into_a_reseller_only_method(): void
+    {
+        $ring = $this->pickProduct('Ring', tier: 300, stock: 20, price: 450);
+        $own = StorefrontPaymentMethod::query()->create([
+            'company_id' => $this->company->getKey(), 'type' => StorefrontPaymentMethod::TYPE_MANUAL,
+            'name' => 'bKash (Reseller)', 'account_number' => '01911111111', 'is_active' => true, 'reseller_only' => true,
+        ]);
+        $this->assertTrue(app(ResellerOwnCourierService::class)->paymentMethods($this->company)->contains('id', $own->getKey()));
+
+        $order = $this->place([['product_id' => $ring->getKey(), 'quantity' => 1, 'price' => 650]], ['payment_method_id' => $own->getKey()]);
+
+        $payment = $order->resellerAdvancePayment;
+        $this->assertSame($own->getKey(), $payment->storefront_payment_method_id);
+
+        app(ResellerOwnCourierService::class)->verifyPayment($payment);
+        $this->assertStringContainsString('bKash (Reseller)', (string) OrderPayment::query()->where('order_id', $order->getKey())->value('note'));
+
+        $this->asPortal();
+        Livewire::test(CreateOrder::class)
+            ->fillForm(['delivery_method' => 'own'])
+            ->assertSee('bKash (Reseller)');
+    }
+
+    public function test_a_store_method_the_admin_did_not_tick_is_refused_for_the_advance(): void
+    {
+        $ring = $this->pickProduct('Ring', tier: 300, stock: 20, price: 450);
+        $nagad = StorefrontPaymentMethod::query()->create([
+            'company_id' => $this->company->getKey(), 'type' => StorefrontPaymentMethod::TYPE_MANUAL,
+            'name' => 'Nagad', 'account_number' => '01822222222', 'is_active' => true,
+        ]);
+        $this->company->storefrontSetting->forceFill(['reseller_payment_method_ids' => [$nagad->getKey()]])->save();
+        $service = app(ResellerOwnCourierService::class);
+
+        $this->assertSame([$nagad->getKey()], $service->paymentMethods($this->company->fresh())->modelKeys());
+
+        // bKash exists, is active, and is on the store's list -- but was not ticked.
+        $errors = $this->errorsFor(fn () => $this->place([['product_id' => $ring->getKey(), 'quantity' => 1, 'price' => 650]]));
+        $this->assertSame(['data.payment_method_id'], array_keys($errors));
+        $this->assertSame(0, Order::query()->count());
+
+        $order = $this->place([['product_id' => $ring->getKey(), 'quantity' => 1, 'price' => 650]], ['payment_method_id' => $nagad->getKey()]);
+        $this->assertSame($nagad->getKey(), $order->resellerAdvancePayment->storefront_payment_method_id);
+    }
+
     public function test_the_amount_sent_cannot_be_less_than_what_is_owed(): void
     {
         $ring = $this->pickProduct('Ring', tier: 300, stock: 20, price: 450);

@@ -1161,8 +1161,6 @@
     "Show reseller program": "রিসেলার প্রোগ্রাম দেখান",
     "Off hides \"Become a reseller\" from the storefront's account menu and footer. The reseller pages keep working at their direct URL — only the links are hidden.": "বন্ধ করলে স্টোরফ্রন্টের অ্যাকাউন্ট মেনু ও ফুটার থেকে \"Become a reseller\" লুকানো হয়। রিসেলার পেজগুলো সরাসরি লিংকে চলতে থাকে — শুধু লিংকগুলো লুকানো হয়।",
     "Own-courier advance payments": "নিজস্ব কুরিয়ারের অগ্রিম পেমেন্ট",
-    "Resellers pay the advance of their own-courier orders into these channels. They are the store's manual payment methods (also used at the storefront checkout), so they are managed on the Payment Methods page.": "রিসেলাররা নিজস্ব কুরিয়ারের অর্ডারের অগ্রিম এই মাধ্যমগুলোতে পাঠায়। এগুলো স্টোরের ম্যানুয়াল পেমেন্ট মেথড (স্টোরফ্রন্টের চেকআউটেও ব্যবহার হয়), তাই Payment Methods পেজ থেকে পরিচালনা করা হয়।",
-    "No active payment method yet: resellers cannot place own-courier orders until one is added.": "এখনও কোনো চালু পেমেন্ট মেথড নেই: একটি যোগ না করা পর্যন্ত রিসেলাররা নিজস্ব কুরিয়ারের অর্ডার দিতে পারবে না।",
     "Manage payment methods": "পেমেন্ট মেথড পরিচালনা",
     "Another company already uses this domain.": "অন্য একটি কোম্পানি এই ডোমেইন ব্যবহার করছে।",
     "Reseller settings saved": "রিসেলার সেটিংস সংরক্ষিত হয়েছে",
@@ -1922,5 +1920,15 @@
     "Deduct from a reseller's deposit": "রিসেলারের জমা থেকে কাটুন",
     "The reason is required. The change is kept in the deposit list and in the audit log.": "কারণ লেখা আবশ্যক। পরিবর্তনটি জমার তালিকায় ও অডিট লগে থাকবে।",
     "Deposit now: :balance": "এখন জমা: :balance",
-    "Deposit updated. It now holds :balance.": "জমা আপডেট হয়েছে। এখন আছে :balance।"
+    "Deposit updated. It now holds :balance.": "জমা আপডেট হয়েছে। এখন আছে :balance।",
+    "Resellers pay the advance of their own-courier orders into these channels. Tick the store's payment methods they may use, and add channels that exist only for resellers. The store's checkout never shows the reseller-only channels.": "রিসেলাররা তাদের নিজস্ব কুরিয়ারের অর্ডারের অগ্রিম এই চ্যানেলগুলোতে পাঠায়। স্টোরের যেসব পেমেন্ট মেথড তারা ব্যবহার করতে পারবে সেগুলো টিক দিন এবং শুধু রিসেলারদের জন্য আলাদা চ্যানেল যোগ করুন। স্টোরের চেকআউটে রিসেলার-অনলি চ্যানেল কখনো দেখানো হয় না।",
+    "Store payment methods resellers can use": "রিসেলাররা যেসব স্টোর পেমেন্ট মেথড ব্যবহার করতে পারবে",
+    "Only active manual (send-money / bank) methods from the store's Payment Methods list. A method you add there later stays hidden from resellers until you tick it here.": "স্টোরের পেমেন্ট মেথড তালিকা থেকে শুধু সক্রিয় ম্যানুয়াল (সেন্ড-মানি / ব্যাংক) মেথড। পরে সেখানে নতুন মেথড যোগ করলে এখানে টিক না দেওয়া পর্যন্ত তা রিসেলারদের কাছে লুকানো থাকবে।",
+    "Reseller-only payment methods": "শুধু রিসেলারদের পেমেন্ট মেথড",
+    "Shown to resellers only. Changing the store's payment methods never changes these. A method that was already used for a payment is switched off instead of deleted.": "শুধু রিসেলারদের দেখানো হয়। স্টোরের পেমেন্ট মেথড বদলালে এগুলো বদলায় না। যে মেথডে আগে পেমেন্ট এসেছে তা মুছে না ফেলে বন্ধ করে রাখা হয়।",
+    "Add reseller-only method": "রিসেলার-অনলি মেথড যোগ করুন",
+    "Send-money / account number": "সেন্ড-মানি / অ্যাকাউন্ট নম্বর",
+    "Instructions": "নির্দেশনা",
+    "No payment method is available to resellers yet: they cannot place own-courier orders until one is chosen or added.": "রিসেলারদের জন্য এখনো কোনো পেমেন্ট মেথড নেই: একটি বেছে নেওয়া বা যোগ না করা পর্যন্ত তারা নিজস্ব কুরিয়ারের অর্ডার দিতে পারবে না।",
+    "Two reseller-only payment methods cannot have the same name.": "দুটি রিসেলার-অনলি পেমেন্ট মেথডের নাম এক হতে পারবে না।"
 }

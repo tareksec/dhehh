@@ -2,6 +2,26 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-12 - Reseller Settings: payment methods for the advance (owner decision 4)
+
+Owner decision (asked one by one, in Bangla): the admin chooses which payment methods resellers send the advance to, from the existing list; Reseller Settings can also add methods only for the reseller panel; the reseller sees both; the storefront's list does not change the reseller-only ones.
+
+What changed (Resellers → Reseller Settings → Own-courier advance payments):
+1. **Store payment methods resellers can use**: tick boxes for the store's active manual (send-money / bank) methods. Resellers see only the ticked ones. A method added to the store later stays hidden until ticked.
+2. **Reseller-only payment methods**: add / rename / switch off / remove methods (name, number, instructions) that only the reseller portal uses. The name may equal a store method's (different number). Removing one that a payment already used switches it off instead of deleting it.
+3. Reseller-only methods are **never** shown at the storefront checkout, in the website API (`/checkout` payment methods) or in Storefront → Payment Methods, and a forged request naming one is rejected.
+4. **Nothing changes until the admin saves a choice**: while no choice is saved, every active manual store method is offered, exactly as today, so no company loses its payment channel on deploy.
+
+Deploy: `php artisan migrate` (`2026_10_12_110000_add_reseller_payment_methods`). No setting to change.
+
+**Please confirm (a reading of the owner's answer):** the owner said the methods "come from the Integrations page's payment gateway". The Integrations → Payment Gateway tab holds only the ZiniPay / PayStation credentials (online card / mobile-banking payments), while the list of bKash / Nagad / bank numbers lives under **Storefront → Payment Methods**. I built the choice from that Payment Methods list, because the reseller advance is a manual send-money payment (sender number + transaction ID, checked by staff). Offering the online gateway (pay and verify automatically) as an advance option is a separate, bigger piece of work — say so if that is what was meant.
+
+Needs Bangla review (new keys): the section description, "Store payment methods resellers can use", "Reseller-only payment methods", the two helper texts and "Add reseller-only method" (long sentences, please read them once).
+
+Tests: new `ResellerPaymentMethodsTest` (10): everything offered until a choice is saved, the admin's choice (and an unticked / later-added method stays hidden, ticking none means none), a deactivated method is never offered, forged ids rejected, reseller-only methods added then updated in place (no duplicate rows, same name as a store method allowed, switched off), duplicate names refused, removal deletes unless a payment used it, the store's list changes never touch reseller-only methods and the store's Payment Methods page never lists them, never offered at the storefront (checkout page, forged POST), another company's methods and choices never offered. Plus 2 in `ResellerOwnCourierOrderTest` (paying into a reseller-only method; an unticked store method is refused). A real bug the tests caught: the saved ids kept array keys and would have been stored as an object — fixed with `array_values`.
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Not on `main`: the owner checks first.
+
 ## 2026-10-12 - Admin: Resellers → Deposits (list + add / deduct with a reason) (owner decision 3)
 
 Owner decision (asked one by one, in Bangla): the admin has a page with each reseller's deposit and every entry, and can add or deduct with a required reason, all logged. Built as decided.

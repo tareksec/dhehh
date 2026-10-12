@@ -9,6 +9,7 @@ use App\Models\OrderPayment;
 use App\Models\ResellerDepositEntry;
 use App\Models\StorefrontPayment;
 use App\Models\StorefrontPaymentMethod;
+use App\Models\StorefrontSetting;
 use App\Support\MoneyFormatter;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -31,16 +32,35 @@ class ResellerOwnCourierService
     public const GATEWAY_DEPOSIT = 'reseller_deposit';
 
     /**
-     * The company's active send-money / bank channels the reseller can pay into.
+     * The send-money / bank channels a reseller can pay an advance into
+     * (owner decision 2026-10-12): the store's manual methods the admin chose
+     * in Reseller Settings, plus the methods that exist only for resellers.
+     * Until the admin has saved a choice, every active manual store method
+     * is offered, as before. A deactivated method is never offered.
      *
      * @return Collection<int, StorefrontPaymentMethod>
      */
     public function paymentMethods(Company $company): Collection
     {
+        $chosen = StorefrontSetting::withoutGlobalScopes()
+            ->where('company_id', $company->getKey())
+            ->where('site_type', StorefrontSetting::SITE_BLADE)
+            ->first()
+            ?->reseller_payment_method_ids;
+
         return StorefrontPaymentMethod::withoutGlobalScopes()
             ->where('company_id', $company->getKey())
             ->where('type', StorefrontPaymentMethod::TYPE_MANUAL)
             ->where('is_active', true)
+            ->where(function ($query) use ($chosen): void {
+                $query->where('reseller_only', true);
+
+                if ($chosen === null) {
+                    $query->orWhere('reseller_only', false);
+                } else {
+                    $query->orWhere(fn ($store) => $store->where('reseller_only', false)->whereIn('id', array_map('intval', $chosen)));
+                }
+            })
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();

@@ -1161,8 +1161,6 @@
     "Show reseller program": "Show reseller program",
     "Off hides \"Become a reseller\" from the storefront's account menu and footer. The reseller pages keep working at their direct URL — only the links are hidden.": "Off hides \"Become a reseller\" from the storefront's account menu and footer. The reseller pages keep working at their direct URL — only the links are hidden.",
     "Own-courier advance payments": "Own-courier advance payments",
-    "Resellers pay the advance of their own-courier orders into these channels. They are the store's manual payment methods (also used at the storefront checkout), so they are managed on the Payment Methods page.": "Resellers pay the advance of their own-courier orders into these channels. They are the store's manual payment methods (also used at the storefront checkout), so they are managed on the Payment Methods page.",
-    "No active payment method yet: resellers cannot place own-courier orders until one is added.": "No active payment method yet: resellers cannot place own-courier orders until one is added.",
     "Manage payment methods": "Manage payment methods",
     "Another company already uses this domain.": "Another company already uses this domain.",
     "Reseller settings saved": "Reseller settings saved",
@@ -1922,5 +1920,15 @@
     "Deduct from a reseller's deposit": "Deduct from a reseller's deposit",
     "The reason is required. The change is kept in the deposit list and in the audit log.": "The reason is required. The change is kept in the deposit list and in the audit log.",
     "Deposit now: :balance": "Deposit now: :balance",
-    "Deposit updated. It now holds :balance.": "Deposit updated. It now holds :balance."
+    "Deposit updated. It now holds :balance.": "Deposit updated. It now holds :balance.",
+    "Resellers pay the advance of their own-courier orders into these channels. Tick the store's payment methods they may use, and add channels that exist only for resellers. The store's checkout never shows the reseller-only channels.": "Resellers pay the advance of their own-courier orders into these channels. Tick the store's payment methods they may use, and add channels that exist only for resellers. The store's checkout never shows the reseller-only channels.",
+    "Store payment methods resellers can use": "Store payment methods resellers can use",
+    "Only active manual (send-money / bank) methods from the store's Payment Methods list. A method you add there later stays hidden from resellers until you tick it here.": "Only active manual (send-money / bank) methods from the store's Payment Methods list. A method you add there later stays hidden from resellers until you tick it here.",
+    "Reseller-only payment methods": "Reseller-only payment methods",
+    "Shown to resellers only. Changing the store's payment methods never changes these. A method that was already used for a payment is switched off instead of deleted.": "Shown to resellers only. Changing the store's payment methods never changes these. A method that was already used for a payment is switched off instead of deleted.",
+    "Add reseller-only method": "Add reseller-only method",
+    "Send-money / account number": "Send-money / account number",
+    "Instructions": "Instructions",
+    "No payment method is available to resellers yet: they cannot place own-courier orders until one is chosen or added.": "No payment method is available to resellers yet: they cannot place own-courier orders until one is chosen or added.",
+    "Two reseller-only payment methods cannot have the same name.": "Two reseller-only payment methods cannot have the same name."
 }
