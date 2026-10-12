@@ -813,6 +813,96 @@ class ResellerOwnCourierOrderTest extends TestCase
         $this->assertTrue($service->canMarkPacked($third));
     }
 
+    public function test_a_cancelled_order_gives_back_what_it_took_from_the_deposit(): void
+    {
+        $ring = $this->pickProduct('Ring', tier: 300, stock: 20, price: 450);
+        $service = app(ResellerOwnCourierService::class);
+        $this->creditDeposit(100);
+
+        // Owed 310 (1 x 310): 100 comes from the deposit, 210 is sent to the store.
+        $order = $this->place([['product_id' => $ring->getKey(), 'quantity' => 1, 'price' => 650]]);
+        $this->assertSame(0.0, $service->depositBalance($this->reseller));
+
+        app(OrderStatusWorkflowService::class)->transition($order, Order::STAGE_CANCELLED, 'Customer cancelled', 'test');
+
+        $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->status);
+        // Only the deposit part returns; the 210 sent to the store is not refunded here.
+        $this->assertSame(100.0, $service->depositBalance($this->reseller));
+        $this->assertSame(100.0, $service->refundedTo($order->fresh()));
+        $entry = ResellerDepositEntry::query()->where('type', ResellerDepositEntry::TYPE_REFUND)->sole();
+        $this->assertSame($order->getKey(), $entry->order_id);
+        $this->assertSame($this->reseller->getKey(), $entry->customer_id);
+        $this->assertSame(100.0, (float) $entry->amount);
+    }
+
+    public function test_the_deposit_is_returned_only_once_however_often_the_order_is_saved(): void
+    {
+        $ring = $this->pickProduct('Ring', tier: 300, stock: 20, price: 450);
+        $service = app(ResellerOwnCourierService::class);
+        $this->creditDeposit(500);
+        $order = $this->place([['product_id' => $ring->getKey(), 'quantity' => 1, 'price' => 650]]);
+        $this->assertSame(190.0, $service->depositBalance($this->reseller));
+
+        app(OrderStatusWorkflowService::class)->transition($order, Order::STAGE_CANCELLED, 'Customer cancelled', 'test');
+        $order->fresh()->update(['note' => 'Customer called']);
+        $this->assertSame(0.0, $service->refundDeposit($order->fresh()));
+        $order->fresh()->touch();
+
+        $this->assertSame(500.0, $service->depositBalance($this->reseller));
+        $this->assertSame(1, ResellerDepositEntry::query()->where('type', ResellerDepositEntry::TYPE_REFUND)->count());
+        $this->assertSame(310.0, $service->refundedTo($order->fresh()));
+    }
+
+    public function test_an_order_that_is_not_cancelled_or_took_nothing_from_the_deposit_returns_nothing(): void
+    {
+        $ring = $this->pickProduct('Ring', tier: 300, stock: 20, price: 450);
+        $service = app(ResellerOwnCourierService::class);
+
+        // Nothing was taken from the deposit: cancelling adds no entry.
+        $plain = $this->place([['product_id' => $ring->getKey(), 'quantity' => 1, 'price' => 650]]);
+        app(OrderStatusWorkflowService::class)->transition($plain, Order::STAGE_CANCELLED, 'Customer cancelled', 'test');
+        $this->assertSame(0, ResellerDepositEntry::query()->where('type', ResellerDepositEntry::TYPE_REFUND)->count());
+
+        // The deposit pays a second order; moving it forward (not cancelling) gives nothing back.
+        $this->creditDeposit(200);
+        $paid = $this->place([['product_id' => $ring->getKey(), 'quantity' => 1, 'price' => 650]], ['parcel_id' => 'PATHAO-777', 'transaction_id' => 'TRX9']);
+        $this->assertSame(0.0, $service->depositBalance($this->reseller));
+        app(OrderStatusWorkflowService::class)->transition($paid, Order::STAGE_CONFIRMED, null, 'test');
+        $this->assertSame(0.0, $service->depositBalance($this->reseller));
+        $this->assertSame(0.0, $service->refundDeposit($paid->fresh())); // not cancelled yet
+        $this->assertSame(0, ResellerDepositEntry::query()->where('type', ResellerDepositEntry::TYPE_REFUND)->count());
+    }
+
+    public function test_a_cancelled_order_never_touches_another_resellers_deposit(): void
+    {
+        $ring = $this->pickProduct('Ring', tier: 300, stock: 20, price: 450);
+        $service = app(ResellerOwnCourierService::class);
+        $other = $this->makeReseller('01711000002');
+        ResellerDepositEntry::query()->create([
+            'company_id' => $this->company->getKey(), 'customer_id' => $other->getKey(),
+            'type' => ResellerDepositEntry::TYPE_OVERPAYMENT, 'amount' => 700,
+        ]);
+        $this->creditDeposit(100);
+        $order = $this->place([['product_id' => $ring->getKey(), 'quantity' => 1, 'price' => 650]]);
+
+        app(OrderStatusWorkflowService::class)->transition($order, Order::STAGE_CANCELLED, 'Customer cancelled', 'test');
+
+        $this->assertSame(100.0, $service->depositBalance($this->reseller));
+        $this->assertSame(700.0, $service->depositBalance($other));
+    }
+
+    public function test_staff_see_how_much_a_cancelled_order_returned_to_the_deposit(): void
+    {
+        $ring = $this->pickProduct('Ring', tier: 300, stock: 20, price: 450);
+        $this->creditDeposit(100);
+        $order = $this->place([['product_id' => $ring->getKey(), 'quantity' => 1, 'price' => 650]]);
+        app(OrderStatusWorkflowService::class)->transition($order, Order::STAGE_CANCELLED, 'Customer cancelled', 'test');
+        $this->asStaff();
+
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+            ->assertSee('Returned to the reseller\'s deposit');
+    }
+
     public function test_the_amount_sent_cannot_be_less_than_what_is_owed(): void
     {
         $ring = $this->pickProduct('Ring', tier: 300, stock: 20, price: 450);
@@ -951,6 +1041,14 @@ class ResellerOwnCourierOrderTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
         $this->actingAs($user)->withSession(['current_company_id' => $this->company->getKey()]);
+    }
+
+    protected function creditDeposit(float $amount): void
+    {
+        ResellerDepositEntry::query()->create([
+            'company_id' => $this->company->getKey(), 'customer_id' => $this->reseller->getKey(),
+            'type' => ResellerDepositEntry::TYPE_OVERPAYMENT, 'amount' => $amount,
+        ]);
     }
 
     protected function makeReseller(string $phone): Customer

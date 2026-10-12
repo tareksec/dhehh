@@ -9,8 +9,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * One movement of a reseller's deposit (ResellerOwnCourierService): money
  * sent above an own-courier order's total is credited (positive amount),
- * and the deposit pays the advance of later own-courier orders (negative
- * amount). The balance is the sum of a reseller's entries.
+ * the deposit pays the advance of later own-courier orders (negative
+ * amount), and what a cancelled order took from it goes back (positive
+ * amount, owner rule 2026-10-12). The balance is the sum of a reseller's
+ * entries.
  */
 class ResellerDepositEntry extends Model
 {
@@ -19,6 +21,8 @@ class ResellerDepositEntry extends Model
     public const TYPE_OVERPAYMENT = 'overpayment';
 
     public const TYPE_USED = 'used';
+
+    public const TYPE_REFUND = 'refund';
 
     protected $fillable = [
         'company_id',

@@ -2,6 +2,28 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-12 - Reseller deposit: a cancelled order gives the money back (owner decision 2)
+
+Owner decision (asked one by one, in Bangla): a cancelled order that was paid from the reseller's deposit returns the money to the deposit automatically. Built as decided, nothing added.
+
+What changed (Orders → own-courier orders, Reseller portal deposit):
+1. When an own-courier reseller order becomes **Cancelled** (staff, WooCommerce sync or any other path), what it took from the deposit goes back as one new deposit entry (type `refund`, positive). The balance beside the portal's user menu goes up at once.
+2. It runs once only: saving the order again, or running it twice, returns nothing more.
+3. Only the **deposit part** returns. Money the reseller sent to the store (bKash, bank) is not refunded by this. Returned / Refunded orders are not covered either (the owner said "cancelled").
+4. Staff see **Returned to the reseller's deposit** on the order page when something came back.
+
+Deploy: nothing to run (no migration, no setting).
+
+Needs Bangla review (new key): Returned to the reseller's deposit (রিসেলারের জমায় ফেরত গেছে).
+
+Questions for the owner:
+- If the reseller already **sent money to the store** for a cancelled order, who refunds it, and how? Today staff would use the new deposit adjustment page (next item) to add it to the deposit, or pay it back outside the system.
+- Should **Returned** and **Refunded** orders also give the deposit part back? (Only Cancelled does now.)
+
+Tests: 5 new in `ResellerOwnCourierOrderTest` (36 in the file, all passing): deposit part only, once only however often saved, not cancelled / nothing from the deposit, another reseller's deposit untouched, staff see the returned amount. Full suite is run once at the end of the batch (see the last entry).
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval ("এরপর শেষের কাজ গুলো একে একে শেষ করে ফেল ... তোমার কাজের ব্রাঞ্ছে কমিট এবং পুশ করবে", 2026-10-12). Not on `main`: the owner checks first.
+
 ## 2026-10-12 - Reseller portal: owner decisions on the five open questions (nothing built yet)
 
 The owner answered the five open reseller questions (asked one by one, in Bangla). Recorded in `13_RESELLER_PORTAL_PLAN.md` §11 so nobody builds from memory:

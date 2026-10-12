@@ -112,6 +112,11 @@ class OrderInfolist
                             ->state(fn (Order $record): float => app(ResellerOwnCourierService::class)->creditedFrom($record))
                             ->numeric(decimalPlaces: 2)
                             ->visible(fn (Order $record): bool => app(ResellerOwnCourierService::class)->creditedFrom($record) > 0),
+                        TextEntry::make('reseller_deposit_returned')
+                            ->label(__('Returned to the reseller\'s deposit'))
+                            ->state(fn (Order $record): float => app(ResellerOwnCourierService::class)->refundedTo($record))
+                            ->numeric(decimalPlaces: 2)
+                            ->visible(fn (Order $record): bool => app(ResellerOwnCourierService::class)->refundedTo($record) > 0),
                         TextEntry::make('reseller_advance_outstanding')
                             ->label(__('Still to receive'))
                             ->state(fn (Order $record): float => app(ResellerOwnCourierService::class)->outstandingAmount($record))

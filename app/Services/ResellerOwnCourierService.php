@@ -215,6 +215,58 @@ class ResellerOwnCourierService
         });
     }
 
+    /**
+     * A cancelled order gives back what it took from the reseller's deposit
+     * (owner rule, 2026-10-12). Only the part paid from the deposit returns
+     * this way: money the reseller sent to the store is never refunded
+     * automatically. Safe to call again -- it only returns what has not
+     * come back yet. Returns the amount returned now.
+     */
+    public function refundDeposit(Order $order): float
+    {
+        if (! $order->reseller_own_courier || ! $order->reseller_customer_id || $order->status !== Order::STATUS_CANCELLED) {
+            return 0.0;
+        }
+
+        return DB::transaction(function () use ($order): float {
+            // Same lock as applyDeposit(): one deposit change at a time.
+            if (! Customer::withoutGlobalScopes()->lockForUpdate()->find($order->reseller_customer_id)) {
+                return 0.0;
+            }
+
+            $entries = ResellerDepositEntry::withoutGlobalScopes()
+                ->where('company_id', $order->company_id)
+                ->where('order_id', $order->getKey());
+            $used = -(float) (clone $entries)->where('type', ResellerDepositEntry::TYPE_USED)->sum('amount');
+            $returned = (float) (clone $entries)->where('type', ResellerDepositEntry::TYPE_REFUND)->sum('amount');
+            $back = round($used - $returned, 2);
+
+            if ($back <= 0) {
+                return 0.0;
+            }
+
+            ResellerDepositEntry::query()->create([
+                'company_id' => $order->company_id,
+                'customer_id' => $order->reseller_customer_id,
+                'order_id' => $order->getKey(),
+                'type' => ResellerDepositEntry::TYPE_REFUND,
+                'amount' => $back,
+                'note' => 'Returned: order '.$order->order_number.' was cancelled',
+            ]);
+
+            return $back;
+        });
+    }
+
+    /** What a cancelled $order gave back to the reseller's deposit. */
+    public function refundedTo(Order $order): float
+    {
+        return round((float) ResellerDepositEntry::query()
+            ->where('order_id', $order->getKey())
+            ->where('type', ResellerDepositEntry::TYPE_REFUND)
+            ->sum('amount'), 2);
+    }
+
     /** Credits the part of $order's verified payments above its total that is not credited yet. */
     protected function creditOverpayment(Order $order, StorefrontPayment $payment): void
     {
