@@ -22,9 +22,12 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Services\CompanyContext;
 use App\Services\CompanySettingsService;
+use App\Services\DynamicColorService;
 use App\Services\ResellerOwnCourierService;
+use App\Support\ModuleGuard;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\FontProviders\LocalFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -38,6 +41,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /**
@@ -89,6 +93,10 @@ class ResellerPanelProvider extends PanelProvider
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn (): View|string => $this->depositBadge())
             // "Read the rules first" above the application form, while the guide is on.
             ->renderHook(PanelsRenderHook::AUTH_REGISTER_FORM_BEFORE, fn (): View|string => $this->guideLink())
+            // Hind Siliguri, self-hosted: @font-face lives in the portal theme, so no font URL here.
+            ->font('Hind Siliguri', provider: LocalFontProvider::class)
+            // The store's own colour (Storefront Settings > theme colour) instead of Filament's default amber.
+            ->renderHook(PanelsRenderHook::HEAD_END, fn (): HtmlString => $this->brandColorStyle())
             ->viteTheme('resources/css/filament/reseller/theme.css')
             ->middleware([
                 RestrictPortalHosts::class,
@@ -119,6 +127,21 @@ class ResellerPanelProvider extends PanelProvider
     protected function portalCompany(): ?Company
     {
         return app(CompanyContext::class)->company();
+    }
+
+    /**
+     * The portal's primary colour shades as CSS variables, from the company's
+     * storefront theme colour (the same colour its reseller stores wear). Kept
+     * amber when the company has no storefront settings yet.
+     */
+    protected function brandColorStyle(): HtmlString
+    {
+        return ModuleGuard::run('reseller-portal.brand-colour', function (): HtmlString {
+            $hex = $this->portalCompany()?->storefrontSetting?->normalizedThemeColor() ?? DynamicColorService::DEFAULT_COLOR;
+            $declarations = implode('; ', app(DynamicColorService::class)->cssVariables($hex));
+
+            return new HtmlString('<style>:root { '.e($declarations).'; }</style>');
+        }, new HtmlString(''));
     }
 
     protected function guideLink(): View|string

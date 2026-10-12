@@ -31,6 +31,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection as SupportCollection;
 
 /**
@@ -121,13 +122,15 @@ class Products extends Page implements HasTable
 
         return $table
             ->query(fn (): Builder => Product::query()
+                ->with(['category', 'variants'])
                 ->where('is_active', true)
                 ->where('status', Product::STATUS_AVAILABLE))
             ->columns([
+                // The main image, else the first gallery photo; opens the details on click.
                 ImageColumn::make('image')
                     ->label('')
-                    ->state(fn (Product $record): ?string => CompanyMedia::filamentPublicUrl($record->image, $record))
-                    ->height(40)
+                    ->state(fn (Product $record): ?string => CompanyMedia::filamentPublicUrl($record->image ?: Arr::first($record->gallery_images ?? []), $record))
+                    ->height(64)
                     ->square(),
 
                 TextColumn::make('name')
@@ -278,7 +281,18 @@ class Products extends Page implements HasTable
                         ->deselectRecordsAfterCompletion(),
                 ]),
             ])
+            ->recordAction('viewDetails')
             ->recordActions([
+                Action::make('viewDetails')
+                    ->label(__('Details'))
+                    ->icon(Heroicon::OutlinedEye)
+                    ->slideOver()
+                    ->modalWidth('3xl')
+                    ->modalHeading(fn (Product $record): string => $record->name)
+                    ->modalContent(fn (Product $record) => view('filament.reseller.pages.partials.product-details', $this->detailsFor($record)))
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel(__('Close')),
+
                 Action::make('copyLink')
                     ->label(__('Copy link'))
                     ->icon(Heroicon::OutlinedLink)
@@ -296,12 +310,44 @@ class Products extends Page implements HasTable
                 Action::make('downloadPhotos')
                     ->label(__('Download photos'))
                     ->icon(Heroicon::OutlinedArrowDownTray)
-                    ->visible(fn (Product $record): bool => filled($record->image) || filled($record->gallery_images))
+                    ->visible(fn (Product $record): bool => $record->allImagePaths() !== [])
                     ->url(fn (Product $record): string => route('reseller.portal.products.photos', $record))
                     ->openUrlInNewTab(),
             ])
             ->searchPlaceholder(__('Search name or SKU...'))
             ->defaultSort('name');
+    }
+
+    /**
+     * Everything the details slide-over shows. Only the product's own facts
+     * and the signed-in reseller's own cost, price and commission: the
+     * picks come from $this->picks (this reseller's rows only), the cost is
+     * the company-wide rate, and no other reseller's data is ever read.
+     * The company's purchase cost and wholesale tiers are not shown.
+     *
+     * @return array<string, mixed>
+     */
+    public function detailsFor(Product $record): array
+    {
+        $costPerUnit = $this->costPerUnit();
+        $base = ResellerPricing::basePrice($record, $costPerUnit);
+        $pick = $this->picks[$record->getKey()] ?? null;
+        $inStore = (bool) ($pick['is_active'] ?? false);
+        $suggested = $record->baseSellingPrice();
+        $yourPrice = $inStore ? ($pick['price'] ?? $suggested) : null;
+
+        return [
+            'product' => $record->loadMissing(['category', 'variants']),
+            'currency' => $this->company()->currency ?: 'BDT',
+            'images' => $record->allImagePaths(),
+            'activeVariants' => $record->variants->where('is_active', true)->values(),
+            'cost' => $base,
+            'suggested' => $suggested,
+            'inStore' => $inStore,
+            'yourPrice' => $yourPrice,
+            'commission' => $base !== null && $yourPrice !== null ? max(0, $yourPrice - $base) : null,
+            'storeUrl' => $this->storeProductUrl($record),
+        ];
     }
 
     protected function setInStore(Product $record, bool $inStore): void

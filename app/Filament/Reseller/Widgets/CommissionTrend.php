@@ -22,6 +22,8 @@ class CommissionTrend extends ChartWidget
 {
     use GuardsWidgetRendering;
 
+    protected ?string $maxHeight = '330px';
+
     protected function getData(): array
     {
         $reseller = Filament::auth()->user();
@@ -57,7 +59,12 @@ class CommissionTrend extends ChartWidget
             'datasets' => [[
                 'label' => __('Commission'),
                 'data' => $data,
-                'backgroundColor' => '#6366f1',
+                // A soft area under a smooth line, in the portal's brand colour
+                // (the widget's own colour, so no hard-coded hex here).
+                'fill' => true,
+                'tension' => 0.4,
+                'pointRadius' => 3,
+                'pointHoverRadius' => 5,
             ]],
             'labels' => $labels,
         ];
@@ -65,7 +72,16 @@ class CommissionTrend extends ChartWidget
 
     protected function getType(): string
     {
-        return 'bar';
+        return 'line';
+    }
+
+    /** @return array<string, mixed> */
+    protected function getOptions(): array
+    {
+        return [
+            'plugins' => ['legend' => ['display' => false]],
+            'scales' => ['y' => ['beginAtZero' => true]],
+        ];
     }
 
     public function getHeading(): string

@@ -2,6 +2,74 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-12 - Reseller portal: owner decisions on the five open questions (nothing built yet)
+
+The owner answered the five open reseller questions (asked one by one, in Bangla). Recorded in `13_RESELLER_PORTAL_PLAN.md` §11 so nobody builds from memory:
+1. **Variations:** admin sets a wholesale price per variation; the reseller can change their customer price; commission as for ordinary products; the wholesale price never appears on a reseller storefront.
+2. **Deposit refund:** a cancelled order paid from the deposit returns the money to the deposit automatically.
+3. **Admin deposit page:** list + add/deduct adjustments, a reason is required, everything logged.
+4. **Payment methods for advances:** admin picks from the Integrations payment methods and can add reseller-only methods in Reseller Settings; resellers see both.
+5. **Phone already in use on the application:** SMS-code proof of ownership before the old record is reused.
+
+Only documentation changed in this step. Suggested build order (needs the owner's go-ahead): (2) deposit refund — small; (3) admin deposit page; (4) payment methods; (5) SMS-code check; (1) variations — the biggest (new wholesale price per variation, portal ordering and pricing, storefront must never show it).
+
+Commit status: committed and pushed to the branch and main on owner approval ("যে কাজ গুলো হয়ে সেগুলো কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-12).
+
+## 2026-10-12 - Reseller portal: modern front page (dashboard), store colour and font
+
+Owner request (in Bangla): make the reseller portal's front page more modern; after my proposal the owner approved items 1-7 (hero, overview cards with trend, quick actions, store card, order pipeline / recent orders / area chart, theme). Items 8-11 of the proposal (mobile bottom tab bar, first-steps checklist, best-selling products, admin-managed announcement banner) were **not** requested yet.
+
+What changed (Reseller portal → Dashboard, Orders, whole panel):
+1. **Welcome banner** in the store's colour: greeting by the company's local time, the reseller's name, the amount available to withdraw, **Withdraw** / **Create order** buttons, and pending commission / withdrawal in process / total withdrawn.
+2. **Overview cards**: parcels waiting, this month's orders, sales and commission, each with ▲/▼ % against the **same days of last month** (shown only when last month has something to compare) and a 14-day trend line.
+3. **Quick actions**: create order, add products, withdraw, share store (uses the phone's share sheet, else copies the link).
+4. **Store card**: link styled like an address bar with copy / visit / WhatsApp / Facebook, a QR code drawn on the server, and a Live / "Setting up your store address" badge (the earlier subdomain work).
+5. **Order pipeline** (Confirmed, Processing, Shipping, Completed, plus Cancelled / Returned) — each step opens `/portal/orders?stage=...`, a new stage filter on the Orders page with a "Show all orders" link. **Recent orders** now show the first product's photo and a coloured status badge.
+6. **Commission chart** is a smooth filled line instead of bars, in the brand colour.
+7. **Theme**: the portal uses the company's **Storefront Settings → theme colour** (not Filament's amber; amber stays if the company has no storefront settings), the Hind Siliguri font (self-hosted, SIL OFL, files in `resources/fonts/hind-siliguri/`), rounder cards and tables, frosted top bar; dark mode and phone width checked.
+Also: stage badges on the Orders page are now translated (they were raw English).
+
+Looked at in a real browser (Chromium on a throw-away SQLite file with made-up data, never the demo DB): desktop, 390 px phone and dark mode all render; clicking the Shipping step lands on the filtered Orders list and "Show all orders" clears it. The scratch server, database and storage files were deleted afterwards.
+
+Deploy: `npm run build` (new CSS, font files and Tailwind classes). No migration. No new setting.
+
+Things to know / decide:
+- The brand colour comes from the **Blade storefront row's theme colour**. If the owner wants the portal on a different colour from the stores (e.g. the admin "dashboard colour"), say so; it is one line in `ResellerPanelProvider::brandColorStyle()`.
+- Filament makes buttons from the 400 shade with dark text, so a very light theme colour gives pale buttons. Nothing to do now; mention if a company's colour looks wrong.
+- The QR code uses `chillerlan/php-qrcode`, already installed because Filament requires it; it is not listed in `composer.json` itself. If Filament ever drops it the QR hides itself (no error).
+- The percentage compares **this month to date with the same days of last month** (so the 5th of the month is not set against a whole month). Hover text on the percentage says so.
+- Still open from the proposal: mobile bottom tab bar, first-steps checklist, best-selling products, and an announcement banner (the banner must be admin-managed, so it needs a Reseller Settings field first).
+
+Needs Bangla review (new keys): Good morning (সুপ্রভাত), Good afternoon (শুভ অপরাহ্ন), Good evening (শুভ সন্ধ্যা), Quick actions (দ্রুত কাজ), Add products (প্রোডাক্ট যোগ করুন), Share store (স্টোর শেয়ার করুন), Compared with the same days of last month, vs last month (গত মাসের তুলনায়), This month so far, See parcels on the way (পথে থাকা পার্সেল দেখুন), Setting up your store address, Live (লাইভ), QR code of your store link, Scan to open your store, Order pipeline (অর্ডারের ধাপ), View all orders, Showing :stage orders only., Show all orders, Pending commission (অপেক্ষমাণ কমিশন), Confirmed (নিশ্চিত), Shipping (শিপিংয়ে).
+
+Tests: new `ResellerPortalDashboardRedesignTest` (18), existing `ResellerPortalDashboardTest` / `ResellerPortalAccountTest` unchanged and passing. Full `php artisan test` (plain, no `--env`) on the final code: **2074 passed, 1 skipped, 0 failed**; `npm run build` OK.
+
+Commit status: committed and pushed to the branch and main on owner approval ("যে কাজ গুলো হয়ে সেগুলো কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-12).
+
+## 2026-10-11 - Reseller portal: product details, bigger photos, fuller photo download
+
+Owner report: a reseller says their dashboard did not give them the product details and images. Review found the portal list showed only a 40 px thumbnail, name, SKU, category and prices — no description, gallery, brand, stock, variations or video (images themselves rendered fine). Owner answers (in Bangla): 1) the details button must also show the reseller's cost, but one reseller must never see another's data; 2), 3), 4) ok.
+
+What changed (Reseller portal → Products / Create order):
+1. **Details** button (and row click) opens a slide-over: gallery with thumbnails, video, description + **Copy description**, SKU, brand, category, unit, weight, stock (+ pre-order), minimum order quantity, variations (label, SKU, price, stock, photos), and **this reseller's** cost, suggested price, own price and commission. Not shown: the company's purchase cost, wholesale tiers, other resellers' prices or stores (data comes only from the reseller's own picks).
+2. List thumbnail 64 px, falls back to the first gallery photo.
+3. **Download photos** zip now includes active variation photos; the button shows whenever any photo exists.
+4. **Create order** shows the chosen product's photo, name, SKU and brand.
+
+Not changed (needs an owner decision): products with variations still cannot be priced by the reseller or ordered from the portal (no wholesale rate). The new details only say they sell at their own price with no commission, which is what the code already does.
+
+Needs Bangla review: the 15 new keys (Your price and commission, Add this product to your store to set your price., Product details, SKU, Brand, Unit, Weight, Pre-order, Minimum order quantity, Copy description, No description yet., Variations, Variation, Variations are sold at their own price, with no reseller price or commission., View in my store).
+
+Tests: `ResellerPortalProductsTest` 12 (6 new, incl. two resellers on one product), `ResellerPortalCreateOrderTest` +1. Full `php artisan test` (plain, no `--env`): **2056 passed, 1 skipped, 0 failed**. `npm run build` OK. No migration.
+
+Commit status: committed and pushed to the branch and main on owner approval ("যে কাজ গুলো হয়ে সেগুলো কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-12).
+
+## 2026-10-10 - Reseller plan: subdomain DNS + SSL through Cloudflare
+
+Owner instruction (in Bangla): write into the plan that this is to be done with Cloudflare. Added a "Phase 7 follow-up" section to `13_RESELLER_PORTAL_PLAN.md`: the owner decision, the one-time wildcard-record plan, and three things still to confirm on the live Cloudflare account (proxied or not and `TRUSTED_PROXY_HOPS`; whether the free Universal certificate covers `*.offer.zamzamint.com`, which as a second-level name it normally does not; the set-up time default). Documentation only, no code or lang changes.
+
+Commit status: committed and pushed to the branch and main on owner approval ("যে কাজ গুলো হয়ে সেগুলো কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-12).
+
 ## 2026-10-10 - Reseller portal: profile link in the user menu, subdomain set-up countdown
 
 Owner request (in Bangla, with a screenshot of the portal's user menu): link the profile page from the profile icon; and after a reseller sets a subdomain, DNS and SSL should be created and connected automatically, with a time shown for when the domain will be live.
