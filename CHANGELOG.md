@@ -4,7 +4,9 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Minor
+## [2.73.0] - 2026-10-12
+
+**Release type:** Minor Feature Update
 
 ### Added
 
@@ -26,7 +28,6 @@ All notable production changes to Business Dashboard are documented here.
 - QR code: `App\Support\QrCodeSvg` draws an inline SVG data URI on the server with `chillerlan/php-qrcode`, which `filament/filament` already requires (not a new package, but not a direct `composer.json` dependency either); it returns null on any failure so the page just hides the QR. No third-party QR service sees the store link.
 - Theme: `ResellerPanelProvider::brandColorStyle()` (HEAD_END hook inside `ModuleGuard::run`) writes `--primary-50..950` from `storefrontSetting->normalizedThemeColor()` through the existing `DynamicColorService`, and `->font('Hind Siliguri', provider: LocalFontProvider::class)` names the face; `@font-face` rules and the rounded/frosted polish live in `resources/css/filament/reseller/theme.css`. Font files and `OFL.txt` are in `resources/fonts/hind-siliguri/` (400/500/600/700, Bangla + Latin subsets). Run `npm run build` on deploy.
 - Tests: new `ResellerPortalDashboardRedesignTest` (18 tests: month comparison, no-percentage case, two resellers in one company and a reseller of another company, pipeline, the SQL stage scope against `workflowStage()` for 42 status/courier combinations, the stage filter and its isolation, front page content, subdomain badge, greeting by time zone, order rows, chart, brand colour per company and its default, QR helper, sparkline).
-
 ## [2.72.0] - 2026-10-11
 
 **Release type:** Minor Feature Update
