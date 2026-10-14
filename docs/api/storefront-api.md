@@ -144,7 +144,7 @@ A `null` title means "use the website's own default heading".
 | `trust_strip` | `items: [{icon, title, subtitle}]` (own items, else the site's Trust Strip messages) |
 | `category_grid` | `title`, `subtitle`, `category_slugs` (empty = every category with products), `limit`, `style` (`tiles` / `circles`), `show_tagline`, `show_count` |
 | `deals_banner` | `title`, `subtitle`, `link_label`, `link_url`, `limit`, `source`, `color_from`, `color_to` |
-| `product_row` | `title`, `subtitle`, `source`, `category_slug` (when `source` is `category`), `limit` (≤ 24), `columns` (4 / 5 / 6), `link_label`, `link_url` |
+| `product_row` | `title`, `subtitle`, `source`, `category_slugs` (when `source` is `category`: the categories the row mixes, one product from each in turn; `category_slug` is the first of them, kept for older websites), `limit` (≤ 24), `columns` (4 / 5 / 6), `link_label`, `link_url` |
 | `flash_sale` | `badge`, `title`, `description`, `countdown_label`, `button_label`, `button_url`, `limit`, `source`, `show_countdown`, `background` |
 | `banners` | `columns`, `items: [{image_url, alt, url, new_tab}]` |
 | `mobile_cta` | `eyebrow`, `heading`, `text`, `whatsapp_label`, `call_label` (`{phone}` token), `show_whatsapp`, `show_call`, `show_mockups`, `mockup_button_label`, `background` |

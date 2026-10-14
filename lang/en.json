@@ -1254,5 +1254,19 @@
     "Show the \"Add to cart\" button": "Show the \"Add to cart\" button",
     "Show the wishlist heart": "Show the wishlist heart",
     "Show the quick-view button": "Show the quick-view button",
-    "Show the star rating": "Show the star rating"
+    "Show the star rating": "Show the star rating",
+    "Chosen categories": "Chosen categories",
+    "Pick one or more — the row mixes products from all of them.": "Pick one or more — the row mixes products from all of them.",
+    "Load the starter layout": "Load the starter layout",
+    "Load the starter home page?": "Load the starter home page?",
+    "This replaces every section below with the starter home page — hero, trust strip, shop by category, best deals, latest products, flash deal, four category rows, the WhatsApp section and the about text — and adds the top bar quick links if there are none. Nothing is saved until you press Save changes, and you can edit every word afterwards.": "This replaces every section below with the starter home page — hero, trust strip, shop by category, best deals, latest products, flash deal, four category rows, the WhatsApp section and the about text — and adds the top bar quick links if there are none. Nothing is saved until you press Save changes, and you can edit every word afterwards.",
+    "Starter layout loaded": "Starter layout loaded",
+    "Check the sections, then press Save changes.": "Check the sections, then press Save changes.",
+    "Fill empty category details": "Fill empty category details",
+    "Fill the empty category taglines and icons?": "Fill the empty category taglines and icons?",
+    "Adds the short line (for example \"Earbuds · TWS · Headsets\") and the icon shown on the category cards to the categories that have none, matching them by name. A tagline or icon you already set is never changed. This is saved straight away.": "Adds the short line (for example \"Earbuds · TWS · Headsets\") and the icon shown on the category cards to the categories that have none, matching them by name. A tagline or icon you already set is never changed. This is saved straight away.",
+    "Fill them": "Fill them",
+    ":count categories updated": ":count categories updated",
+    "Nothing to fill": "Nothing to fill",
+    "Every matching category already has its tagline and icon.": "Every matching category already has its tagline and icon."
 }

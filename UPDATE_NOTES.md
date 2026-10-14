@@ -2,6 +2,27 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-14 - Starter home page like zamzamint.netlify.app, loaded from the Home Page Builder
+
+Owner request (in Bangla): arrange the home page like `https://zamzamint.netlify.app/` with every section — doing it by hand in the admin takes too long.
+
+What I did: read the reference site's code and rebuilt its home page as Home Page Builder sections (`App\Support\StorefrontHomeStarter`): hero, trust strip, Shop by Category, Best Deals Today, Latest Gadgets, Flash Deal, four category rows, Order Easily on WhatsApp, Wholesale Gadgets in Bangladesh (SEO text with Read more), plus top bar links Mobile App / Track Order. The wording is the reference site's own. Two new buttons on the Home Page Builder: **Load the starter layout** (draft until Save) and **Fill empty category details** (blank taglines / icons only).
+
+Why a button and not "I set it up": the layout is stored in the live database, which I cannot reach from here. Deploy, open Site → Storefront Settings → the Next.js site → Website Design → Home Page Builder, press **Fill empty category details**, then **Load the starter layout**, then **Save changes**.
+
+Also: a product row can now mix several categories (the reference groups e.g. Audio + Earbuds); the SEO text folds to its first paragraph; the "Shop on mobile" section has the `#mobile-app` anchor.
+
+Things to know:
+- The *Flash Deal* band shows only when a **Flash Sale** collection (Offers) with products exists, and its countdown needs an end time on that offer — the reference site uses a fake timer, the ERP uses the real one. The *Best Deals Today* banner shows products that are really on sale.
+- Hero slides are untouched (Site → Hero Slides); the reference's three slides are not copied because your live slides have your own banners.
+- The starter's phone / WhatsApp buttons use the numbers saved in the site settings (the SEO text names +8801325224400, as the reference does — edit it if that is not your WhatsApp number).
+- The headings are English (as on the reference); admin-entered content is not translated yet, so they stay English in Bangla mode. Category rows named after the reference's "Kitchen" and "Lipstick" are matched to your Air Fryer / Cocker / Cosmetics categories.
+- Needs Bangla review: the 14 new admin labels in `lang/bn.json` (Load the starter layout, Fill empty category details and their messages, Chosen categories).
+
+Tests: new `NextjsHomeStarterTest` (11) and the existing 22 design tests pass. Real-browser check on a throwaway database with your real category names: both buttons, the confirm dialogs, Save, the home page with all 12 sections (desktop and phone), SEO fold and the Mobile App link.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট ও পুশ কর এবং মেইনে পুশ কর", 2026-10-14), both repositories.
+
 ## 2026-10-08 - Next.js home page, header and footer follow the approved design; everything is customised from the dashboard
 
 Owner request (in Bangla, with a screenshot of the design from the upstream repo `sajiduzzaman-im/zamzam-international`): the forked site had drifted to a Blade-theme look — the home page must be exactly that design, the dashboard must have every option to customise it, header and footer must match, and the Footer Builder must be able to build a custom footer.

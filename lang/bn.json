@@ -1254,5 +1254,19 @@
     "Show the \"Add to cart\" button": "\"কার্টে যোগ করুন\" বাটন দেখান",
     "Show the wishlist heart": "উইশলিস্টের হৃদয় আইকন দেখান",
     "Show the quick-view button": "কুইক-ভিউ বাটন দেখান",
-    "Show the star rating": "তারকা রেটিং দেখান"
+    "Show the star rating": "তারকা রেটিং দেখান",
+    "Chosen categories": "নির্বাচিত ক্যাটাগরি",
+    "Pick one or more — the row mixes products from all of them.": "এক বা একাধিক বেছে নিন — রো-তে সবগুলোর পণ্য মিশিয়ে দেখানো হবে।",
+    "Load the starter layout": "স্টার্টার লেআউট লোড করুন",
+    "Load the starter home page?": "স্টার্টার হোম পেজ লোড করবেন?",
+    "This replaces every section below with the starter home page — hero, trust strip, shop by category, best deals, latest products, flash deal, four category rows, the WhatsApp section and the about text — and adds the top bar quick links if there are none. Nothing is saved until you press Save changes, and you can edit every word afterwards.": "নিচের সব সেকশন স্টার্টার হোম পেজ দিয়ে বদলে যাবে — হিরো, ট্রাস্ট স্ট্রিপ, ক্যাটাগরি অনুযায়ী কিনুন, সেরা ডিল, নতুন পণ্য, ফ্ল্যাশ ডিল, চারটি ক্যাটাগরি রো, WhatsApp সেকশন ও পরিচিতি লেখা — এবং টপ বারে কোনো লিংক না থাকলে দ্রুত লিংকগুলোও যোগ হবে। সেভ চাপার আগে কিছুই সংরক্ষিত হবে না, আর পরে প্রতিটি লেখা বদলানো যাবে।",
+    "Starter layout loaded": "স্টার্টার লেআউট লোড হয়েছে",
+    "Check the sections, then press Save changes.": "সেকশনগুলো দেখে নিন, তারপর সেভ চাপুন।",
+    "Fill empty category details": "ফাঁকা ক্যাটাগরির তথ্য পূরণ করুন",
+    "Fill the empty category taglines and icons?": "ফাঁকা ক্যাটাগরির ট্যাগলাইন ও আইকন পূরণ করবেন?",
+    "Adds the short line (for example \"Earbuds · TWS · Headsets\") and the icon shown on the category cards to the categories that have none, matching them by name. A tagline or icon you already set is never changed. This is saved straight away.": "ক্যাটাগরি কার্ডে দেখানো ছোট লাইন (যেমন \"Earbuds · TWS · Headsets\") ও আইকন, যে ক্যাটাগরিতে নেই সেগুলোতে নাম মিলিয়ে যোগ হবে। আপনার আগে দেওয়া ট্যাগলাইন বা আইকন কখনো বদলাবে না। এটি সঙ্গে সঙ্গে সংরক্ষিত হয়।",
+    "Fill them": "পূরণ করুন",
+    ":count categories updated": ":count টি ক্যাটাগরি আপডেট হয়েছে",
+    "Nothing to fill": "পূরণ করার কিছু নেই",
+    "Every matching category already has its tagline and icon.": "মিলে যাওয়া প্রতিটি ক্যাটাগরিতে ট্যাগলাইন ও আইকন আগে থেকেই আছে।"
 }
