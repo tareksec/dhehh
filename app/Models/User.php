@@ -298,6 +298,7 @@ class User extends Authenticatable implements FilamentUser
         CustomerPayment::class => 'sales',
         ResellerCommission::class => 'sales',
         ResellerPayoutRequest::class => 'sales',
+        ResellerDepositEntry::class => 'sales',
         Supplier::class => 'purchasing',
         Purchase::class => 'purchasing',
         SupplierPayment::class => 'purchasing',

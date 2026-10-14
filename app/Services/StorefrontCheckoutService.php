@@ -68,6 +68,7 @@ class StorefrontCheckoutService
     public function activePaymentMethods(StorefrontSetting $setting): Collection
     {
         return StorefrontPaymentMethod::query()
+            ->forStore()
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->get()

@@ -226,7 +226,7 @@ class ResellerPortalDashboardRedesignTest extends TestCase
         $this->assertMatchesRegularExpression('/Good (morning|afternoon|evening),/', $html);
         $this->assertStringContainsString('Test Reseller', $html);
         $this->assertStringContainsString('Available to withdraw', $html);
-        $this->assertStringContainsString('Pending commission', $html);
+        $this->assertStringContainsString('Pending profit', $html);
         $this->assertStringContainsString(CreateOrder::getUrl(), $html);
         $this->assertStringContainsString(Withdrawals::getUrl(), $html);
         $this->assertStringContainsString('Add products', $html);

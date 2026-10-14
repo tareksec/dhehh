@@ -25,7 +25,10 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rules\Unique;
 
 class StorefrontPaymentMethodResource extends Resource
 {
@@ -86,7 +89,7 @@ class StorefrontPaymentMethodResource extends Resource
                     TextInput::make('name')
                         ->required()
                         ->maxLength(255)
-                        ->unique(ignoreRecord: true, modifyRuleUsing: CompanyScopedUnique::rule())
+                        ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule, ?Model $record): Unique => CompanyScopedUnique::rule()($rule, $record)->where('reseller_only', 0))
                         ->placeholder('e.g. Rocket (Send Money), Bank Transfer')
                         ->helperText('Shown to the customer as the option label at checkout.'),
                     TextInput::make('account_number')
@@ -138,6 +141,12 @@ class StorefrontPaymentMethodResource extends Resource
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /** Reseller-only channels are managed in Reseller Settings, not in the store's own list. */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->forStore();
     }
 
     public static function canViewAny(): bool

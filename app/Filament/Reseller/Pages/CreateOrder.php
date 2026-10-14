@@ -4,7 +4,7 @@ namespace App\Filament\Reseller\Pages;
 
 use App\Filament\Reseller\Concerns\ForApprovedResellers;
 use App\Models\Product;
-use App\Models\StorefrontPaymentMethod;
+use App\Models\ProductVariant;
 use App\Services\ExternalCourierFraudService;
 use App\Services\ResellerOrderPlacementService;
 use App\Services\ResellerOwnCourierService;
@@ -70,7 +70,7 @@ class CreateOrder extends Page
     {
         $this->form->fill([
             'delivery_method' => 'store',
-            'items' => [['product_id' => null, 'quantity' => 1, 'price' => null]],
+            'items' => [['product_id' => null, 'variant_id' => null, 'quantity' => 1, 'price' => null]],
         ]);
     }
 
@@ -80,21 +80,31 @@ class CreateOrder extends Page
         $reseller = $this->reseller();
         $products = $service->catalog($reseller)->keyBy('id');
         $paymentMethods = app(ResellerOwnCourierService::class)->paymentMethods($reseller->company)->keyBy('id');
+        // The send-money numbers plus the store's active online gateway.
+        $paymentOptions = app(ResellerOwnCourierService::class)->paymentOptions($reseller->company);
         $ownCourier = fn (Get $get): bool => $get('delivery_method') === 'own';
         // Own courier and something left to send after the reseller's deposit.
         $mustPay = fn (Get $get): bool => $ownCourier($get) && ($this->summary()['to_send'] ?? 1) > 0;
+        $online = fn (Get $get): bool => $get('payment_method_id') === ResellerOwnCourierService::ONLINE;
+        $mustEnterPayment = fn (Get $get): bool => $mustPay($get) && ! $online($get);
+        // The variation a line has chosen; null for a product without variations.
+        $lineVariant = fn (Get $get): ?ProductVariant => ($product = $products->get((int) $get('product_id'))) && $product->has_variants
+            ? $product->activeVariants->firstWhere('id', (int) $get('variant_id'))
+            : null;
+        $hasVariants = fn (Get $get): bool => (bool) $products->get((int) $get('product_id'))?->has_variants;
         // Lowest price allowed on a line, or null when the price is fixed.
-        $minPrice = function (Get $get) use ($products, $service, $reseller): ?float {
+        $minPrice = function (Get $get) use ($products, $service, $reseller, $lineVariant, $hasVariants): ?float {
             $product = $products->get((int) $get('product_id'));
 
-            if (! $product) {
+            if (! $product || ($hasVariants($get) && ! $lineVariant($get))) {
                 return null;
             }
 
-            $base = $service->basePrice($reseller, $product);
+            $variant = $lineVariant($get);
+            $base = $service->basePrice($reseller, $product, $variant);
 
             return $get('../../delivery_method') === 'own'
-                ? round($base ?? $product->baseSellingPrice(), 2)
+                ? round($base ?? $service->suggestedPrice($product, $variant) ?? 0.0, 2)
                 : $base;
         };
 
@@ -139,8 +149,8 @@ class CreateOrder extends Page
                                 'store' => __('The store delivers (cash on delivery)'),
                                 'own' => __('My own courier (I pay the full amount in advance)'),
                             ])
-                            ->disableOptionWhen(fn (string $value): bool => $value === 'own' && $paymentMethods->isEmpty())
-                            ->helperText($paymentMethods->isEmpty() ? __('Own courier orders are not available yet: the store has no payment method set up.') : null)
+                            ->disableOptionWhen(fn (string $value): bool => $value === 'own' && $paymentOptions === [])
+                            ->helperText($paymentOptions === [] ? __('Own courier orders are not available yet: the store has no payment method set up.') : null)
                             ->default('store')
                             ->required()
                             ->live()
@@ -164,28 +174,33 @@ class CreateOrder extends Page
                     ->schema([
                         Select::make('payment_method_id')
                             ->label(__('Paid to'))
-                            ->options(fn (): array => $paymentMethods->mapWithKeys(fn (StorefrontPaymentMethod $method): array => [
-                                $method->getKey() => trim($method->name.($method->account_number ? ' — '.$method->account_number : '')),
-                            ])->all())
+                            ->options(fn (): array => $paymentOptions)
                             ->required($mustPay)
                             ->live()
-                            ->helperText(fn (Get $get): ?string => $paymentMethods->get((int) $get('payment_method_id'))?->instructions)
+                            ->helperText(fn (Get $get): ?string => $online($get)
+                                ? __('You will go to the secure payment page to pay :amount. The store packs the parcel once the payment is confirmed.', [
+                                    'amount' => MoneyFormatter::currency((float) ($this->summary()['to_send'] ?? 0), $this->currency()),
+                                ])
+                                : $paymentMethods->get((int) $get('payment_method_id'))?->instructions)
                             ->columnSpanFull(),
                         TextInput::make('sender')
                             ->label(__('Paid from (number or account)'))
-                            ->required($mustPay)
+                            ->required($mustEnterPayment)
+                            ->visible(fn (Get $get): bool => ! $online($get))
                             ->maxLength(40),
                         TextInput::make('transaction_id')
                             ->label(__('Transaction ID'))
-                            ->required($mustPay)
+                            ->required($mustEnterPayment)
+                            ->visible(fn (Get $get): bool => ! $online($get))
                             ->maxLength(100),
-                        self::amountSentField(fn (): float => (float) ($this->summary()['to_send'] ?? 0), $this->currency()),
+                        self::amountSentField(fn (): float => (float) ($this->summary()['to_send'] ?? 0), $this->currency())
+                            ->visible(fn (Get $get): bool => ! $online($get)),
                     ])
                     ->columns(2),
 
                 Section::make(__('Products'))
                     ->description(fn (Get $get): string => $get('delivery_method') === 'own'
-                        ? __('Only products in your store can be ordered. Set the price your customer pays; you pay the store price plus the packaging charge per piece, and there is no commission on these orders. Your customer only ever sees your price.')
+                        ? __('Only products in your store can be ordered. Set the price your customer pays; you pay the store price plus the packaging charge per piece, and there is no profit to withdraw on these orders. Your customer only ever sees your price.')
                         : __('Only products in your store can be ordered. Payment is cash on delivery.'))
                     ->schema([
                         Repeater::make('items')
@@ -204,7 +219,25 @@ class CreateOrder extends Page
                                     ->live()
                                     ->afterStateUpdated(function (Set $set, ?string $state) use ($products, $service, $reseller): void {
                                         $product = $products->get((int) $state);
-                                        $set('price', $product ? $service->defaultPrice($reseller, $product) : null);
+                                        // A product with variations is priced once an option is chosen.
+                                        $set('variant_id', null);
+                                        $set('price', $product && ! $product->has_variants ? $service->defaultPrice($reseller, $product) : null);
+                                    })
+                                    ->columnSpan(3),
+                                Select::make('variant_id')
+                                    ->label(__('Option'))
+                                    ->options(fn (Get $get): array => ($product = $products->get((int) $get('product_id'))) && $product->has_variants
+                                        ? $product->activeVariants->mapWithKeys(fn (ProductVariant $variant): array => [
+                                            $variant->getKey() => ($variant->label() ?: ($variant->sku ?: '#'.$variant->getKey())).' ('.__('Stock').': '.(int) $variant->stock.')',
+                                        ])->all()
+                                        : [])
+                                    ->visible($hasVariants)
+                                    ->required($hasVariants)
+                                    ->live()
+                                    ->afterStateUpdated(function (Set $set, Get $get, ?string $state) use ($products, $service, $reseller): void {
+                                        $product = $products->get((int) $get('product_id'));
+                                        $variant = $product?->activeVariants->firstWhere('id', (int) $state);
+                                        $set('price', $product && $variant ? $service->defaultPrice($reseller, $product, $variant) : null);
                                     })
                                     ->columnSpan(3),
                                 TextInput::make('quantity')
@@ -230,7 +263,7 @@ class CreateOrder extends Page
                                     ->live(onBlur: true)
                                     ->columnSpan(2),
                                 // A photo of the chosen product, so the right one is picked.
-                                Html::make(fn (Get $get): HtmlString => $this->productPreview($products->get((int) $get('product_id'))))
+                                Html::make(fn (Get $get): HtmlString => $this->productPreview($products->get((int) $get('product_id')), $lineVariant($get)))
                                     ->columnSpanFull(),
                             ])
                             ->columns(6),
@@ -238,15 +271,16 @@ class CreateOrder extends Page
             ]);
     }
 
-    protected function productPreview(?Product $product): HtmlString
+    protected function productPreview(?Product $product, ?ProductVariant $variant = null): HtmlString
     {
         if (! $product) {
             return new HtmlString('');
         }
 
-        $path = $product->image ?: Arr::first($product->gallery_images ?? []);
+        // The chosen option's own photo, else the product's.
+        $path = Arr::first($variant?->images ?? []) ?: $product->image ?: Arr::first($product->gallery_images ?? []);
         $url = CompanyMedia::filamentPublicUrl($path, $product);
-        $details = collect([$product->sku, $product->brand])->filter()->implode(' · ');
+        $details = collect([$variant?->label(), $variant?->sku ?: $product->sku, $product->brand])->filter()->implode(' · ');
 
         return new HtmlString(
             '<div class="flex items-center gap-3 text-sm">'
@@ -357,13 +391,18 @@ class CreateOrder extends Page
             'amount' => $data['amount'] ?? null,
         ] : null);
 
+        // Paying online: on to the gateway's page; the order waits for its confirmation.
+        $onlinePayment = $this->isOwnCourier() ? app(ResellerOwnCourierService::class)->pendingOnlinePayment($order) : null;
+
         Notification::make()
-            ->title($this->isOwnCourier()
-                ? __('Order :number was created. The store will check your payment and pack the parcel.', ['number' => $order->order_number])
-                : __('Order :number was created. The store will review it.', ['number' => $order->order_number]))
+            ->title($onlinePayment
+                ? __('Order :number was created. Finish the payment to send it to the store.', ['number' => $order->order_number])
+                : ($this->isOwnCourier()
+                    ? __('Order :number was created. The store will check your payment and pack the parcel.', ['number' => $order->order_number])
+                    : __('Order :number was created. The store will review it.', ['number' => $order->order_number])))
             ->success()
             ->send();
 
-        $this->redirect(Orders::getUrl());
+        $this->redirect($onlinePayment?->payload['payment_url'] ?? Orders::getUrl());
     }
 }

@@ -21,6 +21,201 @@ Tests: 6 new (dashboard tiles, payout steps until the screenshot, calendar year,
 
 Commit status: committed and pushed to claude/nifty-carson-r2vpby on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
 
+## 2026-10-14 (later) - Correction: the admin sets a suggested selling price on each variation
+
+The owner (in Bangla) after the first brief: my change was a serious mistake. With no price set by the reseller, a customer could buy one piece **at the wholesale price**. The system must work like this: **the admin enters a probable selling rate for the reseller on each variation, so the reseller sees what the market price is; the reseller can override it with their own.**
+
+What changed (on top of commit `84fe781`):
+1. **Admin → Products → Variations**: new field **Suggested selling price for resellers** (shown only while the reseller module is on). It is the default customer price. The reseller still pays the variation's own price (Sale Price) + the company's Reseller cost per unit.
+2. **Customer price of a variation** = the reseller's own price (portal → Products → Variation prices), else the admin's suggested price, never below what the reseller pays. Commission = that price − what the reseller pays.
+3. **Neither set** (no suggested price, and the reseller has not set one): the variation is **not sold at the wholesale rate**. On the reseller's store it shows as out of stock and cannot be added to the cart; in the portal the order line asks the reseller to enter a price (`Enter your price.`), the details table says **Set your price**, and the bulk "suggested + %" action skips it. A variation with no price at all (sale price empty or 0) cannot be ordered either.
+4. **Wording: "commission" is now "profit"** for resellers (owner: *"there is no commission here; the reseller earns a profit = the price they sell at minus our cost"*). Changed everywhere a reseller or the store's reseller admin sees it: portal Orders / Products / Earnings / dashboard / create & change order / product details / order details, the public reseller guide, the older store account page, the Reseller Settings help texts, the admin list of reseller profits (was "Commissions") and the payout voucher purpose ("Reseller profit payout — ..."). 19 old keys were replaced and `Profits` was added in `lang/en.json` and `lang/bn.json`. **Not changed:** the arithmetic, the payable-after-delivery rule, internal names (`ResellerCommission`, `reseller_commissions`, `commission_per_unit` columns), and the investor / channel-partner screens (they have their own, unrelated commission). The bulk "suggested + %" price action is also unchanged.
+5. Nothing changes for ordinary products, the plain (non-reseller) store, the API or the Next.js site.
+
+Deploy: `php artisan migrate` — new migration `2026_10_15_100000_add_reseller_suggested_price_to_variants` (one nullable column on `product_variants`). `npm run build` is not needed.
+
+**Please confirm:**
+- Variations that already exist have **no suggested price**, so for resellers who already have such a product in their store they stop being buyable until the admin fills the new field (or the reseller sets a price). The admin should fill it once per variation after deploying.
+- If the suggested price is lower than what the reseller pays (wholesale + cost per unit), customers are charged what the reseller pays, with no profit for the reseller (same rule as ordinary products).
+
+Needs Bangla review (new keys): Suggested selling price for resellers (and its long helper text), "You pay :cost. There is no suggested price, so set yours to sell it.", Set your price, Enter your price. **Profit wording:** the owner said "প্রফিট"; the Bangla uses "লাভ", which is what the existing `Profit` key already uses in the reports. Say if you prefer "প্রফিট" for the reseller screens (a one-line change per key).
+
+Tests: `ResellerVariationPricingTest` (12, +3): suggested price as the default / raised to cost, a variation with no suggested price is never sold at the wholesale rate (pricing + reseller store cart + checkout), the plain store never shows the suggested prices, staff enter the field, it is hidden while the module is off. `ResellerVariationOrderTest` (16, +2): a variation with no suggested price needs the reseller's own price (store and own-courier delivery), a variation without a price cannot be ordered. `ResellerPortalProductsTest` (18, +1): the same in the portal (details, bulk %, saving).
+
+Full suite (plain `php artisan test`, no `--env`), after the suggested price and the profit wording: **2265 passed, 1 skipped, 0 failed** (365 s). Pint passes on the changed PHP files.
+
+Commit status: committed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-14, "কাজের ব্রাঞ্চে কমিট ও পুশ করুন এবং মেইনে পুশ কর"), on top of `84fe781`, then `origin/main` (v2.74.0) merged and the full suite re-run (2416 passed, 1 skipped, 0 failed). Pushed to `main` the same day.
+
+## 2026-10-14 - Owner's answers: variation price, online gateway, return charge (three changes on the branch)
+
+The owner answered the open points on 2026-10-14. Three changes follow from them; each has its own entry below. Nothing here is on `main` yet.
+
+1. **Variations: no separate reseller price.** The owner: the wholesale rate *is* the reseller rate; the admin needs no extra price. So the **Reseller price** field on a variation is gone (it only ever existed on this branch), and a variation costs the reseller **its own price + the company's "Reseller cost per unit"** (the same formula as an ordinary product's wholesale tier + that cost). The first version sold a variation at that price when nothing else was set; the owner called that a serious mistake and the later entry "Correction: the admin sets a suggested selling price" replaces it. See also the entry "products with variations".
+2. **Online gateway as an advance option.** The owner: whichever gateway is active is shown. See "pay the advance online".
+3. **Return charge of 50 per returned order, from the reseller's deposit.** See "return charge".
+
+Full suite (plain `php artisan test`, no `--env`) with all three changes: **2259 passed, 1 skipped, 0 failed** (379 s).
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-14). Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-14 - Reseller advance: pay online with the store's active gateway
+
+Owner decision (2026-10-14): "the gateway that is active will show". Under **Paid to** a reseller sees **Pay online (ZiniPay)** or **Pay online (PayStation)** when the store has an online payment gateway switched on and set up, in addition to the send-money numbers (those stay as the owner confirmed on 2026-10-12).
+
+What changed:
+1. **Create order / Change order / Send payment again**: the new option needs no number or transaction ID. The reseller is taken to the gateway's secure page for exactly what is still owed (after the deposit pays its part).
+2. **Confirmation**: the gateway sends the reseller back to a signed portal link and also calls its webhook; either one asks the gateway whether the money arrived (the amount must match), marks the payment completed and enters it in the order's Payments History **once**. Staff then see the order as paid and can pack the parcel; nothing is checked by hand. Staff cannot Verify / Reject an online payment.
+3. **Unfinished payment**: the order shows **Waiting for the online payment** with a **Pay now** button; starting another payment (online or send-money) closes the unfinished one. A payment the gateway reports as failed shows "Rejected — send again".
+4. Own-courier orders stay available when the store has only the gateway and no send-money number.
+
+Deploy: no migration. The gateway must already be configured (Integrations → Payment Gateway) and its webhook must reach the company's own domain (the app builds `https://<company domain>/webhooks/zinipay|paystation/<payment>`).
+
+**Please confirm / know:**
+- The online option takes the **exact** amount owed; it does not accept a bigger amount (the send-money flow still lets a reseller send more and credit the extra to the deposit).
+- Nothing is posted to a cash/bank account for an online payment (as for online storefront payments); the order's Payments History carries it with the method "Other" and a note naming the gateway.
+- I did not try a live ZiniPay / PayStation payment: the tests fake the gateway's answers. A first real payment on staging is worth doing before this goes live.
+
+Needs Bangla review (new keys): Pay online (:gateway), Pay now, Waiting for the online payment, Confirmed by the gateway, Not completed, Online (:gateway), the sentence on the Paid-to helper, and the two notices after a payment (received / not completed).
+
+Tests: `ResellerOnlineAdvancePaymentTest` (18): the option appears only when the gateway is on and set up (ZiniPay and PayStation); choosing it when it is not is refused and creates nothing; an order starts a pending gateway payment for the right amount with a signed return link and a webhook on the company's domain; the webhook confirms and enters the money once even if it arrives twice; the signed return does the same and a later webhook changes nothing; an unsigned, tampered or other-company link verifies nothing; pending / wrong-amount / failed answers never complete it; an unfinished attempt is replaced by a new one or by a send-money payment; a gateway error creates no order; the deposit pays first; staff cannot verify by hand; the portal form skips the number and transaction ID and goes to the gateway; send-money still needs them; own courier with only the gateway; Pay now and Send payment again on the Orders list; paying the extra of a raised order online; another reseller's payment is unreachable.
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval. Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-14 - Reseller return charge (50 per returned order, from the deposit)
+
+Owner decision (2026-10-14): an order cancelled before delivery gives the money back to the reseller's account (built on 2026-10-12); after a return, "50 taka per return" is charged. Asked in Bangla: it comes from the reseller's credit (the deposit balance), once per order (not per piece).
+
+What changed:
+1. When a reseller's order becomes **Returned** (store-delivered or own courier), one deposit entry of **−50** is made, with the order and the reason in its note. The amount is **Reseller Settings → Money rules → Return charge per order** (default 50; 0 = no charge).
+2. A return gives nothing back (the deposit part is returned only on a cancellation).
+3. If the deposit holds less than the charge it goes **below zero**; later credits make that up first, and a deposit below zero pays nothing on new orders (the placement code spends `max(0, balance)`). The staff "Deduct" action still refuses to go below zero.
+4. Shown: **Resellers → Deposits** (type "Return charge (order returned)"), the order for staff (a "Return charge" section), the reseller's order details, and the reseller's deposit badge (which can show a minus).
+
+Deploy: `php artisan migrate` (`2026_10_14_100000_add_reseller_return_charge`: one column, default 50).
+
+**Please confirm (readings of the owner's words):**
+- "Returned" status is the trigger, not "was delivered first": an order can reach Returned from Confirmed, Processing, Shipping or Completed, and all of them are charged.
+- The charge is taken for **every** returned reseller order, including own-courier orders whose advance was paid by send-money or online; only the deposit is touched. If an own-courier return should also give the money back (minus the charge), that is a separate rule to decide.
+- A reseller whose deposit is empty ends up with a negative deposit instead of an uncollected charge.
+- The public reseller guide does not mention the return charge yet.
+
+Needs Bangla review (new keys): Return charge per order and its helper text, Return charge, Return charge (order returned), Taken from the reseller's deposit, the sentence in the reseller's order details.
+
+Tests: `ResellerReturnChargeTest` (11): the default of 50; a returned store-delivered order; an own-courier order (charge only, no deposit back); once only however often the order is saved or refunded afterwards; nothing for a cancelled, delivered or non-reseller order; the amount follows the company's setting and 0 means none; each company uses its own setting and deposits; a deposit below zero pays nothing and later credits cover it first; staff see it in the Deposits list and on the order; the reseller sees why; the setting is saved and cannot be negative.
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval. Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-12 - Reseller program: products with variations (owner decision 1, reworked on 2026-10-14)
+
+Owner decision (asked one by one, in Bangla), then corrected on 2026-10-14: *the wholesale rate is the reseller rate; the admin does not set a separate reseller price; the reseller sets their own customer price; we add only the wholesale rate, the packaging cost and, with our courier, the courier cost.*
+
+What changed:
+1. **Admin → Products → Variations**: a variation's own **Sale Price** is the wholesale rate; the new **Suggested selling price for resellers** is the market price a reseller sees (see the entry "Correction: the admin sets a suggested selling price"). The earlier "Reseller price" field was removed before it reached `main`.
+2. **What the reseller pays for a variation** = its own price + the company's **Reseller cost per unit** (as for an ordinary product). Packaging stays the own-courier packaging charge per piece; delivery is the store's delivery charge (or the reseller's own courier).
+3. **Reseller portal → Products**: a product with variations shows "From ৳X" for cost / suggested price and a commission range; the **Variation prices** action sets the customer price per variation (never below what the reseller pays; blank = the admin's suggested price, raised to the cost if lower; none = cannot be sold until a price is set); the bulk "Set price = suggested + %" works per variation; the details slide-over lists cost, price and commission per variation. The "No wholesale rate" filter now only lists a product with variations when none of them is active.
+4. **Reseller's store**: each variation shows the reseller's price; the cart / checkout charge it and record the commission (customer price − what the reseller pays). What the reseller pays is not output on the store at all (tested, including the page's hidden JSON).
+5. **Reseller portal → Create order / Change order**: products with variations can be ordered. Each line has an **Option** picker; stock is the variation's own; the same rules as ordinary products (price at least what the reseller pays, one line per option, own-courier orders charge the base price + packaging with no commission, adding a variation to an own-courier order asks only for the extra). Recent orders on the dashboard show the option.
+
+Deploy: `php artisan migrate` (`2026_10_12_120000_add_reseller_prices_to_variants`: one nullable column on `reseller_products`). `npm run build` is not needed for this step.
+
+**Please confirm (readings of the owner's words):**
+- "The wholesale rate" of a variation is **the variation's own price**, not the product's wholesale tier price (tiers apply to the base product only on the storefront, and a variation line never gets a tier). If the tier should be used for every variation of a product instead, say so.
+- The company's "Reseller cost per unit" **is** added (the same as for ordinary products). A variation with no price of its own uses the product's price; one with no price at all cannot be sold.
+- Until a reseller sets a price, a variation sells at the admin's suggested price (never at the wholesale rate); with no suggested price either it cannot be sold.
+- The older storefront account page for resellers (`/account/reseller`, before the portal) still prices only ordinary products; the portal is the place for variations.
+
+Needs Bangla review (new keys): Variation prices, Per variation, the sentence in the Variation prices modal, "This variation has no price yet, so it cannot be sold." and the details note.
+
+Tests: `ResellerVariationPricingTest` (9): the price rules (chosen / normal raised to cost, cost = own price + cost per unit, none without a price), no change outside a reseller session, another reseller's or company's data never used, the storefront shows the reseller's prices and never what the reseller pays (in the HTML and the JSON), an order through the reseller store records price / base / commission, the plain store records none, the admin edits the variation's price and the reseller's cost follows. `ResellerVariationOrderTest` (14): the portal order with commission, option required and valid, price floor, the variation's own stock (and pre-order), duplicates, catalog rules, outside-store products refused, another reseller's price ignored, the option picker and pricing in the form, own-courier orders, the buyer-facing price, adding a variation to an own-courier order, stock and duplicates on edit. `ResellerPortalProductsTest` +5: per-variation prices and the floor, isolation, details, bulk %, the filter.
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12), reworked and pushed on 2026-10-14 with owner approval. Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-12 - Reseller application: SMS code proves ownership of an existing number (owner decision 5) — also a security fix
+
+Owner decision (asked one by one, in Bangla): applying with a phone number that already belongs to a customer must prove the number with an SMS code before the old record is used.
+
+**Why it mattered:** the portal's Become a reseller page found any customer by phone and **set a new password on that record**. Anyone who knew an approved reseller's number could apply with it, choose a password and sign in as that reseller (their orders, balance and withdrawals). The older plain `/reseller` form likewise overwrote an existing person's name and business name. Both are closed now.
+
+What changed (Reseller portal → Become a reseller; storefront /reseller):
+1. **New number:** applies exactly as before, no code.
+2. **Number that already has a customer record** (storefront account, past orders, or a reseller): the form sends a 6-digit SMS code to that number (10 minutes, five tries, one SMS a minute, hashed, per company + number) and shows a code step with **Send a new code** and **Use a different number**. Only after the right code does it use the old record, set the password and sign in; until then the old record is not touched at all. Any spelling of the number (+880…, 880…, 01…) counts.
+3. **No SMS gateway:** such a number cannot be proven; the form says to contact the store, and nothing changes.
+4. The older plain storefront form (`/reseller`) no longer reuses an existing number: it shows an error and the portal application link (or "contact the store" when the company has no portal host).
+
+I assumed the code is needed **only when the number already exists** (as written in the decision); a brand-new number is not asked for a code. Tell me if every applicant should be verified when SMS is on.
+
+Deploy: nothing to run. It needs the company's SMS gateway (Integrations) for the code; each code costs one SMS.
+
+Needs Bangla review (new keys): the code-step helper text, "Verification code", "Verify and apply", "Use a different number", and the four error / notice sentences.
+
+Tests: new `ResellerApplicationVerificationTest` (9): new number needs no code; an existing number is untouched until the code (the password hash only waits in the session); wrong code changes nothing and five wrong codes burn the code; knowing an approved reseller's number cannot replace their password; other spellings need the code and never duplicate; no SMS gateway means no takeover; resend once a minute and change the number; another company's number is a new number here; the plain storefront form never takes over a number. The old "approved reseller stays approved on re-application" test was rewritten for the new rule.
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-12 - Reseller Settings: payment methods for the advance (owner decision 4)
+
+Owner decision (asked one by one, in Bangla): the admin chooses which payment methods resellers send the advance to, from the existing list; Reseller Settings can also add methods only for the reseller panel; the reseller sees both; the storefront's list does not change the reseller-only ones.
+
+What changed (Resellers → Reseller Settings → Own-courier advance payments):
+1. **Store payment methods resellers can use**: tick boxes for the store's active manual (send-money / bank) methods. Resellers see only the ticked ones. A method added to the store later stays hidden until ticked.
+2. **Reseller-only payment methods**: add / rename / switch off / remove methods (name, number, instructions) that only the reseller portal uses. The name may equal a store method's (different number). Removing one that a payment already used switches it off instead of deleting it.
+3. Reseller-only methods are **never** shown at the storefront checkout, in the website API (`/checkout` payment methods) or in Storefront → Payment Methods, and a forged request naming one is rejected.
+4. **Nothing changes until the admin saves a choice**: while no choice is saved, every active manual store method is offered, exactly as today, so no company loses its payment channel on deploy.
+
+Deploy: `php artisan migrate` (`2026_10_12_110000_add_reseller_payment_methods`). No setting to change.
+
+**Please confirm (a reading of the owner's answer):** the owner said the methods "come from the Integrations page's payment gateway". The Integrations → Payment Gateway tab holds only the ZiniPay / PayStation credentials (online card / mobile-banking payments), while the list of bKash / Nagad / bank numbers lives under **Storefront → Payment Methods**. I built the choice from that Payment Methods list, because the reseller advance is a manual send-money payment (sender number + transaction ID, checked by staff). Offering the online gateway (pay and verify automatically) as an advance option is a separate, bigger piece of work — say so if that is what was meant.
+
+Needs Bangla review (new keys): the section description, "Store payment methods resellers can use", "Reseller-only payment methods", the two helper texts and "Add reseller-only method" (long sentences, please read them once).
+
+Tests: new `ResellerPaymentMethodsTest` (10): everything offered until a choice is saved, the admin's choice (and an unticked / later-added method stays hidden, ticking none means none), a deactivated method is never offered, forged ids rejected, reseller-only methods added then updated in place (no duplicate rows, same name as a store method allowed, switched off), duplicate names refused, removal deletes unless a payment used it, the store's list changes never touch reseller-only methods and the store's Payment Methods page never lists them, never offered at the storefront (checkout page, forged POST), another company's methods and choices never offered. Plus 2 in `ResellerOwnCourierOrderTest` (paying into a reseller-only method; an unticked store method is refused). A real bug the tests caught: the saved ids kept array keys and would have been stored as an object — fixed with `array_values`.
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-12 - Admin: Resellers → Deposits (list + add / deduct with a reason) (owner decision 3)
+
+Owner decision (asked one by one, in Bangla): the admin has a page with each reseller's deposit and every entry, and can add or deduct with a required reason, all logged. Built as decided.
+
+What changed (Admin → Resellers → Deposits):
+1. **Deposits** page: every deposit entry with date, reseller (+ phone), type (sent above an order total / used on an order / returned when an order was cancelled / adjusted by staff), amount (+ green, − red), order, reason / note and who did it ("Automatic" for system entries). Filters: reseller, type.
+2. **Add to deposit** / **Deduct from deposit** buttons: pick an approved reseller, amount, **reason (required)**. The form shows the deposit now. Each adjustment is one entry with the reason and the staff member, and also goes to the **Audit Logs** page.
+3. The **Resellers** list has a sortable **Deposit** column; a reseller's page shows the deposit.
+4. Permissions follow Sales: **sales.view** sees the page, **sales.update** gets the two buttons. Super admin has both.
+
+Deploy: `php artisan migrate` (`2026_10_12_100000_add_created_by_to_reseller_deposit_entries`, one nullable column). No setting.
+
+Decision I had to make (not from the owner — please confirm): **a deduction larger than the deposit is refused** ("The deposit holds only X, so Y cannot be deducted"), so a deposit never goes negative. Entries are never edited or deleted; a mistake is corrected by another adjustment.
+
+Needs Bangla review (new keys): Returned (order cancelled) (ফেরত (অর্ডার বাতিল)), Adjusted by staff (স্টাফ সমন্বয় করেছেন), Done by (যিনি করেছেন), Sent above an order total (অর্ডারের মোটের বেশি পাঠানো), Reason / note (কারণ / নোট), Deposit entry / Deposit entries (জমার এন্ট্রি), and the two modal headings.
+
+Tests: new `ResellerDepositAdminTest` (13): reason / staff member / positive entry, deduct and empty, over-deduction refused and nothing changes, reason / amount / direction required, audit log row with the staff member, the page lists every entry with type / reason / who, add + deduct from the page and the reason is mandatory, over-deduction from the page notifies and changes nothing, another company's resellers and entries are never listed or adjustable, only approved resellers, view-only staff do not get the buttons, the Resellers list and page show the deposit. Full suite (plain `php artisan test`, no `--env`) after all five items: **2229 passed, 1 skipped, 0 failed** (540 s).
+
+Note: while writing this I ran `php artisan migrate` once by mistake on the local development SQLite file (not the test database): it only added this one column, no data was touched. Tests use their own in-memory database.
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-12 - Reseller deposit: a cancelled order gives the money back (owner decision 2)
+
+Owner decision (asked one by one, in Bangla): a cancelled order that was paid from the reseller's deposit returns the money to the deposit automatically. Built as decided, nothing added.
+
+What changed (Orders → own-courier orders, Reseller portal deposit):
+1. When an own-courier reseller order becomes **Cancelled** (staff, WooCommerce sync or any other path), what it took from the deposit goes back as one new deposit entry (type `refund`, positive). The balance beside the portal's user menu goes up at once.
+2. It runs once only: saving the order again, or running it twice, returns nothing more.
+3. Only the **deposit part** returns. Money the reseller sent to the store (bKash, bank) is not refunded by this. Returned / Refunded orders are not covered either (the owner said "cancelled").
+4. Staff see **Returned to the reseller's deposit** on the order page when something came back.
+
+Deploy: nothing to run (no migration, no setting).
+
+Needs Bangla review (new key): Returned to the reseller's deposit (রিসেলারের জমায় ফেরত গেছে).
+
+Questions for the owner:
+- If the reseller already **sent money to the store** for a cancelled order, who refunds it, and how? Today staff would use the new deposit adjustment page (next item) to add it to the deposit, or pay it back outside the system.
+- Should **Returned** and **Refunded** orders also give the deposit part back? (Only Cancelled does now.)
+
+Tests: 5 new in `ResellerOwnCourierOrderTest` (36 in the file, all passing): deposit part only, once only however often saved, not cancelled / nothing from the deposit, another reseller's deposit untouched, staff see the returned amount. Full suite (plain `php artisan test`, no `--env`) after all five items: **2229 passed, 1 skipped, 0 failed** (540 s).
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval ("এরপর শেষের কাজ গুলো একে একে শেষ করে ফেল ... তোমার কাজের ব্রাঞ্ছে কমিট এবং পুশ করবে", 2026-10-12). Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
 ## 2026-10-13 - Read-only data feed for IMS
 
 Owner asked "যা চায় করে দেও" after sharing IMS's `ERP-INTEGRATION-REQUIREMENTS.md` (IMS wants to pull the ERP's business data). Built the read-only feed `/api/v1/sync/*` (uncommitted, on top of the investor-group work).

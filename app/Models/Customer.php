@@ -157,6 +157,11 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
             ->withTimestamps();
     }
 
+    public function depositEntries(): HasMany
+    {
+        return $this->hasMany(ResellerDepositEntry::class);
+    }
+
     public function resellerCommissions(): HasMany
     {
         return $this->hasMany(ResellerCommission::class);

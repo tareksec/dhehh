@@ -7,9 +7,12 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
+use App\Services\CustomerAccountService;
+use App\Support\StorefrontApi\Phone;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class ResellerController extends Controller
@@ -57,17 +60,30 @@ class ResellerController extends Controller
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $customer = Customer::query()->firstOrNew(['phone' => $data['phone']]);
+        $phone = Phone::normalize($data['phone']);
 
-        // Approved resellers keep their status; everyone else becomes pending.
+        // A number that already belongs to a customer is never taken over by
+        // this plain form (owner decision 2026-10-12): the owner of the number
+        // proves it with an SMS code on the reseller portal's application page.
+        if (app(CustomerAccountService::class)->findByPhone($phone) !== null) {
+            $joinUrl = $this->context->company()?->resellerJoinUrl();
+
+            throw ValidationException::withMessages([
+                'phone' => $joinUrl
+                    ? __('This phone number already belongs to a customer of the store, so it has to be confirmed by SMS first. Please apply here: :url', ['url' => $joinUrl])
+                    : __('This phone number already belongs to a customer of the store. Please contact the store to become a reseller.'),
+            ]);
+        }
+
+        $customer = new Customer(['phone' => $phone]);
         $customer->fill([
             'name' => $data['name'],
             'business_name' => $data['business_name'],
             'reseller_note' => $data['note'] ?? null,
-            'reseller_status' => $customer->reseller_status === 'approved' ? 'approved' : 'pending',
-            'customer_type' => $customer->customer_type ?: 'reseller',
-            'customer_source' => $customer->customer_source ?: 'website',
-            'opening_balance' => $customer->opening_balance ?? 0,
+            'reseller_status' => 'pending',
+            'customer_type' => 'reseller',
+            'customer_source' => 'website',
+            'opening_balance' => 0,
             'is_active' => true,
         ]);
         $customer->save();

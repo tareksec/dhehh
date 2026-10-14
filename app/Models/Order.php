@@ -8,6 +8,7 @@ use App\Models\Concerns\GeneratesSequentialNumber;
 use App\Services\CustomerRiskService;
 use App\Services\OrderWorkflowService;
 use App\Services\ResellerCommissionService;
+use App\Services\ResellerOwnCourierService;
 use App\Services\ShippingFeeService;
 use App\Services\WebsiteWebhookDispatcher;
 use Illuminate\Database\Eloquent\Builder;
@@ -317,6 +318,14 @@ class Order extends Model
         static::saved(function (Order $order): void {
             $order->syncTotalsStockAndCustomerBalance();
             app(ResellerCommissionService::class)->sync($order);
+            // A cancelled own-courier order gives back what it took from the reseller's deposit.
+            if ($order->reseller_own_courier && $order->wasChanged('status') && $order->status === self::STATUS_CANCELLED) {
+                app(ResellerOwnCourierService::class)->refundDeposit($order);
+            }
+            // A returned reseller order takes the return charge from the reseller's deposit (once).
+            if ($order->reseller_customer_id && $order->wasChanged('status') && $order->status === self::STATUS_RETURNED) {
+                app(ResellerOwnCourierService::class)->chargeReturn($order);
+            }
             app(OrderWorkflowService::class)->syncPreviousCustomerBalance($order);
             if ($order->wasChanged('status') && $order->isAccounted() && Schema::hasTable('fraud_checks')) {
                 app(CustomerRiskService::class)->evaluateOrder($order);

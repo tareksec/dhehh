@@ -6,6 +6,7 @@ use App\Filament\Concerns\OptimizesUploadedImages;
 use App\Filament\Concerns\SelectableFromMediaHub;
 use App\Filament\Forms\Components\AttachedVideoPreview;
 use App\Filament\Resources\Categories\Schemas\CategoryForm;
+use App\Filament\Resources\Resellers\ResellerResource;
 use App\Models\Category;
 use App\Models\Product;
 use App\Support\CompanyMedia;
@@ -278,6 +279,13 @@ class ProductForm
                                     ->prefix('৳')
                                     ->minValue(0)
                                     ->helperText('Leave empty to use the product sale price.'),
+                                TextInput::make('reseller_suggested_price')
+                                    ->label(__('Suggested selling price for resellers'))
+                                    ->numeric()
+                                    ->prefix('৳')
+                                    ->minValue(0)
+                                    ->visible(fn (): bool => ResellerResource::resellerModuleEnabledForCurrentContext())
+                                    ->helperText(__('The market price resellers see for this variation. Their customers pay it unless the reseller sets their own price, which can be anything at or above what the reseller pays (the Sale Price above plus the reseller cost per unit). Leave empty and the reseller must set a price before it can be sold.')),
                                 TextInput::make('cost_price')
                                     ->label('Cost Price')
                                     ->numeric()

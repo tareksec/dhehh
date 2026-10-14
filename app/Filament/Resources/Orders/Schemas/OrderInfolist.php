@@ -90,9 +90,19 @@ class OrderInfolist
                         TextEntry::make('reseller_advance_payments')
                             ->label(__('Payments'))
                             ->state(fn (Order $record): array => $record->resellerAdvancePayments
-                                ->map(fn (StorefrontPayment $payment): string => $payment->gateway === ResellerOwnCourierService::GATEWAY_DEPOSIT
-                                    ? __(':amount from the reseller\'s deposit', ['amount' => number_format((float) $payment->amount, 2)])
-                                    : __(':amount from :sender, transaction :transaction (:status)', [
+                                ->map(fn (StorefrontPayment $payment): string => match (true) {
+                                    $payment->gateway === ResellerOwnCourierService::GATEWAY_DEPOSIT => __(':amount from the reseller\'s deposit', ['amount' => number_format((float) $payment->amount, 2)]),
+                                    app(ResellerOwnCourierService::class)->isOnline($payment) => __(':amount paid online with :gateway (:status)', [
+                                        'amount' => number_format((float) $payment->amount, 2),
+                                        'gateway' => ResellerOwnCourierService::ONLINE_GATEWAYS[$payment->gateway],
+                                        'status' => match ($payment->status) {
+                                            StorefrontPayment::STATUS_PENDING => __('Waiting for the online payment'),
+                                            StorefrontPayment::STATUS_COMPLETED => __('Confirmed by the gateway'),
+                                            StorefrontPayment::STATUS_FAILED => __('Not completed'),
+                                            default => $payment->status,
+                                        },
+                                    ]),
+                                    default => __(':amount from :sender, transaction :transaction (:status)', [
                                         'amount' => number_format((float) $payment->amount, 2),
                                         'sender' => $payment->payment_method,
                                         'transaction' => $payment->transaction_id,
@@ -102,7 +112,8 @@ class OrderInfolist
                                             StorefrontPayment::STATUS_FAILED => __('Rejected'),
                                             default => $payment->status,
                                         },
-                                    ]))
+                                    ]),
+                                })
                                 ->all())
                             ->listWithLineBreaks()
                             ->placeholder('-')
@@ -112,6 +123,11 @@ class OrderInfolist
                             ->state(fn (Order $record): float => app(ResellerOwnCourierService::class)->creditedFrom($record))
                             ->numeric(decimalPlaces: 2)
                             ->visible(fn (Order $record): bool => app(ResellerOwnCourierService::class)->creditedFrom($record) > 0),
+                        TextEntry::make('reseller_deposit_returned')
+                            ->label(__('Returned to the reseller\'s deposit'))
+                            ->state(fn (Order $record): float => app(ResellerOwnCourierService::class)->refundedTo($record))
+                            ->numeric(decimalPlaces: 2)
+                            ->visible(fn (Order $record): bool => app(ResellerOwnCourierService::class)->refundedTo($record) > 0),
                         TextEntry::make('reseller_advance_outstanding')
                             ->label(__('Still to receive'))
                             ->state(fn (Order $record): float => app(ResellerOwnCourierService::class)->outstandingAmount($record))
@@ -123,6 +139,16 @@ class OrderInfolist
                             ->placeholder(__('Not yet')),
                     ])
                     ->columns(3),
+
+                // Any reseller's order that was returned: the return charge taken from their deposit.
+                Section::make(__('Return charge'))
+                    ->visible(fn (Order $record): bool => app(ResellerOwnCourierService::class)->returnChargeOf($record) > 0)
+                    ->schema([
+                        TextEntry::make('reseller_return_charge')
+                            ->label(__('Taken from the reseller\'s deposit'))
+                            ->state(fn (Order $record): float => app(ResellerOwnCourierService::class)->returnChargeOf($record))
+                            ->numeric(decimalPlaces: 2),
+                    ]),
 
                 Section::make('Courier')
                     ->columnSpanFull()

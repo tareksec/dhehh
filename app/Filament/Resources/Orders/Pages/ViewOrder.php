@@ -256,7 +256,11 @@ class ViewOrder extends ViewRecord
         // The oldest payment still waiting: the first advance, then the
         // extra the reseller sent after raising the total (one at a time).
         $pendingPayment = fn (): ?StorefrontPayment => $this->record->reseller_own_courier
-            ? $this->record->resellerAdvancePayments()->where('status', StorefrontPayment::STATUS_PENDING)->first()
+            ? $this->record->resellerAdvancePayments()
+                ->where('status', StorefrontPayment::STATUS_PENDING)
+                // An online payment is confirmed by the gateway, never by hand.
+                ->whereNotIn('gateway', array_keys(ResellerOwnCourierService::ONLINE_GATEWAYS))
+                ->first()
             : null;
 
         return [

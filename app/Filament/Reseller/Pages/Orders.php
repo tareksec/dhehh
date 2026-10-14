@@ -5,7 +5,6 @@ namespace App\Filament\Reseller\Pages;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\ResellerCommission;
-use App\Models\StorefrontPaymentMethod;
 use App\Services\ResellerOwnCourierService;
 use App\Support\MoneyFormatter;
 use BackedEnum;
@@ -16,6 +15,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
@@ -162,7 +162,7 @@ class Orders extends Page implements HasTable
                         : null),
 
                 TextColumn::make('commission')
-                    ->label(__('Commission'))
+                    ->label(__('Profit'))
                     ->state(function (Order $record) use ($currency): string {
                         $commission = $record->resellerCommission;
 
@@ -197,38 +197,56 @@ class Orders extends Page implements HasTable
                     ->visible(fn (Order $record): bool => app(ResellerOwnCourierService::class)->canEdit($record))
                     ->url(fn (Order $record): string => EditOrder::getUrl(['record' => $record->getKey()])),
 
+                // An online payment that was started and not finished: back to the gateway's page.
+                Action::make('payOnline')
+                    ->label(__('Pay now'))
+                    ->icon(Heroicon::OutlinedCreditCard)
+                    ->color('success')
+                    ->visible(fn (Order $record): bool => $record->reseller_own_courier
+                        && $record->status !== Order::STATUS_CANCELLED
+                        && (app(ResellerOwnCourierService::class)->pendingOnlinePayment($record)?->payload['payment_url'] ?? null) !== null)
+                    ->url(fn (Order $record): ?string => app(ResellerOwnCourierService::class)->pendingOnlinePayment($record)?->payload['payment_url'] ?? null),
+
                 Action::make('resendPayment')
                     ->label(__('Send payment again'))
                     ->icon(Heroicon::OutlinedBanknotes)
                     ->color('warning')
                     ->visible(fn (Order $record): bool => $record->reseller_own_courier
-                        && in_array(app(ResellerOwnCourierService::class)->paymentState($record), ['rejected', 'short'], true)
+                        && in_array(app(ResellerOwnCourierService::class)->paymentState($record), ['rejected', 'short', 'paying'], true)
                         && $record->status !== Order::STATUS_CANCELLED)
-                    ->modalDescription(fn (Order $record): string => __('Your last payment was not accepted. Send :amount and enter the new payment details.', [
+                    ->modalDescription(fn (Order $record): string => __('Send :amount and enter the payment details, or pay online.', [
                         'amount' => MoneyFormatter::currency(app(ResellerOwnCourierService::class)->outstandingAmount($record), $currency),
                     ]))
                     ->schema(fn (Order $record): array => [
                         Select::make('payment_method_id')
                             ->label(__('Paid to'))
-                            ->options(app(ResellerOwnCourierService::class)->paymentMethods($this->reseller()->company)
-                                ->mapWithKeys(fn (StorefrontPaymentMethod $method): array => [
-                                    $method->getKey() => trim($method->name.($method->account_number ? ' — '.$method->account_number : '')),
-                                ])->all())
-                            ->required(),
+                            ->options(app(ResellerOwnCourierService::class)->paymentOptions($this->reseller()->company))
+                            ->required()
+                            ->live(),
                         TextInput::make('sender')
                             ->label(__('Paid from (number or account)'))
                             ->required()
+                            ->visible(fn (Get $get): bool => $get('payment_method_id') !== ResellerOwnCourierService::ONLINE)
                             ->maxLength(40),
                         TextInput::make('transaction_id')
                             ->label(__('Transaction ID'))
                             ->required()
+                            ->visible(fn (Get $get): bool => $get('payment_method_id') !== ResellerOwnCourierService::ONLINE)
                             ->maxLength(100),
-                        CreateOrder::amountSentField(fn (): float => app(ResellerOwnCourierService::class)->outstandingAmount($record), $currency),
+                        CreateOrder::amountSentField(fn (): float => app(ResellerOwnCourierService::class)->outstandingAmount($record), $currency)
+                            ->visible(fn (Get $get): bool => $get('payment_method_id') !== ResellerOwnCourierService::ONLINE),
                     ])
-                    ->action(function (Order $record, array $data): void {
+                    ->action(function (Order $record, array $data, Action $action): void {
                         abort_unless((int) $record->reseller_customer_id === (int) $this->reseller()->getKey(), 403);
 
-                        app(ResellerOwnCourierService::class)->submitPayment($record, $data, 'mountedActions.0.data.');
+                        $payment = app(ResellerOwnCourierService::class)->submitPayment($record, $data, 'mountedActions.0.data.');
+
+                        // Paying online: on to the gateway's page.
+                        if ($payment->payload['payment_url'] ?? null) {
+                            $action->redirect($payment->payload['payment_url']);
+
+                            return;
+                        }
 
                         Notification::make()->title(__('Payment sent. The store will check it.'))->success()->send();
                     }),

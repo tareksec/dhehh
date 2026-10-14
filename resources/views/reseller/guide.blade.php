@@ -76,7 +76,7 @@
                 <nav class="mt-10 flex flex-wrap gap-2 text-sm" aria-label="{{ __('On this page') }}">
                     @foreach (array_filter([
                         'how' => __('How it works'),
-                        'money' => __('Pricing and commission'),
+                        'money' => __('Pricing and profit'),
                         'store' => __('Your store'),
                         'orders' => __('Orders and delivery'),
                         'rules' => __('Rules'),
@@ -90,7 +90,7 @@
         {{-- How it works --}}
         <section id="how" class="mx-auto max-w-6xl scroll-mt-20 px-4 py-16 sm:px-6">
             <h2 class="text-2xl font-bold tracking-tight sm:text-3xl">{{ __('How it works') }}</h2>
-            <p class="mt-2 text-gray-600 dark:text-gray-400">{{ __('Four steps from applying to your first commission.') }}</p>
+            <p class="mt-2 text-gray-600 dark:text-gray-400">{{ __('Four steps from applying to your first profit.') }}</p>
             <ol class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 @foreach ($steps as $i => $step)
                     <li class="relative rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-gray-900">
@@ -105,22 +105,22 @@
         {{-- Money --}}
         <section id="money" class="scroll-mt-20 border-y border-gray-200/70 bg-white dark:border-white/10 dark:bg-gray-900/40">
             <div class="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-                <h2 class="text-2xl font-bold tracking-tight sm:text-3xl">{{ __('Pricing and commission') }}</h2>
+                <h2 class="text-2xl font-bold tracking-tight sm:text-3xl">{{ __('Pricing and profit') }}</h2>
                 <div class="mt-8 grid gap-4 lg:grid-cols-3">
                     <article class="rounded-2xl border border-gray-200 p-6 dark:border-white/10">
                         <h3 class="font-semibold">{{ __('Your price, your profit') }}</h3>
-                        <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-400">{{ __('Every product shows your cost in the portal. You can sell at your cost or any price above it; the difference is your commission.') }}</p>
+                        <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-400">{{ __('Every product shows your cost in the portal. You can sell at your cost or any price above it; the difference is your profit.') }}</p>
                         <div class="mt-5 rounded-xl bg-gray-50 p-4 text-sm dark:bg-white/5">
                             <div class="flex justify-between"><span class="text-gray-500 dark:text-gray-400">{{ __('Your price') }}</span><span class="font-medium">A</span></div>
                             <div class="mt-1 flex justify-between"><span class="text-gray-500 dark:text-gray-400">{{ __('Your cost') }}</span><span class="font-medium">− B</span></div>
-                            <div class="mt-2 flex justify-between border-t border-gray-200 pt-2 font-semibold text-[var(--brand)] dark:border-white/10"><span>{{ __('Your commission') }}</span><span>A − B</span></div>
+                            <div class="mt-2 flex justify-between border-t border-gray-200 pt-2 font-semibold text-[var(--brand)] dark:border-white/10"><span>{{ __('Your profit') }}</span><span>A − B</span></div>
                         </div>
                     </article>
                     <article class="rounded-2xl border border-gray-200 p-6 dark:border-white/10">
                         <h3 class="font-semibold">{{ __('When you earn it') }}</h3>
                         <ul class="mt-3 space-y-3 text-sm leading-6 text-gray-600 dark:text-gray-400">
-                            <li class="flex gap-3"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand)]"></span>{{ __('A commission waits while the order is on its way and becomes yours to withdraw once the order is delivered.') }}</li>
-                            <li class="flex gap-3"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand)]"></span>{{ __('Cancelled, returned or refunded orders earn no commission. If a delivered order is returned later, its commission is taken back.') }}</li>
+                            <li class="flex gap-3"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand)]"></span>{{ __('Your profit waits while the order is on its way and becomes yours to withdraw once the order is delivered.') }}</li>
+                            <li class="flex gap-3"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand)]"></span>{{ __('Cancelled, returned or refunded orders earn no profit. If a delivered order is returned later, its profit is taken back.') }}</li>
                         </ul>
                     </article>
                     <article class="rounded-2xl border border-gray-200 p-6 dark:border-white/10">

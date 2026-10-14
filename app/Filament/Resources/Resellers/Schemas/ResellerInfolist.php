@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Resellers\Schemas;
 
 use App\Models\Customer;
+use App\Services\ResellerOwnCourierService;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -45,6 +46,10 @@ class ResellerInfolist
                                 ? "{$record->company->domain}/store/{$state}"
                                 : $state)
                             ->copyable(),
+                        TextEntry::make('reseller_deposit')
+                            ->label(__('Deposit'))
+                            ->state(fn (Customer $record): float => app(ResellerOwnCourierService::class)->depositBalance($record))
+                            ->numeric(decimalPlaces: 2),
                         TextEntry::make('reseller_note')->label('Note')->placeholder('-')->columnSpanFull(),
                     ])
                     ->columns(3),
