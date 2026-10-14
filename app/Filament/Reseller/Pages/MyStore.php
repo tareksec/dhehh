@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Services\CompanyStorageService;
 use App\Services\ImageOptimizerService;
 use App\Services\ResellerDomainDnsChecker;
+use App\Services\ResellerSubdomainProbe;
 use App\Support\CompanyMedia;
 use BackedEnum;
 use Filament\Forms\Components\BaseFileUpload;
@@ -158,15 +159,20 @@ class MyStore extends Page
             ? Company::normalizeDomain($data['reseller_custom_domain'] ?? null)
             : $reseller->reseller_custom_domain;
         $domainChanged = $customDomain !== $reseller->reseller_custom_domain;
+        $subdomain = $this->company()?->reseller_subdomains_enabled
+            ? (filled($data['reseller_subdomain'] ?? null) ? strtolower(trim($data['reseller_subdomain'])) : null)
+            : $reseller->reseller_subdomain;
+        $subdomainChanged = $subdomain !== $reseller->reseller_subdomain;
 
         $reseller->update([
             'reseller_slug' => $data['reseller_slug'],
             'reseller_custom_domain' => $customDomain,
             // A new or changed domain has to be checked again before it goes live.
             'reseller_custom_domain_verified_at' => $domainChanged ? null : $reseller->reseller_custom_domain_verified_at,
-            'reseller_subdomain' => $this->company()?->reseller_subdomains_enabled
-                ? (filled($data['reseller_subdomain'] ?? null) ? strtolower(trim($data['reseller_subdomain'])) : null)
-                : $reseller->reseller_subdomain,
+            'reseller_subdomain' => $subdomain,
+            // A new subdomain starts its set-up clock; the page then checks it until it opens.
+            'reseller_subdomain_changed_at' => $subdomainChanged ? ($subdomain ? now() : null) : $reseller->reseller_subdomain_changed_at,
+            'reseller_subdomain_live_at' => $subdomainChanged ? null : $reseller->reseller_subdomain_live_at,
             'reseller_logo' => $this->uploadedPath($data['reseller_logo'] ?? null),
             'reseller_logo_dark' => $this->uploadedPath($data['reseller_logo_dark'] ?? null),
             'reseller_store_name' => filled($data['reseller_store_name'] ?? null) ? trim($data['reseller_store_name']) : null,
@@ -255,6 +261,49 @@ class MyStore extends Page
             'verified' => $reseller->reseller_custom_domain_verified_at !== null,
             'target' => $company->domain,
         ];
+    }
+
+    /**
+     * The chosen subdomain's set-up state for the status card: live, or still
+     * being set up with the time it is expected to be ready (the countdown).
+     *
+     * @return array{host: string, url: string, live: bool, ready_at: ?string}|null
+     */
+    public function subdomainStatus(): ?array
+    {
+        $reseller = $this->reseller()->fresh();
+        $host = $this->company()?->resellerSubdomainHost($reseller->reseller_subdomain);
+
+        if ($host === null) {
+            return null;
+        }
+
+        $live = $reseller->reseller_subdomain_live_at !== null || $reseller->reseller_subdomain_changed_at === null;
+
+        return [
+            'host' => $host,
+            'url' => 'https://'.$host,
+            'live' => $live,
+            'ready_at' => $live ? null : $reseller->resellerSubdomainReadyAt()?->toIso8601String(),
+        ];
+    }
+
+    /** Polled by the status card while the subdomain is being set up: marks it live once it opens over HTTPS. */
+    public function checkSubdomain(): void
+    {
+        $reseller = $this->reseller()->fresh();
+        $company = $this->company();
+        $host = $company?->resellerSubdomainHost($reseller->reseller_subdomain);
+
+        if ($host === null || $reseller->reseller_subdomain_live_at !== null || $reseller->reseller_subdomain_changed_at === null) {
+            return;
+        }
+
+        if (app(ResellerSubdomainProbe::class)->isLive($host, $company)) {
+            $reseller->forceFill(['reseller_subdomain_live_at' => now()])->save();
+
+            Notification::make()->title(__('Your store address :host is live.', ['host' => $host]))->success()->send();
+        }
     }
 
     public function storeUrl(): ?string

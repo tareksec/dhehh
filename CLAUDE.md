@@ -37,6 +37,10 @@ These rules are mandatory for any AI agent working in this repository.
 - **Price rule (owner decision 2026-10-04):** the server charges variation price → live Collection **deal price** → wholesale **tier price** → selling price. A live deal wins over tiers; a deal not lower than the selling price is ignored; variations never get a product-level deal. The Next.js checkout re-prices every line on the server (`StorefrontCatalogService::unitPrice()`), and the visitor's IP is forwarded as `client_ip` (never the Next.js server's). Admin-entered content (product names, descriptions, banners) is not translated yet — that is `docs/i18n-bangla-english-plan.md` Phase 4, so the Next.js site shows it as entered, with only its interface text in Bangla + English.
 - The Next.js site's colour/fonts come from the ERP (`/site` → `theme`); its brand colour scale is derived from the primary colour. Background/surface/text palette parity with the Blade site is not done yet.
 
+## WhatsApp Web (QR) channel rule
+
+- Any work on WhatsApp channels with `connection_type = 'web'` (the `whatsapp-bridge` service) must follow `docs/whatsapp-web-rules.md`: the archive is never deleted; sending is off by default and only allowed as a staff reply to a customer who messaged first; no bulk, broadcast, follow-up or AI sending; honour opt-out; admin-set rate limits; stop on ban/logout; no SMS fallback.
+
 ## Bilingual (Bangla + English) rule
 
 - Follow `docs/i18n-bangla-english-plan.md` (section 0 applies to every task, not only i18n work).
@@ -48,6 +52,12 @@ These rules are mandatory for any AI agent working in this repository.
 
 - Every new company-owned model must use `BelongsToCompany` + `CompanyScope` and be added to `MultiCompanyIsolationTest::test_every_company_owned_model_uses_the_company_scope_contract`.
 - `SetCurrentCompany` must stay pinned before `SubstituteBindings` in `bootstrap/app.php`; new queued jobs set/clear `CompanyContext` explicitly; scheduled commands loop per company.
+
+## Error isolation (owner request 2026-10-08)
+
+- One module's error must not take the whole app down. A new sidebar badge is written as `navigationBadge()` with `HasGuardedNavigationBadge`; a new widget uses `GuardsWidgetRendering`; anything else drawn on every page goes through `App\Support\ModuleGuard::run()`. `ModuleGuardTest` enforces the badge and widget rules.
+- Caught errors are reported to Super Admins (Deploy Error Logs), never swallowed silently. Isolation is off in `local` / `testing`, so tests still see real errors.
+- Migrations must also pass on MySQL 8.4 (`.github/workflows/mysql-migrations.yml`): name long indexes explicitly (64-character limit, `MigrationIdentifierLengthTest`). Coolify deploys `main` on push, so the branch's checks must be green before pushing to `main`.
 
 ## Test runs must never touch demo/dev data
 

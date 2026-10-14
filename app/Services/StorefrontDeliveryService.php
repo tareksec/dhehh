@@ -12,7 +12,7 @@ class StorefrontDeliveryService
     public function quote(iterable $items, string $area, StorefrontSetting $setting): array
     {
         $weight = round((float) collect($items)->sum(
-            fn (array $item): float => max(0, (float) ($item['product']->weight_kg ?? 0)) * max(1, (int) $item['quantity'])
+            fn (array $item): float => max(0, (float) (($item['variant'] ?? null)?->weight_kg ?? $item['product']->weight_kg ?? 0)) * max(1, (int) $item['quantity'])
         ), 3);
         $billedWeight = max(1, (int) ceil($weight));
         $firstKg = $area === 'outside'

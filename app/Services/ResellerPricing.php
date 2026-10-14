@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\ResellerProduct;
 use Illuminate\Contracts\Session\Session;
 
@@ -25,8 +26,17 @@ use Illuminate\Contracts\Session\Session;
  *                  company's one reseller cost per unit;
  *  - suggested   = the product's normal selling price;
  *  - the reseller picks any price at or above the base price.
- * Products without wholesale tiers, and variant lines, have no base price
- * and are sold at the normal price with no commission.
+ * Products without wholesale tiers have no base price and are sold at the
+ * normal price with no commission.
+ *
+ * Variations (owner decision 2026-10-14): there is no separate reseller price
+ * on a variation. Its wholesale rate -- the variation's own price -- is what
+ * the reseller pays, plus the company's reseller cost per unit (as for a
+ * product). The admin enters a suggested selling (market) price per variation;
+ * the reseller sees it and may override it with their own, at or above what
+ * they pay, and keeps the difference. With neither set the variation cannot
+ * be sold (never at the wholesale rate). The reseller's cost is never output
+ * on a storefront.
  */
 class ResellerPricing
 {
@@ -38,6 +48,9 @@ class ResellerPricing
 
     /** @var array<int, float|null>|null product_id => reseller price (null = suggested) */
     protected ?array $prices = null;
+
+    /** @var array<int, array<int, float>>|null product_id => [variant_id => the reseller's customer price] */
+    protected ?array $variantPrices = null;
 
     public static function sessionKey(Company $company): string
     {
@@ -82,6 +95,7 @@ class ResellerPricing
         $this->companyId = (int) $company->getKey();
         $this->costPerUnit = (float) ($company->storefrontSetting?->reseller_cost_per_unit ?? 0);
         $this->prices = null;
+        $this->variantPrices = null;
     }
 
     public function clear(): void
@@ -89,6 +103,7 @@ class ResellerPricing
         $this->reseller = null;
         $this->companyId = null;
         $this->prices = null;
+        $this->variantPrices = null;
     }
 
     public function reseller(): ?Customer
@@ -121,6 +136,60 @@ class ResellerPricing
         return max($prices[(int) $product->getKey()] ?? $product->baseSellingPrice(), $base);
     }
 
+    /**
+     * The reseller price the storefront should charge for $variant, or null
+     * when none applies (no reseller active, the product is not in their
+     * store, the variation has no price, or no selling price is set for it).
+     */
+    public function variantPriceFor(ProductVariant $variant): ?float
+    {
+        if (! $this->reseller || ! $variant->getKey() || (int) $variant->company_id !== $this->companyId) {
+            return null;
+        }
+
+        $productId = (int) $variant->product_id;
+
+        if (! array_key_exists($productId, $this->catalogPrices())) {
+            return null;
+        }
+
+        return self::variantPrice($variant, $this->catalogVariantPrices()[$productId][(int) $variant->getKey()] ?? null, $this->costPerUnit);
+    }
+
+    /** What the active reseller pays for $variant, or null when it is not reseller-priced. */
+    public function variantBasePriceFor(ProductVariant $variant): ?float
+    {
+        return $this->variantPriceFor($variant) === null ? null : $variant->resellerCost($this->costPerUnit);
+    }
+
+    /**
+     * The price a reseller's customer pays for $variant: the reseller's own
+     * choice, else the price the admin suggests, never below what the
+     * reseller pays for it. Null when it cannot be sold through a reseller:
+     * the variation has no price, or neither the reseller nor the admin has
+     * set a selling price (it is never sold at the wholesale rate).
+     */
+    public static function variantPrice(ProductVariant $variant, ?float $chosen, float $costPerUnit = 0.0): ?float
+    {
+        $base = $variant->resellerCost($costPerUnit);
+        $price = $chosen ?? $variant->resellerSuggestedPrice();
+
+        return $base === null || $price === null ? null : round(max($price, $base), 2);
+    }
+
+    /**
+     * True when the active reseller sells $variant's product but this
+     * variation has no selling price to charge, so a visitor of their store
+     * cannot buy it.
+     */
+    public function variantBlocked(ProductVariant $variant): bool
+    {
+        return $this->reseller !== null
+            && (int) $variant->company_id === $this->companyId
+            && array_key_exists((int) $variant->product_id, $this->catalogPrices())
+            && $this->variantPriceFor($variant) === null;
+    }
+
     /** Per-unit base price for the active reseller, or null when not reseller-priced. */
     public function basePriceFor(Product $product): ?float
     {
@@ -138,12 +207,43 @@ class ResellerPricing
     /** @return array<int, float|null> */
     protected function catalogPrices(): array
     {
-        return $this->prices ??= ResellerProduct::query()
+        $this->loadCatalog();
+
+        return $this->prices;
+    }
+
+    /** @return array<int, array<int, float>> */
+    protected function catalogVariantPrices(): array
+    {
+        $this->loadCatalog();
+
+        return $this->variantPrices;
+    }
+
+    /** The active reseller's picks, read once per request. */
+    protected function loadCatalog(): void
+    {
+        if ($this->prices !== null && $this->variantPrices !== null) {
+            return;
+        }
+
+        $rows = ResellerProduct::query()
             ->where('customer_id', $this->reseller->getKey())
             ->where('is_active', true)
-            ->get(['product_id', 'price'])
+            ->get(['product_id', 'price', 'variant_prices']);
+
+        $this->prices = $rows
             ->mapWithKeys(fn (ResellerProduct $row): array => [
                 (int) $row->product_id => $row->price === null ? null : (float) $row->price,
+            ])
+            ->all();
+
+        $this->variantPrices = $rows
+            ->mapWithKeys(fn (ResellerProduct $row): array => [
+                (int) $row->product_id => collect($row->variant_prices ?? [])
+                    ->filter(fn ($price): bool => is_numeric($price))
+                    ->mapWithKeys(fn ($price, $variantId): array => [(int) $variantId => (float) $price])
+                    ->all(),
             ])
             ->all();
     }

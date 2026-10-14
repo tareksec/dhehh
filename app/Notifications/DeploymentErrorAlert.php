@@ -5,6 +5,7 @@ namespace App\Notifications;
 use App\Filament\Resources\DeploymentErrors\DeploymentErrorResource;
 use App\Models\DeploymentError;
 use App\Support\ClipboardCopy;
+use App\Support\ModuleGuard;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification as FilamentNotification;
 use Filament\Support\Icons\Heroicon;
@@ -54,7 +55,9 @@ class DeploymentErrorAlert extends Notification
         );
 
         $message = FilamentNotification::make()
-            ->title("Deploy error: {$this->error->source}")
+            ->title(str_starts_with($this->error->source, ModuleGuard::SOURCE_PREFIX)
+                ? __('Module error (the rest of the app keeps working): :section', ['section' => Str::after($this->error->source, ModuleGuard::SOURCE_PREFIX)])
+                : "Deploy error: {$this->error->source}")
             ->body(Str::limit($this->error->message, 200))
             ->danger()
             ->actions([

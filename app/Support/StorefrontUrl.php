@@ -26,6 +26,21 @@ class StorefrontUrl
     ];
 
     /**
+     * The storefront home link: the reseller's mini-store front, the staff
+     * preview home, or the company's main home page.
+     */
+    public static function home(?string $previewSlug = null): string
+    {
+        $previewSlug ??= self::currentPreviewSlug();
+
+        if (self::currentResellerSlug()) {
+            return self::route('show', [], $previewSlug);
+        }
+
+        return $previewSlug ? route('storefront.preview.show', $previewSlug) : route('marketing.home');
+    }
+
+    /**
      * Build a storefront URL for the given route "family" (the part of the
      * route name after "storefront." / "storefront.preview."), preferring
      * — in order — a staff preview, the current reseller's mini-store, then

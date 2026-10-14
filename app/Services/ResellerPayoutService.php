@@ -58,7 +58,7 @@ class ResellerPayoutService
                 'payment_method' => $locked->method,
                 'transaction_id' => $data['payment_reference'],
                 'confirmation_source' => 'manual',
-                'purpose' => 'Reseller commission payout — '.($reseller?->business_name ?: $reseller?->name).' ('.$reseller?->phone.') — request #'.$locked->getKey(),
+                'purpose' => 'Reseller profit payout — '.($reseller?->business_name ?: $reseller?->name).' ('.$reseller?->phone.') — request #'.$locked->getKey(),
                 'remarks' => $data['admin_note'] ?? null,
             ], $user);
 

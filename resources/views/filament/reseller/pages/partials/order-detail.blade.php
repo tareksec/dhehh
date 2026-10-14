@@ -132,7 +132,7 @@
                     <tbody>
                         @foreach ($order->resellerAdvancePayments as $payment)
                             <tr class="border-t border-gray-100 dark:border-white/10">
-                                <td class="py-1">{{ $payment->gateway === \App\Services\ResellerOwnCourierService::GATEWAY_DEPOSIT ? __('From your deposit') : $payment->transaction_id }}</td>
+                                <td class="py-1">{{ $payment->gateway === \App\Services\ResellerOwnCourierService::GATEWAY_DEPOSIT ? __('From your deposit') : (isset(\App\Services\ResellerOwnCourierService::ONLINE_GATEWAYS[$payment->gateway]) ? __('Online (:gateway)', ['gateway' => \App\Services\ResellerOwnCourierService::ONLINE_GATEWAYS[$payment->gateway]]) : $payment->transaction_id) }}</td>
                                 <td class="py-1">{{ $paymentStatuses[$payment->status] ?? $payment->status }}</td>
                                 <td class="py-1 text-right">{{ MoneyFormatter::currency($payment->amount, $currency) }}</td>
                             </tr>
@@ -143,8 +143,15 @@
         </div>
     @endif
 
+    @if (($returnCharge = app(\App\Services\ResellerOwnCourierService::class)->returnChargeOf($order)) > 0)
+        <div>
+            <h3 class="mb-2 text-sm font-semibold">{{ __('Return charge') }}</h3>
+            <p class="text-sm">{{ __(':amount was taken from your deposit because this order was returned.', ['amount' => MoneyFormatter::currency($returnCharge, $currency)]) }}</p>
+        </div>
+    @endif
+
     <div>
-        <h3 class="mb-2 text-sm font-semibold">{{ __('Commission') }}</h3>
+        <h3 class="mb-2 text-sm font-semibold">{{ __('Profit') }}</h3>
         @if ($order->reseller_own_courier && ! $order->resellerCommission)
             <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('None (own courier)') }}</p>
         @elseif ($order->resellerCommission)

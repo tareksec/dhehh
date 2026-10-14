@@ -76,6 +76,20 @@ class ResellerPortalCreateOrderTest extends TestCase
         $this->assertSame(380.0, (float) $commission->amount); // (500 - 310) * 2
     }
 
+    public function test_choosing_a_product_shows_its_photo_and_details(): void
+    {
+        $product = $this->pickProduct('Photo Ring', tier: 300, stock: 20, price: 450);
+        $product->update(['brand' => 'Acme', 'image' => 'companies/'.$this->company->storage_key.'/public/products/ring.jpg']);
+
+        Filament::setCurrentPanel(Filament::getPanel('reseller'));
+        $this->actingAs($this->reseller, 'customer');
+
+        Livewire::test(CreateOrder::class)
+            ->fillForm(['items' => [['product_id' => $product->getKey(), 'quantity' => 1, 'price' => null]]])
+            ->assertSee('products/ring.jpg')
+            ->assertSee('Acme');
+    }
+
     public function test_a_blank_price_uses_the_resellers_saved_price_then_the_suggested_one(): void
     {
         $saved = $this->pickProduct('Saved', tier: 300, stock: 5, price: 450, resellerPrice: 600);
@@ -253,7 +267,7 @@ class ResellerPortalCreateOrderTest extends TestCase
                 'items' => [['product_id' => $product->getKey(), 'quantity' => 2, 'price' => 520]],
             ])
             ->assertSee('Customer pays')
-            ->assertSee('Your commission')
+            ->assertSee('Your profit')
             ->fillForm(['name' => 'B', 'phone' => '017', 'address' => 'x', 'items' => [['product_id' => $product->getKey(), 'quantity' => 1, 'price' => 100]]])
             ->call('create')
             ->assertHasFormErrors(['items.0.price']);

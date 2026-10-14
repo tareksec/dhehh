@@ -126,6 +126,23 @@ class Product extends Model
         return $this->variants()->where('is_active', true);
     }
 
+    /**
+     * Every photo of the product: the main image, the gallery and the images
+     * of its active variants, without repeats. Used by the reseller portal's
+     * product details and its "Download photos" zip.
+     *
+     * @return list<string>
+     */
+    public function allImagePaths(): array
+    {
+        return collect([$this->image, ...($this->gallery_images ?? [])])
+            ->merge($this->variants->where('is_active', true)->flatMap(fn (ProductVariant $variant): array => $variant->images ?? []))
+            ->filter(fn ($path): bool => is_string($path) && $path !== '')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     public function stockMovements()
     {
         return $this->hasMany(StockMovement::class);

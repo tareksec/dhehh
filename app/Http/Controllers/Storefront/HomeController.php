@@ -8,7 +8,10 @@ use App\Models\Company;
 use App\Models\Product;
 use App\Models\ProductCarousel;
 use App\Models\StorefrontSlide;
+use App\Support\CompanyMedia;
 use App\Support\StorefrontListingCache;
+use App\Support\StorefrontSchema;
+use App\Support\StorefrontSeo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -55,6 +58,13 @@ class HomeController extends Controller
                 ->take(23)
                 ->get(),
         ]);
+
+        $homeUrl = route('marketing.home');
+
+        StorefrontSeo::current()->page(null)->index()->jsonLd(
+            StorefrontSchema::organization($company, $setting, $homeUrl, CompanyMedia::publicUrl($setting->logo, $company)),
+            StorefrontSchema::website($setting->meta_title ?: $company->name, $homeUrl, route('storefront.products.index')),
+        );
 
         return view($setting->homepageView(), [
             'company' => $company,

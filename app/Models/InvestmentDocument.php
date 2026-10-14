@@ -21,15 +21,21 @@ class InvestmentDocument extends Model
 
     public const CATEGORY_NOMINEE_NID = 'nominee_nid';
 
+    public const CATEGORY_INVESTOR_PHOTO = 'investor_photo';
+
     public const CATEGORY_PROJECT_CONTRACT = 'project_contract';
 
     public const CATEGORY_PARTNER_NID = 'partner_nid';
 
     public const CATEGORY_PARTNER_AGREEMENT = 'partner_agreement';
 
+    /** The screenshot staff upload after paying a payout (shown to the person paid). */
+    public const CATEGORY_PAYMENT_PROOF = 'payment_proof';
+
     public const CATEGORIES = [
         self::CATEGORY_INVESTOR_NID => 'Investor NID / Passport copy',
         self::CATEGORY_NOMINEE_NID => 'Nominee NID / Passport copy',
+        self::CATEGORY_INVESTOR_PHOTO => 'Investor photo',
         self::CATEGORY_PROJECT_CONTRACT => 'Project contract (same for all investors)',
         self::CATEGORY_PARTNER_NID => 'Channel partner NID / Passport copy',
         self::CATEGORY_PARTNER_AGREEMENT => 'Channel partner agreement',
@@ -40,6 +46,7 @@ class InvestmentDocument extends Model
         'cost_receipt' => 'Cost Receipt / Invoice',
         'purchase_document' => 'Purchase Document',
         'bank_slip' => 'Bank Slip / Transfer Proof',
+        self::CATEGORY_PAYMENT_PROOF => 'Payment screenshot',
         'signed_contract' => 'Signed Contract',
         'other' => 'Other',
     ];
@@ -48,14 +55,15 @@ class InvestmentDocument extends Model
      * Identity papers and contracts: only users with `investments.manage`
      * may list or download them (owner's rule).
      */
-    public const SENSITIVE_CATEGORIES = [self::CATEGORY_INVESTOR_NID, self::CATEGORY_NOMINEE_NID, self::CATEGORY_PROJECT_CONTRACT, self::CATEGORY_PARTNER_NID, self::CATEGORY_PARTNER_AGREEMENT, 'signed_contract', 'cheque_copy', 'stamp_copy'];
+    public const SENSITIVE_CATEGORIES = [self::CATEGORY_INVESTOR_NID, self::CATEGORY_NOMINEE_NID, self::CATEGORY_INVESTOR_PHOTO, self::CATEGORY_PROJECT_CONTRACT, self::CATEGORY_PARTNER_NID, self::CATEGORY_PARTNER_AGREEMENT, 'signed_contract', 'cheque_copy', 'stamp_copy'];
 
     protected $fillable = ['company_id', 'documentable_type', 'documentable_id', 'file_path', 'file_type', 'category', 'label', 'uploaded_by'];
 
     protected static function booted(): void
     {
         static::creating(function (self $document): void {
-            $document->uploaded_by ??= Auth::id();
+            // Only staff are users; a portal upload (investor account) has no uploader id.
+            $document->uploaded_by ??= Auth::user() instanceof User ? Auth::id() : null;
         });
 
         static::saving(function (self $document): void {
@@ -78,7 +86,7 @@ class InvestmentDocument extends Model
     public function isSensitive(): bool
     {
         return in_array($this->category, self::SENSITIVE_CATEGORIES, true)
-            || in_array($this->documentable_type, [(new Investor)->getMorphClass(), (new ChannelPartner)->getMorphClass()], true);
+            || in_array($this->documentable_type, [(new Investor)->getMorphClass(), (new ChannelPartner)->getMorphClass(), (new InvestorDraft)->getMorphClass()], true);
     }
 
     public static function categoryLabel(?string $category): string

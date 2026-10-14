@@ -7,7 +7,11 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\ResellerProduct;
+use App\Support\StorefrontProductPage;
+use App\Support\StorefrontSchema;
+use App\Support\StorefrontSeo;
 use App\Support\StorefrontThemeRegistry;
+use App\Support\StorefrontUrl;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -58,11 +62,43 @@ class ProductShowController extends Controller
             ->limit(4)
             ->get();
 
+        $this->describe($company, $product, $reseller instanceof Customer);
+
         return StorefrontThemeRegistry::page('products.show', [
             'company' => $company,
             'setting' => $company->storefrontSetting,
             'product' => $product,
             'related' => $related,
         ]);
+    }
+
+    /**
+     * The product's own title, description and photo, and its price and stock
+     * as structured data. A reseller's store charges that reseller's prices,
+     * so it keeps the page indexable but publishes no price markup.
+     */
+    protected function describe(Company $company, Product $product, bool $isResellerStore): void
+    {
+        $page = StorefrontProductPage::make($product, $company);
+        $url = StorefrontUrl::route('products.show', [$product->slug]);
+        $trail = [
+            ['name' => __('Home'), 'url' => StorefrontUrl::home()],
+            ['name' => __('All products'), 'url' => StorefrontUrl::route('products.index')],
+        ];
+
+        if ($product->category) {
+            $trail[] = ['name' => $product->category->name, 'url' => StorefrontUrl::route('categories.show', [$product->category->slug])];
+        }
+
+        $trail[] = ['name' => $product->name, 'url' => $url];
+
+        StorefrontSeo::current()
+            ->page($product->name, StorefrontSeo::excerpt($product->description), $page->galleryImages->first())
+            ->type('product')
+            ->index()
+            ->jsonLd(
+                $isResellerStore ? [] : StorefrontSchema::product($product, $page, $url, $company->currency ?: 'BDT'),
+                StorefrontSchema::breadcrumbs($trail),
+            );
     }
 }

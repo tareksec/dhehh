@@ -656,8 +656,8 @@ class ResellerPortalAccountTest extends TestCase
         $html = Livewire::test(Dashboard::class)->html();
 
         $this->assertNotFalse(strpos($html, 'Recent orders'));
-        $this->assertNotFalse(strpos($html, 'Commission (last 6 months)'));
-        $this->assertLessThan(strpos($html, 'Commission (last 6 months)'), strpos($html, 'Recent orders'));
+        $this->assertNotFalse(strpos($html, 'Profit (last 6 months)'));
+        $this->assertLessThan(strpos($html, 'Profit (last 6 months)'), strpos($html, 'Recent orders'));
     }
 
     public function test_the_login_page_link_says_become_a_reseller(): void

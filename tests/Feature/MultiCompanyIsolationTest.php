@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Account;
+use App\Models\AgreementAcceptance;
+use App\Models\AgreementTemplate;
 use App\Models\AuditLog;
 use App\Models\Broadcast;
 use App\Models\Category;
@@ -41,8 +43,13 @@ use App\Models\InvestmentProject;
 use App\Models\InvestmentWithdrawalNotice;
 use App\Models\InvestmentWitness;
 use App\Models\Investor;
+use App\Models\InvestorBankAccount;
 use App\Models\InvestorCycleElection;
 use App\Models\InvestorDraft;
+use App\Models\InvestorGroup;
+use App\Models\InvestorGroupMember;
+use App\Models\InvestorPortalAccount;
+use App\Models\InvestorRequest;
 use App\Models\InvestorSecurityInstrument;
 use App\Models\Lead;
 use App\Models\Media;
@@ -58,6 +65,8 @@ use App\Models\Order;
 use App\Models\OrderCost;
 use App\Models\OrderItem;
 use App\Models\OrderPayment;
+use App\Models\PayoutBatch;
+use App\Models\PayoutBatchItem;
 use App\Models\Product;
 use App\Models\ProductCarousel;
 use App\Models\ProductReview;
@@ -91,6 +100,7 @@ use App\Models\TransactionLedger;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherAttachment;
+use App\Models\WhatsAppContact;
 use App\Scopes\CompanyScope;
 use App\Services\CompanyContext;
 use App\Services\ReportService;
@@ -123,7 +133,7 @@ class MultiCompanyIsolationTest extends TestCase
             Conversation::class, ConversationChannel::class,
             ChatOrderLink::class, CompanyFaq::class, QuickReply::class,
             CompanyApiKey::class, StorefrontCustomerToken::class,
-            InvestmentProject::class, Investor::class, InvestorDraft::class,
+            InvestmentProject::class, Investor::class, InvestorDraft::class, InvestorPortalAccount::class, InvestorBankAccount::class, AgreementTemplate::class, AgreementAcceptance::class, InvestorRequest::class, PayoutBatch::class, PayoutBatchItem::class, InvestorGroup::class, InvestorGroupMember::class,
             Investment::class, ProjectCostItem::class,
             InvestorSecurityInstrument::class, InvestmentWitness::class, InvestmentDocument::class,
             InvestorCycleElection::class, InvestmentWithdrawalNotice::class, ProjectSettlement::class,
@@ -133,6 +143,7 @@ class MultiCompanyIsolationTest extends TestCase
             Broadcast::class, Media::class, GeneratedImage::class, GeneratedVideo::class,
             ExpenseScan::class, ExpenseScanItem::class,
             ResellerCommission::class, ResellerPayoutRequest::class, ResellerPayoutAccount::class, ResellerDepositEntry::class,
+            WhatsAppContact::class,
         ];
 
         foreach ($models as $modelClass) {

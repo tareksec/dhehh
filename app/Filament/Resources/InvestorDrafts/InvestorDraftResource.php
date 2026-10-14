@@ -3,14 +3,18 @@
 namespace App\Filament\Resources\InvestorDrafts;
 
 use App\Filament\Clusters\Investments;
+use App\Filament\Concerns\HasGuardedNavigationBadge;
 use App\Filament\Resources\InvestorDrafts\Pages\EditInvestorDraft;
 use App\Filament\Resources\InvestorDrafts\Pages\ListInvestorDrafts;
 use App\Models\ChannelPartner;
 use App\Models\Investment;
+use App\Models\InvestmentDocument;
 use App\Models\InvestmentProject;
 use App\Models\Investor;
 use App\Models\InvestorDraft;
+use App\Models\InvestorGroup;
 use App\Services\Investment\InvestorImportService;
+use App\Services\InvestorOnboardingService;
 use App\Support\InvestorIdentity;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -46,6 +50,8 @@ use Illuminate\Validation\ValidationException;
  */
 class InvestorDraftResource extends Resource
 {
+    use HasGuardedNavigationBadge;
+
     protected static ?string $model = InvestorDraft::class;
 
     protected static ?string $cluster = Investments::class;
@@ -71,7 +77,7 @@ class InvestorDraftResource extends Resource
         return __('investor drafts');
     }
 
-    public static function getNavigationBadge(): ?string
+    protected static function navigationBadge(): ?string
     {
         if (! static::canViewAny()) {
             return null;
@@ -101,6 +107,15 @@ class InvestorDraftResource extends Resource
                     TextEntry::make('source')
                         ->label(__('Imported from'))
                         ->state(fn (?InvestorDraft $record): string => $record ? static::sourceDescription($record) : '-'),
+                    TextEntry::make('portal_documents')
+                        ->label(__('Documents uploaded with the application'))
+                        ->visible(fn (?InvestorDraft $record): bool => $record?->source === InvestorDraft::SOURCE_PORTAL)
+                        ->state(fn (?InvestorDraft $record): array => $record?->documents()->get()
+                            ->map(fn (InvestmentDocument $document): string => '<a class="text-primary-600 underline" target="_blank" href="'.e(route('investment-documents.download', $document)).'">'.e(InvestmentDocument::categoryLabel($document->category)).'</a>')
+                            ->all() ?? [])
+                        ->html()
+                        ->listWithLineBreaks()
+                        ->placeholder(__('None')),
                     Select::make('existing_investor_id')
                         ->label(__('Add to an existing investor'))
                         ->relationship('existingInvestor', 'name')
@@ -194,6 +209,7 @@ class InvestorDraftResource extends Resource
                     InvestorDraft::SOURCE_EXCEL => InvestorDraft::sourceLabel(InvestorDraft::SOURCE_EXCEL),
                     InvestorDraft::SOURCE_CSV => InvestorDraft::sourceLabel(InvestorDraft::SOURCE_CSV),
                     InvestorDraft::SOURCE_TEXT => InvestorDraft::sourceLabel(InvestorDraft::SOURCE_TEXT),
+                    InvestorDraft::SOURCE_PORTAL => InvestorDraft::sourceLabel(InvestorDraft::SOURCE_PORTAL),
                 ]),
             ])
             ->recordActions([
@@ -217,7 +233,8 @@ class InvestorDraftResource extends Resource
 
                         Notification::make()->title($message)->success()->send();
                     }),
-                DeleteAction::make()->label(__('Discard')),
+                static::rejectApplicationAction(),
+                DeleteAction::make()->label(__('Discard'))->visible(fn (InvestorDraft $record): bool => $record->source !== InvestorDraft::SOURCE_PORTAL),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -260,9 +277,17 @@ class InvestorDraftResource extends Resource
     public static function investmentFields(bool $withAmount): array
     {
         return array_values(array_filter([
+            Select::make('group_id')
+                ->label(__('Group'))
+                ->options(fn (): array => InvestorGroup::query()->open()->orderBy('id')->get()
+                    ->mapWithKeys(fn (InvestorGroup $group): array => [$group->getKey() => trim($group->group_code.' — '.$group->name)])
+                    ->all())
+                ->searchable()
+                ->helperText(__('New money joins a group that is still open.')),
             Select::make('project_id')
-                ->label(__('Project'))
+                ->label(__('Project (not in a group)'))
                 ->options(fn (): array => InvestmentProject::query()
+                    ->ungrouped()
                     ->whereIn('status', InvestorDraft::OPEN_PROJECT_STATUSES)
                     ->orderByDesc('id')
                     ->get()
@@ -326,6 +351,30 @@ class InvestorDraftResource extends Resource
         return $draft->existing_investor_id
             ? __('New investment of :amount added for :name', ['amount' => $amount, 'name' => $name])
             : __('Investor :name added with an investment of :amount', ['name' => $name, 'amount' => $amount]);
+    }
+
+    /** Turns a portal sign-up down with a reason the applicant sees when they sign in. */
+    public static function rejectApplicationAction(): Action
+    {
+        return Action::make('rejectApplication')
+            ->label(__('Reject application'))
+            ->icon(Heroicon::OutlinedXCircle)
+            ->color('danger')
+            ->visible(fn (InvestorDraft $record): bool => $record->source === InvestorDraft::SOURCE_PORTAL)
+            ->schema([
+                Textarea::make('reason')
+                    ->label(__('Reason (the applicant sees this)'))
+                    ->required()
+                    ->maxLength(1000),
+            ])
+            ->action(function (InvestorDraft $record, array $data): void {
+                abort_unless(auth()->user()?->hasPermission('investments.manage'), 403);
+
+                app(InvestorOnboardingService::class)->reject($record, (string) $data['reason']);
+                $record->delete();
+
+                Notification::make()->title(__('Application rejected'))->success()->send();
+            });
     }
 
     public static function sourceDescription(InvestorDraft $record): string

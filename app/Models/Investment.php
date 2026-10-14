@@ -19,7 +19,7 @@ class Investment extends Model
 
     public const STATUSES = [self::STATUS_ACTIVE => 'Active', self::STATUS_WITHDRAWN => 'Withdrawn'];
 
-    protected $fillable = ['company_id', 'project_id', 'investor_id', 'amount', 'status', 'withdrawn_at', 'withdrawal_voucher_id', 'withdrawal_note', 'payment_method', 'payment_reference', 'invested_at', 'override_reason', 'received_by', 'voucher_id'];
+    protected $fillable = ['company_id', 'project_id', 'group_member_id', 'investor_id', 'amount', 'status', 'withdrawn_at', 'withdrawal_voucher_id', 'withdrawal_note', 'payment_method', 'payment_reference', 'invested_at', 'override_reason', 'received_by', 'voucher_id'];
 
     protected $attributes = ['status' => self::STATUS_ACTIVE];
 
@@ -68,6 +68,19 @@ class Investment extends Model
 
             $investment->company_id = $project->company_id;
 
+            // Money goes into a GROUP, not into one of its projects
+            // (16_INVESTOR_GROUPS_PLAN.md). A project of a group holds only the
+            // snapshot rows copied from the group's members, each tagged with
+            // its member; a loose investment there would skip the group's
+            // rules and be booked twice.
+            if ($project->group_id) {
+                $member = $investment->group_member_id ? InvestorGroupMember::query()->find($investment->group_member_id) : null;
+
+                if (! $member || (int) $member->group_id !== (int) $project->group_id || (int) $member->investor_id !== (int) $investment->investor_id) {
+                    throw ValidationException::withMessages(['investor_id' => __('This project belongs to a group. Add the investor to the group instead; the project copies the group\'s members when it starts.')]);
+                }
+            }
+
             // A project that never configured an investment window
             // (investment_opens_at/closes_at both null) is unrestricted --
             // this is an opt-in feature (v3 P2.3, Q4).
@@ -91,6 +104,12 @@ class Investment extends Model
     public function investor()
     {
         return $this->belongsTo(Investor::class);
+    }
+
+    /** The group deposit this snapshot row was copied from (null for an ungrouped investment). */
+    public function groupMember()
+    {
+        return $this->belongsTo(InvestorGroupMember::class, 'group_member_id');
     }
 
     public function receiver()

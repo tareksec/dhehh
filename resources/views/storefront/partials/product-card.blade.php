@@ -64,7 +64,7 @@
             <div class="flex items-baseline gap-2">
                 <span class="text-base font-semibold text-gray-950 dark:text-white">{{ \App\Support\MoneyFormatter::currency($sellingPrice) }}</span>
                 @if ($discountPercent > 0)
-                    <span class="text-xs text-gray-400 line-through dark:text-gray-500">{{ \App\Support\MoneyFormatter::currency($sellingPrice) }}</span>
+                    <span class="text-xs text-gray-400 line-through dark:text-gray-500">{{ \App\Support\MoneyFormatter::currency($comparePrice) }}</span>
                 @endif
             </div>
             @if ($product->stock > 0 && $product->stock <= 5)
@@ -80,34 +80,5 @@
 </article>
 
 @if (! $product->has_variants)
-    @once
-        <script>
-            document.addEventListener('submit', function (event) {
-                var form = event.target.closest && event.target.closest('[data-quick-add-form]');
-                if (!form) return;
-
-                if (form.dataset.submitting === 'true') {
-                    event.preventDefault();
-                    return;
-                }
-
-                form.dataset.submitting = 'true';
-
-                window.setTimeout(function () {
-                    if (event.defaultPrevented) {
-                        delete form.dataset.submitting;
-                        return;
-                    }
-
-                    var button = form.querySelector('button[type="submit"]');
-                    if (!button) return;
-
-                    button.disabled = true;
-                    button.setAttribute('aria-busy', 'true');
-                    button.setAttribute('aria-label', button.getAttribute('data-pending-label') || 'Adding to cart');
-                    button.textContent = '…';
-                }, 0);
-            });
-        </script>
-    @endonce
+    @include('storefront.partials.quick-add-script')
 @endif

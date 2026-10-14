@@ -17,13 +17,17 @@ use App\Filament\Reseller\Pages\Products;
 use App\Filament\Reseller\Pages\Profile;
 use App\Filament\Reseller\Pages\Withdrawals;
 use App\Http\Middleware\ResolveCompanyFromResellerPortalDomain;
-use App\Http\Middleware\RestrictResellerPortalHost;
+use App\Http\Middleware\RestrictPortalHosts;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Services\CompanyContext;
 use App\Services\CompanySettingsService;
+use App\Services\DynamicColorService;
 use App\Services\ResellerOwnCourierService;
+use App\Support\ModuleGuard;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\FontProviders\LocalFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -37,6 +41,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /**
@@ -45,7 +50,7 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * reseller_portal_domain, both resolved by ResolveCompanyFromResellerPortalDomain
  * -- never by Filament's own ->domain(), which only matches one fixed host
  * and can't express "any company's domain, prefixed with reseller.". The
- * panel is path-scoped ("/portal") instead, on every host; RestrictResellerPortalHost
+ * panel is path-scoped ("/portal") instead, on every host; RestrictPortalHosts
  * (registered here AND globally in bootstrap/app.php) is what actually keeps
  * it off the shop/admin hosts and keeps everything else off the portal host.
  */
@@ -80,13 +85,21 @@ class ResellerPanelProvider extends PanelProvider
                 Profile::class,
             ])
             ->homeUrl(Dashboard::class)
+            // The name at the top of the user menu opens the Profile page (owner request, 2026-10-10).
+            ->userMenuItems([
+                'profile' => fn (Action $action): Action => $action->url(fn (): string => Profile::getUrl()),
+            ])
             // The reseller's deposit, beside the user menu on every page (owner rule, 2026-10-06).
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn (): View|string => $this->depositBadge())
             // "Read the rules first" above the application form, while the guide is on.
             ->renderHook(PanelsRenderHook::AUTH_REGISTER_FORM_BEFORE, fn (): View|string => $this->guideLink())
+            // Hind Siliguri, self-hosted: @font-face lives in the portal theme, so no font URL here.
+            ->font('Hind Siliguri', provider: LocalFontProvider::class)
+            // The store's own colour (Storefront Settings > theme colour) instead of Filament's default amber.
+            ->renderHook(PanelsRenderHook::HEAD_END, fn (): HtmlString => $this->brandColorStyle())
             ->viteTheme('resources/css/filament/reseller/theme.css')
             ->middleware([
-                RestrictResellerPortalHost::class,
+                RestrictPortalHosts::class,
                 ResolveCompanyFromResellerPortalDomain::class,
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -114,6 +127,21 @@ class ResellerPanelProvider extends PanelProvider
     protected function portalCompany(): ?Company
     {
         return app(CompanyContext::class)->company();
+    }
+
+    /**
+     * The portal's primary colour shades as CSS variables, from the company's
+     * storefront theme colour (the same colour its reseller stores wear). Kept
+     * amber when the company has no storefront settings yet.
+     */
+    protected function brandColorStyle(): HtmlString
+    {
+        return ModuleGuard::run('reseller-portal.brand-colour', function (): HtmlString {
+            $hex = $this->portalCompany()?->storefrontSetting?->normalizedThemeColor() ?? DynamicColorService::DEFAULT_COLOR;
+            $declarations = implode('; ', app(DynamicColorService::class)->cssVariables($hex));
+
+            return new HtmlString('<style>:root { '.e($declarations).'; }</style>');
+        }, new HtmlString(''));
     }
 
     protected function guideLink(): View|string

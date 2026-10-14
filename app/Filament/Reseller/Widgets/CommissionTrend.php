@@ -2,6 +2,7 @@
 
 namespace App\Filament\Reseller\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Models\Customer;
 use App\Models\ResellerCommission;
 use Filament\Facades\Filament;
@@ -19,6 +20,10 @@ use Filament\Widgets\ChartWidget;
  */
 class CommissionTrend extends ChartWidget
 {
+    use GuardsWidgetRendering;
+
+    protected ?string $maxHeight = '330px';
+
     protected function getData(): array
     {
         $reseller = Filament::auth()->user();
@@ -52,9 +57,14 @@ class CommissionTrend extends ChartWidget
 
         return [
             'datasets' => [[
-                'label' => __('Commission'),
+                'label' => __('Profit'),
                 'data' => $data,
-                'backgroundColor' => '#6366f1',
+                // A soft area under a smooth line, in the portal's brand colour
+                // (the widget's own colour, so no hard-coded hex here).
+                'fill' => true,
+                'tension' => 0.4,
+                'pointRadius' => 3,
+                'pointHoverRadius' => 5,
             ]],
             'labels' => $labels,
         ];
@@ -62,11 +72,20 @@ class CommissionTrend extends ChartWidget
 
     protected function getType(): string
     {
-        return 'bar';
+        return 'line';
+    }
+
+    /** @return array<string, mixed> */
+    protected function getOptions(): array
+    {
+        return [
+            'plugins' => ['legend' => ['display' => false]],
+            'scales' => ['y' => ['beginAtZero' => true]],
+        ];
     }
 
     public function getHeading(): string
     {
-        return __('Commission (last 6 months)');
+        return __('Profit (last 6 months)');
     }
 }

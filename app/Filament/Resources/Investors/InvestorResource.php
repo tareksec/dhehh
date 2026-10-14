@@ -8,6 +8,7 @@ use App\Filament\Resources\Investors\Pages\CreateInvestor;
 use App\Filament\Resources\Investors\Pages\EditInvestor;
 use App\Filament\Resources\Investors\Pages\ListInvestors;
 use App\Filament\Resources\Investors\Pages\ViewInvestor;
+use App\Filament\Resources\Investors\RelationManagers\BankAccountsRelationManager;
 use App\Filament\Resources\Investors\RelationManagers\InvestmentsRelationManager;
 use App\Filament\Resources\Investors\RelationManagers\WithdrawalNoticesRelationManager;
 use App\Models\ChannelPartner;
@@ -274,11 +275,7 @@ class InvestorResource extends Resource
                     ->label(__('Project'))
                     ->multiple()
                     ->searchable()
-                    ->options(fn (): array => InvestmentProject::query()
-                        ->orderByDesc('id')
-                        ->get()
-                        ->mapWithKeys(fn (InvestmentProject $project): array => [$project->getKey() => trim(($project->project_code ? $project->project_code.' — ' : '').$project->name)])
-                        ->all())
+                    ->options(fn (): array => self::projectFilterOptions())
                     ->query(fn (Builder $query, array $data): Builder => $query->when(
                         filled($data['values'] ?? null),
                         fn (Builder $query): Builder => $query->whereHas('investments', fn (Builder $investments) => $investments->whereIn('project_id', $data['values'])),
@@ -344,6 +341,21 @@ class InvestorResource extends Resource
             ]);
     }
 
+    /**
+     * Projects offered by the investor list's project filter, newest first.
+     * Used by the filter dropdown and by the project picker on the table toolbar.
+     *
+     * @return array<int, string> project id => "CODE — name"
+     */
+    public static function projectFilterOptions(): array
+    {
+        return InvestmentProject::query()
+            ->orderByDesc('id')
+            ->get()
+            ->mapWithKeys(fn (InvestmentProject $project): array => [$project->getKey() => trim(($project->project_code ? $project->project_code.' — ' : '').$project->name)])
+            ->all();
+    }
+
     public static function canCreate(): bool
     {
         return auth()->user()?->hasPermission('investments.manage') ?? false;
@@ -363,7 +375,7 @@ class InvestorResource extends Resource
 
     public static function getRelations(): array
     {
-        return [InvestmentsRelationManager::class, DocumentsRelationManager::class, WithdrawalNoticesRelationManager::class];
+        return [InvestmentsRelationManager::class, DocumentsRelationManager::class, WithdrawalNoticesRelationManager::class, BankAccountsRelationManager::class];
     }
 
     public static function getPages(): array

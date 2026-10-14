@@ -2,12 +2,14 @@
 
 namespace App\Filament\Resources\ProjectSettlements\RelationManagers;
 
+use App\Filament\Actions\PayoutProofAction;
 use App\Filament\Resources\Vouchers\VoucherResource;
-use App\Models\InvestmentProject;
 use App\Models\InvestorCycleElection;
 use App\Models\SettlementPayout;
 use App\Services\Investment\CycleElectionService;
-use App\Services\Investment\InvestmentLedgerService;
+use App\Services\Investment\InvestmentTargets;
+use App\Services\Investment\PayoutCompletionService;
+use App\Support\CompanyMedia;
 use App\Support\MoneyFormatter;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -19,6 +21,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class PayoutsRelationManager extends RelationManager
@@ -60,6 +63,11 @@ class PayoutsRelationManager extends RelationManager
         return $table->modifyQueryUsing(fn ($query) => $query->with('cycleElection'))->columns([
             TextColumn::make('investor.name'),
             TextColumn::make('investment_amount')->moneyWithoutTrailingZeroes('BDT'),
+            TextColumn::make('principal_returned')
+                ->label(__('Principal returned'))
+                ->state(fn (SettlementPayout $record): float => $record->principalReturned())
+                ->moneyWithoutTrailingZeroes('BDT')
+                ->toggleable(isToggledHiddenByDefault: true),
             TextColumn::make('profit_share_amount')->moneyWithoutTrailingZeroes('BDT'),
             TextColumn::make('total_payout')->moneyWithoutTrailingZeroes('BDT'),
             TextColumn::make('recipient_name'),
@@ -75,6 +83,7 @@ class PayoutsRelationManager extends RelationManager
                 ->badge()
                 ->placeholder('-')
                 ->url(fn (SettlementPayout $record): ?string => $record->voucher_id ? VoucherResource::getUrl('view', ['record' => $record->voucher_id]) : null),
+            PayoutProofAction::column(),
         ])->recordActions([
             Action::make('report')->label('Report')->icon('heroicon-o-document-text')
                 ->url(fn ($record): string => route('investments.reports.investor-payout', $record))
@@ -96,22 +105,23 @@ class PayoutsRelationManager extends RelationManager
                         ->required(fn (Get $get): bool => $get('election') === 'partial_reinvest')
                         ->visible(fn (Get $get): bool => $get('election') === 'partial_reinvest')
                         ->helperText(fn (SettlementPayout $record): string => 'Total payout: '.MoneyFormatter::currency((float) $record->total_payout)),
-                    Select::make('next_project_id')
-                        ->label('Next Project')
-                        ->options(fn (): array => InvestmentProject::query()->whereIn('status', ['open', 'running'])->pluck('name', 'id')->all())
+                    Select::make('next_target')
+                        ->label(__('Reinvest into (open group)'))
+                        ->options(fn (): array => app(InvestmentTargets::class)->options())
                         ->searchable()
                         ->required(fn (Get $get): bool => in_array($get('election'), ['reinvest', 'partial_reinvest'], true))
-                        ->visible(fn (Get $get): bool => in_array($get('election'), ['reinvest', 'partial_reinvest'], true)),
+                        ->visible(fn (Get $get): bool => in_array($get('election'), ['reinvest', 'partial_reinvest'], true))
+                        ->helperText(__('New money joins a group that is still open; a group that has started takes no new members.')),
                 ])
                 ->requiresConfirmation()
-                ->modalDescription('This is a one-time record per payout. A (partial) reinvest also creates the rollover investment in the chosen project immediately.')
+                ->modalDescription(__('This is a one-time record per payout. A (partial) reinvest also adds the investor to the chosen open group right away, as a new member.'))
                 ->action(function (SettlementPayout $record, array $data): void {
                     try {
                         app(CycleElectionService::class)->recordElection(
                             $record,
                             $data['election'],
                             filled($data['reinvest_amount'] ?? null) ? (float) $data['reinvest_amount'] : null,
-                            filled($data['next_project_id'] ?? null) ? InvestmentProject::query()->find($data['next_project_id']) : null,
+                            app(InvestmentTargets::class)->find($data['next_target'] ?? null),
                             (int) auth()->id(),
                         );
                     } catch (RuntimeException $exception) {
@@ -137,12 +147,22 @@ class PayoutsRelationManager extends RelationManager
                 ->visible(fn ($record): bool => $this->payoutsUnlocked() && $record->payment_status === 'pending' && (auth()->user()?->hasPermission('investments.settle') ?? false))
                 ->requiresConfirmation()
                 ->modalDescription('Confirm the payout has actually been sent to the investor.')
-                ->action(function (SettlementPayout $record): void {
-                    $record->update(['payment_status' => 'paid', 'paid_at' => now()->toDateString()]);
-                    app(InvestmentLedgerService::class)->recordInvestorPayoutPaid($record, (int) auth()->id());
-                    $this->syncSettlementStatus();
+                ->schema([PayoutProofAction::field(fn () => CompanyMedia::require($this->getOwnerRecord()))])
+                ->action(function (SettlementPayout $record, array $data): void {
+                    try {
+                        app(PayoutCompletionService::class)->markPaid($record, auth()->user());
+                    } catch (ValidationException $exception) {
+                        PayoutProofAction::discard($data['payment_proof'] ?? null);
+                        Notification::make()->danger()->title(__('Could not mark the payout paid'))->body(collect($exception->errors())->flatten()->first())->send();
+
+                        return;
+                    }
+
+                    PayoutProofAction::attach($record->fresh(), $data['payment_proof'] ?? null);
+
                     Notification::make()->success()->title('Investor payout marked paid')->send();
                 }),
+            PayoutProofAction::uploadAction(fn () => CompanyMedia::require($this->getOwnerRecord())),
         ]);
     }
 
@@ -150,15 +170,5 @@ class PayoutsRelationManager extends RelationManager
     private function payoutsUnlocked(): bool
     {
         return $this->getOwnerRecord()->status === 'confirmed';
-    }
-
-    private function syncSettlementStatus(): void
-    {
-        $settlement = $this->getOwnerRecord();
-        if ($settlement->status === 'confirmed'
-            && ! $settlement->payouts()->where('payment_status', 'pending')->exists()
-            && ! $settlement->channelPartnerPayouts()->where('payment_status', 'pending')->exists()) {
-            $settlement->update(['status' => 'paid_out']);
-        }
     }
 }

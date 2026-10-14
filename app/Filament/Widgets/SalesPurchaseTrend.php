@@ -2,11 +2,14 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Services\ReportService;
 use Filament\Widgets\ChartWidget;
 
 class SalesPurchaseTrend extends ChartWidget
 {
+    use GuardsWidgetRendering;
+
     protected ?string $heading = 'Sales vs Purchases';
 
     protected ?string $description = 'Last six months confirmed sales and received purchases';

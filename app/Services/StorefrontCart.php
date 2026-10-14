@@ -305,7 +305,9 @@ class StorefrontCart
                 if (! empty($item['variant_id'])) {
                     $variant = $product->activeVariants->firstWhere('id', (int) $item['variant_id']);
 
-                    if (! $variant) {
+                    // A variation with no selling price in the reseller's store
+                    // is not for sale (never at the wholesale rate).
+                    if (! $variant || app(ResellerPricing::class)->variantBlocked($variant)) {
                         $changed = true;
 
                         return null;
@@ -340,7 +342,9 @@ class StorefrontCart
                     // Set only on reseller-priced lines; frozen onto the
                     // order item so the reseller's commission can't drift
                     // if tier prices change after checkout.
-                    'reseller_base_price' => $variant ? null : app(ResellerPricing::class)->basePriceFor($product),
+                    'reseller_base_price' => $variant
+                        ? app(ResellerPricing::class)->variantBasePriceFor($variant)
+                        : app(ResellerPricing::class)->basePriceFor($product),
                 ];
             })
             ->filter()

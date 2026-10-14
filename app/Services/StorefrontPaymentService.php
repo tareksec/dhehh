@@ -21,6 +21,9 @@ class StorefrontPaymentService
         ?string $transactionId = null,
     ): ?Order {
         if ($payment->order_id && $payment->status === StorefrontPayment::STATUS_COMPLETED) {
+            // A reseller's online advance that completed but was not entered yet (a crash in between) is entered now.
+            app(ResellerOwnCourierService::class)->recordOnlinePayment($payment);
+
             return $payment->order()->withoutGlobalScopes()->first();
         }
 
@@ -54,6 +57,11 @@ class StorefrontPaymentService
             } else {
                 return null;
             }
+        }
+
+        // A reseller's own-courier advance paid online: enter it in the order's Payments History (once).
+        if ($payment->purpose === StorefrontPayment::PURPOSE_RESELLER_ADVANCE) {
+            app(ResellerOwnCourierService::class)->recordOnlinePayment($payment->fresh());
         }
 
         if (in_array($payment->purpose, [

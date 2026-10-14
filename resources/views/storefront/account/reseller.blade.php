@@ -107,14 +107,14 @@
         @endif
 
         @if ($commissions->isNotEmpty())
-            <h4 class="mt-5 text-sm font-semibold">{{ __('Recent commissions') }}</h4>
+            <h4 class="mt-5 text-sm font-semibold">{{ __('Recent profits') }}</h4>
             <div class="mt-2 overflow-x-auto">
                 <table class="w-full min-w-[420px] text-left text-sm">
                     <thead class="text-xs text-gray-500 dark:text-gray-400">
                         <tr>
                             <th class="py-2 pr-3 font-medium">{{ __('Order') }}</th>
                             <th class="py-2 pr-3 font-medium">{{ __('Sales') }}</th>
-                            <th class="py-2 pr-3 font-medium">{{ __('Commission') }}</th>
+                            <th class="py-2 pr-3 font-medium">{{ __('Profit') }}</th>
                             <th class="py-2 font-medium">{{ __('Status') }}</th>
                         </tr>
                     </thead>
@@ -160,7 +160,7 @@
                 <input class="{{ $inputClass }} min-h-10" type="search" name="search" value="{{ $search }}" placeholder="{{ __('Search products…') }}" aria-label="{{ __('Search products…') }}">
             </form>
         </div>
-        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ __('Your cost is the wholesale rate plus the store cost. Set any price at or above your cost; the difference is your commission, paid after the order is delivered.') }}</p>
+        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ __('Your cost is the wholesale rate plus the store cost. Set any price at or above your cost; the difference is your profit, paid after the order is delivered.') }}</p>
 
         <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             @forelse ($products as $product)
@@ -182,7 +182,7 @@
                         <div class="flex justify-between gap-2"><dt>{{ __('Suggested price') }}</dt><dd class="tabular-nums">{{ $money($suggestedPrice) }}</dd></div>
                     </dl>
                     @if ($basePrice === null)
-                        <p class="mt-2 text-xs text-amber-700 dark:text-amber-400">{{ __('No wholesale rate set: sells at the normal price, no commission.') }}</p>
+                        <p class="mt-2 text-xs text-amber-700 dark:text-amber-400">{{ __('No wholesale rate set: sells at the normal price, no profit.') }}</p>
                     @endif
 
                     @if ($isPicked && $basePrice !== null)
@@ -195,7 +195,7 @@
                             </div>
                             <button class="inline-flex min-h-9 items-center justify-center rounded-lg border border-gray-300 px-3 text-xs font-semibold transition hover:border-[var(--storefront-brand)] dark:border-gray-700" type="submit">{{ __('Save') }}</button>
                         </form>
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ __('Commission per unit: :amount', ['amount' => $money(max(($ownPrice !== null ? (float) $ownPrice : $suggestedPrice), $basePrice) - $basePrice)]) }}</p>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ __('Profit per unit: :amount', ['amount' => $money(max(($ownPrice !== null ? (float) $ownPrice : $suggestedPrice), $basePrice) - $basePrice)]) }}</p>
                     @endif
 
                     <form class="mt-auto pt-3" method="POST" action="{{ $toggleUrl }}">

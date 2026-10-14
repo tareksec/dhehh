@@ -2,6 +2,8 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Resources\Investors\InvestorResource;
+use App\Filament\Resources\Investors\Pages\ListInvestors;
 use App\Filament\Widgets\BusinessOverview;
 use App\Filament\Widgets\CustomerDueNotifications;
 use App\Filament\Widgets\CustomerRiskAlerts;
@@ -10,9 +12,10 @@ use App\Filament\Widgets\LowStockProducts;
 use App\Filament\Widgets\SalesPurchaseTrend;
 use App\Filament\Widgets\TopBusinessPerformers;
 use App\Http\Middleware\PreventAdminPageCaching;
-use App\Http\Middleware\RestrictResellerPortalHost;
+use App\Http\Middleware\RestrictPortalHosts;
 use App\Http\Middleware\SetCurrentCompany;
 use App\Http\Middleware\SyncAppUpdates;
+use App\Http\Middleware\TurnOffPagesWithMissingTables;
 use App\Models\Company;
 use App\Services\AppUpdateService;
 use App\Services\CompanyContext;
@@ -30,7 +33,9 @@ use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\View\TablesRenderHook;
 use Filament\View\PanelsRenderHook;
+use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -443,6 +448,11 @@ class AdminPanelProvider extends PanelProvider
                 fn (): HtmlString => new HtmlString(view('filament.partials.sidebar-navigation')->render()),
             )
             ->renderHook(
+                TablesRenderHook::TOOLBAR_START,
+                fn (): View => view('filament.investors.list-toolbar', ['projects' => InvestorResource::projectFilterOptions()]),
+                scopes: ListInvestors::class,
+            )
+            ->renderHook(
                 PanelsRenderHook::GLOBAL_SEARCH_BEFORE,
                 fn (): HtmlString => new HtmlString(view('filament.partials.company-switcher')->render()),
             )
@@ -488,8 +498,8 @@ class AdminPanelProvider extends PanelProvider
                 // The admin panel doesn't route through the "web" middleware
                 // group, so this has to be listed here too -- otherwise a
                 // reseller-portal host could still reach /admin. See
-                // 13_RESELLER_PORTAL_PLAN.md §6 and RestrictResellerPortalHost.
-                RestrictResellerPortalHost::class,
+                // 13_RESELLER_PORTAL_PLAN.md §6 and RestrictPortalHosts.
+                RestrictPortalHosts::class,
                 PreventAdminPageCaching::class,
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -505,6 +515,7 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
                 SyncAppUpdates::class,
+                TurnOffPagesWithMissingTables::class,
             ]);
     }
 

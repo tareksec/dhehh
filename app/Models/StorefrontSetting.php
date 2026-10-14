@@ -485,10 +485,13 @@ class StorefrontSetting extends Model
         'reseller_program_enabled',
         'reseller_cost_per_unit',
         'reseller_packaging_cost_per_unit',
+        'reseller_return_charge',
         'reseller_min_withdrawal',
+        'reseller_subdomain_setup_minutes',
         'reseller_guide_enabled',
         'reseller_guide_intro',
         'reseller_guide_rules',
+        'reseller_payment_method_ids',
         'reseller_guide_show_figures',
         'social_links',
         'is_published',
@@ -572,9 +575,12 @@ class StorefrontSetting extends Model
         'reseller_program_enabled' => 'boolean',
         'reseller_cost_per_unit' => 'decimal:2',
         'reseller_packaging_cost_per_unit' => 'decimal:2',
+        'reseller_return_charge' => 'decimal:2',
         'reseller_min_withdrawal' => 'decimal:2',
+        'reseller_subdomain_setup_minutes' => 'integer',
         'reseller_guide_enabled' => 'boolean',
         'reseller_guide_rules' => 'array',
+        'reseller_payment_method_ids' => 'array',
         'reseller_guide_show_figures' => 'boolean',
         'social_links' => 'array',
         'typography_base_size' => 'integer',
@@ -848,6 +854,7 @@ class StorefrontSetting extends Model
             $setting->reseller_program_enabled ??= true;
             $setting->reseller_guide_enabled ??= true;
             $setting->reseller_guide_show_figures ??= false;
+            $setting->reseller_subdomain_setup_minutes ??= 10;
         });
 
         static::saved(function (StorefrontSetting $setting): void {

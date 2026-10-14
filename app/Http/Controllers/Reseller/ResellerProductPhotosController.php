@@ -17,8 +17,8 @@ use ZipArchive;
 /**
  * Reseller portal Phase 4 (13_RESELLER_PORTAL_PLAN.md §3 row 3): lets a
  * logged-in reseller download a product's own photos (featured image +
- * gallery) as a zip, for posting on Facebook/WhatsApp. Reachable only under
- * the portal path (so RestrictResellerPortalHost lets it through) and only
+ * gallery and the images of its variations) as a zip, for posting on Facebook/WhatsApp. Reachable only under
+ * the portal path (so RestrictPortalHosts lets it through) and only
  * for the product's own company -- the same company the portal host and the
  * logged-in reseller both resolve to.
  */
@@ -35,7 +35,7 @@ class ResellerProductPhotosController extends Controller
         abort_unless($company !== null && (int) $product->company_id === (int) $company->getKey(), 404);
 
         $storage = app(CompanyStorageService::class);
-        $paths = array_filter([$product->image, ...($product->gallery_images ?? [])]);
+        $paths = $product->allImagePaths();
 
         abort_if($paths === [], 404);
 

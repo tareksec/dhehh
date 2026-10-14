@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\StorefrontCartRecords\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Models\StorefrontCartRecord;
 use App\Support\MoneyFormatter;
 use Filament\Support\Icons\Heroicon;
@@ -10,6 +11,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class StorefrontRecoveryOverview extends StatsOverviewWidget
 {
+    use GuardsWidgetRendering;
+
     protected static bool $isLazy = false;
 
     protected ?string $heading = 'Checkout Recovery — Last 30 Days';

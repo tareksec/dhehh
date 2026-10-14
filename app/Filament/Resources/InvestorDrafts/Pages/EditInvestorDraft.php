@@ -24,7 +24,10 @@ class EditInvestorDraft extends EditRecord
 
     protected function getHeaderActions(): array
     {
-        return [DeleteAction::make()->label(__('Discard'))];
+        return [
+            InvestorDraftResource::rejectApplicationAction()->after(fn () => $this->redirect(InvestorDraftResource::getUrl())),
+            DeleteAction::make()->label(__('Discard'))->visible(fn (InvestorDraft $record): bool => $record->source !== InvestorDraft::SOURCE_PORTAL),
+        ];
     }
 
     protected function getFormActions(): array

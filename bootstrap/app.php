@@ -2,9 +2,11 @@
 
 use App\Http\Middleware\InvalidateStaleCustomerSession;
 use App\Http\Middleware\PreventDemoModeWrites;
-use App\Http\Middleware\RestrictResellerPortalHost;
+use App\Http\Middleware\RestrictPortalHosts;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetCurrentCompany;
+use App\Support\ModuleGuard;
+use App\Support\PanelErrorPages;
 use App\Support\StorefrontErrorPages;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Console\Scheduling\Schedule;
@@ -50,6 +52,11 @@ return Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('00:30')
             ->withoutOverlapping()
             ->onOneServer();
+        // Hourly so each company's own midnight is caught; idempotent.
+        $schedule->command('investments:advance-groups')
+            ->hourly()
+            ->withoutOverlapping()
+            ->onOneServer();
         $schedule->command('release:notify-deploy')
             ->everyFiveMinutes()
             ->withoutOverlapping()
@@ -63,13 +70,13 @@ return Application::configure(basePath: dirname(__DIR__))
             at: env('TRUSTED_PROXIES', '*'),
             headers: SymfonyRequest::HEADER_X_FORWARDED_TRAEFIK,
         );
-        $middleware->validateCsrfTokens(except: ['webhooks/couriers/*', 'webhooks/zinipay/*', 'webhooks/woocommerce/*', 'webhooks/meta', 'webhooks/mobile-crash-reports']);
+        $middleware->validateCsrfTokens(except: ['webhooks/couriers/*', 'webhooks/zinipay/*', 'webhooks/woocommerce/*', 'webhooks/meta', 'webhooks/whatsapp-web/*', 'webhooks/mobile-crash-reports']);
         // Must run before anything else in the group: on a reseller-portal
         // host it redirects every non-portal path to the portal, and on any
         // other host it 404s the portal path -- see 13_RESELLER_PORTAL_PLAN.md
         // §6. Also appended to the admin panel's own middleware stack (it
         // doesn't route through the "web" group) in AdminPanelProvider.
-        $middleware->appendToGroup('web', RestrictResellerPortalHost::class);
+        $middleware->appendToGroup('web', RestrictPortalHosts::class);
         $middleware->appendToGroup('web', PreventDemoModeWrites::class);
         $middleware->appendToGroup('web', SetCurrentCompany::class);
         $middleware->appendToGroup('web', SecurityHeaders::class);
@@ -90,6 +97,21 @@ return Application::configure(basePath: dirname(__DIR__))
         // requests are left completely alone — Filament and Laravel's own
         // JSON error handling for those must not be touched.
         $exceptions->render(function (\Throwable $e, Request $request) {
+            // A crashed admin / portal page: "this part has a problem, the rest
+            // keeps working" with links back, instead of the bare 500 page.
+            if (PanelErrorPages::appliesTo($request, $e)) {
+                ModuleGuard::report(PanelErrorPages::section($request), $e);
+
+                $home = PanelErrorPages::panelHome($request);
+                $pageUrl = PanelErrorPages::pageUrl($request);
+
+                return response()->view('panel-errors.module', [
+                    'home' => $home,
+                    'onHome' => rtrim((string) parse_url($pageUrl, PHP_URL_PATH), '/') === $home,
+                    'retryUrl' => $pageUrl,
+                ], 500);
+            }
+
             if (app()->environment('local', 'testing')) {
                 return null;
             }

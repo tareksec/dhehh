@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\ResellerProduct;
 use App\Support\MoneyFormatter;
 use Illuminate\Database\Eloquent\Collection;
@@ -32,8 +33,9 @@ class ResellerOrderPlacementService
 
     /**
      * Products the reseller may put on an order: the active picks in their
-     * store that are on sale. Variant products are left out (their lines have
-     * no reseller price).
+     * store that are on sale. A product with variations is ordered one
+     * variation at a time (owner decision 2026-10-12), so it needs at least
+     * one active variation; its variations come loaded as `activeVariants`.
      *
      * @return Collection<int, Product>
      */
@@ -43,32 +45,80 @@ class ResellerOrderPlacementService
             ->wherePivot('is_active', true)
             ->where('products.is_active', true)
             ->where('products.status', Product::STATUS_AVAILABLE)
-            ->where('products.has_variants', false)
+            ->where(fn ($query) => $query
+                ->where('products.has_variants', false)
+                ->orWhereHas('activeVariants'))
+            ->with('activeVariants')
             ->orderBy('products.name')
             ->get();
     }
 
-    /** Lowest price the reseller may charge for $product, or null when it sells at the normal price. */
-    public function basePrice(Customer $reseller, Product $product): ?float
+    /**
+     * Lowest price the reseller may charge for $product (or one of its
+     * variations), or null when it sells at the normal price. A variation's
+     * is what the store charges the reseller for it: its own (wholesale)
+     * price plus the reseller cost per unit.
+     */
+    public function basePrice(Customer $reseller, Product $product, ?ProductVariant $variant = null): ?float
     {
+        if ($product->has_variants) {
+            return $variant?->resellerCost($this->costPerUnit($reseller));
+        }
+
         return ResellerPricing::basePrice($product, $this->costPerUnit($reseller));
     }
 
-    /** The price pre-filled for $product: the reseller's saved price, else the suggested one -- never below the base. */
-    public function defaultPrice(Customer $reseller, Product $product): float
+    /**
+     * The price suggested for $product (its normal selling price), or for its
+     * $variant (the admin's suggested selling price; null when the admin set
+     * none, so the reseller has to set one).
+     */
+    public function suggestedPrice(Product $product, ?ProductVariant $variant = null): ?float
     {
-        $base = $this->basePrice($reseller, $product);
+        return $variant ? $variant->resellerSuggestedPrice() : round($product->baseSellingPrice(), 2);
+    }
+
+    /**
+     * The price pre-filled for $product (or its $variant): the reseller's
+     * saved price, else the suggested one -- never below the base. Null for a
+     * variation with neither: the reseller has to enter a price.
+     */
+    public function defaultPrice(Customer $reseller, Product $product, ?ProductVariant $variant = null): ?float
+    {
+        $base = $this->basePrice($reseller, $product, $variant);
 
         if ($base === null) {
-            return round($product->baseSellingPrice(), 2);
+            return $this->suggestedPrice($product, $variant);
         }
 
-        $saved = ResellerProduct::query()
+        $pick = ResellerProduct::query()
             ->where('customer_id', $reseller->getKey())
             ->where('product_id', $product->getKey())
-            ->value('price');
+            ->first(['price', 'variant_prices']);
+        $saved = $variant ? ($pick?->variant_prices[$variant->getKey()] ?? null) : $pick?->price;
+        $price = $saved !== null ? (float) $saved : $this->suggestedPrice($product, $variant);
 
-        return round(max($saved !== null ? (float) $saved : $product->baseSellingPrice(), $base), 2);
+        return $price === null ? null : round(max($price, $base), 2);
+    }
+
+    /**
+     * The variation a line names: required (and must be one of the product's
+     * active variations) for a product with variations, ignored otherwise.
+     * Null means "not a variation line"; false means the line is wrong.
+     */
+    protected function lineVariant(Product $product, mixed $variantId): ProductVariant|false|null
+    {
+        if (! $product->has_variants) {
+            return null;
+        }
+
+        return $product->activeVariants->firstWhere('id', (int) $variantId) ?? false;
+    }
+
+    /** Units in stock for a line: the variation's own stock, else the product's. */
+    protected function lineStock(Product $product, ?ProductVariant $variant): int
+    {
+        return (int) ($variant ? $variant->stock : $product->stock);
     }
 
     /**
@@ -97,7 +147,7 @@ class ResellerOrderPlacementService
             : 0.0;
         $total = round($subtotal + $fee + $packaging + $vat, 2);
         // Own courier: the reseller's deposit pays first, they send the rest.
-        $depositUsed = $ownCourier ? min(app(ResellerOwnCourierService::class)->depositBalance($reseller), $total) : 0.0;
+        $depositUsed = $ownCourier ? min(app(ResellerOwnCourierService::class)->spendableDeposit($reseller), $total) : 0.0;
 
         return [
             'items' => $items->all(),
@@ -169,9 +219,11 @@ class ResellerOrderPlacementService
                 OrderItem::query()->create([
                     'order_id' => $order->getKey(),
                     'product_id' => $item['product']->getKey(),
+                    'product_variant_id' => $item['variant']?->getKey(),
+                    'variant_label' => $item['variant']?->label(),
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
-                    'unit_cost' => $item['product']->cost_price ?? 0,
+                    'unit_cost' => ($item['variant']?->cost_price ?? $item['product']->cost_price) ?? 0,
                     'reseller_base_price' => $item['reseller_base_price'],
                     'reseller_retail_price' => $item['retail_price'] ?? null,
                 ]);
@@ -241,6 +293,12 @@ class ResellerOrderPlacementService
     {
         $service = app(ResellerOwnCourierService::class);
         $errors = [];
+
+        // Paying online needs no number or transaction ID: the gateway confirms it.
+        if (($ownCourier['payment_method_id'] ?? null) === ResellerOwnCourierService::ONLINE) {
+            return $service->onlineGateway($reseller->company) ? [] : ['data.payment_method_id' => __('Online payment is not available. Choose a send-money number.')];
+        }
+
         $methodId = (int) ($ownCourier['payment_method_id'] ?? 0);
 
         if (! $service->paymentMethods($reseller->company)->contains(fn ($method): bool => (int) $method->getKey() === $methodId)) {
@@ -334,9 +392,11 @@ class ResellerOrderPlacementService
                 OrderItem::query()->create([
                     'order_id' => $order->getKey(),
                     'product_id' => $line['product']->getKey(),
+                    'product_variant_id' => $line['variant']?->getKey(),
+                    'variant_label' => $line['variant']?->label(),
                     'quantity' => $line['quantity'],
                     'unit_price' => $line['unit_price'],
-                    'unit_cost' => $line['product']->cost_price ?? 0,
+                    'unit_cost' => ($line['variant']?->cost_price ?? $line['product']->cost_price) ?? 0,
                     'reseller_base_price' => null,
                     'reseller_retail_price' => $line['retail_price'],
                 ]);
@@ -375,7 +435,7 @@ class ResellerOrderPlacementService
     {
         $existing = $order->items()->with('product')->get()->keyBy('id');
         $catalog = $this->catalog($reseller)->keyBy('id');
-        $seen = $existing->mapWithKeys(fn (OrderItem $item): array => [(int) $item->product_id => true])->all();
+        $seen = $existing->mapWithKeys(fn (OrderItem $item): array => [$item->product_id.':'.(int) $item->product_variant_id => true])->all();
         $errors = [];
         $kept = [];
         $new = [];
@@ -415,12 +475,22 @@ class ResellerOrderPlacementService
                 continue;
             }
 
-            if (isset($seen[$productId])) {
+            $variant = $this->lineVariant($product, $line['variant_id'] ?? null);
+
+            if ($variant === false) {
+                $errors["{$key}.variant_id"] = __('Choose an option.');
+
+                continue;
+            }
+
+            $seenKey = $productId.':'.($variant?->getKey() ?? 0);
+
+            if (isset($seen[$seenKey])) {
                 $errors["{$key}.product_id"] = __('This product is already on the order.');
 
                 continue;
             }
-            $seen[$productId] = true;
+            $seen[$seenKey] = true;
 
             if ($quantity < 1) {
                 $errors["{$key}.quantity"] = __('Enter a quantity of at least 1.');
@@ -428,8 +498,20 @@ class ResellerOrderPlacementService
                 continue;
             }
 
-            $storePrice = round($this->basePrice($reseller, $product) ?? $product->baseSellingPrice(), 2);
-            $retail = filled($line['price'] ?? null) ? round((float) $line['price'], 2) : $this->defaultPrice($reseller, $product);
+            if ($variant && $this->basePrice($reseller, $product, $variant) === null) {
+                $errors["{$key}.variant_id"] = __('This variation has no price yet, so it cannot be sold.');
+
+                continue;
+            }
+
+            $storePrice = round($this->basePrice($reseller, $product, $variant) ?? $this->suggestedPrice($product, $variant) ?? 0.0, 2);
+            $retail = filled($line['price'] ?? null) ? round((float) $line['price'], 2) : $this->defaultPrice($reseller, $product, $variant);
+
+            if ($retail === null) {
+                $errors["{$key}.price"] = __('Enter your price.');
+
+                continue;
+            }
 
             if ($retail < $storePrice) {
                 $errors["{$key}.price"] = __('Your price must be at least :amount.', ['amount' => MoneyFormatter::number($storePrice)]);
@@ -437,7 +519,7 @@ class ResellerOrderPlacementService
                 continue;
             }
 
-            $new[] = ['product' => $product, 'quantity' => $quantity, 'unit_price' => $storePrice, 'retail_price' => $retail, 'index' => $index];
+            $new[] = ['product' => $product, 'variant' => $variant, 'quantity' => $quantity, 'unit_price' => $storePrice, 'retail_price' => $retail, 'index' => $index];
         }
 
         $mentioned = collect($lines)->pluck('item_id')->filter()->map(fn ($id): int => (int) $id);
@@ -451,12 +533,17 @@ class ResellerOrderPlacementService
             $product = isset($line['item']) ? $line['item']->product : $line['product'];
 
             if ($product && ! $product->is_preorder) {
-                $stockRows[$line['index']] = ['product_id' => $product->getKey(), 'quantity' => $line['quantity']];
+                $stockRows[$line['index']] = [
+                    'product_id' => $product->getKey(),
+                    'product_variant_id' => isset($line['item']) ? $line['item']->product_variant_id : $line['variant']?->getKey(),
+                    'quantity' => $line['quantity'],
+                ];
             }
         }
 
         foreach (app(OrderStockCheckService::class)->shortages($stockRows, $order) as $shortage) {
-            $index = collect($stockRows)->search(fn (array $row): bool => (int) $row['product_id'] === $shortage['product_id']);
+            $index = collect($stockRows)->search(fn (array $row): bool => (int) $row['product_id'] === $shortage['product_id']
+                && (int) ($row['product_variant_id'] ?? 0) === (int) ($shortage['product_variant_id'] ?? 0));
             $errors["data.items.{$index}.quantity"] = __(':product does not have enough stock.', ['product' => $shortage['name']]);
         }
 
@@ -479,7 +566,7 @@ class ResellerOrderPlacementService
         $total = round(max($subtotal - (float) $order->discount + $vat + (float) $order->shipping_fee + $packaging, 0), 2);
         $courier = app(ResellerOwnCourierService::class);
         $extra = max(0.0, round($total - $courier->sentAmount($order), 2));
-        $depositUsed = min($courier->depositBalance($reseller), $extra);
+        $depositUsed = min($courier->spendableDeposit($reseller), $extra);
 
         return [
             'kept' => array_values($kept),
@@ -521,12 +608,22 @@ class ResellerOrderPlacementService
                 continue;
             }
 
-            if (isset($seen[$productId])) {
+            $variant = $this->lineVariant($product, $line['variant_id'] ?? null);
+
+            if ($variant === false) {
+                $errors["{$key}.variant_id"] = __('Choose an option.');
+
+                continue;
+            }
+
+            $seenKey = $productId.':'.($variant?->getKey() ?? 0);
+
+            if (isset($seen[$seenKey])) {
                 $errors["{$key}.product_id"] = __('This product is already on the order.');
 
                 continue;
             }
-            $seen[$productId] = true;
+            $seen[$seenKey] = true;
 
             if ($quantity < 1) {
                 $errors["{$key}.quantity"] = __('Enter a quantity of at least 1.');
@@ -534,22 +631,35 @@ class ResellerOrderPlacementService
                 continue;
             }
 
-            if (! $product->is_preorder && $quantity > (int) $product->stock) {
-                $errors["{$key}.quantity"] = __(':product does not have enough stock.', ['product' => $product->name]);
+            if (! $product->is_preorder && $quantity > $this->lineStock($product, $variant)) {
+                $errors["{$key}.quantity"] = __(':product does not have enough stock.', ['product' => $variant ? $product->name.' ('.$variant->label().')' : $product->name]);
 
                 continue;
             }
 
-            $base = $this->basePrice($reseller, $product);
+            $base = $this->basePrice($reseller, $product, $variant);
+            $suggested = $this->suggestedPrice($product, $variant);
+
+            if ($variant && $base === null) {
+                $errors["{$key}.variant_id"] = __('This variation has no price yet, so it cannot be sold.');
+
+                continue;
+            }
 
             if ($ownCourier) {
                 // The reseller pays the store's price (no commission line);
                 // their own retail price is kept for their customer, who
                 // must never see the store's price (owner rule).
-                $storePrice = round($base ?? $product->baseSellingPrice(), 2);
+                $storePrice = round($base ?? $suggested ?? 0.0, 2);
                 $retail = filled($line['price'] ?? null)
                     ? round((float) $line['price'], 2)
-                    : $this->defaultPrice($reseller, $product);
+                    : $this->defaultPrice($reseller, $product, $variant);
+
+                if ($retail === null) {
+                    $errors["{$key}.price"] = __('Enter your price.');
+
+                    continue;
+                }
 
                 if ($retail < $storePrice) {
                     $errors["{$key}.price"] = __('Your price must be at least :amount.', ['amount' => MoneyFormatter::number($storePrice)]);
@@ -559,6 +669,7 @@ class ResellerOrderPlacementService
 
                 $items->push([
                     'product' => $product,
+                    'variant' => $variant,
                     'quantity' => $quantity,
                     'unit_price' => $storePrice,
                     'reseller_base_price' => null,
@@ -569,7 +680,7 @@ class ResellerOrderPlacementService
                 continue;
             }
 
-            $price = $this->defaultPrice($reseller, $product);
+            $price = $this->defaultPrice($reseller, $product, $variant);
 
             if ($base !== null && filled($line['price'] ?? null)) {
                 $price = round((float) $line['price'], 2);
@@ -581,8 +692,15 @@ class ResellerOrderPlacementService
                 }
             }
 
+            if ($price === null) {
+                $errors["{$key}.price"] = __('Enter your price.');
+
+                continue;
+            }
+
             $items->push([
                 'product' => $product,
+                'variant' => $variant,
                 'quantity' => $quantity,
                 'unit_price' => $price,
                 'reseller_base_price' => $base,

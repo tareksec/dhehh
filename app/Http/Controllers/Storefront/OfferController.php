@@ -8,6 +8,8 @@ use App\Models\Offer;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
 use App\Services\OfferPricingService;
+use App\Support\CompanyMedia;
+use App\Support\StorefrontSeo;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -63,6 +65,15 @@ class OfferController extends Controller
             ->latest()
             ->get();
 
+        $seo = StorefrontSeo::current()->page(__('Offers'));
+
+        // The single/combo filter repeats the full list.
+        if ($type === null) {
+            $seo->index();
+        } else {
+            $seo->noindexFollow();
+        }
+
         return StorefrontThemeRegistry::page('offers.index', [
             'company' => $company,
             'setting' => $setting,
@@ -76,6 +87,14 @@ class OfferController extends Controller
     protected function showView(Offer $offer, Company $company, StorefrontSetting $setting, ?string $previewSlug = null): View
     {
         $offer->load(['items.product', 'items.productVariant']);
+
+        StorefrontSeo::current()
+            ->page(
+                $offer->meta_title ?: $offer->title,
+                $offer->meta_description ?: $offer->short_description,
+                CompanyMedia::publicUrl($offer->cover_image, $company),
+            )
+            ->index();
 
         return StorefrontThemeRegistry::page('offers.show', [
             'company' => $company,

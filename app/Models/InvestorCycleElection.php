@@ -24,7 +24,7 @@ class InvestorCycleElection extends Model
         'partial_reinvest' => 'Partial Reinvest',
     ];
 
-    protected $fillable = ['company_id', 'settlement_payout_id', 'election', 'reinvest_amount', 'next_project_id', 'reinvestment_id', 'recorded_by'];
+    protected $fillable = ['company_id', 'settlement_payout_id', 'election', 'reinvest_amount', 'next_project_id', 'next_group_id', 'reinvestment_id', 'reinvestment_member_id', 'recorded_by'];
 
     protected $casts = ['reinvest_amount' => 'decimal:2'];
 
@@ -35,8 +35,8 @@ class InvestorCycleElection extends Model
                 throw ValidationException::withMessages(['election' => 'Choose withdraw, reinvest, or partial reinvest.']);
             }
 
-            if ($election->election !== 'withdraw' && blank($election->next_project_id)) {
-                throw ValidationException::withMessages(['next_project_id' => 'A next project is required to reinvest.']);
+            if ($election->election !== 'withdraw' && blank($election->next_project_id) && blank($election->next_group_id)) {
+                throw ValidationException::withMessages(['next_project_id' => 'A next project or an open group is required to reinvest.']);
             }
 
             if ($election->election === 'partial_reinvest' && (float) $election->reinvest_amount <= 0) {
@@ -59,6 +59,16 @@ class InvestorCycleElection extends Model
     public function nextProject()
     {
         return $this->belongsTo(InvestmentProject::class, 'next_project_id');
+    }
+
+    public function nextGroup()
+    {
+        return $this->belongsTo(InvestorGroup::class, 'next_group_id');
+    }
+
+    public function reinvestmentMember()
+    {
+        return $this->belongsTo(InvestorGroupMember::class, 'reinvestment_member_id');
     }
 
     public function reinvestment()

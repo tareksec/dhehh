@@ -8,8 +8,10 @@ use App\Models\Concerns\GeneratesSequentialNumber;
 use App\Services\CustomerRiskService;
 use App\Services\OrderWorkflowService;
 use App\Services\ResellerCommissionService;
+use App\Services\ResellerOwnCourierService;
 use App\Services\ShippingFeeService;
 use App\Services\WebsiteWebhookDispatcher;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -79,6 +81,13 @@ class Order extends Model
         self::STAGE_CANCELLED => 'Cancelled',
         self::STAGE_RETURNED => 'Returned',
         self::STAGE_REFUNDED => 'Refunded',
+    ];
+
+    /** Courier states that put an open order in the Shipping stage (see workflowStage()). */
+    public const SHIPPING_DELIVERY_STATUSES = [
+        CourierBooking::STATUS_PICKED_UP,
+        CourierBooking::STATUS_IN_TRANSIT,
+        CourierBooking::STATUS_PARTIAL_DELIVERED,
     ];
 
     public const REASON_REQUIRED_STAGES = [
@@ -309,6 +318,14 @@ class Order extends Model
         static::saved(function (Order $order): void {
             $order->syncTotalsStockAndCustomerBalance();
             app(ResellerCommissionService::class)->sync($order);
+            // A cancelled own-courier order gives back what it took from the reseller's deposit.
+            if ($order->reseller_own_courier && $order->wasChanged('status') && $order->status === self::STATUS_CANCELLED) {
+                app(ResellerOwnCourierService::class)->refundDeposit($order);
+            }
+            // A returned reseller order takes the return charge from the reseller's deposit (once).
+            if ($order->reseller_customer_id && $order->wasChanged('status') && $order->status === self::STATUS_RETURNED) {
+                app(ResellerOwnCourierService::class)->chargeReturn($order);
+            }
             app(OrderWorkflowService::class)->syncPreviousCustomerBalance($order);
             if ($order->wasChanged('status') && $order->isAccounted() && Schema::hasTable('fraud_checks')) {
                 app(CustomerRiskService::class)->evaluateOrder($order);
@@ -680,15 +697,37 @@ class Order extends Model
             return $this->status;
         }
 
-        if (in_array($this->delivery_status, [
-            CourierBooking::STATUS_PICKED_UP,
-            CourierBooking::STATUS_IN_TRANSIT,
-            CourierBooking::STATUS_PARTIAL_DELIVERED,
-        ], true)) {
+        if (in_array($this->delivery_status, self::SHIPPING_DELIVERY_STATUSES, true)) {
             return self::STAGE_SHIPPING;
         }
 
         return $this->status;
+    }
+
+    /**
+     * Orders whose workflowStage() is $stage, as SQL. Mirrors workflowStage():
+     * a closed order keeps its status, an open one with a live courier parcel
+     * is Shipping, anything else is its status.
+     *
+     * @param  Builder<Order>  $query
+     * @return Builder<Order>
+     */
+    public function scopeInWorkflowStage(Builder $query, string $stage): Builder
+    {
+        $closed = [self::STATUS_CANCELLED, self::STATUS_RETURNED, self::STATUS_REFUNDED];
+
+        if (in_array($stage, $closed, true)) {
+            return $query->where('status', $stage);
+        }
+
+        if ($stage === self::STAGE_SHIPPING) {
+            return $query->whereNotIn('status', $closed)
+                ->whereIn('delivery_status', self::SHIPPING_DELIVERY_STATUSES);
+        }
+
+        return $query->where('status', $stage)
+            ->where(fn (Builder $q): Builder => $q->whereNull('delivery_status')
+                ->orWhereNotIn('delivery_status', self::SHIPPING_DELIVERY_STATUSES));
     }
 
     /** @return list<string> */

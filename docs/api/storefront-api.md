@@ -89,7 +89,7 @@ created_at`. `collection_kinds` lists the live Offers → Collection kinds the p
 ### `GET /products/{slug}`
 A card plus: `description_html` (sanitised by the same renderer the Blade site uses, safe to
 inject), `description_text`, `weight_kg`, `gallery_urls`, `video_url`, `variants`
-(`id, sku, options, label, price, stock, image_urls` — active variations only),
+(`id, sku, options, label, price, stock, weight_kg, image_urls` — active variations only; a variation's `weight_kg` is its own weight, else the product's),
 `min_order_quantity`, `max_order_quantity` (the bounds the Blade product page and cart enforce),
 `preorder` (`{advance_percent}` or `null`), `reviews` (latest 10 approved; no customer or order ids),
 `related` (up to 4 cards, same category) and `seo`.

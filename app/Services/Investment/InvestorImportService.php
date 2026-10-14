@@ -6,8 +6,10 @@ use App\Models\ChannelPartner;
 use App\Models\Investment;
 use App\Models\Investor;
 use App\Models\InvestorDraft;
+use App\Models\InvestorGroup;
 use App\Models\InvestorSecurityInstrument;
 use App\Services\CompanyContext;
+use App\Services\InvestorOnboardingService;
 use App\Support\InvestorIdentity;
 use DateTimeImmutable;
 use DateTimeInterface;
@@ -140,20 +142,31 @@ class InvestorImportService
         $createsInvestment = $draft->willCreateInvestment();
         $existing = null;
 
-        if ($createsInvestment || filled($draft->project_id) || (float) $draft->investment_amount > 0) {
+        if ($createsInvestment || filled($draft->project_id) || filled($draft->group_id) || (float) $draft->investment_amount > 0) {
+            if (filled($draft->group_id) && filled($draft->project_id)) {
+                throw ValidationException::withMessages(['group_id' => __('Pick a group or a project for the investment amount, not both.')]);
+            }
+
+            $targetRule = filled($draft->group_id)
+                ? ['group_id' => ['required', Rule::exists('investor_groups', 'id')->where('company_id', $companyId)->where('status', InvestorGroup::STATUS_OPEN)]]
+                : ['project_id' => ['required', Rule::exists('investment_projects', 'id')->where('company_id', $companyId)->whereNull('group_id')->whereIn('status', InvestorDraft::OPEN_PROJECT_STATUSES)]];
+
             Validator::make([
                 'project_id' => $draft->project_id,
+                'group_id' => $draft->group_id,
                 'investment_amount' => $draft->investment_amount,
                 'payment_method' => $draft->payment_method,
                 'invested_at' => $draft->invested_at?->toDateString(),
             ], [
-                'project_id' => ['required', Rule::exists('investment_projects', 'id')->where('company_id', $companyId)->whereIn('status', InvestorDraft::OPEN_PROJECT_STATUSES)],
+                ...$targetRule,
                 'investment_amount' => ['required', 'numeric', 'gt:0'],
                 'payment_method' => ['required', Rule::in(array_keys(Investment::PAYMENT_METHODS))],
                 'invested_at' => ['required', 'date'],
             ], [
-                'project_id.required' => __('Pick a project for the investment amount, or clear the amount.'),
+                'project_id.required' => __('Pick a group for the investment amount, or clear the amount.'),
                 'project_id.exists' => __('The chosen project is not open for investments.'),
+                'group_id.required' => __('Pick a group for the investment amount, or clear the amount.'),
+                'group_id.exists' => __('The chosen group is not open for new members.'),
                 'investment_amount.required' => __('Enter the investment amount.'),
                 'investment_amount.gt' => __('Enter the investment amount.'),
                 'payment_method.required' => __('Pick the payment method.'),
@@ -181,7 +194,21 @@ class InvestorImportService
             $investor = $existing ?? Investor::query()->create([...$data, 'company_id' => $companyId]);
             $investment = null;
 
-            if ($createsInvestment) {
+            if ($createsInvestment && filled($draft->group_id)) {
+                // The money joins a group as a new member; the stamp and cheque
+                // become the security instrument of its first project row.
+                app(InvestmentTargets::class)->place(InvestorGroup::query()->findOrFail($draft->group_id), $investor, [
+                    'amount' => $draft->investment_amount,
+                    'payment_method' => $draft->payment_method,
+                    'invested_at' => $draft->invested_at?->toDateString(),
+                    'paperwork' => array_filter([
+                        'stamp_serial_numbers' => filled($draft->stamp_number)
+                            ? array_values(array_filter(array_map('trim', explode(',', (string) $draft->stamp_number))))
+                            : null,
+                        'cheque_number' => $draft->cheque_number,
+                    ]),
+                ], Auth::user());
+            } elseif ($createsInvestment) {
                 $investment = Investment::query()->create([
                     'company_id' => $companyId,
                     'project_id' => $draft->project_id,
@@ -202,6 +229,9 @@ class InvestorImportService
                     ]);
                 }
             }
+
+            // A portal sign-up: its sign-in and KYC files move to the new investor.
+            app(InvestorOnboardingService::class)->draftConfirmed($draft, $investor);
 
             $draft->delete();
 
@@ -251,12 +281,13 @@ class InvestorImportService
     }
 
     /**
-     * @return array{project_id?: int, payment_method?: string, invested_at?: string}
+     * @return array{project_id?: int, group_id?: int, payment_method?: string, invested_at?: string}
      */
     private function investmentDefaults(array $investment): array
     {
         return array_filter([
             'project_id' => filled($investment['project_id'] ?? null) ? (int) $investment['project_id'] : null,
+            'group_id' => filled($investment['group_id'] ?? null) ? (int) $investment['group_id'] : null,
             'payment_method' => array_key_exists((string) ($investment['payment_method'] ?? ''), Investment::PAYMENT_METHODS) ? $investment['payment_method'] : null,
             'invested_at' => filled($investment['invested_at'] ?? null) ? (string) $investment['invested_at'] : null,
             'channel_partner_id' => filled($investment['channel_partner_id'] ?? null)

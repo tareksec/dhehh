@@ -12,6 +12,7 @@ use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
 use App\Services\Crm\AiSettingsService;
 use App\Services\PayStationClient;
+use App\Services\StorefrontNotificationService;
 use App\Services\StorefrontMetaTrackingService;
 use App\Services\WooCommerceImportService;
 use App\Services\WooCommerceOrderSyncService;
@@ -47,7 +48,10 @@ use Livewire\Attributes\Locked;
  * Single, complete editable settings page for every integration this app
  * connects to: AI Integration (one config per AI-powered tool), WooCommerce
  * (credentials, order-webhook test/sync, and the full product import),
- * Payment Gateway (ZiniPay/PayStation credentials and base URLs), and the
+ * Payment Gateway (ZiniPay/PayStation credentials and base URLs), SMS Gateway
+ * (URL template, API key, sender ID — stored in the SMS keys of
+ * `notification_credentials`, merged so the mail/WhatsApp keys edited on
+ * Storefront Settings are kept), and the
  * entire Meta Pixel & Conversions API configuration — connection, consent,
  * browser/status events, purchase timing, and the Event Log & Retries table
  * (embedded via App\Livewire\MetaEventLogTable, the same
@@ -125,6 +129,7 @@ class Integrations extends Page
             'online_payment_enabled' => $setting?->online_payment_enabled ?? false,
             'online_payment_gateway' => $setting?->online_payment_gateway ?? 'zinipay',
             'payment_credentials' => $setting?->payment_credentials ?? [],
+            'notification_credentials' => Arr::only((array) $setting?->notification_credentials, StorefrontNotificationService::SMS_CREDENTIAL_KEYS),
             ...array_merge($this->metaFieldDefaults(), $setting?->only($this->metaFields()) ?? []),
         ]);
     }
@@ -253,6 +258,7 @@ class Integrations extends Page
                 'vision_enabled', 'image_model_enabled', 'image_api_format', 'image_provider', 'image_base_url', 'image_model',
                 'voice_enabled', 'voice_provider', 'voice_base_url', 'voice_model',
                 'review_mode', 'daily_run_limit', 'max_run_tokens', 'daily_budget_usd', 'input_cost_per_million', 'output_cost_per_million', 'sales_follow_ups_enabled', 'follow_up_delay_hours', 'follow_up_template', 'follow_up_template_language',
+                'proactive_mode_enabled', 'objection_handling_enabled', 'cross_sell_enabled', 'personalization_enabled',
             ] as $key) {
                 $fill[$prefix.$key] = $ai[$key];
             }
@@ -475,6 +481,10 @@ class Integrations extends Page
                     : 'Stored encrypted per company.')
                 ->visible(fn (Get $get): bool => (bool) $get("{$prefix}voice_enabled"));
             $fields[] = Toggle::make("{$prefix}review_mode")->label('Draft replies for staff review')->helperText('Suggestions appear in CRM → Sales Automation. No automatic reply is sent in this mode.');
+            $fields[] = Toggle::make("{$prefix}proactive_mode_enabled")->label('Proactive follow-up questions')->helperText('After fully answering, the agent may also ask one natural next-step question (size/colour, quantity, delivery area) to help move the sale forward. Off by default: it answers only what was asked.');
+            $fields[] = Toggle::make("{$prefix}objection_handling_enabled")->label('Handle mild price objections')->helperText('A mild "can you reduce it a bit?" message reaches the agent, which may restate value or ask a clarifying question — grounded in real catalog facts, never an invented discount. Off by default: any discount/bargaining language always hands off to a human.');
+            $fields[] = Toggle::make("{$prefix}cross_sell_enabled")->label('Suggest related products (cross-sell)')->helperText('Lets the agent offer one real same-category product alongside its answer. Off by default: the agent only discusses what the customer asked about.');
+            $fields[] = Toggle::make("{$prefix}personalization_enabled")->label('Personalize by purchase history')->helperText('Lets the agent greet a returning customer and reference their past orders. Off by default: no purchase-history signal is shown to the agent.');
             foreach (['daily_run_limit' => 'Daily run limit', 'max_run_tokens' => 'Token budget per run', 'daily_budget_usd' => 'Daily estimated budget (USD)', 'input_cost_per_million' => 'Input price per million tokens (USD)', 'output_cost_per_million' => 'Output price per million tokens (USD)', 'follow_up_delay_hours' => 'Sales follow-up delay (hours)'] as $key => $label) {
                 $fields[] = TextInput::make($prefix.$key)->label($label)->numeric()->minValue(0)->required();
             }
@@ -1141,6 +1151,31 @@ class Integrations extends Page
                             ])
                             ->columns(2),
 
+                        Tab::make(__('SMS Gateway'))
+                            ->icon(Heroicon::OutlinedDevicePhoneMobile)
+                            ->schema([
+                                Placeholder::make('sms_gateway_note')
+                                    ->hiddenLabel()
+                                    ->content(__('One SMS gateway per site. It sends login OTP codes, password recovery codes, abandoned-cart reminders, and (from the company\'s main site) CRM and lead follow-up SMS.'))
+                                    ->columnSpanFull(),
+                                TextInput::make('notification_credentials.sms_api_url')
+                                    ->label(__('SMS gateway URL template'))
+                                    ->maxLength(500)
+                                    ->placeholder('http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}')
+                                    ->helperText(__('Use the {api_key}, {sender_id}, {phone} and {message} placeholders. Leave empty to turn SMS off for this site.'))
+                                    ->columnSpanFull(),
+                                TextInput::make('notification_credentials.sms_api_key')
+                                    ->label(__('SMS API key'))
+                                    ->password()
+                                    ->revealable()
+                                    ->maxLength(255)
+                                    ->helperText(__('Stored encrypted.')),
+                                TextInput::make('notification_credentials.sms_sender_id')
+                                    ->label(__('SMS sender ID'))
+                                    ->maxLength(100),
+                            ])
+                            ->columns(2),
+
                         Tab::make('Meta Pixel & CAPI')
                             ->icon(Heroicon::OutlinedSignal)
                             ->schema([
@@ -1393,6 +1428,7 @@ class Integrations extends Page
                         'vision_enabled', 'image_model_enabled', 'image_api_format', 'image_provider', 'image_base_url', 'image_model',
                         'voice_enabled', 'voice_provider', 'voice_base_url', 'voice_model',
                         'review_mode', 'daily_run_limit', 'max_run_tokens', 'daily_budget_usd', 'input_cost_per_million', 'output_cost_per_million', 'sales_follow_ups_enabled', 'follow_up_delay_hours', 'follow_up_template', 'follow_up_template_language',
+                        'proactive_mode_enabled', 'objection_handling_enabled', 'cross_sell_enabled', 'personalization_enabled',
                     ])->mapWithKeys(fn ($key) => [$key => $state[$prefix.$key] ?? null])->all(),
                     'api_key' => $state["{$prefix}api_key"] ?? null,
                     'image_api_key' => $state["{$prefix}image_api_key"] ?? null,
@@ -1403,11 +1439,18 @@ class Integrations extends Page
 
         $active = $this->activeSetting();
 
+        // notification_credentials also holds mail/WhatsApp keys edited on Storefront Settings; only touch the SMS ones.
+        $state['notification_credentials'] = array_merge(
+            (array) $active?->notification_credentials,
+            Arr::only((array) ($state['notification_credentials'] ?? []), StorefrontNotificationService::SMS_CREDENTIAL_KEYS),
+        );
+
         StorefrontSetting::withoutGlobalScopes()->updateOrCreate(
             $active
                 ? ['id' => $active->getKey(), 'company_id' => $company->getKey()]
                 : ['company_id' => $company->getKey(), 'site_type' => StorefrontSetting::SITE_BLADE],
             Arr::only($state, [
+                'notification_credentials',
                 'woocommerce_base_url',
                 'woocommerce_credentials',
                 'website_api_credentials',

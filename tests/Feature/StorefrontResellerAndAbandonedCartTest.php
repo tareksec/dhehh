@@ -52,7 +52,7 @@ class StorefrontResellerAndAbandonedCartTest extends TestCase
         $this->assertSame($company->getKey(), $customer->company_id);
     }
 
-    public function test_approved_reseller_stays_approved_on_reapplication(): void
+    public function test_approved_reseller_is_left_untouched_by_the_plain_form_on_reapplication(): void
     {
         $company = $this->createStore('reseller2.example.test');
 
@@ -66,13 +66,18 @@ class StorefrontResellerAndAbandonedCartTest extends TestCase
             'is_active' => true,
         ]);
 
+        // A number that already belongs to a customer is proven by SMS on the
+        // reseller portal (owner decision 2026-10-12); this plain form leaves it alone.
         $this->post('http://reseller2.example.test/reseller', [
-            'name' => 'Approved Reseller',
+            'name' => 'Someone Else',
             'phone' => '01822222222',
-            'business_name' => 'Approved Traders',
-        ])->assertRedirect();
+            'business_name' => 'Hijack Traders',
+        ])->assertSessionHasErrors('phone');
 
-        $this->assertSame('approved', Customer::withoutGlobalScopes()->where('phone', '01822222222')->first()->reseller_status);
+        $reseller = Customer::withoutGlobalScopes()->where('phone', '01822222222')->sole();
+        $this->assertSame('approved', $reseller->reseller_status);
+        $this->assertSame('Approved Reseller', $reseller->name);
+        $this->assertNull($reseller->business_name);
     }
 
     public function test_reseller_preview_is_limited_to_the_staff_members_own_companies(): void

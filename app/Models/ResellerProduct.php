@@ -18,6 +18,7 @@ class ResellerProduct extends Model
         'customer_id',
         'product_id',
         'price',
+        'variant_prices',
         'is_active',
     ];
 
@@ -26,6 +27,7 @@ class ResellerProduct extends Model
         return [
             'is_active' => 'boolean',
             'price' => 'decimal:2',
+            'variant_prices' => 'array',
         ];
     }
 

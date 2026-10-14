@@ -290,7 +290,8 @@ class StorefrontThemeTest extends TestCase
     public function test_theme_page_views_fall_back_to_the_default_view(): void
     {
         $this->assertSame('storefront.products.show', StorefrontThemeRegistry::view(StorefrontThemeRegistry::BUILT_IN, 'products.show'));
-        $this->assertSame('storefront.products.show', StorefrontThemeRegistry::view(StorefrontThemeRegistry::MARKETPLACE_PRO, 'products.show'));
+        $this->assertSame('storefront.themes.marketplace-pro.products.show', StorefrontThemeRegistry::view(StorefrontThemeRegistry::MARKETPLACE_PRO, 'products.show'));
+        $this->assertSame('storefront.cart.show', StorefrontThemeRegistry::view(StorefrontThemeRegistry::NOOR_SOLAR, 'cart.show'));
         $this->assertSame(
             'storefront.themes.marketplace-pro.partials.layout.header',
             StorefrontThemeRegistry::view(StorefrontThemeRegistry::MARKETPLACE_PRO, 'partials.layout.header')

@@ -113,14 +113,14 @@ class OrderTrackController extends Controller
             'time' => $update['time'],
             'type' => $update['type'],
             'title' => match ($update['type']) {
-                StorefrontOrderTrackingService::TYPE_DELIVERY => 'Delivery status updated',
-                StorefrontOrderTrackingService::TYPE_ORDER => 'Order status updated',
-                default => 'Courier status updated',
+                StorefrontOrderTrackingService::TYPE_DELIVERY => __('Delivery status updated'),
+                StorefrontOrderTrackingService::TYPE_ORDER => __('Order status updated'),
+                default => __('Courier status updated'),
             },
             'message' => match ($update['type']) {
-                StorefrontOrderTrackingService::TYPE_DELIVERY => 'Delivery status updated to '.$update['label'].'.',
-                StorefrontOrderTrackingService::TYPE_ORDER => 'Order status updated to '.$update['label'].'.',
-                default => trim($update['label'].($update['note'] ? ': '.$update['note'] : '.')),
+                StorefrontOrderTrackingService::TYPE_DELIVERY => __('Delivery status updated to :status.', ['status' => __($update['label'])]),
+                StorefrontOrderTrackingService::TYPE_ORDER => __('Order status updated to :status.', ['status' => __($update['label'])]),
+                default => trim(__($update['label']).($update['note'] ? ': '.$update['note'] : '.')),
             },
         ]);
     }

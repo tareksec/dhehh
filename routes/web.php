@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\ExpenseScanImageController;
 use App\Http\Controllers\Admin\InvestmentDocumentDownloadController;
 use App\Http\Controllers\Admin\InvestmentReportController;
 use App\Http\Controllers\Admin\InvestorContractDownloadController;
+use App\Http\Controllers\Admin\InvestorPortalOpenController;
 use App\Http\Controllers\Admin\LegacyAdminClusterRedirectController;
 use App\Http\Controllers\Admin\OrderPdfController;
 use App\Http\Controllers\Admin\ProductCsvController;
@@ -28,6 +29,7 @@ use App\Http\Controllers\MobileCrashReportController;
 use App\Http\Controllers\PayStationWebhookController;
 use App\Http\Controllers\QuotationPublicController;
 use App\Http\Controllers\Reseller\ResellerGuideController;
+use App\Http\Controllers\Reseller\ResellerOnlinePaymentReturnController;
 use App\Http\Controllers\Reseller\ResellerProductPhotosController;
 use App\Http\Controllers\Storefront\AccountAuthController as StorefrontAccountAuthController;
 use App\Http\Controllers\Storefront\AccountController as StorefrontAccountController;
@@ -49,6 +51,8 @@ use App\Http\Controllers\Storefront\ProductReviewController as StorefrontProduct
 use App\Http\Controllers\Storefront\ProductShowController as StorefrontProductShowController;
 use App\Http\Controllers\Storefront\ResellerController;
 use App\Http\Controllers\Storefront\ResellerStoreController;
+use App\Http\Controllers\Storefront\SeoFilesController;
+use App\Http\Controllers\WhatsAppWebWebhookController;
 use App\Http\Controllers\WooCommerceWebhookController;
 use App\Http\Controllers\ZiniPayWebhookController;
 use App\Http\Middleware\ResolveCompanyFromDomain;
@@ -83,6 +87,16 @@ Route::post('/webhooks/meta', [MetaWebhookController::class, 'handle'])
     ->middleware('throttle:600,1')
     ->name('webhooks.meta.handle');
 
+// Signed (HMAC) by the self-hosted whatsapp-bridge; see WhatsAppWebWebhookController.
+Route::middleware('throttle:600,1')->group(function (): void {
+    Route::post('/webhooks/whatsapp-web/{channel}', [WhatsAppWebWebhookController::class, 'handle'])
+        ->whereNumber('channel')
+        ->name('webhooks.whatsapp-web.handle');
+    Route::post('/webhooks/whatsapp-web/{channel}/media', [WhatsAppWebWebhookController::class, 'media'])
+        ->whereNumber('channel')
+        ->name('webhooks.whatsapp-web.media');
+});
+
 Route::middleware('throttle:30,1')->group(function (): void {
     Route::get('/o/{token}', [ChatOrderController::class, 'show'])
         ->name('chat-order.show');
@@ -93,6 +107,14 @@ Route::middleware('throttle:30,1')->group(function (): void {
 Route::middleware(ResolveCompanyFromDomain::class.':optional')
     ->get('/pages/{slug}', [StorefrontPageController::class, 'show'])
     ->name('storefront.pages.show');
+
+// robots.txt and the sitemap answer for whichever domain asks; the app's own
+// domain has no company, so it keeps the admin-only rules and has no sitemap.
+Route::middleware(ResolveCompanyFromDomain::class.':optional')->group(function (): void {
+    Route::get('/robots.txt', [SeoFilesController::class, 'robots'])->name('storefront.robots');
+    Route::get('/sitemap.xml', [SeoFilesController::class, 'sitemap'])->name('storefront.sitemap');
+    Route::get('/sitemap-{page}.xml', [SeoFilesController::class, 'sitemap'])->whereNumber('page')->name('storefront.sitemap.page');
+});
 
 Route::get('/storefront', [StorefrontPreviewController::class, 'home'])
     ->name('storefront.preview.index');
@@ -452,7 +474,7 @@ Route::middleware([ResolveCompanyFromDomain::class, ResolveResellerFromSlug::cla
 
 // The reseller portal's own product-photos download (Phase 4 of
 // 13_RESELLER_PORTAL_PLAN.md). Path-prefixed with "portal" so
-// RestrictResellerPortalHost's allow-list lets it through on the portal
+// RestrictPortalHosts's allow-list lets it through on the portal
 // host; it needs the portal's own company resolution and login, which the
 // Filament panel's middleware stack normally provides, so both are applied
 // explicitly here since this is a plain route, not a panel page.
@@ -460,8 +482,15 @@ Route::get('/portal/products/{product}/photos', ResellerProductPhotosController:
     ->middleware([ResolveCompanyFromResellerPortalDomain::class, 'auth:customer'])
     ->name('reseller.portal.products.photos');
 
+// Where the online gateway sends a reseller back after paying an own-courier
+// advance. Signed, so no login is needed to land here; the page it ends on
+// (the portal's Orders) asks for one.
+Route::get('/portal/orders/payment/{payment}/return', ResellerOnlinePaymentReturnController::class)
+    ->middleware(ResolveCompanyFromResellerPortalDomain::class)
+    ->name('reseller.portal.orders.payment-return');
+
 // The public reseller guide (rules before applying), on the portal host only;
-// RestrictResellerPortalHost keeps "/portal/*" off every other host.
+// RestrictPortalHosts keeps "/portal/*" off every other host.
 Route::get('/portal/guide', ResellerGuideController::class)
     ->middleware(ResolveCompanyFromResellerPortalDomain::class)
     ->name('reseller.portal.guide');
@@ -685,6 +714,17 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/admin/investment-documents/{document}/download', InvestmentDocumentDownloadController::class)
         ->whereNumber('document')
         ->name('investment-documents.download');
+
+    // "Open investor portal" on an investor's / channel partner's page: opens in a new tab and sends it on to the portal host with a one-time token.
+    Route::get('/admin/investor-portal/investors/{investor}/open', [InvestorPortalOpenController::class, 'investor'])
+        ->whereNumber('investor')
+        ->middleware('throttle:30,1')
+        ->name('investor-portal.open-investor');
+
+    Route::get('/admin/investor-portal/channel-partners/{partner}/open', [InvestorPortalOpenController::class, 'partner'])
+        ->whereNumber('partner')
+        ->middleware('throttle:30,1')
+        ->name('investor-portal.open-partner');
 
     Route::get('/admin/investments/settlement-payouts/{payout}/report', [InvestmentReportController::class, 'investorPayout'])
         ->whereNumber('payout')

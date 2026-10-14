@@ -129,3 +129,23 @@ No new environment variables. `SESSION_DOMAIN` stays empty, so the portal login 
 - What the domain shows: the reseller's store only; the portal stays on its own host.
 - Who gets it: a company-level switch; when on, all approved resellers.
 - Open (technical, to confirm before building): Caddy on-demand TLS vs Coolify API for custom-domain SSL.
+
+### Phase 7 follow-up: automatic subdomain DNS + SSL via Cloudflare (owner, 2026-10-10)
+
+- **Owner decision:** reseller store subdomains get their DNS and SSL through **Cloudflare**. The app side is built (the My Store card counts down and checks the address until it opens over HTTPS; `/internal/tls-ask` approves approved resellers' subdomains). What remains is the one-time Cloudflare setup, not per-reseller work.
+- **Plan:** in the company domain's Cloudflare zone, add one wildcard record (`*.offer.zamzamint.com` for Zam Zam International) pointing at the server, so every future subdomain resolves with no per-reseller DNS call. SSL comes from Cloudflare in front of the server. Creating a record per subdomain through the Cloudflare API was not built and is not needed while the wildcard record exists.
+- **To confirm against the live Cloudflare account before building anything more** (not decided, nothing invented here):
+  - Whether the wildcard record is proxied (orange cloud) or DNS-only. This changes `TRUSTED_PROXY_HOPS` (2 behind Cloudflare + Traefik, 1 behind Traefik only) and which SSL mode is used between Cloudflare and the server.
+  - Whether Cloudflare's free Universal certificate is enough: it covers `*.zamzamint.com`, not a second-level name such as `*.offer.zamzamint.com`. If subdomains stay under `offer.`, a wider certificate (a paid Cloudflare option, or an origin/Traefik wildcard certificate) is needed.
+  - Whether the Set-up time default (10 minutes) matches how long Cloudflare takes on the live account.
+- Deployment steps: `docs/deployment.md` → "Reseller store subdomains".
+
+## 11. Owner decisions (2026-10-12) — to build, not built yet
+
+Asked one by one; the owner's answers, nothing added by us:
+
+1. **Products with variations (size / colour, each with its own price).** The admin sets the price the reseller pays for **each variation** (its wholesale / "cost" price). The reseller can still **change the customer price** of a variation (commission = the reseller's price minus that wholesale price, same as ordinary products). **The wholesale price must never be shown on a reseller's storefront.** Orders for variations can then be made from the portal.
+2. **A cancelled order that was paid from the reseller's deposit:** the amount goes **back to the deposit automatically**.
+3. **Admin deposit page:** a list of each reseller's deposit with every entry, plus **adjustments (add / deduct) that require a reason and are logged**.
+4. **Payment methods the reseller sends the advance to:** the admin **chooses from the payment methods already set up on the Integrations side**, and Reseller Settings can also **add methods that are only for the reseller panel** when needed; the reseller sees both. Changing the storefront's list does not change the reseller-only ones.
+5. **Applying with a phone number that already belongs to a customer:** the applicant must **prove they own the number with an SMS code** before the old customer record is used. (Needs the company's SMS gateway; each code costs one SMS.)

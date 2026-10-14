@@ -29,7 +29,7 @@ return new class extends Migration
             $table->string('label')->nullable();
             $table->foreignId('uploaded_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
-            $table->index(['company_id', 'documentable_type', 'documentable_id']);
+            $table->index(['company_id', 'documentable_type', 'documentable_id'], 'investment_documents_company_documentable_index');
         });
     }
 

@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\AuditLog;
+use App\Models\InvestorPortalAccount;
 use App\Models\User;
+use App\Support\InvestorPortalStaffPreview;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -25,6 +27,8 @@ class AuditLogService
         AuditLog::query()->create([
             'company_id' => $companyId,
             'user_id' => $this->actorId(),
+            'actor_type' => $this->portalActor()?->getMorphClass(),
+            'actor_id' => $this->portalActor()?->getKey(),
             'action' => $action,
             'auditable_type' => $auditableType,
             'auditable_id' => $auditableId,
@@ -46,7 +50,33 @@ class AuditLogService
     {
         $actor = Auth::user();
 
-        return $actor instanceof User ? $actor->getKey() : null;
+        if ($actor instanceof User) {
+            return $actor->getKey();
+        }
+
+        // A staff member looking at the investor portal as someone
+        // (InvestorPortalStaffPreview): what is recorded is theirs, not the investor's.
+        if ($actor instanceof InvestorPortalAccount && InvestorPortalStaffPreview::isFor($actor)) {
+            return InvestorPortalStaffPreview::current()['staff_user_id'];
+        }
+
+        return null;
+    }
+
+    /**
+     * A signed-in portal user (investor-portal account, reseller) who is not
+     * staff. Stored in actor_type/actor_id so their own actions are attributed
+     * without ever being mistaken for a staff user id.
+     */
+    protected function portalActor(): ?Model
+    {
+        $actor = Auth::user();
+
+        if ($actor instanceof InvestorPortalAccount && InvestorPortalStaffPreview::isFor($actor)) {
+            return null;
+        }
+
+        return $actor instanceof Model && ! $actor instanceof User ? $actor : null;
     }
 
     protected function companyIdFor(string|Model $auditable): ?int

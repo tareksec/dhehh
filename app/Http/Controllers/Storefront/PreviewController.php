@@ -10,6 +10,7 @@ use App\Models\ProductCarousel;
 use App\Models\StorefrontSetting;
 use App\Models\StorefrontSlide;
 use App\Services\CompanyContext;
+use App\Support\StorefrontListingFilters;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -55,6 +56,7 @@ class PreviewController extends Controller
 
         $sort = $request->string('sort')->value();
         $search = trim((string) $request->string('q'));
+        $filters = StorefrontListingFilters::fromRequest($request);
 
         return StorefrontThemeRegistry::page('products.index', [
             'company' => $company,
@@ -71,6 +73,7 @@ class PreviewController extends Controller
                 ->where('status', Product::STATUS_AVAILABLE)
                 ->when($category, fn ($query) => $query->whereBelongsTo($category))
                 ->when($search !== '', fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")))
+                ->tap(fn ($query) => $filters->apply($query))
                 ->when($sort === 'price_asc', fn ($query) => $query->orderByRaw('COALESCE(sale_price, price) asc'))
                 ->when($sort === 'price_desc', fn ($query) => $query->orderByRaw('COALESCE(sale_price, price) desc'))
                 ->when(! in_array($sort, ['price_asc', 'price_desc'], true), fn ($query) => $query->latest())
@@ -78,6 +81,7 @@ class PreviewController extends Controller
                 ->withQueryString(),
             'sort' => $sort,
             'search' => $search,
+            'filters' => $filters,
         ]);
     }
 

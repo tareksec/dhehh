@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -62,6 +63,8 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
         'reseller_note',
         'reseller_slug',
         'reseller_subdomain',
+        'reseller_subdomain_changed_at',
+        'reseller_subdomain_live_at',
         'reseller_custom_domain',
         'reseller_custom_domain_verified_at',
         'reseller_store_name',
@@ -97,6 +100,8 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
         'login_otp_attempts' => 'integer',
         'opted_out_at' => 'datetime',
         'reseller_custom_domain_verified_at' => 'datetime',
+        'reseller_subdomain_changed_at' => 'datetime',
+        'reseller_subdomain_live_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -152,6 +157,11 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
             ->withTimestamps();
     }
 
+    public function depositEntries(): HasMany
+    {
+        return $this->hasMany(ResellerDepositEntry::class);
+    }
+
     public function resellerCommissions(): HasMany
     {
         return $this->hasMany(ResellerCommission::class);
@@ -185,7 +195,9 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
 
         $subdomainHost = $this->company?->resellerSubdomainHost($this->reseller_subdomain);
 
-        if ($subdomainHost) {
+        // While a new subdomain is still being set up, share the long link
+        // (which already works) instead of an address that does not open yet.
+        if ($subdomainHost && $this->resellerSubdomainIsReady()) {
             return 'https://'.$subdomainHost;
         }
 
@@ -213,6 +225,36 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
     protected function logoUrl(?string $path): ?string
     {
         return filled($path) ? CompanyMedia::publicUrl($path, $this->company) : null;
+    }
+
+    /**
+     * A chosen subdomain is ready once its DNS + SSL answered (live_at), or
+     * the company's set-up time has passed since it was chosen. A subdomain
+     * chosen before this was tracked (no changed_at) is already live.
+     */
+    public function resellerSubdomainIsReady(): bool
+    {
+        if (blank($this->reseller_subdomain)) {
+            return false;
+        }
+
+        if ($this->reseller_subdomain_live_at !== null || $this->reseller_subdomain_changed_at === null) {
+            return true;
+        }
+
+        return ! $this->resellerSubdomainReadyAt()->isFuture();
+    }
+
+    /** When a newly chosen subdomain is expected to be live (changed_at + the company's set-up minutes). */
+    public function resellerSubdomainReadyAt(): ?Carbon
+    {
+        if ($this->reseller_subdomain_changed_at === null) {
+            return null;
+        }
+
+        $minutes = (int) ($this->company?->storefrontSetting?->reseller_subdomain_setup_minutes ?? 10);
+
+        return $this->reseller_subdomain_changed_at->copy()->addMinutes(max(1, $minutes));
     }
 
     /** Their own domain is saved, verified, and the company still allows custom domains. */
