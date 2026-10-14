@@ -29,6 +29,11 @@ class Agreements extends Page
 
     protected string $view = 'filament.investor.pages.agreements';
 
+    public static function getNavigationGroup(): ?string
+    {
+        return __('Account');
+    }
+
     public static function getNavigationLabel(): string
     {
         return __('Agreements');

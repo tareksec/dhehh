@@ -2,6 +2,25 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-14 - Investor portal redesign (design G)
+
+Owner reviewed six HTML directions on the design canvas and decided: "B এর মেনু অপশন গুলো থাকবে কিন্তু ডিজাইন হবে F এর" (B's menu, F's design). Mock-up of the result: canvas row G (desktop, phone dashboard, phone menu).
+
+What changed:
+- Navigation groups Overview / Money / Account (+ the existing Channel partner group) on the portal pages; panel without a top bar, user menu in the sidebar, ink primary colour, Hind Siliguri, new `resources/css/filament/investor/theme.css`.
+- Dashboard rebuilt as tiles: hero totals, capital-by-group ring, project tiles (ten-block progress; all old card texts and `data-project-card` kept), this year's project calendar, next-payout steps, profit chart, latest statement.
+- English / বাংলা switch (`investor/language/{locale}`, `SetInvestorPortalLocale`): session first, then the account's `locale` (was never set before, so no one's portal changes until they switch). Switching also sets the account's SMS language. Staff preview: browser only.
+- Phone bottom menu (render hook `BODY_END`).
+- The sidebar shows only a real dark logo; when a company has none, its light logo sits on a white chip (`darkLogoUrl(fallbackToLight: false)` for this panel).
+
+Not done: Bangla digits (numbers stay 0-9, as everywhere in the app; i18n plan `digit_style`); dates on cards still use the English `d M Y` format. Not checked in a real browser yet — only by tests and the built CSS.
+
+Needs Bangla review: 18 new keys (Overview, Investments, Menu, Quick menu, Language, Legend, Capital by group, Across :count groups, Project calendar :year, Next payout, Now, Upcoming, Done, In progress, Still to come, Payment sent, Profit confirmed, Screenshot added).
+
+Tests: 6 new (dashboard tiles, payout steps until the screenshot, calendar year, grouped menu + phone menu, language switch for signed-in and guest).
+
+Commit status: committed and pushed to claude/nifty-carson-r2vpby on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+
 ## 2026-10-13 - Read-only data feed for IMS
 
 Owner asked "যা চায় করে দেও" after sharing IMS's `ERP-INTEGRATION-REQUIREMENTS.md` (IMS wants to pull the ERP's business data). Built the read-only feed `/api/v1/sync/*` (uncommitted, on top of the investor-group work).
@@ -20,7 +39,7 @@ Needs Bangla review: the 3 new key-type strings in `lang/bn.json`.
 
 Tests: `ImsSyncApiTest` (21). Mutation-checked: dropping the cursor tie-break, making `updated_since` exclusive, disabling the scope check, hiding deleted orders and ignoring the time offset each make a test fail.
 
-Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
 
 ## 2026-10-12 - Investor groups, steps 1–6: final check
 
@@ -41,7 +60,7 @@ Needs Bangla review: the 4 new keys (e.g. "Project completed message" → "প�
 
 Tests: `ProjectCompletedMessageTest` (9): empty message sends nothing but logs, placeholders, no double send, leaver included / earlier leaver not, opt-out, no gateway, failing gateway, settings page.
 
-Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
 
 ## 2026-10-12 - Investor groups, step 5 (G5): the investor portal (progress bar, completed state, totals)
 
@@ -62,7 +81,7 @@ Needs Bangla review: the 18 new keys (e.g. "Project :number completed" → "প�
 
 Tests: `InvestorPortalGroupViewTest` (14): progress at 0/49/98%, completed state, settled and paid states, the card leaving when paid + screenshot, open group, one card for two deposits, no leakage between investors, capital at work / total invested / statement balance, a leaver's capital until the last payout, old-style projects unchanged, partner capital.
 
-Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
 
 ## 2026-10-12 - Investor groups, step 4 (G4): the payment screenshot
 
@@ -80,7 +99,7 @@ Needs Bangla review: the 9 new keys (e.g. "Payment screenshot" → "পেমে
 
 Tests: `PayoutPaymentProofTest` (12). Mutation-checked: widening the portal scope to every payout's proof fails the suite.
 
-Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
 
 ## 2026-10-12 - Investor groups, step 3 (G3): new money into open groups, leaving a group, what a group pays
 
@@ -106,7 +125,7 @@ Needs Bangla review: the 23 new keys (e.g. "Add to group", "Principal returned" 
 
 Tests: `InvestorGroupMoneyFlowsTest` (18) and `InvestorGroupExitTest` (11) new; two old tests updated for the new field name / wording (`InvestmentSettlementTest` election action, `InvestorImportTest` message). Mutation-checked: returning the principal to everyone, or leaving one project late, fails the suite. Full `php artisan test`: see the line at the end of this entry.
 
-Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
 
 ## 2026-10-12 - Investor groups, step 2 (G2): the 2-month cycle and the capital-base warning
 
@@ -128,7 +147,7 @@ Needs Bangla review: the 13 new keys (e.g. "Start the next project now" → "প
 
 Tests: `InvestorGroupCycleTest` (22) new. Mutation-checked: making the end date inclusive-exclusive the other way, or dropping the missed-cycle check, fails the suite. Full `php artisan test`: see below.
 
-Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
 
 ## 2026-10-12 - Investor groups, step 1 (G1): groups, members, Project 1, backfill
 

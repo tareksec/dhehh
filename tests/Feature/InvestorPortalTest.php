@@ -322,6 +322,53 @@ class InvestorPortalTest extends TestCase
             ->assertSee('http://investor.menu.example.test/investor/profile', false);
     }
 
+    public function test_the_menu_is_grouped_and_phones_get_a_bottom_menu(): void
+    {
+        $company = $this->company('groups.example.test');
+        [$project, $investorA] = $this->settledProject($company, confirm: true);
+        $this->actingAs($this->activeAccount($company, $investorA), 'investor');
+
+        $this->get('http://investor.groups.example.test/investor/dashboard')
+            ->assertOk()
+            ->assertSeeInOrder(['Overview', 'Dashboard', 'My investments', 'Statement', 'Money', 'Payouts', 'Requests', 'Account', 'Documents', 'Agreements', 'Profile'])
+            ->assertSee('fi-investor-mobile-nav', false)
+            ->assertSee('Quick menu');
+    }
+
+    public function test_the_language_switch_turns_the_portal_bangla_and_remembers_it_on_the_account(): void
+    {
+        $company = $this->company('lang.example.test');
+        [$project, $investorA] = $this->settledProject($company, confirm: true);
+        $account = $this->activeAccount($company, $investorA);
+        $this->actingAs($account, 'investor');
+        $base = 'http://investor.lang.example.test/investor';
+
+        $this->get($base.'/dashboard')->assertOk()->assertSee('Capital at work');
+
+        $this->from($base.'/payouts')->get($base.'/language/bn')->assertRedirect($base.'/payouts');
+        $this->assertSame('bn', $account->fresh()->locale);
+        $this->get($base.'/dashboard')->assertOk()->assertSee('খাটছে এমন মূলধন');
+
+        // A fresh browser of the same person keeps Bangla from the account.
+        $this->flushSession();
+        $this->actingAs($account->fresh(), 'investor');
+        $this->get($base.'/dashboard')->assertOk()->assertSee('খাটছে এমন মূলধন');
+
+        $this->get($base.'/language/fr')->assertNotFound();
+        $this->from('https://elsewhere.example.test/')->get($base.'/language/en')->assertRedirect($base.'/dashboard');
+        $this->assertSame('en', $account->fresh()->locale);
+    }
+
+    public function test_the_sign_in_page_has_the_language_switch_and_a_guest_choice_stays_in_the_browser(): void
+    {
+        $this->company('guest.example.test');
+        $base = 'http://investor.guest.example.test/investor';
+
+        $this->followingRedirects()->get($base)->assertOk()->assertSee($base.'/language/bn', false);
+        $this->get($base.'/language/bn')->assertRedirect();
+        $this->assertSame('bn', session('investor_portal_locale'));
+    }
+
     public function test_another_investors_payout_report_and_documents_are_a_404(): void
     {
         $company = $this->company('scope.example.test');

@@ -179,6 +179,65 @@ class InvestorPortalGroupViewTest extends TestCase
         Livewire::test(Dashboard::class)->assertSeeHtml('data-project-card="payment_pending"');
     }
 
+    // ------------------------------------------------- the dashboard tiles (design G)
+
+    public function test_the_dashboard_tiles_show_the_group_share_the_years_projects_and_the_payout_to_follow(): void
+    {
+        [$group, $me] = $this->settledGroupProject(confirm: true);
+        $this->signIn($me);
+
+        Livewire::test(Dashboard::class)
+            ->assertSee('Welcome, '.$me->name)
+            ->assertSee('Capital by group')
+            ->assertSee('Project calendar 2026')
+            ->assertSeeHtml('data-calendar-state="confirmed"')
+            ->assertSeeHtml('data-calendar-state="running"')
+            ->assertSee('Next payout')
+            ->assertSee('Payment sent');
+
+        $page = new Dashboard;
+        $shares = $page->capitalShares();
+        $this->assertCount(1, $shares);
+        $this->assertSame(100, $shares[0]['percent']);
+        $this->assertSame((string) $group->group_code, $shares[0]['code']);
+
+        $calendar = $page->projectCalendar();
+        $this->assertSame([1, 2], $calendar->first()['entries']->pluck('number')->all());
+        $this->assertSame(['confirmed', 'running'], $calendar->first()['entries']->pluck('state')->all());
+
+        $next = $page->nextPayout();
+        $this->assertSame('payment_pending', $next['card']['state']);
+        $this->assertSame(['done', 'done', 'current', 'next'], array_column($next['steps'], 'state'));
+    }
+
+    public function test_the_payout_to_follow_waits_for_the_screenshot_and_then_leaves(): void
+    {
+        [$group, $me, $payout] = $this->settledGroupProject(confirm: true);
+        $this->signIn($me);
+        app(PayoutCompletionService::class)->markPaid($payout, $this->staff);
+
+        $next = (new Dashboard)->nextPayout();
+        $this->assertSame('paid', $next['card']['state']);
+        $this->assertSame(['done', 'done', 'done', 'current'], array_column($next['steps'], 'state'));
+
+        app(PayoutProofService::class)->attach($payout->fresh(), $this->storedFile('slip.jpg'), $this->staff);
+
+        $page = new Dashboard;
+        $this->assertNull($page->nextPayout());
+        // The finished project stays on the calendar as paid.
+        $this->assertSame(['paid', 'running'], $page->projectCalendar()->first()['entries']->pluck('state')->all());
+    }
+
+    public function test_the_calendar_only_holds_this_years_projects(): void
+    {
+        [$group, $me] = $this->startedGroup([200000]);
+        $this->signIn($me);
+
+        $cards = app(InvestorPortalCards::class);
+        $this->assertCount(1, $cards->calendar($this->accountOf($me), CarbonImmutable::parse('2026-01-10'))->first()['entries']);
+        $this->assertTrue($cards->calendar($this->accountOf($me), CarbonImmutable::parse('2027-06-01'))->isEmpty());
+    }
+
     public function test_an_open_group_tells_the_investor_it_has_not_started(): void
     {
         $group = InvestorGroup::query()->create(['company_id' => $this->company->id]);
@@ -426,6 +485,11 @@ class InvestorPortalGroupViewTest extends TestCase
         Storage::disk('local')->put($path, 'screenshot');
 
         return $path;
+    }
+
+    private function accountOf(Investor $investor): InvestorPortalAccount
+    {
+        return InvestorPortalAccount::query()->where('investor_id', $investor->id)->firstOrFail();
     }
 
     /** Signs the investor in to the portal, as the portal pages need. */

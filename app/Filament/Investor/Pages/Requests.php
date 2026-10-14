@@ -45,6 +45,11 @@ class Requests extends Page implements HasTable
 
     protected string $view = 'filament.investor.pages.table';
 
+    public static function getNavigationGroup(): ?string
+    {
+        return __('Money');
+    }
+
     public static function getNavigationLabel(): string
     {
         return __('Requests');
