@@ -1146,7 +1146,9 @@ class StorefrontSettingResource extends Resource
                 ->collapsed(),
 
             Section::make('Footer Builder')
+                ->key('footer_builder')
                 ->columnSpanFull()
+                ->headerActions([NextjsDesignSections::loadStarterFooterAction()])
                 ->description(__('Add, remove, and reorder the sections shown in the public footer. Leave empty to use the automatic default footer (brand, quick links, contact, bottom bar). Use "Custom links column", "Custom text", "Payment badges" and "Image / badge" to build any extra column you need.'))
                 ->schema([
                     Repeater::make('social_links')
@@ -1295,6 +1297,12 @@ class StorefrontSettingResource extends Resource
                                 ->maxLength(160)
                                 ->placeholder(__('Developed by ...'))
                                 ->helperText(__('Shown in the middle of the bottom bar on the Next.js site.'))
+                                ->visible(fn (Get $get): bool => $get('type') === 'bottom_bar'),
+                            TextInput::make('data.center_url')
+                                ->label(__('Middle text link'))
+                                ->maxLength(500)
+                                ->placeholder('https://example.com')
+                                ->helperText(__('Optional. Makes the middle text a link.'))
                                 ->visible(fn (Get $get): bool => $get('type') === 'bottom_bar'),
                             TextInput::make('data.right_text')
                                 ->label(__('Right-hand text'))

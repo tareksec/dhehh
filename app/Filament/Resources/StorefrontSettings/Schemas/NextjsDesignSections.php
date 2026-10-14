@@ -4,9 +4,11 @@ namespace App\Filament\Resources\StorefrontSettings\Schemas;
 
 use App\Filament\Resources\StorefrontSettings\StorefrontSettingResource;
 use App\Models\Category;
+use App\Models\Company;
 use App\Models\StorefrontPage;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
+use App\Support\StorefrontFooterStarter;
 use App\Support\StorefrontHomeStarter;
 use App\Support\StorefrontSiteDesign;
 use Filament\Actions\Action;
@@ -302,6 +304,81 @@ final class NextjsDesignSections
                     ->body($changed > 0 ? null : __('Every matching category already has its tagline and icon.'))
                     ->send();
             });
+    }
+
+    /**
+     * Fills the Footer Builder (and the Quick links menu) with the starter footer
+     * (StorefrontFooterStarter). Like the starter home page it only changes the form: the owner
+     * reviews the blocks and presses Save changes.
+     */
+    public static function loadStarterFooterAction(): Action
+    {
+        return Action::make('loadStarterFooter')
+            ->label(__('Load the starter footer'))
+            ->icon('heroicon-o-sparkles')
+            ->color('gray')
+            ->visible(fn (Get $get): bool => ($get('site_type') ?: StorefrontSetting::SITE_BLADE) === StorefrontSetting::SITE_NEXTJS)
+            ->requiresConfirmation()
+            ->modalHeading(__('Load the starter footer?'))
+            ->modalDescription(__('This replaces the footer sections below and the footer menu with the starter footer — brand and about text, quick links, customer service, office details, payment badges and the bottom bar. Links to pages such as About or Privacy Policy are added only when a published page with that name exists. Nothing is saved until you press Save changes, and you can edit every word afterwards.'))
+            ->modalSubmitActionLabel(__('Load the starter footer'))
+            ->action(function (Set $set, ?StorefrontSetting $record): void {
+                $companyId = self::companyId($record);
+                $pages = $companyId ? StorefrontPage::withoutGlobalScopes()
+                    ->where('company_id', $companyId)
+                    ->when($record, fn ($query) => $query->forSite($record))
+                    ->where('is_published', true)
+                    ->orderBy('sort_order')
+                    ->orderBy('id')
+                    ->get() : collect();
+                $company = $companyId ? Company::query()->find($companyId) : null;
+
+                $footer = StorefrontFooterStarter::layout($pages, (string) ($company?->name ?: config('app.name')));
+
+                $set('footer_blocks', collect($footer['blocks'])->mapWithKeys(fn (array $block): array => [(string) Str::uuid() => self::footerBlockState($block)])->all());
+                $set('footer_menu', self::keyed($footer['menu']));
+
+                Notification::make()
+                    ->success()
+                    ->title(__('Starter footer loaded'))
+                    ->body($footer['skipped'] === []
+                        ? __('Check the sections, then press Save changes.')
+                        : __('Check the sections, then press Save changes. Not added, because no published page has that name: :links. Create the pages under Site → Pages, then add them to the footer.', ['links' => implode(', ', $footer['skipped'])]))
+                    ->send();
+            });
+    }
+
+    /**
+     * A cleaned footer block as the Footer Builder's fields hold it: the phone numbers in the one
+     * text box (one per line), and the nested lists keyed like the form's own rows.
+     *
+     * @param  array{type: string, data: array<string, mixed>}  $block
+     * @return array{type: string, data: array<string, mixed>}
+     */
+    private static function footerBlockState(array $block): array
+    {
+        $data = $block['data'];
+
+        if (isset($data['phones'])) {
+            $data['phones'] = implode("\n", $data['phones']);
+        }
+
+        foreach (['links', 'items'] as $list) {
+            if (isset($data[$list])) {
+                $data[$list] = self::keyed($data[$list]);
+            }
+        }
+
+        return ['type' => $block['type'], 'data' => $data];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<string, array<string, mixed>>
+     */
+    private static function keyed(array $rows): array
+    {
+        return collect($rows)->mapWithKeys(fn (array $row): array => [(string) Str::uuid() => $row])->all();
     }
 
     /** @return Collection<int, Category> */

@@ -2176,5 +2176,13 @@
     "Fill them": "পূরণ করুন",
     ":count categories updated": ":count টি ক্যাটাগরি আপডেট হয়েছে",
     "Nothing to fill": "পূরণ করার কিছু নেই",
-    "Every matching category already has its tagline and icon.": "মিলে যাওয়া প্রতিটি ক্যাটাগরিতে ট্যাগলাইন ও আইকন আগে থেকেই আছে।"
+    "Every matching category already has its tagline and icon.": "মিলে যাওয়া প্রতিটি ক্যাটাগরিতে ট্যাগলাইন ও আইকন আগে থেকেই আছে।",
+    "Quality gadgets at affordable prices for everyday needs — :name is your trusted online shop.": "নিত্যদিনের প্রয়োজন মেটাতে মানসম্মত গ্যাজেট সাশ্রয়ী দামে — :name আপনার বিশ্বস্ত অনলাইন শপ।",
+    "Load the starter footer": "স্টার্টার ফুটার লোড করুন",
+    "Load the starter footer?": "স্টার্টার ফুটার লোড করবেন?",
+    "This replaces the footer sections below and the footer menu with the starter footer — brand and about text, quick links, customer service, office details, payment badges and the bottom bar. Links to pages such as About or Privacy Policy are added only when a published page with that name exists. Nothing is saved until you press Save changes, and you can edit every word afterwards.": "এটি নিচের ফুটার সেকশন ও ফুটার মেনু বদলে স্টার্টার ফুটার বসাবে — ব্র্যান্ড ও পরিচিতি লেখা, কুইক লিংক, কাস্টমার সার্ভিস, অফিসের তথ্য, পেমেন্ট ব্যাজ ও নিচের বার। About বা Privacy Policy-র মতো পেজের লিংক শুধু তখনই যোগ হবে যখন ওই নামে প্রকাশিত পেজ আছে। সেভ চাপার আগে কিছুই সংরক্ষিত হয় না, আর পরে প্রতিটি লেখা বদলানো যাবে।",
+    "Starter footer loaded": "স্টার্টার ফুটার লোড হয়েছে",
+    "Check the sections, then press Save changes. Not added, because no published page has that name: :links. Create the pages under Site → Pages, then add them to the footer.": "সেকশনগুলো দেখে নিন, তারপর সেভ চাপুন। এই নামে প্রকাশিত কোনো পেজ নেই বলে যোগ হয়নি: :links। সাইট → পেজ থেকে পেজগুলো তৈরি করে ফুটারে যোগ করুন।",
+    "Middle text link": "মাঝের লেখার লিংক",
+    "Optional. Makes the middle text a link.": "ঐচ্ছিক। মাঝের লেখাটিকে লিংক বানায়।"
 }

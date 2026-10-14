@@ -160,9 +160,11 @@ A `null` title means "use the website's own default heading".
 `links` resolved like the menus), `contact_info` (`heading`, `address`, `email`, `phones[]`, `hours`, `trade_license` — blanks are
 filled from the company's own details), `social_links` (`heading`; the profiles are `social_links`), `payment_methods`
 (`heading`, `items: [{label, tone}]`), `custom_text` (`heading`, `text`, `button_label`, `button_url`), `image`
-(`heading`, `image_url`, `alt`, `url`) and `bottom_bar` (`copyright_text`, `center_text`, `right_text` with a `{heart}`
-token, `legal_links: [{label, page_slug}]`). `own_column` (on `social_links`, `custom_text`, `payment_methods`, `image`)
-asks for a column of its own instead of sitting under the previous one.
+(`heading`, `image_url`, `alt`, `url`) and `bottom_bar` (`copyright_text` with `{year}` and `{company_name}` tokens,
+`center_text` and an optional `center_url` that makes it a link, `right_text` with a `{heart}` token,
+`legal_links: [{label, page_slug}]`). The website fills the `{year}` / `{company_name}` tokens itself when it renders.
+`own_column` (on `social_links`, `custom_text`, `payment_methods`, `image`) asks for a column of its own instead of sitting
+under the previous one.
 
 ## 4. Collections, deals and the ERP price
 

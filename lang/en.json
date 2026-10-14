@@ -2176,5 +2176,13 @@
     "Fill them": "Fill them",
     ":count categories updated": ":count categories updated",
     "Nothing to fill": "Nothing to fill",
-    "Every matching category already has its tagline and icon.": "Every matching category already has its tagline and icon."
+    "Every matching category already has its tagline and icon.": "Every matching category already has its tagline and icon.",
+    "Quality gadgets at affordable prices for everyday needs — :name is your trusted online shop.": "Quality gadgets at affordable prices for everyday needs — :name is your trusted online shop.",
+    "Load the starter footer": "Load the starter footer",
+    "Load the starter footer?": "Load the starter footer?",
+    "This replaces the footer sections below and the footer menu with the starter footer — brand and about text, quick links, customer service, office details, payment badges and the bottom bar. Links to pages such as About or Privacy Policy are added only when a published page with that name exists. Nothing is saved until you press Save changes, and you can edit every word afterwards.": "This replaces the footer sections below and the footer menu with the starter footer — brand and about text, quick links, customer service, office details, payment badges and the bottom bar. Links to pages such as About or Privacy Policy are added only when a published page with that name exists. Nothing is saved until you press Save changes, and you can edit every word afterwards.",
+    "Starter footer loaded": "Starter footer loaded",
+    "Check the sections, then press Save changes. Not added, because no published page has that name: :links. Create the pages under Site → Pages, then add them to the footer.": "Check the sections, then press Save changes. Not added, because no published page has that name: :links. Create the pages under Site → Pages, then add them to the footer.",
+    "Middle text link": "Middle text link",
+    "Optional. Makes the middle text a link.": "Optional. Makes the middle text a link."
 }

@@ -2,6 +2,28 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-14 (later) - Starter footer like zamzamint.netlify.app, loaded from the Footer Builder
+
+Owner request (in Bangla): design the footer too, like the reference site.
+
+What I did: read the reference footer's markup and rebuilt it as Footer Builder blocks (`App\Support\StorefrontFooterStarter`): brand with about text and social icons, Quick links, Customer Service, Our Office (address, email, two phones, trade licence), Safety Payments badges (bKash, Nagad, Rocket, Cards) and the bottom bar (copyright, "Developed by Bright Hive Digital", "Developed with ♥ for Bangladesh"). Like the home page it is a button, not something I set in your database (which I cannot reach): after deploying the ERP and the website, open Site → Storefront Settings → the Next.js site → Navigation, menus & SEO → **Footer Builder** → **Load the starter footer** → **Save changes**.
+
+Website: `Footer.tsx` now uses the reference's sizes and colours on a dark footer (headings, links, badges, bottom bar), a wider brand and office column, comma-separated phone numbers, and it fills `{year}` / `{company_name}` in the copyright (the Blade footer already did; the Next.js footer printed the tokens). The bottom bar has a new optional **Middle text link** so "Developed by …" can link out.
+
+Things to know:
+- **Pages:** the links to About Us, Contact Us, Delivery Information, Return/Refund & Exchange, Terms and Privacy Policy go to your own published pages, found by title or slug for the Next.js site. A page that does not exist yet is left out and named in the message after loading; create it under Site → Pages and add the link. I did not create the pages or write their text (policy wording is yours).
+- **Request for Quote / Reselling Program** from the reference are not added: the Next.js site has no such pages yet. **Promotions** links to the discounted-products list (`/products?sort=discount&sale=1`).
+- **Social icons:** the Facebook and WhatsApp icons come from Footer Builder → Social links, as before; the starter does not copy the reference's profile URLs. Add them there if they are not set.
+- **Contact details** are the reference's own (the address in Uttara, info@zamzamint.com, +8801325224400, +8801894449445, trade licence TRAD/DNCC/049335/2025); the about text is the reference's Bangla sentence with the company's name. The "Developed by Bright Hive Digital" line is the reference's too. Edit or delete any of them after loading.
+- The starter replaces the footer blocks and the footer menu in the form (a confirm dialog says so). Nothing is saved until Save changes.
+- The width of the footer follows the rest of the site (a little wider than the reference's), so it lines up with the header and the home page.
+
+Needs Bangla review: 7 new admin labels in `lang/bn.json` (Load the starter footer, its dialog and message, Starter footer loaded, Middle text link and its help). The footer's Bangla about text is the reference's own sentence, not a translation of mine.
+
+Tests: new `NextjsFooterStarterTest` (10); real-browser check on a throwaway database through the real admin (button, confirm dialog, Save, 7 blocks and the 5-link menu persisted, no JS or server errors) and the website footer on desktop and phone, dark and light backgrounds. Website `tsc` and `npm run build` are clean.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট ও পুশ কর এবং মেইনে পুশ কর", 2026-10-14), both repositories; `origin/main` (v2.76.0) merged first.
+
 ## 2026-10-14 - Starter home page like zamzamint.netlify.app, loaded from the Home Page Builder
 
 Owner request (in Bangla): arrange the home page like `https://zamzamint.netlify.app/` with every section — doing it by hand in the admin takes too long.

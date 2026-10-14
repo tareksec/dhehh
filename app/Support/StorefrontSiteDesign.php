@@ -386,6 +386,7 @@ final class StorefrontSiteDesign
             'bottom_bar' => [
                 'copyright_text' => self::text($d['copyright_text'] ?? null, 255),
                 'center_text' => self::text($d['center_text'] ?? null, 160),
+                'center_url' => self::url($d['center_url'] ?? null),
                 'right_text' => self::text($d['right_text'] ?? null, 160),
                 'legal_links' => collect(is_array($d['legal_links'] ?? null) ? $d['legal_links'] : [])
                     ->filter(fn ($link): bool => is_array($link) && filled($link['page_id'] ?? null))
