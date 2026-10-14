@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.76.0] - 2026-10-14
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -15,7 +17,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - Starter home page: new `App\Support\StorefrontHomeStarter` (sections, top bar links, category matching by normalised name, blank-only tagline/icon fills) used by two header actions of the Home Page Builder section (`NextjsDesignSections`: `loadStarterLayout` only sets the form state; `fillCategoryDetails` writes the blank category fields straight away, per category only when the user may update it, always inside the settings row's company). `product_row` data now holds `category_ids` (the old `category_id` is merged in by `StorefrontSiteDesign`); `GET /site` serves `category_slugs` plus `category_slug` (the first) for older websites; `PRODUCT_SOURCES['category']` reads "Chosen categories". 14 new keys in `lang/en.json` and `lang/bn.json`. New `NextjsHomeStarterTest` (11).
-
 ## [2.75.0] - 2026-10-14
 
 **Release type:** Minor Feature Update
