@@ -2,6 +2,16 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-14 (later still) - Agent rule: commit and push new work to a topic-named feature branch
+
+Owner request (in Bangla): add a rule for the agent — after any new work, commit it and push it to a feature branch, and name that branch after the session's relevant topic.
+
+What changed: `CLAUDE.md` → Commit policy. Finished work (tests, bilingual keys, CHANGELOG and UPDATE_NOTES done, checks passing) is committed and pushed to `feature/<topic>` without being asked, in both repositories; one topic per branch; a branch the session's instructions already designate wins. The rule that `main` moves only on the owner's explicit approval stays, because Coolify deploys `main` on push. No force-push or history rewrite on a pushed branch.
+
+Good to know: new sessions start from the default branch, so the rule only reaches them once this branch is merged to `main`. The website repository has no rules file; this one covers it.
+
+Commit status: committed and pushed to `feature/agent-commit-and-branch-rule` (not `main`).
+
 ## 2026-10-14 (later) - Starter footer like zamzamint.netlify.app, loaded from the Footer Builder
 
 Owner request (in Bangla): design the footer too, like the reference site.

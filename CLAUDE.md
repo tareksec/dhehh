@@ -9,7 +9,10 @@ These rules are mandatory for any AI agent working in this repository.
 
 ## Commit policy
 
-- Never `git commit` or `git push` without the owner's explicit approval in the conversation.
+- **New work is committed and pushed to a feature branch as part of the work (owner decision 2026-10-14).** When a piece of work is finished — code, tests, bilingual keys, `CHANGELOG.md` and `UPDATE_NOTES.md` done and the checks under "Verification before handoff" passing — commit it and push it to a feature branch, without waiting to be asked. This applies to this repository and to the website repository (`bhd4232/zamzamint-new-website-theme`), which has no rules file of its own.
+  - **Branch name = the session's topic.** Name the branch after what the work is about, in lower-case English with hyphens, under `feature/` (for example `feature/nextjs-footer-starter`, `feature/reseller-return-charge`). Use the same topic name in both repositories when one task touches both. One topic per branch: follow-up work on the same topic goes to the same branch; an unrelated new topic gets its own branch, started from `main`. If the session's instructions already designate a branch, push to that one instead of inventing another.
+  - **Never push or merge to `main` without the owner's explicit approval in the conversation.** Coolify deploys `main` on push, so the owner decides when it moves (see the error-isolation section: the branch's checks must be green first). A feature branch is not live.
+  - Never force-push or rewrite history on a branch that was already pushed, and never commit secrets, `.env` files or throwaway databases.
 - Never run destructive commands (`migrate:fresh`, broad seeders) against non-demo databases.
 
 ## Business rules
