@@ -4,6 +4,10 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.74.0] - 2026-10-14
+
+**Release type:** Minor Feature Update
+
 ### Added
 
 - **Read-only data feed for IMS (`/api/v1/sync/*`).** The ERP can now be read by IMS (`tareksec/ims`), which asked for products, stock, purchases, suppliers, shipments, sales with their payments, customers and expenses.
@@ -49,7 +53,6 @@ All notable production changes to Business Dashboard are documented here.
 - Step 5: `InvestorPortalCards` (cards: state, progress via `GroupCycleCalendar::progressPercent`, done rule), `InvestorPortalService::capitalAtWork()` / `workingCapital()` / `totalInvested()` / membership-based `statement()` / `partnerSummary()`, partial `filament/investor/pages/partials/project-card.blade.php`. 18 more lang keys (en + bn). Run `npm run build` on deploy (new utility classes in the portal views). Checked in a browser on a disposable database (desktop and phone widths).
 - Tests: `ProjectCompletedMessageTest` (9), `InvestorPortalGroupViewTest` (14), `PayoutPaymentProofTest` (12), `InvestorGroupMoneyFlowsTest` (18) and `InvestorGroupExitTest` (11: notice on/after the boundary, several deposits, everyone leaves, the signed-invoice payouts with a leaver ৳2,077,486.16 and ৳7,748.62 for a stayer, profit-only next project, old projects unchanged, voucher amount of the payout), plus `GroupCycleCalendarTest` (12), `InvestorGroupCycleTest` (22: boundary days, 31st anchor, leap-safe February, missed cycles, one project per confirmation, withdrawn member skipped, settled project untouched, per-company and timezone, scheduler entry), `InvestorGroupTest` (32; includes the signed-invoice figures: pool ৳2,76,005.20, ৳3,874.31 per lakh, ৳7,748.62 for ৳2 lakh, 23.25% a year, and a group project settling exactly like an old-style project). 77 new lang keys (en + bn).
 - Maintenance: added `16_INVESTOR_GROUPS_PLAN.md`, the approved plan for group-based investment (investors join groups, each group runs a new project every calendar 2 months, payment screenshot on payouts, portal progress bar). Planning document only; no code or data changes.
-
 ## [2.73.0] - 2026-10-12
 
 **Release type:** Minor Feature Update
