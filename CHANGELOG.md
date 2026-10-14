@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.77.0] - 2026-10-14
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -18,7 +20,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - Starter footer: new `App\Support\StorefrontFooterStarter::layout()` (blocks, Quick links menu and the labels of page links left out; pages matched by normalised title or slug among the site's published pages, `forSite()`), used by the `loadStarterFooter` header action of the Footer Builder section (`NextjsDesignSections::loadStarterFooterAction()`, section key `footer_builder`, visible on the Next.js row only). It only sets the form state (`footer_blocks`, `footer_menu`). The about text is the reference's Bangla sentence, read from `lang/bn.json` whatever language the admin uses. The contact block carries the reference's own office details (address, email, two phones, trade licence) as editable text; they are not read from another company. No migration. `bottom_bar` data gains `center_url` (`StorefrontSiteDesign::footerBlockData()`, cleaned like other links); the Blade footer ignores it. Website: `Footer.tsx` restyled, `{year}` / `{company_name}` filled in the copyright and middle text, `center_url` rendered as a link. New `NextjsFooterStarterTest` (10).
-
 ## [2.76.0] - 2026-10-14
 
 **Release type:** Minor Feature Update
