@@ -21,7 +21,7 @@ class ResolveCompanyFromApiKey
 {
     public function __construct(protected CompanyContext $context) {}
 
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next, string $scope = CompanyApiKey::SCOPE_WEBSITE): Response
     {
         $token = $request->bearerToken();
 
@@ -41,6 +41,18 @@ class ResolveCompanyFromApiKey
                 'error' => 'invalid_api_key',
                 'hint' => 'This API key is invalid or has been revoked. Generate a new one from ZamZam ERP → Settings → Integrations → Website API.',
             ], 401);
+        }
+
+        // A key only opens the API it was made for: a website key never reads
+        // the purchase and cost feed, and a data-sync key never writes products.
+        if ($apiKey->scope !== $scope) {
+            return response()->json([
+                'ok' => false,
+                'error' => 'wrong_key_scope',
+                'hint' => $scope === CompanyApiKey::SCOPE_SYNC
+                    ? 'This endpoint needs a "Data sync" API key. Generate one from ZamZam ERP → Settings → Integrations → Website API.'
+                    : 'This endpoint needs a "Website" API key; a "Data sync" key can only read /api/v1/sync/*.',
+            ], 403);
         }
 
         if ($apiKey->last_used_at === null || $apiKey->last_used_at->diffInMinutes(now()) >= 1) {

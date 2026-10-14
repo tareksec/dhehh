@@ -4,6 +4,7 @@ namespace App\Filament\Resources\InvestmentProjects\Pages;
 
 use App\Filament\Resources\InvestmentProjects\InvestmentProjectResource;
 use App\Filament\Resources\ProjectSettlements\ProjectSettlementResource;
+use App\Models\InvestmentProject;
 use App\Models\ProjectSettlement;
 use App\Services\Investment\SettlementService;
 use App\Support\MoneyFormatter;
@@ -15,6 +16,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Filament\Schemas\Components\Callout;
 use Filament\Schemas\Components\Utilities\Get;
 
 class ViewInvestmentProject extends ViewRecord
@@ -31,6 +33,21 @@ class ViewInvestmentProject extends ViewRecord
             ->filter(fn ($item): bool => (int) $item->documents_count === 0)
             ->pluck('label')
             ->all();
+    }
+
+    /** Why the warning matters, in plain words. */
+    public static function capitalGapMessage(InvestmentProject $project): string
+    {
+        $gap = (float) $project->capitalBaseGap();
+
+        return __('Investors ৳:investors + company ৳:company = capital base ৳:base, but the landed cost is ৳:landed (:direction by ৳:gap). The profit per lakh is spread over the capital base, so it will differ from a figure worked out on the landed cost. Check the company contribution before settling.', [
+            'investors' => MoneyFormatter::number($project->totalInvested()),
+            'company' => MoneyFormatter::number((float) $project->company_contribution_amount),
+            'base' => MoneyFormatter::number($project->totalCapitalBase()),
+            'landed' => MoneyFormatter::number($project->totalLandedCost()),
+            'direction' => $gap > 0 ? __('the base is higher') : __('the base is lower'),
+            'gap' => MoneyFormatter::number(abs($gap)),
+        ]);
     }
 
     protected function getHeaderActions(): array
@@ -51,12 +68,18 @@ class ViewInvestmentProject extends ViewRecord
                 ->requiresConfirmation()
                 ->modalDescription('This creates a DRAFT settlement and payout schedule from the recorded direct costs. Review it, then Confirm (or Void and recalculate).')
                 ->schema([
+                    Callout::make(__('The capital base is not the landed cost'))
+                        ->description(fn (): string => static::capitalGapMessage($this->record))
+                        ->status('warning')
+                        ->visible(fn (): bool => $this->record->capitalBaseGap() !== null)
+                        ->columnSpanFull(),
                     TextInput::make('total_revenue')->numeric()->prefix('৳')->minValue(0)->required()->live(debounce: 500)
                         ->helperText(fn (Get $get): string => 'বাস্তব বিক্রয় মূল্য (Selling Amount)। Direct cost: '
                             .MoneyFormatter::currency($this->record->totalCostItems())
                             .' → Net: '.MoneyFormatter::currency((float) ($get('total_revenue') ?? 0) - $this->record->totalCostItems())),
                     Select::make('outcome')
-                        ->options(ProjectSettlement::OUTCOMES)
+                        // A group's principal stays invested, so a loss that eats into it waits for the owner's rule.
+                        ->options(fn (): array => $this->record->isGrouped() ? array_diff_key(ProjectSettlement::OUTCOMES, ['loss_investor_borne' => true]) : ProjectSettlement::OUTCOMES)
                         ->default('profit')
                         ->required()
                         ->live()

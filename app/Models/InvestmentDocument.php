@@ -29,6 +29,9 @@ class InvestmentDocument extends Model
 
     public const CATEGORY_PARTNER_AGREEMENT = 'partner_agreement';
 
+    /** The screenshot staff upload after paying a payout (shown to the person paid). */
+    public const CATEGORY_PAYMENT_PROOF = 'payment_proof';
+
     public const CATEGORIES = [
         self::CATEGORY_INVESTOR_NID => 'Investor NID / Passport copy',
         self::CATEGORY_NOMINEE_NID => 'Nominee NID / Passport copy',
@@ -43,6 +46,7 @@ class InvestmentDocument extends Model
         'cost_receipt' => 'Cost Receipt / Invoice',
         'purchase_document' => 'Purchase Document',
         'bank_slip' => 'Bank Slip / Transfer Proof',
+        self::CATEGORY_PAYMENT_PROOF => 'Payment screenshot',
         'signed_contract' => 'Signed Contract',
         'other' => 'Other',
     ];

@@ -5,6 +5,7 @@ namespace App\Services\Investment;
 use App\Models\ChannelPartnerPayout;
 use App\Models\FundSource;
 use App\Models\Investment;
+use App\Models\InvestorGroupMember;
 use App\Models\SettlementPayout;
 use App\Models\User;
 use App\Models\Voucher;
@@ -27,6 +28,13 @@ class InvestmentLedgerService
 
     public function recordInvestmentReceived(Investment $investment): void
     {
+        // A group project's rows are snapshots of the group's members. The
+        // money was booked once, when the member joined the group
+        // (`recordGroupDepositReceived`) -- never a second voucher here.
+        if ($investment->group_member_id) {
+            return;
+        }
+
         $project = $investment->project;
         $fundSource = $project?->receiving_fund_source_id ? FundSource::query()->find($project->receiving_fund_source_id) : null;
 
@@ -52,6 +60,38 @@ class InvestmentLedgerService
                 'transaction_id' => $investment->payment_reference,
                 'confirmation_source' => 'manual',
                 'purpose' => "Mudarabah investor capital — {$investment->investor?->name} — {$investment->project?->project_code}",
+            ], $submitter);
+        });
+    }
+
+    /** The receiving voucher for a deposit into a group (16_INVESTOR_GROUPS_PLAN.md §3.3). */
+    public function recordGroupDepositReceived(InvestorGroupMember $member): void
+    {
+        $group = $member->group;
+        $fundSource = $group?->receiving_fund_source_id ? FundSource::query()->find($group->receiving_fund_source_id) : null;
+
+        if (! $fundSource || (float) $member->amount <= 0) {
+            return;
+        }
+
+        $submitter = User::query()->find($member->received_by);
+
+        if (! $submitter) {
+            return;
+        }
+
+        $this->submitQuietly($member, function () use ($member, $group, $fundSource, $submitter): Voucher {
+            return $this->vouchers->submit([
+                'company_id' => $member->company_id,
+                'type' => Voucher::TYPE_CREDIT,
+                'transaction_type' => 'capital_investment',
+                'amount' => (float) $member->amount,
+                'fund_source_id' => $fundSource->id,
+                'account_id' => $fundSource->account_id,
+                'payment_method' => $member->payment_method,
+                'transaction_id' => $member->payment_reference,
+                'confirmation_source' => 'manual',
+                'purpose' => "Mudarabah investor capital — {$member->investor?->name} — {$group->name} ({$group->group_code})",
             ], $submitter);
         });
     }
@@ -120,7 +160,7 @@ class InvestmentLedgerService
      * swallowed after being reported: booking a voucher is a bookkeeping
      * nicety here, never a reason to lose the underlying investment/payout.
      */
-    private function submitQuietly(Investment|SettlementPayout|ChannelPartnerPayout $record, \Closure $submit): void
+    private function submitQuietly(Investment|InvestorGroupMember|SettlementPayout|ChannelPartnerPayout $record, \Closure $submit): void
     {
         try {
             $voucher = $submit();

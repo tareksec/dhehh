@@ -1,6 +1,4 @@
 @php
-    use App\Models\InvestmentProject;
-    use App\Services\InvestorPortalService;
     use App\Support\MoneyFormatter;
 @endphp
 
@@ -62,57 +60,51 @@
         </div>
 
         <x-filament::section :heading="__('My investments')">
-            @php($investments = $this->investmentCards())
+            @php($board = $this->board())
 
-            @if ($investments->isEmpty())
+            @if ($board['groups']->isEmpty() && $board['legacy']->isEmpty())
                 <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('No investments yet.') }}</p>
             @else
-                <div class="grid gap-4 md:grid-cols-2">
-                    @foreach ($investments as $investment)
-                        @php($project = $investment->project)
-                        @php($settlement = $project?->settlement && in_array($project->settlement->status, InvestorPortalService::FINAL_SETTLEMENT_STATUSES, true) ? $project->settlement : null)
-                        <div class="rounded-xl border border-gray-200 p-4 dark:border-white/10">
-                            <div class="flex items-start justify-between gap-2">
-                                <div class="font-semibold">{{ $this->portal()->projectLabel($project) }}</div>
-                                <x-filament::badge class="shrink-0" :color="$investment->isWithdrawn() ? 'gray' : ($settlement ? 'success' : 'info')">
-                                    @if ($investment->isWithdrawn())
-                                        {{ __('Withdrawn') }}
-                                    @elseif ($settlement)
-                                        {{ __('Settled') }}
+                <div class="space-y-6">
+                    @foreach ($board['groups'] as $section)
+                        <div class="space-y-3" data-investor-group="{{ $section['group']->group_code }}">
+                            <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                                <div class="font-semibold">{{ $section['group']->group_code }} — {{ $section['group']->name }}</div>
+                                <div class="text-sm text-gray-500 dark:text-gray-400">
+                                    @if ($section['leaving'])
+                                        {{ __('You are leaving this group') }}
                                     @else
-                                        {{ __(InvestmentProject::STATUSES[$project?->status] ?? 'Open') }}
+                                        {{ __('Your money in this group: :amount', ['amount' => MoneyFormatter::currency($section['amount'], $currency)]) }}
                                     @endif
-                                </x-filament::badge>
+                                    @if ($section['since'])
+                                        · {{ __('since :date', ['date' => $section['since']->format('d M Y')]) }}
+                                    @endif
+                                </div>
                             </div>
-                            <div class="mt-2 text-lg font-semibold">{{ MoneyFormatter::currency($investment->amount, $currency) }}</div>
-                            <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                                <dt class="text-gray-500 dark:text-gray-400">{{ __('Invested on') }}</dt>
-                                <dd>{{ $investment->invested_at?->format('d M Y') ?? '-' }}</dd>
-                                @if (! $settlement && ! $investment->isWithdrawn() && $investment->invested_at)
-                                    <dt class="text-gray-500 dark:text-gray-400">{{ __('Days running') }}</dt>
-                                    <dd>{{ (int) $investment->invested_at->diffInDays(now()) }}</dd>
-                                @endif
-                                @if ($project?->end_date && ! $settlement)
-                                    <dt class="text-gray-500 dark:text-gray-400">{{ __('Expected end') }}</dt>
-                                    <dd>{{ $project->end_date->format('d M Y') }}</dd>
-                                @endif
-                                @if ($settlement)
-                                    @if ($settlement->rate_per_lac !== null)
-                                        <dt class="text-gray-500 dark:text-gray-400">{{ __('Profit per lakh') }}</dt>
-                                        <dd>{{ MoneyFormatter::currency($settlement->rate_per_lac, $currency) }}</dd>
-                                    @endif
-                                    @if ($settlement->annualized_return_percent !== null)
-                                        <dt class="text-gray-500 dark:text-gray-400">{{ __('Annualized return') }}</dt>
-                                        <dd>{{ MoneyFormatter::number($settlement->annualized_return_percent) }}%</dd>
-                                    @endif
-                                    @if ($settlement->outcome !== 'profit')
-                                        <dt class="text-gray-500 dark:text-gray-400">{{ __('Result') }}</dt>
-                                        <dd>{{ __(\App\Models\ProjectSettlement::OUTCOMES[$settlement->outcome] ?? $settlement->outcome) }}</dd>
-                                    @endif
-                                @endif
-                            </dl>
+
+                            @if ($section['group']->isOpen())
+                                <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('This group has not started yet. Its first project begins when the company starts the group.') }}</p>
+                            @endif
+
+                            @if ($section['cards']->isEmpty() && ! $section['group']->isOpen())
+                                <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('Nothing is waiting for you in this group. Finished projects are on the Payouts page.') }}</p>
+                            @else
+                                <div class="grid gap-4 md:grid-cols-2">
+                                    @foreach ($section['cards'] as $card)
+                                        @include('filament.investor.pages.partials.project-card', ['card' => $card, 'currency' => $currency])
+                                    @endforeach
+                                </div>
+                            @endif
                         </div>
                     @endforeach
+
+                    @if ($board['legacy']->isNotEmpty())
+                        <div class="grid gap-4 md:grid-cols-2">
+                            @foreach ($board['legacy'] as $card)
+                                @include('filament.investor.pages.partials.project-card', ['card' => $card, 'currency' => $currency])
+                            @endforeach
+                        </div>
+                    @endif
                 </div>
             @endif
         </x-filament::section>

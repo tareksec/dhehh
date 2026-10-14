@@ -28,7 +28,7 @@ class InvestorDraft extends Model
     /** Columns copied onto the Investor when the draft is confirmed. */
     public const INVESTOR_FIELDS = ['name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
 
-    protected $fillable = ['company_id', 'batch_id', 'source', 'source_name', 'source_row', 'name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address', 'existing_investor_id', 'project_id', 'investment_amount', 'payment_method', 'invested_at', 'import_notes', 'created_by', 'portal_account_id'];
+    protected $fillable = ['company_id', 'batch_id', 'source', 'source_name', 'source_row', 'name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address', 'existing_investor_id', 'project_id', 'group_id', 'investment_amount', 'payment_method', 'invested_at', 'import_notes', 'created_by', 'portal_account_id'];
 
     protected $casts = ['date_of_birth' => 'date', 'nid_number' => 'encrypted', 'nominee_nid_or_passport' => 'encrypted', 'import_notes' => 'array', 'investment_amount' => 'decimal:2', 'invested_at' => 'date'];
 
@@ -75,6 +75,11 @@ class InvestorDraft extends Model
         return $this->belongsTo(Investor::class, 'existing_investor_id');
     }
 
+    public function group()
+    {
+        return $this->belongsTo(InvestorGroup::class, 'group_id');
+    }
+
     public function project()
     {
         return $this->belongsTo(InvestmentProject::class, 'project_id');
@@ -83,7 +88,7 @@ class InvestorDraft extends Model
     /** Whether confirming this draft also records an investment. */
     public function willCreateInvestment(): bool
     {
-        return filled($this->project_id) && (float) $this->investment_amount > 0;
+        return (filled($this->project_id) || filled($this->group_id)) && (float) $this->investment_amount > 0;
     }
 
     public function creator()
@@ -185,7 +190,7 @@ class InvestorDraft extends Model
     {
         $hasAmount = (float) $this->investment_amount > 0;
 
-        if (! $hasAmount && blank($this->project_id)) {
+        if (! $hasAmount && blank($this->project_id) && blank($this->group_id)) {
             return [];
         }
 
@@ -195,8 +200,26 @@ class InvestorDraft extends Model
             $issues[] = __('Enter the investment amount.');
         }
 
+        if (filled($this->group_id) && filled($this->project_id)) {
+            $issues[] = __('Pick a group or a project for the investment amount, not both.');
+
+            return $issues;
+        }
+
+        if (filled($this->group_id)) {
+            $group = InvestorGroup::query()->where('company_id', $this->company_id)->find($this->group_id);
+
+            if (! $group) {
+                $issues[] = __('The chosen group was not found.');
+            } elseif (! $group->isOpen()) {
+                $issues[] = __('Group :group has started or closed and takes no new members. Pick an open group.', ['group' => $group->group_code.' — '.$group->name]);
+            }
+
+            return [...$issues, ...$this->paymentIssues()];
+        }
+
         if (blank($this->project_id)) {
-            $issues[] = __('Pick a project for the investment amount, or clear the amount.');
+            $issues[] = __('Pick a group for the investment amount, or clear the amount.');
 
             return $issues;
         }
@@ -205,9 +228,19 @@ class InvestorDraft extends Model
 
         if (! $project) {
             $issues[] = __('The chosen project was not found.');
+        } elseif ($project->group_id) {
+            $issues[] = __('Project :project belongs to a group. Money goes into the group, not into one of its projects.', ['project' => $project->project_code ?: $project->name]);
         } elseif (! in_array($project->status, self::OPEN_PROJECT_STATUSES, true)) {
             $issues[] = __('Project :project is :status and no longer takes investments.', ['project' => $project->project_code ?: $project->name, 'status' => __(InvestmentProject::STATUSES[$project->status] ?? $project->status)]);
         }
+
+        return [...$issues, ...$this->paymentIssues()];
+    }
+
+    /** @return list<string> */
+    private function paymentIssues(): array
+    {
+        $issues = [];
 
         if (blank($this->payment_method)) {
             $issues[] = __('Pick the payment method.');

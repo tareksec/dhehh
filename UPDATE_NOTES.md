@@ -25,7 +25,7 @@ Tests: `ResellerVariationPricingTest` (12, +3): suggested price as the default /
 
 Full suite (plain `php artisan test`, no `--env`), after the suggested price and the profit wording: **2265 passed, 1 skipped, 0 failed** (365 s). Pint passes on the changed PHP files.
 
-Commit status: committed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-14, "কাজের ব্রাঞ্চে কমিট ও পুশ করুন এবং মেইনে পুশ কর"), on top of `84fe781`. The owner then asked for `main` too: `origin/main` (v2.74.0) is merged into the branch first and the tests re-run (see the entry above the merge note).
+Commit status: committed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-14, "কাজের ব্রাঞ্চে কমিট ও পুশ করুন এবং মেইনে পুশ কর"), on top of `84fe781`, then `origin/main` (v2.74.0) merged and the full suite re-run (2416 passed, 1 skipped, 0 failed). Pushed to `main` the same day.
 
 ## 2026-10-14 - Owner's answers: variation price, online gateway, return charge (three changes on the branch)
 
@@ -37,7 +37,7 @@ The owner answered the open points on 2026-10-14. Three changes follow from them
 
 Full suite (plain `php artisan test`, no `--env`) with all three changes: **2259 passed, 1 skipped, 0 failed** (379 s).
 
-Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-14). Not on `main`: the owner checks first.
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-14). Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
 
 ## 2026-10-14 - Reseller advance: pay online with the store's active gateway
 
@@ -60,7 +60,7 @@ Needs Bangla review (new keys): Pay online (:gateway), Pay now, Waiting for the 
 
 Tests: `ResellerOnlineAdvancePaymentTest` (18): the option appears only when the gateway is on and set up (ZiniPay and PayStation); choosing it when it is not is refused and creates nothing; an order starts a pending gateway payment for the right amount with a signed return link and a webhook on the company's domain; the webhook confirms and enters the money once even if it arrives twice; the signed return does the same and a later webhook changes nothing; an unsigned, tampered or other-company link verifies nothing; pending / wrong-amount / failed answers never complete it; an unfinished attempt is replaced by a new one or by a send-money payment; a gateway error creates no order; the deposit pays first; staff cannot verify by hand; the portal form skips the number and transaction ID and goes to the gateway; send-money still needs them; own courier with only the gateway; Pay now and Send payment again on the Orders list; paying the extra of a raised order online; another reseller's payment is unreachable.
 
-Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval. Not on `main`: the owner checks first.
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval. Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
 
 ## 2026-10-14 - Reseller return charge (50 per returned order, from the deposit)
 
@@ -84,7 +84,7 @@ Needs Bangla review (new keys): Return charge per order and its helper text, Ret
 
 Tests: `ResellerReturnChargeTest` (11): the default of 50; a returned store-delivered order; an own-courier order (charge only, no deposit back); once only however often the order is saved or refunded afterwards; nothing for a cancelled, delivered or non-reseller order; the amount follows the company's setting and 0 means none; each company uses its own setting and deposits; a deposit below zero pays nothing and later credits cover it first; staff see it in the Deposits list and on the order; the reseller sees why; the setting is saved and cannot be negative.
 
-Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval. Not on `main`: the owner checks first.
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval. Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
 
 ## 2026-10-12 - Reseller program: products with variations (owner decision 1, reworked on 2026-10-14)
 
@@ -109,7 +109,7 @@ Needs Bangla review (new keys): Variation prices, Per variation, the sentence in
 
 Tests: `ResellerVariationPricingTest` (9): the price rules (chosen / normal raised to cost, cost = own price + cost per unit, none without a price), no change outside a reseller session, another reseller's or company's data never used, the storefront shows the reseller's prices and never what the reseller pays (in the HTML and the JSON), an order through the reseller store records price / base / commission, the plain store records none, the admin edits the variation's price and the reseller's cost follows. `ResellerVariationOrderTest` (14): the portal order with commission, option required and valid, price floor, the variation's own stock (and pre-order), duplicates, catalog rules, outside-store products refused, another reseller's price ignored, the option picker and pricing in the form, own-courier orders, the buyer-facing price, adding a variation to an own-courier order, stock and duplicates on edit. `ResellerPortalProductsTest` +5: per-variation prices and the floor, isolation, details, bulk %, the filter.
 
-Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12), reworked and pushed on 2026-10-14 with owner approval. Not on `main`: the owner checks first.
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12), reworked and pushed on 2026-10-14 with owner approval. Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
 
 ## 2026-10-12 - Reseller application: SMS code proves ownership of an existing number (owner decision 5) — also a security fix
 
@@ -131,7 +131,7 @@ Needs Bangla review (new keys): the code-step helper text, "Verification code", 
 
 Tests: new `ResellerApplicationVerificationTest` (9): new number needs no code; an existing number is untouched until the code (the password hash only waits in the session); wrong code changes nothing and five wrong codes burn the code; knowing an approved reseller's number cannot replace their password; other spellings need the code and never duplicate; no SMS gateway means no takeover; resend once a minute and change the number; another company's number is a new number here; the plain storefront form never takes over a number. The old "approved reseller stays approved on re-application" test was rewritten for the new rule.
 
-Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Not on `main`: the owner checks first.
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
 
 ## 2026-10-12 - Reseller Settings: payment methods for the advance (owner decision 4)
 
@@ -151,7 +151,7 @@ Needs Bangla review (new keys): the section description, "Store payment methods 
 
 Tests: new `ResellerPaymentMethodsTest` (10): everything offered until a choice is saved, the admin's choice (and an unticked / later-added method stays hidden, ticking none means none), a deactivated method is never offered, forged ids rejected, reseller-only methods added then updated in place (no duplicate rows, same name as a store method allowed, switched off), duplicate names refused, removal deletes unless a payment used it, the store's list changes never touch reseller-only methods and the store's Payment Methods page never lists them, never offered at the storefront (checkout page, forged POST), another company's methods and choices never offered. Plus 2 in `ResellerOwnCourierOrderTest` (paying into a reseller-only method; an unticked store method is refused). A real bug the tests caught: the saved ids kept array keys and would have been stored as an object — fixed with `array_values`.
 
-Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Not on `main`: the owner checks first.
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
 
 ## 2026-10-12 - Admin: Resellers → Deposits (list + add / deduct with a reason) (owner decision 3)
 
@@ -173,7 +173,7 @@ Tests: new `ResellerDepositAdminTest` (13): reason / staff member / positive ent
 
 Note: while writing this I ran `php artisan migrate` once by mistake on the local development SQLite file (not the test database): it only added this one column, no data was touched. Tests use their own in-memory database.
 
-Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Not on `main`: the owner checks first.
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
 
 ## 2026-10-12 - Reseller deposit: a cancelled order gives the money back (owner decision 2)
 
@@ -195,7 +195,166 @@ Questions for the owner:
 
 Tests: 5 new in `ResellerOwnCourierOrderTest` (36 in the file, all passing): deposit part only, once only however often saved, not cancelled / nothing from the deposit, another reseller's deposit untouched, staff see the returned amount. Full suite (plain `php artisan test`, no `--env`) after all five items: **2229 passed, 1 skipped, 0 failed** (540 s).
 
-Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval ("এরপর শেষের কাজ গুলো একে একে শেষ করে ফেল ... তোমার কাজের ব্রাঞ্ছে কমিট এবং পুশ করবে", 2026-10-12). Not on `main`: the owner checks first.
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval ("এরপর শেষের কাজ গুলো একে একে শেষ করে ফেল ... তোমার কাজের ব্রাঞ্ছে কমিট এবং পুশ করবে", 2026-10-12). Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-13 - Read-only data feed for IMS
+
+Owner asked "যা চায় করে দেও" after sharing IMS's `ERP-INTEGRATION-REQUIREMENTS.md` (IMS wants to pull the ERP's business data). Built the read-only feed `/api/v1/sync/*` (uncommitted, on top of the investor-group work).
+
+What changed:
+- `company_api_keys.scope` (migration `2026_10_13_100000`): `website` (default, every old key) or `sync`. `ResolveCompanyFromApiKey` now takes the scope as a parameter and answers `403 wrong_key_scope` when a key is used on the wrong API, so a website developer's key can never read purchases/costs and a sync key can never write products.
+- `ImsSyncFeed` (14 resources, keyset paging on `updated_at`+`id`, inclusive `updated_since`, status/date filters, `ids_only`), `SyncController` (`ping`, `index`), route group `v1/sync`, `sync-api` rate limiter (300/min/key).
+- The Website API keys table on the Integrations page shows the key type and the Generate action asks for it (4 new keys: "Key type", "Website (products, orders, leads)", "Data sync (read-only feed for IMS)", the helper text; "Type" already existed).
+- `docs/api/ims-sync-api.md`: the contract, how IMS should poll, and the answers to IMS's questionnaire.
+
+Not built (not asked / not decided): webhooks to IMS, an IP allow-list, a currency-rate feed (the ERP has one base currency), any write path.
+
+Owner decisions open (listed at the end of `docs/api/ims-sync-api.md`): who is the source of truth for investor accounting (IMS plans its own, this ERP already has one); one business = one IMS project; what must not be copied to IMS; which sale status is "final" for profit sharing.
+
+Needs Bangla review: the 3 new key-type strings in `lang/bn.json`.
+
+Tests: `ImsSyncApiTest` (21). Mutation-checked: dropping the cursor tie-break, making `updated_since` exclusive, disabling the scope check, hiding deleted orders and ignoring the time offset each make a test fail.
+
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+
+## 2026-10-12 - Investor groups, steps 1–6: final check
+
+Everything from G1 to G6 below is in the working tree, uncommitted. Final full `php artisan test` (plain, no `--env`) after all six steps: **2180 passed, 2 skipped, 0 failed** (19,961 assertions). `npm run build` OK. Pint clean. New migrations: `2026_10_12_100000_create_investor_groups_tables`, `2026_10_12_110000_add_group_targets_to_investor_flows`, `2026_10_12_120000_add_project_completed_message_to_companies` (all ran on a fresh SQLite database; names are within MySQL's 64-character limit and `MigrationIdentifierLengthTest` passes).
+
+Deploy order when the owner approves: `php artisan migrate`, `npm run build`, then `php artisan investments:backfill-groups --dry-run` and read it with the owner **before** the real run (the five projects → G1–G5); after that staff check each group's dates and switch Automatic cycles on. The open questions are collected in section 11 of `16_INVESTOR_GROUPS_PLAN.md`.
+
+## 2026-10-12 - Investor groups, step 6 (G6): the "project completed" SMS
+
+Owner (rule R7 of the plan): when a project cycle finishes the investor gets a congratulation message on their mobile. Built phase G6 of `16_INVESTOR_GROUPS_PLAN.md` (still uncommitted, on top of G1–G5).
+
+What changed:
+- `InvestorGroupProjectCompleted` (raised by the cycle after the commit) now has a listener, `SendProjectCompletedMessages`. It sends the company's **Project completed message** to every investor who has money in the finished project (a member leaving at this boundary is included; one withdrawn earlier is not), through the SMS gateway already set for the company. `:name`, `:group`, `:project` are replaced.
+- **The text is the owner's.** `companies.investor_project_completed_message` starts empty and **nothing is sent while it is empty**; staff write it at Investor Portal Settings → Messages. The owner's draft from the plan is shown as the example in the helper text (and its Bangla translation in `lang/bn.json`), not used as a default.
+- One message per investor per project (guard also survives a repeated event); numbers on the CRM opt-out list are skipped; a missing or failing gateway never stops the cycle; every completion is written to the audit log with the counts.
+
+Needs Bangla review: the 4 new keys (e.g. "Project completed message" → "প্রজেক্ট সম্পন্নের বার্তা").
+
+Tests: `ProjectCompletedMessageTest` (9): empty message sends nothing but logs, placeholders, no double send, leaver included / earlier leaver not, opt-out, no gateway, failing gateway, settings page.
+
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+
+## 2026-10-12 - Investor groups, step 5 (G5): the investor portal (progress bar, completed state, totals)
+
+Owner (rules R6/R7 of the plan): the investor sees a progress bar and "Project-2 completed", and after the payout is paid and its screenshot uploaded the project leaves the dashboard and stays on the Payouts page. Built phase G5 of `16_INVESTOR_GROUPS_PLAN.md` (still uncommitted, on top of G1–G4).
+
+What changed:
+- `InvestorPortalCards` builds the dashboard: groups the investor is in, a card per project (one card even if they have two deposits in it): running (progress), completed (bar full, "Project N completed", "The company is calculating your profit."), payment pending (profit, "You receive"), paid (screenshot still to come), and **done = payout paid AND screenshot uploaded → hidden**. A withdrawn row is hidden too. An open group shows "has not started yet".
+- The totals no longer count a member's money once per project: `capitalAtWork` = active members of **running** groups + leaving members until their last payout is paid + old-style projects not settled yet; `total_invested` = one deposit per membership + old-style rows; the statement lists one deposit per membership (a leaver's principal comes back inside their last payout, so there is no separate "withdrawn" line for them); partner "capital at work" uses the same rule.
+- Payouts page: Capital returned ("Stays invested") and "Group · Project N"; My investments: group name, "Completed".
+- Checked in a real browser on a throwaway SQLite database (desktop and 390 px): cards, progress bars, states and the totals look right. No demo or real data was touched.
+
+Decisions I made (say so if you disagree):
+- **Old projects already paid before this feature** (e.g. Project-01) have no screenshot, so after the migration their card stays on the dashboard as "Paid — screenshot to come" until staff upload one. That is the owner's rule applied literally. If you would rather hide payouts paid before a date, tell me the date.
+- Money waiting in an open group is *invested* but not *at work*.
+- A leaving member's capital counts as at work until their final payout is marked paid.
+
+Needs Bangla review: the 18 new keys (e.g. "Project :number completed" → "প্রজেক্ট :number সম্পন্ন", "Payment on the way" → "পেমেন্ট আসছে", "Stays invested" → "বিনিয়োগেই থাকছে").
+
+Tests: `InvestorPortalGroupViewTest` (14): progress at 0/49/98%, completed state, settled and paid states, the card leaving when paid + screenshot, open group, one card for two deposits, no leakage between investors, capital at work / total invested / statement balance, a leaver's capital until the last payout, old-style projects unchanged, partner capital.
+
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+
+## 2026-10-12 - Investor groups, step 4 (G4): the payment screenshot
+
+Owner (Q3 of the plan): staff pay by hand and upload a payment screenshot in the admin; the investor sees it in the portal. Built phase G4 of `16_INVESTOR_GROUPS_PLAN.md` (still uncommitted, on top of G1–G3).
+
+What changed:
+- The screenshot is an `InvestmentDocument` (category `payment_proof`, label "Payment screenshot") attached to the payout, in the company's private storage. This reuses the existing document store, download checks and audit instead of new columns (the plan had proposed columns on the payout tables; no migration was needed).
+- `PayoutProofService::attach()`: only a PAID payout takes one; a newer upload becomes the one shown and the older stays; audit `payout_payment_proof_uploaded`.
+- Staff: **Mark as Paid** on an investor payout and on a channel-partner payout has an optional upload field; a paid payout gets a **Payment screenshot / Replace screenshot** action; the payout tables and the payout-batch items table show a "Screenshot" tick that opens the file. The action needs `investments.settle`; the file opens for `investments.view`. Image or PDF, up to 5 MB.
+- Portal: Payouts (investors) and Commissions (partners) get a **Payment screenshot** button when one exists; Documents lists it ("Payment for <project>"). `InvestorPortalService::documents()` includes only the `payment_proof` papers of the person's own payouts; another person's file, or another company's, is a 404.
+
+Decision I made: the screenshot is optional when marking paid (the payout can be paid first and the screenshot added after); the owner's rule that a project leaves the investor's dashboard only after "paid + screenshot uploaded" is applied in step 5 (dashboard).
+
+Needs Bangla review: the 9 new keys (e.g. "Payment screenshot" → "পেমেন্টের স্ক্রিনশট", "Replace screenshot" → "স্ক্রিনশট বদলান").
+
+Tests: `PayoutPaymentProofTest` (12). Mutation-checked: widening the portal scope to every payout's proof fails the suite.
+
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+
+## 2026-10-12 - Investor groups, step 3 (G3): new money into open groups, leaving a group, what a group pays
+
+Owner: "এক এক করে শেষ কর, টেস্ট যোগ করবে ক্রিটিকাল ক্যালকুলেশনে". Built phase G3 of `16_INVESTOR_GROUPS_PLAN.md` on top of G1 and G2 (still uncommitted).
+
+**One rule I had to decide, and the owner must confirm it.** The old engine pays every investor "principal + profit" at the end of each project. In a group the same members continue into the next project, so paying the principal each time would pay it out while it is still invested. I built it this way: **a member who stays is paid the profit only (the principal carries on into the next project); a member who leaves is paid principal + profit.** The owner's example (৳2 lakh earns ৳7,748.62 a cycle) fits this. If the owner wants "principal + profit every project, with the investor choosing to reinvest", the change is in one place (`SettlementService`, the `principalLeaving()` block) and its tests.
+
+What changed:
+- `InvestmentTargets` lists where new money can go: open groups, then projects outside any group (`g<id>` / `p<id>`) and places the money: a new group member (one capital voucher) or a plain investment. Used by the portal top-up and reinvest request, the staff request queue (staff can pick another open group at approval), the payout election (staff and portal), investor drafts / import / sign-up confirmation.
+- `InvestorRequestService`, `CycleElectionService`, `InvestorImportService`, `InvestorDraft` (+ resource), the portal Requests page, the request queue and the payout election now take a group. The old project fields still work for projects outside a group.
+- Withdrawal request/notice is per group. `InvestorGroupCycleService` applies notices that have run out by a project's end date (inclusive) before copying members into the next project: the member becomes `withdrawn` from that day with `leaves_after_sequence` = that project, and the notice is `honored`. Also in the dry run, in `NO_MEMBERS` (everyone leaves) and in a confirmed catch-up (counted at the right project end, not at the day staff press the button).
+- `SettlementService` for a group project: `total_payout` = principal returned + profit, with `principal_returned_amount` (0 for members who stay). A loss borne by investors is refused on a group project (the settle dialog does not offer it) because it would reduce the stake of members who stay; "company bears the loss" works (stayers 0, leavers principal). Staff payout table has a "Principal returned" column (hidden by default) and the payout report shows the line.
+- Stamp / cheque numbers from a draft are kept on the member (`paperwork`) and become the security instrument of the member's first project row, once. Witnesses and deed scans are added by staff on that first row (Q5).
+
+Decisions I made (say so if you disagree):
+- Members leave at the first project end on or after the notice's end date (`effective_at` = notice day + 60).
+- A leaving member is marked withdrawn at the boundary; their principal reaches them through the final payout (one voucher), not through a separate withdrawal voucher.
+- A notice for a group is honored by the cycle, not by hand (the "Mark honored" button is hidden for group notices; "Cancel" still works until the boundary).
+
+Known gaps for the next steps: the investor portal's statement and "My investments" still list one deposit per project row (G5 changes them to one per membership), and the portal Payouts page does not show the principal-returned column yet (G5).
+
+Needs Bangla review: the 23 new keys (e.g. "Add to group", "Principal returned" → "ফেরত দেওয়া মূল টাকা", "Left after project").
+
+Tests: `InvestorGroupMoneyFlowsTest` (18) and `InvestorGroupExitTest` (11) new; two old tests updated for the new field name / wording (`InvestmentSettlementTest` election action, `InvestorImportTest` message). Mutation-checked: returning the principal to everyone, or leaving one project late, fails the suite. Full `php artisan test`: see the line at the end of this entry.
+
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+
+## 2026-10-12 - Investor groups, step 2 (G2): the 2-month cycle and the capital-base warning
+
+Owner: "এক এক করে শেষ কর, টেস্ট যোগ করবে ক্রিটিকাল ক্যালকুলেশনে". Built phase G2 of `16_INVESTOR_GROUPS_PLAN.md` on top of G1 (still uncommitted).
+
+What changed:
+- `InvestorGroupCycleService`: `decide()` (read-only) and `advance()` (one step, in a transaction, group row locked). When the latest project's end date (calendar, from the group's anchor) has arrived: it is closed (`running` → `closed`, ready to settle) and project N+1 starts with the active members copied in. At most one project per call, and only while today is inside that project's own window. If whole cycles were missed it closes the finished project, starts nothing and reports BEHIND; staff press **Start the next project now** (one project per confirmation). If no active member is left it closes the project and starts nothing (the group page says "Close the group").
+- `php artisan investments:advance-groups [--company=] [--dry-run]`: per active company, in the company's timezone, wrapped in `ModuleGuard`; only Running groups with Automatic cycles on. Scheduled hourly (`withoutOverlapping`, `onOneServer`) so each company's midnight is caught; safe to run repeatedly. A "behind" group is written to the audit log once a day.
+- `InvestorGroupProjectCompleted` event (project, group, next project) is dispatched after the commit. Nothing listens yet: the congratulation message is G6 and waits for the owner's text.
+- Group page: "Cycle" line (behind / nobody left) and the **Start the next project now** action. The Automatic cycles switch is refused unless the group is Running.
+- Capital base vs landed cost: `InvestmentProject::capitalBaseGap()` (null when the difference is ৳1 or less, or no landed cost yet); the project page shows a "Capital base vs landed cost" line and the Calculate & Settle dialog shows a warning callout. Warning only, never a block.
+
+Decisions I made (say so if you disagree):
+- Cycle boundaries follow the **calendar from the anchor**, not each project's own `end_date`. For the five old projects the anchor is the project's start date, so Project 1's calendar end can differ by a day or two from its recorded end date (60 days vs 2 months). Staff should compare the dates before switching Automatic cycles on for a migrated group.
+- A group with missed cycles waits for staff instead of creating several catch-up projects at once.
+- The company contribution is not copied to the next project (Q8).
+
+Needs Bangla review: the 13 new keys (e.g. "Start the next project now" → "পরের প্রজেক্ট এখনই শুরু করুন", "Capital base vs landed cost" → "মূলধন ভিত্তি বনাম ল্যান্ডেড কস্ট").
+
+Tests: `InvestorGroupCycleTest` (22) new. Mutation-checked: making the end date inclusive-exclusive the other way, or dropping the missed-cycle check, fails the suite. Full `php artisan test`: see below.
+
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+
+## 2026-10-12 - Investor groups, step 1 (G1): groups, members, Project 1, backfill
+
+Owner: "প্ল্যানের ফাইল কমিট করে কাজ শুরু করে এক এক করে শেষ কর, টেস্ট যোগ করবে ক্রিটিকাল ক্যালকুলেশনে যাতে ডিপ্লয়ের আগেই ধরা পড়ে।" Built phase G1 of `16_INVESTOR_GROUPS_PLAN.md`.
+
+What changed:
+- New tables and models: `InvestorGroup` (G1, G2 … per company; Open → Running → Closed, one-way), `InvestorGroupMember` (one row per deposit); `investment_projects.group_id` / `sequence_in_group`, `investments.group_member_id`. The plan's `cycle_starts_on` column was left out: a project's own `start_date` / `end_date` already say it.
+- `InvestorGroupService`: `addMember` (open group only, books the one capital voucher), `startGroup` (Open → Running, creates Project 1 dated from the chosen day, copies the members), `closeGroup`, `createProject` / `snapshotMembers` (used by the daily cycle in G2).
+- `GroupCycleCalendar`: project N runs from anchor + (N−1)×2 months to anchor + N×2 months, always counted from the anchor with Carbon's no-overflow, so a 31st anchor gives 31 Oct, 31 Dec, 28 Feb, 30 Apr … without drift.
+- Admin: Investments → Investor Groups (list, create, view, edit; Members and Projects tabs; Start group and Close group actions; Withdraw deposit while Open). Projects get a Group column, filter and summary line; snapshot rows have no Create/Edit/Delete.
+- Guards: `Investment` refuses a row on a group project unless it is a copy of a member of that group; the money maths in `SettlementService` are untouched.
+- Withdrawing a snapshot row (the old project-level Withdraw) also marks its member withdrawn when it is the member's latest row, so later projects skip that member. Voiding or restoring the withdrawal voucher flips the member back and forth, the same as the investment.
+- `php artisan investments:backfill-groups [--company=] [--dry-run] [--force]` moves each project into its own group (project 1 → G1 …), copying amount, date, payment details and voucher to members; withdrawn investments become withdrawn members; no voucher is booked; project codes stay; groups start Running with automatic cycles OFF. Projects still Open or without investments are skipped and listed.
+
+Decisions I made (say so if you disagree):
+- A project in status **Open** is skipped by the backfill (a group has no project while it collects money). The owner decides what it is.
+- The pick-a-project screens (investor draft, import, portal top-up, reinvest) hide group projects until G3 makes them target an open group. **Do not run the backfill on real data before G3** or those screens will have nothing to pick.
+- Deed, witnesses and cheque/stamp entry for a group member still live on the investment record (the project's copy); recording them once at the group level (Q5) needs a change to those tables and is planned with G3.
+- Closing a group needs every project settled and every member out (their latest project row withdrawn, or the deposit withdrawn while the group was Open).
+
+Needs Bangla review: all 77 new keys in `lang/bn.json` (e.g. "Start group" → "গ্রুপ শুরু করুন", "Automatic cycles" → "স্বয়ংক্রিয় চক্র", "Withdraw deposit" → "জমা তুলে নিন", "Investor Groups" → "বিনিয়োগকারী গ্রুপ").
+
+Tests: new `GroupCycleCalendarTest` (12) and `InvestorGroupTest` (32); `MultiCompanyIsolationTest` lists the two new models. Full `php artisan test` (plain, no `--env`): **2093 passed, 2 skipped, 0 failed** (run before the last test and style fixes; the group, calendar and translation tests were rerun after and pass).
+
+Commit status: not committed yet (the owner approved committing the plan file only; waiting for approval to commit the code).
+
+## 2026-10-12 - Investor groups: the plan (`16_INVESTOR_GROUPS_PLAN.md`)
+
+Owner request (in Bangla): the investment module must be group-based (investors join a group; a group runs Project-1, 2, 3 … every calendar 2 months; manual payout with a payment screenshot; closed projects move to the Payouts page). After the owner answered the questions, the owner approved the plan: "প্ল্যানের ফাইল কমিট করে কাজ শুরু করে এক এক করে শেষ কর, টেস্ট যোগ করবে ক্রিটিকাল ক্যালকুলেশনে যাতে ডিপ্লয়ের আগেই ধরা পড়ে।" This entry is the plan document only; each build phase (G1–G6) gets its own entry below.
+
+Commit status: committed locally on owner approval (2026-10-12). Not pushed; the owner has not said to push.
 
 ## 2026-10-12 - Reseller portal: owner decisions on the five open questions (nothing built yet)
 

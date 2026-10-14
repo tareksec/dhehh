@@ -3,16 +3,15 @@
 namespace App\Filament\Investor\Pages;
 
 use App\Filament\Investor\Concerns\InvestorPortalPage;
-use App\Models\Investment;
+use App\Services\InvestorPortalCards;
 use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
 
 /**
  * The portal home (15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md §6.1 page 1):
- * totals, a card per investment, the 12-month profit chart and the latest
+ * totals, a card per project under its group, the 12-month profit chart and the latest
  * statement rows for an investor; the referred-capital and commission
  * totals for a channel partner. One person who is both sees both.
  */
@@ -38,14 +37,16 @@ class Dashboard extends Page
         return __('Dashboard');
     }
 
-    /** @return Collection<int, Investment> */
-    public function investmentCards(): Collection
+    /**
+     * The investor's groups with a card per project that is still running or
+     * waiting for its payment, plus the cards of projects outside any group.
+     * A project leaves here once its payout is paid and the screenshot is up.
+     *
+     * @return array{groups: SupportCollection<int, array<string, mixed>>, legacy: SupportCollection<int, array<string, mixed>>}
+     */
+    public function board(): array
     {
-        return $this->portal()->investments($this->account())
-            ->with(['project', 'project.settlement'])
-            ->orderByDesc('invested_at')
-            ->orderByDesc('id')
-            ->get();
+        return app(InvestorPortalCards::class)->dashboard($this->account());
     }
 
     public function recentStatement(): SupportCollection

@@ -43,14 +43,16 @@ class WithdrawalNoticesRelationManager extends RelationManager
         return $table->columns([
             TextColumn::make('notice_given_at')->label('Given')->date(),
             TextColumn::make('effective_at')->label('Effective')->date(),
-            TextColumn::make('project.name')->label('Project')->placeholder('General'),
+            TextColumn::make('group.name')->label(__('Group'))->placeholder('-'),
+            TextColumn::make('project.name')->label('Project')->placeholder('-'),
             TextColumn::make('reason')->limit(30)->placeholder('-'),
             TextColumn::make('status')->badge(),
         ])->headerActions([
             CreateAction::make()->mutateDataUsing(fn (array $data): array => [...$data, 'company_id' => $this->getOwnerRecord()->company_id]),
         ])->recordActions([
+            // A group notice is honored by itself at the end of the project it matures in.
             Action::make('honor')->label('Mark Honored')->icon('heroicon-o-check-circle')->color('success')
-                ->visible(fn (InvestmentWithdrawalNotice $record): bool => $record->status === 'pending')
+                ->visible(fn (InvestmentWithdrawalNotice $record): bool => $record->status === 'pending' && blank($record->group_id))
                 ->requiresConfirmation()
                 ->action(function (InvestmentWithdrawalNotice $record): void {
                     $record->update(['status' => 'honored']);

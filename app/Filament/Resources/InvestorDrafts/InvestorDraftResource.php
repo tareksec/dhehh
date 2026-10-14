@@ -12,6 +12,7 @@ use App\Models\InvestmentDocument;
 use App\Models\InvestmentProject;
 use App\Models\Investor;
 use App\Models\InvestorDraft;
+use App\Models\InvestorGroup;
 use App\Services\Investment\InvestorImportService;
 use App\Services\InvestorOnboardingService;
 use App\Support\InvestorIdentity;
@@ -276,9 +277,17 @@ class InvestorDraftResource extends Resource
     public static function investmentFields(bool $withAmount): array
     {
         return array_values(array_filter([
+            Select::make('group_id')
+                ->label(__('Group'))
+                ->options(fn (): array => InvestorGroup::query()->open()->orderBy('id')->get()
+                    ->mapWithKeys(fn (InvestorGroup $group): array => [$group->getKey() => trim($group->group_code.' — '.$group->name)])
+                    ->all())
+                ->searchable()
+                ->helperText(__('New money joins a group that is still open.')),
             Select::make('project_id')
-                ->label(__('Project'))
+                ->label(__('Project (not in a group)'))
                 ->options(fn (): array => InvestmentProject::query()
+                    ->ungrouped()
                     ->whereIn('status', InvestorDraft::OPEN_PROJECT_STATUSES)
                     ->orderByDesc('id')
                     ->get()

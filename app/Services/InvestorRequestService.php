@@ -6,12 +6,13 @@ use App\Models\Investment;
 use App\Models\InvestmentProject;
 use App\Models\InvestmentWithdrawalNotice;
 use App\Models\InvestorCycleElection;
-use App\Models\InvestorDraft;
+use App\Models\InvestorGroup;
+use App\Models\InvestorGroupMember;
 use App\Models\InvestorPortalAccount;
 use App\Models\InvestorRequest;
 use App\Models\User;
 use App\Services\Investment\CycleElectionService;
-use App\Services\Investment\InvestmentLedgerService;
+use App\Services\Investment\InvestmentTargets;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -23,8 +24,9 @@ use RuntimeException;
  * pending → approved / rejected with notes and audit). Approving one runs the
  * same flow staff already use, so no money rule is duplicated here:
  *
- * - top-up → a new Investment once staff confirm the money arrived (+ its
- *   pending capital voucher, InvestmentLedgerService)
+ * - top-up → a new member of an OPEN GROUP once staff confirm the money
+ *   arrived (+ its pending capital voucher); new money never joins a running
+ *   group. A project that is not in a group still takes a plain Investment.
  * - withdrawal → an InvestmentWithdrawalNotice (60 days, deed clauses 5–6)
  * - reinvest → CycleElectionService::recordElection() on a pending payout
  * - support → a written answer
@@ -52,7 +54,9 @@ class InvestorRequestService
             ->where('investor_id', $account->investor_id)
             ->where('type', $type)
             ->where('status', InvestorRequest::STATUS_PENDING)
-            ->when($type === InvestorRequest::TYPE_WITHDRAWAL || $type === InvestorRequest::TYPE_TOP_UP, fn ($query) => $query->where('project_id', $attributes['project_id']))
+            ->when($type === InvestorRequest::TYPE_WITHDRAWAL || $type === InvestorRequest::TYPE_TOP_UP, fn ($query) => $query
+                ->where('project_id', $attributes['project_id'] ?? null)
+                ->where('group_id', $attributes['group_id'] ?? null))
             ->when($type === InvestorRequest::TYPE_REINVEST, fn ($query) => $query->where('settlement_payout_id', $attributes['settlement_payout_id']))
             ->exists();
 
@@ -100,6 +104,7 @@ class InvestorRequestService
                     'company_id' => $request->company_id,
                     'investor_id' => $request->investor_id,
                     'project_id' => $request->project_id,
+                    'group_id' => $request->group_id,
                     'notice_given_at' => $request->created_at->toDateString(),
                     'reason' => $request->message,
                 ]),
@@ -120,11 +125,6 @@ class InvestorRequestService
                 'result_id' => $result?->getKey(),
             ])->save();
         });
-
-        if ($request->type === InvestorRequest::TYPE_TOP_UP && $request->result instanceof Investment) {
-            // The same pending capital voucher every new investment gets.
-            app(InvestmentLedgerService::class)->recordInvestmentReceived($request->result);
-        }
 
         $this->audit->record('investor_request.approved', $request, ['status' => InvestorRequest::STATUS_PENDING], ['status' => InvestorRequest::STATUS_APPROVED, 'result' => $request->result_type ? class_basename($request->result_type).' #'.$request->result_id : null]);
     }
@@ -149,15 +149,46 @@ class InvestorRequestService
         $this->audit->record('investor_request.rejected', $request, ['status' => InvestorRequest::STATUS_PENDING], ['status' => InvestorRequest::STATUS_REJECTED, 'note' => trim($note)]);
     }
 
-    /** Projects an investor may add money to: open or running, and inside the investment window when one is set. */
+    /** Projects outside any group that an investor may still add money to (open or running, inside the investment window). */
     public function openProjects(): Collection
     {
-        return InvestmentProject::query()
-            ->whereIn('status', InvestorDraft::OPEN_PROJECT_STATUSES)
-            ->orderByDesc('id')
-            ->get()
-            ->filter(fn (InvestmentProject $project): bool => $project->investment_closes_at === null || $project->isWithinInvestmentWindow())
-            ->values();
+        return $this->targets()->openProjects();
+    }
+
+    /** Where new money can go: the open groups, then projects outside any group. */
+    public function openTargets(): \Illuminate\Support\Collection
+    {
+        return $this->targets()->open();
+    }
+
+    protected function targets(): InvestmentTargets
+    {
+        return app(InvestmentTargets::class);
+    }
+
+    /**
+     * The target picked in a form: `target` (`g12` / `p5`), or the older
+     * `group_id` / `project_id` fields.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function targetKey(array $data, string $target = 'target', string $project = 'project_id', string $group = 'group_id'): ?string
+    {
+        return match (true) {
+            filled($data[$target] ?? null) => (string) $data[$target],
+            filled($data[$group] ?? null) => 'g'.(int) $data[$group],
+            filled($data[$project] ?? null) => 'p'.(int) $data[$project],
+            default => null,
+        };
+    }
+
+    /** @return array{project_id: int|null, group_id: int|null} */
+    protected function targetColumns(InvestorGroup|InvestmentProject|null $target): array
+    {
+        return [
+            'project_id' => $target instanceof InvestmentProject ? $target->getKey() : null,
+            'group_id' => $target instanceof InvestorGroup ? $target->getKey() : null,
+        ];
     }
 
     /** The permission the existing flow needs: new money and notices = manage, payout choices = settle. */
@@ -176,11 +207,11 @@ class InvestorRequestService
     /** @return array<string, mixed> */
     protected function topUpAttributes(array $data): array
     {
-        $project = $this->openProjects()->firstWhere('id', (int) ($data['project_id'] ?? 0));
+        $target = $this->targets()->find($this->targetKey($data));
         $amount = round((float) ($data['amount'] ?? 0), 2);
 
-        if (! $project) {
-            throw ValidationException::withMessages(['data.project_id' => __('Choose a project that is open for investment.')]);
+        if (! $target) {
+            throw ValidationException::withMessages(['data.'.(filled($data['target'] ?? null) || filled($data['group_id'] ?? null) ? 'target' : 'project_id') => __('Choose a group that is open for new members.')]);
         }
 
         if ($amount <= 0) {
@@ -192,7 +223,7 @@ class InvestorRequestService
         }
 
         return [
-            'project_id' => $project->getKey(),
+            ...$this->targetColumns($target),
             'amount' => $amount,
             'payload' => [
                 'payment_method' => $data['payment_method'],
@@ -205,18 +236,40 @@ class InvestorRequestService
     /** @return array<string, mixed> */
     protected function withdrawalAttributes(InvestorPortalAccount $account, array $data): array
     {
-        $projectId = (int) ($data['project_id'] ?? 0);
-        $hasActive = $this->portal->investments($account)->where('project_id', $projectId)->where('status', Investment::STATUS_ACTIVE)->exists();
+        $key = $this->targetKey($data, 'target', 'project_id', 'group_id');
+        $kind = $key ? substr($key, 0, 1) : null;
+        $id = $key ? (int) substr($key, 1) : 0;
+        $errorKey = 'data.'.(filled($data['target'] ?? null) || filled($data['group_id'] ?? null) ? 'target' : 'project_id');
+
+        if ($kind === 'g') {
+            $inGroup = InvestorGroupMember::query()
+                ->where('investor_id', $account->investor_id)
+                ->where('group_id', $id)
+                ->where('status', InvestorGroupMember::STATUS_ACTIVE)
+                ->exists();
+
+            if (! $inGroup) {
+                throw ValidationException::withMessages([$errorKey => __('Choose a group where you have money invested.')]);
+            }
+
+            if (InvestmentWithdrawalNotice::query()->where('investor_id', $account->investor_id)->where('group_id', $id)->where('status', 'pending')->exists()) {
+                throw ValidationException::withMessages([$errorKey => __('A withdrawal notice for this group is already running.')]);
+            }
+
+            return ['group_id' => $id, 'project_id' => null];
+        }
+
+        $hasActive = $this->portal->investments($account)->where('project_id', $id)->where('status', Investment::STATUS_ACTIVE)->exists();
 
         if (! $hasActive) {
-            throw ValidationException::withMessages(['data.project_id' => __('Choose a project where you have money invested.')]);
+            throw ValidationException::withMessages([$errorKey => __('Choose a project where you have money invested.')]);
         }
 
-        if (InvestmentWithdrawalNotice::query()->where('investor_id', $account->investor_id)->where('project_id', $projectId)->where('status', 'pending')->exists()) {
-            throw ValidationException::withMessages(['data.project_id' => __('A withdrawal notice for this project is already running.')]);
+        if (InvestmentWithdrawalNotice::query()->where('investor_id', $account->investor_id)->where('project_id', $id)->where('status', 'pending')->exists()) {
+            throw ValidationException::withMessages([$errorKey => __('A withdrawal notice for this project is already running.')]);
         }
 
-        return ['project_id' => $projectId];
+        return ['project_id' => $id, 'group_id' => null];
     }
 
     /** @return array<string, mixed> */
@@ -239,16 +292,16 @@ class InvestorRequestService
         }
 
         $amount = null;
-        $nextProjectId = null;
+        $next = ['project_id' => null, 'group_id' => null];
 
         if ($election !== 'withdraw') {
-            $nextProject = $this->openProjects()->firstWhere('id', (int) ($data['next_project_id'] ?? 0));
+            $nextTarget = $this->targets()->find($this->targetKey($data, 'next_target', 'next_project_id', 'next_group_id'));
 
-            if (! $nextProject) {
-                throw ValidationException::withMessages(['data.next_project_id' => __('Choose a project that is open for investment.')]);
+            if (! $nextTarget) {
+                throw ValidationException::withMessages(['data.'.(filled($data['next_target'] ?? null) || filled($data['next_group_id'] ?? null) ? 'next_target' : 'next_project_id') => __('Choose a group that is open for new members.')]);
             }
 
-            $nextProjectId = $nextProject->getKey();
+            $next = $this->targetColumns($nextTarget);
             $amount = $election === 'reinvest' ? (float) $payout->total_payout : round((float) ($data['amount'] ?? 0), 2);
 
             if ($amount <= 0 || $amount > (float) $payout->total_payout) {
@@ -258,7 +311,7 @@ class InvestorRequestService
 
         return [
             'settlement_payout_id' => $payout->getKey(),
-            'project_id' => $nextProjectId,
+            ...$next,
             'amount' => $amount,
             'payload' => ['election' => $election],
         ];
@@ -274,7 +327,7 @@ class InvestorRequestService
         return [];
     }
 
-    protected function approveTopUp(InvestorRequest $request, User $by, array $data): Investment
+    protected function approveTopUp(InvestorRequest $request, User $by, array $data): InvestorGroupMember|Investment
     {
         $amount = round((float) ($data['amount'] ?? $request->amount), 2);
         $method = (string) ($data['payment_method'] ?? $request->payload['payment_method'] ?? '');
@@ -283,17 +336,23 @@ class InvestorRequestService
             throw ValidationException::withMessages(['amount' => __('Enter the amount received, the date and how it was paid.')]);
         }
 
-        return Investment::query()->create([
-            'company_id' => $request->company_id,
-            'project_id' => $request->project_id,
-            'investor_id' => $request->investor_id,
+        // Staff may pick another open group if the one asked for has started since.
+        $key = filled($data['target'] ?? null)
+            ? (string) $data['target']
+            : ($request->group_id ? 'g'.$request->group_id : ($request->project_id ? 'p'.$request->project_id : null));
+        $target = $this->targets()->find($key);
+
+        if (! $target) {
+            throw ValidationException::withMessages(['target' => __('That group is not open any more. Pick an open group for this money.')]);
+        }
+
+        return $this->targets()->place($target, $request->investor, [
             'amount' => $amount,
             'payment_method' => $method,
             'payment_reference' => filled($data['payment_reference'] ?? null) ? trim((string) $data['payment_reference']) : ($request->payload['payment_reference'] ?? null),
             'invested_at' => $data['invested_at'],
             'override_reason' => $data['override_reason'] ?? null,
-            'received_by' => $by->getKey(),
-        ]);
+        ], $by);
     }
 
     protected function approveReinvest(InvestorRequest $request, User $by): InvestorCycleElection
@@ -309,7 +368,9 @@ class InvestorRequestService
                 $payout,
                 (string) ($request->payload['election'] ?? ''),
                 $request->amount !== null ? (float) $request->amount : null,
-                $request->project_id ? InvestmentProject::query()->find($request->project_id) : null,
+                $request->group_id
+                    ? InvestorGroup::query()->find($request->group_id)
+                    : ($request->project_id ? InvestmentProject::query()->find($request->project_id) : null),
                 (int) $by->getKey(),
             );
         } catch (RuntimeException $exception) {

@@ -5,6 +5,7 @@ namespace App\Filament\Investor\Pages;
 use App\Filament\Investor\Concerns\InvestorPortalPage;
 use App\Models\InvestorCycleElection;
 use App\Models\SettlementPayout;
+use App\Services\InvestorPortalCards;
 use App\Support\MoneyFormatter;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -52,9 +53,15 @@ class Payouts extends Page implements HasTable
             ->columns([
                 TextColumn::make('project')
                     ->label(__('Project'))
-                    ->state(fn (SettlementPayout $record): string => $this->portal()->projectLabel($record->settlement?->project))
+                    ->state(fn (SettlementPayout $record): string => app(InvestorPortalCards::class)->title($record->settlement?->project))
                     ->wrap(),
                 TextColumn::make('investment_amount')->label(__('Capital'))->formatStateUsing(fn ($state): string => MoneyFormatter::currency($state, $currency))->visibleFrom('md'),
+                TextColumn::make('principal_returned_amount')
+                    ->label(__('Capital returned'))
+                    ->state(fn (SettlementPayout $record): string => $record->principal_returned_amount !== null && (float) $record->principal_returned_amount <= 0
+                        ? __('Stays invested')
+                        : MoneyFormatter::currency($record->principalReturned(), $currency))
+                    ->visibleFrom('lg'),
                 TextColumn::make('profit_share_amount')->label(__('Profit share'))->formatStateUsing(fn ($state): string => MoneyFormatter::currency($state, $currency))->visibleFrom('md'),
                 TextColumn::make('total_payout')->label(__('Total'))->formatStateUsing(fn ($state): string => MoneyFormatter::currency($state, $currency))->weight('bold'),
                 TextColumn::make('payment_status')
@@ -71,6 +78,11 @@ class Payouts extends Page implements HasTable
                     ->toggleable(),
             ])
             ->recordActions([
+                Action::make('paymentProof')
+                    ->label(__('Payment screenshot'))
+                    ->icon(Heroicon::OutlinedCamera)
+                    ->visible(fn (SettlementPayout $record): bool => $record->payment_status === 'paid' && $record->hasPaymentProof())
+                    ->url(fn (SettlementPayout $record): string => route('filament.investor.documents.download', ['document' => $record->paymentProof()?->getKey()])),
                 Action::make('report')
                     ->label(__('Report'))
                     ->icon(Heroicon::OutlinedPrinter)

@@ -6,6 +6,7 @@ use App\Filament\Investor\Concerns\InvestorPortalPage;
 use App\Models\Investment;
 use App\Models\InvestmentProject;
 use App\Models\ProjectSettlement;
+use App\Services\InvestorPortalCards;
 use App\Services\InvestorPortalService;
 use App\Support\MoneyFormatter;
 use BackedEnum;
@@ -55,7 +56,7 @@ class MyInvestments extends Page implements HasTable
             ->columns([
                 TextColumn::make('project')
                     ->label(__('Project'))
-                    ->state(fn (Investment $record): string => $this->portal()->projectLabel($record->project))
+                    ->state(fn (Investment $record): string => app(InvestorPortalCards::class)->title($record->project))
                     ->description(fn (Investment $record): ?string => $record->project?->deal_reference)
                     ->wrap(),
                 TextColumn::make('amount')->label(__('Amount'))->formatStateUsing(fn ($state): string => MoneyFormatter::currency($state, $currency)),
@@ -67,6 +68,8 @@ class MyInvestments extends Page implements HasTable
                     ->state(fn (Investment $record): string => match (true) {
                         $record->isWithdrawn() => __('Withdrawn'),
                         $this->finalSettlement($record) !== null => __('Settled'),
+                        // In a group, "closed" means the two months are over, not that anything went wrong.
+                        $record->project?->group_id !== null && $record->project->status === 'closed' => __('Completed'),
                         default => __(InvestmentProject::STATUSES[$record->project?->status] ?? 'Open'),
                     })
                     ->color(fn (Investment $record): string => match (true) {

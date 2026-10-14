@@ -80,10 +80,18 @@ class SettlementService
             $netProfit = round($totalRevenue - $totalCost, 2);
 
             $grouped = $investments->groupBy('investor_id');
+            $isGroupProject = filled($lockedProject->group_id);
 
             if ($netProfit < 0) {
                 if (! in_array($outcome, ['loss_investor_borne', 'loss_manager_borne'], true)) {
                     throw new RuntimeException('Net profit is negative. Choose how the loss is borne (per the contract) and give a reason.');
+                }
+
+                // In a group the principal stays invested in the next project. A loss that
+                // eats into it needs the owner's rule for reducing a member's stake, which
+                // is not decided yet: never settle it silently.
+                if ($isGroupProject && $outcome === 'loss_investor_borne') {
+                    throw new RuntimeException(__('A loss borne by the investors cannot be settled on a group project yet: it needs the owner\'s rule for reducing a member\'s stake. Settle it as "company bears the loss", or ask for this rule to be built.'));
                 }
                 if (blank($lossReason)) {
                     throw new RuntimeException('A loss reason is required when settling a losing project.');
@@ -114,14 +122,22 @@ class SettlementService
                 'settled_at' => now(),
             ]);
 
+            // A group's members stay in the group, so their principal carries on into the
+            // next project and only the profit is paid. A member whose withdrawal notice
+            // matured at the end of this project gets the principal back as well.
+            $principalLeaving = $isGroupProject ? $this->principalLeaving($lockedProject, $investments) : [];
+
             foreach ($figures['payout_rows'] as $row) {
+                $principalReturned = $isGroupProject ? round($principalLeaving[$row['investor_id']] ?? 0.0, 2) : $row['principal'];
+
                 SettlementPayout::query()->create([
                     'company_id' => $lockedProject->company_id,
                     'settlement_id' => $settlement->id,
                     'investor_id' => $row['investor_id'],
                     'investment_amount' => $row['principal'],
+                    'principal_returned_amount' => $isGroupProject ? $principalReturned : null,
                     'profit_share_amount' => $row['profit_share'],
-                    'total_payout' => round($row['principal'] + $row['profit_share'], 2),
+                    'total_payout' => round($principalReturned + $row['profit_share'], 2),
                     'recipient_name' => $row['recipient_name'],
                 ]);
             }
@@ -151,6 +167,22 @@ class SettlementService
 
             return $settlement->load(['payouts', 'channelPartnerPayouts']);
         });
+    }
+
+    /**
+     * Principal that goes back with this project's payouts, per investor: the
+     * rows of members who leave the group at the end of this project.
+     *
+     * @return array<int, float> investor id => amount
+     */
+    private function principalLeaving(InvestmentProject $project, Collection $investments): array
+    {
+        return $investments->load('groupMember')
+            ->filter(fn ($investment): bool => $investment->groupMember !== null
+                && (int) $investment->groupMember->leaves_after_sequence === (int) $project->sequence_in_group)
+            ->groupBy('investor_id')
+            ->map(fn (Collection $rows): float => round((float) $rows->sum('amount'), 2))
+            ->all();
     }
 
     /** Promote a reviewed draft settlement to confirmed (v3 P1.4). */

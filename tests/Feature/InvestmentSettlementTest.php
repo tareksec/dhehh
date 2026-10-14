@@ -694,7 +694,7 @@ class InvestmentSettlementTest extends TestCase
 
         Livewire::test(PayoutsRelationManager::class, ['ownerRecord' => $settlement, 'pageClass' => ViewProjectSettlement::class])
             ->mountTableAction('election', $payout)
-            ->setTableActionData(['election' => 'partial_reinvest', 'reinvest_amount' => 5000, 'next_project_id' => $nextProject->id])
+            ->setTableActionData(['election' => 'partial_reinvest', 'reinvest_amount' => 5000, 'next_target' => 'p'.$nextProject->id])
             ->callMountedTableAction()
             ->assertHasNoTableActionErrors();
 

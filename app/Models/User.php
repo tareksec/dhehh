@@ -312,6 +312,8 @@ class User extends Authenticatable implements FilamentUser
         InvestmentProject::class => 'investments',
         Investor::class => 'investments',
         InvestorDraft::class => 'investments',
+        InvestorGroup::class => 'investments',
+        InvestorGroupMember::class => 'investments',
         Investment::class => 'investments',
         ProjectCostItem::class => 'investments',
         InvestorSecurityInstrument::class => 'investments',

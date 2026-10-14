@@ -66,6 +66,7 @@ class Company extends Model
         'reseller_custom_domains_enabled',
         'investor_portal_enabled',
         'investor_portal_domain',
+        'investor_project_completed_message',
     ];
 
     protected $casts = [

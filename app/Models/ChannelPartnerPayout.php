@@ -3,11 +3,12 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\HasPaymentProof;
 use Illuminate\Database\Eloquent\Model;
 
 class ChannelPartnerPayout extends Model
 {
-    use BelongsToCompany;
+    use BelongsToCompany, HasPaymentProof;
 
     protected $fillable = ['company_id', 'settlement_id', 'channel_partner_id', 'amount', 'payment_status', 'paid_at', 'payment_method', 'payment_reference', 'voucher_id'];
 

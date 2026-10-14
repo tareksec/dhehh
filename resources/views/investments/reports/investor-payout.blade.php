@@ -94,6 +94,13 @@
                         @if (! is_null($settlement->rate_per_lac)) &times; {{ $money($settlement->rate_per_lac) }} per lac @endif</td>
                     <td class="num">Principal {{ $money($payout->investment_amount) }}</td>
                 </tr>
+                @if (! is_null($payout->principal_returned_amount))
+                    <tr>
+                        <td>Principal returned with this payout
+                            @if ((float) $payout->principal_returned_amount <= 0) (stays invested in the group) @endif</td>
+                        <td class="num">{{ $money($payout->principal_returned_amount) }}</td>
+                    </tr>
+                @endif
                 <tr><td>Profit share</td><td class="num">{{ $money($payout->profit_share_amount) }}</td></tr>
                 <tr class="total"><td>Total Payout</td><td class="num">{{ $money($payout->total_payout) }}</td></tr>
             </tbody>
