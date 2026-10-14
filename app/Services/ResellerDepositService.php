@@ -16,8 +16,8 @@ use Illuminate\Validation\ValidationException;
  * added, negative = deducted) that keeps the reason and the member of staff,
  * and is also written to the audit log (AuditObserver).
  *
- * The deposit never goes below zero: a deduction bigger than the balance is
- * refused. It runs under the same reseller row lock as
+ * A staff deduction never takes the deposit below zero: one bigger than the
+ * balance is refused (only a return charge can leave it negative). It runs under the same reseller row lock as
  * ResellerOwnCourierService::applyDeposit(), so an adjustment and an order
  * that is using the deposit never read the same balance twice.
  */

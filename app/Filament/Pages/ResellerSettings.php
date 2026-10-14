@@ -89,6 +89,7 @@ class ResellerSettings extends Page
             'reseller_subdomain_setup_minutes' => (int) ($setting?->reseller_subdomain_setup_minutes ?? 10),
             'reseller_cost_per_unit' => (float) ($setting?->reseller_cost_per_unit ?? 0),
             'reseller_packaging_cost_per_unit' => (float) ($setting?->reseller_packaging_cost_per_unit ?? 0),
+            'reseller_return_charge' => (float) ($setting?->reseller_return_charge ?? 50),
             'reseller_min_withdrawal' => (float) ($setting?->reseller_min_withdrawal ?? 0),
             'reseller_program_enabled' => (bool) ($setting?->reseller_program_enabled ?? true),
             'reseller_guide_enabled' => (bool) ($setting?->reseller_guide_enabled ?? true),
@@ -208,6 +209,13 @@ class ResellerSettings extends Page
                             ->required()
                             ->prefix($currency)
                             ->helperText(__('Charged on orders a reseller sends with their own courier: this amount times the number of pieces. The reseller pays it in advance with the order.')),
+                        TextInput::make('reseller_return_charge')
+                            ->label(__('Return charge per order'))
+                            ->numeric()
+                            ->minValue(0)
+                            ->required()
+                            ->prefix($currency)
+                            ->helperText(__('Taken once from the reseller\'s deposit when one of their orders is returned (not when it is cancelled before delivery). Enter 0 for no charge. If the deposit holds less, it goes below zero and the reseller\'s next credits make it up.')),
                         TextInput::make('reseller_min_withdrawal')
                             ->label(__('Minimum reseller withdrawal'))
                             ->numeric()
@@ -425,6 +433,7 @@ class ResellerSettings extends Page
         $setting->forceFill([
             'reseller_cost_per_unit' => round((float) $data['reseller_cost_per_unit'], 2),
             'reseller_packaging_cost_per_unit' => round((float) $data['reseller_packaging_cost_per_unit'], 2),
+            'reseller_return_charge' => round((float) $data['reseller_return_charge'], 2),
             'reseller_min_withdrawal' => round((float) $data['reseller_min_withdrawal'], 2),
             'reseller_program_enabled' => (bool) $data['reseller_program_enabled'],
             'reseller_guide_enabled' => (bool) $data['reseller_guide_enabled'],

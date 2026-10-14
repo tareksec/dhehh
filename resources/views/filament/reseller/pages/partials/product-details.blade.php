@@ -166,7 +166,7 @@
                     @endforeach
                 </tbody>
             </table>
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ __('A variation with a cost is sold at the price you set, and the difference is your commission. A variation without one sells at its normal price with no commission. Set your prices with Variation prices.') }}</p>
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ __('The difference between the price you set and what you pay the store is your commission. Set your prices with Variation prices.') }}</p>
         </div>
     @endif
 

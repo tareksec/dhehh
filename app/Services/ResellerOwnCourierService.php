@@ -13,6 +13,9 @@ use App\Models\StorefrontSetting;
 use App\Support\MoneyFormatter;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -30,6 +33,12 @@ class ResellerOwnCourierService
 {
     /** StorefrontPayment::gateway of an advance paid from the reseller's deposit (no transaction to check). */
     public const GATEWAY_DEPOSIT = 'reseller_deposit';
+
+    /** The "Paid to" choice that pays through the store's online payment gateway instead of a send-money number. */
+    public const ONLINE = 'online';
+
+    /** StorefrontPayment::gateway values of an advance paid through an online gateway. */
+    public const ONLINE_GATEWAYS = ['zinipay' => 'ZiniPay', 'paystation' => 'PayStation'];
 
     /**
      * The send-money / bank channels a reseller can pay an advance into
@@ -66,6 +75,64 @@ class ResellerOwnCourierService
             ->get();
     }
 
+    /**
+     * The online payment gateway the store has switched on and set up
+     * (Integrations > Payment Gateway), or null when it has none (owner
+     * decision 2026-10-14: whichever gateway is active is offered too).
+     */
+    public function onlineGateway(Company $company): ?string
+    {
+        $setting = StorefrontSetting::bladeFor((int) $company->getKey());
+
+        if (! $setting || ! $setting->online_payment_enabled) {
+            return null;
+        }
+
+        $gateway = $setting->online_payment_gateway ?: 'zinipay';
+
+        return array_key_exists($gateway, self::ONLINE_GATEWAYS)
+            && app(PaymentGatewayResolver::class)->isConfigured($setting)
+            ? $gateway
+            : null;
+    }
+
+    /**
+     * Everything a reseller can pick under "Paid to": the manual methods,
+     * then the active online gateway.
+     *
+     * @return array<string, string>
+     */
+    public function paymentOptions(Company $company): array
+    {
+        $options = $this->paymentMethods($company)
+            ->mapWithKeys(fn (StorefrontPaymentMethod $method): array => [
+                (string) $method->getKey() => trim($method->name.($method->account_number ? ' — '.$method->account_number : '')),
+            ])
+            ->all();
+
+        if ($gateway = $this->onlineGateway($company)) {
+            $options[self::ONLINE] = __('Pay online (:gateway)', ['gateway' => self::ONLINE_GATEWAYS[$gateway]]);
+        }
+
+        return $options;
+    }
+
+    /** True when $payment was paid, or is to be paid, through an online gateway. */
+    public function isOnline(StorefrontPayment $payment): bool
+    {
+        return array_key_exists((string) $payment->gateway, self::ONLINE_GATEWAYS);
+    }
+
+    /** The online payment the reseller started but has not completed, if any. */
+    public function pendingOnlinePayment(Order $order): ?StorefrontPayment
+    {
+        return $order->resellerAdvancePayments()
+            ->where('status', StorefrontPayment::STATUS_PENDING)
+            ->whereIn('gateway', array_keys(self::ONLINE_GATEWAYS))
+            ->latest('id')
+            ->first();
+    }
+
     /** True when the reseller already used $parcelId on another order that is not cancelled. */
     public function parcelIdIsTaken(int $resellerId, string $parcelId, ?int $exceptOrderId = null): bool
     {
@@ -95,11 +162,18 @@ class ResellerOwnCourierService
     {
         abort_unless($order->reseller_own_courier, 404);
 
+        if (($payment['payment_method_id'] ?? null) === self::ONLINE) {
+            return $this->startOnlinePayment($order, $errorPrefix);
+        }
+
         $methodId = (int) ($payment['payment_method_id'] ?? 0);
 
         if (! $this->paymentMethods($order->company)->contains(fn (StorefrontPaymentMethod $method): bool => (int) $method->getKey() === $methodId)) {
             throw ValidationException::withMessages([$errorPrefix.'payment_method_id' => __('Choose how you paid.')]);
         }
+
+        // An online attempt that was never completed gives way to this one.
+        $this->replaceOnlineAttempts($order);
 
         $owed = $this->outstandingAmount($order);
 
@@ -124,6 +198,137 @@ class ResellerOwnCourierService
             'payment_method' => trim($payment['sender']),
             'transaction_id' => trim($payment['transaction_id']),
         ]);
+    }
+
+    /**
+     * Starts an online payment of what is still owed on $order: a hosted
+     * invoice at the store's active gateway. The payment waits (pending)
+     * until the gateway confirms it -- on the reseller's return or by its
+     * webhook -- and is then recorded without staff checking it. An earlier
+     * online attempt that never completed is replaced. The page URL to send
+     * the reseller to is kept in the payment's payload.
+     */
+    public function startOnlinePayment(Order $order, string $errorPrefix = 'data.'): StorefrontPayment
+    {
+        $company = Company::query()->withoutGlobalScopes()->findOrFail($order->company_id);
+        $gateway = $this->onlineGateway($company);
+        $setting = StorefrontSetting::bladeFor((int) $company->getKey());
+
+        if (! $gateway || ! $setting) {
+            throw ValidationException::withMessages([$errorPrefix.'payment_method_id' => __('Online payment is not available. Choose a send-money number.')]);
+        }
+
+        $payment = DB::transaction(function () use ($order, $gateway, $errorPrefix): StorefrontPayment {
+            // One reseller payment at a time on an order.
+            Order::query()->whereKey($order->getKey())->lockForUpdate()->firstOrFail();
+
+            $this->replaceOnlineAttempts($order);
+
+            $owed = $this->outstandingAmount($order);
+
+            if ($owed <= 0) {
+                throw ValidationException::withMessages([$errorPrefix.'transaction_id' => __('A payment for this order is already waiting or verified.')]);
+            }
+
+            return StorefrontPayment::query()->create([
+                'company_id' => $order->company_id,
+                'order_id' => $order->getKey(),
+                'gateway' => $gateway,
+                'purpose' => StorefrontPayment::PURPOSE_RESELLER_ADVANCE,
+                'amount' => $owed,
+                'status' => StorefrontPayment::STATUS_PENDING,
+            ]);
+        });
+
+        $reseller = Customer::withoutGlobalScopes()->findOrFail($order->reseller_customer_id);
+        $returnUrl = URL::temporarySignedRoute('reseller.portal.orders.payment-return', now()->addHour(), ['payment' => $payment]);
+        // The gateway calls the webhook on the store's own domain: the portal host serves only the portal.
+        $webhookPath = route($gateway.'.webhook', $payment, false);
+        $webhookUrl = filled($company->domain) ? 'https://'.$company->domain.$webhookPath : url($webhookPath);
+
+        try {
+            $created = app(PaymentGatewayResolver::class)->byKey($gateway)->createPayment(
+                $setting,
+                (float) $payment->amount,
+                (string) $reseller->name,
+                $reseller->email,
+                (string) $reseller->phone,
+                (string) ($reseller->address ?: 'N/A'),
+                $returnUrl,
+                $returnUrl,
+                $webhookUrl,
+                $payment->getKey().'-'.Str::random(10),
+                ['payment_id' => $payment->getKey(), 'purpose' => StorefrontPayment::PURPOSE_RESELLER_ADVANCE],
+            );
+        } catch (\Throwable $exception) {
+            $payment->update(['status' => StorefrontPayment::STATUS_FAILED, 'payload' => ['error' => $exception->getMessage()]]);
+            Log::warning('Reseller online advance could not be started', ['payment' => $payment->getKey(), 'error' => $exception->getMessage()]);
+
+            throw ValidationException::withMessages([$errorPrefix.'payment_method_id' => __('The secure payment page could not be opened. Please try again.')]);
+        }
+
+        $payment->update(['invoice_id' => $created['invoice_id'], 'payload' => ['payment_url' => $created['payment_url']]]);
+
+        return $payment->refresh();
+    }
+
+    /** Online payments the reseller started and never completed are closed, so a new payment can be made. */
+    protected function replaceOnlineAttempts(Order $order): void
+    {
+        $order->resellerAdvancePayments()
+            ->reorder()
+            ->where('status', StorefrontPayment::STATUS_PENDING)
+            ->whereIn('gateway', array_keys(self::ONLINE_GATEWAYS))
+            ->update(['status' => StorefrontPayment::STATUS_FAILED, 'payload' => json_encode(['replaced' => true])]);
+    }
+
+    /**
+     * Enters an online advance the gateway confirmed in the order's Payments
+     * History, once (called by StorefrontPaymentService when it marks the
+     * payment completed), and credits anything above the total to the
+     * reseller's deposit. Does nothing for any other payment.
+     */
+    public function recordOnlinePayment(StorefrontPayment $payment): void
+    {
+        if ($payment->purpose !== StorefrontPayment::PURPOSE_RESELLER_ADVANCE || ! $this->isOnline($payment)) {
+            return;
+        }
+
+        $context = app(CompanyContext::class);
+        $previous = $context->company();
+        $context->set(Company::query()->withoutGlobalScopes()->findOrFail($payment->company_id));
+
+        try {
+            DB::transaction(function () use ($payment): void {
+                $payment = StorefrontPayment::withoutGlobalScopes()->lockForUpdate()->findOrFail($payment->getKey());
+
+                // The note carries the payment's id, so a repeated call (the
+                // return and the webhook both arrive) enters it only once.
+                $marker = '[payment #'.$payment->getKey().']';
+
+                if ($payment->status !== StorefrontPayment::STATUS_COMPLETED
+                    || OrderPayment::query()->where('order_id', $payment->order_id)->where('note', 'like', '%'.$marker.'%')->exists()) {
+                    return;
+                }
+
+                $order = Order::withoutGlobalScopes()->findOrFail($payment->order_id);
+
+                OrderPayment::query()->create([
+                    'company_id' => $payment->company_id,
+                    'order_id' => $order->getKey(),
+                    'type' => OrderPayment::TYPE_ADVANCE,
+                    'method' => 'other',
+                    'amount' => $payment->amount,
+                    'note' => trim('Reseller advance paid online ('.(self::ONLINE_GATEWAYS[$payment->gateway] ?? $payment->gateway).'). '
+                        .($payment->payment_method ? $payment->payment_method.', ' : '')
+                        .'transaction '.$payment->transaction_id.' '.$marker),
+                ]);
+
+                $this->creditOverpayment($order, $payment);
+            });
+        } finally {
+            $context->set($previous);
+        }
     }
 
     /**
@@ -178,6 +383,12 @@ class ResellerOwnCourierService
             ->sum('amount'), 2);
     }
 
+    /** The part of the deposit an order can use: never anything while a return charge has left it below zero. */
+    public function spendableDeposit(Customer $reseller): float
+    {
+        return max(0.0, $this->depositBalance($reseller));
+    }
+
     /**
      * Pays what is still owed on $order from the reseller's deposit (owner
      * rule: the deposit is used on their next orders), as a payment that
@@ -192,7 +403,7 @@ class ResellerOwnCourierService
         return DB::transaction(function () use ($order): float {
             // One reseller's deposit is used by one order at a time.
             $reseller = Customer::withoutGlobalScopes()->lockForUpdate()->findOrFail($order->reseller_customer_id);
-            $used = min($this->depositBalance($reseller), $this->outstandingAmount($order));
+            $used = min($this->spendableDeposit($reseller), $this->outstandingAmount($order));
 
             if ($used <= 0) {
                 return 0.0;
@@ -276,6 +487,65 @@ class ResellerOwnCourierService
 
             return $back;
         });
+    }
+
+    /**
+     * A returned order takes the return charge from the reseller's deposit
+     * (owner rule, 2026-10-14): the amount set in Reseller Settings, once per
+     * order, for store-delivered and own-courier orders alike. Nothing else
+     * comes back for a return. The deposit may end up below zero; later
+     * credits make that up. Safe to call again -- it charges only once.
+     * Returns the amount charged now.
+     */
+    public function chargeReturn(Order $order): float
+    {
+        if (! $order->reseller_customer_id || $order->status !== Order::STATUS_RETURNED) {
+            return 0.0;
+        }
+
+        $charge = round((float) (StorefrontSetting::bladeFor((int) $order->company_id)?->reseller_return_charge ?? 0), 2);
+
+        if ($charge <= 0) {
+            return 0.0;
+        }
+
+        return DB::transaction(function () use ($order, $charge): float {
+            // Same lock as applyDeposit(): one deposit change at a time.
+            if (! Customer::withoutGlobalScopes()->lockForUpdate()->find($order->reseller_customer_id)) {
+                return 0.0;
+            }
+
+            $charged = ResellerDepositEntry::withoutGlobalScopes()
+                ->where('company_id', $order->company_id)
+                ->where('order_id', $order->getKey())
+                ->where('type', ResellerDepositEntry::TYPE_RETURN_CHARGE)
+                ->exists();
+
+            if ($charged) {
+                return 0.0;
+            }
+
+            ResellerDepositEntry::query()->create([
+                'company_id' => $order->company_id,
+                'customer_id' => $order->reseller_customer_id,
+                'order_id' => $order->getKey(),
+                'type' => ResellerDepositEntry::TYPE_RETURN_CHARGE,
+                'amount' => -$charge,
+                'note' => 'Return charge: order '.$order->order_number.' was returned',
+            ]);
+
+            return $charge;
+        });
+    }
+
+    /** What a returned $order took from the reseller's deposit as the return charge. */
+    public function returnChargeOf(Order $order): float
+    {
+        return round(-(float) ResellerDepositEntry::withoutGlobalScopes()
+            ->where('company_id', $order->company_id)
+            ->where('order_id', $order->getKey())
+            ->where('type', ResellerDepositEntry::TYPE_RETURN_CHARGE)
+            ->sum('amount'), 2);
     }
 
     /** What a cancelled $order gave back to the reseller's deposit. */
@@ -377,7 +647,7 @@ class ResellerOwnCourierService
      * Short state for the reseller and staff: verified (the whole total is
      * verified), rejected (the last one was not accepted and money is still
      * owed), waiting (a payment is being checked), short (less arrived than
-     * was owed) or not sent.
+     * was owed), paying (an online payment is not confirmed yet) or not sent.
      */
     public function paymentState(Order $order): string
     {
@@ -394,6 +664,11 @@ class ResellerOwnCourierService
         // has to send it again, even while an earlier payment is waiting.
         if ($payments->last()?->status === StorefrontPayment::STATUS_FAILED && $sent < round((float) $order->total_amount, 2)) {
             return 'rejected';
+        }
+
+        // The reseller started an online payment that the gateway has not confirmed yet.
+        if ($payments->contains(fn (StorefrontPayment $payment): bool => $payment->status === StorefrontPayment::STATUS_PENDING && $this->isOnline($payment))) {
+            return 'paying';
         }
 
         if ($payments->contains('status', StorefrontPayment::STATUS_PENDING)) {
@@ -425,6 +700,7 @@ class ResellerOwnCourierService
     {
         return [
             'waiting' => __('Waiting for verification'),
+            'paying' => __('Waiting for the online payment'),
             'verified' => __('Verified'),
             'rejected' => __('Rejected — send again'),
             'short' => __('Part received — send the rest'),

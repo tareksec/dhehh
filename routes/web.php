@@ -29,6 +29,7 @@ use App\Http\Controllers\MobileCrashReportController;
 use App\Http\Controllers\PayStationWebhookController;
 use App\Http\Controllers\QuotationPublicController;
 use App\Http\Controllers\Reseller\ResellerGuideController;
+use App\Http\Controllers\Reseller\ResellerOnlinePaymentReturnController;
 use App\Http\Controllers\Reseller\ResellerProductPhotosController;
 use App\Http\Controllers\Storefront\AccountAuthController as StorefrontAccountAuthController;
 use App\Http\Controllers\Storefront\AccountController as StorefrontAccountController;
@@ -480,6 +481,13 @@ Route::middleware([ResolveCompanyFromDomain::class, ResolveResellerFromSlug::cla
 Route::get('/portal/products/{product}/photos', ResellerProductPhotosController::class)
     ->middleware([ResolveCompanyFromResellerPortalDomain::class, 'auth:customer'])
     ->name('reseller.portal.products.photos');
+
+// Where the online gateway sends a reseller back after paying an own-courier
+// advance. Signed, so no login is needed to land here; the page it ends on
+// (the portal's Orders) asks for one.
+Route::get('/portal/orders/payment/{payment}/return', ResellerOnlinePaymentReturnController::class)
+    ->middleware(ResolveCompanyFromResellerPortalDomain::class)
+    ->name('reseller.portal.orders.payment-return');
 
 // The public reseller guide (rules before applying), on the portal host only;
 // RestrictPortalHosts keeps "/portal/*" off every other host.

@@ -5,7 +5,6 @@ namespace App\Filament\Reseller\Pages;
 use App\Filament\Reseller\Concerns\ForApprovedResellers;
 use App\Models\Product;
 use App\Models\ProductVariant;
-use App\Models\StorefrontPaymentMethod;
 use App\Services\ExternalCourierFraudService;
 use App\Services\ResellerOrderPlacementService;
 use App\Services\ResellerOwnCourierService;
@@ -81,9 +80,13 @@ class CreateOrder extends Page
         $reseller = $this->reseller();
         $products = $service->catalog($reseller)->keyBy('id');
         $paymentMethods = app(ResellerOwnCourierService::class)->paymentMethods($reseller->company)->keyBy('id');
+        // The send-money numbers plus the store's active online gateway.
+        $paymentOptions = app(ResellerOwnCourierService::class)->paymentOptions($reseller->company);
         $ownCourier = fn (Get $get): bool => $get('delivery_method') === 'own';
         // Own courier and something left to send after the reseller's deposit.
         $mustPay = fn (Get $get): bool => $ownCourier($get) && ($this->summary()['to_send'] ?? 1) > 0;
+        $online = fn (Get $get): bool => $get('payment_method_id') === ResellerOwnCourierService::ONLINE;
+        $mustEnterPayment = fn (Get $get): bool => $mustPay($get) && ! $online($get);
         // The variation a line has chosen; null for a product without variations.
         $lineVariant = fn (Get $get): ?ProductVariant => ($product = $products->get((int) $get('product_id'))) && $product->has_variants
             ? $product->activeVariants->firstWhere('id', (int) $get('variant_id'))
@@ -146,8 +149,8 @@ class CreateOrder extends Page
                                 'store' => __('The store delivers (cash on delivery)'),
                                 'own' => __('My own courier (I pay the full amount in advance)'),
                             ])
-                            ->disableOptionWhen(fn (string $value): bool => $value === 'own' && $paymentMethods->isEmpty())
-                            ->helperText($paymentMethods->isEmpty() ? __('Own courier orders are not available yet: the store has no payment method set up.') : null)
+                            ->disableOptionWhen(fn (string $value): bool => $value === 'own' && $paymentOptions === [])
+                            ->helperText($paymentOptions === [] ? __('Own courier orders are not available yet: the store has no payment method set up.') : null)
                             ->default('store')
                             ->required()
                             ->live()
@@ -171,22 +174,27 @@ class CreateOrder extends Page
                     ->schema([
                         Select::make('payment_method_id')
                             ->label(__('Paid to'))
-                            ->options(fn (): array => $paymentMethods->mapWithKeys(fn (StorefrontPaymentMethod $method): array => [
-                                $method->getKey() => trim($method->name.($method->account_number ? ' — '.$method->account_number : '')),
-                            ])->all())
+                            ->options(fn (): array => $paymentOptions)
                             ->required($mustPay)
                             ->live()
-                            ->helperText(fn (Get $get): ?string => $paymentMethods->get((int) $get('payment_method_id'))?->instructions)
+                            ->helperText(fn (Get $get): ?string => $online($get)
+                                ? __('You will go to the secure payment page to pay :amount. The store packs the parcel once the payment is confirmed.', [
+                                    'amount' => MoneyFormatter::currency((float) ($this->summary()['to_send'] ?? 0), $this->currency()),
+                                ])
+                                : $paymentMethods->get((int) $get('payment_method_id'))?->instructions)
                             ->columnSpanFull(),
                         TextInput::make('sender')
                             ->label(__('Paid from (number or account)'))
-                            ->required($mustPay)
+                            ->required($mustEnterPayment)
+                            ->visible(fn (Get $get): bool => ! $online($get))
                             ->maxLength(40),
                         TextInput::make('transaction_id')
                             ->label(__('Transaction ID'))
-                            ->required($mustPay)
+                            ->required($mustEnterPayment)
+                            ->visible(fn (Get $get): bool => ! $online($get))
                             ->maxLength(100),
-                        self::amountSentField(fn (): float => (float) ($this->summary()['to_send'] ?? 0), $this->currency()),
+                        self::amountSentField(fn (): float => (float) ($this->summary()['to_send'] ?? 0), $this->currency())
+                            ->visible(fn (Get $get): bool => ! $online($get)),
                     ])
                     ->columns(2),
 
@@ -383,13 +391,18 @@ class CreateOrder extends Page
             'amount' => $data['amount'] ?? null,
         ] : null);
 
+        // Paying online: on to the gateway's page; the order waits for its confirmation.
+        $onlinePayment = $this->isOwnCourier() ? app(ResellerOwnCourierService::class)->pendingOnlinePayment($order) : null;
+
         Notification::make()
-            ->title($this->isOwnCourier()
-                ? __('Order :number was created. The store will check your payment and pack the parcel.', ['number' => $order->order_number])
-                : __('Order :number was created. The store will review it.', ['number' => $order->order_number]))
+            ->title($onlinePayment
+                ? __('Order :number was created. Finish the payment to send it to the store.', ['number' => $order->order_number])
+                : ($this->isOwnCourier()
+                    ? __('Order :number was created. The store will check your payment and pack the parcel.', ['number' => $order->order_number])
+                    : __('Order :number was created. The store will review it.', ['number' => $order->order_number])))
             ->success()
             ->send();
 
-        $this->redirect(Orders::getUrl());
+        $this->redirect($onlinePayment?->payload['payment_url'] ?? Orders::getUrl());
     }
 }

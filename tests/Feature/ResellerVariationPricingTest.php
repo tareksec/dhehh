@@ -19,15 +19,17 @@ use App\Services\CompanyContext;
 use App\Services\ResellerPricing;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\TestCase;
 
 /**
- * Owner decision (2026-10-12): the admin sets a reseller price on each
- * variation (what the reseller pays); the reseller sets their own customer
- * price per variation at or above it; the commission is the difference; the
- * reseller price is never shown on a reseller's storefront.
+ * Owner decision (2026-10-14): a variation has no separate reseller price --
+ * its own (wholesale) price plus the company's reseller cost per unit is what
+ * the reseller pays; the reseller sets their own customer price per variation
+ * at or above it; the commission is the difference; what the reseller pays is
+ * never shown on a reseller's storefront.
  */
 class ResellerVariationPricingTest extends TestCase
 {
@@ -62,36 +64,49 @@ class ResellerVariationPricingTest extends TestCase
             'reorder_level' => 1, 'vat_rate' => 0, 'has_variants' => true,
             'is_active' => true, 'status' => Product::STATUS_AVAILABLE,
         ])->fresh();
-        // Distinctive numbers, so a leak of any reseller price is easy to spot in HTML.
-        $this->medium = $this->variant('Size', 'M', sale: 691, reseller: 433);
-        $this->large = $this->variant('Size', 'L', sale: 733, reseller: 521);
-        $this->extraLarge = $this->variant('Size', 'XL', sale: 877, reseller: null);
+        // Distinctive numbers, so a leak of what the reseller pays is easy to
+        // spot in HTML. The company adds 20 per unit: the reseller pays 711, 753, 897.
+        $this->medium = $this->variant('Size', 'M', sale: 691);
+        $this->large = $this->variant('Size', 'L', sale: 733);
+        $this->extraLarge = $this->variant('Size', 'XL', sale: 877);
         ResellerProduct::query()->create([
             'customer_id' => $this->reseller->getKey(), 'product_id' => $this->product->getKey(), 'is_active' => true,
-            'variant_prices' => [$this->medium->getKey() => 659],
+            'variant_prices' => [$this->medium->getKey() => 759],
         ]);
     }
 
-    public function test_a_reseller_pays_the_admins_reseller_price_and_sets_their_own_customer_price(): void
+    public function test_a_reseller_pays_the_wholesale_price_plus_the_unit_cost_and_sets_their_own_customer_price(): void
     {
         $pricing = app(ResellerPricing::class);
         $pricing->activate($this->company, $this->reseller);
 
-        // Chosen price; else the normal price; none for a variation without a reseller price.
-        $this->assertSame(659.0, $pricing->variantPriceFor($this->medium));
-        $this->assertSame(733.0, $pricing->variantPriceFor($this->large));
-        $this->assertNull($pricing->variantPriceFor($this->extraLarge));
+        // The reseller's chosen price; otherwise the normal price, raised to what they pay.
+        $this->assertSame(759.0, $pricing->variantPriceFor($this->medium));
+        $this->assertSame(753.0, $pricing->variantPriceFor($this->large));
+        $this->assertSame(897.0, $pricing->variantPriceFor($this->extraLarge));
 
-        // The reseller pays exactly the admin's price: no per-unit cost is added.
-        $this->company->storefrontSetting->update(['reseller_cost_per_unit' => 50]);
+        // Every variation's cost is its own price + the company's cost per unit.
+        $this->assertSame(711.0, $pricing->variantBasePriceFor($this->medium));
+        $this->assertSame(753.0, $pricing->variantBasePriceFor($this->large));
+        $this->assertSame(897.0, $pricing->variantBasePriceFor($this->extraLarge));
+
+        // With no cost per unit the wholesale price alone is what they pay.
+        $this->company->storefrontSetting->update(['reseller_cost_per_unit' => 0]);
         $pricing->activate($this->company->fresh(), $this->reseller);
-        $this->assertSame(433.0, $pricing->variantBasePriceFor($this->medium));
-        $this->assertSame(521.0, $pricing->variantBasePriceFor($this->large));
-        $this->assertNull($pricing->variantBasePriceFor($this->extraLarge));
+        $this->assertSame(691.0, $pricing->variantBasePriceFor($this->medium));
+        $this->assertSame(733.0, $pricing->variantPriceFor($this->large));
+        $this->assertSame(877.0, $pricing->variantPriceFor($this->extraLarge));
 
         // What the storefront shows is the same number.
-        $this->assertSame(659.0, $this->medium->effectiveSalePrice());
+        $this->assertSame(759.0, $this->medium->effectiveSalePrice());
         $this->assertSame(877.0, $this->extraLarge->effectiveSalePrice());
+    }
+
+    public function test_a_variation_without_a_price_has_no_reseller_cost(): void
+    {
+        $this->assertNull((new ProductVariant(['sale_price' => 0]))->resellerCost(20));
+        $this->assertSame(120.0, (new ProductVariant(['sale_price' => 100]))->resellerCost(20));
+        $this->assertSame(100.0, (new ProductVariant(['sale_price' => 100]))->resellerCost(-5)); // a negative cost is ignored
     }
 
     public function test_a_price_below_what_the_reseller_pays_is_raised_to_it(): void
@@ -102,13 +117,13 @@ class ResellerVariationPricingTest extends TestCase
         $pricing = app(ResellerPricing::class);
         $pricing->activate($this->company, $this->reseller);
 
-        $this->assertSame(433.0, $pricing->variantPriceFor($this->medium)); // never below the cost
-        $this->assertSame(733.0, $pricing->variantPriceFor($this->large)); // junk is ignored
+        $this->assertSame(711.0, $pricing->variantPriceFor($this->medium)); // never below the cost
+        $this->assertSame(753.0, $pricing->variantPriceFor($this->large)); // junk is ignored: normal price raised to the cost
     }
 
     public function test_nothing_changes_without_a_reseller_or_for_a_product_outside_their_store(): void
     {
-        // No reseller active: the normal price, the reseller price is never used.
+        // No reseller active: the normal price.
         $this->assertSame(691.0, $this->medium->effectiveSalePrice());
         $this->assertSame(733.0, $this->large->effectiveSalePrice());
 
@@ -127,13 +142,13 @@ class ResellerVariationPricingTest extends TestCase
         $pricing->activate($this->company, $other);
         $this->assertSame(999.0, $pricing->variantPriceFor($this->medium));
         $pricing->activate($this->company, $this->reseller);
-        $this->assertSame(659.0, $pricing->variantPriceFor($this->medium));
+        $this->assertSame(759.0, $pricing->variantPriceFor($this->medium));
     }
 
     public function test_a_variation_of_another_company_is_never_reseller_priced(): void
     {
         $other = $this->makeCompany('other-var.example.test', 'OTV');
-        $foreign = new ProductVariant(['product_id' => $this->product->getKey(), 'options' => ['Size' => 'S'], 'sale_price' => 500, 'reseller_price' => 300, 'stock' => 5]);
+        $foreign = new ProductVariant(['product_id' => $this->product->getKey(), 'options' => ['Size' => 'S'], 'sale_price' => 500, 'stock' => 5]);
         $foreign->company_id = $other->getKey();
         $foreign->save();
         $pricing = app(ResellerPricing::class);
@@ -142,30 +157,40 @@ class ResellerVariationPricingTest extends TestCase
         $this->assertNull($pricing->variantPriceFor($foreign));
     }
 
-    public function test_the_reseller_store_shows_the_resellers_prices_and_never_the_reseller_price(): void
+    public function test_the_reseller_store_shows_the_resellers_prices_and_never_what_they_pay(): void
     {
+        ResellerProduct::query()->where('customer_id', $this->reseller->getKey())->update([
+            'variant_prices' => [$this->medium->getKey() => 759, $this->large->getKey() => 800, $this->extraLarge->getKey() => 963],
+        ]);
+
         $html = $this->get('http://var-co.example.test/store/margin-shop/product/'.$this->product->slug)
             ->assertOk()
             ->getContent();
+        $this->assertStringContainsString('759', $html);
+        $this->assertStringContainsString('800', $html);
+        $this->assertStringContainsString('963', $html);
+        $this->assertStringNotContainsString('691', $html); // the normal prices are replaced by the reseller's
+        $this->assertStringNotContainsString('733', $html);
+        $this->assertStringNotContainsString('877', $html);
+        $this->assertStringNotContainsString('711', $html); // what the reseller pays: never shown
+        $this->assertStringNotContainsString('753', $html);
+        $this->assertStringNotContainsString('897', $html);
 
-        $this->assertStringContainsString('659', $html);   // chosen
-        $this->assertStringContainsString('733', $html);   // normal price (nothing chosen)
-        $this->assertStringContainsString('877', $html);   // no reseller price: normal
-        $this->assertStringNotContainsString('691', $html); // M's normal price is replaced by the reseller's
-        $this->assertStringNotContainsString('433', $html); // what the reseller pays: never shown
-        $this->assertStringNotContainsString('521', $html);
-
-        // The plain store (no reseller) shows normal prices and never the reseller price either.
+        // The plain store (no reseller) shows normal prices and never the reseller's.
         $this->flushSession();
         $plain = $this->get('http://var-co.example.test/product/'.$this->product->slug)->assertOk()->getContent();
         $this->assertStringContainsString('691', $plain);
-        $this->assertStringNotContainsString('433', $plain);
-        $this->assertStringNotContainsString('521', $plain);
-        $this->assertStringNotContainsString('659', $plain);
+        $this->assertStringNotContainsString('711', $plain);
+        $this->assertStringNotContainsString('759', $plain);
+        $this->assertDoesNotMatchRegularExpression('/(?<![\d.])963(?!\d)/', $plain); // as a price, not inside an SVG path
     }
 
     public function test_an_order_through_the_reseller_store_charges_their_price_and_records_the_commission(): void
     {
+        ResellerProduct::query()->where('customer_id', $this->reseller->getKey())->update([
+            'variant_prices' => [$this->medium->getKey() => 759, $this->large->getKey() => 800, $this->extraLarge->getKey() => 963],
+        ]);
+
         $this->post("http://var-co.example.test/store/margin-shop/cart/items/{$this->product->slug}", [
             'quantities' => [$this->medium->getKey() => 2, $this->large->getKey() => 1, $this->extraLarge->getKey() => 1],
         ])->assertRedirect();
@@ -177,18 +202,18 @@ class ResellerVariationPricingTest extends TestCase
         $this->assertSame($this->reseller->getKey(), $order->reseller_customer_id);
 
         $lines = $order->items->keyBy('product_variant_id');
-        $this->assertSame(659.0, (float) $lines[$this->medium->getKey()]->unit_price);
-        $this->assertSame(433.0, (float) $lines[$this->medium->getKey()]->reseller_base_price);
-        $this->assertSame(733.0, (float) $lines[$this->large->getKey()]->unit_price);
-        $this->assertSame(521.0, (float) $lines[$this->large->getKey()]->reseller_base_price);
-        $this->assertSame(877.0, (float) $lines[$this->extraLarge->getKey()]->unit_price);
-        $this->assertNull($lines[$this->extraLarge->getKey()]->reseller_base_price);
+        $this->assertSame(759.0, (float) $lines[$this->medium->getKey()]->unit_price);
+        $this->assertSame(711.0, (float) $lines[$this->medium->getKey()]->reseller_base_price);
+        $this->assertSame(800.0, (float) $lines[$this->large->getKey()]->unit_price);
+        $this->assertSame(753.0, (float) $lines[$this->large->getKey()]->reseller_base_price);
+        $this->assertSame(963.0, (float) $lines[$this->extraLarge->getKey()]->unit_price);
+        $this->assertSame(897.0, (float) $lines[$this->extraLarge->getKey()]->reseller_base_price);
 
-        // Commission = (price - what the reseller pays) per unit, only on reseller-priced lines.
+        // Commission = (price - what the reseller pays) per unit.
         $commission = ResellerCommission::query()->where('order_id', $order->getKey())->sole();
-        $this->assertSame((659 - 433) * 2 + (733 - 521) * 1, (int) round((float) $commission->amount));
-        $this->assertSame(659 * 2 + 733, (int) round((float) $commission->sales_amount));
-        $this->assertSame(433 * 2 + 521, (int) round((float) $commission->base_amount));
+        $this->assertSame((759 - 711) * 2 + (800 - 753) + (963 - 897), (int) round((float) $commission->amount));
+        $this->assertSame(759 * 2 + 800 + 963, (int) round((float) $commission->sales_amount));
+        $this->assertSame(711 * 2 + 753 + 897, (int) round((float) $commission->base_amount));
         $this->assertSame($this->reseller->getKey(), $commission->customer_id);
     }
 
@@ -207,36 +232,31 @@ class ResellerVariationPricingTest extends TestCase
         $this->assertSame(0, ResellerCommission::query()->count());
     }
 
-    public function test_staff_set_the_reseller_price_on_each_variation_and_it_is_kept(): void
+    public function test_the_variation_price_staff_enter_is_the_wholesale_rate_the_reseller_pays(): void
     {
         $this->actingAs(User::factory()->create(['role' => 'super_admin', 'is_active' => true]))
             ->withSession(['current_company_id' => $this->company->getKey()]);
         app(CompanyContext::class)->set($this->company);
 
         $mediumKey = 'record-'.$this->medium->getKey();
-        $extraKey = 'record-'.$this->extraLarge->getKey();
 
         Livewire::test(EditProduct::class, ['record' => $this->product->getKey()])
-            // The saved reseller prices are loaded into the form...
-            ->assertSet("data.variants.{$mediumKey}.reseller_price", 433)
-            ->assertSet("data.variants.{$extraKey}.reseller_price", null)
-            // ...and changing them is kept.
-            ->set("data.variants.{$mediumKey}.reseller_price", 444.5)
-            ->set("data.variants.{$extraKey}.reseller_price", 600)
+            ->set("data.variants.{$mediumKey}.sale_price", 700)
             ->call('save')
             ->assertHasNoFormErrors();
 
-        $this->assertSame('444.50', $this->medium->fresh()->reseller_price);
-        $this->assertSame('600.00', $this->extraLarge->fresh()->reseller_price);
-        $this->assertSame('521.00', $this->large->fresh()->reseller_price);
+        $this->assertSame('700.00', $this->medium->fresh()->sale_price);
+        // 700 + the company's 20 per unit; no separate reseller price exists.
+        $this->assertSame(720.0, $this->medium->fresh()->resellerCost(20.0));
+        $this->assertFalse(Schema::hasColumn('product_variants', 'reseller_price'));
     }
 
-    protected function variant(string $attribute, string $value, float $sale, ?float $reseller): ProductVariant
+    protected function variant(string $attribute, string $value, float $sale): ProductVariant
     {
         $variant = ProductVariant::query()->create([
             'company_id' => $this->company->getKey(), 'product_id' => $this->product->getKey(),
             'sku' => 'POLO-'.$value, 'options' => [$attribute => $value],
-            'sale_price' => $sale, 'cost_price' => 300, 'reseller_price' => $reseller, 'stock' => 0, 'is_active' => true,
+            'sale_price' => $sale, 'cost_price' => 300, 'stock' => 0, 'is_active' => true,
         ]);
         StockMovement::query()->create([
             'product_id' => $this->product->getKey(), 'product_variant_id' => $variant->getKey(), 'type' => 'opening', 'quantity' => 20,

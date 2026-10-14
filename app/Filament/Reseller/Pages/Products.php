@@ -247,7 +247,7 @@ class Products extends Page implements HasTable
                             ->where(fn (Builder $tiers) => $tiers->whereNull('tier_prices')->orWhereJsonLength('tier_prices', 0)))
                         ->orWhere(fn (Builder $variable) => $variable
                             ->where('has_variants', true)
-                            ->whereDoesntHave('variants', fn (Builder $variants) => $variants->where('is_active', true)->where('reseller_price', '>', 0)))))
+                            ->whereDoesntHave('variants', fn (Builder $variants) => $variants->where('is_active', true)))))
                     ->toggle(),
             ])
             ->toolbarActions([
@@ -299,7 +299,7 @@ class Products extends Page implements HasTable
                                 $inStore = $this->picks[$record->getKey()]['is_active'] ?? false;
 
                                 if ($record->has_variants) {
-                                    // Each variation that has a store price gets the suggested price + the percent.
+                                    // Each priced variation gets the suggested price + the percent.
                                     $priced = $inStore ? $this->setVariationPricesFromSuggested($record, $percent) : false;
                                     $priced ? $updated++ : $skipped++;
 
@@ -342,7 +342,7 @@ class Products extends Page implements HasTable
                     ->icon(Heroicon::OutlinedAdjustmentsHorizontal)
                     ->visible(fn (Product $record): bool => $record->has_variants && ($this->picks[$record->getKey()]['is_active'] ?? false))
                     ->modalHeading(fn (Product $record): string => __('Variation prices: :name', ['name' => $record->name]))
-                    ->modalDescription(__('Set the price your customer pays for each variation, never below what you pay the store. Leave a price empty to use the suggested price. A variation without a store price sells at its normal price with no commission.'))
+                    ->modalDescription(__('Set the price your customer pays for each variation, never below what you pay the store. Leave a price empty to use the suggested price.'))
                     ->schema(fn (Product $record): array => $this->variationFields($record))
                     ->fillForm(fn (Product $record): array => $this->variationFormState($record))
                     ->action(fn (Product $record, array $data) => $this->saveVariationPrices($record, $data)),
@@ -407,10 +407,10 @@ class Products extends Page implements HasTable
 
     /**
      * What this reseller sees for each active variation of $record: the
-     * suggested (normal) price, what they pay the store (null = no store
-     * price, so it sells at its normal price with no commission), their own
-     * customer price and the commission per unit. Only this reseller's own
-     * saved prices are read.
+     * suggested (normal) price, what they pay the store (its wholesale price
+     * plus the reseller cost per unit; null when the variation has no price),
+     * their own customer price and the commission per unit. Only this
+     * reseller's own saved prices are read.
      *
      * @return list<array{variant: ProductVariant, suggested: float, cost: ?float, price: ?float, commission: ?float}>
      */
@@ -422,8 +422,8 @@ class Products extends Page implements HasTable
         return $record->variants
             ->where('is_active', true)
             ->map(function (ProductVariant $variant) use ($pick, $inStore): array {
-                $cost = $variant->resellerCost();
-                $price = $inStore ? ResellerPricing::variantPrice($variant, $pick['variant_prices'][$variant->getKey()] ?? null) : null;
+                $cost = $variant->resellerCost($this->costPerUnit());
+                $price = $inStore ? ResellerPricing::variantPrice($variant, $pick['variant_prices'][$variant->getKey()] ?? null, $this->costPerUnit()) : null;
 
                 return [
                     'variant' => $variant,
@@ -451,7 +451,7 @@ class Products extends Page implements HasTable
                 ->disabled($row['cost'] === null)
                 ->placeholder(MoneyFormatter::number($row['suggested']))
                 ->helperText($row['cost'] === null
-                    ? __('No store price: sells at :price with no commission.', ['price' => MoneyFormatter::currency($row['suggested'], $currency)])
+                    ? __('This variation has no price yet, so it cannot be sold.')
                     : __('You pay :cost. Suggested price :suggested.', ['cost' => MoneyFormatter::currency($row['cost'], $currency), 'suggested' => MoneyFormatter::currency($row['suggested'], $currency)])))
             ->all();
     }
@@ -468,7 +468,7 @@ class Products extends Page implements HasTable
 
     /**
      * Saves the reseller's customer price for each variation that has a
-     * store price. A price below it is refused; a blank one goes back to the
+     * price. A price below it is refused; a blank one goes back to the
      * suggested price. Only this reseller's own pick is changed.
      *
      * @param  array<string, mixed>  $data
@@ -489,7 +489,7 @@ class Products extends Page implements HasTable
         $prices = [];
 
         foreach ($record->variants->where('is_active', true) as $variant) {
-            $cost = $variant->resellerCost();
+            $cost = $variant->resellerCost($this->costPerUnit());
             $raw = $data['price_'.$variant->getKey()] ?? null;
 
             if ($cost === null || $raw === null || $raw === '') {
@@ -526,7 +526,7 @@ class Products extends Page implements HasTable
         $prices = [];
 
         foreach ($record->variants->where('is_active', true) as $variant) {
-            $cost = $variant->resellerCost();
+            $cost = $variant->resellerCost($this->costPerUnit());
 
             if ($cost !== null) {
                 $prices[$variant->getKey()] = max(round($variant->baseSalePrice() * (1 + $percent / 100), 2), $cost);

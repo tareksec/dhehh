@@ -29,13 +29,12 @@ use Illuminate\Contracts\Session\Session;
  * Products without wholesale tiers have no base price and are sold at the
  * normal price with no commission.
  *
- * Variations (owner decision 2026-10-12): the admin sets a reseller price on
- * each variation, which is exactly what the reseller pays for it (no per-unit
- * cost is added). The reseller picks any customer price at or above it
- * (their own price, else the variation's normal price), and the commission
- * is the difference, as for products. A variation without a reseller price
- * sells at its normal price with no commission. The reseller price is never
- * output on a storefront.
+ * Variations (owner decision 2026-10-14): there is no separate reseller price
+ * on a variation. Its wholesale rate -- the variation's own price -- is what
+ * the reseller pays, plus the company's reseller cost per unit (as for a
+ * product). The reseller picks any customer price at or above that (their
+ * own price, else the variation's normal price) and keeps the difference. The
+ * reseller's cost is never output on a storefront.
  */
 class ResellerPricing
 {
@@ -138,7 +137,7 @@ class ResellerPricing
     /**
      * The reseller price the storefront should charge for $variant, or null
      * when none applies (no reseller active, the product is not in their
-     * store, or the variation has no reseller price).
+     * store, or the variation has no price).
      */
     public function variantPriceFor(ProductVariant $variant): ?float
     {
@@ -152,23 +151,23 @@ class ResellerPricing
             return null;
         }
 
-        return self::variantPrice($variant, $this->catalogVariantPrices()[$productId][(int) $variant->getKey()] ?? null);
+        return self::variantPrice($variant, $this->catalogVariantPrices()[$productId][(int) $variant->getKey()] ?? null, $this->costPerUnit);
     }
 
     /** What the active reseller pays for $variant, or null when it is not reseller-priced. */
     public function variantBasePriceFor(ProductVariant $variant): ?float
     {
-        return $this->variantPriceFor($variant) === null ? null : $variant->resellerCost();
+        return $this->variantPriceFor($variant) === null ? null : $variant->resellerCost($this->costPerUnit);
     }
 
     /**
      * The price a reseller's customer pays for $variant: the reseller's
      * choice (else the variation's normal price), never below what the
-     * reseller pays for it. Null when the variation has no reseller price.
+     * reseller pays for it. Null when the variation has no price at all.
      */
-    public static function variantPrice(ProductVariant $variant, ?float $chosen): ?float
+    public static function variantPrice(ProductVariant $variant, ?float $chosen, float $costPerUnit = 0.0): ?float
     {
-        $base = $variant->resellerCost();
+        $base = $variant->resellerCost($costPerUnit);
 
         return $base === null ? null : round(max($chosen ?? $variant->baseSalePrice(), $base), 2);
     }

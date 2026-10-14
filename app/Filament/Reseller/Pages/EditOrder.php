@@ -7,7 +7,6 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
-use App\Models\StorefrontPaymentMethod;
 use App\Services\ResellerOrderPlacementService;
 use App\Services\ResellerOwnCourierService;
 use App\Support\MoneyFormatter;
@@ -120,6 +119,8 @@ class EditOrder extends Page
             $item->product_id => $item->product?->name ?? __('Product'),
         ]))->all();
         $paymentMethods = app(ResellerOwnCourierService::class)->paymentMethods($reseller->company)->keyBy('id');
+        // The send-money numbers plus the store's active online gateway.
+        $paymentOptions = app(ResellerOwnCourierService::class)->paymentOptions($reseller->company);
         $existing = fn (Get $get): ?OrderItem => filled($get('item_id')) ? $items->get((int) $get('item_id')) : null;
         // The variation a new line has chosen; null for a product without variations.
         $lineVariant = fn (Get $get): ?ProductVariant => ($product = $catalog->get((int) $get('product_id'))) && $product->has_variants
@@ -263,22 +264,27 @@ class EditOrder extends Page
                     ->schema([
                         Select::make('payment_method_id')
                             ->label(__('Paid to'))
-                            ->options(fn (): array => $paymentMethods->mapWithKeys(fn (StorefrontPaymentMethod $method): array => [
-                                $method->getKey() => trim($method->name.($method->account_number ? ' — '.$method->account_number : '')),
-                            ])->all())
+                            ->options(fn (): array => $paymentOptions)
                             ->required($owesExtra)
                             ->live()
-                            ->helperText(fn (Get $get): ?string => $paymentMethods->get((int) $get('payment_method_id'))?->instructions)
+                            ->helperText(fn (Get $get): ?string => $get('payment_method_id') === ResellerOwnCourierService::ONLINE
+                                ? __('You will go to the secure payment page to pay :amount. The store packs the parcel once the payment is confirmed.', [
+                                    'amount' => MoneyFormatter::currency((float) ($this->summary()['to_send'] ?? 0), $this->currency()),
+                                ])
+                                : $paymentMethods->get((int) $get('payment_method_id'))?->instructions)
                             ->columnSpanFull(),
                         TextInput::make('sender')
                             ->label(__('Paid from (number or account)'))
-                            ->required($owesExtra)
+                            ->required(fn (Get $get): bool => $owesExtra() && $get('payment_method_id') !== ResellerOwnCourierService::ONLINE)
+                            ->visible(fn (Get $get): bool => $get('payment_method_id') !== ResellerOwnCourierService::ONLINE)
                             ->maxLength(40),
                         TextInput::make('transaction_id')
                             ->label(__('Transaction ID'))
-                            ->required($owesExtra)
+                            ->required(fn (Get $get): bool => $owesExtra() && $get('payment_method_id') !== ResellerOwnCourierService::ONLINE)
+                            ->visible(fn (Get $get): bool => $get('payment_method_id') !== ResellerOwnCourierService::ONLINE)
                             ->maxLength(100),
-                        CreateOrder::amountSentField(fn (): float => (float) ($this->summary()['to_send'] ?? 0), $this->currency()),
+                        CreateOrder::amountSentField(fn (): float => (float) ($this->summary()['to_send'] ?? 0), $this->currency())
+                            ->visible(fn (Get $get): bool => $get('payment_method_id') !== ResellerOwnCourierService::ONLINE),
                     ])
                     ->columns(2),
             ]);
@@ -335,8 +341,15 @@ class EditOrder extends Page
             'amount' => $data['amount'] ?? null,
         ]);
 
-        Notification::make()->title(__('Order :number was updated.', ['number' => $this->order()->order_number]))->success()->send();
+        $onlinePayment = app(ResellerOwnCourierService::class)->pendingOnlinePayment($this->order());
 
-        $this->redirect(Orders::getUrl());
+        Notification::make()
+            ->title($onlinePayment
+                ? __('Order :number was updated. Finish the payment for the extra.', ['number' => $this->order()->order_number])
+                : __('Order :number was updated.', ['number' => $this->order()->order_number]))
+            ->success()
+            ->send();
+
+        $this->redirect($onlinePayment?->payload['payment_url'] ?? Orders::getUrl());
     }
 }

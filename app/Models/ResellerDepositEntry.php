@@ -11,8 +11,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * sent above an own-courier order's total is credited (positive amount),
  * the deposit pays the advance of later own-courier orders (negative
  * amount), and what a cancelled order took from it goes back (positive
- * amount, owner rule 2026-10-12). The balance is the sum of a reseller's
- * entries.
+ * amount, owner rule 2026-10-12). A returned order takes a return charge
+ * from it (negative amount; unlike a staff deduction it may leave the balance
+ * below zero, which later credits make up first). The balance is the sum of a
+ * reseller's entries.
  */
 class ResellerDepositEntry extends Model
 {
@@ -26,12 +28,16 @@ class ResellerDepositEntry extends Model
 
     public const TYPE_ADJUSTMENT = 'adjustment';
 
+    /** The charge taken from the deposit when a reseller's order is returned (owner rule 2026-10-14). */
+    public const TYPE_RETURN_CHARGE = 'return_charge';
+
     /** Shown in the admin deposit list; run through __() where displayed. */
     public const TYPES = [
         self::TYPE_OVERPAYMENT => 'Sent above an order total',
         self::TYPE_USED => 'Used on an order',
         self::TYPE_REFUND => 'Returned (order cancelled)',
         self::TYPE_ADJUSTMENT => 'Adjusted by staff',
+        self::TYPE_RETURN_CHARGE => 'Return charge (order returned)',
     ];
 
     protected $fillable = [

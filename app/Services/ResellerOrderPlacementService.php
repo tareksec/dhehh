@@ -56,12 +56,13 @@ class ResellerOrderPlacementService
     /**
      * Lowest price the reseller may charge for $product (or one of its
      * variations), or null when it sells at the normal price. A variation's
-     * is what the store charges the reseller for it (its reseller price).
+     * is what the store charges the reseller for it: its own (wholesale)
+     * price plus the reseller cost per unit.
      */
     public function basePrice(Customer $reseller, Product $product, ?ProductVariant $variant = null): ?float
     {
         if ($product->has_variants) {
-            return $variant?->resellerCost();
+            return $variant?->resellerCost($this->costPerUnit($reseller));
         }
 
         return ResellerPricing::basePrice($product, $this->costPerUnit($reseller));
@@ -140,7 +141,7 @@ class ResellerOrderPlacementService
             : 0.0;
         $total = round($subtotal + $fee + $packaging + $vat, 2);
         // Own courier: the reseller's deposit pays first, they send the rest.
-        $depositUsed = $ownCourier ? min(app(ResellerOwnCourierService::class)->depositBalance($reseller), $total) : 0.0;
+        $depositUsed = $ownCourier ? min(app(ResellerOwnCourierService::class)->spendableDeposit($reseller), $total) : 0.0;
 
         return [
             'items' => $items->all(),
@@ -286,6 +287,12 @@ class ResellerOrderPlacementService
     {
         $service = app(ResellerOwnCourierService::class);
         $errors = [];
+
+        // Paying online needs no number or transaction ID: the gateway confirms it.
+        if (($ownCourier['payment_method_id'] ?? null) === ResellerOwnCourierService::ONLINE) {
+            return $service->onlineGateway($reseller->company) ? [] : ['data.payment_method_id' => __('Online payment is not available. Choose a send-money number.')];
+        }
+
         $methodId = (int) ($ownCourier['payment_method_id'] ?? 0);
 
         if (! $service->paymentMethods($reseller->company)->contains(fn ($method): bool => (int) $method->getKey() === $methodId)) {
@@ -541,7 +548,7 @@ class ResellerOrderPlacementService
         $total = round(max($subtotal - (float) $order->discount + $vat + (float) $order->shipping_fee + $packaging, 0), 2);
         $courier = app(ResellerOwnCourierService::class);
         $extra = max(0.0, round($total - $courier->sentAmount($order), 2));
-        $depositUsed = min($courier->depositBalance($reseller), $extra);
+        $depositUsed = min($courier->spendableDeposit($reseller), $extra);
 
         return [
             'kept' => array_values($kept),

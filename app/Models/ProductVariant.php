@@ -18,7 +18,6 @@ class ProductVariant extends Model
         'options',
         'cost_price',
         'sale_price',
-        'reseller_price',
         'stock',
         'weight_kg',
         'images',
@@ -31,7 +30,6 @@ class ProductVariant extends Model
         'images' => 'array',
         'cost_price' => 'decimal:2',
         'sale_price' => 'decimal:2',
-        'reseller_price' => 'decimal:2',
         'weight_kg' => 'decimal:3',
         'stock' => 'integer',
         'is_active' => 'boolean',
@@ -86,14 +84,16 @@ class ProductVariant extends Model
     }
 
     /**
-     * What a reseller pays for this variation (the admin's reseller price),
-     * or null when it has none and so is not reseller-priced.
+     * What a reseller pays for this variation (owner decision 2026-10-14):
+     * its wholesale rate -- the variation's own price -- plus the company's
+     * reseller cost per unit, the same as a product's lowest wholesale tier
+     * price plus that cost. Null when the variation has no price.
      */
-    public function resellerCost(): ?float
+    public function resellerCost(float $costPerUnit = 0.0): ?float
     {
-        return $this->reseller_price !== null && (float) $this->reseller_price > 0
-            ? round((float) $this->reseller_price, 2)
-            : null;
+        $rate = $this->baseSalePrice();
+
+        return $rate > 0 ? round($rate + max(0, $costPerUnit), 2) : null;
     }
 
     /**
