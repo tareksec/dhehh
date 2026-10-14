@@ -350,7 +350,7 @@ class StorefrontCustomerAuthTest extends TestCase
 
             return true;
         });
-        preg_match('/verification code is (\d{6})/', (string) $sentUrl, $matches);
+        preg_match('/OTP is (\d{6})/', (string) $sentUrl, $matches);
         $this->assertNotEmpty($matches, 'a sign-up code was texted');
 
         return $this->post($host.'/account/register/verify', ['code' => $matches[1]]);
@@ -444,7 +444,7 @@ class StorefrontCustomerAuthTest extends TestCase
         });
 
         $this->assertNotNull($sentUrl);
-        preg_match('/reset code is (\d{6})/', urldecode($sentUrl), $matches);
+        preg_match('/OTP is (\d{6})/', urldecode($sentUrl), $matches);
         $this->assertNotEmpty($matches, 'Reset code was not found in the sent SMS message.');
         $code = $matches[1];
 
@@ -505,7 +505,7 @@ class StorefrontCustomerAuthTest extends TestCase
 
             return true;
         });
-        preg_match('/login code is (\d{6})/', (string) $sentUrl, $matches);
+        preg_match('/OTP is (\d{6})/', (string) $sentUrl, $matches);
         $this->assertNotEmpty($matches);
 
         $this->post('http://phone-otp.example.test/account/otp/verify', [

@@ -256,8 +256,8 @@ class InvestorPortalAccountService
         ])->save();
 
         $message = $purpose === 'reset'
-            ? __('Your :company investor portal password reset code is :code. It expires in :minutes minutes.', ['company' => $company?->name, 'code' => $code, 'minutes' => self::CODE_VALID_MINUTES], $account->locale)
-            : __('Your :company investor portal sign-in code is :code. It expires in :minutes minutes.', ['company' => $company?->name, 'code' => $code, 'minutes' => self::CODE_VALID_MINUTES], $account->locale);
+            ? __('Your :company OTP is :code. Use it to reset your investor portal password. It expires in :minutes minutes.', ['company' => $company?->name, 'code' => $code, 'minutes' => self::CODE_VALID_MINUTES], $account->locale)
+            : __('Your :company OTP is :code. Use it to sign in to the investor portal. It expires in :minutes minutes.', ['company' => $company?->name, 'code' => $code, 'minutes' => self::CODE_VALID_MINUTES], $account->locale);
 
         $sent = $company !== null && $this->sendSms($company, $account, $message);
 

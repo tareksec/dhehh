@@ -166,7 +166,7 @@ class CustomerAccountService
         $sent = $this->notifications->sendSms(
             $setting,
             $phone,
-            "Your {$company->name} account verification code is {$code}. It expires in ".self::REGISTRATION_CODE_MINUTES.' minutes.',
+            "Your {$company->name} OTP is {$code}. Use it to verify your account. It expires in ".self::REGISTRATION_CODE_MINUTES.' minutes.',
         );
 
         if (! $sent) {
@@ -313,7 +313,7 @@ class CustomerAccountService
             : $this->notifications->sendSms(
                 $setting,
                 $customer->phone,
-                "Your {$company->name} login code is {$code}. It expires in 10 minutes.",
+                "Your {$company->name} OTP is {$code}. Use it to log in. It expires in 10 minutes.",
             );
 
         if (! $sent) {
@@ -369,7 +369,7 @@ class CustomerAccountService
         return $this->notifications->sendSms(
             $setting,
             $customer->phone,
-            "Your {$company->name} password reset code is {$code}. It expires in 15 minutes.",
+            "Your {$company->name} OTP is {$code}. Use it to reset your password. It expires in 15 minutes.",
         );
     }
 

@@ -120,7 +120,7 @@ class StorefrontApiAccountTest extends TestCase
         $this->register()->assertStatus(202)
             ->assertJsonPath('verification_required', true)
             ->assertJsonPath('masked_identifier', '•••••••5678');
-        $token = $this->register(['code' => $this->sentCode('verification code is')])->assertCreated()->json('data.token');
+        $token = $this->register(['code' => $this->sentCode('OTP is')])->assertCreated()->json('data.token');
 
         $this->assertSame(1, Customer::query()->count(), 'the CRM record is reused');
         $this->api('GET', '/account/orders', [], $token)->assertOk()->assertJsonCount(1, 'data');
@@ -138,7 +138,7 @@ class StorefrontApiAccountTest extends TestCase
         $this->configureSms();
         Http::fake(['sms.example.test/*' => Http::response('OK')]);
         $this->register()->assertStatus(202);
-        $code = $this->sentCode('verification code is');
+        $code = $this->sentCode('OTP is');
 
         $this->register(['code' => $code === '111111' ? '222222' : '111111'])->assertStatus(422)->assertJsonPath('error', 'otp_invalid');
         $this->assertFalse(Customer::query()->first()->isRegistered());
@@ -156,7 +156,7 @@ class StorefrontApiAccountTest extends TestCase
         $this->register()->assertStatus(202);
         $this->register()->assertStatus(202);
         Http::assertSentCount(1);
-        $code = $this->sentCode('verification code is');
+        $code = $this->sentCode('OTP is');
 
         foreach (range(1, 5) as $ignored) {
             $this->register(['code' => $code === '111111' ? '222222' : '111111'])->assertStatus(422);
@@ -274,7 +274,7 @@ class StorefrontApiAccountTest extends TestCase
 
         $this->api('POST', '/account/otp', ['identifier' => '01712345678'])
             ->assertStatus(202)->assertJsonPath('masked_identifier', '•••••••5678');
-        $code = $this->sentCode('login code is');
+        $code = $this->sentCode('OTP is');
 
         $this->api('POST', '/account/otp/verify', ['identifier' => '01712345678', 'code' => '000000'])
             ->assertStatus(422)->assertJsonPath('error', 'otp_invalid');
@@ -303,7 +303,7 @@ class StorefrontApiAccountTest extends TestCase
         $this->configureSms();
         Http::fake(['sms.example.test/*' => Http::response('OK')]);
         $this->api('POST', '/account/otp', ['identifier' => '01712345678'])->assertStatus(202);
-        $code = $this->sentCode('login code is');
+        $code = $this->sentCode('OTP is');
 
         foreach (range(1, 5) as $ignored) {
             $this->api('POST', '/account/otp/verify', ['identifier' => '01712345678', 'code' => $code === '111111' ? '222222' : '111111'])->assertStatus(422);
@@ -322,7 +322,7 @@ class StorefrontApiAccountTest extends TestCase
         Http::fake(['sms.example.test/*' => Http::response('OK')]);
 
         $this->api('POST', '/account/password/forgot', ['phone' => '01712345678'])->assertStatus(202);
-        $code = $this->sentCode('reset code is');
+        $code = $this->sentCode('OTP is');
 
         $response = $this->api('POST', '/account/password/reset', [
             'phone' => '01712345678', 'code' => $code, 'password' => 'brand-new-pass', 'password_confirmation' => 'brand-new-pass',
@@ -354,7 +354,7 @@ class StorefrontApiAccountTest extends TestCase
         $this->configureSms();
         Http::fake(['sms.example.test/*' => Http::response('OK')]);
         $this->api('POST', '/account/password/forgot', ['phone' => '01712345678'])->assertStatus(202);
-        $code = $this->sentCode('reset code is');
+        $code = $this->sentCode('OTP is');
         $payload = fn (string $c): array => ['phone' => '01712345678', 'code' => $c, 'password' => 'brand-new-pass', 'password_confirmation' => 'brand-new-pass'];
 
         foreach (range(1, 5) as $ignored) {
@@ -375,7 +375,7 @@ class StorefrontApiAccountTest extends TestCase
         $setting->save();
         Http::fake(['sms.example.test/*' => Http::response('OK')]);
         $accounts->sendPasswordResetCode($this->company, $setting, $customer);
-        $code = $this->sentCode('reset code is');
+        $code = $this->sentCode('OTP is');
 
         foreach (range(1, 5) as $ignored) {
             $this->assertFalse($accounts->resetPassword($customer->fresh(), $code === '000000' ? '111111' : '000000', 'another-pass-1'));

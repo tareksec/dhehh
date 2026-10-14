@@ -104,7 +104,7 @@ class InvestorPortalTest extends TestCase
         Auth::logout();
 
         $this->assertStringStartsWith('http://investor.invite.example.test/investor/invite/', $link);
-        Http::assertSent(fn ($request): bool => str_contains(urldecode($request->url()), '/investor/invite/') && str_contains($request->url(), 'to=01711000001'));
+        Http::assertSent(fn ($request): bool => str_contains(urldecode($request->url()), '/investor/invite/') && str_contains($request->url(), 'to=8801711000001'));
 
         $account = InvestorPortalAccount::query()->withoutGlobalScopes()->where('investor_id', $investor->id)->firstOrFail();
         $this->assertSame('01711000001', $account->phone);
