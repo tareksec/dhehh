@@ -44,7 +44,7 @@
     @endif
 
     <div>
-        <h3 class="mb-2 text-sm font-semibold">{{ __('Your price and commission') }}</h3>
+        <h3 class="mb-2 text-sm font-semibold">{{ __('Your price and profit') }}</h3>
         <div class="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
             <div>
                 <div class="text-gray-500 dark:text-gray-400">{{ __('Your cost') }}</div>
@@ -59,7 +59,7 @@
                 <div class="font-medium">{{ $yourPrice === null ? '—' : $money($yourPrice) }}</div>
             </div>
             <div>
-                <div class="text-gray-500 dark:text-gray-400">{{ __('Commission per unit') }}</div>
+                <div class="text-gray-500 dark:text-gray-400">{{ __('Profit per unit') }}</div>
                 <div class="font-medium">{{ $commission === null ? '—' : $money($commission) }}</div>
             </div>
         </div>
@@ -141,7 +141,7 @@
                         <th class="pb-1 text-right">{{ __('Suggested price') }}</th>
                         <th class="pb-1 text-right">{{ __('Your cost') }}</th>
                         <th class="pb-1 text-right">{{ __('Your price') }}</th>
-                        <th class="pb-1 text-right">{{ __('Commission per unit') }}</th>
+                        <th class="pb-1 text-right">{{ __('Profit per unit') }}</th>
                         <th class="pb-1 text-right">{{ __('Stock') }}</th>
                     </tr>
                 </thead>
@@ -157,16 +157,24 @@
                                 </div>
                             </td>
                             <td class="py-1.5">{{ $row['variant']->sku ?: '—' }}</td>
-                            <td class="py-1.5 text-right">{{ $money($row['suggested']) }}</td>
+                            <td class="py-1.5 text-right">{{ $row['suggested'] === null ? '—' : $money($row['suggested']) }}</td>
                             <td class="py-1.5 text-right">{{ $row['cost'] === null ? '—' : $money($row['cost']) }}</td>
-                            <td class="py-1.5 text-right">{{ $row['price'] === null ? '—' : $money($row['price']) }}</td>
+                            <td class="py-1.5 text-right">
+                                @if ($row['price'] !== null)
+                                    {{ $money($row['price']) }}
+                                @elseif ($inStore && $row['cost'] !== null)
+                                    <span class="text-warning-600 dark:text-warning-400">{{ __('Set your price') }}</span>
+                                @else
+                                    —
+                                @endif
+                            </td>
                             <td class="py-1.5 text-right">{{ $row['commission'] === null ? '—' : $money($row['commission']) }}</td>
                             <td class="py-1.5 text-right">{{ (int) $row['variant']->stock }}</td>
                         </tr>
                     @endforeach
                 </tbody>
             </table>
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ __('The difference between the price you set and what you pay the store is your commission. Set your prices with Variation prices.') }}</p>
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ __('The difference between the price you set and what you pay the store is your profit. Set your prices with Variation prices.') }}</p>
         </div>
     @endif
 

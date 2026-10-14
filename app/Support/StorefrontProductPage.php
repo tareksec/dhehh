@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Company;
 use App\Models\Product;
+use App\Services\ResellerPricing;
 use App\Services\StorefrontCart;
 use Illuminate\Support\Collection;
 
@@ -48,12 +49,16 @@ final class StorefrontProductPage
 
         $isVariableProduct = (bool) $product->has_variants;
 
+        $resellerPricing = app(ResellerPricing::class);
+
         $variantData = $isVariableProduct
             ? $product->activeVariants()->get()->map(fn ($variant): array => [
                 'id' => $variant->getKey(),
                 'label' => $variant->label(),
                 'price' => $variant->effectiveSalePrice(),
-                'stock' => (int) $variant->stock,
+                // A variation a reseller has no selling price for cannot be
+                // bought in their store (never sold at the wholesale rate).
+                'stock' => $resellerPricing->variantBlocked($variant) ? 0 : (int) $variant->stock,
                 'sku' => $variant->sku ?: $product->sku,
                 'images' => collect($variant->images ?? [])->map(fn ($img) => CompanyMedia::publicUrl($img, $company))->filter()->values()->all(),
             ])->values()

@@ -78,9 +78,10 @@ class ResellerVariationOrderTest extends TestCase
             'price' => 650, 'sale_price' => 650, 'cost_price' => 300, 'stock' => 0, 'unit' => 'pcs', 'reorder_level' => 1,
             'vat_rate' => 0, 'has_variants' => true, 'is_active' => true, 'status' => Product::STATUS_AVAILABLE,
         ])->fresh();
-        $this->medium = $this->variant('M', sale: 691, stock: 5);
-        $this->large = $this->variant('L', sale: 733, stock: 5);
-        $this->extraLarge = $this->variant('XL', sale: 877, stock: 5);
+        // The admin suggests a selling price for each (790, 800, 900).
+        $this->medium = $this->variant('M', sale: 691, stock: 5, suggested: 790);
+        $this->large = $this->variant('L', sale: 733, stock: 5, suggested: 800);
+        $this->extraLarge = $this->variant('XL', sale: 877, stock: 5, suggested: 900);
         ResellerProduct::query()->create([
             'customer_id' => $this->reseller->getKey(), 'product_id' => $this->product->getKey(), 'is_active' => true,
             'variant_prices' => [$this->medium->getKey() => 750],
@@ -102,14 +103,14 @@ class ResellerVariationOrderTest extends TestCase
         $this->assertSame(701.0, (float) $medium->reseller_base_price);
         $this->assertSame('Size: M', $medium->variant_label);
         $this->assertSame(300.0, (float) $medium->unit_cost);
-        // Blank price = the reseller's saved price, else the normal one raised to what they pay: L has nothing saved -> 733 -> 743, no commission.
-        $this->assertSame(743.0, (float) $items[$this->large->getKey()]->unit_price);
+        // Blank price = the reseller's saved price, else the admin's suggested one: L has nothing saved -> 800.
+        $this->assertSame(800.0, (float) $items[$this->large->getKey()]->unit_price);
         $this->assertSame(743.0, (float) $items[$this->large->getKey()]->reseller_base_price);
         $this->assertSame(950.0, (float) $items[$this->extraLarge->getKey()]->unit_price);
         $this->assertSame(887.0, (float) $items[$this->extraLarge->getKey()]->reseller_base_price);
 
         $commission = ResellerCommission::query()->where('order_id', $order->getKey())->sole();
-        $this->assertSame((780 - 701) * 2.0 + (743 - 743) + (950 - 887), (float) $commission->amount);
+        $this->assertSame((780 - 701) * 2.0 + (800 - 743) + (950 - 887), (float) $commission->amount);
         $this->assertSame((int) $this->reseller->getKey(), (int) $order->reseller_customer_id);
     }
 
@@ -278,6 +279,44 @@ class ResellerVariationOrderTest extends TestCase
         $this->assertSame(['data.items.1.product_id'], array_keys($errors));
     }
 
+    public function test_a_variation_with_no_suggested_price_needs_the_resellers_own_price(): void
+    {
+        $small = $this->variant('S', sale: 500, stock: 5); // base 510, no suggested price
+        $line = fn (mixed $price): array => ['product_id' => $this->product->getKey(), 'variant_id' => $small->getKey(), 'quantity' => 1, 'price' => $price];
+
+        // Neither a price on the line nor a saved one: it is not sold at the wholesale rate.
+        $errors = $this->errorsFor(fn () => $this->place([$line(null)]));
+        $this->assertSame(['data.items.0.price'], array_keys($errors));
+        $errors = $this->errorsFor(fn () => $this->place([$line(null)], ownCourier: true));
+        $this->assertSame(['data.items.0.price'], array_keys($errors));
+
+        // Below what the reseller pays is still refused...
+        $errors = $this->errorsFor(fn () => $this->place([$line(505)]));
+        $this->assertSame(['data.items.0.price'], array_keys($errors));
+
+        // ...their own price works...
+        $order = $this->place([$line(600)]);
+        $this->assertSame(600.0, (float) $order->items()->sole()->unit_price);
+        $this->assertSame(510.0, (float) $order->items()->sole()->reseller_base_price);
+
+        // ...and so does a price they saved in Variation prices.
+        ResellerProduct::query()->where('customer_id', $this->reseller->getKey())->update(['variant_prices' => [$small->getKey() => 640]]);
+        $order = $this->place([$line(null)]);
+        $this->assertSame(640.0, (float) $order->items()->sole()->unit_price);
+    }
+
+    public function test_a_variation_without_a_price_cannot_be_ordered_at_all(): void
+    {
+        $free = ProductVariant::query()->create([
+            'company_id' => $this->company->getKey(), 'product_id' => $this->product->getKey(), 'sku' => 'POLO-Z',
+            'options' => ['Size' => 'Z'], 'sale_price' => 0, 'reseller_suggested_price' => 700, 'cost_price' => 300, 'stock' => 5, 'is_active' => true,
+        ]);
+        $this->product->update(['sale_price' => 0, 'price' => 0]);
+
+        $errors = $this->errorsFor(fn () => $this->place([['product_id' => $this->product->getKey(), 'variant_id' => $free->getKey(), 'quantity' => 1, 'price' => 700]]));
+        $this->assertSame(['data.items.0.variant_id'], array_keys($errors));
+    }
+
     public function test_the_portal_form_asks_for_an_option_and_prices_the_line_once_it_is_chosen(): void
     {
         $plain = Product::query()->create([
@@ -302,7 +341,7 @@ class ResellerVariationOrderTest extends TestCase
         $page->set("data.items.{$key}.variant_id", $this->medium->getKey())
             ->assertSet("data.items.{$key}.price", 750)
             ->set("data.items.{$key}.variant_id", $this->large->getKey())
-            ->assertSet("data.items.{$key}.price", 743); // nothing saved: the normal price (733), raised to what she pays
+            ->assertSet("data.items.{$key}.price", 800); // nothing saved: the admin's suggested price
 
         // A plain product never shows it.
         $page->set("data.items.{$key}.product_id", $plain->getKey())
@@ -370,11 +409,11 @@ class ResellerVariationOrderTest extends TestCase
         $this->actingAs($this->reseller, 'customer');
     }
 
-    protected function variant(string $size, float $sale, int $stock): ProductVariant
+    protected function variant(string $size, float $sale, int $stock, ?float $suggested = null): ProductVariant
     {
         $variant = ProductVariant::query()->create([
             'company_id' => $this->company->getKey(), 'product_id' => $this->product->getKey(), 'sku' => 'POLO-'.$size,
-            'options' => ['Size' => $size], 'sale_price' => $sale, 'cost_price' => 300,
+            'options' => ['Size' => $size], 'sale_price' => $sale, 'reseller_suggested_price' => $suggested, 'cost_price' => 300,
             'stock' => $stock, 'is_active' => true,
         ]);
 

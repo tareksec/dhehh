@@ -160,8 +160,10 @@ class Products extends Page implements HasTable
                 TextColumn::make('suggested_price')
                     ->label(__('Suggested price'))
                     ->state(function (Product $record) use ($currency): string {
-                        if ($record->has_variants && ($rows = $this->variationRows($record)) !== []) {
-                            return __('From :amount', ['amount' => MoneyFormatter::currency(min(array_column($rows, 'suggested')), $currency)]);
+                        if ($record->has_variants) {
+                            $suggested = array_filter(array_column($this->variationRows($record), 'suggested'), fn ($price): bool => $price !== null);
+
+                            return $suggested === [] ? '—' : __('From :amount', ['amount' => MoneyFormatter::currency(min($suggested), $currency)]);
                         }
 
                         return MoneyFormatter::currency($record->baseSellingPrice(), $currency);
@@ -196,7 +198,7 @@ class Products extends Page implements HasTable
                         || ResellerPricing::basePrice($record, $costPerUnit) === null),
 
                 TextColumn::make('commission_per_unit')
-                    ->label(__('Commission per unit'))
+                    ->label(__('Profit per unit'))
                     ->state(function (Product $record) use ($costPerUnit, $currency): string {
                         $pick = $this->picks[$record->getKey()] ?? null;
 
@@ -407,12 +409,14 @@ class Products extends Page implements HasTable
 
     /**
      * What this reseller sees for each active variation of $record: the
-     * suggested (normal) price, what they pay the store (its wholesale price
-     * plus the reseller cost per unit; null when the variation has no price),
-     * their own customer price and the commission per unit. Only this
-     * reseller's own saved prices are read.
+     * suggested selling price (the admin's; null when none), what they pay
+     * the store (its wholesale price plus the reseller cost per unit; null
+     * when the variation has no price), their own customer price (their pick,
+     * else the suggested one; null when neither is set, so it cannot be sold)
+     * and the commission per unit. Only this reseller's own saved prices are
+     * read.
      *
-     * @return list<array{variant: ProductVariant, suggested: float, cost: ?float, price: ?float, commission: ?float}>
+     * @return list<array{variant: ProductVariant, suggested: ?float, cost: ?float, price: ?float, commission: ?float}>
      */
     protected function variationRows(Product $record): array
     {
@@ -427,9 +431,9 @@ class Products extends Page implements HasTable
 
                 return [
                     'variant' => $variant,
-                    'suggested' => $variant->baseSalePrice(),
+                    'suggested' => $variant->resellerSuggestedPrice(),
                     'cost' => $cost,
-                    'price' => $inStore ? ($price ?? $variant->baseSalePrice()) : null,
+                    'price' => $price,
                     'commission' => $cost !== null && $price !== null ? max(0.0, round($price - $cost, 2)) : null,
                 ];
             })
@@ -449,10 +453,12 @@ class Products extends Page implements HasTable
                 ->prefix($currency)
                 ->minValue($row['cost'])
                 ->disabled($row['cost'] === null)
-                ->placeholder(MoneyFormatter::number($row['suggested']))
-                ->helperText($row['cost'] === null
-                    ? __('This variation has no price yet, so it cannot be sold.')
-                    : __('You pay :cost. Suggested price :suggested.', ['cost' => MoneyFormatter::currency($row['cost'], $currency), 'suggested' => MoneyFormatter::currency($row['suggested'], $currency)])))
+                ->placeholder($row['suggested'] === null ? null : MoneyFormatter::number($row['suggested']))
+                ->helperText(match (true) {
+                    $row['cost'] === null => __('This variation has no price yet, so it cannot be sold.'),
+                    $row['suggested'] === null => __('You pay :cost. There is no suggested price, so set yours to sell it.', ['cost' => MoneyFormatter::currency($row['cost'], $currency)]),
+                    default => __('You pay :cost. Suggested price :suggested.', ['cost' => MoneyFormatter::currency($row['cost'], $currency), 'suggested' => MoneyFormatter::currency($row['suggested'], $currency)]),
+                }))
             ->all();
     }
 
@@ -516,7 +522,7 @@ class Products extends Page implements HasTable
         $this->notifyDone(__('Variation prices saved.'));
     }
 
-    /** Sets every priced variation to its suggested price + $percent (never below its store price). */
+    /** Sets every variation that has a suggested price to it + $percent (never below its store price). */
     protected function setVariationPricesFromSuggested(Product $record, float $percent): bool
     {
         $pick = ResellerProduct::query()
@@ -527,9 +533,11 @@ class Products extends Page implements HasTable
 
         foreach ($record->variants->where('is_active', true) as $variant) {
             $cost = $variant->resellerCost($this->costPerUnit());
+            $suggested = $variant->resellerSuggestedPrice();
 
-            if ($cost !== null) {
-                $prices[$variant->getKey()] = max(round($variant->baseSalePrice() * (1 + $percent / 100), 2), $cost);
+            // A variation with no suggested price has nothing to add the percent to.
+            if ($cost !== null && $suggested !== null) {
+                $prices[$variant->getKey()] = max(round($suggested * (1 + $percent / 100), 2), $cost);
             }
         }
 

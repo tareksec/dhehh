@@ -201,7 +201,7 @@ class ResellerSettings extends Page
                             ->minValue(0)
                             ->required()
                             ->prefix($currency)
-                            ->helperText(__("Added to a product's lowest wholesale tier price to get a reseller's cost. Resellers can sell at any price at or above that cost; the difference is their commission.")),
+                            ->helperText(__("Added to a product's lowest wholesale tier price to get a reseller's cost. Resellers can sell at any price at or above that cost; the difference is their profit.")),
                         TextInput::make('reseller_packaging_cost_per_unit')
                             ->label(__('Packaging charge per piece (own courier)'))
                             ->numeric()
@@ -222,7 +222,7 @@ class ResellerSettings extends Page
                             ->minValue(0)
                             ->required()
                             ->prefix($currency)
-                            ->helperText(__('The smallest amount a reseller can request to withdraw from their delivered-order commission.')),
+                            ->helperText(__('The smallest amount a reseller can request to withdraw from their delivered-order profit.')),
                     ])
                     ->columns(2),
 

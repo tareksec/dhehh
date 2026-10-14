@@ -68,17 +68,22 @@ class ResellerOrderPlacementService
         return ResellerPricing::basePrice($product, $this->costPerUnit($reseller));
     }
 
-    /** The normal price of $product, or of its $variant. */
-    public function suggestedPrice(Product $product, ?ProductVariant $variant = null): float
+    /**
+     * The price suggested for $product (its normal selling price), or for its
+     * $variant (the admin's suggested selling price; null when the admin set
+     * none, so the reseller has to set one).
+     */
+    public function suggestedPrice(Product $product, ?ProductVariant $variant = null): ?float
     {
-        return round($variant ? $variant->baseSalePrice() : $product->baseSellingPrice(), 2);
+        return $variant ? $variant->resellerSuggestedPrice() : round($product->baseSellingPrice(), 2);
     }
 
     /**
      * The price pre-filled for $product (or its $variant): the reseller's
-     * saved price, else the suggested one -- never below the base.
+     * saved price, else the suggested one -- never below the base. Null for a
+     * variation with neither: the reseller has to enter a price.
      */
-    public function defaultPrice(Customer $reseller, Product $product, ?ProductVariant $variant = null): float
+    public function defaultPrice(Customer $reseller, Product $product, ?ProductVariant $variant = null): ?float
     {
         $base = $this->basePrice($reseller, $product, $variant);
 
@@ -91,8 +96,9 @@ class ResellerOrderPlacementService
             ->where('product_id', $product->getKey())
             ->first(['price', 'variant_prices']);
         $saved = $variant ? ($pick?->variant_prices[$variant->getKey()] ?? null) : $pick?->price;
+        $price = $saved !== null ? (float) $saved : $this->suggestedPrice($product, $variant);
 
-        return round(max($saved !== null ? (float) $saved : $this->suggestedPrice($product, $variant), $base), 2);
+        return $price === null ? null : round(max($price, $base), 2);
     }
 
     /**
@@ -492,8 +498,20 @@ class ResellerOrderPlacementService
                 continue;
             }
 
-            $storePrice = round($this->basePrice($reseller, $product, $variant) ?? $this->suggestedPrice($product, $variant), 2);
+            if ($variant && $this->basePrice($reseller, $product, $variant) === null) {
+                $errors["{$key}.variant_id"] = __('This variation has no price yet, so it cannot be sold.');
+
+                continue;
+            }
+
+            $storePrice = round($this->basePrice($reseller, $product, $variant) ?? $this->suggestedPrice($product, $variant) ?? 0.0, 2);
             $retail = filled($line['price'] ?? null) ? round((float) $line['price'], 2) : $this->defaultPrice($reseller, $product, $variant);
+
+            if ($retail === null) {
+                $errors["{$key}.price"] = __('Enter your price.');
+
+                continue;
+            }
 
             if ($retail < $storePrice) {
                 $errors["{$key}.price"] = __('Your price must be at least :amount.', ['amount' => MoneyFormatter::number($storePrice)]);
@@ -622,14 +640,26 @@ class ResellerOrderPlacementService
             $base = $this->basePrice($reseller, $product, $variant);
             $suggested = $this->suggestedPrice($product, $variant);
 
+            if ($variant && $base === null) {
+                $errors["{$key}.variant_id"] = __('This variation has no price yet, so it cannot be sold.');
+
+                continue;
+            }
+
             if ($ownCourier) {
                 // The reseller pays the store's price (no commission line);
                 // their own retail price is kept for their customer, who
                 // must never see the store's price (owner rule).
-                $storePrice = round($base ?? $suggested, 2);
+                $storePrice = round($base ?? $suggested ?? 0.0, 2);
                 $retail = filled($line['price'] ?? null)
                     ? round((float) $line['price'], 2)
                     : $this->defaultPrice($reseller, $product, $variant);
+
+                if ($retail === null) {
+                    $errors["{$key}.price"] = __('Enter your price.');
+
+                    continue;
+                }
 
                 if ($retail < $storePrice) {
                     $errors["{$key}.price"] = __('Your price must be at least :amount.', ['amount' => MoneyFormatter::number($storePrice)]);
@@ -660,6 +690,12 @@ class ResellerOrderPlacementService
 
                     continue;
                 }
+            }
+
+            if ($price === null) {
+                $errors["{$key}.price"] = __('Enter your price.');
+
+                continue;
             }
 
             $items->push([

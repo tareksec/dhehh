@@ -81,7 +81,7 @@
                     'metric' => 'sales',
                 ],
                 [
-                    'label' => __('This month\'s commission'),
+                    'label' => __('This month\'s profit'),
                     'value' => MoneyFormatter::currency($kpis['commission']['value'], $currency),
                     'icon' => 'heroicon-o-receipt-percent',
                     'tone' => 'success',
@@ -124,7 +124,7 @@
 
                     <dl class="grid grid-cols-3 gap-3 text-sm lg:w-96">
                         <div class="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15 backdrop-blur-sm">
-                            <dt class="text-xs text-white/70">{{ __('Pending commission') }}</dt>
+                            <dt class="text-xs text-white/70">{{ __('Pending profit') }}</dt>
                             <dd class="mt-1 font-semibold">{{ MoneyFormatter::currency($balances['pending'], $currency) }}</dd>
                         </div>
                         <div class="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15 backdrop-blur-sm">

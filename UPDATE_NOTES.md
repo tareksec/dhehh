@@ -2,11 +2,36 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-14 (later) - Correction: the admin sets a suggested selling price on each variation
+
+The owner (in Bangla) after the first brief: my change was a serious mistake. With no price set by the reseller, a customer could buy one piece **at the wholesale price**. The system must work like this: **the admin enters a probable selling rate for the reseller on each variation, so the reseller sees what the market price is; the reseller can override it with their own.**
+
+What changed (on top of commit `84fe781`):
+1. **Admin → Products → Variations**: new field **Suggested selling price for resellers** (shown only while the reseller module is on). It is the default customer price. The reseller still pays the variation's own price (Sale Price) + the company's Reseller cost per unit.
+2. **Customer price of a variation** = the reseller's own price (portal → Products → Variation prices), else the admin's suggested price, never below what the reseller pays. Commission = that price − what the reseller pays.
+3. **Neither set** (no suggested price, and the reseller has not set one): the variation is **not sold at the wholesale rate**. On the reseller's store it shows as out of stock and cannot be added to the cart; in the portal the order line asks the reseller to enter a price (`Enter your price.`), the details table says **Set your price**, and the bulk "suggested + %" action skips it. A variation with no price at all (sale price empty or 0) cannot be ordered either.
+4. **Wording: "commission" is now "profit"** for resellers (owner: *"there is no commission here; the reseller earns a profit = the price they sell at minus our cost"*). Changed everywhere a reseller or the store's reseller admin sees it: portal Orders / Products / Earnings / dashboard / create & change order / product details / order details, the public reseller guide, the older store account page, the Reseller Settings help texts, the admin list of reseller profits (was "Commissions") and the payout voucher purpose ("Reseller profit payout — ..."). 19 old keys were replaced and `Profits` was added in `lang/en.json` and `lang/bn.json`. **Not changed:** the arithmetic, the payable-after-delivery rule, internal names (`ResellerCommission`, `reseller_commissions`, `commission_per_unit` columns), and the investor / channel-partner screens (they have their own, unrelated commission). The bulk "suggested + %" price action is also unchanged.
+5. Nothing changes for ordinary products, the plain (non-reseller) store, the API or the Next.js site.
+
+Deploy: `php artisan migrate` — new migration `2026_10_15_100000_add_reseller_suggested_price_to_variants` (one nullable column on `product_variants`). `npm run build` is not needed.
+
+**Please confirm:**
+- Variations that already exist have **no suggested price**, so for resellers who already have such a product in their store they stop being buyable until the admin fills the new field (or the reseller sets a price). The admin should fill it once per variation after deploying.
+- If the suggested price is lower than what the reseller pays (wholesale + cost per unit), customers are charged what the reseller pays, with no profit for the reseller (same rule as ordinary products).
+
+Needs Bangla review (new keys): Suggested selling price for resellers (and its long helper text), "You pay :cost. There is no suggested price, so set yours to sell it.", Set your price, Enter your price. **Profit wording:** the owner said "প্রফিট"; the Bangla uses "লাভ", which is what the existing `Profit` key already uses in the reports. Say if you prefer "প্রফিট" for the reseller screens (a one-line change per key).
+
+Tests: `ResellerVariationPricingTest` (12, +3): suggested price as the default / raised to cost, a variation with no suggested price is never sold at the wholesale rate (pricing + reseller store cart + checkout), the plain store never shows the suggested prices, staff enter the field, it is hidden while the module is off. `ResellerVariationOrderTest` (16, +2): a variation with no suggested price needs the reseller's own price (store and own-courier delivery), a variation without a price cannot be ordered. `ResellerPortalProductsTest` (18, +1): the same in the portal (details, bulk %, saving).
+
+Full suite (plain `php artisan test`, no `--env`), after the suggested price and the profit wording: **2265 passed, 1 skipped, 0 failed** (365 s). Pint passes on the changed PHP files.
+
+Commit status: committed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-14, "কাজের ব্রাঞ্চে কমিট ও পুশ করুন এবং মেইনে পুশ কর"), on top of `84fe781`. The owner then asked for `main` too: `origin/main` (v2.74.0) is merged into the branch first and the tests re-run (see the entry above the merge note).
+
 ## 2026-10-14 - Owner's answers: variation price, online gateway, return charge (three changes on the branch)
 
 The owner answered the open points on 2026-10-14. Three changes follow from them; each has its own entry below. Nothing here is on `main` yet.
 
-1. **Variations: no separate reseller price.** The owner: the wholesale rate *is* the reseller rate; the admin needs no extra price. So the **Reseller price** field on a variation is gone (it only ever existed on this branch), and a variation costs the reseller **its own price + the company's "Reseller cost per unit"** (the same formula as an ordinary product's wholesale tier + that cost). See the entry "products with variations".
+1. **Variations: no separate reseller price.** The owner: the wholesale rate *is* the reseller rate; the admin needs no extra price. So the **Reseller price** field on a variation is gone (it only ever existed on this branch), and a variation costs the reseller **its own price + the company's "Reseller cost per unit"** (the same formula as an ordinary product's wholesale tier + that cost). The first version sold a variation at that price when nothing else was set; the owner called that a serious mistake and the later entry "Correction: the admin sets a suggested selling price" replaces it. See also the entry "products with variations".
 2. **Online gateway as an advance option.** The owner: whichever gateway is active is shown. See "pay the advance online".
 3. **Return charge of 50 per returned order, from the reseller's deposit.** See "return charge".
 
@@ -66,9 +91,9 @@ Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on
 Owner decision (asked one by one, in Bangla), then corrected on 2026-10-14: *the wholesale rate is the reseller rate; the admin does not set a separate reseller price; the reseller sets their own customer price; we add only the wholesale rate, the packaging cost and, with our courier, the courier cost.*
 
 What changed:
-1. **Admin → Products → Variations**: nothing new to fill in (the earlier "Reseller price" field was removed before it reached `main`). A variation's own price is the wholesale rate.
+1. **Admin → Products → Variations**: a variation's own **Sale Price** is the wholesale rate; the new **Suggested selling price for resellers** is the market price a reseller sees (see the entry "Correction: the admin sets a suggested selling price"). The earlier "Reseller price" field was removed before it reached `main`.
 2. **What the reseller pays for a variation** = its own price + the company's **Reseller cost per unit** (as for an ordinary product). Packaging stays the own-courier packaging charge per piece; delivery is the store's delivery charge (or the reseller's own courier).
-3. **Reseller portal → Products**: a product with variations shows "From ৳X" for cost / suggested price and a commission range; the **Variation prices** action sets the customer price per variation (never below what the reseller pays; blank = the suggested price raised to the cost); the bulk "Set price = suggested + %" works per variation; the details slide-over lists cost, price and commission per variation. The "No wholesale rate" filter now only lists a product with variations when none of them is active.
+3. **Reseller portal → Products**: a product with variations shows "From ৳X" for cost / suggested price and a commission range; the **Variation prices** action sets the customer price per variation (never below what the reseller pays; blank = the admin's suggested price, raised to the cost if lower; none = cannot be sold until a price is set); the bulk "Set price = suggested + %" works per variation; the details slide-over lists cost, price and commission per variation. The "No wholesale rate" filter now only lists a product with variations when none of them is active.
 4. **Reseller's store**: each variation shows the reseller's price; the cart / checkout charge it and record the commission (customer price − what the reseller pays). What the reseller pays is not output on the store at all (tested, including the page's hidden JSON).
 5. **Reseller portal → Create order / Change order**: products with variations can be ordered. Each line has an **Option** picker; stock is the variation's own; the same rules as ordinary products (price at least what the reseller pays, one line per option, own-courier orders charge the base price + packaging with no commission, adding a variation to an own-courier order asks only for the extra). Recent orders on the dashboard show the option.
 
@@ -77,7 +102,7 @@ Deploy: `php artisan migrate` (`2026_10_12_120000_add_reseller_prices_to_variant
 **Please confirm (readings of the owner's words):**
 - "The wholesale rate" of a variation is **the variation's own price**, not the product's wholesale tier price (tiers apply to the base product only on the storefront, and a variation line never gets a tier). If the tier should be used for every variation of a product instead, say so.
 - The company's "Reseller cost per unit" **is** added (the same as for ordinary products). A variation with no price of its own uses the product's price; one with no price at all cannot be sold.
-- Until a reseller sets a price, a variation sells at its normal price raised to what the reseller pays: no commission.
+- Until a reseller sets a price, a variation sells at the admin's suggested price (never at the wholesale rate); with no suggested price either it cannot be sold.
 - The older storefront account page for resellers (`/account/reseller`, before the portal) still prices only ordinary products; the portal is the place for variations.
 
 Needs Bangla review (new keys): Variation prices, Per variation, the sentence in the Variation prices modal, "This variation has no price yet, so it cannot be sold." and the details note.

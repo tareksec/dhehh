@@ -374,10 +374,10 @@ class ResellerPortalProductsTest extends TestCase
         $page = Livewire::test(Products::class);
 
         // The product row is priced per variation: cost from the lowest one, no single price. Until
-        // the reseller sets prices, each sells at its normal price raised to its cost: no commission.
+        // the reseller sets prices, each sells at the admin's suggested price: M 799-701 = 98, L 849-743 = 106, XL 999-887 = 112.
         $page->assertTableColumnStateSet('your_cost', 'From '.MoneyFormatter::currency(701, 'BDT'), $product)
-            ->assertTableColumnStateSet('suggested_price', 'From '.MoneyFormatter::currency(691, 'BDT'), $product)
-            ->assertTableColumnStateSet('commission_per_unit', MoneyFormatter::currency(0, 'BDT'), $product)
+            ->assertTableColumnStateSet('suggested_price', 'From '.MoneyFormatter::currency(799, 'BDT'), $product)
+            ->assertTableColumnStateSet('commission_per_unit', MoneyFormatter::number(98).' – '.MoneyFormatter::currency(112, 'BDT'), $product)
             ->assertTableActionVisible('variationPrices', $product);
 
         // A price below what the reseller pays is refused and nothing is saved.
@@ -394,9 +394,9 @@ class ResellerPortalProductsTest extends TestCase
         $saved = ResellerProduct::query()->where('product_id', $product->getKey())->value('variant_prices');
         $this->assertEquals([$medium->getKey() => 750.0, $extraLarge->getKey() => 999.0], $saved);
 
-        // The listing now shows the reseller's own commission: M 750-701 = 49, L nothing set 0, XL 999-887 = 112.
+        // The listing now shows the reseller's own commission: M 750-701 = 49, L still the suggested 106, XL 999-887 = 112.
         Livewire::test(Products::class)
-            ->assertTableColumnStateSet('commission_per_unit', MoneyFormatter::number(0).' – '.MoneyFormatter::currency(112, 'BDT'), $product);
+            ->assertTableColumnStateSet('commission_per_unit', MoneyFormatter::number(49).' – '.MoneyFormatter::currency(112, 'BDT'), $product);
     }
 
     public function test_one_resellers_variation_prices_never_reach_another_reseller(): void
@@ -436,7 +436,9 @@ class ResellerPortalProductsTest extends TestCase
         $this->assertStringContainsString('691', $html);   // what the reseller pays for M: its own price
         $this->assertStringContainsString('800', $html);   // their price for M
         $this->assertStringContainsString('109', $html);   // commission 800 - 691
-        $this->assertStringContainsString('877', $html);   // XL: normal price, no commission
+        $this->assertStringContainsString('877', $html);   // what the reseller pays for XL
+        $this->assertStringContainsString('999', $html);   // XL: the admin's suggested price, since they set none
+        $this->assertStringContainsString('122', $html);   // commission 999 - 877
         $this->assertStringNotContainsString('300', $html); // the company's purchase cost is never printed
     }
 
@@ -451,20 +453,52 @@ class ResellerPortalProductsTest extends TestCase
         Livewire::test(Products::class)
             ->callTableBulkAction('setPriceFromSuggested', [$inStore, $notInStore], data: ['percent' => 10]);
 
-        // 691 +10% = 760.10, 733 +10% = 806.30, 877 +10% = 964.70.
+        // The suggested prices +10%: 799 -> 878.90, 849 -> 933.90, 999 -> 1098.90.
         $this->assertEquals(
-            [$medium->getKey() => 760.1, $large->getKey() => 806.3, $extraLarge->getKey() => 964.7],
+            [$medium->getKey() => 878.9, $large->getKey() => 933.9, $extraLarge->getKey() => 1098.9],
             ResellerProduct::query()->where('product_id', $inStore->getKey())->value('variant_prices'),
         );
         $this->assertDatabaseMissing('reseller_products', ['customer_id' => $reseller->getKey(), 'product_id' => $notInStore->getKey()]);
 
-        // A big cut never goes below what the reseller pays: 691 -90% would be 69.10, so M stays at 691.
+        // A big cut never goes below what the reseller pays: 799 -90% would be 79.90, so M stays at 691.
         Livewire::test(Products::class)
             ->callTableBulkAction('setPriceFromSuggested', [$inStore], data: ['percent' => -90]);
         $this->assertEquals(
             [$medium->getKey() => 691.0, $large->getKey() => 733.0, $extraLarge->getKey() => 877.0],
             ResellerProduct::query()->where('product_id', $inStore->getKey())->value('variant_prices'),
         );
+    }
+
+    public function test_a_variation_with_no_suggested_price_waits_for_the_resellers_own_price(): void
+    {
+        [$company, $reseller] = $this->setUpCompany('products-variations-nosuggest.example.test');
+        [$product, $medium, $large, $extraLarge] = $this->makeVariationProduct($company);
+        $large->update(['reseller_suggested_price' => null]);
+        ResellerProduct::query()->create(['customer_id' => $reseller->getKey(), 'product_id' => $product->getKey(), 'is_active' => true]);
+        $this->asPortal($company, $reseller);
+
+        // The listing only counts the variations that can be sold: M 799-691 = 108, XL 999-877 = 122.
+        Livewire::test(Products::class)
+            ->assertTableColumnStateSet('commission_per_unit', MoneyFormatter::number(108).' – '.MoneyFormatter::currency(122, 'BDT'), $product);
+
+        // The details say so instead of showing the wholesale rate as a price.
+        $html = $this->detailsHtml(Livewire::test(Products::class)->mountTableAction('viewDetails', $product), $product);
+        $this->assertStringContainsString('Set your price', $html);
+
+        // The bulk percent leaves it alone: nothing to add the percent to.
+        Livewire::test(Products::class)->callTableBulkAction('setPriceFromSuggested', [$product], data: ['percent' => 10]);
+        $this->assertEquals(
+            [$medium->getKey() => 878.9, $extraLarge->getKey() => 1098.9],
+            ResellerProduct::query()->where('product_id', $product->getKey())->value('variant_prices'),
+        );
+
+        // Their own price for it is saved like any other.
+        Livewire::test(Products::class)->callTableAction('variationPrices', $product, data: [
+            'price_'.$medium->getKey() => '',
+            'price_'.$large->getKey() => 780,
+            'price_'.$extraLarge->getKey() => '',
+        ]);
+        $this->assertEquals([$large->getKey() => 780.0], ResellerProduct::query()->where('product_id', $product->getKey())->value('variant_prices'));
     }
 
     public function test_the_no_wholesale_rate_filter_counts_a_product_with_variations_as_priced(): void
@@ -484,8 +518,9 @@ class ResellerPortalProductsTest extends TestCase
     }
 
     /**
-     * A product with three variations, each with its own (wholesale) price.
-     * Distinctive numbers so any leak shows up in HTML.
+     * A product with three variations, each with its own (wholesale) price and
+     * the admin's suggested selling price. Distinctive numbers so any leak
+     * shows up in HTML.
      *
      * @return array{0: Product, 1: ProductVariant, 2: ProductVariant, 3: ProductVariant}
      */
@@ -493,12 +528,13 @@ class ResellerPortalProductsTest extends TestCase
     {
         $product = $this->makeProduct($company, $name, tierPrice: null, sellingPrice: 650);
         $product->forceFill(['has_variants' => true, 'cost_price' => 300])->save();
-        $make = fn (string $size, float $sale): ProductVariant => ProductVariant::query()->create([
+        $make = fn (string $size, float $sale, ?float $suggested): ProductVariant => ProductVariant::query()->create([
             'company_id' => $company->getKey(), 'product_id' => $product->getKey(), 'sku' => Str::upper(Str::random(6)),
-            'options' => ['Size' => $size], 'sale_price' => $sale, 'cost_price' => 300, 'stock' => 5, 'is_active' => true,
+            'options' => ['Size' => $size], 'sale_price' => $sale, 'reseller_suggested_price' => $suggested,
+            'cost_price' => 300, 'stock' => 5, 'is_active' => true,
         ]);
 
-        return [$product->fresh(), $make('M', 691), $make('L', 733), $make('XL', 877)];
+        return [$product->fresh(), $make('M', 691, 799), $make('L', 733, 849), $make('XL', 877, 999)];
     }
 
     /** The details slide-over's content for $product, as the mounted page builds it. */

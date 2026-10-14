@@ -104,7 +104,7 @@ class CreateOrder extends Page
             $base = $service->basePrice($reseller, $product, $variant);
 
             return $get('../../delivery_method') === 'own'
-                ? round($base ?? $service->suggestedPrice($product, $variant), 2)
+                ? round($base ?? $service->suggestedPrice($product, $variant) ?? 0.0, 2)
                 : $base;
         };
 
@@ -200,7 +200,7 @@ class CreateOrder extends Page
 
                 Section::make(__('Products'))
                     ->description(fn (Get $get): string => $get('delivery_method') === 'own'
-                        ? __('Only products in your store can be ordered. Set the price your customer pays; you pay the store price plus the packaging charge per piece, and there is no commission on these orders. Your customer only ever sees your price.')
+                        ? __('Only products in your store can be ordered. Set the price your customer pays; you pay the store price plus the packaging charge per piece, and there is no profit to withdraw on these orders. Your customer only ever sees your price.')
                         : __('Only products in your store can be ordered. Payment is cash on delivery.'))
                     ->schema([
                         Repeater::make('items')

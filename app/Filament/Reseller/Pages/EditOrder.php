@@ -141,7 +141,7 @@ class EditOrder extends Page
 
             $variant = $lineVariant($get);
 
-            return round($service->basePrice($reseller, $product, $variant) ?? $service->suggestedPrice($product, $variant), 2);
+            return round($service->basePrice($reseller, $product, $variant) ?? $service->suggestedPrice($product, $variant) ?? 0.0, 2);
         };
         $owesExtra = fn (): bool => ($this->summary()['to_send'] ?? 0) > 0;
 

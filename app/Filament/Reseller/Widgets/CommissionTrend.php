@@ -57,7 +57,7 @@ class CommissionTrend extends ChartWidget
 
         return [
             'datasets' => [[
-                'label' => __('Commission'),
+                'label' => __('Profit'),
                 'data' => $data,
                 // A soft area under a smooth line, in the portal's brand colour
                 // (the widget's own colour, so no hard-coded hex here).
@@ -86,6 +86,6 @@ class CommissionTrend extends ChartWidget
 
     public function getHeading(): string
     {
-        return __('Commission (last 6 months)');
+        return __('Profit (last 6 months)');
     }
 }

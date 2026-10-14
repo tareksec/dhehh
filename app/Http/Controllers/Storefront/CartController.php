@@ -107,7 +107,8 @@ class CartController extends Controller
         foreach ($quantities as $variantId => $quantity) {
             $variant = $variants->get((int) $variantId);
 
-            if (! $variant || (int) $variant->stock < 1) {
+            // A variation the reseller has no selling price for is not for sale.
+            if (! $variant || (int) $variant->stock < 1 || app(ResellerPricing::class)->variantBlocked($variant)) {
                 continue;
             }
 

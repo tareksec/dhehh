@@ -32,9 +32,11 @@ use Illuminate\Contracts\Session\Session;
  * Variations (owner decision 2026-10-14): there is no separate reseller price
  * on a variation. Its wholesale rate -- the variation's own price -- is what
  * the reseller pays, plus the company's reseller cost per unit (as for a
- * product). The reseller picks any customer price at or above that (their
- * own price, else the variation's normal price) and keeps the difference. The
- * reseller's cost is never output on a storefront.
+ * product). The admin enters a suggested selling (market) price per variation;
+ * the reseller sees it and may override it with their own, at or above what
+ * they pay, and keeps the difference. With neither set the variation cannot
+ * be sold (never at the wholesale rate). The reseller's cost is never output
+ * on a storefront.
  */
 class ResellerPricing
 {
@@ -137,7 +139,7 @@ class ResellerPricing
     /**
      * The reseller price the storefront should charge for $variant, or null
      * when none applies (no reseller active, the product is not in their
-     * store, or the variation has no price).
+     * store, the variation has no price, or no selling price is set for it).
      */
     public function variantPriceFor(ProductVariant $variant): ?float
     {
@@ -161,15 +163,31 @@ class ResellerPricing
     }
 
     /**
-     * The price a reseller's customer pays for $variant: the reseller's
-     * choice (else the variation's normal price), never below what the
-     * reseller pays for it. Null when the variation has no price at all.
+     * The price a reseller's customer pays for $variant: the reseller's own
+     * choice, else the price the admin suggests, never below what the
+     * reseller pays for it. Null when it cannot be sold through a reseller:
+     * the variation has no price, or neither the reseller nor the admin has
+     * set a selling price (it is never sold at the wholesale rate).
      */
     public static function variantPrice(ProductVariant $variant, ?float $chosen, float $costPerUnit = 0.0): ?float
     {
         $base = $variant->resellerCost($costPerUnit);
+        $price = $chosen ?? $variant->resellerSuggestedPrice();
 
-        return $base === null ? null : round(max($chosen ?? $variant->baseSalePrice(), $base), 2);
+        return $base === null || $price === null ? null : round(max($price, $base), 2);
+    }
+
+    /**
+     * True when the active reseller sells $variant's product but this
+     * variation has no selling price to charge, so a visitor of their store
+     * cannot buy it.
+     */
+    public function variantBlocked(ProductVariant $variant): bool
+    {
+        return $this->reseller !== null
+            && (int) $variant->company_id === $this->companyId
+            && array_key_exists((int) $variant->product_id, $this->catalogPrices())
+            && $this->variantPriceFor($variant) === null;
     }
 
     /** Per-unit base price for the active reseller, or null when not reseller-priced. */

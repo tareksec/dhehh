@@ -18,6 +18,7 @@ class ProductVariant extends Model
         'options',
         'cost_price',
         'sale_price',
+        'reseller_suggested_price',
         'stock',
         'weight_kg',
         'images',
@@ -30,6 +31,7 @@ class ProductVariant extends Model
         'images' => 'array',
         'cost_price' => 'decimal:2',
         'sale_price' => 'decimal:2',
+        'reseller_suggested_price' => 'decimal:2',
         'weight_kg' => 'decimal:3',
         'stock' => 'integer',
         'is_active' => 'boolean',
@@ -94,6 +96,20 @@ class ProductVariant extends Model
         $rate = $this->baseSalePrice();
 
         return $rate > 0 ? round($rate + max(0, $costPerUnit), 2) : null;
+    }
+
+    /**
+     * The selling (market) price the admin suggests to resellers for this
+     * variation (owner decision 2026-10-14): what their customers pay unless
+     * the reseller sets their own price. Null when the admin set none -- the
+     * reseller must then set a price before it can be sold; it is never sold
+     * at the wholesale rate.
+     */
+    public function resellerSuggestedPrice(): ?float
+    {
+        $price = (float) ($this->reseller_suggested_price ?? 0);
+
+        return $price > 0 ? round($price, 2) : null;
     }
 
     /**

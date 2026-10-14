@@ -305,7 +305,9 @@ class StorefrontCart
                 if (! empty($item['variant_id'])) {
                     $variant = $product->activeVariants->firstWhere('id', (int) $item['variant_id']);
 
-                    if (! $variant) {
+                    // A variation with no selling price in the reseller's store
+                    // is not for sale (never at the wholesale rate).
+                    if (! $variant || app(ResellerPricing::class)->variantBlocked($variant)) {
                         $changed = true;
 
                         return null;

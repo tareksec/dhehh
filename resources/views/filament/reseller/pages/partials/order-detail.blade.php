@@ -151,7 +151,7 @@
     @endif
 
     <div>
-        <h3 class="mb-2 text-sm font-semibold">{{ __('Commission') }}</h3>
+        <h3 class="mb-2 text-sm font-semibold">{{ __('Profit') }}</h3>
         @if ($order->reseller_own_courier && ! $order->resellerCommission)
             <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('None (own courier)') }}</p>
         @elseif ($order->resellerCommission)
