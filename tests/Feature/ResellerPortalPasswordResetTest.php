@@ -77,7 +77,7 @@ class ResellerPortalPasswordResetTest extends TestCase
         $reseller->refresh();
         $this->assertNotNull($reseller->password_reset_code);
         $this->assertTrue($reseller->password_reset_expires_at->isFuture());
-        Http::assertSent(fn ($request): bool => str_contains(urldecode($request->url()), 'password reset code'));
+        Http::assertSent(fn ($request): bool => str_contains(urldecode($request->url()), 'OTP is'));
     }
 
     public function test_no_code_is_sent_to_a_phone_that_is_not_a_reseller_but_the_reply_is_the_same(): void

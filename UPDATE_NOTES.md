@@ -2,6 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-14 - SMS gateway checked against the BulkSMSBD API
+
+Owner logged in to bulksmsbd.net and asked for a check of the SMS code against its API page; then "সব গুলো ঠিক করে দেও".
+
+- Fixed: reply code in an HTTP 200 (anything but 202 = failed, logged with its meaning).
+- Fixed: number sent as `8801XXXXXXXXX`.
+- Fixed: OTP SMS wording `Your {Company} OTP is {code}. …` (customer, reseller, investor portal; 2 investor keys renamed in `lang/en.json` and `lang/bn.json`).
+- Not changed: `type=text` stays in the URL template; whether Bangla text needs another `type` is not on the page the owner showed. Send one Bangla test SMS to check.
+- Verified: StorefrontSmsGatewayTest (new) and the SMS/OTP-related test files passed; full suite on the clean worktree before the rebase onto v2.77.0: 2058 passed, 2 failed (`WhatsAppWebArchiveTest`, heroicons SVG missing in the test copy of vendor — fails without this change too).
+
+Needs Bangla review: the 2 investor OTP strings in `lang/bn.json`.
+
+Commit status: committed and pushed to main with owner approval (2026-10-14).
+
 ## 2026-10-14 (later) - Starter footer like zamzamint.netlify.app, loaded from the Footer Builder
 
 Owner request (in Bangla): design the footer too, like the reference site.

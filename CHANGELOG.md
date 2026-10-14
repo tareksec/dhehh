@@ -4,6 +4,17 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A refused SMS was counted as sent.** BulkSMSBD-style gateways answer HTTP 200 even when they refuse the SMS (no balance, wrong sender ID, IP not whitelisted) and put the real result in a reply code. The system now reads that code (`response_code` in the JSON, or a plain code): anything other than `202` is a failed send, so a login code that never left no longer shows "sent", and the WhatsApp-to-SMS fallback no longer stops at a refused SMS. The refusal and its meaning (for example 1007 Balance Insufficient, 1032 IP not whitelisted) are written to the log. Gateways that send no reply code keep going by HTTP status.
+- **SMS numbers are now sent with the country code** (`8801XXXXXXXXX`, as the BulkSMSBD documentation shows) instead of the stored `01XXXXXXXXX`.
+- **Login, registration and password-reset SMS follow the gateway's OTP format** `Your {Company} OTP is {code}. Use it to … It expires in N minutes.` (storefront customers, reseller portal and investor portal). BulkSMSBD asks for this format for OTP messages. The investor portal texts (English and Bangla) changed too.
+
+### Technical Notes
+
+- `StorefrontNotificationService::sendSms()` reads the reply through `smsGatewayCode()`; known codes are in `SMS_GATEWAY_CODES`. Phone goes through `PhoneLinks::internationalDigits()`.
+- Tests: new `StorefrontSmsGatewayTest` (5); OTP-wording assertions updated in `StorefrontApiAccountTest`, `StorefrontCustomerAuthTest`, `ResellerPortalPasswordResetTest`, `InvestorPortalTest`.
+
 ## [2.77.0] - 2026-10-14
 
 **Release type:** Minor Feature Update
