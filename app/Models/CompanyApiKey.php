@@ -25,9 +25,20 @@ class CompanyApiKey extends Model
 {
     use BelongsToCompany;
 
+    public const SCOPE_WEBSITE = 'website';
+
+    /** Read-only data feed for an outside system (IMS), see Api\V1\Sync. */
+    public const SCOPE_SYNC = 'sync';
+
+    public const SCOPES = [
+        self::SCOPE_WEBSITE => 'Website (products, orders, leads)',
+        self::SCOPE_SYNC => 'Data sync (read-only feed for IMS)',
+    ];
+
     protected $fillable = [
         'company_id',
         'label',
+        'scope',
         'key_prefix',
         'key_hash',
         'last_used_at',
@@ -54,13 +65,14 @@ class CompanyApiKey extends Model
      * Creates a new key for $company and returns [model, plaintext token].
      * The plaintext token is never persisted or retrievable again.
      */
-    public static function generate(Company $company, ?string $label = null, ?int $createdBy = null): array
+    public static function generate(Company $company, ?string $label = null, ?int $createdBy = null, string $scope = self::SCOPE_WEBSITE): array
     {
         $token = Str::random(40);
 
         $key = static::query()->create([
             'company_id' => $company->getKey(),
             'label' => $label,
+            'scope' => $scope,
             'key_prefix' => substr($token, 0, 8),
             'key_hash' => hash('sha256', $token),
             'created_by' => $createdBy,

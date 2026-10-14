@@ -9,8 +9,11 @@ use App\Models\InvestmentDocument;
 use App\Models\InvestmentProject;
 use App\Models\Investor;
 use App\Models\InvestorCycleElection;
+use App\Models\InvestorGroup;
+use App\Models\InvestorGroupMember;
 use App\Models\InvestorPortalAccount;
 use App\Models\SettlementPayout;
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -74,26 +77,82 @@ class InvestorPortalService
         $partnerId = $account->isChannelPartner() ? $account->channel_partner_id : 0;
         $investmentIds = Investment::query()->where('investor_id', $investorId)->select('id');
         $projectIds = Investment::query()->where('investor_id', $investorId)->select('project_id');
+        // The screenshot of a payout made to them, and only that category of its papers.
+        $payoutIds = SettlementPayout::query()->where('investor_id', $investorId)->select('id');
+        $partnerPayoutIds = ChannelPartnerPayout::query()->where('channel_partner_id', $partnerId)->select('id');
 
         return InvestmentDocument::query()->where(fn (Builder $query) => $query
             ->where(fn (Builder $query) => $query->where('documentable_type', (new Investor)->getMorphClass())->where('documentable_id', $investorId))
             ->orWhere(fn (Builder $query) => $query->where('documentable_type', (new ChannelPartner)->getMorphClass())->where('documentable_id', $partnerId))
             ->orWhere(fn (Builder $query) => $query->where('documentable_type', (new Investment)->getMorphClass())->whereIn('documentable_id', $investmentIds))
+            ->orWhere(fn (Builder $query) => $query->where('documentable_type', (new SettlementPayout)->getMorphClass())->whereIn('documentable_id', $payoutIds)->where('category', InvestmentDocument::CATEGORY_PAYMENT_PROOF))
+            ->orWhere(fn (Builder $query) => $query->where('documentable_type', (new ChannelPartnerPayout)->getMorphClass())->whereIn('documentable_id', $partnerPayoutIds)->where('category', InvestmentDocument::CATEGORY_PAYMENT_PROOF))
             ->orWhere(fn (Builder $query) => $query->where('documentable_type', (new InvestmentProject)->getMorphClass())->whereIn('documentable_id', $projectIds)
                 ->whereIn('category', self::SHARED_PROJECT_DOCUMENT_CATEGORIES)));
     }
 
     /**
-     * Money still working in a project: active investments in projects that
-     * are not settled yet (after settlement the principal comes back with
-     * the payout).
+     * Money still working: what the person has in groups that are running
+     * (a member stays in the group from project to project, so a settled
+     * project does not take it out; a group that has not started yet is money
+     * waiting, not working), what is on its way back to a
+     * member who is leaving (until that last payout is paid), and the
+     * investments in projects outside any group that are not settled yet.
      */
     public function capitalAtWork(InvestorPortalAccount $account): float
     {
-        return round((float) $this->investments($account)
+        return $this->workingCapital(fn (Builder $query): Builder => $query->where('investor_id', $account->investor_id ?? 0));
+    }
+
+    /**
+     * @param  Closure(Builder): Builder  $forInvestors  limits a query to the investors in question
+     */
+    protected function workingCapital(Closure $forInvestors): float
+    {
+        $staying = (float) $forInvestors(InvestorGroupMember::query())
+            ->where('status', InvestorGroupMember::STATUS_ACTIVE)
+            ->whereHas('group', fn (Builder $query) => $query->where('status', InvestorGroup::STATUS_RUNNING))
+            ->sum('amount');
+
+        $leaving = (float) $forInvestors(InvestorGroupMember::query())
+            ->where('status', InvestorGroupMember::STATUS_WITHDRAWN)
+            ->whereNotNull('leaves_after_sequence')
+            ->get()
+            ->filter(fn (InvestorGroupMember $member): bool => $this->lastPayoutStillOpen($member))
+            ->sum(fn (InvestorGroupMember $member): float => (float) $member->amount);
+
+        $outsideGroups = (float) $forInvestors(Investment::query())
+            ->whereNull('group_member_id')
             ->where('status', Investment::STATUS_ACTIVE)
             ->whereHas('project', fn (Builder $query) => $query->where('status', '!=', 'settled'))
-            ->sum('amount'), 2);
+            ->sum('amount');
+
+        return round($staying + $leaving + $outsideGroups, 2);
+    }
+
+    /** A leaving member's principal is still on its way until the payout of the project they left after is paid. */
+    protected function lastPayoutStillOpen(InvestorGroupMember $member): bool
+    {
+        $project = InvestmentProject::query()->where('group_id', $member->group_id)->where('sequence_in_group', $member->leaves_after_sequence)->first();
+        $settlement = $project?->settlement;
+
+        if (! $settlement || ! in_array($settlement->status, self::FINAL_SETTLEMENT_STATUSES, true)) {
+            return true;
+        }
+
+        $payout = SettlementPayout::query()->where('settlement_id', $settlement->getKey())->where('investor_id', $member->investor_id)->first();
+
+        return $payout === null || $payout->payment_status !== 'paid';
+    }
+
+    /** Everything the person has ever put in: one deposit per group membership, plus investments outside any group. */
+    public function totalInvested(InvestorPortalAccount $account): float
+    {
+        return round(
+            (float) InvestorGroupMember::query()->where('investor_id', $account->investor_id ?? 0)->sum('amount')
+            + (float) $this->investments($account)->whereNull('group_member_id')->sum('amount'),
+            2,
+        );
     }
 
     /** @return array{capital_at_work: float, total_invested: float, profit_received: float, profit_pending: float, paid_out: float} */
@@ -101,7 +160,7 @@ class InvestorPortalService
     {
         return [
             'capital_at_work' => $this->capitalAtWork($account),
-            'total_invested' => round((float) $this->investments($account)->sum('amount'), 2),
+            'total_invested' => $this->totalInvested($account),
             'profit_received' => round((float) $this->payouts($account)->where('payment_status', 'paid')->sum('profit_share_amount'), 2),
             'profit_pending' => round((float) $this->payouts($account)->where('payment_status', 'pending')->sum('profit_share_amount'), 2),
             'paid_out' => round((float) $this->payouts($account)->where('payment_status', 'paid')->sum('total_payout'), 2),
@@ -116,11 +175,7 @@ class InvestorPortalService
 
         return [
             'investors' => $this->referredInvestors($account)->count(),
-            'referred_capital' => round((float) Investment::query()
-                ->whereIn('investor_id', $this->referredInvestors($account)->select('id'))
-                ->where('status', Investment::STATUS_ACTIVE)
-                ->whereHas('project', fn (Builder $query) => $query->where('status', '!=', 'settled'))
-                ->sum('amount'), 2),
+            'referred_capital' => $this->workingCapital(fn (Builder $query): Builder => $query->whereIn('investor_id', $this->referredInvestors($account)->select('id'))),
             'earned' => $earned,
             'paid' => $paid,
             'due' => round($earned - $paid, 2),
@@ -139,7 +194,23 @@ class InvestorPortalService
     {
         $entries = collect();
 
-        $investments = $this->investments($account)->with('project:id,project_code,name')->get();
+        // Money in a group is ONE deposit however many projects it has been through
+        // (each project holds a copy of it); only investments outside any group are
+        // listed row by row.
+        $members = InvestorGroupMember::query()->where('investor_id', $account->investor_id ?? 0)->with('group:id,group_code,name')->get();
+
+        foreach ($members as $member) {
+            $about = trim($member->group?->group_code.' — '.$member->group?->name);
+            $entries->push($this->entry($member->invested_at ?? $member->created_at, 'deposit', __('Investment'), $about, (float) $member->amount));
+
+            // A member who left at a project's end gets the principal back inside that
+            // project's payout, so only a withdrawal on its own is listed here.
+            if ($member->isWithdrawn() && $member->leaves_after_sequence === null) {
+                $entries->push($this->entry($member->withdrawn_at ?? $member->updated_at, 'withdrawal', __('Capital withdrawn'), $about, -(float) $member->amount));
+            }
+        }
+
+        $investments = $this->investments($account)->whereNull('group_member_id')->with('project:id,project_code,name')->get();
 
         foreach ($investments as $investment) {
             $entries->push($this->entry($investment->invested_at ?? $investment->created_at, 'deposit', __('Investment'), $investment->project, (float) $investment->amount));
@@ -149,7 +220,7 @@ class InvestorPortalService
             }
         }
 
-        $payouts = $this->payouts($account)->with(['settlement.project:id,project_code,name', 'cycleElection.nextProject:id,project_code,name'])->get();
+        $payouts = $this->payouts($account)->with(['settlement.project:id,project_code,name', 'cycleElection.nextProject:id,project_code,name', 'cycleElection.nextGroup:id,group_code,name'])->get();
 
         foreach ($payouts as $payout) {
             $settlement = $payout->settlement;
@@ -175,7 +246,7 @@ class InvestorPortalService
                 $entries->push($this->entry(
                     $election->created_at,
                     'reinvest',
-                    __('Reinvested into :project', ['project' => $this->projectLabel($election->nextProject)]),
+                    __('Reinvested into :project', ['project' => $election->nextGroup ? trim($election->nextGroup->group_code.' — '.$election->nextGroup->name) : $this->projectLabel($election->nextProject)]),
                     $settlement->project,
                     0.0,
                     (float) $election->reinvest_amount,
@@ -225,7 +296,7 @@ class InvestorPortalService
     }
 
     /** @return array{date: Carbon, type: string, label: string, project: string, amount: float, info_amount: ?float, order: int} */
-    protected function entry(mixed $date, string $type, string $label, ?InvestmentProject $project, float $amount, ?float $infoAmount = null): array
+    protected function entry(mixed $date, string $type, string $label, InvestmentProject|string|null $project, float $amount, ?float $infoAmount = null): array
     {
         $order = ['deposit' => 1, 'profit' => 2, 'loss' => 2, 'payout' => 3, 'reinvest' => 4, 'withdrawal' => 5][$type] ?? 9;
 
@@ -233,7 +304,7 @@ class InvestorPortalService
             'date' => Carbon::parse($date ?? now()),
             'type' => $type,
             'label' => $label,
-            'project' => $this->projectLabel($project),
+            'project' => is_string($project) ? $project : $this->projectLabel($project),
             'amount' => round($amount, 2),
             'info_amount' => $infoAmount === null ? null : round($infoAmount, 2),
             'order' => $order,

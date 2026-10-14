@@ -2,10 +2,12 @@
 
 namespace App\Filament\Resources\PayoutBatches\RelationManagers;
 
+use App\Filament\Actions\PayoutProofAction;
 use App\Models\PayoutBatch;
 use App\Models\PayoutBatchItem;
 use App\Models\SettlementPayout;
 use App\Services\Investment\PayoutBatchService;
+use App\Support\CompanyMedia;
 use App\Support\MoneyFormatter;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
@@ -54,8 +56,10 @@ class ItemsRelationManager extends RelationManager
                         default => 'warning',
                     })
                     ->description(fn (PayoutBatchItem $record): ?string => $record->failure_reason),
+                PayoutProofAction::column(fn (PayoutBatchItem $record) => $record->payable),
             ])
             ->recordActions([
+                PayoutProofAction::uploadAction(fn () => CompanyMedia::require($this->getOwnerRecord()), fn (PayoutBatchItem $record) => $record->payable),
                 Action::make('remove')
                     ->label(__('Take out'))
                     ->icon(Heroicon::OutlinedMinusCircle)

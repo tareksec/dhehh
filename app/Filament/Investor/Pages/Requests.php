@@ -5,8 +5,10 @@ namespace App\Filament\Investor\Pages;
 use App\Filament\Investor\Concerns\InvestorPortalPage;
 use App\Models\Investment;
 use App\Models\InvestorCycleElection;
+use App\Models\InvestorGroupMember;
 use App\Models\InvestorRequest;
 use App\Models\SettlementPayout;
+use App\Services\Investment\InvestmentTargets;
 use App\Services\InvestorRequestService;
 use App\Support\MoneyFormatter;
 use BackedEnum;
@@ -71,11 +73,12 @@ class Requests extends Page implements HasTable
                         ->live(),
 
                     // Top-up
-                    Select::make('project_id')
-                        ->label(__('Project'))
-                        ->options(fn (): array => app(InvestorRequestService::class)->openProjects()->mapWithKeys(fn ($project): array => [$project->getKey() => $this->portal()->projectLabel($project)])->all())
+                    Select::make('target')
+                        ->label(__('Group'))
+                        ->options(fn (): array => app(InvestmentTargets::class)->options())
                         ->required()
-                        ->visible($isType(InvestorRequest::TYPE_TOP_UP)),
+                        ->visible($isType(InvestorRequest::TYPE_TOP_UP))
+                        ->helperText(__('New money joins a group that is still open. A group that has started takes no new members.')),
                     TextInput::make('amount')->label(__('Amount'))->numeric()->minValue(1)->prefix($currency)->required()->visible($isType(InvestorRequest::TYPE_TOP_UP)),
                     Select::make('payment_method')->label(__('How you sent the money'))->options(collect(Investment::PAYMENT_METHODS)->map(fn (string $label): string => __($label))->all())->required()->visible($isType(InvestorRequest::TYPE_TOP_UP)),
                     TextInput::make('payment_reference')->label(__('Transaction / slip reference'))->maxLength(100)->visible($isType(InvestorRequest::TYPE_TOP_UP)),
@@ -83,11 +86,9 @@ class Requests extends Page implements HasTable
                     Text::make(__('The investment is added once the company confirms the money has arrived. The deed, cheque and witnesses are completed at the office as before.'))->visible($isType(InvestorRequest::TYPE_TOP_UP)),
 
                     // Withdrawal notice
-                    Select::make('withdrawal_project_id')
-                        ->label(__('Project'))
-                        ->options(fn (): array => $this->portal()->investments($this->account())
-                            ->where('status', Investment::STATUS_ACTIVE)->with('project')->get()
-                            ->mapWithKeys(fn (Investment $investment): array => [$investment->project_id => $this->portal()->projectLabel($investment->project)])->all())
+                    Select::make('withdrawal_target')
+                        ->label(__('Group'))
+                        ->options(fn (): array => $this->withdrawalOptions())
                         ->required()
                         ->visible($isType(InvestorRequest::TYPE_WITHDRAWAL)),
                     Text::make(__('Under the deed, a withdrawal needs 60 days\' written notice. Once the company accepts this request, the notice runs from the day you sent it.'))->visible($isType(InvestorRequest::TYPE_WITHDRAWAL)),
@@ -106,9 +107,9 @@ class Requests extends Page implements HasTable
                         ->required()
                         ->live()
                         ->visible($isType(InvestorRequest::TYPE_REINVEST)),
-                    Select::make('next_project_id')
+                    Select::make('next_target')
                         ->label(__('Reinvest into'))
-                        ->options(fn (): array => app(InvestorRequestService::class)->openProjects()->mapWithKeys(fn ($project): array => [$project->getKey() => $this->portal()->projectLabel($project)])->all())
+                        ->options(fn (): array => app(InvestmentTargets::class)->options())
                         ->required()
                         ->visible(fn (Get $get): bool => $get('type') === InvestorRequest::TYPE_REINVEST && in_array($get('election'), ['reinvest', 'partial_reinvest'], true)),
                     TextInput::make('reinvest_amount')
@@ -127,7 +128,7 @@ class Requests extends Page implements HasTable
                     $type = (string) $data['type'];
 
                     if ($type === InvestorRequest::TYPE_WITHDRAWAL) {
-                        $data['project_id'] = $data['withdrawal_project_id'] ?? null;
+                        $data['target'] = $data['withdrawal_target'] ?? null;
                     }
 
                     if ($type === InvestorRequest::TYPE_REINVEST) {
@@ -140,18 +141,48 @@ class Requests extends Page implements HasTable
         ];
     }
 
+    /**
+     * Groups the investor is in (and projects outside any group they have
+     * money in), keyed `g<id>` / `p<id>`.
+     *
+     * @return array<string, string>
+     */
+    private function withdrawalOptions(): array
+    {
+        $targets = app(InvestmentTargets::class);
+        $options = [];
+
+        InvestorGroupMember::query()
+            ->where('investor_id', $this->account()->investor_id ?? 0)
+            ->where('status', InvestorGroupMember::STATUS_ACTIVE)
+            ->with('group')
+            ->get()
+            ->each(function (InvestorGroupMember $member) use (&$options, $targets): void {
+                $options['g'.$member->group_id] = $targets->label($member->group);
+            });
+
+        $this->portal()->investments($this->account())
+            ->where('status', Investment::STATUS_ACTIVE)->whereNull('group_member_id')->with('project')->get()
+            ->each(function (Investment $investment) use (&$options): void {
+                $options['p'.$investment->project_id] = $this->portal()->projectLabel($investment->project);
+            });
+
+        return $options;
+    }
+
     public function table(Table $table): Table
     {
         $currency = $this->currency();
 
         return $table
-            ->query(fn () => InvestorRequest::query()->where('portal_account_id', $this->account()->getKey())->with('project'))
+            ->query(fn () => InvestorRequest::query()->where('portal_account_id', $this->account()->getKey())->with(['project', 'group']))
             ->defaultSort('id', 'desc')
             ->columns([
                 TextColumn::make('type')
                     ->label(__('Request'))
                     ->formatStateUsing(fn (string $state): string => InvestorRequest::typeLabel($state))
                     ->description(fn (InvestorRequest $record): ?string => collect([
+                        $record->group ? app(InvestmentTargets::class)->label($record->group) : null,
                         $record->project ? $this->portal()->projectLabel($record->project) : null,
                         filled($record->admin_note) ? __('Company\'s answer').': '.$record->admin_note : null,
                     ])->filter()->implode(' · ') ?: null)

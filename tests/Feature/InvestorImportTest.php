@@ -102,8 +102,8 @@ class InvestorImportTest extends TestCase
         $this->assertSame('9363512, 9363513', $one->stamp_number);
         $this->assertSame('BANK/CHQ-0011280', $one->cheque_number);
         $this->assertSame('200000.00', $one->investment_amount);
-        // An amount with no project chosen must be resolved before confirming.
-        $this->assertSame([__('Pick a project for the investment amount, or clear the amount.')], $one->blockingIssues());
+        // An amount with no group or project chosen must be resolved before confirming.
+        $this->assertSame([__('Pick a group for the investment amount, or clear the amount.')], $one->blockingIssues());
 
         $two = InvestorDraft::query()->where('name', 'Investor Two')->sole();
         $this->assertSame('01722222222', $two->phone);

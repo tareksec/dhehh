@@ -47,7 +47,7 @@ class InvestorRequest extends Model
         self::STATUS_CANCELLED => 'Cancelled',
     ];
 
-    protected $fillable = ['company_id', 'portal_account_id', 'investor_id', 'channel_partner_id', 'type', 'project_id', 'settlement_payout_id', 'amount', 'payload', 'message'];
+    protected $fillable = ['company_id', 'portal_account_id', 'investor_id', 'channel_partner_id', 'type', 'project_id', 'group_id', 'settlement_payout_id', 'amount', 'payload', 'message'];
 
     protected $attributes = ['status' => self::STATUS_PENDING];
 
@@ -66,6 +66,11 @@ class InvestorRequest extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(InvestmentProject::class, 'project_id');
+    }
+
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(InvestorGroup::class, 'group_id');
     }
 
     public function payout(): BelongsTo

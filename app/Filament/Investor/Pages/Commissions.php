@@ -6,6 +6,7 @@ use App\Filament\Investor\Concerns\InvestorPortalPage;
 use App\Models\ChannelPartnerPayout;
 use App\Support\MoneyFormatter;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -66,6 +67,13 @@ class Commissions extends Page implements HasTable
                     ->color(fn (string $state): string => $state === 'paid' ? 'success' : 'warning'),
                 TextColumn::make('paid_at')->label(__('Paid on'))->date('d M Y')->placeholder('-')->visibleFrom('md'),
                 TextColumn::make('payment_reference')->label(__('Reference'))->placeholder('-')->toggleable()->visibleFrom('md'),
+            ])
+            ->recordActions([
+                Action::make('paymentProof')
+                    ->label(__('Payment screenshot'))
+                    ->icon(Heroicon::OutlinedCamera)
+                    ->visible(fn (ChannelPartnerPayout $record): bool => $record->payment_status === 'paid' && $record->hasPaymentProof())
+                    ->url(fn (ChannelPartnerPayout $record): string => route('filament.investor.documents.download', ['document' => $record->paymentProof()?->getKey()])),
             ])
             ->emptyStateHeading(__('No commissions yet.'))
             ->paginated([10, 25, 50]);

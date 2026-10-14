@@ -157,3 +157,57 @@ New admin and portal strings go through `__()` in both language files; uncertain
 - **Q7.** The congratulation message goes by SMS first. Draft: "অভিনন্দন! আপনার গ্রুপ-১-এর প্রজেক্ট-২ সফলভাবে সম্পন্ন হয়েছে। লাভের হিসাব শীঘ্রই জানানো হবে।" The owner finalises the wording; nothing is sent before that.
 - **Q8.** The company contribution is entered by staff on each project (as today) and is **not** copied to the next phase.
 - **Q9 (new).** Annualized return stays on the 2-month = 60-day formula even though project dates follow the calendar. *Say so if you want the real day count instead.*
+
+## 10. Build log
+
+**G1 — built 2026-10-12** (groups foundation). Where the build differs from the plan:
+
+- `investment_projects.cycle_starts_on` was not added: `start_date` / `end_date` already carry it.
+- The backfill skips a project that is still `open` and a project with no investments, and lists them. A group has no project while it collects money, so an `open` project needs the owner's decision.
+- Group-member deposits can be withdrawn while the group is Open (`InvestmentWithdrawalService::withdrawGroupMember`). After it runs, the old project-level Withdraw on the member's latest project row also marks the member withdrawn. Withdrawal at the cycle boundary with the 60-day notice is G3.
+- Deed, witnesses and cheque/stamp entry (Q5) still live on the investment record. Recording them once at the group level needs a change to those tables; planned with G3.
+- Closing a group needs every project settled and every member out.
+- The pick-a-project screens (investor draft, import, portal top-up, reinvest) hide group projects. **The backfill must not run on real data before G3 gives them an open-group target.**
+- Tests: `GroupCycleCalendarTest` (dates, 28th–31st anchors, leap February, boundary days, progress) and `InvestorGroupTest` (lifecycle, one voucher, snapshot, guards, the signed-invoice figures, backfill, admin screens).
+
+**G2 — built 2026-10-12** (cycle). Where the build differs from the plan:
+
+- Boundaries come from the calendar (anchor + N × 2 months), not from each project's recorded `end_date`; see `UPDATE_NOTES.md` for the effect on migrated groups.
+- The command runs hourly instead of daily so every company's own midnight is caught; it is idempotent.
+- A group that is behind is not caught up automatically: the finished project closes, nothing starts, and the group page offers **Start the next project now** (one project per confirmation).
+- The capital-base vs landed-cost warning is on the project page and in the Calculate & Settle dialog, as a warning only.
+- The "project completed" event exists (`InvestorGroupProjectCompleted`); nothing listens until G6.
+
+**G3 — built 2026-10-12** (new money, leaving, what a group pays). Where the build differs from the plan:
+
+- **New rule decided during the build (owner to confirm):** a member who stays in the group is paid the **profit only** each project (the principal carries on); a member who leaves is paid principal + profit. The plan only said "principal returns with the closing project's payout" for leavers. One code block, `SettlementService::principalLeaving()`.
+- Leaving is applied by the cycle at the project's end date (inclusive of a notice that ends that day), not by a separate withdrawal voucher: the final payout carries the principal.
+- A loss borne by investors is refused on a group project until the owner decides how a member's stake is reduced.
+- Deed paperwork (Q5): stamp / cheque from a draft ride on the member and become the first project row's security instrument; everything else is entered on that first row by staff.
+- Open for G5: the portal statement and "My investments" still show one deposit per project row.
+
+**G4 — built 2026-10-12** (payment screenshot). Where the build differs from the plan:
+
+- No new columns: the screenshot is an `InvestmentDocument` (`payment_proof`) attached to the payout, which already has private storage, the admin download, the portal download scope and the audit. The `payment_proof_path` / `proof_uploaded_*` columns of §3.3 are not needed.
+- The upload is optional when marking paid and can be added or replaced afterwards; the dashboard rule (paid + screenshot) is G5.
+
+**G5 — built 2026-10-12** (portal). Where the build differs from the plan:
+
+- The dashboard is built by `InvestorPortalCards`: one card per project under its group; a card leaves when its payout is paid **and** has a screenshot; withdrawn rows are hidden from the dashboard.
+- The portal totals are membership-based (see `UPDATE_NOTES.md`): a member's money is counted once, not once per project copy.
+- Old payouts made before the screenshot existed keep their card as "Paid" until a screenshot is uploaded (literal reading of the owner's rule); date cut-off offered to the owner.
+- Checked in a browser on a disposable database.
+
+**G6 — built 2026-10-12** (congratulation SMS). Where the build differs from the plan:
+
+- The sender is the existing SMS gateway through a listener on `InvestorGroupProjectCompleted` (no separate Phase 6 sender exists yet). The message text is a company setting that starts empty (the owner's wording, Q7); nothing is sent until the owner writes it. WhatsApp is not used.
+
+## 11. Open questions for the owner (collected at the end of the build)
+
+1. **What a group project pays (decided by me, please confirm):** members who stay get the **profit only** (the principal carries on into the next project); a member who leaves gets principal + profit. See G3.
+2. **A loss that the investors bear** cannot be settled on a group project yet: how should a member's stake be reduced?
+3. **Payouts paid before the screenshot existed** (the old Project-01 etc.): the card stays on the dashboard until a screenshot is uploaded. Hide payouts paid before a date instead?
+4. **The five old projects:** their payouts include principal + profit. After the migration their members are active in the group and will be copied into Project 2. Is that right for each group (did the investors really leave their principal in)?
+5. **Open project:** a project still in status Open is skipped by the migration; what is it?
+6. **The congratulation SMS wording** (Settings → Messages). Nothing is sent until it is written.
+7. **Calendar vs the old end dates:** the cycle follows the calendar from each group's start date. Compare the old projects' end dates before switching Automatic cycles on.

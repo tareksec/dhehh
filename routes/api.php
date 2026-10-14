@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\StorefrontAccountController;
 use App\Http\Controllers\Api\V1\StorefrontCheckoutController;
 use App\Http\Controllers\Api\V1\StorefrontController;
 use App\Http\Controllers\Api\V1\StorefrontOrderTrackingController;
+use App\Http\Controllers\Api\V1\Sync\SyncController;
 use App\Http\Middleware\AuthenticateStorefrontCustomer;
 use App\Http\Middleware\EnsureNextjsSiteEnabled;
 use App\Http\Middleware\EnsureStorefrontAccountsEnabled;
@@ -41,6 +42,24 @@ Route::prefix('v1')
         Route::get('orders/{order_number}', [OrderController::class, 'show']);
 
         Route::post('leads', [LeadController::class, 'store']);
+    });
+
+/*
+|--------------------------------------------------------------------------
+| Data sync API (v1) — read-only feed for IMS
+|--------------------------------------------------------------------------
+|
+| Needs a "Data sync" key (CompanyApiKey::SCOPE_SYNC); a website key gets a
+| 403 here, and a sync key gets a 403 on the website API. GET only, so the
+| outside system can read the company's business data and change nothing.
+| See docs/api/ims-sync-api.md.
+*/
+
+Route::prefix('v1/sync')
+    ->middleware(['throttle:sync-api', ForceJsonResponse::class, ResolveCompanyFromApiKey::class.':sync'])
+    ->group(function (): void {
+        Route::get('ping', [SyncController::class, 'ping']);
+        Route::get('{resource}', [SyncController::class, 'index'])->where('resource', '[a-z-]+');
     });
 
 /*

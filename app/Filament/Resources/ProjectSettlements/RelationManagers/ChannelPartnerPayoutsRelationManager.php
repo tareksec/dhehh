@@ -2,10 +2,12 @@
 
 namespace App\Filament\Resources\ProjectSettlements\RelationManagers;
 
+use App\Filament\Actions\PayoutProofAction;
 use App\Filament\Resources\ChannelPartners\ChannelPartnerResource;
 use App\Filament\Resources\Vouchers\VoucherResource;
 use App\Models\ChannelPartnerPayout;
 use App\Services\Investment\PayoutCompletionService;
+use App\Support\CompanyMedia;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -42,23 +44,32 @@ class ChannelPartnerPayoutsRelationManager extends RelationManager
                 ->badge()
                 ->placeholder('-')
                 ->url(fn (ChannelPartnerPayout $record): ?string => $record->voucher_id ? VoucherResource::getUrl('view', ['record' => $record->voucher_id]) : null),
+            PayoutProofAction::column(),
         ])->recordActions([
             Action::make('markPaid')->label('Mark as Paid')->icon('heroicon-o-check-circle')->color('success')
                 ->visible(fn ($record): bool => $this->getOwnerRecord()->status === 'confirmed' && $record->payment_status === 'pending' && (auth()->user()?->hasPermission('investments.settle') ?? false))
                 ->schema([
                     Select::make('payment_method')->options(['cash' => 'Cash', 'bkash' => 'bKash', 'bank' => 'Bank', 'other' => 'Other'])->required(),
                     TextInput::make('payment_reference'),
+                    PayoutProofAction::field(fn () => CompanyMedia::require($this->getOwnerRecord())),
                 ])->requiresConfirmation()->action(function (ChannelPartnerPayout $record, array $data): void {
+                    $proof = $data['payment_proof'] ?? null;
+                    unset($data['payment_proof']);
+
                     try {
                         app(PayoutCompletionService::class)->markPaid($record, auth()->user(), $data);
                     } catch (ValidationException $exception) {
+                        PayoutProofAction::discard($proof);
                         Notification::make()->danger()->title(__('Could not mark the payout paid'))->body(collect($exception->errors())->flatten()->first())->send();
 
                         return;
                     }
 
+                    PayoutProofAction::attach($record->fresh(), $proof);
+
                     Notification::make()->success()->title('Channel payout marked paid')->send();
                 }),
+            PayoutProofAction::uploadAction(fn () => CompanyMedia::require($this->getOwnerRecord())),
         ]);
     }
 }

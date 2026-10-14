@@ -52,6 +52,11 @@ return Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('00:30')
             ->withoutOverlapping()
             ->onOneServer();
+        // Hourly so each company's own midnight is caught; idempotent.
+        $schedule->command('investments:advance-groups')
+            ->hourly()
+            ->withoutOverlapping()
+            ->onOneServer();
         $schedule->command('release:notify-deploy')
             ->everyFiveMinutes()
             ->withoutOverlapping()

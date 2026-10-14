@@ -33,6 +33,16 @@ class InvestmentsRelationManager extends RelationManager
         return in_array($this->getOwnerRecord()->status, ['closed', 'settled'], true) || parent::isReadOnly();
     }
 
+    /**
+     * A group project's rows are snapshots of the group's members
+     * (16_INVESTOR_GROUPS_PLAN.md): money is added to the group, and the
+     * amounts here are not edited by hand.
+     */
+    private function isGroupProject(): bool
+    {
+        return $this->getOwnerRecord()->isGrouped();
+    }
+
     public function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -94,14 +104,15 @@ class InvestmentsRelationManager extends RelationManager
                 ->url(fn (Investment $record): ?string => $record->voucher_id ? VoucherResource::getUrl('view', ['record' => $record->voucher_id]) : null),
         ])->headerActions([
             CreateAction::make()
+                ->hidden(fn (): bool => $this->isGroupProject())
                 ->mutateDataUsing(fn (array $data): array => [...$data, 'company_id' => $this->getOwnerRecord()->company_id, 'received_by' => auth()->id()])
                 ->after(fn (Investment $record) => app(InvestmentLedgerService::class)->recordInvestmentReceived($record)),
         ])
             ->recordActions([
                 ViewAction::make()->url(fn (Investment $record): string => InvestmentRecordResource::getUrl('view', ['record' => $record])),
                 InvestmentRecordResource::withdrawAction(),
-                EditAction::make()->hidden(fn (Investment $record): bool => $record->isWithdrawn()),
-                DeleteAction::make()->hidden(fn (Investment $record): bool => $record->isWithdrawn()),
+                EditAction::make()->hidden(fn (Investment $record): bool => $record->isWithdrawn() || filled($record->group_member_id)),
+                DeleteAction::make()->hidden(fn (Investment $record): bool => $record->isWithdrawn() || filled($record->group_member_id)),
             ]);
     }
 }

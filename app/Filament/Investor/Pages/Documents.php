@@ -3,9 +3,11 @@
 namespace App\Filament\Investor\Pages;
 
 use App\Filament\Investor\Concerns\InvestorPortalPage;
+use App\Models\ChannelPartnerPayout;
 use App\Models\Investment;
 use App\Models\InvestmentDocument;
 use App\Models\InvestmentProject;
+use App\Models\SettlementPayout;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Pages\Page;
@@ -60,6 +62,7 @@ class Documents extends Page implements HasTable
                     ->state(fn (InvestmentDocument $record): string => match (true) {
                         $record->documentable instanceof InvestmentProject => $this->portal()->projectLabel($record->documentable),
                         $record->documentable instanceof Investment => $this->portal()->projectLabel($record->documentable->project),
+                        $record->documentable instanceof SettlementPayout, $record->documentable instanceof ChannelPartnerPayout => __('Payment for :project', ['project' => $this->portal()->projectLabel($record->documentable->settlement?->project)]),
                         default => __('You'),
                     })
                     ->wrap(),

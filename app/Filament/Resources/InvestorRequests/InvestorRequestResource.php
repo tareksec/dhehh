@@ -8,6 +8,7 @@ use App\Filament\Resources\InvestorRequests\Pages\ListInvestorRequests;
 use App\Models\Investment;
 use App\Models\InvestorCycleElection;
 use App\Models\InvestorRequest;
+use App\Services\Investment\InvestmentTargets;
 use App\Services\InvestorPortalService;
 use App\Services\InvestorRequestService;
 use App\Support\MoneyFormatter;
@@ -90,7 +91,7 @@ class InvestorRequestResource extends Resource
         $money = fn ($state): string => $state === null ? '-' : MoneyFormatter::currency($state);
 
         return $table
-            ->modifyQueryUsing(fn ($query) => $query->with(['investor', 'project', 'payout.settlement.project']))
+            ->modifyQueryUsing(fn ($query) => $query->with(['investor', 'project', 'group', 'payout.settlement.project']))
             ->defaultSort('id', 'desc')
             ->columns([
                 TextColumn::make('created_at')->label(__('Sent'))->dateTime()->sortable(),
@@ -124,18 +125,21 @@ class InvestorRequestResource extends Resource
                     ->color('success')
                     ->visible(fn (InvestorRequest $record): bool => static::canDecide($record))
                     ->modalDescription(fn (InvestorRequest $record): string => match ($record->type) {
-                        InvestorRequest::TYPE_TOP_UP => __('Approve only after the money has arrived. This adds the investment and its pending capital voucher, as on the project\'s Investments tab.'),
+                        InvestorRequest::TYPE_TOP_UP => __('Approve only after the money has arrived. This adds the investor to the group as a new member, with the pending capital voucher. New money cannot join a group that has already started.'),
                         InvestorRequest::TYPE_WITHDRAWAL => __('This records a 60-day withdrawal notice from the day the investor sent the request.'),
                         InvestorRequest::TYPE_REINVEST => __('This records the investor\'s choice on the payout; a reinvest also adds the new investment now.'),
                         default => __('Your answer is shown to the investor in the portal.'),
                     })
                     ->fillForm(fn (InvestorRequest $record): array => [
+                        'target' => static::requestedTargetKey($record),
                         'amount' => $record->amount,
                         'payment_method' => $record->payload['payment_method'] ?? null,
                         'payment_reference' => $record->payload['payment_reference'] ?? null,
                         'invested_at' => $record->payload['sent_on'] ?? now()->toDateString(),
                     ])
                     ->schema(fn (InvestorRequest $record): array => array_values(array_filter([
+                        $record->type === InvestorRequest::TYPE_TOP_UP ? Select::make('target')->label(__('Add to group'))->options(fn (): array => app(InvestmentTargets::class)->options())->required()
+                            ->helperText(__('The group the investor asked for. If it has started since, pick another open group.')) : null,
                         $record->type === InvestorRequest::TYPE_TOP_UP ? TextInput::make('amount')->label(__('Amount received'))->numeric()->minValue(0.01)->required() : null,
                         $record->type === InvestorRequest::TYPE_TOP_UP ? DatePicker::make('invested_at')->label(__('Received on'))->required() : null,
                         $record->type === InvestorRequest::TYPE_TOP_UP ? Select::make('payment_method')->label(__('Payment method'))->options(Investment::PAYMENT_METHODS)->required() : null,
@@ -171,12 +175,25 @@ class InvestorRequestResource extends Resource
             ]);
     }
 
+    /** `g<id>` / `p<id>` of the group or project the investor asked for, when it is still open (else empty, so staff pick). */
+    protected static function requestedTargetKey(InvestorRequest $record): ?string
+    {
+        $key = $record->group_id ? 'g'.$record->group_id : ($record->project_id ? 'p'.$record->project_id : null);
+
+        return $key && app(InvestmentTargets::class)->find($key) ? $key : null;
+    }
+
+    protected static function targetLabel(InvestorRequest $record, InvestorPortalService $portal): string
+    {
+        return $record->group ? app(InvestmentTargets::class)->label($record->group) : $portal->projectLabel($record->project);
+    }
+
     protected static function details(InvestorRequest $record, InvestorPortalService $portal): string
     {
         return match ($record->type) {
-            InvestorRequest::TYPE_TOP_UP => trim($portal->projectLabel($record->project).' · '.MoneyFormatter::currency($record->amount).' · '.(Investment::PAYMENT_METHODS[$record->payload['payment_method'] ?? ''] ?? '').(filled($record->payload['payment_reference'] ?? null) ? ' · '.$record->payload['payment_reference'] : '')),
-            InvestorRequest::TYPE_WITHDRAWAL => $portal->projectLabel($record->project),
-            InvestorRequest::TYPE_REINVEST => trim($portal->projectLabel($record->payout?->settlement?->project).' · '.__(InvestorCycleElection::ELECTIONS[$record->payload['election'] ?? ''] ?? '').($record->project ? ' → '.$portal->projectLabel($record->project) : '').($record->amount !== null ? ' · '.MoneyFormatter::currency($record->amount) : '')),
+            InvestorRequest::TYPE_TOP_UP => trim(static::targetLabel($record, $portal).' · '.MoneyFormatter::currency($record->amount).' · '.(Investment::PAYMENT_METHODS[$record->payload['payment_method'] ?? ''] ?? '').(filled($record->payload['payment_reference'] ?? null) ? ' · '.$record->payload['payment_reference'] : '')),
+            InvestorRequest::TYPE_WITHDRAWAL => static::targetLabel($record, $portal),
+            InvestorRequest::TYPE_REINVEST => trim($portal->projectLabel($record->payout?->settlement?->project).' · '.__(InvestorCycleElection::ELECTIONS[$record->payload['election'] ?? ''] ?? '').(($record->project || $record->group) ? ' → '.static::targetLabel($record, $portal) : '').($record->amount !== null ? ' · '.MoneyFormatter::currency($record->amount) : '')),
             default => '-',
         };
     }

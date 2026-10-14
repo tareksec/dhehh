@@ -10,7 +10,9 @@ use App\Filament\Resources\InvestmentProjects\Pages\ViewInvestmentProject;
 use App\Filament\Resources\InvestmentProjects\RelationManagers\CostItemsRelationManager;
 use App\Filament\Resources\InvestmentProjects\RelationManagers\DocumentsRelationManager;
 use App\Filament\Resources\InvestmentProjects\RelationManagers\InvestmentsRelationManager;
+use App\Filament\Resources\InvestorGroups\InvestorGroupResource;
 use App\Models\InvestmentProject;
+use App\Models\InvestorGroup;
 use App\Support\MoneyFormatter;
 use BackedEnum;
 use Closure;
@@ -31,6 +33,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 
@@ -175,6 +178,11 @@ class InvestmentProjectResource extends Resource
             Section::make('Project Summary')->schema([
                 TextEntry::make('project_code'),
                 TextEntry::make('name'),
+                TextEntry::make('group.name')
+                    ->label(__('Group'))
+                    ->formatStateUsing(fn (InvestmentProject $record): string => $record->group->name.' · P'.$record->sequence_in_group)
+                    ->url(fn (InvestmentProject $record): ?string => $record->group_id ? InvestorGroupResource::getUrl('view', ['record' => $record->group_id]) : null)
+                    ->visible(fn (InvestmentProject $record): bool => $record->isGrouped()),
                 TextEntry::make('deal_reference')->placeholder('-'),
                 TextEntry::make('status')->badge(),
                 TextEntry::make('investment_window')
@@ -197,6 +205,12 @@ class InvestmentProjectResource extends Resource
                     ->state(fn (InvestmentProject $record): float => $record->totalCapitalBase())
                     ->moneyWithoutTrailingZeroes('BDT')
                     ->helperText('Investor + company contribution — settlement-এ profit pool ও rate per lac এর উপর হিসাব হয়।'),
+                TextEntry::make('capital_gap')
+                    ->label(__('Capital base vs landed cost'))
+                    ->state(fn (InvestmentProject $record): ?string => $record->capitalBaseGap() === null ? null : ViewInvestmentProject::capitalGapMessage($record))
+                    ->color('warning')
+                    ->columnSpanFull()
+                    ->visible(fn (InvestmentProject $record): bool => $record->capitalBaseGap() !== null && $record->status !== 'settled'),
                 TextEntry::make('receivingFundSource.name')->label('Receiving Fund Source')->placeholder('Not configured — no voucher created'),
                 TextEntry::make('payoutFundSource.name')->label('Payout Fund Source')->placeholder('Not configured — no voucher created'),
                 TextEntry::make('funding_progress')
@@ -231,6 +245,7 @@ class InvestmentProjectResource extends Resource
         return $table->modifyQueryUsing(fn ($query) => $query->withSum('investments', 'amount'))->columns([
             TextColumn::make('project_code')->searchable()->sortable(),
             TextColumn::make('name')->searchable()->sortable(),
+            TextColumn::make('group.group_code')->label(__('Group'))->placeholder('-')->sortable()->toggleable(),
             TextColumn::make('deal_reference')->limit(30)->placeholder('-'),
             TextColumn::make('investments_sum_amount')->label('Invested')->moneyWithoutTrailingZeroes('BDT')->sortable(),
             TextColumn::make('target_amount')->moneyWithoutTrailingZeroes('BDT')->placeholder('-'),
@@ -252,6 +267,10 @@ class InvestmentProjectResource extends Resource
                 ->badge()
                 ->color(fn (InvestmentProject $record): string => $record->isWithinInvestmentWindow() ? 'success' : 'danger')
                 ->placeholder('-'),
+        ])->filters([
+            SelectFilter::make('group_id')
+                ->label(__('Group'))
+                ->options(fn (): array => InvestorGroup::query()->orderBy('id')->pluck('name', 'id')->all()),
         ])->recordActions([ViewAction::make(), EditAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
     }
 

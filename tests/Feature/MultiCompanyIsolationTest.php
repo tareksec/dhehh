@@ -46,6 +46,8 @@ use App\Models\Investor;
 use App\Models\InvestorBankAccount;
 use App\Models\InvestorCycleElection;
 use App\Models\InvestorDraft;
+use App\Models\InvestorGroup;
+use App\Models\InvestorGroupMember;
 use App\Models\InvestorPortalAccount;
 use App\Models\InvestorRequest;
 use App\Models\InvestorSecurityInstrument;
@@ -131,7 +133,7 @@ class MultiCompanyIsolationTest extends TestCase
             Conversation::class, ConversationChannel::class,
             ChatOrderLink::class, CompanyFaq::class, QuickReply::class,
             CompanyApiKey::class, StorefrontCustomerToken::class,
-            InvestmentProject::class, Investor::class, InvestorDraft::class, InvestorPortalAccount::class, InvestorBankAccount::class, AgreementTemplate::class, AgreementAcceptance::class, InvestorRequest::class, PayoutBatch::class, PayoutBatchItem::class,
+            InvestmentProject::class, Investor::class, InvestorDraft::class, InvestorPortalAccount::class, InvestorBankAccount::class, AgreementTemplate::class, AgreementAcceptance::class, InvestorRequest::class, PayoutBatch::class, PayoutBatchItem::class, InvestorGroup::class, InvestorGroupMember::class,
             Investment::class, ProjectCostItem::class,
             InvestorSecurityInstrument::class, InvestmentWitness::class, InvestmentDocument::class,
             InvestorCycleElection::class, InvestmentWithdrawalNotice::class, ProjectSettlement::class,
