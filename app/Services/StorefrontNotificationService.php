@@ -29,6 +29,9 @@ use Illuminate\Support\Facades\Mail;
  */
 class StorefrontNotificationService
 {
+    /** notification_credentials keys edited on Settings → Integrations → SMS Gateway (not on Storefront Settings). */
+    public const SMS_CREDENTIAL_KEYS = ['sms_api_url', 'sms_api_key', 'sms_sender_id'];
+
     public function __construct(protected MetaGraphService $meta) {}
 
     public function smsConfigured(StorefrontSetting $setting): bool

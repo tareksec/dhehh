@@ -24,6 +24,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Livewire\Attributes\Url;
 
 /**
  * Reseller portal Phase 3 (13_RESELLER_PORTAL_PLAN.md §3 row 2): every order
@@ -41,6 +42,10 @@ class Orders extends Page implements HasTable
     protected string $view = 'filament.reseller.pages.orders';
 
     protected static ?int $navigationSort = 2;
+
+    /** Set by the dashboard's order pipeline (/portal/orders?stage=shipping). */
+    #[Url]
+    public ?string $stage = null;
 
     public static function getNavigationLabel(): string
     {
@@ -78,12 +83,33 @@ class Orders extends Page implements HasTable
         return $customer;
     }
 
+    /** The stage filter from the URL, or null when it is missing or not a real stage. */
+    public function activeStage(): ?string
+    {
+        return array_key_exists((string) $this->stage, Order::WORKFLOW_STAGES) ? $this->stage : null;
+    }
+
+    public function activeStageLabel(): ?string
+    {
+        $stage = $this->activeStage();
+
+        return $stage === null ? null : __(Order::WORKFLOW_STAGES[$stage]);
+    }
+
+    public function clearStage(): void
+    {
+        $this->stage = null;
+        $this->resetPage();
+    }
+
     public function table(Table $table): Table
     {
         $currency = $this->reseller()->company?->currency ?: 'BDT';
 
         return $table
-            ->query(fn (): Builder => $this->reseller()->resellerOrders()->getQuery()->with(['customer', 'resellerCommission', 'resellerAdvancePayments']))
+            ->query(fn (): Builder => $this->reseller()->resellerOrders()->getQuery()
+                ->with(['customer', 'resellerCommission', 'resellerAdvancePayments'])
+                ->when($this->activeStage(), fn (Builder $query, string $stage): Builder => $query->inWorkflowStage($stage)))
             ->columns([
                 TextColumn::make('order_number')
                     ->label(__('Order'))
@@ -119,7 +145,7 @@ class Orders extends Page implements HasTable
                     ->label(__('Status'))
                     ->badge()
                     ->state(fn (Order $record): string => $record->workflowStage())
-                    ->formatStateUsing(fn (string $state): string => Order::WORKFLOW_STAGES[$state] ?? Order::STATUSES[$state] ?? $state)
+                    ->formatStateUsing(fn (string $state): string => __(Order::WORKFLOW_STAGES[$state] ?? Order::STATUSES[$state] ?? $state))
                     ->color(fn (string $state): string => match ($state) {
                         Order::STAGE_DELIVERED, Order::STAGE_COMPLETED => 'success',
                         Order::STAGE_SHIPPING, Order::STAGE_PROCESSING => 'warning',

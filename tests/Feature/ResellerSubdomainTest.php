@@ -299,6 +299,36 @@ class ResellerSubdomainTest extends TestCase
         $this->get('http://sub-ask.example.test/internal/tls-ask?domain=alice.sub-ask.example.test')->assertNotFound();
     }
 
+    public function test_a_reseller_subdomain_keeps_the_private_page_rules_but_has_no_sitemap(): void
+    {
+        $company = $this->company('sub-seo.example.test');
+        $this->reseller($company, 'alice', 'alice-shop');
+
+        $this->get('http://alice.sub-seo.example.test/robots.txt')
+            ->assertOk()
+            ->assertSee('Disallow: /checkout', false)
+            ->assertDontSee('Sitemap', false);
+
+        // It repeats the company's catalog at the reseller's prices, so it is not listed.
+        $this->get('http://alice.sub-seo.example.test/sitemap.xml')->assertNotFound();
+    }
+
+    public function test_a_reseller_subdomain_product_page_publishes_no_price_markup(): void
+    {
+        $company = $this->company('sub-price.example.test');
+        $reseller = $this->reseller($company, 'alice', 'alice-shop');
+        $product = $this->product($company, 'Alice Pick');
+        $this->pick($reseller, $product);
+
+        $response = $this->get('http://alice.sub-price.example.test/product/'.$product->slug)
+            ->assertOk()
+            ->assertSee('<link rel="canonical" href="http://alice.sub-price.example.test/product/'.$product->slug.'">', false)
+            ->assertSee('"BreadcrumbList"', false);
+
+        // The company's price is not this reseller's price.
+        $response->assertDontSee('"@type":"Product"', false);
+    }
+
     protected function fakeProbe(bool $live): void
     {
         $this->app->instance(ResellerSubdomainProbe::class, new class($live) extends ResellerSubdomainProbe

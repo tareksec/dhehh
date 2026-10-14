@@ -12,3 +12,107 @@
 @source '../../../../app/Filament/Reseller/**/*';
 @source '../../../../resources/views/filament/reseller/**/*';
 @source '../../../../resources/views/filament/fraud-check/**/*';
+
+/*
+ * The portal's font: Hind Siliguri (SIL OFL 1.1, see
+ * resources/fonts/hind-siliguri/OFL.txt), self-hosted so no third-party font
+ * request blocks rendering. It is a clean UI face for Bangla and English
+ * together; the Bangla file is only downloaded when a page has Bangla text.
+ * ResellerPanelProvider names it with ->font('Hind Siliguri') so Filament
+ * puts it in --font-family.
+ */
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-bengali-400-normal.woff2') format('woff2');
+    unicode-range: U+0951-0952,U+0964-0965,U+0980-09FE,U+1CD0,U+1CD2,U+1CD5-1CD6,U+1CD8,U+1CE1,U+1CEA,U+1CED,U+1CF2,U+1CF5-1CF7,U+200C-200D,U+20B9,U+25CC,U+A8F1;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-latin-400-normal.woff2') format('woff2');
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-bengali-500-normal.woff2') format('woff2');
+    unicode-range: U+0951-0952,U+0964-0965,U+0980-09FE,U+1CD0,U+1CD2,U+1CD5-1CD6,U+1CD8,U+1CE1,U+1CEA,U+1CED,U+1CF2,U+1CF5-1CF7,U+200C-200D,U+20B9,U+25CC,U+A8F1;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-latin-500-normal.woff2') format('woff2');
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-bengali-600-normal.woff2') format('woff2');
+    unicode-range: U+0951-0952,U+0964-0965,U+0980-09FE,U+1CD0,U+1CD2,U+1CD5-1CD6,U+1CD8,U+1CE1,U+1CEA,U+1CED,U+1CF2,U+1CF5-1CF7,U+200C-200D,U+20B9,U+25CC,U+A8F1;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-latin-600-normal.woff2') format('woff2');
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-bengali-700-normal.woff2') format('woff2');
+    unicode-range: U+0951-0952,U+0964-0965,U+0980-09FE,U+1CD0,U+1CD2,U+1CD5-1CD6,U+1CD8,U+1CE1,U+1CEA,U+1CED,U+1CF2,U+1CF5-1CF7,U+200C-200D,U+20B9,U+25CC,U+A8F1;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-latin-700-normal.woff2') format('woff2');
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+
+/*
+ * Portal polish: softer, rounder surfaces and a frosted top bar, in light and
+ * dark mode. Colours still come from Filament's variables, so the store's
+ * brand colour (ResellerPanelProvider::brandColorStyle()) flows through.
+ */
+.fi-topbar {
+    background-color: rgb(255 255 255 / 0.85);
+    backdrop-filter: blur(12px);
+}
+
+.dark .fi-topbar {
+    background-color: rgb(17 24 39 / 0.85);
+}
+
+.fi-section,
+.fi-ta-ctn {
+    border-radius: 1rem;
+}
+
+.fi-sidebar-item-btn {
+    border-radius: 0.75rem;
+}

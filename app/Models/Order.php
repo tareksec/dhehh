@@ -10,6 +10,7 @@ use App\Services\OrderWorkflowService;
 use App\Services\ResellerCommissionService;
 use App\Services\ShippingFeeService;
 use App\Services\WebsiteWebhookDispatcher;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -79,6 +80,13 @@ class Order extends Model
         self::STAGE_CANCELLED => 'Cancelled',
         self::STAGE_RETURNED => 'Returned',
         self::STAGE_REFUNDED => 'Refunded',
+    ];
+
+    /** Courier states that put an open order in the Shipping stage (see workflowStage()). */
+    public const SHIPPING_DELIVERY_STATUSES = [
+        CourierBooking::STATUS_PICKED_UP,
+        CourierBooking::STATUS_IN_TRANSIT,
+        CourierBooking::STATUS_PARTIAL_DELIVERED,
     ];
 
     public const REASON_REQUIRED_STAGES = [
@@ -680,15 +688,37 @@ class Order extends Model
             return $this->status;
         }
 
-        if (in_array($this->delivery_status, [
-            CourierBooking::STATUS_PICKED_UP,
-            CourierBooking::STATUS_IN_TRANSIT,
-            CourierBooking::STATUS_PARTIAL_DELIVERED,
-        ], true)) {
+        if (in_array($this->delivery_status, self::SHIPPING_DELIVERY_STATUSES, true)) {
             return self::STAGE_SHIPPING;
         }
 
         return $this->status;
+    }
+
+    /**
+     * Orders whose workflowStage() is $stage, as SQL. Mirrors workflowStage():
+     * a closed order keeps its status, an open one with a live courier parcel
+     * is Shipping, anything else is its status.
+     *
+     * @param  Builder<Order>  $query
+     * @return Builder<Order>
+     */
+    public function scopeInWorkflowStage(Builder $query, string $stage): Builder
+    {
+        $closed = [self::STATUS_CANCELLED, self::STATUS_RETURNED, self::STATUS_REFUNDED];
+
+        if (in_array($stage, $closed, true)) {
+            return $query->where('status', $stage);
+        }
+
+        if ($stage === self::STAGE_SHIPPING) {
+            return $query->whereNotIn('status', $closed)
+                ->whereIn('delivery_status', self::SHIPPING_DELIVERY_STATUSES);
+        }
+
+        return $query->where('status', $stage)
+            ->where(fn (Builder $q): Builder => $q->whereNull('delivery_status')
+                ->orWhereNotIn('delivery_status', self::SHIPPING_DELIVERY_STATUSES));
     }
 
     /** @return list<string> */

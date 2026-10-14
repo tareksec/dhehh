@@ -95,4 +95,15 @@ class OrderItem extends Model
     {
         return $this->belongsTo(ProductVariant::class);
     }
+
+    /**
+     * Weight of one unit in kg: the chosen variation's weight, else the
+     * product's. Null when neither has one.
+     */
+    public function unitWeightKg(): ?float
+    {
+        $weight = $this->productVariant?->weight_kg ?? $this->product?->weight_kg;
+
+        return $weight !== null ? (float) $weight : null;
+    }
 }

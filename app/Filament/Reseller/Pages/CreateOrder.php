@@ -8,6 +8,7 @@ use App\Models\StorefrontPaymentMethod;
 use App\Services\ExternalCourierFraudService;
 use App\Services\ResellerOrderPlacementService;
 use App\Services\ResellerOwnCourierService;
+use App\Support\CompanyMedia;
 use App\Support\FraudCheckReport;
 use App\Support\MoneyFormatter;
 use BackedEnum;
@@ -24,6 +25,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Arr;
 use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 
@@ -54,7 +56,7 @@ class CreateOrder extends Page
     /** @var array<string, mixed>|null */
     public ?array $data = [];
 
-    /** @var array<string, mixed>|null courier fraud check for $fraudPhone */
+    /** @var array<string, mixed>|null courier fraud check for */
     public ?array $fraudResult = null;
 
     public ?string $fraudPhone = null;
@@ -227,10 +229,32 @@ class CreateOrder extends Page
                                         : null)
                                     ->live(onBlur: true)
                                     ->columnSpan(2),
+                                // A photo of the chosen product, so the right one is picked.
+                                Html::make(fn (Get $get): HtmlString => $this->productPreview($products->get((int) $get('product_id'))))
+                                    ->columnSpanFull(),
                             ])
                             ->columns(6),
                     ]),
             ]);
+    }
+
+    protected function productPreview(?Product $product): HtmlString
+    {
+        if (! $product) {
+            return new HtmlString('');
+        }
+
+        $path = $product->image ?: Arr::first($product->gallery_images ?? []);
+        $url = CompanyMedia::filamentPublicUrl($path, $product);
+        $details = collect([$product->sku, $product->brand])->filter()->implode(' · ');
+
+        return new HtmlString(
+            '<div class="flex items-center gap-3 text-sm">'
+            .($url ? '<img src="'.e($url).'" alt="" class="h-14 w-14 rounded-md object-cover ring-1 ring-gray-950/10 dark:ring-white/10">' : '')
+            .'<div><div class="font-medium">'.e($product->name).'</div>'
+            .($details !== '' ? '<div class="text-gray-500 dark:text-gray-400">'.e($details).'</div>' : '')
+            .'</div></div>'
+        );
     }
 
     /**

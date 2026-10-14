@@ -1,48 +1,19 @@
 @extends(\App\Support\StorefrontThemeRegistry::layoutView($setting->storefrontTheme()))
 
-@push('meta-events')
-    @php
-        $metaTracking = app(\App\Services\StorefrontMetaTrackingService::class);
-    @endphp
-    @if (! isset($previewSlug) && $metaTracking->shouldFireBrowserPurchase($setting, $order, request()))
-        <script>
-            fbq(
-                'track',
-                'Purchase',
-                {{ Illuminate\Support\Js::from($metaTracking->purchasePayload($order)) }},
-                {eventID: {{ Illuminate\Support\Js::from($metaTracking->purchaseEventId($order)) }}}
-            );
-        </script>
-    @endif
-@endpush
+@include('storefront.checkout.partials.success-meta-events')
 
 @section('content')
     @php
-        $advancePayment = $order->storefrontPayments()->latest()->first();
-        // 'manual_bkash'/'manual_nagad' are legacy literal gateway values
-        // from before payment methods became dashboard-managed
-        // (StorefrontPaymentMethod) - kept here so historical orders still
-        // display correctly. New manual payments use the generic 'manual'
-        // gateway with the channel's own name via the paymentMethod relation.
-        $isManualPayment = $advancePayment && in_array($advancePayment->gateway, ['manual', 'manual_bkash', 'manual_nagad'], true);
-        $manualPaymentLabel = match (true) {
-            ! $isManualPayment => null,
-            $advancePayment->gateway === 'manual_bkash' => 'bKash',
-            $advancePayment->gateway === 'manual_nagad' => 'Nagad',
-            default => $advancePayment->paymentMethod?->name ?? 'Manual',
-        };
-        // The "pay the full order online" checkout option reuses the same
-        // purpose as a partial advance (StorefrontPayment::PURPOSE_CHECKOUT_ADVANCE)
-        // - amount fully covering the order total is what actually
-        // distinguishes it, so it isn't mislabelled as an "advance".
-        $isFullyPaidOnline = $advancePayment && ! $isManualPayment
-            && (float) $advancePayment->amount >= (float) $order->total_amount - 0.01;
-        $trackUrl = isset($previewSlug)
-            ? route('storefront.preview.track.show', ['company' => $previewSlug, 'orderNo' => $order->order_number, 'phone' => $order->customer?->phone])
-            : Illuminate\Support\Facades\URL::temporarySignedRoute('storefront.track.show', now()->addDays(7), ['orderNo' => $order->order_number]);
-        $orderHistoryUrl = \App\Support\StorefrontUrl::route('account.orders', [], $previewSlug ?? null);
-        $showOrderHistoryLink = isset($previewSlug) || (bool) ($setting->customer_accounts_enabled ?? true);
-        $complaintUrl = \App\Support\StorefrontUrl::route('complaints.show', ['order' => $order->order_number], $previewSlug ?? null);
+        $success = \App\Support\StorefrontOrderSuccessPage::make($order, $setting, $previewSlug ?? null);
+        $advancePayment = $success->payment;
+        $isManualPayment = $success->isManualPayment;
+        $manualPaymentLabel = $success->manualPaymentLabel;
+        $isFullyPaidOnline = $success->isFullyPaidOnline;
+        $trackUrl = $success->trackUrl;
+        $orderHistoryUrl = $success->orderHistoryUrl;
+        $showOrderHistoryLink = $success->showOrderHistoryLink;
+        $complaintUrl = $success->complaintUrl;
+        $money = fn (float $amount) => \App\Support\MoneyFormatter::currency($amount);
     @endphp
 
     <section class="mx-auto w-full max-w-5xl px-4 py-8 text-center sm:px-5 lg:px-6">
@@ -63,14 +34,17 @@
                     @foreach ($order->items as $item)
                         <div class="flex justify-between gap-4 text-sm">
                             <span class="text-gray-600 dark:text-gray-300">{{ $item->product?->name }}{{ $item->variant_label ? ' ('.$item->variant_label.')' : '' }} &times; {{ $item->quantity }}</span>
-                            <span class="font-semibold">{{ \App\Support\MoneyFormatter::currency((float) $order->total_amount) }}</span>
+                            <span class="font-semibold">{{ $money((float) $item->subtotal) }}</span>
                         </div>
                     @endforeach
                 </div>
                 <div class="mt-5 space-y-2 border-t border-gray-200 pt-4 text-sm dark:border-white/10">
-                    <div class="flex justify-between text-gray-600 dark:text-gray-300"><span>Subtotal</span><span>{{ \App\Support\MoneyFormatter::currency((float) $order->total_amount) }}</span></div>
-                    <div class="flex justify-between text-gray-600 dark:text-gray-300"><span>Delivery charge</span><span>{{ \App\Support\MoneyFormatter::currency((float) $order->total_amount) }}</span></div>
-                    <div class="flex justify-between font-semibold text-gray-950 dark:text-white"><span>Amount due on delivery</span><span>{{ \App\Support\MoneyFormatter::currency((float) $order->total_amount) }}</span></div>
+                    <div class="flex justify-between text-gray-600 dark:text-gray-300"><span>Subtotal</span><span>{{ $money($success->subtotal) }}</span></div>
+                    @if ($success->discount > 0)<div class="flex justify-between text-gray-600 dark:text-gray-300"><span>Discount</span><span>- {{ $money($success->discount) }}</span></div>@endif
+                    @if ($success->vat > 0)<div class="flex justify-between text-gray-600 dark:text-gray-300"><span>{{ $setting->vatLabel() }}</span><span>{{ $money($success->vat) }}</span></div>@endif
+                    <div class="flex justify-between text-gray-600 dark:text-gray-300"><span>Delivery charge</span><span>{{ $money($success->shippingFee) }}</span></div>
+                    @if ($success->packagingFee > 0)<div class="flex justify-between text-gray-600 dark:text-gray-300"><span>Packaging fee</span><span>{{ $money($success->packagingFee) }}</span></div>@endif
+                    <div class="flex justify-between font-semibold text-gray-950 dark:text-white"><span>Amount due on delivery</span><span>{{ $money($success->due) }}</span></div>
                 </div>
             </div>
             <aside class="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-white/10 dark:bg-white/[0.03]">
@@ -89,7 +63,7 @@
             <div class="mt-4 rounded-xl border px-5 py-4 text-left text-sm {{ $advancePayment->status === 'completed' ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200' : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200' }}">
                 <div class="flex flex-wrap justify-between gap-2 font-semibold">
                     <span>{{ $isManualPayment ? "{$manualPaymentLabel} payment" : ($isFullyPaidOnline ? 'Paid online in full' : ($advancePayment->purpose === \App\Models\StorefrontPayment::PURPOSE_NEW_CUSTOMER_DELIVERY ? 'Delivery advance payment' : 'Pre-order advance payment')) }}</span>
-                    <span>{{ \App\Support\MoneyFormatter::currency((float) $order->total_amount) }} &middot; {{ \App\Models\StorefrontPayment::STATUSES[$advancePayment->status] ?? ucfirst($advancePayment->status) }}</span>
+                    <span>{{ $money((float) $advancePayment->amount) }} &middot; {{ \App\Models\StorefrontPayment::STATUSES[$advancePayment->status] ?? ucfirst($advancePayment->status) }}</span>
                 </div>
                 @if ($advancePayment->status !== 'completed')<p class="mt-1 text-xs">{{ $isManualPayment ? 'We are verifying your payment and will contact you if needed.' : 'The payment status updates automatically after gateway verification.' }}</p>@endif
             </div>

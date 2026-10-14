@@ -289,6 +289,13 @@ class ProductForm
                                     ->default(0)
                                     ->minValue(0)
                                     ->required(),
+                                TextInput::make('weight_kg')
+                                    ->label(__('Variation weight (kg)'))
+                                    ->numeric()
+                                    ->minValue(0)
+                                    ->step('0.001')
+                                    ->suffix('kg')
+                                    ->helperText(__('Leave empty to use the product weight.')),
                                 Toggle::make('is_active')
                                     ->label('Active')
                                     ->default(true),
