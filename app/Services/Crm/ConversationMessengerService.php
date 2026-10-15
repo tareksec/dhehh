@@ -36,6 +36,12 @@ class ConversationMessengerService
         ?string $mediaUrl = null,
         array $automation = [],
     ): ConversationMessage {
+        // The Agent Desk test chat uses an unsaved conversation; nothing it
+        // produces may ever reach a customer.
+        if (! $conversation->exists) {
+            throw new \LogicException('A message can only be sent in a saved conversation.');
+        }
+
         $message = ConversationMessage::query()->create([
             'conversation_id' => $conversation->getKey(),
             'direction' => 'outgoing',

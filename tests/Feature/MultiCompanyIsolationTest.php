@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Account;
 use App\Models\AgreementAcceptance;
 use App\Models\AgreementTemplate;
+use App\Models\AiInstructionVersion;
 use App\Models\AttentionItem;
 use App\Models\AuditLog;
 use App\Models\Broadcast;
@@ -129,7 +130,7 @@ class MultiCompanyIsolationTest extends TestCase
             VoucherAttachment::class, FundTransfer::class,
             StorefrontSlide::class,
             Lead::class, Quotation::class, QuotationItem::class,
-            AttentionItem::class, Conversation::class, ConversationChannel::class, ConversationModeEvent::class,
+            AiInstructionVersion::class, AttentionItem::class, Conversation::class, ConversationChannel::class, ConversationModeEvent::class,
             ChatOrderLink::class, CompanyFaq::class, QuickReply::class,
             CompanyApiKey::class, StorefrontCustomerToken::class,
             InvestmentProject::class, Investor::class, InvestorDraft::class, InvestorPortalAccount::class, InvestorBankAccount::class, AgreementTemplate::class, AgreementAcceptance::class, InvestorRequest::class, PayoutBatch::class, PayoutBatchItem::class,

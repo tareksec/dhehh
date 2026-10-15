@@ -22,6 +22,13 @@ All notable production changes to Business Dashboard are documented here.
   - late share, never answered, and waiting now (with the longest wait);
   - why the AI handed over;
   - a by-channel table.
+- **CRM → Agent Desk** (plan 16, phase 4):
+  - three boxes for the sales agent's written guidance: about the business, voice, and conversation guidelines (the last two are the existing "Brand voice" and "Sales agent conversation guidelines" settings);
+  - **Save draft**, **Publish** (with an optional note) and **Discard draft**;
+  - a **test chat** where the owner writes as a customer and sees the AI's reply, or that it would hand the chat to the team and why, plus what it looked up. It reads the real catalog and FAQ, sends nothing to anyone and creates no order, link or lead; it can try the unpublished text in the editor;
+  - a **Versions** list (including changes saved on Integrations) with **Open in editor** and **Make live again**.
+  - Only people who can manage settings can edit, publish or test; everyone with CRM view access can read it.
+- **CRM → Unanswered questions**: chats the AI handed to the team in the last 30 days because it had no verified answer, with what the customer asked and an **Add FAQ answer** button, so the AI can answer the same question next time.
 
 ### Changed
 
@@ -37,6 +44,9 @@ All notable production changes to Business Dashboard are documented here.
 - Tests: `ConversationModeTest` (14 tests); `InboxPageTest` updated for the new panel keys.
 - New company-owned table `attention_items` (`AttentionItem`, in `MultiCompanyIsolationTest`): `kind`, `conversation_id`, `reason`, `note`, `opened_at`, `due_at`, `first_response_at`/`_by`, `resolved_at`/`_by`, `outcome`. `App\Services\Crm\AttentionQueueService` keeps at most one open item per chat; `ConversationModeService` opens it when the AI hands over (source `ai`), records the first staff reply in `staffAnswered()`, and closes it on every switch back to the AI. A takeover from the dashboard, a staff reply or "." opens nothing. The push alert from `AiReplyService::escalate()` is unchanged. New setting `response_target_minutes`. Tests: `AttentionQueueTest` (7 tests).
 - `App\Services\Crm\AiInboxReportService` computes the report on request from `conversation_messages`, `conversation_mode_events` and `attention_items` in the current company's scope; nothing new is stored. Page `AiInboxReport`. Tests: `AiInboxReportTest` (3 tests).
+- New company-owned table `ai_instruction_versions` (`AiInstructionVersion`, in `MultiCompanyIsolationTest`): `blocks` (about, voice, guidelines), `status` (draft | published | superseded), `source` (agent_desk | settings | restore), `change_note`, `published_at`/`_by`. The live text stays in the company's AI settings (`business_about`, `brand_voice`, `sales_guidelines`), so the agent's prompt source is unchanged: `AiInstructionService::publishDraft()` / `restore()` write the settings, and `AiSettingsService::save()` records a version whenever the Integrations page changes those fields. New `business_about` setting, added to the prompt as background that is explicitly not a source of prices, stock or promises.
+- `AiReplyService::dryRun()` runs the real agent for the Agent Desk test chat: read-only lookups are real, `create_order_link` / `update_qualification` / `create_quotation` answer "test mode", `escalate()` and `sendAiReply()` return at once while the flag is on, and `ConversationMessengerService::send()` now refuses an unsaved conversation. Test runs are logged as `crm_ai_runs.is_test` (with `conversation_id` now nullable): they count toward the daily budget but not the daily run limit and are left out of Sales Automation and its metrics.
+- Tests: `AgentDeskTest` (12 tests).
 
 ## [2.65.0] - 2026-10-09
 

@@ -19,7 +19,15 @@ Built from `16_AI_INBOX_CONTROL_PLANE_PLAN.md` after a read-only walk through Ai
   - It shows average and median first reply, late share, never answered, waiting now, handover reasons, and a by-channel table.
   - Nothing is stored; the numbers are worked out when the page opens. "Handled by the AI alone" means a chat with customer messages in the period and no switch to the team in the period.
 
-Not done yet (next phases of the plan): Agent Desk with draft/test/publish (4), knowledge base (5), Meta "Seen"/typing indicator, customer product cards/carousel (Messenger templates).
+- Phase 4 (owner: "ধাপ ৪ শুরু কর"): CRM → Agent Desk (`AgentDesk`, `AiInstructionService`, `AiInstructionVersion`) and CRM → Unanswered questions (`UnansweredQuestions`).
+  - **Decision O6 not asked yet:** editing, publishing and testing need `canManageSettings()`, the same people who can already change these texts on Integrations. No new permission was added.
+  - **Plan changed on purpose:** the plan listed five blocks (about, delivery, voice, exact words, other). The agent never writes free text. The server renders every customer-visible fact from the catalog, FAQ and delivery tools, so a "delivery" or "exact words" box would have no effect. The Agent Desk has three boxes instead: about (new), voice and guidelines (the two existing settings). Facts like delivery time or warranty belong in FAQ answers, and the Unanswered questions page makes that quick.
+  - Migration `2026_10_10_000100_create_ai_instruction_versions_table` also adds `crm_ai_runs.is_test` and makes `crm_ai_runs.conversation_id` nullable (test runs have no conversation). Not yet run on the demo database.
+  - Plain-language change requests ("make the fee 25,000") are not built, as the plan said.
+  - Needs Bangla review: 55 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to `feature/ai-inbox-control-plane` (owner approved: "ওকে কমিট এবং পুশ কর"). Not merged to `main`. The migration has not been run on the demo DB.
+
+Not done yet (next phases of the plan): knowledge base (5), Meta "Seen"/typing indicator, customer product cards/carousel (Messenger templates).
 
 Needs Bangla review: the new Inbox/Activity/settings strings in `lang/bn.json` (51 keys) the Needs attention strings (19 keys) and the AI Inbox Report strings (26 keys) were written by the agent.
 

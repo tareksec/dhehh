@@ -220,7 +220,13 @@ class SalesReplyRenderer
 
     private function detectLanguage(Conversation $conversation): string
     {
-        foreach ($conversation->messages()->where('direction', 'incoming')->latest('id')->limit(5)->pluck('body') as $body) {
+        return $this->languageOf($conversation->messages()->where('direction', 'incoming')->latest('id')->limit(5)->pluck('body'));
+    }
+
+    /** Language of the newest of these customer messages that shows one; Bangla when none does. */
+    public function languageOf(iterable $bodies): string
+    {
+        foreach ($bodies as $body) {
             if (preg_match('/[\x{0980}-\x{09FF}]/u', (string) $body)) {
                 return 'bn';
             }

@@ -2,7 +2,7 @@
 
 > **বাংলা সারসংক্ষেপ:** AiPraktor (aipraktor.com) ড্যাশবোর্ডের প্রতিটা পেজ ২০২৬-১০-০৯ তারিখে পড়ে দেখা হয়েছে, এবং `origin/main` (v2.64.1)-এর কোডের সাথে মেলানো হয়েছে। আমাদের ERP-তে AI চ্যাটের ভিত্তি আগে থেকেই আছে: Inbox, Messenger/WhatsApp, AI auto-reply (প্রোডাক্ট/FAQ/ডেলিভারি টুল), ছবি ও ভয়েস বোঝা, Leads, Follow-ups, Broadcasts, Orders, কুরিয়ার। যা নেই তা হলো একটা পরিষ্কার "কন্ট্রোল প্লেন"। এর মানে: চ্যাট AI-এর হাতে না মানুষের হাতে, সেটা টেকসইভাবে রাখা ও লগ করা; কোনো হ্যান্ডওভার যেন হারিয়ে না যায়; AI কতটা কাজ করছে তা মাপা; আর মালিক নিজেই AI-এর নির্দেশনা বদলে, পরীক্ষা করে, প্রকাশ করতে পারেন। কাজ ৮টা ধাপে ভাগ করা। প্রথম ধাপে AI/Human মোড ও Activity লগ আসবে। এই ধাপ `docs/CRM_AI_SALES_AUDIT_2026-09-09.md`-এর High সমস্যাগুলোও ঠিক করে। AiPraktor-এর সংখ্যাগুলো (৩ ঘণ্টা, ২৩ ঘণ্টা ইত্যাদি) শুধু রেফারেন্স। আমাদের নিয়ম মালিক §৩-এ ঠিক করবেন।
 
-Status: **Phases 1–3 built (2026-10-09) and committed on branch `feature/ai-inbox-control-plane` (not merged).** Owner instruction for O1 and the reply style: "aipraktor এর মত করে বিল্ড কর" — follow AiPraktor. Other phases still wait for the owner answers in §3.
+Status: **Phases 1–3 built (2026-10-09) and committed on branch `feature/ai-inbox-control-plane` (not merged). Phase 4 built 2026-10-10 (not committed).** Owner instruction for O1 and the reply style: "aipraktor এর মত করে বিল্ড কর" — follow AiPraktor. Other phases still wait for the owner answers in §3.
 
 Source: a read-only walk through every AiPraktor dashboard page (owner's practice account "Bright Hive Digital", 2026-10-09; no page connected, so every list was empty — behaviour is taken from each page's own text and controls, not from exercising them). Code facts are from `origin/main` at `9c54cfe8` (v2.64.1).
 
@@ -234,3 +234,13 @@ Files: migration `2026_10_09_000200_create_attention_items_table`, `AttentionIte
 - "Handled by the AI alone" = chats with a customer message in the period and no switch to the team in the period. First reply is measured from the handover (attention item), like AiPraktor.
 
 Files: `AiInboxReportService`, `AiInboxReport` page, `ai-inbox-report.blade.php`. Tests: `AiInboxReportTest`.
+
+### Phase 4 — 2026-10-10 (not committed)
+
+- **Three blocks, not five.** The agent never writes free text: `submit_reply` only selects reply keys and the server renders every fact from the catalog, FAQ and delivery tools. A "delivery" or "exact words" box could not reach a customer, so it was dropped. Blocks: `about` (new, `business_about`; background only, the prompt says it is not a source of facts), `voice` (`brand_voice`), `guidelines` (`sales_guidelines`).
+- **The live text stays in the settings.** Versions are history, draft and rollback on top: publish and restore write the settings, and saving the same fields on Integrations records a version, so the prompt source is unchanged and nothing can drift.
+- **Test chat = `AiReplyService::dryRun()`**: same prompt, tools, keyword hand-over, FAQ shortcut and renderer as a live reply. Read-only tools are real; the three action tools answer "test mode"; sending is blocked in `escalate()`, `sendAiReply()` and (for an unsaved conversation) `ConversationMessengerService::send()`. Test runs are `crm_ai_runs.is_test`; they count toward the daily budget but not the run limit.
+- **O6 default:** `canManageSettings()` (same as Integrations), no new permission. Needs the owner's confirmation.
+- **Unanswered questions** = `out_of_scope` hand-overs of the last 30 days with the customer's last message; **Add FAQ answer** creates a `CompanyFaq` and clears its cache. Knowledge documents come in phase 5.
+
+Files: migration `2026_10_10_000100_create_ai_instruction_versions_table`, `AiInstructionVersion`, `AiInstructionService`, `AgentDesk`, `UnansweredQuestions`, `agent-desk.blade.php`; changes in `AiReplyService`, `AiSettingsService`, `AiRunService`, `SalesReplyRenderer::languageOf()`, `ConversationMessengerService`, `CrmSalesMetrics`, `SalesAutomation`. Tests: `AgentDeskTest`.

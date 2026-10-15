@@ -2,6 +2,7 @@
 
 namespace App\Services\Crm;
 
+use App\Models\AiInstructionVersion;
 use App\Models\Company;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Crypt;
@@ -126,6 +127,8 @@ class AiSettingsService
         // reply before the Needs attention page marks it late. 0 = no
         // target (nothing is marked late) until the owner sets one.
         'response_target_minutes' => 0,
+        // What the business is, for the agent's background only (Agent Desk).
+        'business_about' => '',
     ];
 
     public const ADDRESS_STYLES = ['none', 'sir_maam', 'bhaiya_apu'];
@@ -151,6 +154,7 @@ class AiSettingsService
     {
         $settings = (array) $company->settings;
         $existing = (array) data_get($settings, "ai_tools.{$tool}", []);
+        $instructionsBefore = $tool === self::TOOL_MESSAGING ? $this->instructionBlocks($company) : null;
 
         $settings['ai_tools'][$tool] = [
             'enabled' => (bool) ($data['enabled'] ?? false),
@@ -204,11 +208,43 @@ class AiSettingsService
                 ? ($data['address_style'] ?? $existing['address_style'] ?? 'none')
                 : 'none',
             'response_target_minutes' => max(0, min(1440, (int) ($data['response_target_minutes'] ?? $existing['response_target_minutes'] ?? self::DEFAULTS['response_target_minutes']))),
+            'business_about' => mb_substr(trim((string) ($data['business_about'] ?? $existing['business_about'] ?? '')), 0, 4000),
             'api_key' => filled($data['api_key'] ?? null)
                 ? Crypt::encryptString(trim((string) $data['api_key']))
                 : ($existing['api_key'] ?? null), // keep existing when left blank
         ];
 
+        $company->forceFill(['settings' => $settings])->save();
+
+        if ($instructionsBefore !== null) {
+            app(AiInstructionService::class)->recordSettingsChange($company, $instructionsBefore, $this->instructionBlocks($company), auth()->user());
+        }
+    }
+
+    /** The owner's written guidance as stored in the settings: about, voice, guidelines. */
+    public function instructionBlocks(Company $company): array
+    {
+        $all = $this->all($company, self::TOOL_MESSAGING);
+        $blocks = [];
+        foreach (AiInstructionVersion::BLOCKS as $block => $key) {
+            $blocks[$block] = (string) ($all[$key] ?? '');
+        }
+
+        return AiInstructionVersion::normalize($blocks);
+    }
+
+    /** Write the guidance blocks straight into the settings (publishing from the Agent Desk). */
+    public function setInstructions(Company $company, array $blocks): void
+    {
+        $blocks = AiInstructionVersion::normalize($blocks);
+        $settings = (array) $company->settings;
+        foreach (AiInstructionVersion::BLOCKS as $block => $key) {
+            $settings['ai_tools'][self::TOOL_MESSAGING][$key] = mb_substr($blocks[$block], 0, match ($block) {
+                'about' => 4000,
+                'voice' => 2000,
+                default => 16000,
+            });
+        }
         $company->forceFill(['settings' => $settings])->save();
     }
 
