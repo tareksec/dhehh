@@ -113,7 +113,7 @@
                         <div class="mt-5 rounded-xl bg-gray-50 p-4 text-sm dark:bg-white/5">
                             <div class="flex justify-between"><span class="text-gray-500 dark:text-gray-400">{{ __('Your price') }}</span><span class="font-medium">A</span></div>
                             <div class="mt-1 flex justify-between"><span class="text-gray-500 dark:text-gray-400">{{ __('Your cost') }}</span><span class="font-medium">− B</span></div>
-                            <div class="mt-2 flex justify-between border-t border-gray-200 pt-2 font-semibold text-[var(--brand)] dark:border-white/10"><span>{{ __('Your profit') }}</span><span>A − B</span></div>
+                            <div class="mt-2 flex justify-between border-t border-gray-200 pt-2 font-semibold text-[var(--brand)] dark:border-white/10"><span>{{ __('My profit') }}</span><span>A − B</span></div>
                         </div>
                     </article>
                     <article class="rounded-2xl border border-gray-200 p-6 dark:border-white/10">

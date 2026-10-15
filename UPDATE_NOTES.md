@@ -2,6 +2,56 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-15 (later) - Owner's answers: returned goods stay out of stock until staff check them; reseller Bangla word "আয়"
+
+The owner answered four questions on 2026-10-15: (1) commit and push the password-reset and audit work to the work branch **and** `main`; (2) the emailed reset link stays valid for **60 minutes**; (3) when an order is Returned, **staff put the goods back in stock themselves after checking them**; (4) on reseller screens "profit" is written **"আমার আয়"** in Bangla.
+
+**Returned orders keep their goods out of stock — a rule change for every order, not only reseller orders**
+- Before: marking an order Returned (or Refunded) deleted its sale from the stock ledger at once, so the pieces counted as in stock immediately.
+- Now: the sale stays. On a Returned or Refunded order's page the new action **Put returned goods back in stock** (staff who may add stock movements) shows each item with *sold / already put back / can still be put back*; staff enter the pieces in good condition, damaged pieces are left out, it can be done in parts, and it never exceeds what was sold. It adds a *Return* stock movement tied to the order.
+- Unchanged: **Cancelled** still gives stock back at once (it never left). Customer dues, sales reports and the reseller's profit still follow the order status. The return charge for resellers is unchanged.
+- **My choices (say if you want different):** (a) **Refunded** keeps the goods out too (a refund after a return would otherwise have restocked it behind the rule); (b) moving a returned order to the **trash** removes its sale and any Return movements recorded for it together, so the shelf is as before the order; (c) **restoring** a returned order from the trash does not bring its sale back (the pieces are then counted as on the shelf), so check stock after restoring one.
+- Deploy: nothing to run. Orders that were already Returned have already put their goods back; only returns made from now on wait for staff.
+
+**Bangla for profit on reseller screens**
+- "Profit" is "আয়" in all the reseller-only texts, and the column / headings are "আমার আয়" (new key `My profit`); the admin list is "রিসেলারের আয়" / "রিসেলারদের আয়". English still says profit. The reports' own `Profit` ("লাভ") and the investors' `Your profit` are untouched.
+- Because the owner wrote "আমার আয়" (my income), the Bangla headings are first person; the sentences that talk to the reseller say "আপনার আয়".
+
+Needs Bangla review (7 new keys): Put returned goods back in stock (and with `:order`), the long text on its dialog, Add to stock, "Sold :sold, already put back :back, can still be put back :left.", ":count pieces were added back to stock.", "Nothing was added to stock.". Plus the "আয়" wording above.
+
+Tests: `OrderReturnedStockTest` (8): a returned order keeps its goods out (also after delivery), cancelled still gives them back, partial / later put-back with the damaged pieces left out, never more than sold, the action only on returned / refunded orders and only with the stock permission, trash releases without double counting, dues and sales still follow the status. `ResellerPortalAdminFlowTest` updated for the new rule.
+
+Full suite (plain `php artisan test`, no `--env`) with everything on 2026-10-15: **2451 passed, 1 skipped, 0 failed** (405 s). Pint passes.
+
+Commit status: Committed and pushed to `claude/reseller-module-status-v9tobe` and to `main` on owner approval (2026-10-15: "কাজের ব্রাঞ্চ ও main দুটোতেই পুশ").
+
+## 2026-10-15 - Admin: reset a reseller's password / email a reset link; portal ↔ admin audit
+
+The owner (in Bangla): *"From the admin, resellers' passwords can be reset, and a password reset request can be sent by email to the email the reseller set."* and *"Check whether the portal and the admin dashboard are connected without problems, whether stock works properly, and whether orders work properly."*
+
+**1. Password reset from the admin** (nothing to deploy: no migration, no `npm run build`)
+- Admin → Resellers: **Set a new password** (staff choose it; the reseller is signed out everywhere; it is not emailed) and **Email a password reset link** (to the reseller's own email; the button is disabled with a reason when they have none). They are in the list's action menu and at the top of a reseller's View and Edit pages, only for staff who may edit customers and only for a pending or approved reseller.
+- The link opens the portal's "Choose a new password" page on the reseller's portal address; it works once and expires after **60 minutes** (the owner confirmed it on 2026-10-15). A pending SMS code is replaced by a link and the other way round.
+- Email is sent with the company's own SMTP (Storefront Settings → Customer Notifications & Reminders) or the server's mail setting. If neither can really send (the server's `MAIL_MAILER` is `log`), the action says "Email is not set up" and sends nothing. **On production, check that one of the two is set up before relying on it.**
+- Both actions are in the audit log with the staff member; the password is never written there.
+- The mail is written in the language of the staff member who sends it (the reseller's own language is not stored).
+
+**2. Audit of the portal and the admin** — result: **no bug found; the connection works.** New `ResellerPortalAdminFlowTest` checks it through the real pages on both sides. What it proved, and what to know:
+- A portal order arrives in the admin Orders list with the right company, source "Reseller portal", buyer, lines, variation label and prices, as a **Draft**.
+- **A draft holds no stock** (same as every order in this system). Stock moves when staff *Confirm*: the sale is taken from the exact item (for a product with variations: from that variation; the product shows the sum). Cancel and Return give it back automatically.
+- Two resellers can each place a draft for the last pieces. Staff can confirm the first; the second is refused with an error and stays a draft, so **stock never goes negative**. The portal also refuses an order bigger than the shelf holds at the moment of ordering.
+- Completing the order makes the reseller's profit payable; a later return takes it back and charges the return charge (50, from the deposit).
+- The portal shows the new status after staff change it; each company sees only its own orders, and a reseller only their own.
+- **Decided by the owner (2026-10-15): returned goods no longer go back on the shelf by themselves.** See the entry "Owner's answers: returned goods stay out of stock until staff check them" above.
+
+Needs Bangla review (20 new keys): Set a new password, the two long texts on the Set password and Email link dialogs, Email a password reset link, Send link, the five messages when a link cannot be sent, the portal page's "Choose a new password" and "This reset link is invalid or has expired…", and the three lines of the email itself. The note about "Storefront Settings → Customer Notifications & Reminders" uses the English menu names in Bangla text.
+
+Tests: `ResellerPasswordResetByStaffTest` (19): staff set a password (old one stops, signed out, audit has no password, weak / mismatched refused, pending reset cancelled), the link is emailed to the reseller's own address on the portal host with a valid signature (and the email prints it unescaped), no email / email not set up / failed send leave nothing valid, the link works once through the Livewire page and through the real endpoint, tampered / expired / another company's / wrong-token links are refused, a rejected reseller gets nothing, the actions are on the list / view / edit pages, staff without permission cannot see or force them, another company's reseller cannot be reached. `ResellerPortalAdminFlowTest` (8): see above.
+
+Full suite before the return-stock rule: 2443 passed, 1 skipped, 0 failed; the final run is in the entry above.
+
+Commit status: Committed and pushed to `claude/reseller-module-status-v9tobe` and to `main` on owner approval (2026-10-15: "কাজের ব্রাঞ্চ ও main দুটোতেই পুশ").
+
 ## 2026-10-14 (later) - Correction: the admin sets a suggested selling price on each variation
 
 The owner (in Bangla) after the first brief: my change was a serious mistake. With no price set by the reseller, a customer could buy one piece **at the wholesale price**. The system must work like this: **the admin enters a probable selling rate for the reseller on each variation, so the reseller sees what the market price is; the reseller can override it with their own.**

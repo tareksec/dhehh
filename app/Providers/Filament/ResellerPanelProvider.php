@@ -5,6 +5,7 @@ namespace App\Providers\Filament;
 use App\Filament\Reseller\Pages\Auth\Apply;
 use App\Filament\Reseller\Pages\Auth\ForgotPassword;
 use App\Filament\Reseller\Pages\Auth\Login;
+use App\Filament\Reseller\Pages\Auth\ResetPasswordByLink;
 use App\Filament\Reseller\Pages\CreateOrder;
 use App\Filament\Reseller\Pages\Dashboard;
 use App\Filament\Reseller\Pages\Earnings;
@@ -64,10 +65,10 @@ class ResellerPanelProvider extends PanelProvider
             ->authGuard('customer')
             ->login(Login::class)
             ->registration(Apply::class)
-            // Reset by SMS code on one page (ForgotPassword); Filament's
-            // e-mailed link is not used, so its signed "reset" route only
-            // points back at the same page.
-            ->passwordReset(ForgotPassword::class, ForgotPassword::class)
+            // Reset by SMS code on one page (ForgotPassword). Filament's own
+            // e-mailed link is not used; the signed "reset" route is the page
+            // behind the link staff email from the admin (ResetPasswordByLink).
+            ->passwordReset(ForgotPassword::class, ResetPasswordByLink::class)
             ->brandName(fn (): string => app(CompanySettingsService::class)->name($this->portalCompany()))
             ->brandLogo(fn (): ?string => app(CompanySettingsService::class)->logoUrl($this->portalCompany()))
             ->darkModeBrandLogo(fn (): ?string => app(CompanySettingsService::class)->darkLogoUrl(company: $this->portalCompany()))

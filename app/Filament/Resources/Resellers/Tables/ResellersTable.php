@@ -2,8 +2,10 @@
 
 namespace App\Filament\Resources\Resellers\Tables;
 
+use App\Filament\Resources\Resellers\Actions\ResellerPasswordActions;
 use App\Models\Customer;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -90,6 +92,10 @@ class ResellersTable
                     ])),
                 ViewAction::make(),
                 EditAction::make(),
+                ActionGroup::make([
+                    ResellerPasswordActions::setPassword(),
+                    ResellerPasswordActions::emailResetLink(),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

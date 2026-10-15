@@ -633,6 +633,37 @@ class Order extends Model
     }
 
     /**
+     * Owner decision 2026-10-15: a returned (or refunded) order's goods do not
+     * go back on the shelf by themselves. The sale stays in the stock ledger
+     * until staff have looked at what came back and record it (the order's
+     * "Put returned goods back in stock" action adds a Return movement for
+     * the pieces that are fine; damaged ones simply are not added). A
+     * cancelled order, which never left, still releases its stock at once.
+     */
+    public function keepsStockOutUntilGoodsAreChecked(): bool
+    {
+        return in_array($this->status, [self::STATUS_RETURNED, self::STATUS_REFUNDED], true);
+    }
+
+    /**
+     * Pieces staff already put back in stock for this order, keyed
+     * "productId:variantId" (variant 0 = none).
+     *
+     * @return array<string, int>
+     */
+    public function returnedQuantities(): array
+    {
+        return StockMovement::query()
+            ->where('type', 'return')
+            ->where('reference_type', self::class)
+            ->where('reference_id', $this->getKey())
+            ->get(['product_id', 'product_variant_id', 'quantity'])
+            ->groupBy(fn (StockMovement $movement): string => $movement->product_id.':'.($movement->product_variant_id ?? 0))
+            ->map(fn ($group): int => (int) $group->sum(fn (StockMovement $movement): int => abs((int) $movement->quantity)))
+            ->all();
+    }
+
+    /**
      * What a courier should collect on delivery: the full invoice total
      * (products − discount + VAT + shipping), never reduced by an advance
      * already paid. If the order carries no shipping fee of its own, the zone

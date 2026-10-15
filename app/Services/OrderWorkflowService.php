@@ -31,7 +31,7 @@ class OrderWorkflowService
 
         if ($order->isAccounted()) {
             $this->syncStockMovements($order, $items);
-        } else {
+        } elseif (! $order->keepsStockOutUntilGoodsAreChecked()) {
             $this->deleteStockMovements($order);
         }
 
@@ -50,15 +50,23 @@ class OrderWorkflowService
         $order->customer?->syncCurrentBalance();
     }
 
+    /**
+     * Takes the order's stock effects out: its sale movements, and then any
+     * "Return" movements staff recorded for its goods (see
+     * Order::returnedQuantities()), so the two cancel out and the shelf is as
+     * it was before the order. The sales go first so stock never dips.
+     */
     public function deleteStockMovements(Order $order): void
     {
-        StockMovement::query()
-            ->where('type', 'sale')
-            ->where('reference_type', Order::class)
-            ->where('reference_id', $order->getKey())
-            ->get()
-            ->each
-            ->delete();
+        foreach (['sale', 'return'] as $type) {
+            StockMovement::query()
+                ->where('type', $type)
+                ->where('reference_type', Order::class)
+                ->where('reference_id', $order->getKey())
+                ->get()
+                ->each
+                ->delete();
+        }
     }
 
     protected function syncStockMovements(Order $order, Collection $items): void

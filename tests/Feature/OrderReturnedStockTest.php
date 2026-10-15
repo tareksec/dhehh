@@ -1,0 +1,265 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Filament\Resources\Orders\Pages\ViewOrder;
+use App\Models\Category;
+use App\Models\Company;
+use App\Models\Customer;
+use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Product;
+use App\Models\ProductVariant;
+use App\Models\StockMovement;
+use App\Models\User;
+use App\Models\UserRole;
+use App\Services\CompanyContext;
+use Filament\Facades\Filament;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+/**
+ * Owner decision (2026-10-15): when an order is returned, its goods do NOT go
+ * back on the shelf by themselves. Staff look at what came back and add the
+ * pieces that are fine with "Put returned goods back in stock". A cancelled
+ * order, which never left, still gives its stock back at once.
+ */
+class OrderReturnedStockTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected Company $company;
+
+    protected User $admin;
+
+    protected Product $cap;
+
+    protected Product $shirt;
+
+    protected ProductVariant $medium;
+
+    protected Customer $buyer;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->company = Company::query()->create([
+            'name' => 'Return Co', 'slug' => 'return-co', 'domain' => 'return-co.example.test', 'domain_verified' => true,
+            'invoice_prefix' => 'RET', 'currency' => 'BDT', 'timezone' => 'Asia/Dhaka', 'is_active' => true,
+        ])->fresh();
+        app(CompanyContext::class)->set($this->company);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->admin = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($this->admin)->withSession(['current_company_id' => $this->company->getKey()]);
+
+        $category = Category::query()->create(['company_id' => $this->company->getKey(), 'name' => 'Things', 'slug' => 'things', 'is_active' => true]);
+        $this->cap = $this->product($category, 'Cap', 'CAP-1');
+        $this->shirt = $this->product($category, 'Shirt', 'SHIRT-1', variants: true);
+        $this->medium = ProductVariant::query()->create([
+            'company_id' => $this->company->getKey(), 'product_id' => $this->shirt->getKey(), 'sku' => 'SHIRT-M',
+            'options' => ['Size' => 'M'], 'sale_price' => 500, 'cost_price' => 300, 'stock' => 0, 'is_active' => true,
+        ])->fresh();
+        $this->opening($this->cap, 10);
+        $this->opening($this->shirt, 8, $this->medium);
+
+        $this->buyer = Customer::query()->create(['company_id' => $this->company->getKey(), 'name' => 'Buyer', 'phone' => '01700000001']);
+    }
+
+    public function test_a_returned_order_keeps_its_goods_out_of_stock(): void
+    {
+        $order = $this->confirmedOrder(capQuantity: 3, shirtQuantity: 2);
+        $this->assertStock(cap: 7, medium: 6);
+
+        $this->transition($order, 'returned', 'Customer refused it');
+
+        $this->assertSame(Order::STATUS_RETURNED, $order->fresh()->status);
+        $this->assertStock(cap: 7, medium: 6); // nothing came back by itself
+        $this->assertSame(2, StockMovement::query()->where('type', 'sale')->where('reference_id', $order->getKey())->count());
+        $this->assertSame(6, (int) $this->shirt->fresh()->stock); // a product with variations shows the sum of its variations
+    }
+
+    public function test_a_delivered_order_that_comes_back_also_keeps_its_goods_out(): void
+    {
+        $order = $this->confirmedOrder(capQuantity: 4, shirtQuantity: 1);
+        $this->transition($order, 'completed');
+        $this->transition($order, 'returned', 'Came back after delivery');
+
+        $this->assertStock(cap: 6, medium: 7);
+    }
+
+    public function test_a_cancelled_order_still_gives_its_stock_back_at_once(): void
+    {
+        $order = $this->confirmedOrder(capQuantity: 3, shirtQuantity: 2);
+
+        $this->transition($order, 'cancelled', 'Changed their mind');
+
+        $this->assertStock(cap: 10, medium: 8);
+    }
+
+    public function test_staff_put_back_only_what_is_in_good_condition_and_can_do_it_in_parts(): void
+    {
+        $order = $this->confirmedOrder(capQuantity: 5, shirtQuantity: 2);
+        $this->transition($order, 'returned', 'Came back');
+        [$capItem, $shirtItem] = $this->itemIds($order);
+
+        // 3 of the 5 caps are fine, the shirt is damaged (0).
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+            ->assertActionVisible('putReturnedGoodsBackInStock')
+            ->callAction('putReturnedGoodsBackInStock', data: ['qty_'.$capItem => 3, 'qty_'.$shirtItem => 0])
+            ->assertHasNoActionErrors()
+            ->assertNotified('3 pieces were added back to stock.');
+
+        $this->assertStock(cap: 8, medium: 6);
+        $movement = StockMovement::query()->where('type', 'return')->sole();
+        $this->assertSame(Order::class, $movement->reference_type);
+        $this->assertSame($order->getKey(), (int) $movement->reference_id);
+        $this->assertSame($this->company->getKey(), (int) $movement->company_id);
+
+        // Later the other 2 caps turn out fine too, and one shirt.
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+            ->callAction('putReturnedGoodsBackInStock', data: ['qty_'.$capItem => 2, 'qty_'.$shirtItem => 1])
+            ->assertHasNoActionErrors();
+        $this->assertStock(cap: 10, medium: 7);
+
+        // The shirt that was damaged is the only thing still waiting; the caps are done.
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+            ->assertActionVisible('putReturnedGoodsBackInStock')
+            ->callAction('putReturnedGoodsBackInStock', data: ['qty_'.$shirtItem => 0])
+            ->assertNotified('Nothing was added to stock.');
+        $this->assertStock(cap: 10, medium: 7);
+    }
+
+    public function test_more_than_was_sold_can_never_be_put_back(): void
+    {
+        $order = $this->confirmedOrder(capQuantity: 2, shirtQuantity: 1);
+        $this->transition($order, 'returned', 'Came back');
+        [$capItem, $shirtItem] = $this->itemIds($order);
+
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+            ->callAction('putReturnedGoodsBackInStock', data: ['qty_'.$capItem => 3, 'qty_'.$shirtItem => 1])
+            ->assertHasActionErrors(['qty_'.$capItem]);
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+            ->callAction('putReturnedGoodsBackInStock', data: ['qty_'.$capItem => -1, 'qty_'.$shirtItem => 1])
+            ->assertHasActionErrors(['qty_'.$capItem]);
+
+        $this->assertSame(0, StockMovement::query()->where('type', 'return')->count());
+        $this->assertStock(cap: 8, medium: 7);
+
+        // Everything fine: all of it goes back, and then the action has nothing left to offer.
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+            ->callAction('putReturnedGoodsBackInStock', data: ['qty_'.$capItem => 2, 'qty_'.$shirtItem => 1])
+            ->assertHasNoActionErrors();
+        $this->assertStock(cap: 10, medium: 8);
+
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+            ->assertActionHidden('putReturnedGoodsBackInStock');
+    }
+
+    public function test_the_action_is_only_for_returned_or_refunded_orders_and_for_staff_who_may_add_stock(): void
+    {
+        $order = $this->confirmedOrder(capQuantity: 2, shirtQuantity: 1);
+
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])->assertActionHidden('putReturnedGoodsBackInStock'); // confirmed
+
+        $this->transition($order, 'returned', 'Came back');
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])->assertActionVisible('putReturnedGoodsBackInStock');
+
+        // A refund after the return keeps the goods out too, and the action stays available.
+        $this->transition($order, 'refunded', 'Money given back');
+        $this->assertStock(cap: 8, medium: 7);
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])->assertActionVisible('putReturnedGoodsBackInStock');
+
+        // Staff who cannot add stock movements do not get it.
+        UserRole::query()->create(['name' => 'Sales only', 'slug' => 'sales-only', 'permissions' => ['sales.view', 'sales.update'], 'is_active' => true]);
+        $sales = User::factory()->create(['role' => 'sales-only', 'is_active' => true]);
+        $this->actingAs($sales)->withSession(['current_company_id' => $this->company->getKey()]);
+
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])->assertActionHidden('putReturnedGoodsBackInStock');
+    }
+
+    public function test_moving_a_returned_order_to_the_trash_releases_its_stock_without_double_counting(): void
+    {
+        $order = $this->confirmedOrder(capQuantity: 4, shirtQuantity: 2);
+        $this->transition($order, 'returned', 'Came back');
+        [$capItem, $shirtItem] = $this->itemIds($order);
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+            ->callAction('putReturnedGoodsBackInStock', data: ['qty_'.$capItem => 3, 'qty_'.$shirtItem => 0]);
+        $this->assertStock(cap: 9, medium: 6);
+
+        $order->fresh()->delete();
+
+        // The sale and the return cancel out: the shelf is as it was before the order.
+        $this->assertStock(cap: 10, medium: 8);
+        $this->assertSame(0, StockMovement::query()->where('reference_type', Order::class)->where('reference_id', $order->getKey())->count());
+    }
+
+    public function test_a_returned_order_does_not_count_as_a_sale_or_a_customer_due(): void
+    {
+        $order = $this->confirmedOrder(capQuantity: 3, shirtQuantity: 1);
+        $this->assertGreaterThan(0, (float) $this->buyer->fresh()->current_balance);
+
+        $this->transition($order, 'returned', 'Came back');
+
+        // Money and sales follow the order status as before; only the shelf waits for staff.
+        $this->assertEqualsWithDelta(0.0, (float) $this->buyer->fresh()->current_balance, 0.001);
+        $this->assertFalse($order->fresh()->isAccounted());
+    }
+
+    protected function confirmedOrder(int $capQuantity, int $shirtQuantity): Order
+    {
+        $order = Order::query()->create([
+            'company_id' => $this->company->getKey(), 'customer_id' => $this->buyer->getKey(), 'customer_name' => 'Buyer',
+            'order_date' => now()->toDateString(), 'status' => 'draft', 'source' => Order::SOURCE_ADMIN,
+            'discount' => 0, 'vat' => 0, 'shipping_fee' => 0, 'paid_amount' => 0,
+        ]);
+        OrderItem::query()->create(['order_id' => $order->getKey(), 'product_id' => $this->cap->getKey(), 'quantity' => $capQuantity, 'unit_price' => 300, 'unit_cost' => 90]);
+        OrderItem::query()->create([
+            'order_id' => $order->getKey(), 'product_id' => $this->shirt->getKey(), 'product_variant_id' => $this->medium->getKey(),
+            'variant_label' => 'Size: M', 'quantity' => $shirtQuantity, 'unit_price' => 500, 'unit_cost' => 300,
+        ]);
+        $order->refresh();
+        $this->transition($order, 'confirmed');
+
+        return $order->fresh();
+    }
+
+    protected function transition(Order $order, string $stage, ?string $reason = null): void
+    {
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+            ->callAction('changeWorkflowStatus', data: array_filter(['stage' => $stage, 'reason' => $reason]))
+            ->assertHasNoActionErrors();
+    }
+
+    /** @return array{0: int, 1: int} the cap line and the shirt line */
+    protected function itemIds(Order $order): array
+    {
+        return [
+            (int) $order->items()->where('product_id', $this->cap->getKey())->value('id'),
+            (int) $order->items()->where('product_id', $this->shirt->getKey())->value('id'),
+        ];
+    }
+
+    protected function assertStock(int $cap, int $medium): void
+    {
+        $this->assertSame($cap, (int) $this->cap->fresh()->stock, 'Cap stock');
+        $this->assertSame($medium, (int) $this->medium->fresh()->stock, 'Shirt M stock');
+    }
+
+    protected function product(Category $category, string $name, string $sku, bool $variants = false): Product
+    {
+        return Product::query()->create([
+            'company_id' => $this->company->getKey(), 'category_id' => $category->getKey(), 'name' => $name, 'sku' => $sku,
+            'price' => 300, 'sale_price' => 300, 'cost_price' => 90, 'stock' => 0, 'unit' => 'pcs', 'reorder_level' => 1,
+            'vat_rate' => 0, 'has_variants' => $variants, 'is_active' => true, 'status' => Product::STATUS_AVAILABLE,
+        ])->fresh();
+    }
+
+    protected function opening(Product $product, int $quantity, ?ProductVariant $variant = null): void
+    {
+        StockMovement::query()->create([
+            'product_id' => $product->getKey(), 'product_variant_id' => $variant?->getKey(), 'type' => 'opening', 'quantity' => $quantity,
+        ]);
+    }
+}

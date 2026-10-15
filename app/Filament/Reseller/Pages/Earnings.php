@@ -105,7 +105,7 @@ class Earnings extends Page implements HasTable
                     ->toggleable(),
 
                 TextColumn::make('amount')
-                    ->label(__('Profit'))
+                    ->label(__('My profit'))
                     ->state(fn (ResellerCommission $record): string => MoneyFormatter::currency($record->amount, $currency))
                     ->weight('bold')
                     ->sortable(),

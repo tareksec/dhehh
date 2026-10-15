@@ -33,17 +33,17 @@ class ResellerCommissionResource extends Resource
 
     public static function getNavigationLabel(): string
     {
-        return __('Profits');
+        return __('Reseller profits');
     }
 
     public static function getModelLabel(): string
     {
-        return __('Profit');
+        return __('Reseller profit');
     }
 
     public static function getPluralModelLabel(): string
     {
-        return __('Profits');
+        return __('Reseller profits');
     }
 
     public static function table(Table $table): Table
@@ -57,7 +57,7 @@ class ResellerCommissionResource extends Resource
                     ->searchable(),
                 TextColumn::make('sales_amount')->label(__('Sales'))->numeric(2)->sortable(),
                 TextColumn::make('base_amount')->label(__('Reseller cost'))->numeric(2)->toggleable(),
-                TextColumn::make('amount')->label(__('Profit'))->numeric(2)->sortable(),
+                TextColumn::make('amount')->label(__('Reseller profit'))->numeric(2)->sortable(),
                 TextColumn::make('status')
                     ->label(__('Status'))
                     ->badge()

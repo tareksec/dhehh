@@ -57,7 +57,7 @@ class CommissionTrend extends ChartWidget
 
         return [
             'datasets' => [[
-                'label' => __('Profit'),
+                'label' => __('My profit'),
                 'data' => $data,
                 // A soft area under a smooth line, in the portal's brand colour
                 // (the widget's own colour, so no hard-coded hex here).

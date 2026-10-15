@@ -417,6 +417,55 @@ class CustomerAccountService
         return RateLimiter::tooManyAttempts($key, 5) ? RateLimiter::availableIn($key) : 0;
     }
 
+    /** How long an emailed reset link works. */
+    public const RESET_LINK_MINUTES = 60;
+
+    /**
+     * Starts an emailed reset for $customer and returns the one-time token
+     * for the link. It uses the same hashed code + expiry as the SMS reset
+     * (resetPassword() checks it), so it works once, expires, and a pending
+     * SMS code is replaced. A lock from earlier wrong tries is lifted: the
+     * link is sent by staff on purpose.
+     */
+    public function issueResetLink(Customer $customer): string
+    {
+        $token = Str::random(48);
+
+        $customer->forceFill([
+            'password_reset_code' => Hash::make($token),
+            'password_reset_expires_at' => now()->addMinutes(self::RESET_LINK_MINUTES),
+        ])->save();
+
+        RateLimiter::clear('storefront-reset:'.$customer->getKey());
+
+        return $token;
+    }
+
+    /** Drops a pending reset (a link that could not be sent must not stay valid). */
+    public function cancelReset(Customer $customer): void
+    {
+        $customer->forceFill(['password_reset_code' => null, 'password_reset_expires_at' => null])->save();
+    }
+
+    /** Whether $code is the customer's unexpired reset code. Does not use the code up. */
+    public function resetCodeIsValid(Customer $customer, string $code): bool
+    {
+        return filled($customer->password_reset_code)
+            && $customer->password_reset_expires_at?->isFuture() === true
+            && Hash::check($code, $customer->password_reset_code);
+    }
+
+    /**
+     * Staff set a new password for $customer: they are signed out everywhere
+     * and any pending reset code or link stops working.
+     */
+    public function setPasswordByStaff(Customer $customer, string $newPassword): void
+    {
+        $this->updatePassword($customer, $newPassword);
+        $this->cancelReset($customer);
+        RateLimiter::clear('storefront-reset:'.$customer->getKey());
+    }
+
     public function updatePassword(Customer $customer, string $newPassword): void
     {
         $customer->forceFill([

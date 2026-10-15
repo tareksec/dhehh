@@ -267,7 +267,7 @@ class ResellerPortalCreateOrderTest extends TestCase
                 'items' => [['product_id' => $product->getKey(), 'quantity' => 2, 'price' => 520]],
             ])
             ->assertSee('Customer pays')
-            ->assertSee('Your profit')
+            ->assertSee('My profit')
             ->fillForm(['name' => 'B', 'phone' => '017', 'address' => 'x', 'items' => [['product_id' => $product->getKey(), 'quantity' => 1, 'price' => 100]]])
             ->call('create')
             ->assertHasFormErrors(['items.0.price']);

@@ -40,7 +40,7 @@
                     @else
                         <dt class="font-semibold">{{ __('Customer pays (cash on delivery)') }}</dt>
                         <dd class="text-right font-semibold">{{ MoneyFormatter::currency($summary['total'], $currency) }}</dd>
-                        <dt class="text-gray-500 dark:text-gray-400">{{ __('Your profit') }}</dt>
+                        <dt class="text-gray-500 dark:text-gray-400">{{ __('My profit') }}</dt>
                         <dd class="text-right">{{ MoneyFormatter::currency($summary['commission'], $currency) }}</dd>
                     @endif
                 </dl>
