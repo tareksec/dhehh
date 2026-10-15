@@ -4,6 +4,16 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **IMS investor feed.** A new key type **Investor sync (investors and payouts for IMS)** opens `/api/v1/sync/investor/*`: investors (name, phone, NID, group, approved bank accounts), groups, projects with their progress percentage, investments, and payouts with amount, status, date and a link to the payment screenshot (`GET /payouts/{id}/proof`). Read only, one company per key, and never a customer or a supplier. Owner decisions 2026-10-15 (details and the planned "IMS reports a payout" step in `docs/api/ims-sync-api.md`).
+
+### Technical Notes
+
+- `CompanyApiKey::SCOPE_INVESTOR_SYNC`, `ResolveCompanyFromApiKey` hint per scope, `InvestorSyncFeed` (extends `ImsSyncFeed`), `InvestorSyncController`, `Investor::groupMemberships()`. Two interface strings added or reworded in both language files (the key-type name and the key helper text). Tests: `InvestorSyncApiTest` (10).
+
 ## [2.78.0] - 2026-10-15
 
 **Release type:** Minor Feature Update

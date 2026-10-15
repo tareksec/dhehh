@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\StorefrontAccountController;
 use App\Http\Controllers\Api\V1\StorefrontCheckoutController;
 use App\Http\Controllers\Api\V1\StorefrontController;
 use App\Http\Controllers\Api\V1\StorefrontOrderTrackingController;
+use App\Http\Controllers\Api\V1\Sync\InvestorSyncController;
 use App\Http\Controllers\Api\V1\Sync\SyncController;
 use App\Http\Middleware\AuthenticateStorefrontCustomer;
 use App\Http\Middleware\EnsureNextjsSiteEnabled;
@@ -60,6 +61,19 @@ Route::prefix('v1/sync')
     ->group(function (): void {
         Route::get('ping', [SyncController::class, 'ping']);
         Route::get('{resource}', [SyncController::class, 'index'])->where('resource', '[a-z-]+');
+    });
+
+/*
+| The investors' side of the same link (owner, 2026-10-15): investors, groups,
+| projects (with how far each has run), investments and payouts. Its own
+| "Investor sync" key, because it carries NID, phone and bank accounts. GET only.
+*/
+Route::prefix('v1/sync/investor')
+    ->middleware(['throttle:sync-api', ForceJsonResponse::class, ResolveCompanyFromApiKey::class.':investor_sync'])
+    ->group(function (): void {
+        Route::get('ping', [InvestorSyncController::class, 'ping']);
+        Route::get('payouts/{payout}/proof', [InvestorSyncController::class, 'proof'])->whereNumber('payout');
+        Route::get('{resource}', [InvestorSyncController::class, 'index'])->where('resource', '[a-z-]+');
     });
 
 /*

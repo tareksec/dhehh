@@ -49,9 +49,11 @@ class ResolveCompanyFromApiKey
             return response()->json([
                 'ok' => false,
                 'error' => 'wrong_key_scope',
-                'hint' => $scope === CompanyApiKey::SCOPE_SYNC
-                    ? 'This endpoint needs a "Data sync" API key. Generate one from ZamZam ERP → Settings → Integrations → Website API.'
-                    : 'This endpoint needs a "Website" API key; a "Data sync" key can only read /api/v1/sync/*.',
+                'hint' => match ($scope) {
+                    CompanyApiKey::SCOPE_SYNC => 'This endpoint needs a "Data sync" API key. Generate one from ZamZam ERP → Settings → Integrations → Website API.',
+                    CompanyApiKey::SCOPE_INVESTOR_SYNC => 'This endpoint needs an "Investor sync" API key. Generate one from ZamZam ERP → Settings → Integrations → Website API.',
+                    default => 'This endpoint needs a "Website" API key; a sync key can only read its own /api/v1/sync/* feed.',
+                },
             ], 403);
         }
 

@@ -30,9 +30,17 @@ class CompanyApiKey extends Model
     /** Read-only data feed for an outside system (IMS), see Api\V1\Sync. */
     public const SCOPE_SYNC = 'sync';
 
+    /**
+     * The investors' side of the IMS link: investors, their groups, projects,
+     * investments and payouts. A separate key from SCOPE_SYNC on purpose, because it carries
+     * personal data (NID, phone, bank accounts) that the business feed never does.
+     */
+    public const SCOPE_INVESTOR_SYNC = 'investor_sync';
+
     public const SCOPES = [
         self::SCOPE_WEBSITE => 'Website (products, orders, leads)',
         self::SCOPE_SYNC => 'Data sync (read-only feed for IMS)',
+        self::SCOPE_INVESTOR_SYNC => 'Investor sync (investors and payouts for IMS)',
     ];
 
     protected $fillable = [

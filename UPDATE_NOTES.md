@@ -87,6 +87,18 @@ Known limits to tell IMS: the ERP has no partial returns and no refund payment r
 
 Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-15 (owner approved "কমিট এবং পুশ করে মেইন এ পুশ কর"); pushed to main on 2026-10-15. Deploy: run `php artisan migrate --force` (new migration).
 
+## 2026-10-15 (later still) - IMS investor feed (phase 1 of the two-way link)
+
+Owner's answers to my questions: unit sales per project are not needed now, only the project's percentage; so "final sale" status is moot; the payout system stays in the ERP, IMS shows every payout's information, IMS can make payouts and those show in the ERP too (two-way); IMS payout = a record, the ERP marks that payout paid then continues as usual, ERP staff approve; IMS may show name and group, payout amount/date/status/screenshot, bank accounts, NID and phone; cost of goods = order-line unit_cost x quantity. Also: IMS must have a way to send a bank instruction and the ERP must have the same option.
+
+Built now (uncommitted): the read side. `InvestorSyncFeed` + `InvestorSyncController` + routes `/api/v1/sync/investor/*` behind a new key type `investor_sync` (separate from the business key on purpose: it carries NID, phone and bank accounts). Resources: investors, groups, projects (progress_percent), investments, payouts, and `payouts/{id}/proof`. Only approved bank accounts are shared. Tests: `InvestorSyncApiTest` (10; mutation-checked: sharing pending accounts and using the wrong key scope each fail a test). `docs/api/ims-sync-api.md` has the new section and the plan for the rest.
+
+Not built: (2) IMS reporting a payout (`POST .../payouts/{id}/report`) with an ERP approval screen; (3) the bank instruction from IMS and from the ERP: blocked on the bank's file format / host-to-host access, never guessed.
+
+Needs Bangla review: the new key-type label "ইনভেস্টর সিংক (IMS-এর জন্য ইনভেস্টর ও পেআউট)" and the reworded key helper text.
+
+Commit status: committed and pushed to claude/nifty-carson-r2vpby on 2026-10-15 (owner approved "কমিট এবং পুশ কর"); not on main.
+
 ## 2026-10-15 (later) - IMS feed: no supplier information
 
 Owner: "সাপ্লায়ারের তথ্যও investor দেখবে না". Removed the `suppliers` and `supplier-payments` resources from `ImsSyncFeed` and the supplier from `purchases`; the feed now has 11 resources. The investor portal itself shows no supplier data (checked). `ImsSyncApiTest`: purchase test now asserts no supplier anywhere, plus 404s for both removed paths; `docs/api/ims-sync-api.md` and the IMS handover page updated.
