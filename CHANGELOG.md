@@ -4,7 +4,9 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Minor
+## [2.80.0] - 2026-10-15
+
+**Release type:** Minor Feature Update
 
 ### Added
 
@@ -26,7 +28,6 @@ All notable production changes to Business Dashboard are documented here.
 - Variation prices tool: new `ResellerVariationPriceResource` (model `ProductVariant`, Resellers cluster, index only; needs the reseller module and view rights on Products, editing needs update rights). No migration or new model.
 - Reseller portal: tab bar is `resources/views/filament/reseller/bottom-nav.blade.php`, drawn from the panel's `LAYOUT_END` hook through `ModuleGuard`; the portal theme CSS adds bottom padding on small screens, so **`npm run build` is needed**. Dashboard additions: migration `2026_10_15_130000_add_reseller_announcement_to_storefront_settings` (`reseller_announcement_enabled` boolean default false, `reseller_announcement` text), `Dashboard::announcement()`, `firstSteps()`, `bestSellers()`.
 - `ResellerSubdomainProbe::diagnose()` returns `ok` / `dns` / `https` (with the connection error), `isLive()` uses it. `ResellerGuideController` passes `returnCharge`. Tests: `OrderReturnedStockTest` (14), `ResellerVariationPriceToolTest` (6), `ResellerPortalBottomNavTest` (3), `ResellerPortalDashboardExtrasTest` (7), `ResellerSubdomainSetupCheckTest` (4), `ResellerGuidePageTest` (+1).
-
 ## [2.79.0] - 2026-10-15
 
 **Release type:** Minor Feature Update
