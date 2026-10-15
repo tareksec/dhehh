@@ -42,6 +42,11 @@ class Profile extends Page
     /** @var array<string, mixed>|null */
     public ?array $data = [];
 
+    public static function getNavigationGroup(): ?string
+    {
+        return __('Account');
+    }
+
     public static function getNavigationLabel(): string
     {
         return __('Profile');

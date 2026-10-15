@@ -31,7 +31,7 @@ class ProfitTrend extends ChartWidget
             'datasets' => [[
                 'label' => __('Profit share'),
                 'data' => array_values($series),
-                'backgroundColor' => '#10b981',
+                'backgroundColor' => '#5f6775',
             ]],
             'labels' => array_map(fn (string $month): string => Carbon::createFromFormat('Y-m', $month)->translatedFormat('M Y'), array_keys($series)),
         ];

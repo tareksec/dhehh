@@ -280,6 +280,7 @@ class ProjectCompletedMessageTest extends TestCase
     {
         parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
 
-        return (string) $query['to'];
+        // The gateway is sent the number with the country code (8801XXXXXXXXX); the stored one is 01XXXXXXXXX.
+        return preg_replace('/^88(?=01)/', '', (string) $query['to']);
     }
 }

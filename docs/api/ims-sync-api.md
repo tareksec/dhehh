@@ -22,9 +22,9 @@ Base URL: `https://<erp-domain>/api/v1/sync`. Rate limit: 300 requests per minut
 |---|---|
 | `GET /ping` | Health check. Returns the company, the base `currency`, `timezone`, `server_time` and the list of resources. |
 | `GET /products` `/categories` `/stock-movements` | Catalogue and the stock ledger. |
-| `GET /suppliers` `/purchases` `/supplier-payments` | Buying. A purchase carries its lines, the cost components and the ERP's landed cost per unit. |
+| `GET /purchases` | Buying. A purchase carries its lines, the cost components and the ERP's landed cost per unit. **No supplier information** (owner rule 2026-10-15): no supplier record, name, contact, balance or supplier payment. |
 | `GET /containers` `/shipments` | Shipping. |
-| `GET /customers` `/orders` `/order-payments` `/customer-payments` | Selling. An order carries its lines, its payments (each with its own `paid_at`) and its costs. |
+| `GET /orders` `/order-payments` `/sale-returns` | Selling. An order carries its lines, its payments (each with its own `paid_at`) and its costs. `/sale-returns` lists the returned and refunded orders on their own. **There is no customer information anywhere in the feed** (owner rule 2026-10-15): no customer record, no name, phone, address or balance, and no free-text notes. |
 | `GET /expenses` `/expense-categories` | Costs. |
 
 ### Query parameters (all optional)
@@ -61,7 +61,10 @@ Records are ordered by `updated_at`, then `id`. Paging by cursor never skips or 
 - **Money** is a string with two decimals (`"1234.50"`), in the company's base currency (`/ping` → `currency`). There is no exchange-rate table in this ERP; foreign-currency purchase costs are entered in BDT already.
 - **Times** are ISO 8601 in UTC with the offset (`2026-10-01T10:00:00+00:00`). **Dates** are `YYYY-MM-DD`. The database clock is UTC.
 - **Empty values** are `null`. Quantities are whole numbers. Text is UTF-8; Bangla names are supported.
-- **Deleted / cancelled:** an order that is deleted stays in the feed with `"deleted": true`; cancelled, returned and refunded orders keep their `status`. Other records are removed for good: use the daily `ids_only` check.
+- **Deleted / cancelled:** an order, an expense or an order payment that is deleted stays in the feed with `"deleted": true` and a `deleted_at` time (expenses and order payments since 2026-10-15; deletions before that day are gone and show only in the `ids_only` check). Cancelled, returned and refunded orders keep their `status`. Other records are removed for good: use the daily `ids_only` check.
+- **Returns:** the ERP returns a *whole* order, never part of one. `GET /sale-returns` lists each order whose status is `returned` or `refunded` with `return_date` (when it moved to that status), `return_value` (the order total), `paid_amount` and its lines. `orders` also carry `returned_amount` (the order total once returned or refunded, otherwise `0.00`). The ERP does not record a separate refund payment, so there is no refund amount or refund date.
+- **Stock losses:** `GET /stock-movements?status=damage` (also `adjustment`, `return`...). Each movement has `movement_date`, `reference_type` / `reference_id` (the order, purchase or other record behind it), `unit_cost` and `estimated_value`. Both money figures use the product's **current** cost price, because the ERP does not store a cost on each movement.
+- **Currency:** every amount is in the company's base currency (`/ping` → `currency`). Expenses carry no currency or exchange rate of their own, and are not linked to a purchase, shipment or project.
 - **Sale statuses:** `draft`, `confirmed`, `processing`, `completed`, `cancelled`, `returned`, `refunded`. The ERP's own accounting counts `confirmed`, `processing` and `completed`; *final* for profit sharing is the owner's call (see below).
 - **Purchase statuses:** `draft`, `received`, `cancelled`. **Shipment statuses:** `planned`, `booked`, `shipped`, `in_transit`, `customs`, `received`, `cancelled`. **Payment types:** `advance`, `partial`, `final`. **Stock movement types:** `opening`, `purchase`, `sale`, `return`, `damage`, `adjustment`, `transfer` (`quantity` is stored positive, the type gives the direction).
 - `landed_unit_cost` on a purchase line is the ERP's own figure, so IMS can compare it with the landed cost it works out.
@@ -86,12 +89,12 @@ JSON with `ok: false`, `error` and a `hint`: `401 missing_api_key` / `invalid_ap
 | 9.5 | Webhooks: not provided for IMS. |
 | 9.6 | Nothing is written back. |
 | 10.1 | One business (company) = one IMS project is the natural fit with this ERP's structure (option A). **Owner to confirm.** |
-| 7. Not shared | Passwords, reseller store data, supplier bank details and investor data are not in the feed. Customer name, phone, address and balances **are** (IMS asked for them); product and purchase cost prices are too. **Owner to confirm.** |
+| 7. Not shared | **No customer information at all** (owner rule 2026-10-15): no customer names, phones, addresses, balances or customer payments, and the free-text notes on payments, expenses and stock movements are left out because they can name people. **No supplier information either** (no supplier records, names, contacts, balances or supplier payments). Passwords, reseller store data and investor data are not in the feed either. Product and purchase cost prices are. |
 
 ## Open owner decisions
 
 1. **Investor accounting twice?** IMS says it will do investor management, profit sharing and payouts. This ERP already has its own investor portal and groups. Decide which system is the source of truth, or the same money is calculated in two places.
 2. Confirm **one business = one project** (10.1).
-3. Confirm what may not be copied to IMS (customer personal details, cost prices).
+3. Cost prices: product and purchase costs are in the feed. Say if any must be hidden. (Customer details are already excluded.)
 4. Which sale status is **final** for profit sharing (the ERP counts `confirmed`, `processing`, `completed` as sales).
 5. Does IMS get its own IP allow-list, and who is the night-time contact if a sync fails?

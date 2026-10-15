@@ -144,7 +144,7 @@ A `null` title means "use the website's own default heading".
 | `trust_strip` | `items: [{icon, title, subtitle}]` (own items, else the site's Trust Strip messages) |
 | `category_grid` | `title`, `subtitle`, `category_slugs` (empty = every category with products), `limit`, `style` (`tiles` / `circles`), `show_tagline`, `show_count` |
 | `deals_banner` | `title`, `subtitle`, `link_label`, `link_url`, `limit`, `source`, `color_from`, `color_to` |
-| `product_row` | `title`, `subtitle`, `source`, `category_slug` (when `source` is `category`), `limit` (≤ 24), `columns` (4 / 5 / 6), `link_label`, `link_url` |
+| `product_row` | `title`, `subtitle`, `source`, `category_slugs` (when `source` is `category`: the categories the row mixes, one product from each in turn; `category_slug` is the first of them, kept for older websites), `limit` (≤ 24), `columns` (4 / 5 / 6), `link_label`, `link_url` |
 | `flash_sale` | `badge`, `title`, `description`, `countdown_label`, `button_label`, `button_url`, `limit`, `source`, `show_countdown`, `background` |
 | `banners` | `columns`, `items: [{image_url, alt, url, new_tab}]` |
 | `mobile_cta` | `eyebrow`, `heading`, `text`, `whatsapp_label`, `call_label` (`{phone}` token), `show_whatsapp`, `show_call`, `show_mockups`, `mockup_button_label`, `background` |
@@ -160,9 +160,11 @@ A `null` title means "use the website's own default heading".
 `links` resolved like the menus), `contact_info` (`heading`, `address`, `email`, `phones[]`, `hours`, `trade_license` — blanks are
 filled from the company's own details), `social_links` (`heading`; the profiles are `social_links`), `payment_methods`
 (`heading`, `items: [{label, tone}]`), `custom_text` (`heading`, `text`, `button_label`, `button_url`), `image`
-(`heading`, `image_url`, `alt`, `url`) and `bottom_bar` (`copyright_text`, `center_text`, `right_text` with a `{heart}`
-token, `legal_links: [{label, page_slug}]`). `own_column` (on `social_links`, `custom_text`, `payment_methods`, `image`)
-asks for a column of its own instead of sitting under the previous one.
+(`heading`, `image_url`, `alt`, `url`) and `bottom_bar` (`copyright_text` with `{year}` and `{company_name}` tokens,
+`center_text` and an optional `center_url` that makes it a link, `right_text` with a `{heart}` token,
+`legal_links: [{label, page_slug}]`). The website fills the `{year}` / `{company_name}` tokens itself when it renders.
+`own_column` (on `social_links`, `custom_text`, `payment_methods`, `image`) asks for a column of its own instead of sitting
+under the previous one.
 
 ## 4. Collections, deals and the ERP price
 

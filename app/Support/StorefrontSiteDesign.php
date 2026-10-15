@@ -51,7 +51,7 @@ final class StorefrontSiteDesign
     /** Where a product row / deals banner / flash band takes its products from. */
     public const PRODUCT_SOURCES = [
         'latest' => 'Latest products',
-        'category' => 'One category',
+        'category' => 'Chosen categories',
         'top_discount' => 'Biggest discounts',
         'flash_sale' => 'Flash Sale collection',
         'trending' => 'Trending collection',
@@ -206,7 +206,8 @@ final class StorefrontSiteDesign
                 'title' => self::text($d['title'] ?? null, 80),
                 'subtitle' => self::text($d['subtitle'] ?? null, 160),
                 'source' => self::enum($d['source'] ?? null, array_keys(self::PRODUCT_SOURCES), 'latest'),
-                'category_id' => self::id($d['category_id'] ?? null),
+                // A row can mix several categories; `category_id` is what rows saved before that held.
+                'category_ids' => self::ids([...(is_array($d['category_ids'] ?? null) ? $d['category_ids'] : []), $d['category_id'] ?? null], 8),
                 'limit' => self::int($d['limit'] ?? null, 1, 24, 6),
                 'columns' => (int) self::enum((string) ($d['columns'] ?? ''), ['4', '5', '6'], '6'),
                 'link_label' => self::text($d['link_label'] ?? null, 40),
@@ -385,6 +386,7 @@ final class StorefrontSiteDesign
             'bottom_bar' => [
                 'copyright_text' => self::text($d['copyright_text'] ?? null, 255),
                 'center_text' => self::text($d['center_text'] ?? null, 160),
+                'center_url' => self::url($d['center_url'] ?? null),
                 'right_text' => self::text($d['right_text'] ?? null, 160),
                 'legal_links' => collect(is_array($d['legal_links'] ?? null) ? $d['legal_links'] : [])
                     ->filter(fn ($link): bool => is_array($link) && filled($link['page_id'] ?? null))

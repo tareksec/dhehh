@@ -297,10 +297,15 @@ class StorefrontSiteConfigService
                     break;
 
                 case 'product_row':
-                    $data['category_slug'] = $data['source'] === 'category' ? $categories->get($data['category_id']) : null;
-                    unset($data['category_id']);
+                    $slugs = $data['source'] === 'category'
+                        ? collect($data['category_ids'])->map(fn (int $id) => $categories->get($id))->filter()->values()->all()
+                        : [];
+                    // `category_slug` (the first one) stays for websites built before a row could mix categories.
+                    $data['category_slugs'] = $slugs;
+                    $data['category_slug'] = $slugs[0] ?? null;
+                    unset($data['category_ids']);
 
-                    if ($data['source'] === 'category' && $data['category_slug'] === null) {
+                    if ($data['source'] === 'category' && $slugs === []) {
                         return null;
                     }
                     break;

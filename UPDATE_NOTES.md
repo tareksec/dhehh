@@ -1,6 +1,116 @@
 # Update Notes
 
-This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
+This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
+
+## 2026-10-14 (later still) - Agent rule: commit and push new work to a topic-named feature branch
+
+Owner request (in Bangla): add a rule for the agent — after any new work, commit it and push it to a feature branch, and name that branch after the session's relevant topic.
+
+What changed: `CLAUDE.md` → Commit policy, and `AGENTS.md` (the file other agents read; its three "no commit / ask before pushing / no push without permission" lines contradicted the new rule, so they were replaced by it). Finished work (tests, bilingual keys, CHANGELOG and UPDATE_NOTES done, checks passing) is committed and pushed to `feature/<topic>` without being asked, in both repositories; one topic per branch; a branch the session's instructions already designate wins. The rule that `main` moves only on the owner's explicit approval stays, because Coolify deploys `main` on push. No force-push or history rewrite on a pushed branch.
+
+Good to know: new sessions start from the default branch, so the rule only reaches them once this branch is merged to `main`. The website repository has no rules file; this one covers it.
+
+Commit status: committed and pushed to `feature/agent-commit-and-branch-rule` (not `main`).
+
+## 2026-10-14 - SMS gateway checked against the BulkSMSBD API
+
+Owner logged in to bulksmsbd.net and asked for a check of the SMS code against its API page; then "সব গুলো ঠিক করে দেও".
+
+- Fixed: reply code in an HTTP 200 (anything but 202 = failed, logged with its meaning).
+- Fixed: number sent as `8801XXXXXXXXX`.
+- Fixed: OTP SMS wording `Your {Company} OTP is {code}. …` (customer, reseller, investor portal; 2 investor keys renamed in `lang/en.json` and `lang/bn.json`).
+- Not changed: `type=text` stays in the URL template; whether Bangla text needs another `type` is not on the page the owner showed. Send one Bangla test SMS to check.
+- Verified: StorefrontSmsGatewayTest (new) and the SMS/OTP-related test files passed; full suite on the clean worktree before the rebase onto v2.77.0: 2058 passed, 2 failed (`WhatsAppWebArchiveTest`, heroicons SVG missing in the test copy of vendor — fails without this change too).
+
+Needs Bangla review: the 2 investor OTP strings in `lang/bn.json`.
+
+Commit status: committed and pushed to main with owner approval (2026-10-14).
+
+## 2026-10-14 (later) - Starter footer like zamzamint.netlify.app, loaded from the Footer Builder
+
+Owner request (in Bangla): design the footer too, like the reference site.
+
+What I did: read the reference footer's markup and rebuilt it as Footer Builder blocks (`App\Support\StorefrontFooterStarter`): brand with about text and social icons, Quick links, Customer Service, Our Office (address, email, two phones, trade licence), Safety Payments badges (bKash, Nagad, Rocket, Cards) and the bottom bar (copyright, "Developed by Bright Hive Digital", "Developed with ♥ for Bangladesh"). Like the home page it is a button, not something I set in your database (which I cannot reach): after deploying the ERP and the website, open Site → Storefront Settings → the Next.js site → Navigation, menus & SEO → **Footer Builder** → **Load the starter footer** → **Save changes**.
+
+Website: `Footer.tsx` now uses the reference's sizes and colours on a dark footer (headings, links, badges, bottom bar), a wider brand and office column, comma-separated phone numbers, and it fills `{year}` / `{company_name}` in the copyright (the Blade footer already did; the Next.js footer printed the tokens). The bottom bar has a new optional **Middle text link** so "Developed by …" can link out.
+
+Things to know:
+- **Pages:** the links to About Us, Contact Us, Delivery Information, Return/Refund & Exchange, Terms and Privacy Policy go to your own published pages, found by title or slug for the Next.js site. A page that does not exist yet is left out and named in the message after loading; create it under Site → Pages and add the link. I did not create the pages or write their text (policy wording is yours).
+- **Request for Quote / Reselling Program** from the reference are not added: the Next.js site has no such pages yet. **Promotions** links to the discounted-products list (`/products?sort=discount&sale=1`).
+- **Social icons:** the Facebook and WhatsApp icons come from Footer Builder → Social links, as before; the starter does not copy the reference's profile URLs. Add them there if they are not set.
+- **Contact details** are the reference's own (the address in Uttara, info@zamzamint.com, +8801325224400, +8801894449445, trade licence TRAD/DNCC/049335/2025); the about text is the reference's Bangla sentence with the company's name. The "Developed by Bright Hive Digital" line is the reference's too. Edit or delete any of them after loading.
+- The starter replaces the footer blocks and the footer menu in the form (a confirm dialog says so). Nothing is saved until Save changes.
+- The width of the footer follows the rest of the site (a little wider than the reference's), so it lines up with the header and the home page.
+
+Needs Bangla review: 7 new admin labels in `lang/bn.json` (Load the starter footer, its dialog and message, Starter footer loaded, Middle text link and its help). The footer's Bangla about text is the reference's own sentence, not a translation of mine.
+
+Tests: new `NextjsFooterStarterTest` (10); real-browser check on a throwaway database through the real admin (button, confirm dialog, Save, 7 blocks and the 5-link menu persisted, no JS or server errors) and the website footer on desktop and phone, dark and light backgrounds. Website `tsc` and `npm run build` are clean.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট ও পুশ কর এবং মেইনে পুশ কর", 2026-10-14), both repositories; `origin/main` (v2.76.0) merged first.
+
+## 2026-10-14 - Starter home page like zamzamint.netlify.app, loaded from the Home Page Builder
+
+Owner request (in Bangla): arrange the home page like `https://zamzamint.netlify.app/` with every section — doing it by hand in the admin takes too long.
+
+What I did: read the reference site's code and rebuilt its home page as Home Page Builder sections (`App\Support\StorefrontHomeStarter`): hero, trust strip, Shop by Category, Best Deals Today, Latest Gadgets, Flash Deal, four category rows, Order Easily on WhatsApp, Wholesale Gadgets in Bangladesh (SEO text with Read more), plus top bar links Mobile App / Track Order. The wording is the reference site's own. Two new buttons on the Home Page Builder: **Load the starter layout** (draft until Save) and **Fill empty category details** (blank taglines / icons only).
+
+Why a button and not "I set it up": the layout is stored in the live database, which I cannot reach from here. Deploy, open Site → Storefront Settings → the Next.js site → Website Design → Home Page Builder, press **Fill empty category details**, then **Load the starter layout**, then **Save changes**.
+
+Also: a product row can now mix several categories (the reference groups e.g. Audio + Earbuds); the SEO text folds to its first paragraph; the "Shop on mobile" section has the `#mobile-app` anchor.
+
+Things to know:
+- The *Flash Deal* band shows only when a **Flash Sale** collection (Offers) with products exists, and its countdown needs an end time on that offer — the reference site uses a fake timer, the ERP uses the real one. The *Best Deals Today* banner shows products that are really on sale.
+- Hero slides are untouched (Site → Hero Slides); the reference's three slides are not copied because your live slides have your own banners.
+- The starter's phone / WhatsApp buttons use the numbers saved in the site settings (the SEO text names +8801325224400, as the reference does — edit it if that is not your WhatsApp number).
+- The headings are English (as on the reference); admin-entered content is not translated yet, so they stay English in Bangla mode. Category rows named after the reference's "Kitchen" and "Lipstick" are matched to your Air Fryer / Cocker / Cosmetics categories.
+- Needs Bangla review: the 14 new admin labels in `lang/bn.json` (Load the starter layout, Fill empty category details and their messages, Chosen categories).
+
+Tests: new `NextjsHomeStarterTest` (11) and the existing 22 design tests pass. Real-browser check on a throwaway database with your real category names: both buttons, the confirm dialogs, Save, the home page with all 12 sections (desktop and phone), SEO fold and the Mobile App link.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট ও পুশ কর এবং মেইনে পুশ কর", 2026-10-14), both repositories.
+
+## 2026-10-15 - IMS feed: our side of the work (no customer data, returns, deleted records)
+
+Owner: "IMS এ কখনই কাস্টমার ইনফো দেখানো যাবে না ... এখন যেমন আছে তেমনই রাখ ... আমাদের দিকের কাজ গুলো শেষ কর" after reading IMS's second requirements document (profit-focused: sales, payments, returns, expenses, stock losses). The project/branch tag on sales was left as it is on purpose; unit sales per project for the investor dashboard is a separate, undecided piece.
+
+What changed (uncommitted):
+- `ImsSyncFeed`: removed `customers` and `customer-payments`; orders lost the customer block; notes dropped from payments, expenses and stock movements; new `sale-returns` resource (returned / refunded orders, return date from the status history, whole-order value); `returned_amount` on orders; `order-payments` and `expenses` now include deleted rows flagged `deleted` / `deleted_at`; stock movements gained `movement_date`, `reference_type`, `reference_id`, `unit_cost` (the product's current cost) and `estimated_value`.
+- Migration `2026_10_15_100000_add_soft_deletes_to_expenses_and_order_payments`; `Expense` and `OrderPayment` use `SoftDeletes`. Stock movements were left alone because shared-stock sums use `withoutGlobalScopes()` and would count deleted rows.
+- `docs/api/ims-sync-api.md` updated (endpoints, data rules, answer 7, open decision 3).
+- Tests: `ImsSyncApiTest` now 26 (new: no customer data anywhere, deleted expense kept, deleted payment kept and order total follows, sale returns, stock loss values).
+
+Not done (needs the owner): project tag on sales and per-project unit sales for the investor dashboard; a period-closed flag; signed webhooks; OpenAPI file and staging; the IMS-facing handover file.
+
+Also fixed: 7 tests that were already failing on main (the SMS now goes out as 8801XXXXXXXXX with the OTP wording) — `ProjectCompletedMessageTest` and `ResellerApplicationVerificationTest`; tests only, no app code.
+
+Known limits to tell IMS: the ERP has no partial returns and no refund payment record; stock-loss money uses today's cost price; expenses have no project, purchase or shipment link and no foreign-currency fields.
+
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-15 (owner approved "কমিট এবং পুশ করে মেইন এ পুশ কর"); pushed to main on 2026-10-15. Deploy: run `php artisan migrate --force` (new migration).
+
+## 2026-10-15 (later) - IMS feed: no supplier information
+
+Owner: "সাপ্লায়ারের তথ্যও investor দেখবে না". Removed the `suppliers` and `supplier-payments` resources from `ImsSyncFeed` and the supplier from `purchases`; the feed now has 11 resources. The investor portal itself shows no supplier data (checked). `ImsSyncApiTest`: purchase test now asserts no supplier anywhere, plus 404s for both removed paths; `docs/api/ims-sync-api.md` and the IMS handover page updated.
+
+Commit status: committed and pushed to claude/nifty-carson-r2vpby on 2026-10-15 (owner approved "কমিট এবং পুশ কর এবং মেইনে পুশ কর"); pushed to main on 2026-10-15.
+
+## 2026-10-14 - Investor portal redesign (design G)
+
+Owner reviewed six HTML directions on the design canvas and decided: "B এর মেনু অপশন গুলো থাকবে কিন্তু ডিজাইন হবে F এর" (B's menu, F's design). Mock-up of the result: canvas row G (desktop, phone dashboard, phone menu).
+
+What changed:
+- Navigation groups Overview / Money / Account (+ the existing Channel partner group) on the portal pages; panel without a top bar, user menu in the sidebar, ink primary colour, Hind Siliguri, new `resources/css/filament/investor/theme.css`.
+- Dashboard rebuilt as tiles: hero totals, capital-by-group ring, project tiles (ten-block progress; all old card texts and `data-project-card` kept), this year's project calendar, next-payout steps, profit chart, latest statement.
+- English / বাংলা switch (`investor/language/{locale}`, `SetInvestorPortalLocale`): session first, then the account's `locale` (was never set before, so no one's portal changes until they switch). Switching also sets the account's SMS language. Staff preview: browser only.
+- Phone bottom menu (render hook `BODY_END`).
+- The sidebar shows only a real dark logo; when a company has none, its light logo sits on a white chip (`darkLogoUrl(fallbackToLight: false)` for this panel).
+
+Not done: Bangla digits (numbers stay 0-9, as everywhere in the app; i18n plan `digit_style`); dates on cards still use the English `d M Y` format. Not checked in a real browser yet — only by tests and the built CSS.
+
+Needs Bangla review: 18 new keys (Overview, Investments, Menu, Quick menu, Language, Legend, Capital by group, Across :count groups, Project calendar :year, Next payout, Now, Upcoming, Done, In progress, Still to come, Payment sent, Profit confirmed, Screenshot added).
+
+Tests: 6 new (dashboard tiles, payout steps until the screenshot, calendar year, grouped menu + phone menu, language switch for signed-in and guest).
+
+Commit status: committed and pushed to claude/nifty-carson-r2vpby on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
 
 ## 2026-10-15 (later) - Owner's answers: returned goods stay out of stock until staff check them; reseller Bangla word "আয়"
 
@@ -21,7 +131,7 @@ Needs Bangla review (7 new keys): Put returned goods back in stock (and with `:o
 
 Tests: `OrderReturnedStockTest` (8): a returned order keeps its goods out (also after delivery), cancelled still gives them back, partial / later put-back with the damaged pieces left out, never more than sold, the action only on returned / refunded orders and only with the stock permission, trash releases without double counting, dues and sales still follow the status. `ResellerPortalAdminFlowTest` updated for the new rule.
 
-Full suite (plain `php artisan test`, no `--env`) with everything on 2026-10-15: **2451 passed, 1 skipped, 0 failed** (405 s). Pint passes.
+Full suite (plain `php artisan test`, no `--env`) with everything on 2026-10-15, after merging `origin/main` (v2.78.0 and later; the asset build passes too): **2488 passed, 1 skipped, 0 failed**. One existing test (`ResellerSubdomainTest` countdown) compared two `now()` readings to the exact second and failed once when the clock ticked between them; it passed alone and is now tolerant of a second. Pint passes.
 
 Commit status: Committed and pushed to `claude/reseller-module-status-v9tobe` and to `main` on owner approval (2026-10-15: "কাজের ব্রাঞ্চ ও main দুটোতেই পুশ").
 
@@ -265,7 +375,7 @@ Needs Bangla review: the 3 new key-type strings in `lang/bn.json`.
 
 Tests: `ImsSyncApiTest` (21). Mutation-checked: dropping the cursor tie-break, making `updated_since` exclusive, disabling the scope check, hiding deleted orders and ignoring the time offset each make a test fail.
 
-Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
 
 ## 2026-10-12 - Investor groups, steps 1–6: final check
 
@@ -286,7 +396,7 @@ Needs Bangla review: the 4 new keys (e.g. "Project completed message" → "প�
 
 Tests: `ProjectCompletedMessageTest` (9): empty message sends nothing but logs, placeholders, no double send, leaver included / earlier leaver not, opt-out, no gateway, failing gateway, settings page.
 
-Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
 
 ## 2026-10-12 - Investor groups, step 5 (G5): the investor portal (progress bar, completed state, totals)
 
@@ -307,7 +417,7 @@ Needs Bangla review: the 18 new keys (e.g. "Project :number completed" → "প�
 
 Tests: `InvestorPortalGroupViewTest` (14): progress at 0/49/98%, completed state, settled and paid states, the card leaving when paid + screenshot, open group, one card for two deposits, no leakage between investors, capital at work / total invested / statement balance, a leaver's capital until the last payout, old-style projects unchanged, partner capital.
 
-Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
 
 ## 2026-10-12 - Investor groups, step 4 (G4): the payment screenshot
 
@@ -325,7 +435,7 @@ Needs Bangla review: the 9 new keys (e.g. "Payment screenshot" → "পেমে
 
 Tests: `PayoutPaymentProofTest` (12). Mutation-checked: widening the portal scope to every payout's proof fails the suite.
 
-Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
 
 ## 2026-10-12 - Investor groups, step 3 (G3): new money into open groups, leaving a group, what a group pays
 
@@ -351,7 +461,7 @@ Needs Bangla review: the 23 new keys (e.g. "Add to group", "Principal returned" 
 
 Tests: `InvestorGroupMoneyFlowsTest` (18) and `InvestorGroupExitTest` (11) new; two old tests updated for the new field name / wording (`InvestmentSettlementTest` election action, `InvestorImportTest` message). Mutation-checked: returning the principal to everyone, or leaving one project late, fails the suite. Full `php artisan test`: see the line at the end of this entry.
 
-Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
 
 ## 2026-10-12 - Investor groups, step 2 (G2): the 2-month cycle and the capital-base warning
 
@@ -373,7 +483,7 @@ Needs Bangla review: the 13 new keys (e.g. "Start the next project now" → "প
 
 Tests: `InvestorGroupCycleTest` (22) new. Mutation-checked: making the end date inclusive-exclusive the other way, or dropping the missed-cycle check, fails the suite. Full `php artisan test`: see below.
 
-Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
 
 ## 2026-10-12 - Investor groups, step 1 (G1): groups, members, Project 1, backfill
 

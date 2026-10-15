@@ -175,6 +175,104 @@ class InvestorPortalCards
             : $this->portal->projectLabel($project);
     }
 
+    /**
+     * The person's group projects that fall in the current calendar year, by
+     * group, for the dashboard's project calendar: each with its dates and
+     * where it stands (paid, confirmed, completed, running or upcoming).
+     * Projects outside any group and withdrawn shares are not on it.
+     *
+     * @return Collection<int, array{group: InvestorGroup, entries: Collection<int, array{number: ?int, starts_on: ?CarbonImmutable, ends_on: ?CarbonImmutable, state: string}>}>
+     */
+    public function calendar(InvestorPortalAccount $account, ?CarbonImmutable $today = null): Collection
+    {
+        $today ??= CarbonImmutable::now()->startOfDay();
+        $yearStart = $today->startOfYear();
+        $yearEnd = $today->endOfYear();
+
+        $rows = $this->portal->investments($account)->whereNotNull('group_member_id')->with(['project.settlement', 'project.group'])->orderBy('id')->get();
+        $payouts = $this->payoutsBySettlement($account);
+        $withProof = $this->payoutsWithProof($payouts);
+
+        return $rows->groupBy('project_id')
+            ->map(function (Collection $projectRows) use ($payouts, $withProof, $today): array {
+                $active = $projectRows->reject(fn (Investment $row): bool => $row->isWithdrawn());
+                $first = $active->first() ?? $projectRows->first();
+
+                return $this->card($first, $payouts->get($first->project?->settlement?->getKey()), $withProof, $today, null, $active->isEmpty());
+            })
+            ->filter(function (array $card) use ($yearStart, $yearEnd): bool {
+                $project = $card['project'];
+
+                if ($card['state'] === self::WITHDRAWN || $project?->group === null || $project->start_date === null) {
+                    return false;
+                }
+
+                $ends = $project->end_date ?? $project->start_date;
+
+                return $project->start_date->lte($yearEnd) && $ends->gte($yearStart);
+            })
+            ->groupBy(fn (array $card): int => (int) $card['project']->group_id)
+            ->map(fn (Collection $cards): array => [
+                'group' => $cards->first()['project']->group,
+                'entries' => $cards
+                    ->sortBy(fn (array $card): int => (int) $card['project']->sequence_in_group)
+                    ->map(fn (array $card): array => [
+                        'number' => $card['number'],
+                        'starts_on' => CarbonImmutable::parse($card['project']->start_date),
+                        'ends_on' => $card['project']->end_date ? CarbonImmutable::parse($card['project']->end_date) : null,
+                        'state' => $this->calendarState($card, $today),
+                    ])
+                    ->values(),
+            ])
+            ->sortBy(fn (array $row): string => (string) $row['group']->group_code)
+            ->values();
+    }
+
+    /** paid, confirmed, completed, running or upcoming. */
+    public function calendarState(array $card, CarbonImmutable $today): string
+    {
+        return match ($card['state']) {
+            self::DONE, self::PAID => 'paid',
+            self::PAYMENT_PENDING => 'confirmed',
+            self::COMPLETED => 'completed',
+            default => $card['project']?->status === 'open' || ($card['project']?->start_date && $card['project']->start_date->gt($today)) ? 'upcoming' : 'running',
+        };
+    }
+
+    /**
+     * The payout to follow on the dashboard: money on its way first, then a
+     * paid payout still waiting for its screenshot, then a finished project
+     * whose profit is being calculated. Null when none of the cards is there.
+     *
+     * @param  Collection<int, array<string, mixed>>  $cards
+     * @return array{card: array<string, mixed>, steps: list<array{label: string, state: string}>}|null
+     */
+    public function nextPayout(Collection $cards): ?array
+    {
+        foreach ([self::PAYMENT_PENDING, self::PAID, self::COMPLETED] as $state) {
+            $card = $cards->first(fn (array $card): bool => $card['state'] === $state);
+
+            if ($card === null) {
+                continue;
+            }
+
+            $steps = [
+                ['label' => __('Project completed'), 'state' => 'done'],
+                ['label' => __('Profit confirmed'), 'state' => $state === self::COMPLETED ? 'current' : 'done'],
+                ['label' => __('Payment sent'), 'state' => match ($state) {
+                    self::PAID => 'done',
+                    self::PAYMENT_PENDING => 'current',
+                    default => 'next',
+                }],
+                ['label' => __('Screenshot added'), 'state' => $state === self::PAID ? 'current' : 'next'],
+            ];
+
+            return ['card' => $card, 'steps' => $steps];
+        }
+
+        return null;
+    }
+
     /** Payouts of the person on confirmed settlements, by settlement id. */
     private function payoutsBySettlement(InvestorPortalAccount $account): Collection
     {

@@ -37,6 +37,11 @@ class Documents extends Page implements HasTable
 
     protected string $view = 'filament.investor.pages.table';
 
+    public static function getNavigationGroup(): ?string
+    {
+        return __('Account');
+    }
+
     public static function getNavigationLabel(): string
     {
         return __('Documents');

@@ -33,6 +33,11 @@ class Statement extends Page
     #[Url]
     public ?string $until = null;
 
+    public static function getNavigationGroup(): ?string
+    {
+        return __('Overview');
+    }
+
     public static function getNavigationLabel(): string
     {
         return __('Statement');
