@@ -81,6 +81,8 @@ What changed (uncommitted):
 
 Not done (needs the owner): project tag on sales and per-project unit sales for the investor dashboard; a period-closed flag; signed webhooks; OpenAPI file and staging; the IMS-facing handover file.
 
+Also fixed: 7 tests that were already failing on main (the SMS now goes out as 8801XXXXXXXXX with the OTP wording) — `ProjectCompletedMessageTest` and `ResellerApplicationVerificationTest`; tests only, no app code.
+
 Known limits to tell IMS: the ERP has no partial returns and no refund payment record; stock-loss money uses today's cost price; expenses have no project, purchase or shipment link and no foreign-currency fields.
 
 Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-15 (owner approved "কমিট এবং পুশ করে মেইন এ পুশ কর"); pushed to main on 2026-10-15. Deploy: run `php artisan migrate --force` (new migration).

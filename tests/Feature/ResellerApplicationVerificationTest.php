@@ -245,7 +245,7 @@ class ResellerApplicationVerificationTest extends TestCase
         $recorded = Http::recorded();
         $request = $recorded->last()[0];
         $this->assertInstanceOf(Request::class, $request);
-        preg_match('/verification code is (\d{6})/', urldecode($request->url()), $matches);
+        preg_match('/OTP is (\d{6})/', urldecode($request->url()), $matches);
         $this->assertNotEmpty($matches, 'an SMS with a code was sent');
 
         return $matches[1];
