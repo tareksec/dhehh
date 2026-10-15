@@ -4,7 +4,9 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Minor
+## [2.79.0] - 2026-10-15
+
+**Release type:** Minor Feature Update
 
 ### Added
 
@@ -22,7 +24,6 @@ All notable production changes to Business Dashboard are documented here.
 - Portal ↔ admin audit: `ResellerPortalAdminFlowTest` (8) drives both sides through their real pages and actions: an order placed on the portal arrives with the right company, source, buyer, lines, variation and prices; a draft holds no stock; the admin's Change status action takes stock from the exact item (a product with variations shows the sum of its variations), gives it back on cancel and on return, makes the profit payable on completion and takes it back on return (plus the return charge); two resellers asking for the last pieces cannot both be confirmed and stock never goes negative; the portal refuses more than the shelf holds; own-courier orders with a variation follow the same rules; companies and resellers see only their own orders. No application bug was found.
 - Returned stock rule: `OrderWorkflowService::sync()` only deletes the order's sale movements when `Order::keepsStockOutUntilGoodsAreChecked()` is false (that is true for `returned` and `refunded`); `deleteStockMovements()` now removes the order's `sale` movements first and then its `return` movements; `Order::returnedQuantities()`; new `PutReturnedGoodsBackInStockAction` (header action on `ViewOrder`, needs `create` on `StockMovement`, quantities worked out under a row lock on the order, `reference_type` / `reference_id` point at the order). No migration. Tests: `OrderReturnedStockTest` (8); `ResellerPortalAdminFlowTest` follows the new rule.
 - Bangla wording: the reseller-only keys were renamed from "commission" to "profit" and their Bangla changed to "আয়"; new keys `My profit` (আমার আয়), `Reseller profit` / `Reseller profits` (admin list). The shared `Profit` and the investors' `Your profit` keys are untouched.
-
 ## [2.78.0] - 2026-10-15
 
 **Release type:** Minor Feature Update
