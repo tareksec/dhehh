@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.78.0] - 2026-10-15
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -27,7 +29,6 @@ All notable production changes to Business Dashboard are documented here.
 - `StorefrontNotificationService::sendSms()` reads the reply through `smsGatewayCode()`; known codes are in `SMS_GATEWAY_CODES`. Phone goes through `PhoneLinks::internationalDigits()`.
 - Tests: new `StorefrontSmsGatewayTest` (5); OTP-wording assertions updated in `StorefrontApiAccountTest`, `StorefrontCustomerAuthTest`, `ResellerPortalPasswordResetTest`, `InvestorPortalTest`.
 - Agent rules (`CLAUDE.md` Commit policy and `AGENTS.md`, which had the opposite "never commit without permission" lines): finished work is now committed and pushed to a topic-named feature branch (`feature/<topic>`) without waiting to be asked; pushing or merging to `main` still needs the owner's explicit approval. No code change.
-
 ## [2.77.0] - 2026-10-14
 
 **Release type:** Minor Feature Update
