@@ -38,6 +38,22 @@ class OrderWorkflowService
         $this->syncCustomerBalance($order);
     }
 
+    /**
+     * Owner decision 2026-10-15: restoring an order from the trash brings its
+     * sale back, whatever its status. A returned or refunded order is
+     * otherwise left alone by sync() (its sale is kept, never rebuilt), so it
+     * needs this explicit step. Orders in the other statuses already get their
+     * sale back from sync().
+     */
+    public function restoreFromTrash(Order $order): void
+    {
+        $this->sync($order);
+
+        if ($order->keepsStockOutUntilGoodsAreChecked()) {
+            $this->syncStockMovements($order, $order->items()->get());
+        }
+    }
+
     public function syncPreviousCustomerBalance(Order $order): void
     {
         if ($order->wasChanged('customer_id')) {
@@ -51,14 +67,16 @@ class OrderWorkflowService
     }
 
     /**
-     * Takes the order's stock effects out: its sale movements, and then any
-     * "Return" movements staff recorded for its goods (see
-     * Order::returnedQuantities()), so the two cancel out and the shelf is as
-     * it was before the order. The sales go first so stock never dips.
+     * Takes the order's stock effects out: its sale movements, then any
+     * customer-return damage written off for it, and last the "Return"
+     * movements staff recorded for its goods (see Order::returnedQuantities()),
+     * so they all cancel out and the shelf is as it was before the order. The
+     * order matters: sales and write-offs give stock back first, so removing
+     * the returns never makes stock dip below zero.
      */
     public function deleteStockMovements(Order $order): void
     {
-        foreach (['sale', 'return'] as $type) {
+        foreach (['sale', 'damage', 'return'] as $type) {
             StockMovement::query()
                 ->where('type', $type)
                 ->where('reference_type', Order::class)

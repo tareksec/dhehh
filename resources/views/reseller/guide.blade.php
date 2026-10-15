@@ -121,6 +121,12 @@
                         <ul class="mt-3 space-y-3 text-sm leading-6 text-gray-600 dark:text-gray-400">
                             <li class="flex gap-3"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand)]"></span>{{ __('Your profit waits while the order is on its way and becomes yours to withdraw once the order is delivered.') }}</li>
                             <li class="flex gap-3"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand)]"></span>{{ __('Cancelled, returned or refunded orders earn no profit. If a delivered order is returned later, its profit is taken back.') }}</li>
+                            @if ($returnCharge > 0)
+                                <li class="flex gap-3"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand)]"></span>{{ __('When an order is returned, a return charge is taken from your deposit, once for that order. This applies to orders the store delivers and to your own-courier orders alike.') }}</li>
+                                @if ($showFigures)
+                                    <li class="flex gap-3"><span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--brand)]"></span>{{ __('The return charge is :amount for each returned order.', ['amount' => $money($returnCharge)]) }}</li>
+                                @endif
+                            @endif
                         </ul>
                     </article>
                     <article class="rounded-2xl border border-gray-200 p-6 dark:border-white/10">

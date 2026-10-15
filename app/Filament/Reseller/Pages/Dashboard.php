@@ -6,6 +6,8 @@ use App\Models\Company;
 use App\Models\CourierBooking;
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Product;
 use App\Models\ResellerCommission;
 use App\Services\CompanyContext;
 use App\Services\ResellerCommissionService;
@@ -242,6 +244,114 @@ class Dashboard extends Page
             'image' => $product ? CompanyMedia::filamentPublicUrl($path, $product) : null,
             'more' => max(0, $order->items->count() - 1),
         ];
+    }
+
+    /**
+     * The company's notice for resellers (Reseller Settings → Portal
+     * announcement), or null when it is off or empty.
+     */
+    public function announcement(): ?string
+    {
+        $setting = $this->company()?->storefrontSetting;
+
+        if (! $setting || ! $setting->reseller_announcement_enabled || blank($setting->reseller_announcement)) {
+            return null;
+        }
+
+        return trim((string) $setting->reseller_announcement);
+    }
+
+    /**
+     * The first things a new reseller sets up, each with whether it is done and
+     * where to do it. The checklist disappears once everything is done.
+     *
+     * @return list<array{key: string, label: string, hint: string, done: bool, url: string}>
+     */
+    public function firstSteps(): array
+    {
+        $reseller = $this->reseller();
+
+        return [
+            [
+                'key' => 'store-name',
+                'label' => __('Name your store'),
+                'hint' => __('Your customers see this name, not ours.'),
+                'done' => filled($reseller->reseller_store_name),
+                'url' => MyStore::getUrl(),
+            ],
+            [
+                'key' => 'products',
+                'label' => __('Add products to your store'),
+                'hint' => __('Pick what you sell and set your prices.'),
+                'done' => $reseller->resellerProducts()->where('is_active', true)->exists(),
+                'url' => Products::getUrl(),
+            ],
+            [
+                'key' => 'payout-account',
+                'label' => __('Add a payout account'),
+                'hint' => __('This is where your profit is sent when you withdraw.'),
+                'done' => $reseller->resellerPayoutAccounts()->exists(),
+                'url' => PayoutAccounts::getUrl(),
+            ],
+            [
+                'key' => 'first-order',
+                'label' => __('Get your first order'),
+                'hint' => __('Share your store link, or create an order yourself.'),
+                'done' => $reseller->resellerOrders()->exists(),
+                'url' => CreateOrder::getUrl(),
+            ],
+        ];
+    }
+
+    /**
+     * The products this reseller sold the most pieces of in the last 30 days,
+     * from their own orders only (cancelled, returned and draft orders do not
+     * count). A product that no longer exists is left out.
+     *
+     * @return list<array{name: string, image: ?string, pieces: int}>
+     */
+    public function bestSellers(): array
+    {
+        $ownOrderIds = $this->reseller()->resellerOrders()
+            ->whereIn('status', Order::ACCOUNTED_STATUSES)
+            ->whereDate('order_date', '>=', now()->subDays(29)->toDateString())
+            ->select('orders.id');
+
+        $totals = OrderItem::query()
+            ->whereIn('order_id', $ownOrderIds)
+            ->selectRaw('product_id, SUM(quantity) as pieces')
+            ->groupBy('product_id')
+            ->orderByDesc('pieces')
+            ->orderBy('product_id')
+            ->limit(5)
+            ->pluck('pieces', 'product_id');
+
+        if ($totals->isEmpty()) {
+            return [];
+        }
+
+        $products = Product::query()->whereIn('id', $totals->keys())->get()->keyBy('id');
+
+        return $totals
+            ->map(function ($pieces, $productId) use ($products): ?array {
+                /** @var Product|null $product */
+                $product = $products->get($productId);
+
+                if (! $product) {
+                    return null;
+                }
+
+                $path = $product->image ?: Arr::first($product->gallery_images ?? []);
+
+                return [
+                    'name' => $product->name,
+                    'image' => CompanyMedia::filamentPublicUrl($path, $product),
+                    'pieces' => (int) $pieces,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
     }
 
     public function hasStoreSlug(): bool

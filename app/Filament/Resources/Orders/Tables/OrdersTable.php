@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Orders\Tables;
 
 use App\Filament\Resources\Orders\Actions\ChangeOrderWorkflowAction;
 use App\Filament\Resources\Orders\Actions\CourierBookingFeedback;
+use App\Filament\Resources\Orders\OrderResource;
 use App\Livewire\OrderTrashTable;
 use App\Models\CourierBooking;
 use App\Models\CourierProvider;
@@ -340,8 +341,10 @@ class OrdersTable
                     DeleteBulkAction::make()
                         ->label('Move to trash')
                         ->icon('heroicon-o-trash')
+                        // A returned or refunded order is never trashed (OrderResource::canDelete()); it is skipped and reported.
+                        ->authorizeIndividualRecords(fn (Order $record): bool => OrderResource::canDelete($record))
                         ->modalHeading('Move selected orders to trash?')
-                        ->modalDescription('The selected orders will leave the active order list and remain available in Trash until they are permanently deleted.')
+                        ->modalDescription('The selected orders will leave the active order list and remain available in Trash until they are permanently deleted. Returned and refunded orders cannot be moved to trash.')
                         ->modalSubmitActionLabel('Move to trash')
                         ->successNotificationTitle('Selected orders moved to trash'),
                 ]),

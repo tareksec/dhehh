@@ -549,6 +549,8 @@ Optional, per company. Needs two things on the server before **Resellers → Res
 
    Without either, subdomains open with a certificate warning.
 
+For the live Cloudflare + Coolify set-up (owner does it, 2026-10-15) follow `docs/reseller-subdomain-setup.md` (written in Bangla): DNS-only wildcard record, a separate Traefik `cloudflare` DNS-challenge resolver for the `*.offer.<domain>` certificate, and routing the wildcard to the app. **Reseller Settings → Test subdomain setup** then tells which step is still missing (DNS, or HTTPS).
+
 No environment variables, no per-reseller server work: the wildcard DNS record already covers every future name, so once both are in place a reseller's chosen subdomain works as soon as the certificate is issued. The portal's **My Store** page shows "Setting up … (DNS and SSL)" with a countdown (**Reseller Settings → Subdomain set-up time**, default 10 minutes), checks every 15 seconds whether the address opens over HTTPS, and then shows it as live. Until then the reseller's shared store link stays the long `/store/<slug>` link; it switches to the subdomain once the check passes or the set-up time has passed. The check calls the subdomain from the app server itself, so the server must be able to reach its own public address. Custom domains of their own (e.g. `myshop.com`) are a separate step.
 
 ### Reseller custom domains (`myshop.com`)

@@ -51,6 +51,11 @@ class OrderResource extends Resource
 
     public static function canDelete(Model $record): bool
     {
+        // A returned or refunded order is never trashed (owner decision 2026-10-15).
+        if ($record instanceof Order && ! $record->canBeMovedToTrash()) {
+            return false;
+        }
+
         return Auth::user()?->canDeleteSensitiveRecords() ?? false;
     }
 

@@ -10,7 +10,9 @@ use App\Models\StorefrontPaymentMethod;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
 use App\Services\ResellerOwnCourierService;
+use App\Services\ResellerSubdomainProbe;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
@@ -21,12 +23,14 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -96,6 +100,8 @@ class ResellerSettings extends Page
             'reseller_guide_intro' => $setting?->reseller_guide_intro,
             'reseller_guide_show_figures' => (bool) ($setting?->reseller_guide_show_figures ?? false),
             'reseller_guide_rules' => $setting?->reseller_guide_rules ?? [],
+            'reseller_announcement_enabled' => (bool) ($setting?->reseller_announcement_enabled ?? false),
+            'reseller_announcement' => $setting?->reseller_announcement,
             ...$this->paymentFormState($setting),
         ]);
     }
@@ -269,6 +275,20 @@ class ResellerSettings extends Page
                     ])
                     ->columns(2),
 
+                Section::make(__('Portal announcement'))
+                    ->description(__('A notice every approved reseller sees at the top of their dashboard, for example a holiday closing or a price change. Turn it off to hide it without losing the text.'))
+                    ->schema([
+                        Toggle::make('reseller_announcement_enabled')
+                            ->label(__('Show the announcement'))
+                            ->live(),
+                        Textarea::make('reseller_announcement')
+                            ->label(__('Announcement'))
+                            ->rows(3)
+                            ->maxLength(500)
+                            ->required(fn (Get $get): bool => (bool) $get('reseller_announcement_enabled'))
+                            ->columnSpanFull(),
+                    ]),
+
                 Section::make(__('Own-courier advance payments'))
                     ->description(__('Resellers pay the advance of their own-courier orders into these channels. Tick the store\'s payment methods they may use, and add channels that exist only for resellers. The store\'s checkout never shows the reseller-only channels.'))
                     ->schema([
@@ -326,6 +346,51 @@ class ResellerSettings extends Page
             : '';
 
         return new HtmlString($warning.'<p><a class="text-primary-600 underline" href="'.e(StorefrontPaymentMethodResource::getUrl()).'">'.e(__('Manage payment methods')).'</a></p>');
+    }
+
+    /** @return array<int, Action> */
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('checkSubdomainSetup')
+                ->label(__('Test subdomain setup'))
+                ->icon(Heroicon::OutlinedSignal)
+                ->color('gray')
+                ->visible(fn (): bool => filled($this->company()?->domain))
+                ->action(fn () => $this->testSubdomainSetup()),
+        ];
+    }
+
+    /**
+     * Opens a made-up name under the company's domain the way a visitor of a
+     * reseller's store would: it must resolve to this server (the wildcard
+     * DNS record) and open over HTTPS (the wildcard certificate). Tells the
+     * admin which of the two is still missing.
+     */
+    protected function testSubdomainSetup(): void
+    {
+        $company = $this->company();
+
+        if (! $company || blank($company->domain)) {
+            return;
+        }
+
+        $host = 'setup-test-'.Str::lower(Str::random(6)).'.'.$company->domain;
+        $result = app(ResellerSubdomainProbe::class)->diagnose($host, $company);
+
+        $notification = match ($result['status']) {
+            'ok' => Notification::make()->success()
+                ->title(__('Subdomains open over HTTPS'))
+                ->body(__(':host opened with a valid SSL certificate, so new reseller store addresses will work.', ['host' => $host])),
+            'dns' => Notification::make()->danger()
+                ->title(__('Subdomains do not reach this server yet'))
+                ->body(__(':host does not resolve to this server. Add a DNS record for *.:domain that points at the server (DNS only, not proxied), then test again; DNS changes can take a few minutes.', ['host' => $host, 'domain' => $company->domain])),
+            default => Notification::make()->danger()
+                ->title(__('Subdomains resolve but HTTPS does not work'))
+                ->body(__(':host resolves to this server, but opening it over HTTPS failed (:detail). A wildcard SSL certificate for *.:domain is needed.', ['host' => $host, 'domain' => $company->domain, 'detail' => $result['detail'] ?? '-'])),
+        };
+
+        $notification->persistent()->send();
     }
 
     protected function guideDescription(): HtmlString
@@ -439,6 +504,8 @@ class ResellerSettings extends Page
             'reseller_guide_enabled' => (bool) $data['reseller_guide_enabled'],
             'reseller_guide_intro' => filled($data['reseller_guide_intro'] ?? null) ? trim($data['reseller_guide_intro']) : null,
             'reseller_guide_show_figures' => (bool) $data['reseller_guide_show_figures'],
+            'reseller_announcement_enabled' => (bool) ($data['reseller_announcement_enabled'] ?? false),
+            'reseller_announcement' => filled($data['reseller_announcement'] ?? null) ? trim($data['reseller_announcement']) : null,
             'reseller_guide_rules' => collect($data['reseller_guide_rules'] ?? [])
                 ->map(fn (array $rule): array => ['title' => trim((string) ($rule['title'] ?? '')), 'body' => filled($rule['body'] ?? null) ? trim($rule['body']) : null])
                 ->filter(fn (array $rule): bool => $rule['title'] !== '')

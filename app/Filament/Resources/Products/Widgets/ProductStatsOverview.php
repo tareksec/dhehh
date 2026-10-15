@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Products\Widgets;
 
 use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Filament\Resources\Products\Pages\BulkUpdateStock;
+use App\Filament\Resources\StockMovements\StockMovementResource;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\PurchaseItem;
@@ -128,7 +129,14 @@ class ProductStatsOverview extends Widget
                 'valueColor' => $shortageCount > 0 ? 'text-danger-600 dark:text-danger-400' : null,
                 'url' => BulkUpdateStock::getUrl().'?shortageOnly=1',
             ],
-            ['label' => 'Total Damage', 'value' => $totalDamage, 'icon' => 'heroicon-o-exclamation-circle', 'valueColor' => $totalDamage > 0 ? 'text-danger-600 dark:text-danger-400' : null],
+            [
+                'label' => 'Total Damage',
+                'value' => $totalDamage,
+                'icon' => 'heroicon-o-exclamation-circle',
+                'valueColor' => $totalDamage > 0 ? 'text-danger-600 dark:text-danger-400' : null,
+                // The damage list, where each entry shows whether it was a customer return or a shipment.
+                'url' => StockMovementResource::getUrl('index').'?'.http_build_query(['filters' => ['type' => ['value' => 'damage']]]),
+            ],
         ];
     }
 }

@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class Order extends Model
 {
@@ -337,11 +338,23 @@ class Order extends Model
             app(OrderWorkflowService::class)->syncCustomerBalance($order);
         });
 
+        static::deleting(function (Order $order): void {
+            // Owner decision 2026-10-15: a returned (or refunded) order is never
+            // trashed, or its returned-goods and damage record would be lost.
+            if (! $order->isForceDeleting() && ! $order->canBeMovedToTrash()) {
+                throw ValidationException::withMessages([
+                    'status' => __('A returned or refunded order cannot be moved to trash, because its returned goods and damage are counted from it.'),
+                ]);
+            }
+        });
+
         static::restored(function (Order $order): void {
             // Moving an accounted order to trash releases its stock and due
             // contribution in the deleted hook above. Restoring must rebuild
-            // those business effects, not only clear the deleted_at column.
-            $order->syncTotalsStockAndCustomerBalance();
+            // those business effects, not only clear the deleted_at column
+            // (owner decision 2026-10-15: that includes the sale of an order
+            // that was returned).
+            app(OrderWorkflowService::class)->restoreFromTrash($order);
         });
 
         static::forceDeleting(function (Order $order): void {
@@ -643,6 +656,15 @@ class Order extends Model
     public function keepsStockOutUntilGoodsAreChecked(): bool
     {
         return in_array($this->status, [self::STATUS_RETURNED, self::STATUS_REFUNDED], true);
+    }
+
+    /**
+     * Owner decision 2026-10-15: a returned (or refunded) order never goes to
+     * trash — the returned goods and the damage counted from it would be lost.
+     */
+    public function canBeMovedToTrash(): bool
+    {
+        return ! $this->keepsStockOutUntilGoodsAreChecked();
     }
 
     /**

@@ -92,6 +92,8 @@ class ResellerPanelProvider extends PanelProvider
             ])
             // The reseller's deposit, beside the user menu on every page (owner rule, 2026-10-06).
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn (): View|string => $this->depositBadge())
+            // The tab bar at the bottom of a phone screen, for approved resellers only.
+            ->renderHook(PanelsRenderHook::LAYOUT_END, fn (): View|string => $this->bottomNav())
             // "Read the rules first" above the application form, while the guide is on.
             ->renderHook(PanelsRenderHook::AUTH_REGISTER_FORM_BEFORE, fn (): View|string => $this->guideLink())
             // Hind Siliguri, self-hosted: @font-face lives in the portal theme, so no font URL here.
@@ -152,6 +154,31 @@ class ResellerPanelProvider extends PanelProvider
         }
 
         return view('filament.reseller.guide-link', ['url' => route('reseller.portal.guide')]);
+    }
+
+    /**
+     * The phone-width tab bar (owner request 2026-10-15): Home, Products, a
+     * raised "create order" button, Orders and Earnings. Hidden from the large
+     * screens, where the sidebar shows everything, and from anyone who is not
+     * an approved reseller (the login and apply pages, a pending application).
+     */
+    protected function bottomNav(): View|string
+    {
+        return ModuleGuard::run('reseller-portal.bottom-nav', function (): View|string {
+            $reseller = Filament::auth()->user();
+
+            if (! $reseller instanceof Customer || ! $reseller->isApprovedReseller()) {
+                return '';
+            }
+
+            return view('filament.reseller.bottom-nav', ['items' => [
+                ['key' => 'dashboard', 'label' => Dashboard::getNavigationLabel(), 'icon' => 'heroicon-o-home', 'url' => Dashboard::getUrl(), 'exact' => true, 'primary' => false],
+                ['key' => 'products', 'label' => Products::getNavigationLabel(), 'icon' => 'heroicon-o-shopping-bag', 'url' => Products::getUrl(), 'exact' => false, 'primary' => false],
+                ['key' => 'create-order', 'label' => __('Create order'), 'icon' => 'heroicon-o-plus', 'url' => CreateOrder::getUrl(), 'exact' => false, 'primary' => true],
+                ['key' => 'orders', 'label' => Orders::getNavigationLabel(), 'icon' => 'heroicon-o-clipboard-document-list', 'url' => Orders::getUrl(), 'exact' => false, 'primary' => false],
+                ['key' => 'earnings', 'label' => Earnings::getNavigationLabel(), 'icon' => 'heroicon-o-banknotes', 'url' => Earnings::getUrl(), 'exact' => false, 'primary' => false],
+            ]]);
+        }, '');
     }
 
     /** Only approved resellers have a deposit (overpaid own-courier advances, ResellerOwnCourierService). */

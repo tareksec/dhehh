@@ -43,6 +43,14 @@ class StockMovementsTable
                     ->badge()
                     ->color(fn (int $state): string => $state < 0 ? 'danger' : 'success'),
 
+                TextColumn::make('damage_source')
+                    ->label(__('Damage source'))
+                    ->badge()
+                    ->color('danger')
+                    ->formatStateUsing(fn (?string $state): ?string => StockMovement::damageSources()[$state] ?? $state)
+                    ->placeholder('-')
+                    ->toggleable(),
+
                 TextColumn::make('reason')
                     ->label('Reason')
                     ->limit(40)
@@ -72,6 +80,10 @@ class StockMovementsTable
                 SelectFilter::make('type')
                     ->label('Type')
                     ->options(StockMovement::TYPES),
+
+                SelectFilter::make('damage_source')
+                    ->label(__('Damage source'))
+                    ->options(fn (): array => StockMovement::damageSources()),
             ])
             ->recordActions([
                 ViewAction::make(),

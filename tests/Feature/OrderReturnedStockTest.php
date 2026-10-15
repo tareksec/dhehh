@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\Orders\Pages\EditOrder;
+use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
+use App\Filament\Resources\StockMovements\Pages\CreateStockMovement;
 use App\Models\Category;
 use App\Models\Company;
 use App\Models\Customer;
@@ -14,8 +17,11 @@ use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\UserRole;
 use App\Services\CompanyContext;
+use App\Services\OrderWorkflowService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -104,10 +110,10 @@ class OrderReturnedStockTest extends TestCase
         $this->transition($order, 'returned', 'Came back');
         [$capItem, $shirtItem] = $this->itemIds($order);
 
-        // 3 of the 5 caps are fine, the shirt is damaged (0).
+        // 3 of the 5 caps are fine; the rest is left for later.
         Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
             ->assertActionVisible('putReturnedGoodsBackInStock')
-            ->callAction('putReturnedGoodsBackInStock', data: ['qty_'.$capItem => 3, 'qty_'.$shirtItem => 0])
+            ->callAction('putReturnedGoodsBackInStock', data: $this->counts($capItem, 3, 0, $shirtItem, 0, 0))
             ->assertHasNoActionErrors()
             ->assertNotified('3 pieces were added back to stock.');
 
@@ -119,14 +125,14 @@ class OrderReturnedStockTest extends TestCase
 
         // Later the other 2 caps turn out fine too, and one shirt.
         Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
-            ->callAction('putReturnedGoodsBackInStock', data: ['qty_'.$capItem => 2, 'qty_'.$shirtItem => 1])
+            ->callAction('putReturnedGoodsBackInStock', data: $this->counts($capItem, 2, 0, $shirtItem, 1, 0))
             ->assertHasNoActionErrors();
         $this->assertStock(cap: 10, medium: 7);
 
-        // The shirt that was damaged is the only thing still waiting; the caps are done.
+        // One shirt is still waiting to be checked; the caps are done.
         Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
             ->assertActionVisible('putReturnedGoodsBackInStock')
-            ->callAction('putReturnedGoodsBackInStock', data: ['qty_'.$shirtItem => 0])
+            ->callAction('putReturnedGoodsBackInStock', data: $this->counts($capItem, 0, 0, $shirtItem, 0, 0))
             ->assertNotified('Nothing was added to stock.');
         $this->assertStock(cap: 10, medium: 7);
     }
@@ -138,18 +144,22 @@ class OrderReturnedStockTest extends TestCase
         [$capItem, $shirtItem] = $this->itemIds($order);
 
         Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
-            ->callAction('putReturnedGoodsBackInStock', data: ['qty_'.$capItem => 3, 'qty_'.$shirtItem => 1])
-            ->assertHasActionErrors(['qty_'.$capItem]);
+            ->callAction('putReturnedGoodsBackInStock', data: $this->counts($capItem, 3, 0, $shirtItem, 1, 0))
+            ->assertHasActionErrors(['good_'.$capItem]);
         Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
-            ->callAction('putReturnedGoodsBackInStock', data: ['qty_'.$capItem => -1, 'qty_'.$shirtItem => 1])
-            ->assertHasActionErrors(['qty_'.$capItem]);
+            ->callAction('putReturnedGoodsBackInStock', data: $this->counts($capItem, -1, 0, $shirtItem, 1, 0))
+            ->assertHasActionErrors(['good_'.$capItem]);
+        // Good and damaged pieces together cannot pass what is left either.
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+            ->callAction('putReturnedGoodsBackInStock', data: $this->counts($capItem, 2, 1, $shirtItem, 1, 0))
+            ->assertHasActionErrors(['damaged_'.$capItem]);
 
         $this->assertSame(0, StockMovement::query()->where('type', 'return')->count());
         $this->assertStock(cap: 8, medium: 7);
 
         // Everything fine: all of it goes back, and then the action has nothing left to offer.
         Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
-            ->callAction('putReturnedGoodsBackInStock', data: ['qty_'.$capItem => 2, 'qty_'.$shirtItem => 1])
+            ->callAction('putReturnedGoodsBackInStock', data: $this->counts($capItem, 2, 0, $shirtItem, 1, 0))
             ->assertHasNoActionErrors();
         $this->assertStock(cap: 10, medium: 8);
 
@@ -179,20 +189,150 @@ class OrderReturnedStockTest extends TestCase
         Livewire::test(ViewOrder::class, ['record' => $order->getKey()])->assertActionHidden('putReturnedGoodsBackInStock');
     }
 
-    public function test_moving_a_returned_order_to_the_trash_releases_its_stock_without_double_counting(): void
+    public function test_damaged_pieces_are_counted_as_customer_return_damage_and_never_shelved(): void
     {
+        $order = $this->confirmedOrder(capQuantity: 5, shirtQuantity: 2);
+        $this->transition($order, 'returned', 'Came back');
+        [$capItem, $shirtItem] = $this->itemIds($order);
+
+        // 3 caps fine, 2 caps damaged; both shirts fine.
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+            ->callAction('putReturnedGoodsBackInStock', data: $this->counts($capItem, 3, 2, $shirtItem, 2, 0))
+            ->assertHasNoActionErrors()
+            ->assertNotified('5 pieces were added back to stock. 2 pieces were counted as customer-return damage.');
+
+        // Only the good pieces are back on the shelf; the damaged ones are not.
+        $this->assertStock(cap: 8, medium: 8);
+
+        $damage = StockMovement::query()->where('type', 'damage')->sole();
+        $this->assertSame($this->cap->getKey(), (int) $damage->product_id);
+        $this->assertSame(2, (int) $damage->quantity);
+        $this->assertSame(StockMovement::DAMAGE_SOURCE_CUSTOMER_RETURN, $damage->damage_source);
+        $this->assertSame($order->getKey(), (int) $damage->reference_id);
+        $this->assertSame(Order::class, $damage->reference_type);
+
+        // Every returned piece is now checked, so the action has nothing left to offer.
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])->assertActionHidden('putReturnedGoodsBackInStock');
+    }
+
+    public function test_a_returned_variation_piece_can_be_counted_as_damaged(): void
+    {
+        $order = $this->confirmedOrder(capQuantity: 1, shirtQuantity: 2);
+        $this->transition($order, 'returned', 'Came back');
+        [$capItem, $shirtItem] = $this->itemIds($order);
+
+        Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
+            ->callAction('putReturnedGoodsBackInStock', data: $this->counts($capItem, 1, 0, $shirtItem, 1, 1))
+            ->assertHasNoActionErrors();
+
+        $this->assertStock(cap: 10, medium: 7);
+        $damage = StockMovement::query()->where('type', 'damage')->sole();
+        $this->assertSame($this->medium->getKey(), (int) $damage->product_variant_id);
+        $this->assertSame(1, (int) $damage->quantity);
+    }
+
+    public function test_a_returned_or_refunded_order_can_never_be_moved_to_trash(): void
+    {
+        $returned = $this->confirmedOrder(capQuantity: 2, shirtQuantity: 1);
+        $this->transition($returned, 'returned', 'Came back');
+        $refunded = $this->confirmedOrder(capQuantity: 1, shirtQuantity: 1);
+        $this->transition($refunded, 'returned', 'Came back');
+        $this->transition($refunded, 'refunded', 'Money given back');
+
+        foreach ([$returned, $refunded] as $order) {
+            $this->assertFalse($order->fresh()->canBeMovedToTrash());
+
+            try {
+                $order->fresh()->delete();
+                $this->fail('A returned or refunded order must not be trashable.');
+            } catch (ValidationException $exception) {
+                $this->assertArrayHasKey('status', $exception->errors());
+            }
+
+            $this->assertNull($order->fresh()->deleted_at);
+        }
+
+        // The page does not offer it, and the bulk action skips these orders.
+        Livewire::test(EditOrder::class, ['record' => $returned->getKey()])->assertActionHidden('delete');
+        Livewire::test(ListOrders::class)
+            ->callTableBulkAction('delete', [$returned, $refunded]);
+        $this->assertNull($returned->fresh()->deleted_at);
+        $this->assertNull($refunded->fresh()->deleted_at);
+
+        // An order that is not returned still goes to the trash as before, and its stock is released.
+        $open = $this->confirmedOrder(capQuantity: 1, shirtQuantity: 1);
+        $this->assertTrue($open->canBeMovedToTrash());
+        Livewire::test(EditOrder::class, ['record' => $open->getKey()])->assertActionVisible('delete');
+    }
+
+    public function test_restoring_a_trashed_order_brings_its_sale_back(): void
+    {
+        // A confirmed order moved to trash gives its goods back, and restoring takes them again.
+        $order = $this->confirmedOrder(capQuantity: 3, shirtQuantity: 2);
+        $order->fresh()->delete();
+        $this->assertStock(cap: 10, medium: 8);
+
+        Order::onlyTrashed()->findOrFail($order->getKey())->restore();
+        $this->assertStock(cap: 7, medium: 6);
+    }
+
+    public function test_restoring_a_returned_order_from_the_trash_recreates_its_sale(): void
+    {
+        // An order that was trashed while returned, before returned orders were protected:
+        // its sale was released then (the shelf has its goods) and no return was recorded.
         $order = $this->confirmedOrder(capQuantity: 4, shirtQuantity: 2);
+        $this->transition($order, 'returned', 'Came back');
+        StockMovement::query()->where('reference_type', Order::class)->where('reference_id', $order->getKey())->get()->each->delete();
+        $this->assertStock(cap: 10, medium: 8);
+        DB::table('orders')->where('id', $order->getKey())->update(['deleted_at' => now()]);
+
+        Order::onlyTrashed()->findOrFail($order->getKey())->restore();
+
+        // The sale is back (owner decision), and the order is waiting to be checked again.
+        $this->assertStock(cap: 6, medium: 6);
+        $this->assertSame(2, StockMovement::query()->where('type', 'sale')->where('reference_id', $order->getKey())->count());
+        $this->assertSame(Order::STATUS_RETURNED, $order->fresh()->status);
+    }
+
+    public function test_taking_an_order_s_stock_effects_out_also_removes_its_damage_write_offs(): void
+    {
+        $order = $this->confirmedOrder(capQuantity: 5, shirtQuantity: 1);
         $this->transition($order, 'returned', 'Came back');
         [$capItem, $shirtItem] = $this->itemIds($order);
         Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
-            ->callAction('putReturnedGoodsBackInStock', data: ['qty_'.$capItem => 3, 'qty_'.$shirtItem => 0]);
-        $this->assertStock(cap: 9, medium: 6);
+            ->callAction('putReturnedGoodsBackInStock', data: $this->counts($capItem, 2, 2, $shirtItem, 1, 0));
+        $this->assertStock(cap: 7, medium: 8);
 
-        $order->fresh()->delete();
+        app(OrderWorkflowService::class)->deleteStockMovements($order->fresh());
 
-        // The sale and the return cancel out: the shelf is as it was before the order.
+        // The sale, the returns and the write-off cancel out: the shelf is as it was.
         $this->assertStock(cap: 10, medium: 8);
         $this->assertSame(0, StockMovement::query()->where('reference_type', Order::class)->where('reference_id', $order->getKey())->count());
+        $this->assertSame(0, (int) StockMovement::query()->where('type', 'damage')->sum('quantity'));
+    }
+
+    public function test_the_damage_source_is_asked_for_on_a_damage_entry_and_kept_off_other_entries(): void
+    {
+        // A shipment found damaged: the staff member picks "Shipment damage".
+        Livewire::test(CreateStockMovement::class)
+            ->fillForm(['product_id' => $this->cap->getKey(), 'type' => 'damage', 'quantity' => 2, 'reason' => 'Broken in the carton'])
+            ->call('create')
+            ->assertHasFormErrors(['damage_source' => 'required']);
+
+        Livewire::test(CreateStockMovement::class)
+            ->fillForm(['product_id' => $this->cap->getKey(), 'type' => 'damage', 'quantity' => 2, 'reason' => 'Broken in the carton', 'damage_source' => StockMovement::DAMAGE_SOURCE_SHIPMENT])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame(StockMovement::DAMAGE_SOURCE_SHIPMENT, StockMovement::query()->where('type', 'damage')->sole()->damage_source);
+        $this->assertStock(cap: 8, medium: 8);
+
+        // Only damage carries a source, and an unknown one is refused.
+        $purchase = StockMovement::query()->create(['product_id' => $this->cap->getKey(), 'type' => 'purchase', 'quantity' => 1, 'damage_source' => StockMovement::DAMAGE_SOURCE_SHIPMENT]);
+        $this->assertNull($purchase->fresh()->damage_source);
+
+        $this->expectException(ValidationException::class);
+        StockMovement::query()->create(['product_id' => $this->cap->getKey(), 'type' => 'damage', 'quantity' => 1, 'reason' => 'x', 'damage_source' => 'made_up']);
     }
 
     public function test_a_returned_order_does_not_count_as_a_sale_or_a_customer_due(): void
@@ -230,6 +370,15 @@ class OrderReturnedStockTest extends TestCase
         Livewire::test(ViewOrder::class, ['record' => $order->getKey()])
             ->callAction('changeWorkflowStatus', data: array_filter(['stage' => $stage, 'reason' => $reason]))
             ->assertHasNoActionErrors();
+    }
+
+    /** Form data for the "put returned goods back" action: good and damaged pieces per line. */
+    protected function counts(int $firstItem, int $firstGood, int $firstDamaged, int $secondItem, int $secondGood, int $secondDamaged): array
+    {
+        return [
+            'good_'.$firstItem => $firstGood, 'damaged_'.$firstItem => $firstDamaged,
+            'good_'.$secondItem => $secondGood, 'damaged_'.$secondItem => $secondDamaged,
+        ];
     }
 
     /** @return array{0: int, 1: int} the cap line and the shirt line */

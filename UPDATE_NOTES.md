@@ -135,6 +135,42 @@ Full suite (plain `php artisan test`, no `--env`) with everything on 2026-10-15,
 
 Commit status: Committed and pushed to `claude/reseller-module-status-v9tobe` and to `main` on owner approval (2026-10-15: "কাজের ব্রাঞ্চ ও main দুটোতেই পুশ").
 
+## 2026-10-15 (evening) - Owner's answers on the next batch: damaged goods, trash rule, price tool, dashboard, guide, subdomain guide
+
+Owner request (in Bangla): "কী কী লাগবে প্রশ্ন করে জেনে নেও।" Asked, and the owner answered: do the mobile tab bar, the dashboard checklist / best-sellers / announcement, the public guide's return-charge note, and the Cloudflare / `TRUSTED_PROXY_HOPS` work (owner does Coolify and Cloudflare, we write the guide); variation suggested prices by "একসাথে অনেকগুলোর দাম বসানোর টুল"; and on returned goods: restoring a trashed order brings its sale back, a returned order **never** goes to trash (or the returned-product record is lost), and damaged goods must be counted: a damaged product that came back from a customer who got an exchange parcel, and damaged pieces found when a new shipment's cartons are opened, each **labelled** (customer-return damage vs shipment damage).
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+
+1. **Returned / refunded orders: no trash; restore recreates the sale.** `Order::canBeMovedToTrash()`; the order page's delete button is hidden, the list's bulk "Move to trash" skips and reports them, and the model refuses a soft delete in those statuses. `restored` now calls `OrderWorkflowService::restoreFromTrash()`, which rebuilds the sale for every status.
+2. **Damaged goods with a source label.** New column `stock_movements.damage_source` (migration `2026_10_15_120000`): *Customer return damage* / *Shipment damage* / *Other damage*; required on the stock movement form for a damage entry; column + filter in the movement list and history; the Total Damage card links to the damage list. **Put returned goods back in stock** now asks *Good pieces* and *Damaged pieces* per item; damaged pieces are booked as a Return and straight away written off as a customer-return Damage (net zero on the shelf, counted in Total Damage). Shipment damage is entered with the existing stock movement form (type Damage, source Shipment damage).
+3. **Resellers → Variation selling prices.** One list of every active variation with the wholesale price (read only) and an editable suggested price, a "no suggested price yet" filter and two bulk actions (same price, clear). No percentages.
+4. **Reseller portal tab bar on phones** (Dashboard, Products, raised Create order, Orders, Earnings).
+5. **Dashboard: announcement** (Reseller Settings → Portal announcement; migration `2026_10_15_130000`), **Get started** checklist (4 steps), **Best-selling products** (last 30 days).
+6. **Public guide:** return-charge sentence (and amount with the figures switch).
+7. **Subdomains:** `docs/reseller-subdomain-setup.md` (Bangla step-by-step for Cloudflare + Coolify) and a **Test subdomain setup** button on Reseller Settings. `TRUSTED_PROXY_HOPS`: the ERP has no such setting (`TRUSTED_PROXIES=*`, unchanged); it belongs to the Next.js website (2 behind Cloudflare orange cloud + Traefik, 1 behind Traefik only).
+
+Looked at in a real browser (Chromium, throw-away SQLite file with made-up data, never the demo DB; deleted afterwards): at 390 px the announcement banner, the Get started card, the best sellers and the tab bar with the raised button render, the current tab is highlighted, content is not hidden behind the bar, and at 1280 px the bar is not displayed.
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- A third damage source **Other damage**, so an entry that is neither a customer return nor a shipment is not forced into a wrong group. Older damage entries have no source (shown as "-").
+- **Refunded** orders are also never trashed (they keep the same returned-goods record as Returned).
+- A damaged returned piece shows as two movements (Return then Damage) in the product's history, so on-hand stock stays right and the order's "checked" count includes it.
+- Best sellers count **pieces** over the **last 30 days** from confirmed / processing / completed orders (cancelled, returned and draft ones are left out); no money amounts, because a reseller's own-courier orders and store orders price their lines differently.
+- Get started steps: name your store, add products (an active pick), add a payout account, get your first order (any order credited to the reseller, including one from their store).
+- The announcement is one text for everyone (the admin writes it in the language they want); it cannot be required to be in two languages.
+- The guide's return-charge sentence shows only while the charge in Reseller Settings is above 0; the amount only with "Show money figures on the guide".
+- The variation prices page needs view rights on Products, and update rights to edit.
+- The subdomain guide recommends a **separate** Traefik resolver (`cloudflare`) with a DNS-only wildcard record, so the other sites' certificates keep working; the Coolify step that sends `*.offer.zamzamint.com` to the app is written from Coolify's documentation and **not tested on the live server**. "Test subdomain setup" opens the name from the app server itself, so on a host that cannot reach its own public address it can say "HTTPS does not work" while a browser opens it fine.
+
+Deploy: `php artisan migrate` (two migrations: `stock_movements.damage_source`, `storefront_settings.reseller_announcement_*`) and `npm run build` (new portal CSS). Then fill the suggested prices (Resellers → Variation selling prices) and write an announcement if wanted.
+
+Needs Bangla review (new keys): Customer return damage (কাস্টমার ফেরত ড্যামেজ), Shipment damage (শিপমেন্টের ড্যামেজ), Other damage (অন্যান্য ড্যামেজ), Damage source, Good pieces (ভালো পিস), Damaged pieces (ড্যামেজ পিস), the Put-returned-goods dialog texts, the trash message, Variation selling prices (ভেরিয়েশনের বিক্রয় দাম), Set the same price, Clear the suggested price, Portal announcement, Get started steps (Name your store, Add products to your store, Add a payout account hint, Get your first order), Best-selling products, :count piece / pieces, Portal menu, the guide's return-charge sentences, Test subdomain setup and its three result messages.
+
+Tests: `OrderReturnedStockTest` (14), `ResellerVariationPriceToolTest` (6), `ResellerPortalBottomNavTest` (3), `ResellerPortalDashboardExtrasTest` (7), `ResellerSubdomainSetupCheckTest` (4), `ResellerGuidePageTest` (6, +1). Full `php artisan test` (plain, no `--env`): 2514 passed, 1 skipped, 1 failed on the first run — `ResellerPortalCreateOrderTest` counted exactly one link to the create-order page, and the new tab bar adds a second; the test now ignores the tab bar and checks it separately (17 passed on its own). Nothing else failed. `npm run build` OK.
+
+Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-15). **Not pushed to `main`**: the owner checks the brief first and approves `main` himself.
+
 ## 2026-10-15 - Admin: reset a reseller's password / email a reset link; portal ↔ admin audit
 
 The owner (in Bangla): *"From the admin, resellers' passwords can be reset, and a password reset request can be sent by email to the email the reseller set."* and *"Check whether the portal and the admin dashboard are connected without problems, whether stock works properly, and whether orders work properly."*
