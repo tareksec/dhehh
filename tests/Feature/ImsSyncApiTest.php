@@ -213,7 +213,7 @@ class ImsSyncApiTest extends TestCase
         $this->assertSame('2026-10-01T10:00:00+00:00', $row['updated_at']);
     }
 
-    public function test_a_purchase_carries_its_lines_landed_cost_and_supplier(): void
+    public function test_a_purchase_carries_its_lines_and_landed_cost_but_no_supplier(): void
     {
         $this->asCompany($this->company, function () {
             $supplier = Supplier::query()->create(['name' => 'Yarn Ltd', 'is_active' => true]);
@@ -224,8 +224,10 @@ class ImsSyncApiTest extends TestCase
 
         $row = $this->getJson('/api/v1/sync/purchases', $this->auth())->assertOk()->json('data.0');
 
-        $this->assertSame('Yarn Ltd', $row['supplier']['name']);
         $this->assertSame('2026-09-03', $row['purchase_date']);
+        $this->assertArrayNotHasKey('supplier', $row);
+        $this->assertArrayNotHasKey('supplier_id', $row);
+        $this->assertStringNotContainsString('Yarn Ltd', (string) json_encode($row), 'the supplier is not named anywhere in the feed');
         $this->assertSame('100.00', $row['cost_components']['freight_to_ctg']);
         $this->assertCount(1, $row['items']);
         $this->assertSame('YARN-1', $row['items'][0]['sku']);
@@ -260,6 +262,8 @@ class ImsSyncApiTest extends TestCase
 
         $this->getJson('/api/v1/sync/customers', $this->auth())->assertNotFound();
         $this->getJson('/api/v1/sync/customer-payments', $this->auth())->assertNotFound();
+        $this->getJson('/api/v1/sync/suppliers', $this->auth())->assertNotFound();
+        $this->getJson('/api/v1/sync/supplier-payments', $this->auth())->assertNotFound();
 
         foreach (['orders', 'order-payments', 'sale-returns', 'expenses'] as $resource) {
             $body = $this->getJson("/api/v1/sync/{$resource}", $this->auth())->assertOk()->getContent();

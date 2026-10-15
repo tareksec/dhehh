@@ -12,8 +12,6 @@ use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\Shipment;
 use App\Models\StockMovement;
-use App\Models\Supplier;
-use App\Models\SupplierPayment;
 use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -220,25 +218,14 @@ class ImsSyncFeed
                     'updated_at' => $this->time($m->updated_at),
                 ],
             ],
-            'suppliers' => [
-                'query' => fn (): Builder => Supplier::query(),
-                'map' => fn (Supplier $s): array => [
-                    'id' => $s->id, 'name' => $s->name, 'company_name' => $s->company_name, 'phone' => $s->phone,
-                    'email' => $s->email, 'address' => $s->address,
-                    'opening_balance' => $this->money($s->opening_balance), 'current_balance' => $this->money($s->current_balance),
-                    'is_active' => (bool) $s->is_active,
-                    'created_at' => $this->time($s->created_at), 'updated_at' => $this->time($s->updated_at),
-                ],
-            ],
             'purchases' => [
                 'query' => fn (): Builder => Purchase::query(),
-                'with' => ['supplier:id,name', 'items.product:id,sku,name'],
+                'with' => ['items.product:id,sku,name'],
                 'status' => 'status',
                 'date' => 'purchase_date',
                 'map' => fn (Purchase $p): array => [
                     'id' => $p->id,
                     'purchase_number' => $p->purchase_number,
-                    'supplier' => $p->supplier ? ['id' => $p->supplier->id, 'name' => $p->supplier->name] : null,
                     'purchase_date' => $this->date($p->purchase_date),
                     // 'draft', 'received' or 'cancelled'.
                     'status' => $p->status,
@@ -268,16 +255,6 @@ class ImsSyncFeed
                         'allocated_cost' => $this->money($item->allocated_cost),
                         'landed_unit_cost' => $this->money($item->landed_unit_cost),
                     ])->values()->all(),
-                    'created_at' => $this->time($p->created_at), 'updated_at' => $this->time($p->updated_at),
-                ],
-            ],
-            'supplier-payments' => [
-                'query' => fn (): Builder => SupplierPayment::query(),
-                'date' => 'payment_date',
-                'map' => fn (SupplierPayment $p): array => [
-                    'id' => $p->id, 'payment_number' => $p->payment_number, 'supplier_id' => $p->supplier_id,
-                    'amount' => $this->money($p->amount), 'payment_date' => $this->date($p->payment_date),
-                    'method' => $p->method, 'reference' => $p->reference,
                     'created_at' => $this->time($p->created_at), 'updated_at' => $this->time($p->updated_at),
                 ],
             ],

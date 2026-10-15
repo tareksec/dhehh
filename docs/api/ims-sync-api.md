@@ -22,7 +22,7 @@ Base URL: `https://<erp-domain>/api/v1/sync`. Rate limit: 300 requests per minut
 |---|---|
 | `GET /ping` | Health check. Returns the company, the base `currency`, `timezone`, `server_time` and the list of resources. |
 | `GET /products` `/categories` `/stock-movements` | Catalogue and the stock ledger. |
-| `GET /suppliers` `/purchases` `/supplier-payments` | Buying. A purchase carries its lines, the cost components and the ERP's landed cost per unit. |
+| `GET /purchases` | Buying. A purchase carries its lines, the cost components and the ERP's landed cost per unit. **No supplier information** (owner rule 2026-10-15): no supplier record, name, contact, balance or supplier payment. |
 | `GET /containers` `/shipments` | Shipping. |
 | `GET /orders` `/order-payments` `/sale-returns` | Selling. An order carries its lines, its payments (each with its own `paid_at`) and its costs. `/sale-returns` lists the returned and refunded orders on their own. **There is no customer information anywhere in the feed** (owner rule 2026-10-15): no customer record, no name, phone, address or balance, and no free-text notes. |
 | `GET /expenses` `/expense-categories` | Costs. |
@@ -89,7 +89,7 @@ JSON with `ok: false`, `error` and a `hint`: `401 missing_api_key` / `invalid_ap
 | 9.5 | Webhooks: not provided for IMS. |
 | 9.6 | Nothing is written back. |
 | 10.1 | One business (company) = one IMS project is the natural fit with this ERP's structure (option A). **Owner to confirm.** |
-| 7. Not shared | **No customer information at all** (owner rule 2026-10-15): no customer names, phones, addresses, balances or customer payments, and the free-text notes on payments, expenses and stock movements are left out because they can name people. Passwords, reseller store data, supplier bank details and investor data are not in the feed either. Product and purchase cost prices are. |
+| 7. Not shared | **No customer information at all** (owner rule 2026-10-15): no customer names, phones, addresses, balances or customer payments, and the free-text notes on payments, expenses and stock movements are left out because they can name people. **No supplier information either** (no supplier records, names, contacts, balances or supplier payments). Passwords, reseller store data and investor data are not in the feed either. Product and purchase cost prices are. |
 
 ## Open owner decisions
 

@@ -87,6 +87,12 @@ Known limits to tell IMS: the ERP has no partial returns and no refund payment r
 
 Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-15 (owner approved "কমিট এবং পুশ করে মেইন এ পুশ কর"); pushed to main on 2026-10-15. Deploy: run `php artisan migrate --force` (new migration).
 
+## 2026-10-15 (later) - IMS feed: no supplier information
+
+Owner: "সাপ্লায়ারের তথ্যও investor দেখবে না". Removed the `suppliers` and `supplier-payments` resources from `ImsSyncFeed` and the supplier from `purchases`; the feed now has 11 resources. The investor portal itself shows no supplier data (checked). `ImsSyncApiTest`: purchase test now asserts no supplier anywhere, plus 404s for both removed paths; `docs/api/ims-sync-api.md` and the IMS handover page updated.
+
+Commit status: committed and pushed to claude/nifty-carson-r2vpby on 2026-10-15 (owner approved "কমিট এবং পুশ কর এবং মেইনে পুশ কর"); pushed to main on 2026-10-15.
+
 ## 2026-10-14 - Investor portal redesign (design G)
 
 Owner reviewed six HTML directions on the design canvas and decided: "B এর মেনু অপশন গুলো থাকবে কিন্তু ডিজাইন হবে F এর" (B's menu, F's design). Mock-up of the result: canvas row G (desktop, phone dashboard, phone menu).

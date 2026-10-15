@@ -12,6 +12,7 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Changed
 
+- **IMS data feed: no supplier information either.** Owner rule 2026-10-15 ("সাপ্লায়ারের তথ্যও investor দেখবে না"). The `suppliers` and `supplier-payments` feeds are removed and purchases no longer name their supplier.
 - **IMS data feed: no customer information, ever.** Owner rule 2026-10-15. The `customers` and `customer-payments` feeds are removed, orders no longer carry the customer's name or phone, and the free-text notes on payments, expenses and stock movements are no longer sent (they can name people). IMS is meant to show only a running project's unit sales, never who bought.
 
 ### Fixed
