@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
@@ -18,7 +19,7 @@ use Illuminate\Validation\ValidationException;
  */
 class OrderPayment extends Model
 {
-    use BelongsToCompany;
+    use BelongsToCompany, SoftDeletes;
 
     public const TYPE_ADVANCE = 'advance';
 

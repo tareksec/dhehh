@@ -4,6 +4,21 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **IMS data feed: returns, deleted records and stock-loss values.** `GET /api/v1/sync/sale-returns` lists every returned or refunded sale with its return date, value and lines; orders carry `returned_amount`; stock movements carry their date, the record behind them and an estimated value; deleted expenses and deleted order payments stay in the feed flagged `deleted`, so IMS can tell that a profit figure changed. (Owner request 2026-10-15; details in `docs/api/ims-sync-api.md`.)
+
+### Changed
+
+- **IMS data feed: no customer information, ever.** Owner rule 2026-10-15. The `customers` and `customer-payments` feeds are removed, orders no longer carry the customer's name or phone, and the free-text notes on payments, expenses and stock movements are no longer sent (they can name people). IMS is meant to show only a running project's unit sales, never who bought.
+
+### Technical Notes
+
+- Migration `2026_10_15_100000` adds `deleted_at` to `expenses` and `order_payments`; both models now soft-delete, and the rest of the ERP still treats a deleted row as gone. Stock movements are deliberately not soft-deleted: shared-stock sums read the ledger without model scopes and would count deleted rows. A deleted stock movement is still found by the daily `ids_only` check.
+- No new interface text, so no language-file changes. Tests: `ImsSyncApiTest` 26 (5 new).
+
 ## [2.75.0] - 2026-10-14
 
 **Release type:** Minor Feature Update

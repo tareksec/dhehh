@@ -4,8 +4,6 @@ namespace App\Services\Sync;
 
 use App\Models\Category;
 use App\Models\Container;
-use App\Models\Customer;
-use App\Models\CustomerPayment;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\Order;
@@ -199,7 +197,7 @@ class ImsSyncFeed
             ],
             'stock-movements' => [
                 'query' => fn (): Builder => StockMovement::query(),
-                'with' => ['product:id,sku,name'],
+                'with' => ['product:id,sku,name,cost_price'],
                 'status' => 'type',
                 'date' => 'created_at',
                 'map' => fn (StockMovement $m): array => [
@@ -211,7 +209,13 @@ class ImsSyncFeed
                     'type' => $m->type,
                     'quantity' => (int) $m->quantity,
                     'reason' => $m->reason,
-                    'note' => $m->note,
+                    // Link to the record that caused the movement (an order for a sale or return, a purchase, ...).
+                    'reference_type' => $m->reference_type ? class_basename($m->reference_type) : null,
+                    'reference_id' => $m->reference_id,
+                    'movement_date' => $this->date($m->created_at),
+                    // The product's CURRENT cost price, not the cost on the day: the ERP does not store one per movement.
+                    'unit_cost' => $this->money($m->product?->cost_price),
+                    'estimated_value' => $m->product ? $this->money((float) $m->product->cost_price * (int) $m->quantity) : null,
                     'created_at' => $this->time($m->created_at),
                     'updated_at' => $this->time($m->updated_at),
                 ],
@@ -305,20 +309,10 @@ class ImsSyncFeed
                     'created_at' => $this->time($s->created_at), 'updated_at' => $this->time($s->updated_at),
                 ],
             ],
-            'customers' => [
-                'query' => fn (): Builder => Customer::query(),
-                'map' => fn (Customer $c): array => [
-                    'id' => $c->id, 'name' => $c->name, 'phone' => $c->phone, 'email' => $c->email, 'address' => $c->address,
-                    'customer_type' => $c->customer_type,
-                    'opening_balance' => $this->money($c->opening_balance), 'current_balance' => $this->money($c->current_balance),
-                    'is_active' => (bool) $c->is_active,
-                    'created_at' => $this->time($c->created_at), 'updated_at' => $this->time($c->updated_at),
-                ],
-            ],
             // A sale. Soft-deleted orders stay in the feed, flagged `deleted`, because profit history depends on them.
             'orders' => [
                 'query' => fn (): Builder => Order::query()->withTrashed(),
-                'with' => ['customer:id,name,phone', 'items.product:id,sku,name', 'payments', 'costs'],
+                'with' => ['items.product:id,sku,name', 'payments', 'costs'],
                 'status' => 'status',
                 'date' => 'order_date',
                 'map' => fn (Order $o): array => [
@@ -332,7 +326,6 @@ class ImsSyncFeed
                     'delivery_status' => $o->delivery_status,
                     'deleted' => $o->trashed(),
                     'deleted_at' => $this->time($o->deleted_at),
-                    'customer' => $o->customer ? ['id' => $o->customer->id, 'name' => $o->customer->name, 'phone' => $o->customer->phone] : ['id' => null, 'name' => $o->customer_name, 'phone' => null],
                     'subtotal' => $this->money($o->subtotal),
                     'discount' => $this->money($o->discount),
                     'vat' => $this->money($o->vat),
@@ -341,6 +334,8 @@ class ImsSyncFeed
                     'total_amount' => $this->money($o->total_amount),
                     'paid_amount' => $this->money($o->paid_amount),
                     'due_amount' => $this->money($o->due_amount),
+                    // The ERP returns a whole order, never part of one: the full total once it is returned or refunded.
+                    'returned_amount' => $this->money($this->isReturned($o) ? $o->total_amount : 0),
                     'items' => $o->items->map(fn ($item): array => [
                         'id' => $item->id,
                         'product_id' => $item->product_id,
@@ -361,29 +356,55 @@ class ImsSyncFeed
                     'created_at' => $this->time($o->created_at), 'updated_at' => $this->time($o->updated_at),
                 ],
             ],
+            // A returned or refunded sale, as its own record. The ERP returns whole orders only, so the returned
+            // value is the order total; it does not record a separate refund payment, so none is invented here.
+            'sale-returns' => [
+                'query' => fn (): Builder => Order::query()->withTrashed()->whereIn('orders.status', [Order::STATUS_RETURNED, Order::STATUS_REFUNDED]),
+                'with' => ['items.product:id,sku,name', 'statusTransitions'],
+                'status' => 'status',
+                'date' => 'order_date',
+                'map' => fn (Order $o): array => [
+                    'id' => $o->id,
+                    'order_id' => $o->id,
+                    'order_number' => $o->order_number,
+                    'order_date' => $this->date($o->order_date),
+                    // 'returned' or 'refunded'.
+                    'status' => $o->status,
+                    // When the order last moved to returned / refunded; the last edit if that was never logged.
+                    'return_date' => $this->date(
+                        $o->statusTransitions
+                            ->whereIn('to_status', [Order::STATUS_RETURNED, Order::STATUS_REFUNDED])
+                            ->sortBy('id')
+                            ->last()?->created_at ?? $o->updated_at
+                    ),
+                    'return_value' => $this->money($o->total_amount),
+                    'paid_amount' => $this->money($o->paid_amount),
+                    'deleted' => $o->trashed(),
+                    'items' => $o->items->map(fn ($item): array => [
+                        'id' => $item->id,
+                        'sku' => $item->product?->sku,
+                        'name' => $item->product?->name,
+                        'quantity' => (int) $item->quantity,
+                        'value' => $this->money($item->subtotal),
+                    ])->values()->all(),
+                    'created_at' => $this->time($o->created_at), 'updated_at' => $this->time($o->updated_at),
+                ],
+            ],
             // The same payments as inside `orders`, as their own feed: editing only a payment's date or
             // method does not touch the order row, so this feed is how a change like that is noticed.
             'order-payments' => [
-                'query' => fn (): Builder => OrderPayment::query(),
+                // A deleted payment stays here, flagged, so IMS sees that a collected amount was taken back.
+                'query' => fn (): Builder => OrderPayment::query()->withTrashed(),
                 'with' => ['order:id,order_number'],
                 'status' => 'type',
                 'date' => 'paid_at',
                 'map' => fn (OrderPayment $p): array => $this->orderPayment($p) + [
                     'order_id' => $p->order_id,
                     'order_number' => $p->order?->order_number,
+                    'deleted' => $p->trashed(),
+                    'deleted_at' => $this->time($p->deleted_at),
                     'created_at' => $this->time($p->created_at),
                     'updated_at' => $this->time($p->updated_at),
-                ],
-            ],
-            // Money received from a customer outside a single order (against the customer's account).
-            'customer-payments' => [
-                'query' => fn (): Builder => CustomerPayment::query(),
-                'date' => 'payment_date',
-                'map' => fn (CustomerPayment $p): array => [
-                    'id' => $p->id, 'payment_number' => $p->payment_number, 'customer_id' => $p->customer_id,
-                    'amount' => $this->money($p->amount), 'payment_date' => $this->date($p->payment_date),
-                    'method' => $p->method, 'reference' => $p->reference,
-                    'created_at' => $this->time($p->created_at), 'updated_at' => $this->time($p->updated_at),
                 ],
             ],
             'expense-categories' => [
@@ -394,14 +415,17 @@ class ImsSyncFeed
                 ],
             ],
             'expenses' => [
-                'query' => fn (): Builder => Expense::query(),
+                // A deleted expense stays here, flagged. Free-text notes are left out on purpose (they can name people).
+                'query' => fn (): Builder => Expense::query()->withTrashed(),
                 'with' => ['category:id,name'],
                 'date' => 'expense_date',
                 'map' => fn (Expense $e): array => [
                     'id' => $e->id, 'expense_number' => $e->expense_number,
                     'category' => $e->category ? ['id' => $e->category->id, 'name' => $e->category->name] : null,
                     'amount' => $this->money($e->amount), 'expense_date' => $this->date($e->expense_date),
-                    'reference' => $e->reference, 'note' => $e->note,
+                    'reference' => $e->reference,
+                    'deleted' => $e->trashed(),
+                    'deleted_at' => $this->time($e->deleted_at),
                     'created_at' => $this->time($e->created_at), 'updated_at' => $this->time($e->updated_at),
                 ],
             ],
@@ -418,8 +442,12 @@ class ImsSyncFeed
             'method' => $payment->method,
             'amount' => $this->money($payment->amount),
             'paid_at' => $this->date($payment->paid_at),
-            'note' => $payment->note,
         ];
+    }
+
+    protected function isReturned(Order $order): bool
+    {
+        return in_array($order->status, [Order::STATUS_RETURNED, Order::STATUS_REFUNDED], true);
     }
 
     /** Money as a two-decimal string, so no client rounds it through a float. */

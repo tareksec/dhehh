@@ -2,6 +2,22 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-15 - IMS feed: our side of the work (no customer data, returns, deleted records)
+
+Owner: "IMS এ কখনই কাস্টমার ইনফো দেখানো যাবে না ... এখন যেমন আছে তেমনই রাখ ... আমাদের দিকের কাজ গুলো শেষ কর" after reading IMS's second requirements document (profit-focused: sales, payments, returns, expenses, stock losses). The project/branch tag on sales was left as it is on purpose; unit sales per project for the investor dashboard is a separate, undecided piece.
+
+What changed (uncommitted):
+- `ImsSyncFeed`: removed `customers` and `customer-payments`; orders lost the customer block; notes dropped from payments, expenses and stock movements; new `sale-returns` resource (returned / refunded orders, return date from the status history, whole-order value); `returned_amount` on orders; `order-payments` and `expenses` now include deleted rows flagged `deleted` / `deleted_at`; stock movements gained `movement_date`, `reference_type`, `reference_id`, `unit_cost` (the product's current cost) and `estimated_value`.
+- Migration `2026_10_15_100000_add_soft_deletes_to_expenses_and_order_payments`; `Expense` and `OrderPayment` use `SoftDeletes`. Stock movements were left alone because shared-stock sums use `withoutGlobalScopes()` and would count deleted rows.
+- `docs/api/ims-sync-api.md` updated (endpoints, data rules, answer 7, open decision 3).
+- Tests: `ImsSyncApiTest` now 26 (new: no customer data anywhere, deleted expense kept, deleted payment kept and order total follows, sale returns, stock loss values).
+
+Not done (needs the owner): project tag on sales and per-project unit sales for the investor dashboard; a period-closed flag; signed webhooks; OpenAPI file and staging; the IMS-facing handover file.
+
+Known limits to tell IMS: the ERP has no partial returns and no refund payment record; stock-loss money uses today's cost price; expenses have no project, purchase or shipment link and no foreign-currency fields.
+
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-15 (owner approved "কমিট এবং পুশ করে মেইন এ পুশ কর"); pushed to main on 2026-10-15. Deploy: run `php artisan migrate --force` (new migration).
+
 ## 2026-10-14 - Investor portal redesign (design G)
 
 Owner reviewed six HTML directions on the design canvas and decided: "B এর মেনু অপশন গুলো থাকবে কিন্তু ডিজাইন হবে F এর" (B's menu, F's design). Mock-up of the result: canvas row G (desktop, phone dashboard, phone menu).

@@ -14,6 +14,7 @@ use App\Models\OrderItem;
 use App\Models\OrderPayment;
 use App\Models\Product;
 use App\Models\Purchase;
+use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Services\CompanyContext;
@@ -246,6 +247,115 @@ class ImsSyncApiTest extends TestCase
         $this->assertSame('Freight', $row['category']['name']);
         $this->assertSame('750.50', $row['amount']);
         $this->assertSame('2026-09-10', $row['expense_date']);
+    }
+
+    // ------------------------------------------- no customer data, ever (owner rule)
+
+    public function test_no_customer_information_is_in_the_feed(): void
+    {
+        $this->asCompany($this->company, function (): void {
+            $order = $this->saleOn('2026-09-01', 1000, status: Order::STATUS_COMPLETED);
+            $this->pay($order, 1000, '2026-09-02', OrderPayment::TYPE_FINAL);
+        });
+
+        $this->getJson('/api/v1/sync/customers', $this->auth())->assertNotFound();
+        $this->getJson('/api/v1/sync/customer-payments', $this->auth())->assertNotFound();
+
+        foreach (['orders', 'order-payments', 'sale-returns', 'expenses'] as $resource) {
+            $body = $this->getJson("/api/v1/sync/{$resource}", $this->auth())->assertOk()->getContent();
+
+            $this->assertStringNotContainsString('Buyer', $body, "{$resource} leaks the customer name");
+            $this->assertStringNotContainsString('01712345678', $body, "{$resource} leaks the customer phone");
+        }
+
+        $order = $this->getJson('/api/v1/sync/orders', $this->auth())->json('data.0');
+        $this->assertArrayNotHasKey('customer', $order);
+        $this->assertArrayNotHasKey('customer_name', $order);
+        $this->assertArrayNotHasKey('note', $order['payments'][0]);
+    }
+
+    // ----------------------------------------- deletions stay visible (expenses, payments)
+
+    public function test_a_deleted_expense_stays_in_the_feed_flagged_as_deleted(): void
+    {
+        $expense = $this->asCompany($this->company, function () {
+            $category = ExpenseCategory::query()->create(['name' => 'Rent', 'slug' => 'rent', 'is_active' => true]);
+            $account = Account::query()->create(['name' => 'Cash', 'opening_balance' => 5000]);
+
+            return Expense::query()->create(['expense_category_id' => $category->id, 'account_id' => $account->id, 'amount' => 900, 'expense_date' => '2026-09-10', 'note' => 'Salary of Rahim']);
+        });
+        $this->travel(5)->minutes();
+        $this->asCompany($this->company, fn () => $expense->fresh()->delete());
+
+        $rows = $this->getJson('/api/v1/sync/expenses', $this->auth())->assertOk()->json('data');
+
+        $this->assertCount(1, $rows);
+        $this->assertTrue($rows[0]['deleted']);
+        $this->assertNotNull($rows[0]['deleted_at']);
+        $this->assertArrayNotHasKey('note', $rows[0]);
+        $this->assertSame(0, $this->asCompany($this->company, fn () => Expense::query()->count()), 'the rest of the ERP still sees it as gone');
+    }
+
+    public function test_a_deleted_payment_stays_in_the_feed_and_the_order_total_follows(): void
+    {
+        $payment = $this->asCompany($this->company, function () {
+            $order = $this->saleOn('2026-09-01', 1000, status: Order::STATUS_COMPLETED);
+            $this->pay($order, 400, '2026-09-02', OrderPayment::TYPE_ADVANCE);
+
+            return $this->pay($order, 600, '2026-09-03', OrderPayment::TYPE_FINAL);
+        });
+        $this->travel(5)->minutes();
+        $this->asCompany($this->company, fn () => $payment->fresh()->delete());
+
+        $rows = collect($this->getJson('/api/v1/sync/order-payments', $this->auth())->assertOk()->json('data'))->keyBy('amount');
+
+        $this->assertCount(2, $rows);
+        $this->assertTrue($rows['600.00']['deleted']);
+        $this->assertFalse($rows['400.00']['deleted']);
+
+        $order = $this->getJson('/api/v1/sync/orders', $this->auth())->json('data.0');
+        $this->assertSame('400.00', $order['paid_amount']);
+        $this->assertCount(1, $order['payments'], 'the order itself lists only live payments');
+    }
+
+    // ---------------------------------------------------------------- returns
+
+    public function test_a_returned_sale_comes_as_a_sale_return_with_its_value_and_lines(): void
+    {
+        $this->asCompany($this->company, function (): void {
+            $this->saleOn('2026-09-01', 500, status: Order::STATUS_COMPLETED);
+            $returned = $this->saleOn('2026-09-02', 800, status: Order::STATUS_COMPLETED);
+            $returned->update(['status' => Order::STATUS_RETURNED]);
+        });
+
+        $returns = $this->getJson('/api/v1/sync/sale-returns', $this->auth())->assertOk()->json('data');
+
+        $this->assertCount(1, $returns, 'only returned or refunded orders');
+        $this->assertSame('returned', $returns[0]['status']);
+        $this->assertSame('800.00', $returns[0]['return_value']);
+        $this->assertNotNull($returns[0]['return_date']);
+        $this->assertSame('SKU-1', $returns[0]['items'][0]['sku']);
+        $this->assertSame(1, $returns[0]['items'][0]['quantity']);
+
+        $orders = collect($this->getJson('/api/v1/sync/orders', $this->auth())->json('data'))->keyBy('total_amount');
+        $this->assertSame('800.00', $orders['800.00']['returned_amount']);
+        $this->assertSame('0.00', $orders['500.00']['returned_amount']);
+    }
+
+    public function test_a_stock_loss_carries_its_date_the_source_and_an_estimated_value(): void
+    {
+        $this->asCompany($this->company, function (): void {
+            $product = $this->product('LOSS-1', cost: 60);
+            StockMovement::query()->create(['product_id' => $product->id, 'type' => 'damage', 'quantity' => 3, 'reason' => 'Water damage', 'note' => 'Sold to Karim']);
+        });
+
+        $rows = collect($this->getJson('/api/v1/sync/stock-movements?status=damage', $this->auth())->assertOk()->json('data'));
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('2026-10-01', $rows[0]['movement_date']);
+        $this->assertSame('60.00', $rows[0]['unit_cost']);
+        $this->assertSame('180.00', $rows[0]['estimated_value']);
+        $this->assertArrayNotHasKey('note', $rows[0]);
     }
 
     // ------------------------------------------------------- paging (critical)

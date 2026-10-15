@@ -6,12 +6,13 @@ use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\GeneratesSequentialNumber;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class Expense extends Model
 {
-    use BelongsToCompany, GeneratesSequentialNumber;
+    use BelongsToCompany, GeneratesSequentialNumber, SoftDeletes;
 
     protected $fillable = [
         'company_id',
