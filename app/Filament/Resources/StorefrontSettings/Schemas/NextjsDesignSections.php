@@ -4,10 +4,14 @@ namespace App\Filament\Resources\StorefrontSettings\Schemas;
 
 use App\Filament\Resources\StorefrontSettings\StorefrontSettingResource;
 use App\Models\Category;
+use App\Models\Company;
 use App\Models\StorefrontPage;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
+use App\Support\StorefrontFooterStarter;
+use App\Support\StorefrontHomeStarter;
 use App\Support\StorefrontSiteDesign;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Builder;
 use Filament\Forms\Components\Builder\Block;
 use Filament\Forms\Components\ColorPicker;
@@ -16,9 +20,14 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 
 /**
  * The "Website Design" tab of the Next.js row in Site → Storefront Settings:
@@ -199,7 +208,9 @@ final class NextjsDesignSections
     private static function homeBuilder(): Section
     {
         return Section::make(__('Home Page Builder'))
+            ->key('home_builder')
             ->columnSpanFull()
+            ->headerActions([self::loadStarterLayoutAction(), self::fillCategoryDetailsAction()])
             ->description(__('Add, remove and reorder the sections of the home page. Hero banners are managed under Site → Hero Slides, flash-sale / trending / new-arrival products under Site → Offers (Collection), prices and stock come from the catalog. Leave a title blank to use the website\'s default heading.'))
             ->schema([
                 Builder::make('home_sections')
@@ -226,6 +237,156 @@ final class NextjsDesignSections
                     ]),
             ])
             ->collapsible();
+    }
+
+    /**
+     * Fills the builder with the starter home page (StorefrontHomeStarter). It only changes the form:
+     * the owner reviews the sections and presses Save changes.
+     */
+    private static function loadStarterLayoutAction(): Action
+    {
+        return Action::make('loadStarterLayout')
+            ->label(__('Load the starter layout'))
+            ->icon('heroicon-o-sparkles')
+            ->color('gray')
+            ->requiresConfirmation()
+            ->modalHeading(__('Load the starter home page?'))
+            ->modalDescription(__('This replaces every section below with the starter home page — hero, trust strip, shop by category, best deals, latest products, flash deal, four category rows, the WhatsApp section and the about text — and adds the top bar quick links if there are none. Nothing is saved until you press Save changes, and you can edit every word afterwards.'))
+            ->modalSubmitActionLabel(__('Load the starter layout'))
+            ->action(function (Set $set, Get $get, ?StorefrontSetting $record): void {
+                $sections = StorefrontHomeStarter::sections(self::companyCategories($record));
+
+                $set('home_sections', collect($sections)->mapWithKeys(fn (array $section): array => [(string) Str::uuid() => $section])->all());
+
+                if (blank($get('site_design.topbar.links'))) {
+                    $set('site_design.topbar.links', collect(StorefrontHomeStarter::topBarLinks())->mapWithKeys(fn (array $link): array => [(string) Str::uuid() => $link])->all());
+                }
+
+                Notification::make()
+                    ->success()
+                    ->title(__('Starter layout loaded'))
+                    ->body(__('Check the sections, then press Save changes.'))
+                    ->send();
+            });
+    }
+
+    /**
+     * The category cards show a tagline and an icon from Categories; this fills the blank ones with
+     * the reference's. It writes straight away (unlike the layout), so it only touches blanks and
+     * only categories the signed-in user may edit.
+     */
+    private static function fillCategoryDetailsAction(): Action
+    {
+        return Action::make('fillCategoryDetails')
+            ->label(__('Fill empty category details'))
+            ->icon('heroicon-o-tag')
+            ->color('gray')
+            ->requiresConfirmation()
+            ->modalHeading(__('Fill the empty category taglines and icons?'))
+            ->modalDescription(__('Adds the short line (for example "Earbuds · TWS · Headsets") and the icon shown on the category cards to the categories that have none, matching them by name. A tagline or icon you already set is never changed. This is saved straight away.'))
+            ->modalSubmitActionLabel(__('Fill them'))
+            ->action(function (?StorefrontSetting $record): void {
+                $categories = self::companyCategories($record);
+                $changed = 0;
+
+                foreach (StorefrontHomeStarter::categoryFills($categories) as $id => $fill) {
+                    $category = $categories->firstWhere('id', $id);
+
+                    if ($category && Gate::allows('update', $category)) {
+                        $category->forceFill($fill)->save();
+                        $changed++;
+                    }
+                }
+
+                Notification::make()
+                    ->success()
+                    ->title($changed > 0 ? __(':count categories updated', ['count' => $changed]) : __('Nothing to fill'))
+                    ->body($changed > 0 ? null : __('Every matching category already has its tagline and icon.'))
+                    ->send();
+            });
+    }
+
+    /**
+     * Fills the Footer Builder (and the Quick links menu) with the starter footer
+     * (StorefrontFooterStarter). Like the starter home page it only changes the form: the owner
+     * reviews the blocks and presses Save changes.
+     */
+    public static function loadStarterFooterAction(): Action
+    {
+        return Action::make('loadStarterFooter')
+            ->label(__('Load the starter footer'))
+            ->icon('heroicon-o-sparkles')
+            ->color('gray')
+            ->visible(fn (Get $get): bool => ($get('site_type') ?: StorefrontSetting::SITE_BLADE) === StorefrontSetting::SITE_NEXTJS)
+            ->requiresConfirmation()
+            ->modalHeading(__('Load the starter footer?'))
+            ->modalDescription(__('This replaces the footer sections below and the footer menu with the starter footer — brand and about text, quick links, customer service, office details, payment badges and the bottom bar. Links to pages such as About or Privacy Policy are added only when a published page with that name exists. Nothing is saved until you press Save changes, and you can edit every word afterwards.'))
+            ->modalSubmitActionLabel(__('Load the starter footer'))
+            ->action(function (Set $set, ?StorefrontSetting $record): void {
+                $companyId = self::companyId($record);
+                $pages = $companyId ? StorefrontPage::withoutGlobalScopes()
+                    ->where('company_id', $companyId)
+                    ->when($record, fn ($query) => $query->forSite($record))
+                    ->where('is_published', true)
+                    ->orderBy('sort_order')
+                    ->orderBy('id')
+                    ->get() : collect();
+                $company = $companyId ? Company::query()->find($companyId) : null;
+
+                $footer = StorefrontFooterStarter::layout($pages, (string) ($company?->name ?: config('app.name')));
+
+                $set('footer_blocks', collect($footer['blocks'])->mapWithKeys(fn (array $block): array => [(string) Str::uuid() => self::footerBlockState($block)])->all());
+                $set('footer_menu', self::keyed($footer['menu']));
+
+                Notification::make()
+                    ->success()
+                    ->title(__('Starter footer loaded'))
+                    ->body($footer['skipped'] === []
+                        ? __('Check the sections, then press Save changes.')
+                        : __('Check the sections, then press Save changes. Not added, because no published page has that name: :links. Create the pages under Site → Pages, then add them to the footer.', ['links' => implode(', ', $footer['skipped'])]))
+                    ->send();
+            });
+    }
+
+    /**
+     * A cleaned footer block as the Footer Builder's fields hold it: the phone numbers in the one
+     * text box (one per line), and the nested lists keyed like the form's own rows.
+     *
+     * @param  array{type: string, data: array<string, mixed>}  $block
+     * @return array{type: string, data: array<string, mixed>}
+     */
+    private static function footerBlockState(array $block): array
+    {
+        $data = $block['data'];
+
+        if (isset($data['phones'])) {
+            $data['phones'] = implode("\n", $data['phones']);
+        }
+
+        foreach (['links', 'items'] as $list) {
+            if (isset($data[$list])) {
+                $data[$list] = self::keyed($data[$list]);
+            }
+        }
+
+        return ['type' => $block['type'], 'data' => $data];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<string, array<string, mixed>>
+     */
+    private static function keyed(array $rows): array
+    {
+        return collect($rows)->mapWithKeys(fn (array $row): array => [(string) Str::uuid() => $row])->all();
+    }
+
+    /** @return Collection<int, Category> */
+    private static function companyCategories(?StorefrontSetting $record): Collection
+    {
+        $companyId = self::companyId($record);
+
+        return $companyId ? Category::withoutGlobalScopes()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get() : collect();
     }
 
     private static function block(string $type, ?string $titleKey = 'title'): Block
@@ -357,11 +518,14 @@ final class NextjsDesignSections
                 ->default('latest')
                 ->native(false)
                 ->live(),
-            Select::make('category_id')
-                ->label(__('Category'))
+            Select::make('category_ids')
+                ->label(__('Categories'))
                 ->options(self::categoryOptions())
+                ->multiple()
+                ->maxItems(8)
                 ->searchable()
                 ->native(false)
+                ->helperText(__('Pick one or more — the row mixes products from all of them.'))
                 ->visible(fn (Get $get): bool => $get('source') === 'category')
                 ->required(fn (Get $get): bool => $get('source') === 'category'),
             TextInput::make('limit')->label(__('How many products'))->numeric()->minValue(1)->maxValue(24)->default(6),

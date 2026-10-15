@@ -6,6 +6,7 @@ use App\Mail\StorefrontLoginOtp;
 use App\Models\ConversationChannel;
 use App\Models\StorefrontSetting;
 use App\Services\Meta\MetaGraphService;
+use App\Support\PhoneLinks;
 use Illuminate\Contracts\Mail\Mailer;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
@@ -32,6 +33,33 @@ class StorefrontNotificationService
     /** notification_credentials keys edited on Settings → Integrations → SMS Gateway (not on Storefront Settings). */
     public const SMS_CREDENTIAL_KEYS = ['sms_api_url', 'sms_api_key', 'sms_sender_id'];
 
+    /** Reply code BulkSMSBD-style gateways send (inside an HTTP 200) when the SMS was accepted. */
+    public const SMS_GATEWAY_SUCCESS_CODE = 202;
+
+    /** BulkSMSBD response codes, for the log when a gateway rejects an SMS. */
+    public const SMS_GATEWAY_CODES = [
+        202 => 'SMS Submitted Successfully',
+        1001 => 'Invalid Number',
+        1002 => 'Sender id not correct / sender id is disabled',
+        1003 => 'Required fields missing',
+        1005 => 'Internal Error',
+        1006 => 'Balance Validity Not Available',
+        1007 => 'Balance Insufficient',
+        1011 => 'User Id not found',
+        1012 => 'Masking SMS must be sent in Bengali',
+        1013 => 'Sender Id has not found Gateway by api key',
+        1014 => 'Sender Type Name not found using this sender by api key',
+        1015 => 'Sender Id has not found Any Valid Gateway by api key',
+        1016 => 'Sender Type Name Active Price Info not found by this sender id',
+        1017 => 'Sender Type Name Price Info not found by this sender id',
+        1018 => 'The Owner of this (username) Account is disabled',
+        1019 => 'The (sender type name) Price of this (username) Account is disabled',
+        1020 => 'The parent of this account is not found',
+        1021 => 'The parent active (sender type name) price of this account is not found',
+        1031 => 'Account Not Verified, contact the administrator',
+        1032 => 'IP not whitelisted',
+    ];
+
     public function __construct(protected MetaGraphService $meta) {}
 
     public function smsConfigured(StorefrontSetting $setting): bool
@@ -51,17 +79,60 @@ class StorefrontNotificationService
         $url = strtr($urlTemplate, [
             '{api_key}' => rawurlencode((string) ($credentials['sms_api_key'] ?? '')),
             '{sender_id}' => rawurlencode((string) ($credentials['sms_sender_id'] ?? '')),
-            '{phone}' => rawurlencode(preg_replace('/\D+/', '', $phone) ?: $phone),
+            // Country-code form (8801XXXXXXXXX), the format the gateway's own docs show.
+            '{phone}' => rawurlencode(PhoneLinks::internationalDigits($phone) ?? $phone),
             '{message}' => rawurlencode($message),
         ]);
 
         try {
-            return Http::timeout(20)->get($url)->successful();
+            $response = Http::timeout(20)->get($url);
         } catch (\Throwable $exception) {
             Log::warning('Storefront SMS send failed', ['error' => $exception->getMessage()]);
 
             return false;
         }
+
+        if (! $response->successful()) {
+            Log::warning('Storefront SMS rejected by gateway', ['company_id' => $setting->company_id, 'http_status' => $response->status()]);
+
+            return false;
+        }
+
+        // These gateways answer HTTP 200 even when they refuse the SMS (no balance, wrong sender ID, IP not
+        // whitelisted), with the real result in a reply code, so the HTTP status alone is not enough.
+        $code = $this->smsGatewayCode($response->body());
+
+        if ($code !== null && $code !== self::SMS_GATEWAY_SUCCESS_CODE) {
+            Log::warning('Storefront SMS refused by gateway', [
+                'company_id' => $setting->company_id,
+                'code' => $code,
+                'meaning' => self::SMS_GATEWAY_CODES[$code] ?? null,
+            ]);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * The reply code of a gateway response: `response_code` in a JSON body, or a plain body that is exactly a
+     * known code. Null when the gateway sends no code (other gateways), so those keep going by HTTP status.
+     */
+    protected function smsGatewayCode(string $body): ?int
+    {
+        $body = trim($body);
+        $json = json_decode($body, true);
+
+        if (is_array($json) && isset($json['response_code']) && is_numeric($json['response_code'])) {
+            return (int) $json['response_code'];
+        }
+
+        if (preg_match('/^\d{3,4}$/', $body) && array_key_exists((int) $body, self::SMS_GATEWAY_CODES)) {
+            return (int) $body;
+        }
+
+        return null;
     }
 
     public function mailConfigured(StorefrontSetting $setting): bool

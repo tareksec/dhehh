@@ -14,11 +14,48 @@ All notable production changes to Business Dashboard are documented here.
 
 - **IMS data feed: no customer information, ever.** Owner rule 2026-10-15. The `customers` and `customer-payments` feeds are removed, orders no longer carry the customer's name or phone, and the free-text notes on payments, expenses and stock movements are no longer sent (they can name people). IMS is meant to show only a running project's unit sales, never who bought.
 
-### Technical Notes
+### Fixed
 
+- **A refused SMS was counted as sent.** BulkSMSBD-style gateways answer HTTP 200 even when they refuse the SMS (no balance, wrong sender ID, IP not whitelisted) and put the real result in a reply code. The system now reads that code (`response_code` in the JSON, or a plain code): anything other than `202` is a failed send, so a login code that never left no longer shows "sent", and the WhatsApp-to-SMS fallback no longer stops at a refused SMS. The refusal and its meaning (for example 1007 Balance Insufficient, 1032 IP not whitelisted) are written to the log. Gateways that send no reply code keep going by HTTP status.
+- **SMS numbers are now sent with the country code** (`8801XXXXXXXXX`, as the BulkSMSBD documentation shows) instead of the stored `01XXXXXXXXX`.
+- **Login, registration and password-reset SMS follow the gateway's OTP format** `Your {Company} OTP is {code}. Use it to … It expires in N minutes.` (storefront customers, reseller portal and investor portal). BulkSMSBD asks for this format for OTP messages. The investor portal texts (English and Bangla) changed too.
+
+### Technical Notes
 - Migration `2026_10_15_100000` adds `deleted_at` to `expenses` and `order_payments`; both models now soft-delete, and the rest of the ERP still treats a deleted row as gone. Stock movements are deliberately not soft-deleted: shared-stock sums read the ledger without model scopes and would count deleted rows. A deleted stock movement is still found by the daily `ids_only` check.
 - No new interface text, so no language-file changes. Tests: `ImsSyncApiTest` 26 (5 new).
+- `StorefrontNotificationService::sendSms()` reads the reply through `smsGatewayCode()`; known codes are in `SMS_GATEWAY_CODES`. Phone goes through `PhoneLinks::internationalDigits()`.
+- Tests: new `StorefrontSmsGatewayTest` (5); OTP-wording assertions updated in `StorefrontApiAccountTest`, `StorefrontCustomerAuthTest`, `ResellerPortalPasswordResetTest`, `InvestorPortalTest`.
+- Agent rules (`CLAUDE.md` Commit policy and `AGENTS.md`, which had the opposite "never commit without permission" lines): finished work is now committed and pushed to a topic-named feature branch (`feature/<topic>`) without waiting to be asked; pushing or merging to `main` still needs the owner's explicit approval. No code change.
 
+## [2.77.0] - 2026-10-14
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **One click to arrange the Next.js footer like the reference site (owner request).** The Footer Builder (Navigation, menus & SEO tab) has a new **Load the starter footer** button on the Next.js row. It fills the Footer Builder and the footer menu with the footer of `zamzamint.netlify.app`: the brand with the about text and the social icons, **Quick links** (Home, Shop, About Us, Contact Us, Promotions), a **Customer Service** column (Delivery Information, Return, Refund & Exchange, Terms and Conditions, Privacy Policy), **Our Office** (address, email, two phone numbers, trade licence line), **Safety Payments** badges (bKash, Nagad, Rocket, Cards) and the bottom bar (copyright, "Developed by Bright Hive Digital", "Developed with ♥ for Bangladesh"). Nothing is saved until **Save changes**, and every word can be edited afterwards. A link to a page (About, Contact, Delivery, Returns, Terms, Privacy) is added only when the site has a published page with that name; the message after loading lists the ones that were left out, so create those pages under Site → Pages and add them. The reference's *Request for Quote* and *Reselling Program* links are not added because the Next.js site has no such pages yet.
+- **Bottom bar: a link on the middle text.** The Footer Builder's bottom bar has a new optional **Middle text link**, so "Developed by …" can link to the developer's site.
+
+### Changed
+
+- **The Next.js footer looks like the reference footer.** Section headings, links, payment badges and the bottom bar use the reference's sizes and colours on a dark footer, the brand and office columns are a little wider, phone numbers are separated by commas, and the copyright text now fills `{year}` and `{company_name}` (the Blade footer already did; the Next.js footer showed the tokens as typed).
+
+### Technical Notes
+
+- Starter footer: new `App\Support\StorefrontFooterStarter::layout()` (blocks, Quick links menu and the labels of page links left out; pages matched by normalised title or slug among the site's published pages, `forSite()`), used by the `loadStarterFooter` header action of the Footer Builder section (`NextjsDesignSections::loadStarterFooterAction()`, section key `footer_builder`, visible on the Next.js row only). It only sets the form state (`footer_blocks`, `footer_menu`). The about text is the reference's Bangla sentence, read from `lang/bn.json` whatever language the admin uses. The contact block carries the reference's own office details (address, email, two phones, trade licence) as editable text; they are not read from another company. No migration. `bottom_bar` data gains `center_url` (`StorefrontSiteDesign::footerBlockData()`, cleaned like other links); the Blade footer ignores it. Website: `Footer.tsx` restyled, `{year}` / `{company_name}` filled in the copyright and middle text, `center_url` rendered as a link. New `NextjsFooterStarterTest` (10).
+## [2.76.0] - 2026-10-14
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **One click to arrange the whole Next.js home page like the reference site (owner request).** The Home Page Builder (Website Design tab) has a new **Load the starter layout** button. It fills the builder with every section of `zamzamint.netlify.app` — hero, trust strip (Fast Delivery, Easy Payment, Smart Gadgets, Quality Check), Shop by Category, *Best Deals Today*, *Latest Gadgets*, the *Flash Deal* band, four category rows (*Best Audio Picks*, *Fans & Cooling*, *Kitchen Essentials*, *Beauty & Lifestyle*), *Order Easily on WhatsApp* and the *Wholesale Gadgets in Bangladesh* text — and adds the top bar links *Mobile App* and *Track Order* when there are none. Your categories are matched by name (a spelling such as "Cocker" or "Gift and Crafts" still matches; a row with none of its categories is left out). Nothing is saved until you press **Save changes**, and every word can be edited afterwards. A second button, **Fill empty category details**, adds the short line and icon the category cards show to the categories that have none — a tagline or icon you already set is never changed.
+- **A product row can mix several categories.** The *Product row* section's category choice is now a multi-select (up to 8): the row shows one product from each chosen category in turn. Rows saved with one category keep working.
+- The *Shop on mobile* section is now the target of the top bar's *Mobile App* link (`/#mobile-app`), and the folded *SEO text* shows the first paragraph and opens the rest with *Read more*.
+
+### Technical Notes
+
+- Starter home page: new `App\Support\StorefrontHomeStarter` (sections, top bar links, category matching by normalised name, blank-only tagline/icon fills) used by two header actions of the Home Page Builder section (`NextjsDesignSections`: `loadStarterLayout` only sets the form state; `fillCategoryDetails` writes the blank category fields straight away, per category only when the user may update it, always inside the settings row's company). `product_row` data now holds `category_ids` (the old `category_id` is merged in by `StorefrontSiteDesign`); `GET /site` serves `category_slugs` plus `category_slug` (the first) for older websites; `PRODUCT_SOURCES['category']` reads "Chosen categories". 14 new keys in `lang/en.json` and `lang/bn.json`. New `NextjsHomeStarterTest` (11).
 ## [2.75.0] - 2026-10-14
 
 **Release type:** Minor Feature Update

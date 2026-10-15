@@ -1,6 +1,73 @@
 # Update Notes
 
-This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
+This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
+
+## 2026-10-14 (later still) - Agent rule: commit and push new work to a topic-named feature branch
+
+Owner request (in Bangla): add a rule for the agent — after any new work, commit it and push it to a feature branch, and name that branch after the session's relevant topic.
+
+What changed: `CLAUDE.md` → Commit policy, and `AGENTS.md` (the file other agents read; its three "no commit / ask before pushing / no push without permission" lines contradicted the new rule, so they were replaced by it). Finished work (tests, bilingual keys, CHANGELOG and UPDATE_NOTES done, checks passing) is committed and pushed to `feature/<topic>` without being asked, in both repositories; one topic per branch; a branch the session's instructions already designate wins. The rule that `main` moves only on the owner's explicit approval stays, because Coolify deploys `main` on push. No force-push or history rewrite on a pushed branch.
+
+Good to know: new sessions start from the default branch, so the rule only reaches them once this branch is merged to `main`. The website repository has no rules file; this one covers it.
+
+Commit status: committed and pushed to `feature/agent-commit-and-branch-rule` (not `main`).
+
+## 2026-10-14 - SMS gateway checked against the BulkSMSBD API
+
+Owner logged in to bulksmsbd.net and asked for a check of the SMS code against its API page; then "সব গুলো ঠিক করে দেও".
+
+- Fixed: reply code in an HTTP 200 (anything but 202 = failed, logged with its meaning).
+- Fixed: number sent as `8801XXXXXXXXX`.
+- Fixed: OTP SMS wording `Your {Company} OTP is {code}. …` (customer, reseller, investor portal; 2 investor keys renamed in `lang/en.json` and `lang/bn.json`).
+- Not changed: `type=text` stays in the URL template; whether Bangla text needs another `type` is not on the page the owner showed. Send one Bangla test SMS to check.
+- Verified: StorefrontSmsGatewayTest (new) and the SMS/OTP-related test files passed; full suite on the clean worktree before the rebase onto v2.77.0: 2058 passed, 2 failed (`WhatsAppWebArchiveTest`, heroicons SVG missing in the test copy of vendor — fails without this change too).
+
+Needs Bangla review: the 2 investor OTP strings in `lang/bn.json`.
+
+Commit status: committed and pushed to main with owner approval (2026-10-14).
+
+## 2026-10-14 (later) - Starter footer like zamzamint.netlify.app, loaded from the Footer Builder
+
+Owner request (in Bangla): design the footer too, like the reference site.
+
+What I did: read the reference footer's markup and rebuilt it as Footer Builder blocks (`App\Support\StorefrontFooterStarter`): brand with about text and social icons, Quick links, Customer Service, Our Office (address, email, two phones, trade licence), Safety Payments badges (bKash, Nagad, Rocket, Cards) and the bottom bar (copyright, "Developed by Bright Hive Digital", "Developed with ♥ for Bangladesh"). Like the home page it is a button, not something I set in your database (which I cannot reach): after deploying the ERP and the website, open Site → Storefront Settings → the Next.js site → Navigation, menus & SEO → **Footer Builder** → **Load the starter footer** → **Save changes**.
+
+Website: `Footer.tsx` now uses the reference's sizes and colours on a dark footer (headings, links, badges, bottom bar), a wider brand and office column, comma-separated phone numbers, and it fills `{year}` / `{company_name}` in the copyright (the Blade footer already did; the Next.js footer printed the tokens). The bottom bar has a new optional **Middle text link** so "Developed by …" can link out.
+
+Things to know:
+- **Pages:** the links to About Us, Contact Us, Delivery Information, Return/Refund & Exchange, Terms and Privacy Policy go to your own published pages, found by title or slug for the Next.js site. A page that does not exist yet is left out and named in the message after loading; create it under Site → Pages and add the link. I did not create the pages or write their text (policy wording is yours).
+- **Request for Quote / Reselling Program** from the reference are not added: the Next.js site has no such pages yet. **Promotions** links to the discounted-products list (`/products?sort=discount&sale=1`).
+- **Social icons:** the Facebook and WhatsApp icons come from Footer Builder → Social links, as before; the starter does not copy the reference's profile URLs. Add them there if they are not set.
+- **Contact details** are the reference's own (the address in Uttara, info@zamzamint.com, +8801325224400, +8801894449445, trade licence TRAD/DNCC/049335/2025); the about text is the reference's Bangla sentence with the company's name. The "Developed by Bright Hive Digital" line is the reference's too. Edit or delete any of them after loading.
+- The starter replaces the footer blocks and the footer menu in the form (a confirm dialog says so). Nothing is saved until Save changes.
+- The width of the footer follows the rest of the site (a little wider than the reference's), so it lines up with the header and the home page.
+
+Needs Bangla review: 7 new admin labels in `lang/bn.json` (Load the starter footer, its dialog and message, Starter footer loaded, Middle text link and its help). The footer's Bangla about text is the reference's own sentence, not a translation of mine.
+
+Tests: new `NextjsFooterStarterTest` (10); real-browser check on a throwaway database through the real admin (button, confirm dialog, Save, 7 blocks and the 5-link menu persisted, no JS or server errors) and the website footer on desktop and phone, dark and light backgrounds. Website `tsc` and `npm run build` are clean.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট ও পুশ কর এবং মেইনে পুশ কর", 2026-10-14), both repositories; `origin/main` (v2.76.0) merged first.
+
+## 2026-10-14 - Starter home page like zamzamint.netlify.app, loaded from the Home Page Builder
+
+Owner request (in Bangla): arrange the home page like `https://zamzamint.netlify.app/` with every section — doing it by hand in the admin takes too long.
+
+What I did: read the reference site's code and rebuilt its home page as Home Page Builder sections (`App\Support\StorefrontHomeStarter`): hero, trust strip, Shop by Category, Best Deals Today, Latest Gadgets, Flash Deal, four category rows, Order Easily on WhatsApp, Wholesale Gadgets in Bangladesh (SEO text with Read more), plus top bar links Mobile App / Track Order. The wording is the reference site's own. Two new buttons on the Home Page Builder: **Load the starter layout** (draft until Save) and **Fill empty category details** (blank taglines / icons only).
+
+Why a button and not "I set it up": the layout is stored in the live database, which I cannot reach from here. Deploy, open Site → Storefront Settings → the Next.js site → Website Design → Home Page Builder, press **Fill empty category details**, then **Load the starter layout**, then **Save changes**.
+
+Also: a product row can now mix several categories (the reference groups e.g. Audio + Earbuds); the SEO text folds to its first paragraph; the "Shop on mobile" section has the `#mobile-app` anchor.
+
+Things to know:
+- The *Flash Deal* band shows only when a **Flash Sale** collection (Offers) with products exists, and its countdown needs an end time on that offer — the reference site uses a fake timer, the ERP uses the real one. The *Best Deals Today* banner shows products that are really on sale.
+- Hero slides are untouched (Site → Hero Slides); the reference's three slides are not copied because your live slides have your own banners.
+- The starter's phone / WhatsApp buttons use the numbers saved in the site settings (the SEO text names +8801325224400, as the reference does — edit it if that is not your WhatsApp number).
+- The headings are English (as on the reference); admin-entered content is not translated yet, so they stay English in Bangla mode. Category rows named after the reference's "Kitchen" and "Lipstick" are matched to your Air Fryer / Cocker / Cosmetics categories.
+- Needs Bangla review: the 14 new admin labels in `lang/bn.json` (Load the starter layout, Fill empty category details and their messages, Chosen categories).
+
+Tests: new `NextjsHomeStarterTest` (11) and the existing 22 design tests pass. Real-browser check on a throwaway database with your real category names: both buttons, the confirm dialogs, Save, the home page with all 12 sections (desktop and phone), SEO fold and the Mobile App link.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট ও পুশ কর এবং মেইনে পুশ কর", 2026-10-14), both repositories.
 
 ## 2026-10-15 - IMS feed: our side of the work (no customer data, returns, deleted records)
 
