@@ -58,7 +58,7 @@ Left sidebar, Bangla/English, mobile friendly. The pages:
 | 7 | **প্রোফাইল (Profile)** | Name, phone (read-only), email, password change. |
 | — | **আবেদন (Apply)** — outside the login | Name, phone, business name, note, password. Creates the pending reseller **with a login** (§2.1 Q4). After login, a pending or rejected applicant sees only a status page (with the rejection reason, if any). |
 
-Not in this plan (can follow later): notifications (SMS/WhatsApp when approved, when commission becomes payable, when paid; needs your message texts), a reseller-wise sales report on the admin side, reseller tiers or levels.
+Not in this plan (can follow later): notifications (SMS/WhatsApp when approved, when commission becomes payable, when paid; needs your message texts), reseller tiers or levels. (The reseller-wise sales report on the admin side was built 2026-10-16: Resellers → Reseller sales report.)
 
 ## 4. The store-link fix
 

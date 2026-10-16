@@ -142,7 +142,7 @@ Owner request (in Bangla): "কী কী লাগবে প্রশ্ন ক
 What changed (details in `CHANGELOG.md` [Unreleased]):
 
 1. **Returned / refunded orders: no trash; restore recreates the sale.** `Order::canBeMovedToTrash()`; the order page's delete button is hidden, the list's bulk "Move to trash" skips and reports them, and the model refuses a soft delete in those statuses. `restored` now calls `OrderWorkflowService::restoreFromTrash()`, which rebuilds the sale for every status.
-2. **Damaged goods with a source label.** New column `stock_movements.damage_source` (migration `2026_10_15_120000`): *Customer return damage* / *Shipment damage* / *Other damage*; required on the stock movement form for a damage entry; column + filter in the movement list and history; the Total Damage card links to the damage list. **Put returned goods back in stock** now asks *Good pieces* and *Damaged pieces* per item; damaged pieces are booked as a Return and straight away written off as a customer-return Damage (net zero on the shelf, counted in Total Damage). Shipment damage is entered with the existing stock movement form (type Damage, source Shipment damage).
+2. **Damaged goods with a source label.** New column `stock_movements.damage_source` (migration `2026_10_15_120000`): *Customer return damage* / *Shipment damage* / *Warehouse damage* (renamed from *Other damage* on 2026-10-16); required on the stock movement form for a damage entry; column + filter in the movement list and history; the Total Damage card links to the damage list. **Put returned goods back in stock** now asks *Good pieces* and *Damaged pieces* per item; damaged pieces are booked as a Return and straight away written off as a customer-return Damage (net zero on the shelf, counted in Total Damage). Shipment damage is entered with the existing stock movement form (type Damage, source Shipment damage).
 3. **Resellers → Variation selling prices.** One list of every active variation with the wholesale price (read only) and an editable suggested price, a "no suggested price yet" filter and two bulk actions (same price, clear). No percentages.
 4. **Reseller portal tab bar on phones** (Dashboard, Products, raised Create order, Orders, Earnings).
 5. **Dashboard: announcement** (Reseller Settings → Portal announcement; migration `2026_10_15_130000`), **Get started** checklist (4 steps), **Best-selling products** (last 30 days).
@@ -153,7 +153,7 @@ Looked at in a real browser (Chromium, throw-away SQLite file with made-up data,
 
 Decisions I made without asking, for the owner to confirm or change:
 
-- A third damage source **Other damage**, so an entry that is neither a customer return nor a shipment is not forced into a wrong group. Older damage entries have no source (shown as "-").
+- A third damage source (now **Warehouse damage**, the owner's name from 2026-10-16), so an entry that is neither a customer return nor a shipment is not forced into a wrong group. Older damage entries have no source (shown as "-").
 - **Refunded** orders are also never trashed (they keep the same returned-goods record as Returned).
 - A damaged returned piece shows as two movements (Return then Damage) in the product's history, so on-hand stock stays right and the order's "checked" count includes it.
 - Best sellers count **pieces** over the **last 30 days** from confirmed / processing / completed orders (cancelled, returned and draft ones are left out); no money amounts, because a reseller's own-courier orders and store orders price their lines differently.
@@ -165,11 +165,35 @@ Decisions I made without asking, for the owner to confirm or change:
 
 Deploy: `php artisan migrate` (two migrations: `stock_movements.damage_source`, `storefront_settings.reseller_announcement_*`) and `npm run build` (new portal CSS). Then fill the suggested prices (Resellers → Variation selling prices) and write an announcement if wanted.
 
-Needs Bangla review (new keys): Customer return damage (কাস্টমার ফেরত ড্যামেজ), Shipment damage (শিপমেন্টের ড্যামেজ), Other damage (অন্যান্য ড্যামেজ), Damage source, Good pieces (ভালো পিস), Damaged pieces (ড্যামেজ পিস), the Put-returned-goods dialog texts, the trash message, Variation selling prices (ভেরিয়েশনের বিক্রয় দাম), Set the same price, Clear the suggested price, Portal announcement, Get started steps (Name your store, Add products to your store, Add a payout account hint, Get your first order), Best-selling products, :count piece / pieces, Portal menu, the guide's return-charge sentences, Test subdomain setup and its three result messages.
+Needs Bangla review (new keys): Customer return damage (কাস্টমার ফেরত ড্যামেজ), Shipment damage (শিপমেন্টের ড্যামেজ), Warehouse damage (গুদামের ড্যামেজ), Damage source, Good pieces (ভালো পিস), Damaged pieces (ড্যামেজ পিস), the Put-returned-goods dialog texts, the trash message, Variation selling prices (ভেরিয়েশনের বিক্রয় দাম), Set the same price, Clear the suggested price, Portal announcement, Get started steps (Name your store, Add products to your store, Add a payout account hint, Get your first order), Best-selling products, :count piece / pieces, Portal menu, the guide's return-charge sentences, Test subdomain setup and its three result messages.
 
 Tests: `OrderReturnedStockTest` (14), `ResellerVariationPriceToolTest` (6), `ResellerPortalBottomNavTest` (3), `ResellerPortalDashboardExtrasTest` (7), `ResellerSubdomainSetupCheckTest` (4), `ResellerGuidePageTest` (6, +1). Full `php artisan test` (plain, no `--env`): 2514 passed, 1 skipped, 1 failed on the first run — `ResellerPortalCreateOrderTest` counted exactly one link to the create-order page, and the new tab bar adds a second; the test now ignores the tab bar and checks it separately (17 passed on its own). Nothing else failed. `npm run build` OK.
 
-Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-15). **Not pushed to `main`**: the owner checks the brief first and approves `main` himself.
+Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-15). Pushed to `main` on 2026-10-15 with the owner's approval (`414a85f`, includes the merge of v2.79.0).
+
+## 2026-10-16 - Owner's answers on the open points; admin Reseller sales report (step 2 of 5)
+
+Owner request (in Bangla): "প্রশ্ন কর" on the open points, then "এটা একটা ক্রম সাজাও ... সবগুলো করতে হবে". Answers: (1) keep the third damage source, named **"গুদামের ড্যামেজ" (Warehouse damage)**; (2) a Refunded order is also never trashed (as built); (3) for a returned product: good condition goes back to stock, a damaged one goes to damage — which is what "Put returned goods back in stock" already does (good pieces are added to the shelf; damaged pieces are counted as *Customer return damage* and the shelf is unchanged), so nothing else changed there; (4) do **all** the next jobs, in an order I choose. Order chosen: 1 the answers above, 2 the admin reseller sales report, 3 reseller notifications (SMS/WhatsApp, texts editable from the admin), 4 the Next.js site's open tasks, 5 reseller tiers last (needs the owner's rules, so I will ask).
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+
+1. **Label rename:** *Other damage* → *Warehouse damage* (গুদামের ড্যামেজ). The stored value stays `other`, so no data changes.
+2. **Resellers → Reseller sales report** (new page, read only): a row per reseller for a period (this month by default, other presets, or custom dates) with orders, cancelled and returned counts, sales, cost, profit (payable / pending delivery) and paid out; totals cards on top. `ResellerSalesReportService` + `ResellerSalesReport` page; no migration.
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- "Sales" = confirmed / processing / completed orders by **order date** (the rule the reseller's own dashboard uses). Cancelled and returned orders are counted, not added to money.
+- "Paid out" = withdrawal requests marked paid whose **paid date** is in the period, so it can include money for earlier orders.
+- A reseller with no order and no payout in the period is not listed. No return-rate percentage is shown (not asked for).
+- Access follows "view reseller profits" plus the company's reseller module switch.
+
+Needs Bangla review (new keys): Reseller sales report (রিসেলার সেলস রিপোর্ট), Custom dates (নিজের দেওয়া তারিখ), Paid out (পরিশোধ করা হয়েছে), Resellers with orders (অর্ডার পাওয়া রিসেলার), ":cancelled cancelled, :returned returned" (:cancelled বাতিল, :returned ফেরত), the period names (This month, Last month, Last 7 days, Last 30 days, This year, All time), Period, the empty-state texts and the long note under the cards.
+
+Tests: `ResellerSalesReportTest` (6); related groups (Reseller, ModuleGuard, TranslationParity, OrderReturnedStock, MultiCompanyIsolation, Permission) 499 passed.
+
+Verified: full suite 2521 passed, 1 skipped, 0 failed.
+
+Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16). Not pushed to `main`.
 
 ## 2026-10-15 - Admin: reset a reseller's password / email a reset link; portal ↔ admin audit
 
