@@ -142,8 +142,10 @@ class StorefrontSiteConfigService
 
     /**
      * Header/footer menu items with category and page ids resolved to slugs
-     * (the website routes by slug). Items pointing at a category or page that
-     * is gone, inactive or unpublished are dropped, like the Blade menus do.
+     * (the website routes by slug) and a "Become a reseller" item resolved to
+     * the reseller portal's address. Items pointing at a category or page that
+     * is gone, inactive or unpublished, or at a reseller program that is off,
+     * are dropped, like the Blade menus do.
      *
      * @param  array<int, array<string, mixed>>|null  $items
      * @return list<array<string, mixed>>
@@ -156,12 +158,19 @@ class StorefrontSiteConfigService
         $pages = StorefrontPage::query()->published()->forSite($this->setting)
             ->whereIn('id', $items->pluck('page_id')->filter()->all())->pluck('slug', 'id');
 
-        return $items->map(function (array $item) use ($categories, $pages): ?array {
+        // "Become a reseller" is not a page of the website: it is the reseller portal's guide (or
+        // application form), as the Blade storefront links it. With the reseller module off, or no
+        // portal address, the item is dropped like a menu item pointing at a category that is gone.
+        $resellerUrl = $items->contains(fn (array $item): bool => ($item['type'] ?? null) === 'reseller')
+            ? $this->company->resellerJoinUrl()
+            : null;
+
+        return $items->map(function (array $item) use ($categories, $pages, $resellerUrl): ?array {
             $type = (string) ($item['type'] ?? 'custom');
             $categorySlug = $type === 'category' ? $categories->get($item['category_id'] ?? null) : null;
             $pageSlug = $type === 'page' ? $pages->get($item['page_id'] ?? null) : null;
 
-            if (($type === 'category' && ! $categorySlug) || ($type === 'page' && ! $pageSlug)) {
+            if (($type === 'category' && ! $categorySlug) || ($type === 'page' && ! $pageSlug) || ($type === 'reseller' && ! $resellerUrl)) {
                 return null;
             }
 
@@ -170,7 +179,11 @@ class StorefrontSiteConfigService
                 'type' => $type,
                 'category_slug' => $categorySlug,
                 'page_slug' => $pageSlug,
-                'url' => $type === 'custom' ? ($item['url'] ?? null) : null,
+                'url' => match ($type) {
+                    'custom' => $item['url'] ?? null,
+                    'reseller' => $resellerUrl,
+                    default => null,
+                },
                 'new_tab' => (bool) ($item['new_tab'] ?? false),
                 'icon' => $item['icon'] ?? null,
             ];

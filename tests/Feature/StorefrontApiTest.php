@@ -577,6 +577,32 @@ class StorefrontApiTest extends TestCase
         $this->assertSame(['next-page'], collect($site->json('data.footer.0.data.legal_links') ?? $site->json('data.footer_blocks.0.data.legal_links'))->pluck('page_slug')->all());
     }
 
+    public function test_the_become_a_reseller_menu_item_points_at_the_reseller_portal_and_goes_when_the_module_is_off(): void
+    {
+        $nextjs = StorefrontSetting::query()->nextjs()->where('company_id', $this->company->getKey())->firstOrFail();
+        $nextjs->update([
+            'header_menu' => [
+                ['label' => 'Shop', 'type' => 'shop'],
+                ['label' => 'Sell with us', 'type' => 'reseller', 'new_tab' => true],
+            ],
+            'footer_menu' => [['label' => 'Resellers', 'type' => 'reseller']],
+        ]);
+
+        // The reseller module is off for this company: there is nowhere to send a visitor, so the item is dropped.
+        $site = $this->api('site')->assertOk();
+        $this->assertSame(['Shop'], collect($site->json('data.menus.header'))->pluck('label')->all());
+        $this->assertSame([], $site->json('data.menus.footer'));
+
+        Company::query()->whereKey($this->company->getKey())->update(['reseller_module_enabled' => true]);
+
+        $site = $this->api('site')->assertOk();
+        $item = collect($site->json('data.menus.header'))->firstWhere('label', 'Sell with us');
+        $this->assertSame('reseller', $item['type']);
+        $this->assertStringEndsWith('://reseller.offer.example.test/portal/guide', $item['url']);
+        $this->assertTrue($item['new_tab']);
+        $this->assertStringEndsWith('://reseller.offer.example.test/portal/guide', $site->json('data.menus.footer.0.url'));
+    }
+
     protected function api(string $path, ?string $token = null): TestResponse
     {
         return $this->getJson('/api/v1/storefront/'.$path, ['Authorization' => 'Bearer '.($token ?? $this->token)]);

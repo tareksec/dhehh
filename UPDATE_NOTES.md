@@ -222,6 +222,28 @@ Tests: `ResellerNotificationsTest` (11). Verified: full suite 2532 passed, 1 ski
 
 Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16). Not pushed to `main`.
 
+## 2026-10-16 (later still) - Next.js site: what is really open, and the "Become a reseller" menu item (step 4 of 5)
+
+Step 4 of the order I gave the owner. The owner never said which Next.js jobs he meant, so I read the website repo (`bhd4232/zamzamint-new-website-theme`, now attached to this session) against the ERP API and the old "not done" notes.
+
+What I found:
+
+- **Already done, the old note is out of date:** sign-up with the SMS code. The website's `RegisterForm` already has the "enter the 6-digit code" step and the proxy passes `verification_required`, so the line "the Next.js site does not show a code field yet" in the 2026-10-07 notes no longer holds.
+- **Real gap, fixed now:** the header / footer / top-bar menu builders offer a *Become a reseller* item, but the API sent it with no address and the website dropped it (`menuHref` returned null). ERP: `StorefrontSiteConfigService::menu()` now gives the item `url` = the reseller portal's guide (or application form when the guide is off), the same address the Blade store uses, and drops it while the reseller module is off. Website: `menuHref` accepts the `reseller` type (branch `feature/reseller-menu-link`, commit `2cdee4b`; typecheck passes, the repo has no test suite). Both must be deployed for the link to show; the website part alone changes nothing visible.
+- **Still open, needs the owner (nothing built, no rule invented):**
+  1. *Request for Quote* page: the ERP has the switch `marketplace_quote_enabled` and a Quotations module, but no storefront endpoint takes a quote request and the website has no page. Needs: which fields, who is told, which ERP record it becomes.
+  2. *Meta pixel / conversion events and a cookie-consent banner* for the Next.js site: needs the owner's decision on the consent wording and which events.
+  3. A live payment run (needs real PayStation / ZiniPay credentials) and the DNS cut-over on Coolify: the owner's side.
+  4. The OpenAPI file still does not describe the storefront endpoints (documentation only; `docs/api/storefront-api.md` is the working contract).
+
+Decision I made without asking: the item is gated only by the reseller module and the portal address (the Blade store does the same); the Next.js row's own `features.reseller_program_enabled` flag is left as it was.
+
+Deploy: nothing to migrate. After deploying both the ERP and the website, add a *Become a reseller* item in the Next.js row's header or footer menu to see it.
+
+Tests: `StorefrontApiTest` (+1). Verified: full suite 2533 passed, 1 skipped, 0 failed.
+
+Commit status: ERP part committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16) after the full suite; website part pushed to the website repo's branch `feature/reseller-menu-link`. Neither is on `main`.
+
 ## 2026-10-15 - Admin: reset a reseller's password / email a reset link; portal ↔ admin audit
 
 The owner (in Bangla): *"From the admin, resellers' passwords can be reset, and a password reset request can be sent by email to the email the reseller set."* and *"Check whether the portal and the admin dashboard are connected without problems, whether stock works properly, and whether orders work properly."*
