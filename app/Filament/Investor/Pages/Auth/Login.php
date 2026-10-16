@@ -61,7 +61,7 @@ class Login extends BaseLogin
                 ->visible(fn (): bool => $this->mode === 'password'),
             TextInput::make('code')
                 ->label(__('SMS code'))
-                ->helperText(fn (): string => __('The 6-digit code sent by SMS to :phone. It expires in 10 minutes.', ['phone' => (string) $this->codePhone]))
+                ->helperText(fn (): string => __('The 6-digit code sent by SMS to :phone. It expires in 1 minute.', ['phone' => (string) $this->codePhone]))
                 ->required()
                 ->maxLength(10)
                 ->autocomplete('one-time-code')

@@ -19,14 +19,16 @@ use Illuminate\Validation\ValidationException;
  * staff invite an investor or channel partner, the person sets a password
  * from the SMS link, and later signs in with phone + password or phone + an
  * SMS code. The one-time-code rules are the storefront's
- * (CustomerAccountService): hashed, 6 digits, 10 minutes, 5 tries, one send
- * per minute. Phones are stored as 01XXXXXXXXX (StorefrontApi\Phone).
+ * (CustomerAccountService): hashed, 6 digits, 5 tries, one send per minute;
+ * the code is valid for 1 minute (CODE_VALID_MINUTES). Phones are stored as
+ * 01XXXXXXXXX (StorefrontApi\Phone).
  */
 class InvestorPortalAccountService
 {
     public const INVITE_VALID_DAYS = 7;
 
-    public const CODE_VALID_MINUTES = 10;
+    /** Owner decision 2026-10-16: an investor's SMS code lives for one minute. */
+    public const CODE_VALID_MINUTES = 1;
 
     public const CODE_MAX_ATTEMPTS = 5;
 
@@ -255,9 +257,10 @@ class InvestorPortalAccountService
             'otp_attempts' => 0,
         ])->save();
 
+        $portal = __(':company Investment Portal', ['company' => (string) $company?->name], $account->locale);
         $message = $purpose === 'reset'
-            ? __('Your :company OTP is :code. Use it to reset your investor portal password. It expires in :minutes minutes.', ['company' => $company?->name, 'code' => $code, 'minutes' => self::CODE_VALID_MINUTES], $account->locale)
-            : __('Your :company OTP is :code. Use it to sign in to the investor portal. It expires in :minutes minutes.', ['company' => $company?->name, 'code' => $code, 'minutes' => self::CODE_VALID_MINUTES], $account->locale);
+            ? __(':portal password reset OTP is :code. It expires in 1 minute.', ['portal' => $portal, 'code' => $code], $account->locale)
+            : __(':portal login OTP is :code. It expires in 1 minute.', ['portal' => $portal, 'code' => $code], $account->locale);
 
         $sent = $company !== null && $this->sendSms($company, $account, $message);
 

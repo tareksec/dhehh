@@ -4,6 +4,16 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch
+
+### Changed
+
+- **Investor portal SMS codes now read "{company} Investment Portal login OTP is 123456. It expires in 1 minute." (or "... password reset OTP is ..."), and the code is valid for 1 minute instead of 10.** Owner request 2026-10-16. Before, the text was "Your {company} OTP is 123456. Use it to sign in to the investor portal. It expires in 10 minutes." The message follows the investor's language, and the sign-in and forgot-password pages now say "It expires in 1 minute." A second request inside the first minute still keeps the code already sent. Customer and reseller codes are unchanged.
+
+### Technical Notes
+
+- `InvestorPortalAccountService::sendCode()` words its own message (portal name = `:company Investment Portal`, reason = `$purpose` `login` or `reset`); `CODE_VALID_MINUTES` 10 -> 1. The two "Use it to ... the investor portal" keys in `lang/` were replaced by three new keys, and the helper text key on `Investor\Pages\Auth\Login` / `ForgotPassword` changed from "...10 minutes." to "...1 minute.". Test: `InvestorPortalTest::test_the_investor_code_sms_names_the_portal_and_the_reason_and_lives_one_minute`.
+
 ## [2.81.0] - 2026-10-16
 
 **Release type:** Minor Feature Update

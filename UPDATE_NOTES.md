@@ -2,6 +2,23 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-16 - Investor portal SMS code: wording and 1-minute expiry
+
+Owner instruction (in Bangla): investor OTP SMS should read "Tasneem investment portal + [reason] + OTP code" and expire in 1 minute; later "commit, push, and push to main".
+
+- `InvestorPortalAccountService::sendCode()`: message is now `{company} Investment Portal login OTP is 123456. It expires in 1 minute.` (reason `login`) or `... password reset OTP is ...` (reason `reset`); `CODE_VALID_MINUTES` 10 -> 1. Investors only; customer and reseller codes are unchanged.
+- The portal name is the company name + " Investment Portal" (the same name the portal's header shows). If the company is named "Tasneem Knitting" the SMS says "Tasneem Knitting Investment Portal"; rename the company, or ask for a separate portal-name setting, if the shorter "Tasneem Investment Portal" is wanted.
+- Login and Forgot-password pages: helper text now says "It expires in 1 minute."
+- Known edge: a second request inside the first minute keeps the code already sent (the existing double-tap guard), so asking again at about 50 seconds gives no fresh code until the old one expires.
+- Files: `InvestorPortalAccountService.php`, `Filament/Investor/Pages/Auth/Login.php`, `ForgotPassword.php`, `lang/en.json` + `lang/bn.json` (2 keys replaced by 3, 1 changed), `tests/Feature/InvestorPortalTest.php` (+1 test).
+- Not done: no real SMS sent. Branched from `main` (v2.81.0) on purpose: the BulkSMSBD gateway work (reply code, 880 numbers, customer OTP wording) is already on `main` from `1565d5eb`, so a parallel copy of it in a long-running local tree was left out.
+
+Needs Bangla review: ":company ইনভেস্টমেন্ট পোর্টাল", ":portal লগইন OTP হলো :code। এটি ১ মিনিট পর মেয়াদোত্তীর্ণ হবে।", ":portal পাসওয়ার্ড রিসেট OTP হলো :code। এটি ১ মিনিট পর মেয়াদোত্তীর্ণ হবে।" and the 1-minute helper text in `lang/bn.json` (written by the agent).
+
+Verified: plain `php artisan test` in a clean worktree of `main` (v2.81.0) plus this change: 2526 passed, 1 skipped, 0 failed (24351 assertions). Also `--filter` over `InvestorPortalTest`, `InvestorPortalStaffEntryTest`, `TranslationParityTest`, `StorefrontSmsGatewayTest`, `ResellerPortalPasswordResetTest`: 60 passed. No real SMS sent.
+
+Commit status: committed on `feature/investor-otp-wording` and pushed to `main` on the owner's explicit approval (2026-10-16).
+
 ## 2026-10-14 (later still) - Agent rule: commit and push new work to a topic-named feature branch
 
 Owner request (in Bangla): add a rule for the agent — after any new work, commit it and push it to a feature branch, and name that branch after the session's relevant topic.

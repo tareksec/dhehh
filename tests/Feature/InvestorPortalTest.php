@@ -259,6 +259,40 @@ class InvestorPortalTest extends TestCase
         $this->assertFalse($service->verifyCode($account->fresh(), (string) $realCode));
     }
 
+    public function test_the_investor_code_sms_names_the_portal_and_the_reason_and_lives_one_minute(): void
+    {
+        $company = $this->company('wording.example.test', withSms: true);
+        $account = $this->activeAccount($company, $this->investor($company, 'Wording', '01711000009'));
+        $service = app(InvestorPortalAccountService::class);
+        $texts = [];
+
+        Http::fake(['sms.example.test/*' => function ($request) use (&$texts) {
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+            $texts[] = $query['msg'];
+
+            return Http::response('OK', 200);
+        }]);
+
+        $this->assertTrue($service->sendCode($account->fresh(), 'login'));
+        $this->assertMatchesRegularExpression(
+            '/^'.preg_quote($company->name, '/').' Investment Portal login OTP is \d{6}\. It expires in 1 minute\.$/',
+            $texts[0],
+        );
+        $this->assertEqualsWithDelta(60, now()->diffInSeconds($account->fresh()->otp_expires_at, false), 2);
+
+        $this->travel(2)->minutes();
+        $this->assertTrue($service->sendCode($account->fresh(), 'reset'));
+        $this->assertMatchesRegularExpression(
+            '/^'.preg_quote($company->name, '/').' Investment Portal password reset OTP is \d{6}\. It expires in 1 minute\.$/',
+            $texts[1],
+        );
+
+        // Past the minute the code no longer works.
+        preg_match('/(\d{6})/', $texts[1], $matches);
+        $this->travel(61)->seconds();
+        $this->assertFalse($service->verifyCode($account->fresh(), $matches[1]));
+    }
+
     public function test_sms_code_sign_in_is_not_offered_without_an_sms_gateway(): void
     {
         $company = $this->company('no-sms.example.test');
