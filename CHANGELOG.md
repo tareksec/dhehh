@@ -4,7 +4,9 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Patch
+## [2.81.1] - 2026-10-16
+
+**Release type:** Patch/Fix Update
 
 ### Changed
 
@@ -13,7 +15,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `InvestorPortalAccountService::sendCode()` words its own message (portal name = `:company Investment Portal`, reason = `$purpose` `login` or `reset`); `CODE_VALID_MINUTES` 10 -> 1. The two "Use it to ... the investor portal" keys in `lang/` were replaced by three new keys, and the helper text key on `Investor\Pages\Auth\Login` / `ForgotPassword` changed from "...10 minutes." to "...1 minute.". Test: `InvestorPortalTest::test_the_investor_code_sms_names_the_portal_and_the_reason_and_lives_one_minute`.
-
 ## [2.81.0] - 2026-10-16
 
 **Release type:** Minor Feature Update
