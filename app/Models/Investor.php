@@ -82,6 +82,12 @@ class Investor extends Model
         return $this->hasMany(Investment::class);
     }
 
+    /** The groups this investor is in (or was in), one row per group. */
+    public function groupMemberships()
+    {
+        return $this->hasMany(InvestorGroupMember::class);
+    }
+
     public function settlementPayouts()
     {
         return $this->hasMany(SettlementPayout::class);

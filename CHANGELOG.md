@@ -35,6 +35,52 @@ All notable production changes to Business Dashboard are documented here.
 - `StorefrontSiteConfigService::menu()` resolves menu items of type `reseller` through `Company::resellerJoinUrl()` (`docs/api/storefront-api.md` updated). Test: `StorefrontApiTest::test_the_become_a_reseller_menu_item_points_at_the_reseller_portal_and_goes_when_the_module_is_off`.
 - Reseller levels: migration `2026_10_16_110000_create_reseller_levels_table` (table `reseller_levels` with unique `(company_id, name)`, and `customers.reseller_level_id` nullable, `nullOnDelete`); model `ResellerLevel` (`BelongsToCompany`, added to the isolation test, mapped to the `sales` permission module in `User::MODEL_MODULES`); `Customer::resellerReturnCharge()` / `resellerMinWithdrawal()` are the one place the level-or-company amount is decided and are used by `ResellerOwnCourierService::chargeReturn()`, the portal `Withdrawals` page and `ResellerStoreController`. Tests: `ResellerLevelsTest` (10). **Deploy: `php artisan migrate`.**
 
+## [2.81.1] - 2026-10-16
+
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **Investor portal SMS codes now read "{company} Investment Portal login OTP is 123456. It expires in 1 minute." (or "... password reset OTP is ..."), and the code is valid for 1 minute instead of 10.** Owner request 2026-10-16. Before, the text was "Your {company} OTP is 123456. Use it to sign in to the investor portal. It expires in 10 minutes." The message follows the investor's language, and the sign-in and forgot-password pages now say "It expires in 1 minute." A second request inside the first minute still keeps the code already sent. Customer and reseller codes are unchanged.
+
+### Technical Notes
+
+- `InvestorPortalAccountService::sendCode()` words its own message (portal name = `:company Investment Portal`, reason = `$purpose` `login` or `reset`); `CODE_VALID_MINUTES` 10 -> 1. The two "Use it to ... the investor portal" keys in `lang/` were replaced by three new keys, and the helper text key on `Investor\Pages\Auth\Login` / `ForgotPassword` changed from "...10 minutes." to "...1 minute.". Test: `InvestorPortalTest::test_the_investor_code_sms_names_the_portal_and_the_reason_and_lives_one_minute`.
+## [2.81.0] - 2026-10-16
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **IMS investor feed.** A new key type **Investor sync (investors and payouts for IMS)** opens `/api/v1/sync/investor/*`: investors (name, phone, NID, group, approved bank accounts), groups, projects with their progress percentage, investments, and payouts with amount, status, date and a link to the payment screenshot (`GET /payouts/{id}/proof`). Read only, one company per key, and never a customer or a supplier. Owner decisions 2026-10-15 (details and the planned "IMS reports a payout" step in `docs/api/ims-sync-api.md`).
+
+### Technical Notes
+
+- `CompanyApiKey::SCOPE_INVESTOR_SYNC`, `ResolveCompanyFromApiKey` hint per scope, `InvestorSyncFeed` (extends `ImsSyncFeed`), `InvestorSyncController`, `Investor::groupMemberships()`. Two interface strings added or reworded in both language files (the key-type name and the key helper text). Tests: `InvestorSyncApiTest` (10).
+## [2.80.0] - 2026-10-15
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Admin: one list to set the suggested selling price of every variation.** Owner request 2026-10-15 ("একসাথে অনেকগুলোর দাম বসানোর টুল"). **Resellers → Variation selling prices** lists every active variation of a variable product with its wholesale price (read only) and its suggested selling price, which is typed straight in the row and saved on leaving the field (blank clears it). A filter shows the variations with no suggested price yet, a product filter and search narrow the list, and two bulk actions give the selected rows the same price or clear it. There is no percentage rule. A variation with no suggested price is still not sold in a reseller's store until the reseller sets a price.
+- **Damaged goods are counted, and labelled by where they came from.** Owner decision 2026-10-15. A stock movement of type **Damage** now has a required **Damage source**: *Customer return damage*, *Shipment damage* (found damaged when a carton or shipment is opened) or *Other damage*. It shows in the stock movement list (with a filter) and in a product's movement history, and the **Total Damage** card on Products now opens the damage list. Older damage entries stay unlabelled. On a returned or refunded order, **Put returned goods back in stock** now takes two numbers per item, *Good pieces* (added back to stock) and *Damaged pieces* (counted as customer-return damage and not added to stock), so a damaged exchange or return is counted too.
+- **Reseller portal: tab bar on phones.** Owner request 2026-10-15. Below the large-screen width, approved resellers get a bar fixed to the bottom of the screen with Dashboard, Products, a raised **Create order** button, Orders and Earnings; the page being viewed is highlighted. The sidebar still holds everything else. It is not shown on large screens, on the sign-in and apply pages, or to a pending application.
+- **Reseller dashboard: announcement, first steps and best sellers.** Owner request 2026-10-15. (1) **Announcement:** Reseller Settings has a new **Portal announcement** section (on/off and the text, up to 500 characters; the text is required while it is on); the text shows in a banner at the top of every approved reseller's dashboard and is escaped, never taken as HTML. (2) **Get started:** a checklist of four steps (name your store, add products, add a payout account, get your first order), each ticked from the reseller's own records and linking to where it is done, with a progress bar; it disappears when all four are done. (3) **Best-selling products:** the five products this reseller sold the most pieces of in the last 30 days, from their own confirmed, processing and completed orders only.
+- **Public reseller guide: the return charge.** Owner request 2026-10-15. The guide now says that when an order is returned a return charge is taken from the reseller's deposit, once for that order, for store-delivered and own-courier orders alike. It appears only while the return charge in Reseller Settings is above zero, and the amount is shown only when **Show money figures on the guide** is on.
+- **Reseller Settings: "Test subdomain setup" and a Cloudflare + Coolify guide.** Owner request 2026-10-15. The button opens a made-up name under the company's domain and says which step is missing: the wildcard DNS record, or the wildcard SSL certificate (with the reason). `docs/reseller-subdomain-setup.md` (in Bangla) walks the owner through the Cloudflare and Coolify side step by step; the owner does that part.
+
+### Changed
+
+- **A returned or refunded order can never be moved to trash.** Owner decision 2026-10-15, so the returned goods and the damage counted from it are never lost. The order page's delete button is hidden, the list's *Move to trash* skips these orders (and says so), and the order model refuses to be soft-deleted in these statuses. Permanent deletion from the trash is unchanged.
+- **Restoring a trashed order brings its sale back.** Owner decision 2026-10-15. Restoring an order from the trash recreates its stock sale for every status, including an order that was returned when an earlier version let it be trashed. (An order whose stock is short still cannot be restored, and the message says so.) Taking an order's stock effects out now also removes the damage written off for it.
+
+### Technical Notes
+
+- Stock rules (2026-10-15): migration `2026_10_15_120000_add_damage_source_to_stock_movements` adds nullable `stock_movements.damage_source`; `StockMovement::damageSources()`, `StockMovementService::prepareForSave()` clears it on non-damage rows and refuses an unknown value (the form requires it only for new damage entries, so the IMS sync and older code paths still work). A damaged returned piece is booked as a `return` (+n) and straight away a `damage` (-n, source `customer_return`, tied to the order), so on-hand stock does not change and `Order::returnedQuantities()` counts it as checked. `OrderWorkflowService::deleteStockMovements()` removes `sale`, then `damage`, then `return` so stock never dips; `restoreFromTrash()` is called from the model's `restored` hook. `Order::canBeMovedToTrash()`, `OrderResource::canDelete()` and a `deleting` hook (not on force delete) enforce the trash rule.
+- Variation prices tool: new `ResellerVariationPriceResource` (model `ProductVariant`, Resellers cluster, index only; needs the reseller module and view rights on Products, editing needs update rights). No migration or new model.
+- Reseller portal: tab bar is `resources/views/filament/reseller/bottom-nav.blade.php`, drawn from the panel's `LAYOUT_END` hook through `ModuleGuard`; the portal theme CSS adds bottom padding on small screens, so **`npm run build` is needed**. Dashboard additions: migration `2026_10_15_130000_add_reseller_announcement_to_storefront_settings` (`reseller_announcement_enabled` boolean default false, `reseller_announcement` text), `Dashboard::announcement()`, `firstSteps()`, `bestSellers()`.
+- `ResellerSubdomainProbe::diagnose()` returns `ok` / `dns` / `https` (with the connection error), `isLive()` uses it. `ResellerGuideController` passes `returnCharge`. Tests: `OrderReturnedStockTest` (14), `ResellerVariationPriceToolTest` (6), `ResellerPortalBottomNavTest` (3), `ResellerPortalDashboardExtrasTest` (7), `ResellerSubdomainSetupCheckTest` (4), `ResellerGuidePageTest` (+1).
 ## [2.79.0] - 2026-10-15
 
 **Release type:** Minor Feature Update

@@ -8,7 +8,7 @@ The feed is **read-only**: `GET` only, so IMS can read a company's data and chan
 
 ERP → **Settings → Integrations → Website API → Generate API key**, and choose the type **Data sync (read-only feed for IMS)**. The key is shown once; send it to IMS through a secure channel, never by email or in a document. Make **one key per business** (each business is a company in this ERP): the key decides whose data IMS sees.
 
-A *Data sync* key opens `/api/v1/sync/*` and nothing else; a *Website* key (the older kind) cannot read the feed. Either wrong combination answers `403 wrong_key_scope`. Keys that existed before this feature are Website keys.
+A *Data sync* key opens `/api/v1/sync/*` (the business feed) and nothing else; a *Website* key (the older kind) cannot read the feed. Either wrong combination answers `403 wrong_key_scope`. Keys that existed before this feature are Website keys.
 
 ```
 Authorization: Bearer <key>
@@ -72,6 +72,33 @@ Records are ordered by `updated_at`, then `id`. Paging by cursor never skips or 
 ## Errors
 
 JSON with `ok: false`, `error` and a `hint`: `401 missing_api_key` / `invalid_api_key`, `403 wrong_key_scope`, `404` (unknown resource), `422 invalid_cursor` or a validation message, `429` (rate limit, retry after a minute). Every call is a `GET`, so repeating a request is always safe.
+
+## Investor feed (separate key, 2026-10-15)
+
+The investors' side of the link: who the investors are, their groups, the projects with how far each has run, their investments and every payout with its status and screenshot. It has **its own key**, because it carries personal data (NID, phone, bank accounts) that the business feed never does.
+
+Get the key in ERP → **Settings → Integrations → Website API → Generate API key**, key type **Investor sync (investors and payouts for IMS)**. It opens only `/api/v1/sync/investor/*`; a *Data sync* or *Website* key gets `403 wrong_key_scope` there, and an Investor sync key gets the same on the business feed. Base URL `https://<erp-domain>/api/v1/sync/investor`, same paging, filters, errors and rate limit as above, `GET` only.
+
+| Path | What |
+|---|---|
+| `GET /ping` | Health check and the list of resources. |
+| `GET /investors` | `id`, `name`, `display_name`, `phone`, `nid_number`, `groups` (group, amount, status) and `bank_accounts` (only accounts the company approved: type, bank, branch, routing number, account name, account number, mobile-money provider and number). |
+| `GET /groups` | `group_code`, `name`, `status`, `running_since`, `cycle_months`. |
+| `GET /projects` | One trade cycle of a group: `project_code`, `group_id`, `sequence_in_group`, `status`, `start_date`, `end_date` and **`progress_percent`** (0 to 100). Only how far it has run is shared: no targets, shares or descriptions. |
+| `GET /investments` | An investor's share of a project: `investor_id`, `project_id`, `amount`, `status`, dates. |
+| `GET /payouts` | `investor_id`, `project_id`, `investment_amount`, `principal_returned_amount`, `profit_share_amount`, `total_payout`, `payment_status` (`pending` / `paid`), `paid_at`, method, reference, recipient details and `payment_proof` (the screenshot: `download_path`, or `null`). |
+| `GET /payouts/{id}/proof` | The screenshot file of one payout, with the same key. `404` when there is none. |
+
+There is **no customer and no supplier information** in either feed. Payout *recording* from IMS back into the ERP, and any bank instruction, are not built yet (see the plan below).
+
+### IMS reports a payout (planned, not built)
+
+Owner decisions 2026-10-15: the payout system stays in the ERP, IMS shows every payout, and a payout made from IMS also appears in the ERP.
+
+1. IMS reports one specific pending payout as paid: `POST /api/v1/sync/investor/payouts/{id}/report` with the amount, the paid date, the method, a reference and the screenshot.
+2. The ERP stores it as a **pending report** and an ERP staff member approves or rejects it. Approving marks that payout paid, books the payout voucher and attaches the screenshot, exactly as when staff pay by hand. IMS sees the result in `GET /payouts`.
+3. Only a pending payout of a confirmed settlement can be reported; the amount must equal `total_payout`; reporting the same payout again with the same reference returns the same report.
+4. **Sending a payment instruction to the bank** from IMS, and the same option inside the ERP, is blocked until the bank's file format or host-to-host access is known (the ERP deliberately never guesses it).
 
 ## Answers to IMS's questionnaire
 

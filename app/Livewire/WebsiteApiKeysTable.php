@@ -74,7 +74,7 @@ class WebsiteApiKeysTable extends Component implements HasActions, HasSchemas, H
                     ->default(CompanyApiKey::SCOPE_WEBSITE)
                     ->required()
                     ->native(false)
-                    ->helperText(__('A "Data sync" key only reads data (for IMS). A "Website" key is for the website API.')),
+                    ->helperText(__('A "Data sync" or "Investor sync" key only reads data (for IMS). A "Website" key is for the website API.')),
             ])
             ->action(function (array $data): void {
                 [, $token] = CompanyApiKey::generate($this->company(), $data['label'] ?? null, Auth::id(), $data['scope'] ?? CompanyApiKey::SCOPE_WEBSITE);

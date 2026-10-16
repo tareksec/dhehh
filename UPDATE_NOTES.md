@@ -2,6 +2,23 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-16 - Investor portal SMS code: wording and 1-minute expiry
+
+Owner instruction (in Bangla): investor OTP SMS should read "Tasneem investment portal + [reason] + OTP code" and expire in 1 minute; later "commit, push, and push to main".
+
+- `InvestorPortalAccountService::sendCode()`: message is now `{company} Investment Portal login OTP is 123456. It expires in 1 minute.` (reason `login`) or `... password reset OTP is ...` (reason `reset`); `CODE_VALID_MINUTES` 10 -> 1. Investors only; customer and reseller codes are unchanged.
+- The portal name is the company name + " Investment Portal" (the same name the portal's header shows). If the company is named "Tasneem Knitting" the SMS says "Tasneem Knitting Investment Portal"; rename the company, or ask for a separate portal-name setting, if the shorter "Tasneem Investment Portal" is wanted.
+- Login and Forgot-password pages: helper text now says "It expires in 1 minute."
+- Known edge: a second request inside the first minute keeps the code already sent (the existing double-tap guard), so asking again at about 50 seconds gives no fresh code until the old one expires.
+- Files: `InvestorPortalAccountService.php`, `Filament/Investor/Pages/Auth/Login.php`, `ForgotPassword.php`, `lang/en.json` + `lang/bn.json` (2 keys replaced by 3, 1 changed), `tests/Feature/InvestorPortalTest.php` (+1 test).
+- Not done: no real SMS sent. Branched from `main` (v2.81.0) on purpose: the BulkSMSBD gateway work (reply code, 880 numbers, customer OTP wording) is already on `main` from `1565d5eb`, so a parallel copy of it in a long-running local tree was left out.
+
+Needs Bangla review: ":company ইনভেস্টমেন্ট পোর্টাল", ":portal লগইন OTP হলো :code। এটি ১ মিনিট পর মেয়াদোত্তীর্ণ হবে।", ":portal পাসওয়ার্ড রিসেট OTP হলো :code। এটি ১ মিনিট পর মেয়াদোত্তীর্ণ হবে।" and the 1-minute helper text in `lang/bn.json` (written by the agent).
+
+Verified: plain `php artisan test` in a clean worktree of `main` (v2.81.0) plus this change: 2526 passed, 1 skipped, 0 failed (24351 assertions). Also `--filter` over `InvestorPortalTest`, `InvestorPortalStaffEntryTest`, `TranslationParityTest`, `StorefrontSmsGatewayTest`, `ResellerPortalPasswordResetTest`: 60 passed. No real SMS sent.
+
+Commit status: committed on `feature/investor-otp-wording` and pushed to `main` on the owner's explicit approval (2026-10-16).
+
 ## 2026-10-14 (later still) - Agent rule: commit and push new work to a topic-named feature branch
 
 Owner request (in Bangla): add a rule for the agent — after any new work, commit it and push it to a feature branch, and name that branch after the session's relevant topic.
@@ -86,6 +103,18 @@ Also fixed: 7 tests that were already failing on main (the SMS now goes out as 8
 Known limits to tell IMS: the ERP has no partial returns and no refund payment record; stock-loss money uses today's cost price; expenses have no project, purchase or shipment link and no foreign-currency fields.
 
 Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-15 (owner approved "কমিট এবং পুশ করে মেইন এ পুশ কর"); pushed to main on 2026-10-15. Deploy: run `php artisan migrate --force` (new migration).
+
+## 2026-10-15 (later still) - IMS investor feed (phase 1 of the two-way link)
+
+Owner's answers to my questions: unit sales per project are not needed now, only the project's percentage; so "final sale" status is moot; the payout system stays in the ERP, IMS shows every payout's information, IMS can make payouts and those show in the ERP too (two-way); IMS payout = a record, the ERP marks that payout paid then continues as usual, ERP staff approve; IMS may show name and group, payout amount/date/status/screenshot, bank accounts, NID and phone; cost of goods = order-line unit_cost x quantity. Also: IMS must have a way to send a bank instruction and the ERP must have the same option.
+
+Built now (uncommitted): the read side. `InvestorSyncFeed` + `InvestorSyncController` + routes `/api/v1/sync/investor/*` behind a new key type `investor_sync` (separate from the business key on purpose: it carries NID, phone and bank accounts). Resources: investors, groups, projects (progress_percent), investments, payouts, and `payouts/{id}/proof`. Only approved bank accounts are shared. Tests: `InvestorSyncApiTest` (10; mutation-checked: sharing pending accounts and using the wrong key scope each fail a test). `docs/api/ims-sync-api.md` has the new section and the plan for the rest.
+
+Not built: (2) IMS reporting a payout (`POST .../payouts/{id}/report`) with an ERP approval screen; (3) the bank instruction from IMS and from the ERP: blocked on the bank's file format / host-to-host access, never guessed.
+
+Needs Bangla review: the new key-type label "ইনভেস্টর সিংক (IMS-এর জন্য ইনভেস্টর ও পেআউট)" and the reworded key helper text.
+
+Commit status: committed and pushed to claude/nifty-carson-r2vpby on 2026-10-15 (owner approved "কমিট এবং পুশ কর"); not on main.
 
 ## 2026-10-15 (later) - IMS feed: no supplier information
 
@@ -243,6 +272,12 @@ Deploy: nothing to migrate. After deploying both the ERP and the website, add a 
 Tests: `StorefrontApiTest` (+1). Verified: full suite 2533 passed, 1 skipped, 0 failed.
 
 Commit status: ERP part committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16) after the full suite; website part pushed to the website repo's branch `feature/reseller-menu-link`. Neither is on `main`.
+
+## 2026-10-16 (merge) - origin/main (v2.80.0 - v2.81.1) merged into the work branch
+
+`main` moved while this branch was open (IMS investor feed v2.80.0, v2.81.0, investor-portal SMS v2.81.1). I merged `origin/main` into `claude/reseller-module-status-v9tobe` so the branch can be pushed to `main` as a fast-forward. Only `CHANGELOG.md` conflicted: main's release commits had moved their own entries into versioned sections, so I kept main's history and put this branch's [Unreleased] block back on top. Full suite re-run after the merge: see the commit status line.
+
+Commit status: merge committed on the work branch (2026-10-16) after the full suite; not pushed to `main`.
 
 ## 2026-10-16 (last) - Reseller levels (step 5 of 5)
 

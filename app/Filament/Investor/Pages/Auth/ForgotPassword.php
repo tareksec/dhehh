@@ -53,7 +53,7 @@ class ForgotPassword extends RequestPasswordReset
                 ->visible($phoneStep),
             TextInput::make('code')
                 ->label(__('Reset code'))
-                ->helperText(fn (): string => __('The 6-digit code sent by SMS to :phone. It expires in 10 minutes.', ['phone' => (string) $this->phone]))
+                ->helperText(fn (): string => __('The 6-digit code sent by SMS to :phone. It expires in 1 minute.', ['phone' => (string) $this->phone]))
                 ->required()
                 ->maxLength(10)
                 ->visible($codeStep),
