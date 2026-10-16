@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.81.0] - 2026-10-16
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -13,7 +15,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `CompanyApiKey::SCOPE_INVESTOR_SYNC`, `ResolveCompanyFromApiKey` hint per scope, `InvestorSyncFeed` (extends `ImsSyncFeed`), `InvestorSyncController`, `Investor::groupMemberships()`. Two interface strings added or reworded in both language files (the key-type name and the key helper text). Tests: `InvestorSyncApiTest` (10).
-
 ## [2.80.0] - 2026-10-15
 
 **Release type:** Minor Feature Update
