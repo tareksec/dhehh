@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\ValidatesEmailAddress;
 use App\Services\CompanyContext;
+use App\Services\ResellerNotificationService;
 use App\Support\CompanyMedia;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasName;
@@ -112,6 +113,13 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
 
         static::saved(function (Customer $customer): void {
             $customer->syncCurrentBalance();
+        });
+
+        // The approval SMS (wording set in Reseller Settings; empty = not sent).
+        static::updated(function (Customer $customer): void {
+            if ($customer->wasChanged('reseller_status') && $customer->reseller_status === 'approved') {
+                app(ResellerNotificationService::class)->notify(ResellerNotificationService::EVENT_APPROVED, $customer);
+            }
         });
     }
 

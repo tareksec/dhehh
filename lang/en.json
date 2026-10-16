@@ -2275,5 +2275,17 @@
     "Try a longer period or different dates.": "Try a longer period or different dates.",
     "Resellers with orders": "Resellers with orders",
     ":cancelled cancelled, :returned returned": ":cancelled cancelled, :returned returned",
-    "Only confirmed, processing and completed orders count as sales. Orders are placed in the period by their order date; \"Paid out\" is what was paid to resellers in the period.": "Only confirmed, processing and completed orders count as sales. Orders are placed in the period by their order date; \"Paid out\" is what was paid to resellers in the period."
+    "Only confirmed, processing and completed orders count as sales. Orders are placed in the period by their order date; \"Paid out\" is what was paid to resellers in the period.": "Only confirmed, processing and completed orders count as sales. Orders are placed in the period by their order date; \"Paid out\" is what was paid to resellers in the period.",
+    "SMS to resellers": "SMS to resellers",
+    "Write the text of each SMS a reseller gets. Leave a message empty and it is not sent. SMS goes through the SMS gateway in Settings → Integrations, and numbers that opted out are skipped. You can use the words shown under each box; they are replaced with the reseller's own details.": "Write the text of each SMS a reseller gets. Leave a message empty and it is not sent. SMS goes through the SMS gateway in Settings → Integrations, and numbers that opted out are skipped. You can use the words shown under each box; they are replaced with the reseller's own details.",
+    "Words you can use: :words": "Words you can use: :words",
+    "When an application is approved": "When an application is approved",
+    "When a profit becomes payable": "When a profit becomes payable",
+    "When a withdrawal is paid": "When a withdrawal is paid",
+    "Fill empty SMS texts with suggested wording": "Fill empty SMS texts with suggested wording",
+    "Suggested wording added": "Suggested wording added",
+    "Read and change it if you like, then press Save changes. Nothing is sent until you save.": "Read and change it if you like, then press Save changes. Nothing is sent until you save.",
+    "Hello :name, your reseller application is approved. Log in here: :portal Your store: :store_link": "Hello :name, your reseller application is approved. Log in here: :portal Your store: :store_link",
+    "Hello :name, order :order is delivered and your profit :profit is now payable. You can withdraw up to :balance.": "Hello :name, order :order is delivered and your profit :profit is now payable. You can withdraw up to :balance.",
+    "Hello :name, :amount was paid to you. Reference: :reference.": "Hello :name, :amount was paid to you. Reference: :reference."
 }

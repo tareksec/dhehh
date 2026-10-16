@@ -2275,5 +2275,17 @@
     "Try a longer period or different dates.": "বড় সময়কাল বা অন্য তারিখ দিয়ে দেখুন।",
     "Resellers with orders": "অর্ডার পাওয়া রিসেলার",
     ":cancelled cancelled, :returned returned": ":cancelled বাতিল, :returned ফেরত",
-    "Only confirmed, processing and completed orders count as sales. Orders are placed in the period by their order date; \"Paid out\" is what was paid to resellers in the period.": "শুধু কনফার্ম, প্রসেসিং ও সম্পন্ন অর্ডার বিক্রি হিসাবে ধরা হয়। অর্ডার তারিখ দিয়ে অর্ডারকে সময়কালে ফেলা হয়; \"পরিশোধ করা হয়েছে\" হলো ওই সময়ে রিসেলারদের যা দেওয়া হয়েছে।"
+    "Only confirmed, processing and completed orders count as sales. Orders are placed in the period by their order date; \"Paid out\" is what was paid to resellers in the period.": "শুধু কনফার্ম, প্রসেসিং ও সম্পন্ন অর্ডার বিক্রি হিসাবে ধরা হয়। অর্ডার তারিখ দিয়ে অর্ডারকে সময়কালে ফেলা হয়; \"পরিশোধ করা হয়েছে\" হলো ওই সময়ে রিসেলারদের যা দেওয়া হয়েছে।",
+    "SMS to resellers": "রিসেলারকে SMS",
+    "Write the text of each SMS a reseller gets. Leave a message empty and it is not sent. SMS goes through the SMS gateway in Settings → Integrations, and numbers that opted out are skipped. You can use the words shown under each box; they are replaced with the reseller's own details.": "রিসেলার যে SMS পান, তার লেখা এখানে লিখুন। কোনো বার্তা ফাঁকা রাখলে সেটি পাঠানো হবে না। SMS যায় Settings → Integrations-এর SMS গেটওয়ে দিয়ে, আর যাঁরা SMS বন্ধ করেছেন তাঁদের নম্বর বাদ যায়। প্রতিটি বাক্সের নিচে দেখানো শব্দগুলো লেখায় ব্যবহার করতে পারেন; পাঠানোর সময় সেগুলো রিসেলারের নিজের তথ্য দিয়ে বদলে যায়।",
+    "Words you can use: :words": "ব্যবহার করা যায় যে শব্দ: :words",
+    "When an application is approved": "আবেদন অনুমোদন হলে",
+    "When a profit becomes payable": "প্রফিট পেআউটযোগ্য হলে",
+    "When a withdrawal is paid": "উইথড্র পরিশোধ হলে",
+    "Fill empty SMS texts with suggested wording": "ফাঁকা SMS-এ প্রস্তাবিত লেখা বসান",
+    "Suggested wording added": "প্রস্তাবিত লেখা বসানো হয়েছে",
+    "Read and change it if you like, then press Save changes. Nothing is sent until you save.": "পড়ে নিন, ইচ্ছামতো বদলান, তারপর Save changes চাপুন। সেভ না করা পর্যন্ত কিছুই পাঠানো হবে না।",
+    "Hello :name, your reseller application is approved. Log in here: :portal Your store: :store_link": "প্রিয় :name, আপনার রিসেলার আবেদন অনুমোদন হয়েছে। এখানে লগইন করুন: :portal আপনার স্টোর: :store_link",
+    "Hello :name, order :order is delivered and your profit :profit is now payable. You can withdraw up to :balance.": "প্রিয় :name, অর্ডার :order ডেলিভারি হয়েছে এবং আপনার প্রফিট :profit এখন তোলার যোগ্য। আপনি সর্বোচ্চ :balance তুলতে পারবেন।",
+    "Hello :name, :amount was paid to you. Reference: :reference.": "প্রিয় :name, আপনাকে :amount পরিশোধ করা হয়েছে। রেফারেন্স: :reference।"
 }

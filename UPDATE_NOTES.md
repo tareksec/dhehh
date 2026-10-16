@@ -195,6 +195,33 @@ Verified: full suite 2521 passed, 1 skipped, 0 failed.
 
 Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16). Not pushed to `main`.
 
+## 2026-10-16 (later) - Reseller SMS: approved, profit payable, withdrawal paid (step 3 of 5)
+
+Step 3 of the order I gave the owner (see the entry above).
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+
+1. **Reseller Settings → SMS to resellers**: three boxes (when an application is approved / a profit becomes payable / a withdrawal is paid), up to 300 characters, with the usable words listed under each box. **Empty = never sent**, exactly like the investor "Project completed message". Migration `2026_10_16_100000` (three text columns on `storefront_settings`).
+2. A header button **Fill empty SMS texts with suggested wording** puts my drafts in the empty boxes only (it never overwrites what is written); it is a draft until Save.
+3. Sending: `ResellerNotificationService` + `SendResellerNotificationJob` on the queue, through the company's SMS gateway (the Next.js row if the company has one, else the Blade row, like the other company-level messages). Opted-out numbers are skipped; a profit or withdrawal is never messaged twice (30-day guard); a failed send is logged and can be tried again later; one try only.
+4. Three model hooks start it: a reseller's status changing to approved (any way staff approve: row action, bulk action, edit form), a commission becoming payable (an order delivered or completed), a withdrawal becoming paid (admin pays it, or its voucher is confirmed).
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- **SMS only, no WhatsApp.** WhatsApp Business needs a Meta-approved template per message, and the WhatsApp Web (QR) rule forbids automatic sending. If the owner wants WhatsApp too, he must give approved template names; then it can be added next to each SMS.
+- **No message for a rejected application** (not asked for).
+- A profit worth 0 does not send an SMS. A profit that goes back to pending or cancelled sends nothing more.
+- One SMS per delivered order (a reseller with many deliveries a day gets many SMS). If that is too many, the alternative is one daily summary; say so.
+- The messages follow the company's opt-out list (the same rule as every other automatic SMS).
+
+Deploy: `php artisan migrate`; a **queue worker must be running** (`php artisan queue:work`, see `docs/deployment.md`), otherwise the SMS stays in the queue. Then open Reseller Settings, press the suggested-wording button (or write your own), read the texts and press Save changes. Until then nothing is sent.
+
+Needs Bangla review (new keys): SMS to resellers (রিসেলারকে SMS), the long description of that section (it names "Settings → Integrations" in English), the three box labels (আবেদন অনুমোদন হলে / প্রফিট পেআউটযোগ্য হলে / উইথড্র পরিশোধ হলে), the button and its notice, and the three suggested SMS texts (they start with "প্রিয় :name," on purpose, no religious greeting).
+
+Tests: `ResellerNotificationsTest` (11). Verified: full suite 2532 passed, 1 skipped, 0 failed.
+
+Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16). Not pushed to `main`.
+
 ## 2026-10-15 - Admin: reset a reseller's password / email a reset link; portal ↔ admin audit
 
 The owner (in Bangla): *"From the admin, resellers' passwords can be reset, and a password reset request can be sent by email to the email the reseller set."* and *"Check whether the portal and the admin dashboard are connected without problems, whether stock works properly, and whether orders work properly."*
