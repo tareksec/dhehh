@@ -275,9 +275,9 @@ Commit status: ERP part committed and pushed to the work branch `claude/reseller
 
 ## 2026-10-16 (merge) - origin/main (v2.80.0 - v2.81.1) merged into the work branch
 
-`main` moved while this branch was open (IMS investor feed v2.80.0, v2.81.0, investor-portal SMS v2.81.1). I merged `origin/main` into `claude/reseller-module-status-v9tobe` so the branch can be pushed to `main` as a fast-forward. Only `CHANGELOG.md` conflicted: main's release commits had moved their own entries into versioned sections, so I kept main's history and put this branch's [Unreleased] block back on top. Full suite re-run after the merge: see the commit status line.
+`main` moved while this branch was open (IMS investor feed v2.80.0, v2.81.0, investor-portal SMS v2.81.1). I merged `origin/main` into `claude/reseller-module-status-v9tobe` so the branch can be pushed to `main` as a fast-forward. Only `CHANGELOG.md` conflicted: main's release commits had moved their own entries into versioned sections, so I kept main's history and put this branch's [Unreleased] block back on top. Full suite after the merge: 2554 passed, 1 skipped, 0 failed.
 
-Commit status: merge committed on the work branch (2026-10-16) after the full suite; not pushed to `main`.
+Commit status: merge committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16); not pushed to `main`.
 
 ## 2026-10-16 (last) - Reseller levels (step 5 of 5)
 
