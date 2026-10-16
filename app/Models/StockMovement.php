@@ -34,6 +34,29 @@ class StockMovement extends Model
         return \Illuminate\Support\Arr::except(self::TYPES, ['transfer']);
     }
 
+    public const DAMAGE_SOURCE_CUSTOMER_RETURN = 'customer_return';
+
+    public const DAMAGE_SOURCE_SHIPMENT = 'shipment';
+
+    public const DAMAGE_SOURCE_OTHER = 'other';
+
+    /**
+     * Where damaged pieces came from (owner decision 2026-10-15): a customer
+     * sent them back damaged, or they were found damaged when a shipment was
+     * opened. "Other" is for anything else, so no entry is forced into a wrong
+     * group. Only 'damage' movements carry one; older rows have none.
+     *
+     * @return array<string, string>
+     */
+    public static function damageSources(): array
+    {
+        return [
+            self::DAMAGE_SOURCE_CUSTOMER_RETURN => __('Customer return damage'),
+            self::DAMAGE_SOURCE_SHIPMENT => __('Shipment damage'),
+            self::DAMAGE_SOURCE_OTHER => __('Other damage'),
+        ];
+    }
+
     protected $fillable = [
         'company_id',
         'product_id',
@@ -41,6 +64,7 @@ class StockMovement extends Model
         'type',
         'quantity',
         'reason',
+        'damage_source',
         'reference_type',
         'reference_id',
         'note',

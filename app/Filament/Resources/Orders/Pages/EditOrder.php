@@ -48,7 +48,9 @@ class EditOrder extends EditRecord
             $this->getStickySaveFormAction(),
             ChangeOrderWorkflowAction::make(),
             ViewAction::make(),
-            DeleteAction::make(),
+            // A returned or refunded order is never trashed (owner decision 2026-10-15).
+            DeleteAction::make()
+                ->visible(fn (): bool => $this->getRecord()->canBeMovedToTrash()),
         ];
     }
 

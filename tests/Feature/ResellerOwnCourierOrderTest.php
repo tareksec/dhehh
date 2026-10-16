@@ -453,7 +453,7 @@ class ResellerOwnCourierOrderTest extends TestCase
                 'items' => [['product_id' => $product->getKey(), 'quantity' => 2]],
             ])
             ->assertSee('You pay in advance')
-            ->assertDontSee('Your profit')
+            ->assertDontSee('My profit')
             ->fillForm([
                 'delivery_method' => 'own',
                 'name' => 'Buyer One', 'phone' => '01722000001', 'address' => 'House 1, Mirpur, Dhaka',

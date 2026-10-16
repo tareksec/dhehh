@@ -42,6 +42,10 @@
             $kpis = $this->kpis();
             $pipeline = $this->pipeline();
             $recentOrders = $this->recentOrders();
+            $announcement = $this->announcement();
+            $firstSteps = $this->firstSteps();
+            $stepsDone = collect($firstSteps)->where('done', true)->count();
+            $bestSellers = $this->bestSellers();
             $storeUrl = $this->storeUrl();
             $storeQr = $this->storeQrCode();
             $card = 'rounded-2xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10';
@@ -97,6 +101,14 @@
         @endphp
 
         <div class="space-y-6">
+            {{-- The company's notice for resellers (Reseller Settings → Portal announcement) --}}
+            @if ($announcement)
+                <aside class="flex items-start gap-3 rounded-2xl bg-warning-50 p-4 text-warning-900 ring-1 ring-warning-600/20 dark:bg-warning-500/10 dark:text-warning-100 dark:ring-warning-400/20" role="status" data-reseller-announcement>
+                    <x-filament::icon icon="heroicon-o-megaphone" class="mt-0.5 h-6 w-6 shrink-0 text-warning-600 dark:text-warning-400" />
+                    <p class="min-w-0 flex-1 whitespace-pre-line break-words text-sm font-medium">{{ $announcement }}</p>
+                </aside>
+            @endif
+
             {{-- Welcome and the money that can be withdrawn now --}}
             <section class="relative overflow-hidden rounded-3xl bg-linear-to-br from-primary-700 via-primary-800 to-primary-950 p-6 text-white shadow-lg sm:p-8">
                 <div class="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-white/10"></div>
@@ -138,6 +150,36 @@
                     </dl>
                 </div>
             </section>
+
+            {{-- The first things to set up, until all are done --}}
+            @if ($stepsDone < count($firstSteps))
+                <section class="{{ $card }} p-5 sm:p-6" data-reseller-first-steps>
+                    <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+                        <h3 class="text-base font-semibold">{{ __('Get started') }}</h3>
+                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ __(':done of :total steps done', ['done' => $stepsDone, 'total' => count($firstSteps)]) }}</span>
+                    </div>
+                    <div class="mb-4 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10" role="progressbar" aria-valuemin="0" aria-valuemax="{{ count($firstSteps) }}" aria-valuenow="{{ $stepsDone }}">
+                        <div class="h-full rounded-full bg-primary-500" style="width: {{ round($stepsDone / count($firstSteps) * 100) }}%"></div>
+                    </div>
+                    <ol class="grid gap-3 sm:grid-cols-2">
+                        @foreach ($firstSteps as $step)
+                            <li>
+                                <a href="{{ $step['url'] }}" data-first-step="{{ $step['key'] }}" data-done="{{ $step['done'] ? '1' : '0' }}" class="flex items-start gap-3 rounded-xl p-3 ring-1 ring-gray-950/5 transition hover:ring-primary-500/50 dark:ring-white/10">
+                                    @if ($step['done'])
+                                        <x-filament::icon icon="heroicon-m-check-circle" class="mt-0.5 h-6 w-6 shrink-0 text-success-500" />
+                                    @else
+                                        <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-gray-300 dark:border-white/20"></span>
+                                    @endif
+                                    <span class="min-w-0">
+                                        <span @class(['block text-sm font-semibold', 'text-gray-400 line-through dark:text-gray-500' => $step['done']])>{{ $step['label'] }}</span>
+                                        <span class="block text-xs text-gray-500 dark:text-gray-400">{{ $step['hint'] }}</span>
+                                    </span>
+                                </a>
+                            </li>
+                        @endforeach
+                    </ol>
+                </section>
+            @endif
 
             {{-- One-tap shortcuts --}}
             <nav class="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="{{ __('Quick actions') }}">
@@ -409,6 +451,33 @@
                     @livewire(\App\Filament\Reseller\Widgets\CommissionTrend::class)
                 </div>
             </div>
+            {{-- What sold the most in the last 30 days --}}
+            @if ($bestSellers !== [])
+                <section class="{{ $card }} p-5 sm:p-6" data-reseller-best-sellers>
+                    <div class="mb-4">
+                        <h3 class="text-base font-semibold">{{ __('Best-selling products') }}</h3>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('Pieces sold in the last 30 days.') }}</p>
+                    </div>
+                    <ol class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        @foreach ($bestSellers as $index => $seller)
+                            <li class="flex items-center gap-3 rounded-xl p-3 ring-1 ring-gray-950/5 dark:ring-white/10">
+                                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-bold text-primary-700 dark:bg-primary-500/10 dark:text-primary-400">{{ $index + 1 }}</span>
+                                @if ($seller['image'])
+                                    <img src="{{ $seller['image'] }}" alt="" class="h-12 w-12 shrink-0 rounded-xl object-cover ring-1 ring-gray-950/10 dark:ring-white/10" loading="lazy">
+                                @else
+                                    <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl {{ $tones['gray'] }}">
+                                        <x-filament::icon icon="heroicon-o-photo" class="h-5 w-5" />
+                                    </span>
+                                @endif
+                                <div class="min-w-0 flex-1">
+                                    <div class="truncate text-sm font-semibold">{{ $seller['name'] }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ $seller['pieces'] === 1 ? __(':count piece', ['count' => 1]) : __(':count pieces', ['count' => $seller['pieces']]) }}</div>
+                                </div>
+                            </li>
+                        @endforeach
+                    </ol>
+                </section>
+            @endif
         </div>
     @endif
 </x-filament-panels::page>

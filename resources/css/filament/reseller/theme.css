@@ -116,3 +116,14 @@
 .fi-sidebar-item-btn {
     border-radius: 0.75rem;
 }
+
+/*
+ * The phone tab bar (resources/views/filament/reseller/bottom-nav.blade.php)
+ * is fixed to the bottom of the screen below the large breakpoint; give the
+ * page room so its last lines are never hidden behind it.
+ */
+@media (max-width: 1023px) {
+    body:has(.reseller-bottom-nav) .fi-main-ctn {
+        padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+    }
+}

@@ -223,7 +223,8 @@ class ResellerSubdomainTest extends TestCase
         $reseller->refresh();
         $this->assertNotNull($reseller->reseller_subdomain_changed_at);
         $this->assertNull($reseller->reseller_subdomain_live_at);
-        $this->assertSame(now()->addMinutes(5)->timestamp, $reseller->resellerSubdomainReadyAt()->timestamp);
+        // The page saved the change a moment ago, so allow for the clock moving on by a second.
+        $this->assertEqualsWithDelta(now()->addMinutes(5)->timestamp, $reseller->resellerSubdomainReadyAt()->timestamp, 2);
         $this->assertSame('https://sub-setup.example.test/store/alice-shop/products', $reseller->resellerStoreUrl());
 
         $this->travel(6)->minutes();

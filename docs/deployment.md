@@ -47,7 +47,7 @@ APP_DEBUG=false
 APP_URL=https://your-domain.com
 ASSET_URL=https://your-domain.com
 TRUSTED_PROXIES=*
-APP_VERSION=2.78.0
+APP_VERSION=2.80.0
 APP_RELEASE_TYPE=minor
 APP_RELEASE_DATE=2026-10-15
 
@@ -548,6 +548,8 @@ Optional, per company. Needs two things on the server before **Resellers → Res
    - the same **on-demand** proxy as custom domains below (Caddy asking `/internal/tls-ask`). The endpoint also answers `200` for the subdomain of every approved reseller, so each subdomain gets its own certificate on its first visit, with no DNS provider token.
 
    Without either, subdomains open with a certificate warning.
+
+For the live Cloudflare + Coolify set-up (owner does it, 2026-10-15) follow `docs/reseller-subdomain-setup.md` (written in Bangla): DNS-only wildcard record, a separate Traefik `cloudflare` DNS-challenge resolver for the `*.offer.<domain>` certificate, and routing the wildcard to the app. **Reseller Settings → Test subdomain setup** then tells which step is still missing (DNS, or HTTPS).
 
 No environment variables, no per-reseller server work: the wildcard DNS record already covers every future name, so once both are in place a reseller's chosen subdomain works as soon as the certificate is issued. The portal's **My Store** page shows "Setting up … (DNS and SSL)" with a countdown (**Reseller Settings → Subdomain set-up time**, default 10 minutes), checks every 15 seconds whether the address opens over HTTPS, and then shows it as live. Until then the reseller's shared store link stays the long `/store/<slug>` link; it switches to the subdomain once the check passes or the set-up time has passed. The check calls the subdomain from the app server itself, so the server must be able to reach its own public address. Custom domains of their own (e.g. `myshop.com`) are a separate step.
 

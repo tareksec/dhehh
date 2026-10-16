@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Mail\ResellerPasswordResetLink;
 use App\Mail\StorefrontLoginOtp;
 use App\Models\ConversationChannel;
 use App\Models\StorefrontSetting;
@@ -159,6 +160,31 @@ class StorefrontNotificationService
         ]);
 
         return Mail::mailer('storefront_dynamic');
+    }
+
+    /**
+     * Whether an email sent for this company would really leave the server: the
+     * company's own SMTP is filled in, or the server's default mailer is a real
+     * one (the "log" and "array" mailers only write the message down).
+     */
+    public function emailDeliveryAvailable(StorefrontSetting $setting): bool
+    {
+        return $this->mailConfigured($setting)
+            || ! in_array(config('mail.default'), ['log', 'array', null, ''], true);
+    }
+
+    public function sendResellerPasswordResetEmail(StorefrontSetting $setting, string $email, string $companyName, string $url, int $minutes): bool
+    {
+        try {
+            $mailer = $this->mailConfigured($setting) ? $this->companyMailer($setting) : Mail::mailer();
+            $mailer->to($email)->send(new ResellerPasswordResetLink($companyName, $url, $minutes));
+
+            return true;
+        } catch (\Throwable $exception) {
+            Log::warning('Reseller password reset email failed', ['error' => $exception->getMessage()]);
+
+            return false;
+        }
     }
 
     public function sendLoginOtpEmail(StorefrontSetting $setting, string $email, string $companyName, string $code): bool

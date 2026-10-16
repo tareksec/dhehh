@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class Order extends Model
 {
@@ -337,11 +338,23 @@ class Order extends Model
             app(OrderWorkflowService::class)->syncCustomerBalance($order);
         });
 
+        static::deleting(function (Order $order): void {
+            // Owner decision 2026-10-15: a returned (or refunded) order is never
+            // trashed, or its returned-goods and damage record would be lost.
+            if (! $order->isForceDeleting() && ! $order->canBeMovedToTrash()) {
+                throw ValidationException::withMessages([
+                    'status' => __('A returned or refunded order cannot be moved to trash, because its returned goods and damage are counted from it.'),
+                ]);
+            }
+        });
+
         static::restored(function (Order $order): void {
             // Moving an accounted order to trash releases its stock and due
             // contribution in the deleted hook above. Restoring must rebuild
-            // those business effects, not only clear the deleted_at column.
-            $order->syncTotalsStockAndCustomerBalance();
+            // those business effects, not only clear the deleted_at column
+            // (owner decision 2026-10-15: that includes the sale of an order
+            // that was returned).
+            app(OrderWorkflowService::class)->restoreFromTrash($order);
         });
 
         static::forceDeleting(function (Order $order): void {
@@ -630,6 +643,46 @@ class Order extends Model
     public function isAccounted(): bool
     {
         return in_array($this->status, self::ACCOUNTED_STATUSES, true);
+    }
+
+    /**
+     * Owner decision 2026-10-15: a returned (or refunded) order's goods do not
+     * go back on the shelf by themselves. The sale stays in the stock ledger
+     * until staff have looked at what came back and record it (the order's
+     * "Put returned goods back in stock" action adds a Return movement for
+     * the pieces that are fine; damaged ones simply are not added). A
+     * cancelled order, which never left, still releases its stock at once.
+     */
+    public function keepsStockOutUntilGoodsAreChecked(): bool
+    {
+        return in_array($this->status, [self::STATUS_RETURNED, self::STATUS_REFUNDED], true);
+    }
+
+    /**
+     * Owner decision 2026-10-15: a returned (or refunded) order never goes to
+     * trash — the returned goods and the damage counted from it would be lost.
+     */
+    public function canBeMovedToTrash(): bool
+    {
+        return ! $this->keepsStockOutUntilGoodsAreChecked();
+    }
+
+    /**
+     * Pieces staff already put back in stock for this order, keyed
+     * "productId:variantId" (variant 0 = none).
+     *
+     * @return array<string, int>
+     */
+    public function returnedQuantities(): array
+    {
+        return StockMovement::query()
+            ->where('type', 'return')
+            ->where('reference_type', self::class)
+            ->where('reference_id', $this->getKey())
+            ->get(['product_id', 'product_variant_id', 'quantity'])
+            ->groupBy(fn (StockMovement $movement): string => $movement->product_id.':'.($movement->product_variant_id ?? 0))
+            ->map(fn ($group): int => (int) $group->sum(fn (StockMovement $movement): int => abs((int) $movement->quantity)))
+            ->all();
     }
 
     /**

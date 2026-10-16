@@ -162,7 +162,7 @@ class Orders extends Page implements HasTable
                         : null),
 
                 TextColumn::make('commission')
-                    ->label(__('Profit'))
+                    ->label(__('My profit'))
                     ->state(function (Order $record) use ($currency): string {
                         $commission = $record->resellerCommission;
 

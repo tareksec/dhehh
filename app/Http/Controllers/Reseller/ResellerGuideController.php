@@ -47,6 +47,8 @@ class ResellerGuideController extends Controller
             'showFigures' => $showFigures,
             'minWithdrawal' => (float) ($setting?->reseller_min_withdrawal ?? 0),
             'packagingCharge' => (float) ($setting?->reseller_packaging_cost_per_unit ?? 0),
+            // The same amount ResellerOwnCourierService::chargeReturn() takes from the deposit of a returned order.
+            'returnCharge' => (float) ($setting?->reseller_return_charge ?? 0),
             'ownCourierAvailable' => $paymentMethods->isNotEmpty(),
             'paymentMethodNames' => $paymentMethods->pluck('name')->filter()->unique()->values(),
             'subdomainsEnabled' => (bool) $company->reseller_subdomains_enabled && filled($company->domain),

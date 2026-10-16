@@ -139,6 +139,7 @@ No new environment variables. `SESSION_DOMAIN` stays empty, so the portal login 
   - Whether Cloudflare's free Universal certificate is enough: it covers `*.zamzamint.com`, not a second-level name such as `*.offer.zamzamint.com`. If subdomains stay under `offer.`, a wider certificate (a paid Cloudflare option, or an origin/Traefik wildcard certificate) is needed.
   - Whether the Set-up time default (10 minutes) matches how long Cloudflare takes on the live account.
 - Deployment steps: `docs/deployment.md` → "Reseller store subdomains".
+- **Step-by-step guide written (2026-10-15):** `docs/reseller-subdomain-setup.md` (Bangla). The owner does the Cloudflare and Coolify work. It recommends a DNS-only wildcard record and a Traefik wildcard certificate through the Cloudflare DNS challenge (free), because Universal SSL does not cover `*.offer.zamzamint.com` and a proxied record can stop the "Live" check (it compares IPs). Reseller Settings has a **Test subdomain setup** button for checking it. Still to confirm on the live account: the Coolify version's way of sending `*.offer.zamzamint.com` to the app, and which `TRUSTED_PROXY_HOPS` the Next.js site needs.
 
 ## 11. Owner decisions (2026-10-12) — to build, not built yet
 

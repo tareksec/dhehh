@@ -114,7 +114,7 @@
                         <tr>
                             <th class="py-2 pr-3 font-medium">{{ __('Order') }}</th>
                             <th class="py-2 pr-3 font-medium">{{ __('Sales') }}</th>
-                            <th class="py-2 pr-3 font-medium">{{ __('Profit') }}</th>
+                            <th class="py-2 pr-3 font-medium">{{ __('My profit') }}</th>
                             <th class="py-2 font-medium">{{ __('Status') }}</th>
                         </tr>
                     </thead>

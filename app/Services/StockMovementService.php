@@ -60,6 +60,15 @@ class StockMovementService
     {
         $movement->quantity = $this->normalizeQuantity($movement->type, (int) $movement->quantity);
 
+        // Only damage carries a source; a value left over from a changed type is dropped.
+        if ($movement->type !== 'damage') {
+            $movement->damage_source = null;
+        } elseif (filled($movement->damage_source) && ! array_key_exists($movement->damage_source, StockMovement::damageSources())) {
+            throw ValidationException::withMessages([
+                'damage_source' => 'Please select where the damage came from.',
+            ]);
+        }
+
         $this->validate($movement);
     }
 

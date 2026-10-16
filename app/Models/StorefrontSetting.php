@@ -493,6 +493,8 @@ class StorefrontSetting extends Model
         'reseller_guide_rules',
         'reseller_payment_method_ids',
         'reseller_guide_show_figures',
+        'reseller_announcement_enabled',
+        'reseller_announcement',
         'social_links',
         'is_published',
         'nextjs_site_enabled',
@@ -582,6 +584,7 @@ class StorefrontSetting extends Model
         'reseller_guide_rules' => 'array',
         'reseller_payment_method_ids' => 'array',
         'reseller_guide_show_figures' => 'boolean',
+        'reseller_announcement_enabled' => 'boolean',
         'social_links' => 'array',
         'typography_base_size' => 'integer',
         'typography_heading_weight' => 'integer',
@@ -854,6 +857,7 @@ class StorefrontSetting extends Model
             $setting->reseller_program_enabled ??= true;
             $setting->reseller_guide_enabled ??= true;
             $setting->reseller_guide_show_figures ??= false;
+            $setting->reseller_announcement_enabled ??= false;
             $setting->reseller_subdomain_setup_minutes ??= 10;
         });
 

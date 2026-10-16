@@ -87,6 +87,31 @@ class ResellerGuidePageTest extends TestCase
             ->assertDontSee('33.00');
     }
 
+    public function test_the_guide_explains_the_return_charge_and_shows_its_amount_only_with_the_figures(): void
+    {
+        $this->setting->forceFill(['reseller_return_charge' => 80])->save();
+
+        $this->get($this->portal.'/portal/guide')
+            ->assertOk()
+            ->assertSee('a return charge is taken from your deposit, once for that order')
+            ->assertDontSee('The return charge is');
+
+        $this->setting->forceFill(['reseller_guide_show_figures' => true])->save();
+
+        $this->get($this->portal.'/portal/guide')
+            ->assertOk()
+            ->assertSee('The return charge is')
+            ->assertSee('80');
+
+        // No charge set: the guide does not promise one.
+        $this->setting->forceFill(['reseller_return_charge' => 0])->save();
+
+        $this->get($this->portal.'/portal/guide')
+            ->assertOk()
+            ->assertDontSee('a return charge is taken')
+            ->assertDontSee('The return charge is');
+    }
+
     public function test_the_guide_is_only_on_the_portal_host_and_can_be_turned_off(): void
     {
         $this->get('https://guide-co.example.test/portal/guide')->assertNotFound();

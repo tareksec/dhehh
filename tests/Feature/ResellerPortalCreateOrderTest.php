@@ -267,7 +267,7 @@ class ResellerPortalCreateOrderTest extends TestCase
                 'items' => [['product_id' => $product->getKey(), 'quantity' => 2, 'price' => 520]],
             ])
             ->assertSee('Customer pays')
-            ->assertSee('Your profit')
+            ->assertSee('My profit')
             ->fillForm(['name' => 'B', 'phone' => '017', 'address' => 'x', 'items' => [['product_id' => $product->getKey(), 'quantity' => 1, 'price' => 100]]])
             ->call('create')
             ->assertHasFormErrors(['items.0.price']);
@@ -280,8 +280,11 @@ class ResellerPortalCreateOrderTest extends TestCase
         $this->actingAs($this->reseller, 'customer');
         $html = $this->get('http://reseller.order-co.example.test/portal/orders')->assertOk()->getContent();
 
-        // One link to the page: the button (the sidebar no longer lists it).
-        $this->assertSame(1, substr_count($html, 'href="http://reseller.order-co.example.test/portal/create-order"'));
+        // Outside the phone tab bar (its raised button links here too), there is one link to the page: the
+        // button (the sidebar no longer lists it).
+        $withoutTabBar = preg_replace('#<nav[^>]*data-reseller-bottom-nav.*?</nav>#s', '', $html);
+        $this->assertSame(1, substr_count($withoutTabBar, 'href="http://reseller.order-co.example.test/portal/create-order"'));
+        $this->assertSame(1, substr_count($html, 'data-bottom-nav="create-order"'));
         $this->assertStringContainsString('Create order', $html);
     }
 
