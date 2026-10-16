@@ -491,7 +491,8 @@ class ResellerOwnCourierService
 
     /**
      * A returned order takes the return charge from the reseller's deposit
-     * (owner rule, 2026-10-14): the amount set in Reseller Settings, once per
+     * (owner rule, 2026-10-14): the amount set in Reseller Settings (or the
+     * lower amount of the reseller's level, owner decision 2026-10-16), once per
      * order, for store-delivered and own-courier orders alike. Nothing else
      * comes back for a return. The deposit may end up below zero; later
      * credits make that up. Safe to call again -- it charges only once.
@@ -503,7 +504,9 @@ class ResellerOwnCourierService
             return 0.0;
         }
 
-        $charge = round((float) (StorefrontSetting::bladeFor((int) $order->company_id)?->reseller_return_charge ?? 0), 2);
+        // The reseller's own level may set a lower charge than the company's (owner decision 2026-10-16).
+        $reseller = Customer::withoutGlobalScopes()->with('resellerLevel')->find($order->reseller_customer_id);
+        $charge = $reseller?->resellerReturnCharge() ?? 0.0;
 
         if ($charge <= 0) {
             return 0.0;

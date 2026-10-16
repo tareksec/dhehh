@@ -79,6 +79,7 @@ use App\Models\Quotation;
 use App\Models\QuotationItem;
 use App\Models\ResellerCommission;
 use App\Models\ResellerDepositEntry;
+use App\Models\ResellerLevel;
 use App\Models\ResellerPayoutAccount;
 use App\Models\ResellerPayoutRequest;
 use App\Models\SettlementPayout;
@@ -142,7 +143,7 @@ class MultiCompanyIsolationTest extends TestCase
             Offer::class, OfferItem::class, ProductReview::class,
             Broadcast::class, Media::class, GeneratedImage::class, GeneratedVideo::class,
             ExpenseScan::class, ExpenseScanItem::class,
-            ResellerCommission::class, ResellerPayoutRequest::class, ResellerPayoutAccount::class, ResellerDepositEntry::class,
+            ResellerCommission::class, ResellerPayoutRequest::class, ResellerPayoutAccount::class, ResellerDepositEntry::class, ResellerLevel::class,
             WhatsAppContact::class,
         ];
 

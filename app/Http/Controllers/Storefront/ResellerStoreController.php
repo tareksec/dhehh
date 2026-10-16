@@ -115,7 +115,7 @@ class ResellerStoreController extends Controller
             'storeUrl' => $this->storeUrl($company, $reseller),
             'previewSlug' => $this->previewSlug($request),
             'balances' => $this->commissions->balances($reseller),
-            'minWithdrawal' => (float) ($company->storefrontSetting?->reseller_min_withdrawal ?? 0),
+            'minWithdrawal' => $reseller->resellerMinWithdrawal(),
             'payoutMethods' => ResellerPayoutRequest::METHODS,
             'commissions' => ResellerCommission::query()
                 ->with('order:id,order_number,order_date')
@@ -241,7 +241,7 @@ class ResellerStoreController extends Controller
             return $reseller;
         }
 
-        $minimum = max(0.01, (float) ($company->storefrontSetting?->reseller_min_withdrawal ?? 0));
+        $minimum = max(0.01, $reseller->resellerMinWithdrawal());
 
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:'.$minimum],

@@ -244,6 +244,34 @@ Tests: `StorefrontApiTest` (+1). Verified: full suite 2533 passed, 1 skipped, 0 
 
 Commit status: ERP part committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16) after the full suite; website part pushed to the website repo's branch `feature/reseller-menu-link`. Neither is on `main`.
 
+## 2026-10-16 (last) - Reseller levels (step 5 of 5)
+
+Step 5 of the order I gave the owner. Because levels were never defined, I asked first (the owner's answers, in Bangla): the admin sets a reseller's level by hand; the admin makes up the level names and how many there are; a level may show a badge/name, **lower the return charge** and **lower the minimum withdrawal**; no automatic period is needed.
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+
+1. **Resellers → Reseller levels** (new, one list with pop-up forms): name, order, optional return charge, optional minimum withdrawal. Migration `2026_10_16_110000` (table + `customers.reseller_level_id`).
+2. The level is chosen on the reseller's edit page, in bulk (*Set level*) and filtered on the list; shown on the reseller's page and list.
+3. The reseller sees the level name as a badge on the portal dashboard.
+4. The lower amounts really apply: a returned order's charge, the Withdrawals page's minimum, and the store's withdrawal check, all through `Customer::resellerReturnCharge()` / `resellerMinWithdrawal()`.
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- The owner ticked "badge only, no money change" **together with** the two "lower" options. I read it as: the badge is always shown, and money only changes where the admin fills in an amount on a level. A level with both amounts empty changes nothing.
+- A level's amount is **not forced to be lower** than the company's (I do not know the owner's rule; the helper text says a lower amount rewards the level). 0 means free returns / no minimum.
+- The return charge uses the level the reseller has **when the order comes back**; changing a level later does not touch charges already taken.
+- Levels are per company, names unique inside a company, a level can only be given to a reseller of the same company. Deleting a level never deletes resellers or touches money.
+- Same permission as the other reseller screens (the Sales module rights, plus the company's reseller module switch).
+- The public reseller guide still shows only the company's return charge and minimum (an applicant has no level yet).
+
+Deploy: `php artisan migrate`. Then open Resellers → Reseller levels, make the levels, and give the resellers their levels.
+
+Needs Bangla review (new keys): Reseller levels (রিসেলার লেভেল), Level name, Order in lists (তালিকায় ক্রম), the two "for this level" labels and their helper line, Company amount (কোম্পানির অঙ্ক), the empty-state and delete-warning sentences, New level, No level, Set level, the two bulk-result messages, and the helper line on the reseller form.
+
+Tests: `ResellerLevelsTest` (10). Verified: full suite 2543 passed, 1 skipped, 0 failed.
+
+Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16). Not pushed to `main`.
+
 ## 2026-10-15 - Admin: reset a reseller's password / email a reset link; portal ↔ admin audit
 
 The owner (in Bangla): *"From the admin, resellers' passwords can be reset, and a password reset request can be sent by email to the email the reseller set."* and *"Check whether the portal and the admin dashboard are connected without problems, whether stock works properly, and whether orders work properly."*

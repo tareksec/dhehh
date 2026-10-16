@@ -13,6 +13,7 @@ use Filament\Panel;
 use Illuminate\Auth\Authenticatable;
 use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -60,6 +61,7 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
         'customer_type',
         'customer_source',
         'reseller_status',
+        'reseller_level_id',
         'business_name',
         'reseller_note',
         'reseller_slug',
@@ -178,6 +180,39 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
     public function resellerPayoutRequests(): HasMany
     {
         return $this->hasMany(ResellerPayoutRequest::class);
+    }
+
+    public function resellerLevel(): BelongsTo
+    {
+        return $this->belongsTo(ResellerLevel::class, 'reseller_level_id');
+    }
+
+    /**
+     * What a returned order costs this reseller: their level's own return charge
+     * when the level sets one, otherwise the company's amount from Reseller
+     * Settings (owner decision 2026-10-16).
+     */
+    public function resellerReturnCharge(): float
+    {
+        $own = $this->resellerLevel?->return_charge;
+
+        if ($own !== null) {
+            return round((float) $own, 2);
+        }
+
+        return round((float) (StorefrontSetting::bladeFor((int) $this->company_id)?->reseller_return_charge ?? 0), 2);
+    }
+
+    /** The smallest withdrawal this reseller may ask for: their level's amount when it sets one, else the company's. */
+    public function resellerMinWithdrawal(): float
+    {
+        $own = $this->resellerLevel?->min_withdrawal;
+
+        if ($own !== null) {
+            return round((float) $own, 2);
+        }
+
+        return round((float) (StorefrontSetting::bladeFor((int) $this->company_id)?->reseller_min_withdrawal ?? 0), 2);
     }
 
     public function resellerPayoutAccounts(): HasMany

@@ -39,6 +39,7 @@ class ResellerInfolist
                                 default => 'gray',
                             }),
                         TextEntry::make('business_name')->label('Business / shop name')->placeholder('-'),
+                        TextEntry::make('resellerLevel.name')->label(__('Reseller level'))->badge()->placeholder('-'),
                         TextEntry::make('reseller_slug')
                             ->label('Store URL')
                             ->placeholder('Not approved yet')
