@@ -2291,5 +2291,14 @@
     "Nuport import failed": "Nuport import failed",
     "Nuport import preview": "Nuport import preview",
     "Nuport orders imported": "Nuport orders imported",
-    "Nuport (imported)": "Nuport (imported)"
+    "Nuport (imported)": "Nuport (imported)",
+    "SKU mapping used: :list": "SKU mapping used: :list",
+    "SKU mapping lines ignored (the ERP SKU was not found or the line is not understood): :list": "SKU mapping lines ignored (the ERP SKU was not found or the line is not understood): :list",
+    ":count products would be created (inactive, stock 0, cost price 0): :list": ":count products would be created (inactive, stock 0, cost price 0): :list",
+    ":count products were created (inactive, stock 0, cost price 0): :list": ":count products were created (inactive, stock 0, cost price 0): :list",
+    "Add these SKUs to the SKU mapping, or turn on \"Create missing products\", then import the same file again.": "Add these SKUs to the SKU mapping, or turn on \"Create missing products\", then import the same file again.",
+    "SKU mapping": "SKU mapping",
+    "One line per Nuport SKU the ERP does not have: Nuport SKU, an equals sign, then the SKU of the ERP product or variant. It is remembered for the next import.": "One line per Nuport SKU the ERP does not have: Nuport SKU, an equals sign, then the SKU of the ERP product or variant. It is remembered for the next import.",
+    "Create missing products": "Create missing products",
+    "A product no SKU or mapping finds is created inactive with stock 0 and cost price 0, so no order is skipped. Set the cost price in the product afterwards.": "A product no SKU or mapping finds is created inactive with stock 0 and cost price 0, so no order is skipped. Set the cost price in the product afterwards."
 }

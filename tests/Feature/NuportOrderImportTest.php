@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\Orders\Pages\ListOrders;
+use App\Models\AppSetting;
 use App\Models\Company;
 use App\Models\CourierBooking;
 use App\Models\Customer;
@@ -447,6 +448,176 @@ class NuportOrderImportTest extends TestCase
         $this->assertSame(1, Order::query()->count());
 
         $this->artisan('orders:import-nuport', ['file' => $path, 'company' => 'missing-co'])->assertFailed();
+    }
+
+    public function test_a_sku_mapping_points_a_nuport_sku_at_an_erp_variant_or_product(): void
+    {
+        $rows = array_merge(
+            $this->order('SO-4001', [
+                'Sales Amount' => '1000.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '1000.00',
+            ], [['sku' => 'zmtfx05b-old', 'name' => 'X05 Fan - Black (old)', 'qty' => 2, 'unit' => 500]]),
+            $this->order('SO-4002', [
+                'Sales Amount' => '40.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '40.00',
+            ], [['sku' => 'ZMKMQ-RETIRED', 'name' => 'Key Chain old', 'qty' => 2, 'unit' => 20]]),
+        );
+        $map = "# retired Nuport SKUs\nZMTFX05B-OLD = ZMTFX05B\nZMKMQ-RETIRED => zmkmq\nNO-SUCH = NOT-IN-ERP\nbroken line";
+
+        $dry = app(NuportOrderImportService::class)->run($this->csv($rows), dryRun: true, skuMap: $map);
+
+        $this->assertSame(2, $dry['created']);
+        $this->assertSame([], $dry['skipped']);
+        $this->assertSame(['zmtfx05b-old' => 1, 'zmkmq-retired' => 1], array_map(fn (array $map): int => $map['orders'], $dry['mapped']));
+        $this->assertSame(['NO-SUCH = NOT-IN-ERP', 'broken line'], $dry['map_ignored']);
+        $this->assertSame(0, Order::query()->count());
+
+        $report = app(NuportOrderImportService::class)->run($this->csv($rows), dryRun: false, skuMap: $map);
+
+        $this->assertSame(2, $report['created']);
+
+        $variantItem = Order::query()->where('order_number', 'SO-4001')->firstOrFail()->items()->firstOrFail();
+        $this->assertSame($this->blackFan->id, $variantItem->product_variant_id);
+        $this->assertSame($this->fan->id, $variantItem->product_id);
+        $this->assertEqualsWithDelta(500.0, (float) $variantItem->unit_price, 0.001);
+
+        $productItem = Order::query()->where('order_number', 'SO-4002')->firstOrFail()->items()->firstOrFail();
+        $this->assertSame($this->keyChain->id, $productItem->product_id);
+        $this->assertNull($productItem->product_variant_id);
+
+        $lines = app(NuportOrderImportService::class)->summary($dry);
+        $this->assertTrue(collect($lines)->contains(fn (string $line): bool => str_contains($line, 'ZMTFX05B-OLD → ZMTFX05B (1)')));
+        $this->assertTrue(collect($lines)->contains(fn (string $line): bool => str_contains($line, 'NO-SUCH = NOT-IN-ERP')));
+    }
+
+    public function test_a_sku_mapping_wins_over_a_direct_match_and_never_guesses(): void
+    {
+        $other = Product::query()->create([
+            'name' => 'Other', 'sku' => 'ZMOTHER', 'price' => 10, 'sale_price' => 10, 'cost_price' => 4,
+            'stock' => 0, 'unit' => 'pcs', 'is_active' => true, 'status' => 'available',
+        ]);
+
+        $path = $this->csv($this->order('SO-4101', [
+            'Sales Amount' => '20.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '20.00',
+        ], [['sku' => 'ZMKMQ', 'name' => 'Key Chain', 'qty' => 2, 'unit' => 10]]));
+
+        app(NuportOrderImportService::class)->run($path, dryRun: false, skuMap: 'ZMKMQ = ZMOTHER');
+
+        $this->assertSame($other->id, Order::query()->firstOrFail()->items()->firstOrFail()->product_id);
+
+        // The ERP SKU is missing: the mapping is dropped, the order is skipped, nothing is guessed.
+        $report = app(NuportOrderImportService::class)->run(
+            $this->csv($this->order('SO-4102', [
+                'Sales Amount' => '20.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '20.00',
+            ], [['sku' => 'ZZ-GONE', 'name' => 'Gone', 'qty' => 1, 'unit' => 20]])),
+            dryRun: false,
+            skuMap: 'ZZ-GONE = ZZ-ALSO-GONE',
+        );
+
+        $this->assertSame(0, $report['created']);
+        $this->assertSame(['ZZ-GONE = ZZ-ALSO-GONE'], $report['map_ignored']);
+        $this->assertSame(['ZZ-GONE' => 1], $report['unmatched']);
+    }
+
+    public function test_missing_products_are_created_inactive_only_when_asked_and_only_once(): void
+    {
+        $rows = array_merge(
+            $this->order('SO-4201', [
+                'Sales Amount' => '1300.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '1300.00',
+            ], [
+                ['sku' => 'ZMGRRLP', 'name' => 'Red Rose & Oyster Gold Pearl Necklace', 'qty' => 1, 'unit' => 1250],
+                ['sku' => '', 'name' => 'Courier Poly', 'qty' => 5, 'unit' => 10],
+            ]),
+            $this->order('SO-4202', [
+                'Sales Amount' => '1300.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '1300.00',
+            ], [
+                ['sku' => 'ZMGRRLP', 'name' => 'Red Rose & Oyster Gold Pearl Necklace', 'qty' => 1, 'unit' => 1300],
+            ]),
+        );
+        $path = $this->csv($rows);
+        $service = app(NuportOrderImportService::class);
+
+        // Off by default: both orders are skipped and listed.
+        $off = $service->run($path, dryRun: false);
+        $this->assertSame(0, $off['created']);
+        $this->assertSame(['ZMGRRLP' => 2, 'Courier Poly (no SKU)' => 1], $off['unmatched']);
+        $this->assertSame(0, Product::query()->where('sku', 'ZMGRRLP')->count());
+
+        // Preview: lists what would be created, saves nothing.
+        $dry = $service->run($path, dryRun: true, createMissing: true);
+        $this->assertSame(2, $dry['created']);
+        $this->assertSame(['ZMGRRLP', 'NUPORT-COURIER-POLY'], array_keys($dry['new_products']));
+        $this->assertSame(0, Product::query()->where('sku', 'ZMGRRLP')->count());
+
+        $report = $service->run($path, dryRun: false, createMissing: true);
+        $this->assertSame(2, $report['created']);
+        $this->assertSame([], $report['errors']);
+
+        $necklace = Product::query()->where('sku', 'ZMGRRLP')->firstOrFail();
+        $this->assertFalse($necklace->is_active);
+        $this->assertSame(0, (int) $necklace->stock);
+        $this->assertEqualsWithDelta(0.0, (float) $necklace->cost_price, 0.001);
+        $this->assertEqualsWithDelta(1300.0, (float) $necklace->sale_price, 0.001);
+        $this->assertSame('Courier Poly', Product::query()->where('sku', 'NUPORT-COURIER-POLY')->firstOrFail()->name);
+        $this->assertSame(0, StockMovement::query()->where('product_id', $necklace->id)->count());
+        $this->assertSame(2, Order::query()->count());
+
+        // A second run finds those products by SKU and name: nothing new, nothing duplicated.
+        $again = $service->run($path, dryRun: false, createMissing: true);
+        $this->assertSame(0, $again['created']);
+        $this->assertSame([], $again['new_products']);
+        $this->assertSame(1, Product::query()->where('sku', 'ZMGRRLP')->count());
+        $this->assertSame(1, Product::query()->where('sku', 'NUPORT-COURIER-POLY')->count());
+    }
+
+    public function test_the_artisan_command_reads_a_sku_mapping_file_and_can_create_missing_products(): void
+    {
+        $path = $this->csv(array_merge(
+            $this->order('SO-4301', [
+                'Sales Amount' => '40.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '40.00',
+            ], [['sku' => 'OLD-KEYCHAIN', 'name' => 'Key Chain old', 'qty' => 2, 'unit' => 20]]),
+            $this->order('SO-4302', [
+                'Sales Amount' => '90.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '90.00',
+            ], [['sku' => 'ZMNEW', 'name' => 'Brand new', 'qty' => 3, 'unit' => 30]]),
+        ));
+        $map = tempnam(sys_get_temp_dir(), 'nuportmap');
+        file_put_contents($map, "OLD-KEYCHAIN = ZMKMQ\n");
+
+        $this->artisan('orders:import-nuport', [
+            'file' => $path, 'company' => $this->company->slug, '--map' => $map, '--create-missing' => true, '--apply' => true,
+        ])->assertSuccessful();
+
+        app(CompanyContext::class)->set($this->company);
+        $this->assertSame(2, Order::query()->count());
+        $this->assertSame($this->keyChain->id, Order::query()->where('order_number', 'SO-4301')->firstOrFail()->items()->firstOrFail()->product_id);
+        $this->assertFalse(Product::query()->where('sku', 'ZMNEW')->firstOrFail()->is_active);
+
+        $this->artisan('orders:import-nuport', ['file' => $path, 'company' => $this->company->slug, '--map' => '/no/such/file'])->assertFailed();
+    }
+
+    public function test_the_import_form_remembers_the_sku_mapping_for_the_next_time(): void
+    {
+        Storage::fake('local');
+        $admin = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($admin)->withSession(['current_company_id' => $this->company->id]);
+
+        $csv = file_get_contents($this->csv($this->order('SO-4401', [
+            'Sales Amount' => '40.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '40.00',
+        ], [['sku' => 'OLD-KEYCHAIN', 'name' => 'Key Chain old', 'qty' => 2, 'unit' => 20]])));
+
+        Livewire::test(ListOrders::class)
+            ->callAction('importNuportOrders', [
+                'csv' => UploadedFile::fake()->createWithContent('nuport.csv', $csv),
+                'sku_map' => 'OLD-KEYCHAIN = ZMKMQ',
+                'create_missing' => false,
+                'preview_only' => false,
+            ])
+            ->assertNotified('Nuport orders imported');
+
+        $this->assertSame(1, Order::query()->count());
+        $this->assertSame('OLD-KEYCHAIN = ZMKMQ', AppSetting::getValue('nuport_import_sku_map_'.$this->company->id));
+
+        Livewire::test(ListOrders::class)
+            ->mountAction('importNuportOrders')
+            ->assertActionDataSet(['sku_map' => 'OLD-KEYCHAIN = ZMKMQ']);
     }
 
     public function test_the_orders_list_offers_the_import_and_previews_an_uploaded_file(): void

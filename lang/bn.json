@@ -2291,5 +2291,14 @@
     "Nuport import failed": "Nuport ইমপোর্ট ব্যর্থ হয়েছে",
     "Nuport import preview": "Nuport ইমপোর্ট প্রিভিউ",
     "Nuport orders imported": "Nuport অর্ডার ইমপোর্ট হয়েছে",
-    "Nuport (imported)": "Nuport (ইমপোর্ট করা)"
+    "Nuport (imported)": "Nuport (ইমপোর্ট করা)",
+    "SKU mapping used: :list": "SKU মিলানো তালিকা ব্যবহার হয়েছে: :list",
+    "SKU mapping lines ignored (the ERP SKU was not found or the line is not understood): :list": "SKU মিলানো তালিকার যে লাইনগুলো বাদ গেছে (ERP-তে ওই SKU পাওয়া যায়নি বা লাইনটি বোঝা যায়নি): :list",
+    ":count products would be created (inactive, stock 0, cost price 0): :list": ":count টি পণ্য তৈরি হবে (নিষ্ক্রিয়, স্টক ০, ক্রয়মূল্য ০): :list",
+    ":count products were created (inactive, stock 0, cost price 0): :list": ":count টি পণ্য তৈরি হয়েছে (নিষ্ক্রিয়, স্টক ০, ক্রয়মূল্য ০): :list",
+    "Add these SKUs to the SKU mapping, or turn on \"Create missing products\", then import the same file again.": "এই SKU-গুলো SKU মিলানো তালিকায় যোগ করুন, অথবা \"অনুপস্থিত পণ্য তৈরি করুন\" চালু করুন, তারপর একই ফাইল আবার ইমপোর্ট করুন।",
+    "SKU mapping": "SKU মিলানো তালিকা",
+    "One line per Nuport SKU the ERP does not have: Nuport SKU, an equals sign, then the SKU of the ERP product or variant. It is remembered for the next import.": "ERP-তে নেই এমন প্রতিটি Nuport SKU-র জন্য একটি লাইন: Nuport SKU, একটি সমান চিহ্ন, তারপর ERP পণ্য বা ভ্যারিয়েন্টের SKU। এটি পরের ইমপোর্টের জন্য মনে রাখা হয়।",
+    "Create missing products": "অনুপস্থিত পণ্য তৈরি করুন",
+    "A product no SKU or mapping finds is created inactive with stock 0 and cost price 0, so no order is skipped. Set the cost price in the product afterwards.": "কোনো SKU বা মিলানো তালিকায় যে পণ্য পাওয়া যায় না, সেটি নিষ্ক্রিয়, স্টক ০ ও ক্রয়মূল্য ০ দিয়ে তৈরি হয়, ফলে কোনো অর্ডার বাদ পড়ে না। পরে পণ্যে ক্রয়মূল্য বসিয়ে দিন।"
 }

@@ -13,6 +13,8 @@ class ImportNuportOrders extends Command
     protected $signature = 'orders:import-nuport
         {file : Path to the CSV from Nuport (Orders, Action, Export As CSV)}
         {company : Company slug to import into}
+        {--map= : Text file with lines of "NUPORT-SKU = ERP-SKU" for Nuport SKUs the ERP does not have}
+        {--create-missing : Create products that no SKU or mapping finds (inactive, stock 0, cost price 0)}
         {--apply : Save the orders. Without it the command only previews and saves nothing}';
 
     protected $description = 'Copy past orders (customer, products, payment, status) from a Nuport order export into a company';
@@ -35,10 +37,27 @@ class ImportNuportOrders extends Command
             return self::FAILURE;
         }
 
+        $map = '';
+
+        if (filled($this->option('map'))) {
+            if (! is_file((string) $this->option('map'))) {
+                $this->error("Mapping file '{$this->option('map')}' not found.");
+
+                return self::FAILURE;
+            }
+
+            $map = (string) file_get_contents((string) $this->option('map'));
+        }
+
         $context->set($company);
 
         try {
-            $report = $service->run($file, dryRun: ! $this->option('apply'));
+            $report = $service->run(
+                $file,
+                dryRun: ! $this->option('apply'),
+                skuMap: $map,
+                createMissing: (bool) $this->option('create-missing'),
+            );
         } catch (ValidationException $exception) {
             $this->error(collect($exception->errors())->flatten()->implode(' '));
 

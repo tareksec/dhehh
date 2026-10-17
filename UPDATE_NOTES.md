@@ -2,6 +2,32 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-17 (later) - Nuport import: SKU mapping and "Create missing products"
+
+Owner request (Bangla): match the Nuport order products' SKUs to the ERP products' SKUs so no order is missed.
+
+Finding: the live ERP (read from the logged-in browser pane, nothing changed) has 35 products and 84 variant SKUs. Of the 91 distinct SKUs in the Nuport export, 79 match exactly; 12 do not. Without any fix 343 of 1,275 importable orders are skipped (ZMGLPN 188, ZMGRRLPWB-OLD 86, ZMGRRLP 49, ZMGWRP 26, ZMGLRLP 15, ZMGLPNK 5, ZMGSMS 2, ZMGLPS-1 1, Courier Poly, Bubble Poly). The 3 "-R" return invoices (SO-0443-R, SO-0444-R, SO-0445-R: quantity 0, sales 0) carry no sale and stay skipped.
+
+What changed (`NuportOrderImportService`, `ListOrders`, `ImportNuportOrders`, lang, tests):
+
+- **SKU mapping**: textarea in the import dialog (and `--map=<file>`), one `NUPORT-SKU = ERP-SKU` per line; wins over a direct match; ERP SKU must exist as a variant or product SKU, else the line is ignored and listed. Remembered per company in `app_settings` (`nuport_import_sku_map_<company id>`).
+- **Create missing products** toggle (and `--create-missing`), off by default: creates the product inactive, stock 0, cost price 0, selling price = last non-zero unit price in the file; SKU-less lines get `NUPORT-<NAME>`. Preview lists them. A second run creates nothing twice.
+- 9 new keys in `lang/en.json` + `lang/bn.json`.
+
+Checked on the real file against the live SKU list (in-memory test DB with a throwaway product per live SKU, nothing on live): no fix 929 new orders; mapping `ZMGRRLPWB-OLD = ZMGRRLPWB` and `ZMGLPN = ZMGLPNW` 1,178; mapping + create missing 1,272 (8 products to create, 0 errors, only the 65 test/fake and 3 return invoices skipped); create missing only 1,272 (10 products).
+
+Open points for the owner:
+
+- The two mappings above were my reading; the owner confirmed both (2026-10-17): `ZMGRRLPWB-OLD` is the Black box at 420 (the ERP's `ZMGRRLPWB` variant of `ZMGRRLPW`); `ZMGLPN` has the same Nuport name "Love Pearl Necklace" as the ERP's `ZMGLPNW` but sold at 950/450/380 against 200-240. (The line keeps its own Nuport unit price either way.)
+- Created products have cost price 0, so the imported lines show no cost and profit looks too high for them. Give each product its real cost; old lines keep 0.
+- Created products do not touch stock or the website (inactive, stock 0).
+
+Needs Bangla review: all 9 new keys.
+
+Verification: `php artisan test --filter=NuportOrderImportTest` 22 passed; full plain `php artisan test`: 2,548 passed, 1 skipped, 0 failed; Pint clean. No live data was written.
+
+Commit status: committed on branch `feature/nuport-sku-map` (cut from origin/main v2.82.0) and pushed to main with the owner's approval (2026-10-17).
+
 ## 2026-10-17 - Import Nuport orders (customer purchases, payment, status)
 
 Owner request: the wholesale team sells through Nuport (app.nuport.io); only customers had been brought over. They asked how to bring in what each customer bought, the payment and the status. I downloaded the real export from Nuport (owner said yes: 1,340 invoices, 2,311 lines, SO-0001 21 Aug 2025 to SO-1309 15 Oct 2026) and built the import from it.

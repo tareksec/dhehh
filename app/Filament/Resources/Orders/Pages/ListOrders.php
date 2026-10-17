@@ -3,11 +3,14 @@
 namespace App\Filament\Resources\Orders\Pages;
 
 use App\Filament\Resources\Orders\OrderResource;
+use App\Models\AppSetting;
 use App\Models\Order;
+use App\Services\CompanyContext;
 use App\Services\NuportOrderImportService;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
@@ -53,6 +56,7 @@ class ListOrders extends ListRecords
             ->modalHeading(__('Import Nuport orders'))
             ->modalDescription(__('Past orders from Nuport are copied in as history. Stock and account balances are never changed.'))
             ->modalSubmitActionLabel(__('Start'))
+            ->fillForm(fn (): array => ['sku_map' => $this->rememberedSkuMap()])
             ->schema([
                 FileUpload::make('csv')
                     ->label(__('Nuport orders CSV'))
@@ -61,6 +65,15 @@ class ListOrders extends ListRecords
                     ->acceptedFileTypes(['text/csv', 'text/plain', 'application/csv', 'application/vnd.ms-excel'])
                     ->required()
                     ->helperText(__('In Nuport open Orders, then Action, then Export As CSV. Uploading a newer export again never duplicates orders.')),
+                Textarea::make('sku_map')
+                    ->label(__('SKU mapping'))
+                    ->rows(5)
+                    ->placeholder("NUPORT-SKU = ERP-SKU\nNUPORT-SKU = ERP-SKU")
+                    ->helperText(__('One line per Nuport SKU the ERP does not have: Nuport SKU, an equals sign, then the SKU of the ERP product or variant. It is remembered for the next import.')),
+                Toggle::make('create_missing')
+                    ->label(__('Create missing products'))
+                    ->helperText(__('A product no SKU or mapping finds is created inactive with stock 0 and cost price 0, so no order is skipped. Set the cost price in the product afterwards.'))
+                    ->default(false),
                 Toggle::make('preview_only')
                     ->label(__('Preview only (save nothing)'))
                     ->helperText(__('Turn this off to save the orders.'))
@@ -76,9 +89,16 @@ class ListOrders extends ListRecords
                 }
 
                 $preview = (bool) ($data['preview_only'] ?? true);
+                $skuMap = trim((string) ($data['sku_map'] ?? ''));
 
                 try {
-                    $report = $service->run(Storage::disk('local')->path($file), dryRun: $preview);
+                    $report = $service->run(
+                        Storage::disk('local')->path($file),
+                        dryRun: $preview,
+                        skuMap: $skuMap,
+                        createMissing: (bool) ($data['create_missing'] ?? false),
+                    );
+                    $this->rememberSkuMap($skuMap);
                 } catch (ValidationException $exception) {
                     Notification::make()
                         ->title(__('Nuport import failed'))
@@ -104,6 +124,30 @@ class ListOrders extends ListRecords
 
                 $notification->send();
             });
+    }
+
+    /** The SKU mapping last used for this company, so the next import starts with it. */
+    protected function skuMapSettingKey(): ?string
+    {
+        $companyId = app(CompanyContext::class)->company()?->getKey();
+
+        return $companyId ? 'nuport_import_sku_map_'.$companyId : null;
+    }
+
+    protected function rememberedSkuMap(): string
+    {
+        $key = $this->skuMapSettingKey();
+
+        return $key ? (string) AppSetting::getValue($key, '') : '';
+    }
+
+    protected function rememberSkuMap(string $skuMap): void
+    {
+        $key = $this->skuMapSettingKey();
+
+        if ($key && $skuMap !== $this->rememberedSkuMap()) {
+            AppSetting::setValue($key, $skuMap);
+        }
     }
 
     /**

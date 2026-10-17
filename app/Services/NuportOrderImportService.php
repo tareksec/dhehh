@@ -37,8 +37,19 @@ use Throwable;
  *   Cancelled = Cancelled. Anything else is skipped and reported, never guessed.
  * - An order is skipped as a whole when one of its products cannot be found by
  *   SKU (variant SKU first, then product SKU, then exact name for lines
- *   without a SKU); a partly imported order would misstate its totals. Create
- *   or fix the product and import the same file again.
+ *   without a SKU); a partly imported order would misstate its totals. Fix the
+ *   product, give the SKU an ERP SKU in the SKU mapping, or let the import
+ *   create it (below), then import the same file again.
+ * - SKU mapping (owner request, 2026-10-17): Nuport used SKUs the ERP does not
+ *   have (retired or renamed ones). A mapping "NUPORT-SKU = ERP-SKU" (one per
+ *   line) makes those lines use the ERP product or variant with that SKU; it
+ *   wins over a direct match. A mapping whose ERP SKU does not exist is ignored
+ *   and reported, never guessed.
+ * - "Create missing products": a product that still cannot be found is created
+ *   with the Nuport SKU (a line without a SKU gets NUPORT-<name>) and name, the
+ *   last non-zero unit price as selling price, cost price 0, stock 0 and
+ *   inactive, so it never shows on the website or in stock. Off by default;
+ *   the preview lists what would be created.
  * - Imported orders never create stock movements, alerts or risk checks
  *   (Order::isHistoricalImport()), and their payments are posted with no
  *   account, so no account balance changes.
@@ -94,10 +105,23 @@ class NuportOrderImportService
     /** @var array<string, array{customer: ?Customer, new: bool}> */
     protected array $customerCache = [];
 
+    /** @var array<string, array{from: string, to: string, label: string}> keyed by lower-case Nuport SKU; "to" is the lower-case ERP SKU, "label" the ERP SKU as typed */
+    protected array $skuMap = [];
+
+    protected bool $createMissing = false;
+
+    /** True once every unit price has been seen (see run()), so planning stops changing them. */
+    protected bool $pricesLocked = false;
+
+    /** @var array<string, array{sku: string, name: string, price: float, product_id: ?int}> keyed by lower-case SKU */
+    protected array $newProducts = [];
+
     /**
+     * @param  string  $skuMap  lines of "NUPORT-SKU = ERP-SKU"
+     * @param  bool  $createMissing  create (inactive) products that no SKU or mapping finds
      * @return array<string, mixed> the report (see emptyReport())
      */
-    public function run(string $path, bool $dryRun = true): array
+    public function run(string $path, bool $dryRun = true, string $skuMap = '', bool $createMissing = false): array
     {
         $company = app(CompanyContext::class)->company();
 
@@ -108,6 +132,8 @@ class NuportOrderImportService
         $this->company = $company;
         $this->timezone = $company->timezone ?: (string) config('app.timezone');
         $this->customerCache = [];
+        $this->createMissing = $createMissing;
+        $this->newProducts = [];
         $this->loadProducts();
 
         if (! $dryRun) {
@@ -121,6 +147,19 @@ class NuportOrderImportService
         $existing = $this->existingOrders(array_keys($invoices));
         $report = $this->emptyReport(count($invoices));
         $report['dry_run'] = $dryRun;
+        $this->skuMap = $this->parseSkuMap($skuMap, $report);
+        $this->pricesLocked = false;
+
+        if ($createMissing) {
+            // Plan every invoice once first so a new product carries the last
+            // non-zero unit price in the file, not the price of whichever
+            // order happens to create it.
+            foreach ($invoices as $invoice => $rows) {
+                $this->plan((string) $invoice, $rows);
+            }
+
+            $this->pricesLocked = true;
+        }
 
         foreach ($invoices as $invoice => $rows) {
             $plan = $this->plan((string) $invoice, $rows);
@@ -144,6 +183,11 @@ class NuportOrderImportService
                 $report['mismatch'][] = $plan['invoice'];
             }
 
+            foreach (array_keys($plan['mapped']) as $from) {
+                $report['mapped'][$from] ??= ['from' => $this->skuMap[$from]['from'], 'to' => $this->skuMap[$from]['label'], 'orders' => 0];
+                $report['mapped'][$from]['orders']++;
+            }
+
             $this->addStatusTotals($report, $plan);
 
             try {
@@ -161,6 +205,13 @@ class NuportOrderImportService
                 }
 
                 $report['created']++;
+
+                foreach ($plan['lines'] as $line) {
+                    if (isset($line['new'])) {
+                        $new = $this->newProducts[$line['new']];
+                        $report['new_products'][$new['sku']] = $new['name'];
+                    }
+                }
             } catch (Throwable $exception) {
                 $report['errors'][] = $plan['invoice'].': '.Str::limit($exception->getMessage(), 160);
             }
@@ -206,9 +257,40 @@ class NuportOrderImportService
             $lines[] = __(':count test or fake cancelled orders were skipped.', ['count' => $testOrFake]);
         }
 
+        if ($report['mapped'] !== []) {
+            $lines[] = __('SKU mapping used: :list', [
+                'list' => $this->shorten(collect($report['mapped'])
+                    ->map(fn (array $map): string => $map['from'].' → '.$map['to'].' ('.$map['orders'].')')
+                    ->values()
+                    ->all()),
+            ]);
+        }
+
+        if ($report['map_ignored'] !== []) {
+            $lines[] = __('SKU mapping lines ignored (the ERP SKU was not found or the line is not understood): :list', [
+                'list' => $this->shorten($report['map_ignored']),
+            ]);
+        }
+
+        if ($report['new_products'] !== []) {
+            $replace = [
+                'count' => count($report['new_products']),
+                'list' => $this->shorten(array_map(
+                    fn (string $sku, string $name): string => $sku.' ('.Str::limit($name, 40).')',
+                    array_keys($report['new_products']),
+                    array_values($report['new_products']),
+                )),
+            ];
+
+            $lines[] = $dryRun
+                ? __(':count products would be created (inactive, stock 0, cost price 0): :list', $replace)
+                : __(':count products were created (inactive, stock 0, cost price 0): :list', $replace);
+        }
+
         if ($unmatched > 0) {
             $lines[] = __(':count orders were skipped because a product was not found.', ['count' => $unmatched]);
             $lines[] = __('Products not found (SKU or name): :list', ['list' => $this->shorten(array_keys($report['unmatched']))]);
+            $lines[] = __('Add these SKUs to the SKU mapping, or turn on "Create missing products", then import the same file again.');
         }
 
         if ($other > 0) {
@@ -265,6 +347,9 @@ class NuportOrderImportService
             'skipped' => [],
             'skipped_orders' => [],
             'unmatched' => [],
+            'mapped' => [],
+            'map_ignored' => [],
+            'new_products' => [],
             'mismatch' => [],
             'errors' => [],
             'ignored_lines' => 0,
@@ -376,6 +461,7 @@ class NuportOrderImportService
             'detail' => null,
             'head' => $head,
             'lines' => [],
+            'mapped' => [],
             'ignored_lines' => 0,
             'mismatch' => false,
         ];
@@ -412,10 +498,18 @@ class NuportOrderImportService
             $unitPrice = $this->money($row['unitprice'] ?? '');
             $resolved = $this->resolveProduct($row['productsku'] ?? '', $row['productname'] ?? '');
 
+            if (! $resolved && $this->createMissing) {
+                $resolved = $this->planNewProduct($row['productsku'] ?? '', $row['productname'] ?? '', $unitPrice);
+            }
+
             if (! $resolved) {
                 $plan['unmatched'][$this->productLabel($row)] = true;
 
                 continue;
+            }
+
+            if (isset($resolved['mapped_from'])) {
+                $plan['mapped'][$resolved['mapped_from']] = true;
             }
 
             $plan['lines'][] = $resolved + ['quantity' => $quantity, 'unit_price' => $unitPrice];
@@ -554,14 +648,20 @@ class NuportOrderImportService
     }
 
     /**
-     * Variant SKU first, then product SKU, then the exact product name for a
-     * line that has no SKU.
+     * The SKU mapping first (it names an ERP SKU), then variant SKU, then
+     * product SKU, then the exact product name for a line that has no SKU.
      *
-     * @return array{product_id: int, variant_id: ?int, label: ?string, unit_cost: float}|null
+     * @return array{product_id: ?int, variant_id: ?int, label: ?string, unit_cost: float, mapped_from: ?string}|null
      */
     protected function resolveProduct(string $sku, string $name): ?array
     {
         $sku = Str::lower(trim($sku));
+        $mappedFrom = null;
+
+        if ($sku !== '' && isset($this->skuMap[$sku])) {
+            $mappedFrom = $sku;
+            $sku = $this->skuMap[$sku]['to'];
+        }
 
         if ($sku !== '') {
             if ($variant = $this->variants->get($sku)) {
@@ -570,6 +670,7 @@ class NuportOrderImportService
                     'variant_id' => $variant->getKey(),
                     'label' => $variant->label() ?: null,
                     'unit_cost' => $variant->effectiveCostPrice(),
+                    'mapped_from' => $mappedFrom,
                 ];
             }
 
@@ -579,8 +680,125 @@ class NuportOrderImportService
         }
 
         return $product
-            ? ['product_id' => $product->getKey(), 'variant_id' => null, 'label' => null, 'unit_cost' => (float) $product->cost_price]
+            ? ['product_id' => $product->getKey(), 'variant_id' => null, 'label' => null, 'unit_cost' => (float) $product->cost_price, 'mapped_from' => $mappedFrom]
             : null;
+    }
+
+    /**
+     * Lines of "NUPORT-SKU = ERP-SKU" (also "=>", "→", a comma or a tab; blank
+     * lines and lines starting with # are comments). A line whose ERP SKU is
+     * neither a variant nor a product SKU, or that has no two parts, is
+     * ignored and reported.
+     *
+     * @param  array<string, mixed>  $report
+     * @return array<string, array{from: string, to: string, label: string}>
+     */
+    protected function parseSkuMap(string $text, array &$report): array
+    {
+        $map = [];
+
+        foreach (preg_split('/\R/u', $text) ?: [] as $line) {
+            $line = trim($line);
+
+            if ($line === '' || str_starts_with($line, '#')) {
+                continue;
+            }
+
+            $understood = preg_match('/^(.+?)\s*(?:=>|→|=|,|;|\t)\s*(.+)$/u', $line, $parts) === 1;
+            $from = $understood ? trim($parts[1]) : '';
+            $to = $understood ? trim($parts[2]) : '';
+            $target = Str::lower($to);
+
+            if ($from === '' || $to === '' || ! ($this->variants->has($target) || $this->productsBySku->has($target))) {
+                $report['map_ignored'][] = $line;
+
+                continue;
+            }
+
+            $map[Str::lower($from)] = ['from' => $from, 'to' => $target, 'label' => $to];
+        }
+
+        return $map;
+    }
+
+    /**
+     * A line no SKU, mapping or name finds, when "Create missing products" is
+     * on: remembers the product to create and gives the line a placeholder
+     * until createNewProduct() saves it.
+     *
+     * @return array{product_id: null, variant_id: null, label: null, unit_cost: float, mapped_from: null, new: string}|null
+     */
+    protected function planNewProduct(string $sku, string $name, float $unitPrice): ?array
+    {
+        $sku = trim($sku);
+        $name = trim($name);
+
+        if ($sku === '') {
+            if ($name === '') {
+                return null;
+            }
+
+            $slug = Str::upper(Str::slug($name));
+            $sku = 'NUPORT-'.($slug !== '' ? $slug : strtoupper(substr(md5($name), 0, 8)));
+        }
+
+        $key = Str::lower($sku);
+        $entry = $this->newProducts[$key] ?? ['sku' => $sku, 'name' => $name !== '' ? $name : $sku, 'price' => 0.0, 'product_id' => null];
+
+        // The last non-zero price in the file is the most recent one.
+        if ($unitPrice > 0 && ! $this->pricesLocked) {
+            $entry['price'] = $unitPrice;
+        }
+
+        $this->newProducts[$key] = $entry;
+
+        return ['product_id' => null, 'variant_id' => null, 'label' => null, 'unit_cost' => 0.0, 'mapped_from' => null, 'new' => $key];
+    }
+
+    /**
+     * Saves the products the lines need and returns the lines with their ids.
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     * @return array<int, array<string, mixed>>
+     */
+    protected function materialiseLines(array $lines): array
+    {
+        foreach ($lines as $index => $line) {
+            if (isset($line['new'])) {
+                $lines[$index]['product_id'] = $this->createNewProduct((string) $line['new']);
+            }
+        }
+
+        return $lines;
+    }
+
+    /** Inactive, stock 0, cost price 0: history only, never on the website or in stock. */
+    protected function createNewProduct(string $key): int
+    {
+        $entry = $this->newProducts[$key];
+
+        if ($entry['product_id'] !== null) {
+            return $entry['product_id'];
+        }
+
+        $product = $this->productsBySku->get($key) ?? Product::query()->create([
+            'company_id' => $this->company->getKey(),
+            'name' => $entry['name'],
+            'sku' => $entry['sku'],
+            'price' => $entry['price'],
+            'sale_price' => $entry['price'],
+            'cost_price' => 0,
+            'stock' => 0,
+            'unit' => 'pcs',
+            'is_active' => false,
+            'status' => Product::STATUS_AVAILABLE,
+        ]);
+
+        $this->productsBySku->put($key, $product);
+        $this->productsByName->put(Str::lower(trim((string) $product->name)), $product);
+        $this->newProducts[$key]['product_id'] = (int) $product->getKey();
+
+        return $this->newProducts[$key]['product_id'];
     }
 
     /**
@@ -639,6 +857,8 @@ class NuportOrderImportService
     /** @param  array<string, mixed>  $plan */
     protected function createOrder(array $plan, Customer $customer): void
     {
+        $plan['lines'] = $this->materialiseLines($plan['lines']);
+
         DB::transaction(function () use ($plan, $customer): void {
             $order = new Order;
             $order->forceFill([

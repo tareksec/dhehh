@@ -4,6 +4,17 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Import Nuport orders: SKU mapping and "Create missing products"**, so no Nuport order is skipped because of a product the ERP does not have.
+  - **SKU mapping**: a box in the import dialog with one line per retired or renamed Nuport SKU, written `NUPORT-SKU = ERP-SKU`. Those lines use the ERP product or variant with that SKU. The mapping is remembered for the next import. The preview shows which mappings were used and how many orders each covered; a line whose ERP SKU does not exist is ignored and listed, never guessed.
+  - **Create missing products** (off by default): a product that no SKU or mapping finds is created **inactive, with stock 0 and cost price 0**, using the Nuport SKU, name and the last non-zero unit price. A line with no SKU gets the SKU `NUPORT-<name>`. The preview lists every product that would be created. Set the real cost price in the product afterwards; the cost of already imported order lines stays 0.
+  - The command takes the same two settings: `php artisan orders:import-nuport <file> <company-slug> --map=<file> --create-missing --apply`.
+
+### Technical Notes
+
+- `NuportOrderImportService::run()` gained `$skuMap` (text) and `$createMissing`. The mapping wins over a direct SKU match. With `$createMissing` the service plans every invoice once first so a new product carries the last non-zero price in the file. New products are saved just before the order that needs them; a second run finds them by SKU (or by name for the SKU-less ones) and creates nothing twice. The remembered mapping is an `app_settings` row `nuport_import_sku_map_<company id>`. Tests: `NuportOrderImportTest` (22 tests).
+
 ## [2.82.0] - 2026-10-17
 
 **Release type:** Minor Feature Update
