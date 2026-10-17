@@ -4,6 +4,10 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.83.1] - 2026-10-17
+
+**Release type:** Patch/Fix Update
+
 ### Fixed
 
 - **Imported Nuport orders of products with no stock** no longer ask for stock when edited. Saving an imported order on its Edit page showed the "Not enough stock" popup for any product whose stock was 0 and offered to add stock, which would have put stock in that was never there. Imported orders are history and never take stock, so the popup is skipped for them (like WooCommerce orders).
@@ -12,7 +16,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `HandlesStockShortages::haltWhenStockIsShort()` returns early for a saved order with `isHistoricalImport()`; `OrderForm`'s item `product_id` select adds `OR products.id = <the line's product_id>` to its active-products query. Test: `NuportOrderImportTest::test_an_imported_order_of_a_zero_stock_product_shows_normally_and_never_asks_for_stock`.
-
 ## [2.83.0] - 2026-10-17
 
 **Release type:** Minor Feature Update
