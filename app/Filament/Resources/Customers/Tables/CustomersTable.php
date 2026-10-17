@@ -30,6 +30,14 @@ class CustomersTable
                     ->searchable()
                     ->copyable(),
 
+                TextColumn::make('address')
+                    ->label('Customer Address')
+                    ->searchable()
+                    ->wrap()
+                    ->lineClamp(3)
+                    ->extraAttributes(['style' => 'min-width: 16rem'])
+                    ->placeholder('-'),
+
                 TextColumn::make('email')
                     ->searchable()
                     ->toggleable(),

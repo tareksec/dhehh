@@ -252,5 +252,6 @@
     "Steadfast rejected the API key or secret key (or they belong to a different business profile). Fix the keys before trying again — repeated failures lock the key out for 60 minutes.": "Steadfast rejected the API key or secret key (or they belong to a different business profile). Fix the keys before trying again — repeated failures lock the key out for 60 minutes.",
     "Steadfast says this account is not allowed right now — it may be inactive or its ownership (KYC) details need resubmitting.": "Steadfast says this account is not allowed right now — it may be inactive or its ownership (KYC) details need resubmitting.",
     "Too many requests or too many failed attempts — Steadfast has paused this key. Wait before trying again.": "Too many requests or too many failed attempts — Steadfast has paused this key. Wait before trying again.",
-    "Steadfast answered with error :status. Try again shortly.": "Steadfast answered with error :status. Try again shortly."
+    "Steadfast answered with error :status. Try again shortly.": "Steadfast answered with error :status. Try again shortly.",
+    "Customer Address": "Customer Address"
 }

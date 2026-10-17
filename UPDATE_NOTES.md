@@ -2,6 +2,16 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-15 - Customers: address in the Customer box + address column in the list
+
+Reason — after importing the customer list, the owner asked: "কাস্টমার এড্রেস কে কাস্টমার বক্সে বসাও এবং কাস্টমার লিস্টেও কাস্টমার এড্রেস কলাম থাকবে wrapped হবে" (put the address in the Customer box, and add a wrapped Customer Address column to the list).
+
+What changed: `CustomerInfolist` shows the address inside the Customer section (full width, label "Customer Address"). `CustomersTable` has a new searchable Customer Address column that wraps (max 3 lines). New key "Customer Address" in `lang/en.json` and `lang/bn.json`.
+
+Needs Bangla review: "Customer Address" → "কাস্টমারের ঠিকানা".
+
+Commit status: Committed and pushed to `claude/order-management-features-nafks7` and `main` (owner approved: "কমিট করে পুশ কর").
+
 ## 2026-09-27 - CI: GitHub Actions on Node.js 24
 
 Reason — the owner saw "Node.js 20 is deprecated" and "setup-java v4 is deprecated" warnings on CI run #159 and approved the fix: "হ্যাঁ, ঠিক করে মেইন এ পুশ কর" (yes, fix it and push to main). These were only warnings: the run succeeded and the APK was built. The workflow file had not been changed by the previous push.

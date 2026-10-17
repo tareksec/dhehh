@@ -252,5 +252,6 @@
     "Steadfast rejected the API key or secret key (or they belong to a different business profile). Fix the keys before trying again — repeated failures lock the key out for 60 minutes.": "স্টিডফাস্ট API কী বা সিক্রেট কী গ্রহণ করেনি (অথবা এগুলো অন্য কোনো ব্যবসার প্রোফাইলের)। আবার চেষ্টা করার আগে কী ঠিক করুন — বারবার ব্যর্থ হলে কী ৬০ মিনিটের জন্য লক হয়ে যায়।",
     "Steadfast says this account is not allowed right now — it may be inactive or its ownership (KYC) details need resubmitting.": "স্টিডফাস্ট জানাচ্ছে এই অ্যাকাউন্ট এখন অনুমোদিত নয় — এটি নিষ্ক্রিয় হতে পারে অথবা মালিকানার (KYC) তথ্য আবার জমা দিতে হবে।",
     "Too many requests or too many failed attempts — Steadfast has paused this key. Wait before trying again.": "অনেক বেশি রিকোয়েস্ট বা অনেকবার ব্যর্থ চেষ্টা — স্টিডফাস্ট এই কী সাময়িকভাবে বন্ধ রেখেছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।",
-    "Steadfast answered with error :status. Try again shortly.": "স্টিডফাস্ট :status ত্রুটি দিয়েছে। একটু পরে আবার চেষ্টা করুন।"
+    "Steadfast answered with error :status. Try again shortly.": "স্টিডফাস্ট :status ত্রুটি দিয়েছে। একটু পরে আবার চেষ্টা করুন।",
+    "Customer Address": "কাস্টমারের ঠিকানা"
 }
