@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\StorefrontSetting;
+use App\Support\LoginClient;
+use App\Support\LoginThrottled;
 use App\Support\StorefrontApi\Phone;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
@@ -20,7 +22,10 @@ use Illuminate\Validation\ValidationException;
  */
 class CustomerAccountService
 {
-    public function __construct(protected StorefrontNotificationService $notifications) {}
+    public function __construct(
+        protected StorefrontNotificationService $notifications,
+        protected LoginGate $loginGate,
+    ) {}
 
     /** No code needed: SMS is off and the phone has no customer record yet. */
     public const VERIFY_NONE = 'none';
@@ -210,23 +215,22 @@ class CustomerAccountService
     }
 
     /**
+     * @param  LoginClient|null  $client  who is asking; defaults to the current web request
+     *                                    (the Next.js API passes the visitor it forwards)
      * @return Customer|null null when the identifier/password pair doesn't match a registered account.
      *
-     * @throws ValidationException when the identifier has failed too many times recently. This is
-     *                             keyed on the identifier itself (not the caller's IP), so it also
-     *                             catches a password-guessing attack distributed across many IPs -
-     *                             the route-level `throttle:10,1` only protects a single IP.
+     * @throws LoginThrottled when LoginGate stops the attempt before the password is checked.
+     *                        The gate counts wrong passwords per account and per device — never
+     *                        per IP alone — so it also catches a password-guessing attack spread
+     *                        over many IPs (the route-level `throttle:10,1` only protects a single
+     *                        IP), and the slow password hash is not computed for a request the gate
+     *                        refuses. The phone is normalised first, so "+880…", "880…" and "01…"
+     *                        count against the same account.
      */
-    public function attemptLogin(string $identifier, string $password): ?Customer
+    public function attemptLogin(string $identifier, string $password, ?LoginClient $client = null): ?Customer
     {
-        $identifier = trim($identifier);
-        $rateLimitKey = $this->loginRateLimitKey($identifier);
-
-        if (RateLimiter::tooManyAttempts($rateLimitKey, 5)) {
-            throw ValidationException::withMessages([
-                'identifier' => 'Too many login attempts. Please try again in '.RateLimiter::availableIn($rateLimitKey).' seconds.',
-            ]);
-        }
+        $identifier = Phone::identifier($identifier);
+        $client ??= LoginClient::fromRequest(request(), LoginGate::SURFACE_CUSTOMER);
 
         $query = Customer::query()->whereNotNull('password');
 
@@ -239,23 +243,37 @@ class CustomerAccountService
 
         $customer = $query->first();
 
-        if (! $customer || ! Hash::check($password, $customer->password)) {
-            // Hit the limiter even for an identifier with no account, so the
-            // lockout can't be used to distinguish "wrong password" from
-            // "no such account".
-            RateLimiter::hit($rateLimitKey, 60);
+        $attempt = $this->loginGate->begin(LoginGate::SURFACE_CUSTOMER, app(CompanyContext::class)->id(), $identifier, $customer, $client);
+
+        if ($attempt->isDenied()) {
+            $this->loginGate->failed($attempt);
 
             return null;
         }
 
-        RateLimiter::clear($rateLimitKey);
+        if ($attempt->isBlocked()) {
+            throw LoginThrottled::for($attempt);
+        }
+
+        if (! $customer) {
+            // An identifier with no account still costs one password hash and
+            // counts as a failure, so neither the time nor a lockout can be
+            // used to tell "wrong password" from "no such account".
+            $this->loginGate->spendHashTime($password);
+            $this->loginGate->failed($attempt);
+
+            return null;
+        }
+
+        if (! Hash::check($password, $customer->password)) {
+            $this->loginGate->failed($attempt);
+
+            return null;
+        }
+
+        $this->loginGate->succeeded($attempt);
 
         return $customer;
-    }
-
-    protected function loginRateLimitKey(string $identifier): string
-    {
-        return 'storefront-login:'.strtolower($identifier);
     }
 
     /**

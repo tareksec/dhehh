@@ -2300,5 +2300,6 @@
     "SKU mapping": "SKU মিলানো তালিকা",
     "One line per Nuport SKU the ERP does not have: Nuport SKU, an equals sign, then the SKU of the ERP product or variant. It is remembered for the next import.": "ERP-তে নেই এমন প্রতিটি Nuport SKU-র জন্য একটি লাইন: Nuport SKU, একটি সমান চিহ্ন, তারপর ERP পণ্য বা ভ্যারিয়েন্টের SKU। এটি পরের ইমপোর্টের জন্য মনে রাখা হয়।",
     "Create missing products": "অনুপস্থিত পণ্য তৈরি করুন",
-    "A product no SKU or mapping finds is created inactive with stock 0 and cost price 0, so no order is skipped. Set the cost price in the product afterwards.": "কোনো SKU বা মিলানো তালিকায় যে পণ্য পাওয়া যায় না, সেটি নিষ্ক্রিয়, স্টক ০ ও ক্রয়মূল্য ০ দিয়ে তৈরি হয়, ফলে কোনো অর্ডার বাদ পড়ে না। পরে পণ্যে ক্রয়মূল্য বসিয়ে দিন।"
+    "A product no SKU or mapping finds is created inactive with stock 0 and cost price 0, so no order is skipped. Set the cost price in the product afterwards.": "কোনো SKU বা মিলানো তালিকায় যে পণ্য পাওয়া যায় না, সেটি নিষ্ক্রিয়, স্টক ০ ও ক্রয়মূল্য ০ দিয়ে তৈরি হয়, ফলে কোনো অর্ডার বাদ পড়ে না। পরে পণ্যে ক্রয়মূল্য বসিয়ে দিন।",
+    "Too many login attempts. Please try again in :seconds seconds.": "অনেকবার লগইনের চেষ্টা করা হয়েছে। অনুগ্রহ করে :seconds সেকেন্ড পরে আবার চেষ্টা করুন।"
 }

@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Auth\AdminLogin;
 use App\Filament\Resources\Investors\InvestorResource;
 use App\Filament\Resources\Investors\Pages\ListInvestors;
 use App\Filament\Widgets\BusinessOverview;
@@ -52,7 +53,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login()
+            ->login(AdminLogin::class)
             ->profile(isSimple: false)
             ->spa()
             ->sidebarCollapsibleOnDesktop()

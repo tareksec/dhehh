@@ -2,6 +2,31 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-17 - Login protection: sign-ins are judged before the password hash (bcrypt)
+
+Trigger: the owner shared a post about distributed credential-stuffing (50,000 guesses a minute from 30,000 IPs: no per-IP limit and no per-account lockout fires, but every guess costs a full bcrypt) and asked whether our login checks the request before bcrypt. The answer was "partly" (a per-identifier lockout and a per-IP throttle only); this is the fix, agreed as a plan (phases A and B) in the conversation. Phase C (CAPTCHA) is not done.
+
+What changed:
+- `App\Services\LoginGate` + `LoginClient`, `LoginAttempt`, `LoginThrottled`, `config/login_protection.php`: per device, per account, per client fingerprint and whole-surface counters (cache), a device-trust token (signed cookie / API `device_token`, bound to the password hash), a global budget of password hashes for unknown devices, fail-open through `ModuleGuard` (`module:login-gate`).
+- Wired into `CustomerAccountService::attemptLogin()` (Blade storefront, reseller portal, Next.js API), `InvestorPortalAccountService::attemptPasswordLogin()` and a new `App\Filament\Auth\AdminLogin` (admin panel `->login()`).
+- Fixed on the way: phone spellings (`+880…` / `880…` / `01…`) shared no lockout counter on the Blade and reseller paths; the counter was not per company; an unknown account skipped the hash (timing leak); the reseller login showed no usable message when locked; the investor login wrote one audit row per refused guess.
+- Docs: `docs/login-protection.md` (new), `docs/api/storefront-api.md` §6 (`device_token`, `challenge`, send `client_ip` + `client_user_agent`).
+- Tests: `LoginGateTest` (19: spellings, per-company counters, owner not locked out by a stranger, no hash for a refused attempt, bot denial and its office-network exception, trusted device, password change ends trust, token binding, hash budget, site-wide attack, fail-open, gate off, Blade cookie, Next.js API, investor, reseller, admin). Mutation-checked: breaking the phone normalisation, the dummy hash or the trusted-device bypass makes the matching tests fail.
+
+Decisions made on the owner's behalf (defaults, all changeable by environment variable): device 5 wrong/minute; account 20 wrong in 15 minutes; fingerprint 30 wrong and no success in 10 minutes; site 300 wrong/minute; 600 hashes/minute for unknown devices; trust 90 days. The plan's three open questions (thresholds, CAPTCHA provider, whether to do the CAPTCHA now) were not answered before work started: thresholds use the proposed defaults, and the CAPTCHA was left for a separate step.
+
+Known limits (also in the doc): until the CAPTCHA exists a *challenge* is a wait, so while an account is under attack its owner on a NEW device waits (owner on a trusted device is unaffected; this is still better than the old rule, where five wrong tries a minute from anyone locked everybody out). Counters need `CACHE_STORE=redis` to be shared between workers. TLS (JA3/JA4) fingerprints can only come from the proxy in front of PHP; the gate uses browser string + language + network block. Device trust is issued after password sign-ins only. Filament's own `rateLimit(5)` per IP on the staff login stays on top.
+
+For the website repo (`zamzamint-new-website-theme`, not touched): keep `data.device_token` from `POST /account/login` in an httpOnly cookie and send it back as `device_token`; always forward `client_ip` and `client_user_agent` on sign-in. It works unchanged without this.
+
+Needs Bangla review: "অনেকবার লগইনের চেষ্টা করা হয়েছে। অনুগ্রহ করে :seconds সেকেন্ড পরে আবার চেষ্টা করুন।" (key "Too many login attempts. Please try again in :seconds seconds.", written by the agent).
+
+Environment note for whoever reads this later: the container had PHP 8.3 and the project needs 8.4, so PHP 8.4 was installed from the ondrej/php PPA for this session only; `npm run build` was run so the page tests can render (`public/build` is gitignored). Neither is part of the commit.
+
+Verified: plain `php artisan test` (no `--env`) on PHP 8.4: 2567 passed, 2 skipped, 0 failed (24856 assertions); `LoginGateTest` 19 passed; the existing sign-in tests (`StorefrontCustomerAuthTest`, `StorefrontApiAccountTest`, `ResellerPortalAccountTest`, `InvestorPortalTest`) pass unchanged; `TranslationParityTest` passes; Pint clean. No real SMS or CAPTCHA involved; no demo data touched.
+
+Commit status: committed and pushed to `ccr-4505e72d-hwaq92` (the branch this session designates; not `main`, which moves only on the owner's approval).
+
 ## 2026-10-17 (evening) - Imported orders of zero-stock products: no stock popup, product name shown
 
 Owner question (Bangla): how will the orders of products whose stock is 0 show? Answer: the Orders list and the order page show them normally (the imported line keeps the product name and the Nuport price; stock stays 0 and never goes below, because an import takes no stock). Checking it found two problems on the Edit order page, fixed here:

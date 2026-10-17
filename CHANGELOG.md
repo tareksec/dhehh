@@ -4,6 +4,33 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Security Update
+
+### Security
+
+- **Sign-in is now judged before the password is checked, so a flood of guesses can no longer burn the server's CPU.** The password hash is slow on purpose, which makes it the most expensive thing an attacker can make the server do: 50,000 guesses a minute from 30,000 addresses stay under every per-IP limit and under every per-account lockout (each address tries under twice, each account about four times), and every guess still costs a full hash while real users wait. A new gate looks at the request first and answers *go ahead*, *wait*, *challenge* or *refused*:
+  - A **device** (IP + browser) that gets 5 passwords wrong for one account in a minute waits.
+  - A **device the account has signed in from before** is never locked out by other people's guessing, so a stranger who only knows a phone number can no longer lock the real owner out. The browser is remembered with a signed cookie after a password sign-in; changing the password ends every remembered device.
+  - An **unknown device** waits while the account has had 20 wrong passwords from anywhere in 15 minutes, or while the whole site is under attack (300 wrong passwords a minute), and when the server's budget of 600 password hashes a minute for unknown devices is used up.
+  - A **client that only ever fails** (30 wrong passwords in 10 minutes and not one successful sign-in from the same browser and network) is told "login failed" and no hash is computed.
+  - It covers the storefront and reseller portal sign-in, the Next.js site's sign-in, the investor portal (which had no per-account limit at all) and the **admin panel** sign-in.
+  - Every number can be changed with an environment variable (`config/login_protection.php`, `docs/login-protection.md`); `LOGIN_PROTECTION_ENABLED=false` turns the gate off.
+
+### Fixed
+
+- **A phone number could be guessed under many spellings to dodge the per-account lockout.** The storefront and reseller sign-in counted wrong passwords under the text typed, so `01712345678`, `+8801712345678` and `8801712345678` each had their own five tries. The phone is now normalised first. The count is also kept per company: the same phone number in two companies no longer shares one counter.
+- **An unknown phone or e-mail answered faster than a wrong password,** which showed who has an account. It now costs the same time.
+- **The reseller portal sign-in's "too many attempts" answer is now a notice with the wait,** instead of an error attached to a field name (`identifier`) its form does not have.
+- **The investor portal no longer writes an audit row for a guess that was refused,** so a flood of guesses cannot flood the audit log.
+
+### Technical Notes
+
+- New: `App\Services\LoginGate` (decides with `begin()`, counts with `failed()` / `succeeded()`, device trust with `issueDeviceToken()` / `rememberDevice()`), `App\Support\LoginClient`, `LoginAttempt`, `LoginThrottled` (a `ValidationException`, so existing `catch` blocks keep working), `config/login_protection.php`, `App\Filament\Auth\AdminLogin` (the admin panel's `->login()`; it lives outside `Filament/Pages` so Filament does not discover it as a page). All counters are `RateLimiter` keys in the cache: production needs `CACHE_STORE=redis` for them to be shared between workers. No migration.
+- `CustomerAccountService::attemptLogin()` and `InvestorPortalAccountService::attemptPasswordLogin()` take an optional `LoginClient`; both services gained a `LoginGate` constructor argument. The old `storefront-login:<identifier>` limiter key is gone.
+- The gate fails open: if it throws (the cache is down) the error goes to Deploy Error Logs as `module:login-gate` through `ModuleGuard::run()` and the sign-in goes on to the normal password check.
+- Next.js API (`docs/api/storefront-api.md` §6): `POST /account/login` accepts `device_token` (or the header `X-Device-Token`) and answers `data.device_token` on success; a `429 too_many_attempts` now also carries `challenge`. The visitor's `client_ip` and `client_user_agent` decide the device. The website works unchanged without the token; keeping it in an httpOnly cookie is the website's part.
+- Not done yet: a CAPTCHA for the *challenge* answer (until then it is a wait), and device trust after a one-time-code sign-in. One new interface string in both language files. Tests: `LoginGateTest` (19).
+
 ## [2.83.1] - 2026-10-17
 
 **Release type:** Patch/Fix Update

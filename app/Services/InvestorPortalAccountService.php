@@ -8,6 +8,8 @@ use App\Models\Investor;
 use App\Models\InvestorPortalAccount;
 use App\Models\StorefrontSetting;
 use App\Models\User;
+use App\Support\LoginClient;
+use App\Support\LoginThrottled;
 use App\Support\StorefrontApi\Phone;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -35,6 +37,7 @@ class InvestorPortalAccountService
     public function __construct(
         protected StorefrontNotificationService $notifications,
         protected AuditLogService $audit,
+        protected LoginGate $loginGate,
     ) {}
 
     /** The account of an investor or partner, if one was created. */
@@ -216,15 +219,40 @@ class InvestorPortalAccountService
         return $phone === '' ? null : InvestorPortalAccount::query()->where('phone', $phone)->first();
     }
 
-    public function attemptPasswordLogin(string $phone, string $password): ?InvestorPortalAccount
+    /**
+     * @throws LoginThrottled when LoginGate stops the attempt before the password is checked
+     */
+    public function attemptPasswordLogin(string $phone, string $password, ?LoginClient $client = null): ?InvestorPortalAccount
     {
         $account = $this->findByPhone($phone);
+        $client ??= LoginClient::fromRequest(request(), LoginGate::SURFACE_INVESTOR);
+
+        $attempt = $this->loginGate->begin(LoginGate::SURFACE_INVESTOR, app(CompanyContext::class)->id(), Phone::normalize($phone), $account, $client);
+
+        if ($attempt->isDenied()) {
+            // Not audited: a flood of refused guesses must not become a flood of rows.
+            $this->loginGate->failed($attempt);
+
+            return null;
+        }
+
+        if ($attempt->isBlocked()) {
+            throw LoginThrottled::for($attempt, 'data.phone');
+        }
+
+        if ($account === null || blank($account->password)) {
+            // Costs the same time as a wrong password, so timing can't show who invests.
+            $this->loginGate->spendHashTime($password);
+        }
 
         if (! $account || blank($account->password) || ! Hash::check($password, $account->password)) {
+            $this->loginGate->failed($attempt);
             $this->audit->record('investor_portal.login_failed', $account ?? InvestorPortalAccount::class, null, ['method' => 'password']);
 
             return null;
         }
+
+        $this->loginGate->succeeded($attempt);
 
         return $account;
     }

@@ -5,6 +5,8 @@ namespace App\Filament\Investor\Pages\Auth;
 use App\Models\InvestorPortalAccount;
 use App\Services\CompanyContext;
 use App\Services\InvestorPortalAccountService;
+use App\Services\LoginGate;
+use App\Support\LoginThrottled;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use Filament\Actions\Action;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
@@ -98,7 +100,13 @@ class Login extends BaseLogin
                 throw ValidationException::withMessages(['data.code' => __('That code is invalid or has expired. Please request a new one.')]);
             }
         } else {
-            $account = $accounts->attemptPasswordLogin((string) $data['phone'], (string) $data['password']);
+            try {
+                $account = $accounts->attemptPasswordLogin((string) $data['phone'], (string) $data['password']);
+            } catch (LoginThrottled $exception) {
+                Notification::make()->title($exception->getMessage())->danger()->send();
+
+                return null;
+            }
 
             if (! $account || ! $this->isUserAllowedToAccessPanel($account)) {
                 throw ValidationException::withMessages(['data.phone' => __('filament-panels::auth/pages/login.messages.failed')]);
@@ -108,6 +116,7 @@ class Login extends BaseLogin
         Filament::auth()->login($account, (bool) ($data['remember'] ?? false));
         session()->regenerate();
         $accounts->recordLogin($account, request()->ip(), $this->mode);
+        app(LoginGate::class)->rememberDevice(LoginGate::SURFACE_INVESTOR, app(CompanyContext::class)->id(), $account);
 
         return app(LoginResponse::class);
     }
