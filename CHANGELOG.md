@@ -4,6 +4,10 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.83.0] - 2026-10-17
+
+**Release type:** Minor Feature Update
+
 ### Added
 
 - **Import Nuport orders: SKU mapping and "Create missing products"**, so no Nuport order is skipped because of a product the ERP does not have.
@@ -14,7 +18,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `NuportOrderImportService::run()` gained `$skuMap` (text) and `$createMissing`. The mapping wins over a direct SKU match. With `$createMissing` the service plans every invoice once first so a new product carries the last non-zero price in the file. New products are saved just before the order that needs them; a second run finds them by SKU (or by name for the SKU-less ones) and creates nothing twice. The remembered mapping is an `app_settings` row `nuport_import_sku_map_<company id>`. Tests: `NuportOrderImportTest` (22 tests).
-
 ## [2.82.0] - 2026-10-17
 
 **Release type:** Minor Feature Update
