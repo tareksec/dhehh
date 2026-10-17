@@ -4,6 +4,24 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Orders → Import Nuport orders**: copies the wholesale customers' past orders from Nuport's **Export As CSV** into the ERP, so each customer's purchases, payments and status are in one place.
+  - It starts as a **preview** that saves nothing: how many orders are new, which products are not found, the totals per status, and how many customers are new or already exist. Turn **Preview only** off to save.
+  - Each order keeps its Nuport number (SO-1309), date, lines, delivery fee, discount, paid amount and due, delivery status, notes, and the Steadfast consignment ID in the note.
+  - Statuses: Delivered = Completed, Approved = Confirmed, In-Transit and Processing = Processing, returned parcels = Returned, Cancelled = Cancelled. Cancelled orders marked "Test Order" or "Fake Order" are skipped; other cancelled orders come in without any payment.
+  - Customers are matched by phone number (01712345678, +8801712345678 and 8801712345678 are one customer); a new phone creates a customer.
+  - An order whose product is not found by SKU is skipped and listed; create the product and import the same file again.
+  - **It never changes stock or any account balance**, and sends no new-order alerts. Payments are history only, with no account.
+  - Importing the same file again never duplicates orders. A newer export refreshes the status, delivery fee, discount and payment of orders already imported.
+  - The same import also runs from the server: `php artisan orders:import-nuport <file> <company-slug> --apply` (without `--apply` it only previews).
+
+### Technical Notes
+
+- `App\Services\NuportOrderImportService` (also `orders:import-nuport`, and `ListOrders::importNuportOrdersAction()`) reads Nuport's export, one row per product line with the order money only on the first row of each invoice. No migration. New `Order::SOURCE_NUPORT_IMPORT` (`nuport_import`, fits `orders.source` varchar 32) marks an imported order; `Order::isHistoricalImport()` makes `OrderWorkflowService::sync()` skip stock movements (for create, status change and later edits), `OrderNotificationObserver` skip the new-order and status alerts, and the `saved` hook skip `CustomerRiskService::evaluateOrder()`.
+- The invoice becomes `order_number` and `external_reference` (unique per company), so a second run finds the order again. `shipping_zone` is stored as `imported` so `Order::creating` does not replace Nuport's delivery fee with the zone fee. Lines are saved with `OrderItem::withoutEvents()` and the workflow is synced once per order; the real export (1,340 invoices, 2,311 lines) imports in about 20 seconds in the test database. Discount = list-price total of the lines minus Sales Amount, so the ERP total equals Sales Amount plus Delivery Fee; invoices where the file's own columns disagree (32 in the real export) are listed in the preview. One `OrderPayment` per order, `account_id` NULL, so no `TransactionLedger` row is posted; customer balances come from the imported due of accounted orders (`Customer::syncCurrentBalance()`), so a customer who already has an opening balance for the same dues is counted twice (the preview counts such customers).
+- Deploy note: the upload action runs in the web request (`set_time_limit(0)`, `ignore_user_abort`); on a slow server or a short proxy timeout use the artisan command. Tests: `NuportOrderImportTest` (17 tests).
+
 ## [2.81.1] - 2026-10-16
 
 **Release type:** Patch/Fix Update

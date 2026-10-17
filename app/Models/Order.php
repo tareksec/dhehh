@@ -162,6 +162,14 @@ class Order extends Model
 
     public const SOURCE_RESELLER_PORTAL = 'reseller_portal';
 
+    /**
+     * Orders copied in from Nuport's CSV export (NuportOrderImportService).
+     * They are history: the stock they moved was already counted in the
+     * physical stock the owner entered, so they never create stock movements,
+     * notifications or fraud checks (see isHistoricalImport()).
+     */
+    public const SOURCE_NUPORT_IMPORT = 'nuport_import';
+
     public const SOURCES = [
         self::SOURCE_ADMIN => 'Admin',
         self::SOURCE_STOREFRONT => 'Storefront',
@@ -171,6 +179,7 @@ class Order extends Model
         self::SOURCE_WOOCOMMERCE => 'WooCommerce',
         self::SOURCE_API => 'Website (API)',
         self::SOURCE_RESELLER_PORTAL => 'Reseller portal',
+        self::SOURCE_NUPORT_IMPORT => 'Nuport (imported)',
     ];
 
     protected $fillable = [
@@ -328,7 +337,7 @@ class Order extends Model
                 app(ResellerOwnCourierService::class)->chargeReturn($order);
             }
             app(OrderWorkflowService::class)->syncPreviousCustomerBalance($order);
-            if ($order->wasChanged('status') && $order->isAccounted() && Schema::hasTable('fraud_checks')) {
+            if ($order->wasChanged('status') && $order->isAccounted() && ! $order->isHistoricalImport() && Schema::hasTable('fraud_checks')) {
                 app(CustomerRiskService::class)->evaluateOrder($order);
             }
         });
@@ -643,6 +652,12 @@ class Order extends Model
     public function isAccounted(): bool
     {
         return in_array($this->status, self::ACCOUNTED_STATUSES, true);
+    }
+
+    /** An order copied in from Nuport's export: history that must not touch stock, alerts or risk checks. */
+    public function isHistoricalImport(): bool
+    {
+        return $this->source === self::SOURCE_NUPORT_IMPORT;
     }
 
     /**

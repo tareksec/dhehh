@@ -25,7 +25,8 @@ class OrderNotificationObserver
 
     public function created(Order $order): void
     {
-        if (! $order->company) {
+        // An import of past orders must not alert the owner once per order.
+        if ($order->isHistoricalImport() || ! $order->company) {
             return;
         }
 
@@ -46,7 +47,7 @@ class OrderNotificationObserver
             return;
         }
 
-        if (! $order->company) {
+        if ($order->isHistoricalImport() || ! $order->company) {
             return;
         }
 
