@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.84.0] - 2026-10-17
+
 **Release type:** Minor Feature Update
 
 ### Changed
@@ -11,7 +13,6 @@ All notable production changes to Business Dashboard are documented here.
 - **Customer address moved into the Customer box** on the customer view page, and the **customer list now has a Customer Address column** that wraps long addresses (up to 3 lines) and can be searched.
 
 **Technical Notes:** `CustomerInfolist` moves the `address` entry into the Customer section; `CustomersTable` adds a wrapped, searchable `address` column. New string "Customer Address" is in `lang/en.json` and `lang/bn.json`. No migrations.
-
 ## [2.83.1] - 2026-10-17
 
 **Release type:** Patch/Fix Update
