@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -36,13 +37,21 @@ class StorefrontPaymentMethod extends Model
         'account_number',
         'instructions',
         'is_active',
+        'reseller_only',
         'sort_order',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'reseller_only' => 'boolean',
         'sort_order' => 'integer',
     ];
+
+    /** Everything a storefront visitor or the store's own admin list may see: no reseller-only channel. */
+    public function scopeForStore(Builder $query): Builder
+    {
+        return $query->where('reseller_only', false);
+    }
 
     /** The value the checkout radio button/`payment_method` field uses for this row. */
     public function paymentValue(): string

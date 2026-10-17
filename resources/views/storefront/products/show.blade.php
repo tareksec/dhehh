@@ -1,21 +1,6 @@
 @extends(\App\Support\StorefrontThemeRegistry::layoutView($setting->storefrontTheme()))
 
-@push('meta-events')
-    @php
-        $metaTracking = app(\App\Services\StorefrontMetaTrackingService::class);
-    @endphp
-    @if (! isset($previewSlug) && $metaTracking->browserEventEnabled($setting, 'ViewContent', request()))
-        <script>
-            fbq('track', 'ViewContent', {{ Illuminate\Support\Js::from([
-                'content_ids' => [(string) $product->getKey()],
-                'content_name' => $product->name,
-                'content_type' => 'product',
-                'currency' => 'BDT',
-                'value' => round((float) $product->selling_price, 2),
-            ]) }}, {eventID: {{ Illuminate\Support\Js::from($metaTracking->eventId('view-content')) }}});
-        </script>
-    @endif
-@endpush
+@include('storefront.products.partials.product-meta-events')
 
 @section('content')
     @php
@@ -23,41 +8,22 @@
 
         $isHtmlDescription = str_contains((string) $product->description, '<');
         $categoryUrl = $product->category
-            ? (isset($previewSlug) ? route('storefront.preview.categories.show', [$previewSlug, $product->category->slug]) : route('storefront.categories.show', $product->category->slug))
+            ? (\App\Support\StorefrontUrl::route('categories.show', [$product->category->slug], $previewSlug ?? null))
             : null;
-        $productsUrl = isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index');
+        $productsUrl = \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null);
 
-        $galleryImages = collect([$product->image])
-            ->merge($product->gallery_images ?? [])
-            ->filter()
-            ->values();
-
-        $isVariableProduct = (bool) $product->has_variants;
-
-        $variants = $isVariableProduct
-            ? $product->activeVariants()->get()
-            : collect();
-
-        $variantData = $variants->map(fn ($variant) => [
-            'id' => $variant->getKey(),
-            'label' => $variant->label(),
-            'price' => $variant->effectiveSalePrice(),
-            'stock' => (int) $variant->stock,
-            'sku' => $variant->sku ?: $product->sku,
-            'images' => collect($variant->images ?? [])->map(fn ($img) => \App\Support\CompanyMedia::publicUrl($img, $company))->values()->all(),
-        ])->values();
-
-        $inStock = $product->stock > 0;
-        $isPreorder = (bool) $product->is_preorder;
-        $orderable = $isVariableProduct
-            ? $variantData->contains(fn (array $variant): bool => $variant['stock'] > 0)
-            : ($inStock || $isPreorder);
-        $moq = $product->effectiveMoq();
-        $maxOrderQuantity = $isPreorder
-            ? max((int) $product->stock, \App\Services\StorefrontCart::PREORDER_STOCK_CEILING)
-            : max(1, (int) $product->stock);
-        $minOrderQuantity = min($moq, $maxOrderQuantity);
-        $tiers = $product->normalizedTiers();
+        $productPage = \App\Support\StorefrontProductPage::make($product, $company);
+        $galleryImages = $productPage->galleryImages;
+        $productVideoUrl = $productPage->videoUrl;
+        $isVariableProduct = $productPage->isVariableProduct;
+        $variantData = $productPage->variantData;
+        $inStock = $productPage->inStock;
+        $isPreorder = $productPage->isPreorder;
+        $orderable = $productPage->orderable;
+        $moq = $productPage->moq;
+        $maxOrderQuantity = $productPage->maxOrderQuantity;
+        $minOrderQuantity = $productPage->minOrderQuantity;
+        $tiers = $productPage->tiers;
     @endphp
 
     <nav class="mx-auto w-full max-w-7xl px-4 pt-4 text-xs text-gray-500 sm:px-5 lg:px-6 dark:text-gray-400" aria-label="Breadcrumb">
@@ -74,22 +40,36 @@
         <div class="w-full max-w-[460px] lg:sticky lg:top-28 lg:self-start">
             @if ($galleryImages->isNotEmpty())
                 <div data-zoom-frame class="group relative aspect-square w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4 dark:border-gray-800 dark:bg-gray-900">
-                    <img data-main-image class="h-full w-full cursor-zoom-in object-contain transition-transform duration-200 ease-out will-change-transform" src="{{ \App\Support\CompanyMedia::publicUrl($galleryImages->first(), $company) }}" alt="{{ $product->name }}" width="960" height="960" fetchpriority="high">
+                    <img data-main-image class="h-full w-full cursor-zoom-in object-contain transition-transform duration-200 ease-out will-change-transform" src="{{ $galleryImages->first() }}" alt="{{ $product->name }}" width="960" height="960" fetchpriority="high">
                     <div class="pointer-events-none absolute bottom-3 right-3 hidden items-center gap-1.5 rounded-full border border-white/70 bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm backdrop-blur lg:flex dark:border-gray-700 dark:bg-gray-950/90 dark:text-gray-200">
                         <svg class="h-4 w-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m2.1-5.4a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0ZM11.25 8.25v6m3-3h-6"/></svg>
                         Hover to zoom
                     </div>
                 </div>
-                <div data-thumbnails class="mt-3 grid grid-cols-5 gap-2 {{ $galleryImages->count() < 2 && $variantData->pluck('images')->flatten()->isEmpty() ? 'hidden' : '' }}">
+                <div data-thumbnails class="mt-3 grid grid-cols-5 gap-2 {{ $galleryImages->count() < 2 && ! $productPage->variantsHaveImages() ? 'hidden' : '' }}">
                     @foreach ($galleryImages as $galleryImage)
-                        <button type="button" data-thumb data-src="{{ \App\Support\CompanyMedia::publicUrl($galleryImage, $company) }}" class="overflow-hidden rounded-lg border border-gray-200 transition hover:border-[var(--storefront-brand)] dark:border-white/10">
-                            <img class="aspect-square w-full object-cover" src="{{ \App\Support\CompanyMedia::publicUrl($galleryImage, $company) }}" alt="{{ $product->name }} photo {{ $loop->iteration }}" width="240" height="240" loading="lazy" decoding="async">
+                        <button type="button" data-thumb data-src="{{ $galleryImage }}" class="overflow-hidden rounded-lg border border-gray-200 transition hover:border-[var(--storefront-brand)] dark:border-white/10">
+                            <img class="aspect-square w-full object-cover" src="{{ $galleryImage }}" alt="{{ $product->name }} photo {{ $loop->iteration }}" width="240" height="240" loading="lazy" decoding="async">
                         </button>
                     @endforeach
                 </div>
             @else
                 <div class="grid aspect-square w-full place-items-center rounded-lg border border-gray-200 bg-gray-100 text-7xl font-semibold text-[var(--storefront-brand)] dark:border-gray-800 dark:bg-gray-900">
                     {{ mb_substr($product->name, 0, 1) }}
+                </div>
+            @endif
+
+            @if ($productVideoUrl)
+                <div class="mt-3" data-product-video>
+                    <video
+                        class="aspect-video w-full rounded-lg border border-gray-200 bg-black object-contain dark:border-gray-800"
+                        src="{{ $productVideoUrl }}"
+                        @if ($galleryImages->isNotEmpty()) poster="{{ $galleryImages->first() }}" @endif
+                        controls
+                        playsinline
+                        preload="metadata"
+                        aria-label="{{ __(':product video', ['product' => $product->name]) }}"
+                    ></video>
                 </div>
             @endif
         </div>
@@ -170,7 +150,7 @@
                 </ul>
             @endif
 
-            <form id="product-purchase-form" class="mt-4" method="POST" action="{{ isset($previewSlug) ? route('storefront.preview.cart.add', [$previewSlug, $product->slug]) : route('storefront.cart.add', $product->slug) }}" data-purchase-form>
+            <form id="product-purchase-form" class="mt-4" method="POST" action="{{ \App\Support\StorefrontUrl::route('cart.add', [$product->slug], $previewSlug ?? null) }}" data-purchase-form>
                 @csrf
 
                 @if ($isVariableProduct)
@@ -183,7 +163,7 @@
                                         <button type="button" data-variant-preview class="min-w-0 flex-1 text-left">
                                             <div class="truncate text-sm font-semibold text-gray-900 dark:text-white">{{ $variant['label'] }}</div>
                                             <div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                                                BDT {{ \App\Support\MoneyFormatter::number($product->selling_price) }}
+                                                BDT {{ \App\Support\MoneyFormatter::number($variant['price']) }}
                                                 &middot;
                                                 @if ($variant['stock'] > 0)
                                                     {{ $variant['stock'] }} in stock
@@ -319,137 +299,5 @@
         <div class="sm:hidden" style="height: calc(4.5rem + env(safe-area-inset-bottom));" aria-hidden="true" data-mobile-purchase-spacer></div>
     @endif
 
-    <script>
-        (function () {
-            var page = document.querySelector('[data-product-page]');
-            if (!page) return;
-
-            var mainImage = page.querySelector('[data-main-image]');
-            var zoomFrame = page.querySelector('[data-zoom-frame]');
-            var thumbsWrap = page.querySelector('[data-thumbnails]');
-            var baseThumbsHtml = thumbsWrap ? thumbsWrap.innerHTML : '';
-
-            function resetZoom() {
-                if (!mainImage) return;
-                mainImage.style.transform = 'scale(1)';
-                mainImage.style.transformOrigin = '50% 50%';
-            }
-
-            if (zoomFrame && mainImage && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
-                zoomFrame.addEventListener('pointerenter', function () {
-                    mainImage.style.transform = 'scale(1.7)';
-                });
-                zoomFrame.addEventListener('pointermove', function (event) {
-                    var bounds = zoomFrame.getBoundingClientRect();
-                    var x = Math.max(0, Math.min(100, ((event.clientX - bounds.left) / bounds.width) * 100));
-                    var y = Math.max(0, Math.min(100, ((event.clientY - bounds.top) / bounds.height) * 100));
-                    mainImage.style.transformOrigin = x + '% ' + y + '%';
-                });
-                zoomFrame.addEventListener('pointerleave', resetZoom);
-            }
-
-            function bindThumbs() {
-                if (!thumbsWrap || !mainImage) return;
-                thumbsWrap.querySelectorAll('[data-thumb]').forEach(function (thumb) {
-                    thumb.addEventListener('click', function () {
-                        resetZoom();
-                        mainImage.src = thumb.getAttribute('data-src');
-                    });
-                });
-            }
-
-            bindThumbs();
-
-            var purchaseForm = document.querySelector('[data-purchase-form]');
-            if (purchaseForm) {
-                purchaseForm.addEventListener('submit', function (event) {
-                    if (purchaseForm.dataset.submitting === 'true') {
-                        event.preventDefault();
-                        return;
-                    }
-
-                    purchaseForm.dataset.submitting = 'true';
-
-                    window.setTimeout(function () {
-                        if (event.defaultPrevented) {
-                            delete purchaseForm.dataset.submitting;
-                            return;
-                        }
-
-                        purchaseForm.setAttribute('aria-busy', 'true');
-                        document.querySelectorAll('#product-purchase-form button[type="submit"], button[form="product-purchase-form"]').forEach(function (button) {
-                            button.disabled = true;
-                            button.setAttribute('aria-busy', 'true');
-                            if (button.hasAttribute('data-pending-label')) {
-                                button.textContent = button.getAttribute('data-pending-label');
-                            }
-                        });
-                    }, 0);
-                });
-            }
-
-            var rows = page.querySelectorAll('[data-variant-row]');
-            if (!rows.length) return;
-
-            var addButtons = document.querySelectorAll('[data-add-to-cart]');
-            var qtyInputs = page.querySelectorAll('[data-variant-qty]');
-
-            function refreshAddButton() {
-                var total = 0;
-                qtyInputs.forEach(function (input) {
-                    total += Math.max(0, parseInt(input.value, 10) || 0);
-                });
-
-                addButtons.forEach(function (button) {
-                    button.disabled = total < 1;
-                    button.textContent = total > 0
-                        ? 'Add to cart (' + total + ')'
-                        : (button.getAttribute('data-idle-label') || 'Add to cart');
-                });
-            }
-
-            refreshAddButton();
-
-            qtyInputs.forEach(function (input) {
-                input.addEventListener('input', refreshAddButton);
-                input.addEventListener('change', refreshAddButton);
-            });
-
-            // Steppers change values programmatically — watch clicks too.
-            page.querySelectorAll('[data-variant-rows] [data-qty-decrement], [data-variant-rows] [data-qty-increment]').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    setTimeout(refreshAddButton, 0);
-                });
-            });
-
-            // Clicking a variant's name previews its images.
-            rows.forEach(function (row) {
-                var preview = row.querySelector('[data-variant-preview]');
-                if (!preview) return;
-
-                preview.addEventListener('click', function () {
-                    var variant = JSON.parse(row.getAttribute('data-variant'));
-
-                    if (thumbsWrap && mainImage) {
-                        if (variant.images && variant.images.length) {
-                            thumbsWrap.classList.remove('hidden');
-                            thumbsWrap.innerHTML = variant.images.map(function (src) {
-                                return '<button type="button" data-thumb data-src="' + src + '" class="overflow-hidden rounded-lg border border-gray-200 transition hover:border-[var(--storefront-brand)] dark:border-white/10"><img class="aspect-square w-full object-cover" src="' + src + '" alt="" width="240" height="240" loading="lazy" decoding="async"></button>';
-                            }).join('');
-                            resetZoom();
-                            mainImage.src = variant.images[0];
-                        } else {
-                            thumbsWrap.innerHTML = baseThumbsHtml;
-                            var firstThumb = thumbsWrap.querySelector('[data-thumb]');
-                            if (firstThumb) {
-                                resetZoom();
-                                mainImage.src = firstThumb.getAttribute('data-src');
-                            }
-                        }
-                        bindThumbs();
-                    }
-                });
-            });
-        })();
-    </script>
+    @include('storefront.products.partials.product-page-script')
 @endsection

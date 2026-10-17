@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\StorefrontCartRecord;
 use App\Models\StorefrontSetting;
+use App\Models\User;
 use App\Services\CompanyContext;
 use App\Services\StorefrontNotificationService;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -51,7 +52,7 @@ class StorefrontResellerAndAbandonedCartTest extends TestCase
         $this->assertSame($company->getKey(), $customer->company_id);
     }
 
-    public function test_approved_reseller_stays_approved_on_reapplication(): void
+    public function test_approved_reseller_is_left_untouched_by_the_plain_form_on_reapplication(): void
     {
         $company = $this->createStore('reseller2.example.test');
 
@@ -65,13 +66,46 @@ class StorefrontResellerAndAbandonedCartTest extends TestCase
             'is_active' => true,
         ]);
 
+        // A number that already belongs to a customer is proven by SMS on the
+        // reseller portal (owner decision 2026-10-12); this plain form leaves it alone.
         $this->post('http://reseller2.example.test/reseller', [
-            'name' => 'Approved Reseller',
+            'name' => 'Someone Else',
             'phone' => '01822222222',
-            'business_name' => 'Approved Traders',
-        ])->assertRedirect();
+            'business_name' => 'Hijack Traders',
+        ])->assertSessionHasErrors('phone');
 
-        $this->assertSame('approved', Customer::withoutGlobalScopes()->where('phone', '01822222222')->first()->reseller_status);
+        $reseller = Customer::withoutGlobalScopes()->where('phone', '01822222222')->sole();
+        $this->assertSame('approved', $reseller->reseller_status);
+        $this->assertSame('Approved Reseller', $reseller->name);
+        $this->assertNull($reseller->business_name);
+    }
+
+    public function test_reseller_preview_is_limited_to_the_staff_members_own_companies(): void
+    {
+        $own = $this->createStore('own-reseller.example.test');
+        $other = $this->createStore('other-reseller.example.test', invoicePrefix: 'OTH');
+
+        $user = User::factory()->create(['role' => 'sales_staff', 'is_active' => true]);
+        $user->companies()->detach();
+        $user->companies()->attach($own, ['role' => 'sales_staff', 'is_default' => true]);
+
+        $this->actingAs($user)
+            ->get(route('storefront.preview.reseller.show', $own->slug))
+            ->assertOk();
+
+        $this->actingAs($user)
+            ->get(route('storefront.preview.reseller.show', $other->slug))
+            ->assertNotFound();
+
+        $this->actingAs($user)
+            ->post(route('storefront.preview.reseller.store', $other->slug), [
+                'name' => 'Cross Company',
+                'phone' => '01833333333',
+                'business_name' => 'Cross Shop',
+            ])
+            ->assertNotFound();
+
+        $this->assertFalse(Customer::withoutGlobalScopes()->where('phone', '01833333333')->exists());
     }
 
     public function test_cart_activity_persists_record_and_checkout_contact_is_remembered(): void
@@ -211,14 +245,14 @@ class StorefrontResellerAndAbandonedCartTest extends TestCase
         );
     }
 
-    private function createStore(string $domain, bool $reminders = false): Company
+    private function createStore(string $domain, bool $reminders = false, string $invoicePrefix = 'RSL'): Company
     {
         $company = Company::query()->create([
             'name' => 'Store '.$domain,
             'slug' => str($domain)->slug()->toString(),
             'domain' => $domain,
             'domain_verified' => true,
-            'invoice_prefix' => 'RSL',
+            'invoice_prefix' => $invoicePrefix,
             'currency' => 'BDT',
             'timezone' => 'Asia/Dhaka',
             'is_active' => true,

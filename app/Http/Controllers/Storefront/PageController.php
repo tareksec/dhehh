@@ -7,6 +7,8 @@ use App\Models\Company;
 use App\Models\StorefrontPage;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
+use App\Support\CompanyMedia;
+use App\Support\StorefrontSeo;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -37,9 +39,18 @@ class PageController extends Controller
     ): View {
         $page = StorefrontPage::query()
             ->where('company_id', $company->getKey())
+            ->forSite($setting)
             ->where('slug', StorefrontPage::normalizeSlug($slug))
             ->published()
             ->firstOrFail();
+
+        StorefrontSeo::current()
+            ->page(
+                $page->meta_title ?: $page->title,
+                $page->meta_description ?: ($page->excerpt ?: StorefrontSeo::excerpt($page->content)),
+                CompanyMedia::publicUrl($page->cover_image, $company),
+            )
+            ->index();
 
         return StorefrontThemeRegistry::page('pages.show', [
             'company' => $company,
@@ -55,6 +66,7 @@ class PageController extends Controller
 
         if (! $company instanceof Company && app()->environment(['local', 'testing'])) {
             $company = StorefrontSetting::query()
+                ->blade()
                 ->where('is_published', true)
                 ->whereHas('company', fn ($query) => $query->where('is_active', true))
                 ->with('company')
@@ -77,6 +89,13 @@ class PageController extends Controller
     protected function previewStorefront(Company $company): StorefrontSetting
     {
         abort_unless(app()->environment(['local', 'testing']) || auth()->check(), 404);
+
+        // Same gate as PreviewController::previewCompany(): a signed-in staff
+        // member may only preview their own company/companies, never another
+        // company's by slug (set() below would otherwise switch the scope).
+        if (auth()->check()) {
+            abort_unless(auth()->user()->canAccessCompany($company->getKey()), 404);
+        }
 
         $this->context->set($company);
 

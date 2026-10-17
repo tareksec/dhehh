@@ -64,7 +64,7 @@ return new class extends Migration
                 $table->timestamps();
 
                 $table->index(['broadcast_id', 'status']);
-                $table->unique(['broadcast_id', 'recipient_type', 'recipient_id']);
+                $table->unique(['broadcast_id', 'recipient_type', 'recipient_id'], 'broadcast_recipients_broadcast_recipient_unique');
             });
         }
     }

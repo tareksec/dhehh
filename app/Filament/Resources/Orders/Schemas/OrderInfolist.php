@@ -8,12 +8,17 @@ use App\Models\CustomerRiskProfile;
 use App\Models\CustomerRiskReview;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\StorefrontPayment;
 use App\Services\OrderActivityFeedService;
+use App\Services\ResellerOwnCourierService;
 use App\Support\PhoneLinks;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\FontWeight;
+use Filament\Support\Enums\TextSize;
 
 class OrderInfolist
 {
@@ -60,8 +65,94 @@ class OrderInfolist
                     ])
                     ->columns(4),
 
+                Section::make(__('Reseller\'s own courier'))
+                    ->columnSpanFull()
+                    ->visible(fn (Order $record): bool => (bool) $record->reseller_own_courier)
+                    ->schema([
+                        TextEntry::make('reseller_parcel_id')
+                            ->label(__('Parcel ID'))
+                            ->size(TextSize::Large)
+                            ->weight(FontWeight::Bold)
+                            ->copyable(),
+                        TextEntry::make('reseller_courier_name')
+                            ->label(__('Courier name'))
+                            ->placeholder('-'),
+                        TextEntry::make('reseller_advance_payment')
+                            ->label(__('Advance payment'))
+                            ->badge()
+                            ->state(fn (Order $record): string => app(ResellerOwnCourierService::class)->paymentState($record))
+                            ->formatStateUsing(fn (string $state): string => ResellerOwnCourierService::paymentStateLabels()[$state] ?? $state)
+                            ->color(fn (string $state): string => match ($state) {
+                                'verified' => 'success',
+                                'rejected' => 'danger',
+                                default => 'warning',
+                            }),
+                        TextEntry::make('reseller_advance_payments')
+                            ->label(__('Payments'))
+                            ->state(fn (Order $record): array => $record->resellerAdvancePayments
+                                ->map(fn (StorefrontPayment $payment): string => match (true) {
+                                    $payment->gateway === ResellerOwnCourierService::GATEWAY_DEPOSIT => __(':amount from the reseller\'s deposit', ['amount' => number_format((float) $payment->amount, 2)]),
+                                    app(ResellerOwnCourierService::class)->isOnline($payment) => __(':amount paid online with :gateway (:status)', [
+                                        'amount' => number_format((float) $payment->amount, 2),
+                                        'gateway' => ResellerOwnCourierService::ONLINE_GATEWAYS[$payment->gateway],
+                                        'status' => match ($payment->status) {
+                                            StorefrontPayment::STATUS_PENDING => __('Waiting for the online payment'),
+                                            StorefrontPayment::STATUS_COMPLETED => __('Confirmed by the gateway'),
+                                            StorefrontPayment::STATUS_FAILED => __('Not completed'),
+                                            default => $payment->status,
+                                        },
+                                    ]),
+                                    default => __(':amount from :sender, transaction :transaction (:status)', [
+                                        'amount' => number_format((float) $payment->amount, 2),
+                                        'sender' => $payment->payment_method,
+                                        'transaction' => $payment->transaction_id,
+                                        'status' => match ($payment->status) {
+                                            StorefrontPayment::STATUS_PENDING => __('Waiting for verification'),
+                                            StorefrontPayment::STATUS_COMPLETED => __('Verified'),
+                                            StorefrontPayment::STATUS_FAILED => __('Rejected'),
+                                            default => $payment->status,
+                                        },
+                                    ]),
+                                })
+                                ->all())
+                            ->listWithLineBreaks()
+                            ->placeholder('-')
+                            ->columnSpan(2),
+                        TextEntry::make('reseller_deposit_credited')
+                            ->label(__('Added to the reseller\'s deposit'))
+                            ->state(fn (Order $record): float => app(ResellerOwnCourierService::class)->creditedFrom($record))
+                            ->numeric(decimalPlaces: 2)
+                            ->visible(fn (Order $record): bool => app(ResellerOwnCourierService::class)->creditedFrom($record) > 0),
+                        TextEntry::make('reseller_deposit_returned')
+                            ->label(__('Returned to the reseller\'s deposit'))
+                            ->state(fn (Order $record): float => app(ResellerOwnCourierService::class)->refundedTo($record))
+                            ->numeric(decimalPlaces: 2)
+                            ->visible(fn (Order $record): bool => app(ResellerOwnCourierService::class)->refundedTo($record) > 0),
+                        TextEntry::make('reseller_advance_outstanding')
+                            ->label(__('Still to receive'))
+                            ->state(fn (Order $record): float => app(ResellerOwnCourierService::class)->outstandingAmount($record))
+                            ->numeric(decimalPlaces: 2)
+                            ->visible(fn (Order $record): bool => app(ResellerOwnCourierService::class)->outstandingAmount($record) > 0),
+                        TextEntry::make('reseller_parcel_packed_at')
+                            ->label(__('Packed'))
+                            ->dateTime()
+                            ->placeholder(__('Not yet')),
+                    ])
+                    ->columns(3),
+
+                // Any reseller's order that was returned: the return charge taken from their deposit.
+                Section::make(__('Return charge'))
+                    ->visible(fn (Order $record): bool => app(ResellerOwnCourierService::class)->returnChargeOf($record) > 0)
+                    ->schema([
+                        TextEntry::make('reseller_return_charge')
+                            ->label(__('Taken from the reseller\'s deposit'))
+                            ->state(fn (Order $record): float => app(ResellerOwnCourierService::class)->returnChargeOf($record))
+                            ->numeric(decimalPlaces: 2),
+                    ]),
+
                 Section::make('Courier')
                     ->columnSpanFull()
+                    ->hidden(fn (Order $record): bool => (bool) $record->reseller_own_courier)
                     ->schema([
                         TextEntry::make('latestCourierBooking.provider.name')
                             ->label('Provider')
@@ -104,13 +195,17 @@ class OrderInfolist
                         TextEntry::make('subtotal')->moneyWithoutTrailingZeroes('BDT'),
                         TextEntry::make('discount')->moneyWithoutTrailingZeroes('BDT'),
                         TextEntry::make('vat')->moneyWithoutTrailingZeroes('BDT'),
+                        TextEntry::make('packaging_fee')
+                            ->label(__('Packaging charge'))
+                            ->moneyWithoutTrailingZeroes('BDT')
+                            ->visible(fn (Order $record): bool => (float) $record->packaging_fee > 0),
                         TextEntry::make('total_amount')->moneyWithoutTrailingZeroes('BDT'),
                         TextEntry::make('paid_amount')->moneyWithoutTrailingZeroes('BDT'),
                         TextEntry::make('due_amount')->moneyWithoutTrailingZeroes('BDT'),
                         TextEntry::make('total_weight')
                             ->label('Total Weight')
                             ->state(fn (Order $record): string => number_format(
-                                $record->items->sum(fn (OrderItem $item): float => (int) $item->quantity * (float) ($item->product?->weight_kg ?? 0)),
+                                $record->items->sum(fn (OrderItem $item): float => (int) $item->quantity * ($item->unitWeightKg() ?? 0.0)),
                                 3
                             ).' kg'),
                         TextEntry::make('total_cost')
@@ -134,7 +229,12 @@ class OrderInfolist
                             ->label('')
                             ->schema([
                                 TextEntry::make('product.name')
-                                    ->label('Product'),
+                                    ->label('Product')
+                                    // Admin-only tag: nothing the customer sees shows it.
+                                    ->belowContent(Text::make(__('Upsell'))
+                                        ->badge()
+                                        ->color('success')
+                                        ->visible(fn (?OrderItem $record): bool => (bool) $record?->is_upsell)),
 
                                 TextEntry::make('variant_label')
                                     ->label('Variant')
@@ -143,8 +243,9 @@ class OrderInfolist
                                 TextEntry::make('quantity')
                                     ->badge(),
 
-                                TextEntry::make('product.weight_kg')
+                                TextEntry::make('unit_weight')
                                     ->label('Weight (kg)')
+                                    ->state(fn (OrderItem $record): ?float => $record->unitWeightKg())
                                     ->placeholder('-'),
 
                                 TextEntry::make('unit_price')

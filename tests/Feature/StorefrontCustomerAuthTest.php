@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class StorefrontCustomerAuthTest extends TestCase
@@ -262,7 +263,10 @@ class StorefrontCustomerAuthTest extends TestCase
 
     public function test_registration_reuses_existing_unregistered_customer_record(): void
     {
-        $company = $this->createPublishedStorefrontCompany('Reuse Store', 'reuse.example.test');
+        $company = $this->createPublishedStorefrontCompany('Reuse Store', 'reuse.example.test', [
+            'notification_credentials' => ['sms_api_url' => 'http://sms.example.test/send?to={phone}&msg={message}'],
+        ]);
+        Http::fake(['sms.example.test/*' => Http::response('OK')]);
 
         app(CompanyContext::class)->set($company);
         $existing = Customer::query()->create([
@@ -271,7 +275,7 @@ class StorefrontCustomerAuthTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->post('http://reuse.example.test/account/register', [
+        $this->registerWithSmsCode('http://reuse.example.test', [
             'name' => 'Walk In Registered',
             'phone' => '01733333333',
             'password' => 'brand-new-pass',
@@ -280,6 +284,76 @@ class StorefrontCustomerAuthTest extends TestCase
 
         $this->assertSame(1, Customer::query()->where('phone', '01733333333')->count());
         $this->assertSame($existing->getKey(), Customer::query()->where('phone', '01733333333')->first()->getKey());
+        $this->assertAuthenticatedAs($existing->fresh(), 'customer');
+    }
+
+    public function test_registration_needs_the_sms_code_before_an_account_is_created(): void
+    {
+        $company = $this->createPublishedStorefrontCompany('Code Store', 'code.example.test', [
+            'notification_credentials' => ['sms_api_url' => 'http://sms.example.test/send?to={phone}&msg={message}'],
+        ]);
+        Http::fake(['sms.example.test/*' => Http::response('OK')]);
+        app(CompanyContext::class)->set($company);
+        $existing = Customer::query()->create(['name' => 'Walk In', 'phone' => '01733333334', 'is_active' => true]);
+
+        $this->post('http://code.example.test/account/register', [
+            'name' => 'Someone Else',
+            'phone' => '01733333334',
+            'password' => 'brand-new-pass',
+            'password_confirmation' => 'brand-new-pass',
+        ])->assertRedirect('http://code.example.test/account/register/verify');
+
+        $this->assertFalse($existing->fresh()->isRegistered());
+        $this->assertGuest('customer');
+        $this->get('http://code.example.test/account/register/verify')->assertOk()->assertSee('•••••••3334');
+
+        $this->post('http://code.example.test/account/register/verify', ['code' => '000000'])->assertSessionHasErrors('code');
+        $this->assertFalse($existing->fresh()->isRegistered());
+
+        // A quick resend keeps the code already sent.
+        $this->post('http://code.example.test/account/register/resend')->assertRedirect('http://code.example.test/account/register/verify');
+        Http::assertSentCount(1);
+    }
+
+    public function test_an_existing_customers_number_cannot_register_while_sms_is_not_set_up(): void
+    {
+        $company = $this->createPublishedStorefrontCompany('No Code Store', 'nocode.example.test');
+        app(CompanyContext::class)->set($company);
+        $existing = Customer::query()->create(['name' => 'Walk In', 'phone' => '01733333335', 'is_active' => true]);
+
+        $this->post('http://nocode.example.test/account/register', [
+            'name' => 'Someone Else',
+            'phone' => '01733333335',
+            'password' => 'brand-new-pass',
+            'password_confirmation' => 'brand-new-pass',
+        ])->assertSessionHasErrors('phone');
+
+        $this->assertFalse($existing->fresh()->isRegistered());
+
+        // A brand-new number still signs up in one step.
+        $this->post('http://nocode.example.test/account/register', [
+            'name' => 'New Buyer',
+            'phone' => '01733333336',
+            'password' => 'brand-new-pass',
+            'password_confirmation' => 'brand-new-pass',
+        ])->assertRedirect('http://nocode.example.test/account/profile');
+    }
+
+    /** Sign-up on a store with an SMS gateway: the form, then the texted code. Http must be faked. */
+    protected function registerWithSmsCode(string $host, array $data): TestResponse
+    {
+        $this->post($host.'/account/register', $data)->assertRedirect($host.'/account/register/verify');
+
+        $sentUrl = null;
+        Http::assertSent(function ($request) use (&$sentUrl): bool {
+            $sentUrl = urldecode($request->url());
+
+            return true;
+        });
+        preg_match('/OTP is (\d{6})/', (string) $sentUrl, $matches);
+        $this->assertNotEmpty($matches, 'a sign-up code was texted');
+
+        return $this->post($host.'/account/register/verify', ['code' => $matches[1]]);
     }
 
     public function test_registration_blocks_duplicate_phone(): void
@@ -348,15 +422,15 @@ class StorefrontCustomerAuthTest extends TestCase
             ],
         ]);
 
-        $this->post('http://reset.example.test/account/register', [
+        Http::fake(['sms.example.test/*' => Http::response('OK', 200)]);
+
+        $this->registerWithSmsCode('http://reset.example.test', [
             'name' => 'Reset Buyer',
             'phone' => '01766666666',
             'password' => 'old-password',
             'password_confirmation' => 'old-password',
         ]);
         $this->post('http://reset.example.test/account/logout');
-
-        Http::fake(['sms.example.test/*' => Http::response('OK', 200)]);
 
         $this->post('http://reset.example.test/account/forgot-password', [
             'phone' => '01766666666',
@@ -370,7 +444,7 @@ class StorefrontCustomerAuthTest extends TestCase
         });
 
         $this->assertNotNull($sentUrl);
-        preg_match('/reset code is (\d{6})/', urldecode($sentUrl), $matches);
+        preg_match('/OTP is (\d{6})/', urldecode($sentUrl), $matches);
         $this->assertNotEmpty($matches, 'Reset code was not found in the sent SMS message.');
         $code = $matches[1];
 
@@ -412,14 +486,14 @@ class StorefrontCustomerAuthTest extends TestCase
                 'sms_api_url' => 'http://sms.example.test/send?to={phone}&msg={message}',
             ],
         ]);
-        $this->post('http://phone-otp.example.test/account/register', [
+        Http::fake(['sms.example.test/*' => Http::response('OK')]);
+        $this->registerWithSmsCode('http://phone-otp.example.test', [
             'name' => 'Phone OTP Buyer',
             'phone' => '01790000001',
             'password' => 'phone-otp-password',
             'password_confirmation' => 'phone-otp-password',
         ]);
         $this->post('http://phone-otp.example.test/account/logout');
-        Http::fake(['sms.example.test/*' => Http::response('OK')]);
 
         $this->post('http://phone-otp.example.test/account/otp', [
             'identifier' => '01790000001',
@@ -431,7 +505,7 @@ class StorefrontCustomerAuthTest extends TestCase
 
             return true;
         });
-        preg_match('/login code is (\d{6})/', (string) $sentUrl, $matches);
+        preg_match('/OTP is (\d{6})/', (string) $sentUrl, $matches);
         $this->assertNotEmpty($matches);
 
         $this->post('http://phone-otp.example.test/account/otp/verify', [

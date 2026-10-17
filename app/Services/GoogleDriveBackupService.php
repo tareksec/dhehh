@@ -4,13 +4,23 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Psr\Http\Message\StreamInterface;
 use RuntimeException;
 
+/**
+ * Google Drive uploads through the service account configured on Settings →
+ * Backups → Google Drive Backup. Used for app backups (upload(), into the
+ * backup folder) and, since Video Generation Phase 4, for "Save to Google
+ * Drive" (uploadStream(), into a folder the caller names).
+ */
 class GoogleDriveBackupService
 {
     private const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
     private const UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink';
+
+    /** Resumable upload: any size, streamed; supportsAllDrives lets the target be a Shared Drive folder. */
+    private const RESUMABLE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,webViewLink';
 
     private const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
@@ -58,6 +68,56 @@ class GoogleDriveBackupService
         }
 
         return $response->json();
+    }
+
+    /** True when service account credentials are saved, whether or not backup uploads are switched on. */
+    public function hasServiceAccount(): bool
+    {
+        $credentials = $this->credentials();
+
+        return filled($credentials['client_email'] ?? null) && filled($credentials['private_key'] ?? null);
+    }
+
+    /** The address a Drive folder must be shared with, so the admin can copy it. */
+    public function serviceAccountEmail(): ?string
+    {
+        return $this->credentials()['client_email'] ?? null;
+    }
+
+    /**
+     * Stream a file into a given Drive folder with a resumable upload — never
+     * loads the whole file into memory, and has no 5 MB multipart ceiling.
+     *
+     * @return array{id?: string, name?: string, webViewLink?: string}
+     */
+    public function uploadStream(StreamInterface $contents, string $filename, string $mimeType, string $folderId): array
+    {
+        $token = $this->accessToken();
+
+        $session = Http::withToken($token)
+            ->withHeaders(array_filter([
+                'X-Upload-Content-Type' => $mimeType,
+                'X-Upload-Content-Length' => $contents->getSize() !== null ? (string) $contents->getSize() : null,
+            ]))
+            ->withBody((string) json_encode(['name' => $filename, 'parents' => [$folderId]]), 'application/json; charset=UTF-8')
+            ->post(self::RESUMABLE_UPLOAD_URL);
+
+        $location = $session->header('Location');
+
+        if (! $session->successful() || blank($location)) {
+            throw new RuntimeException($session->json('error.message') ?: 'Google Drive did not accept the upload.');
+        }
+
+        $response = Http::withToken($token)
+            ->timeout(300)
+            ->withBody($contents, $mimeType)
+            ->put($location);
+
+        if (! $response->successful()) {
+            throw new RuntimeException($response->json('error.message') ?: 'Google Drive upload failed.');
+        }
+
+        return (array) $response->json();
     }
 
     protected function accessToken(): string

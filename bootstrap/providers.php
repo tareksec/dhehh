@@ -1,6 +1,13 @@
 <?php
 
+use App\Providers\AppServiceProvider;
+use App\Providers\Filament\AdminPanelProvider;
+use App\Providers\Filament\InvestorPanelProvider;
+use App\Providers\Filament\ResellerPanelProvider;
+
 return [
-    App\Providers\AppServiceProvider::class,
-    App\Providers\Filament\AdminPanelProvider::class,
+    AppServiceProvider::class,
+    AdminPanelProvider::class,
+    ResellerPanelProvider::class,
+    InvestorPanelProvider::class,
 ];

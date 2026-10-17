@@ -2,11 +2,13 @@
 
 namespace App\Livewire;
 
+use App\Models\Company;
 use App\Models\CompanyApiKey;
 use App\Services\CompanyContext;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
@@ -38,6 +40,9 @@ class WebsiteApiKeysTable extends Component implements HasActions, HasSchemas, H
             ->query(fn (): Builder => CompanyApiKey::query()->where('company_id', $this->companyId()))
             ->columns([
                 TextColumn::make('label')->label('Label')->placeholder('(no label)'),
+                TextColumn::make('scope')->label(__('Type'))
+                    ->formatStateUsing(fn (?string $state): string => __(CompanyApiKey::SCOPES[$state] ?? CompanyApiKey::SCOPES[CompanyApiKey::SCOPE_WEBSITE]))
+                    ->badge(),
                 TextColumn::make('key_prefix')->label('Key')->formatStateUsing(fn (string $state): string => "{$state}…"),
                 TextColumn::make('last_used_at')->label('Last used')->dateTime('d M Y, h:i A')->placeholder('Never'),
                 TextColumn::make('revoked_at')->label('Status')
@@ -63,9 +68,16 @@ class WebsiteApiKeysTable extends Component implements HasActions, HasSchemas, H
                     ->label('Label')
                     ->placeholder('e.g. Tasneem Knitting website')
                     ->maxLength(255),
+                Select::make('scope')
+                    ->label(__('Key type'))
+                    ->options(fn (): array => array_map(fn (string $label): string => __($label), CompanyApiKey::SCOPES))
+                    ->default(CompanyApiKey::SCOPE_WEBSITE)
+                    ->required()
+                    ->native(false)
+                    ->helperText(__('A "Data sync" or "Investor sync" key only reads data (for IMS). A "Website" key is for the website API.')),
             ])
             ->action(function (array $data): void {
-                [, $token] = CompanyApiKey::generate($this->company(), $data['label'] ?? null, Auth::id());
+                [, $token] = CompanyApiKey::generate($this->company(), $data['label'] ?? null, Auth::id(), $data['scope'] ?? CompanyApiKey::SCOPE_WEBSITE);
 
                 Notification::make()
                     ->title('API key generated — copy it now')

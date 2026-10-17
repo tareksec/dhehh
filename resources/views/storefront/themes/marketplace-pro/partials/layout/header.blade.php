@@ -37,11 +37,11 @@
         </button>
 
         <a class="flex min-w-0 shrink items-center gap-2.5" href="{{ $homeUrl }}">
-            @if ($logoDarkUrl || $logoUrl)
-                <img class="h-9 w-auto max-w-[160px] object-contain sm:max-w-[200px]" src="{{ $logoDarkUrl ?: $logoUrl }}" alt="{{ $company->name }}" width="800" height="281">
+            @if ($brandLogoDarkUrl || $brandLogoUrl)
+                <img class="h-9 w-auto max-w-[160px] object-contain sm:max-w-[200px]" src="{{ $brandLogoDarkUrl ?: $brandLogoUrl }}" alt="{{ $brandName }}" width="800" height="281">
             @else
-                <span class="mp-logo-mark" aria-hidden="true">{{ mb_strtoupper(mb_substr($company->name, 0, 2)) }}</span>
-                <span class="mp-brand-name truncate">{{ $company->name }}</span>
+                <span class="mp-logo-mark" aria-hidden="true">{{ mb_strtoupper(mb_substr($brandName, 0, 2)) }}</span>
+                <span class="mp-brand-name truncate">{{ $brandName }}</span>
             @endif
         </a>
 

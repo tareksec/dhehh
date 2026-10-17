@@ -2,8 +2,10 @@
 
 namespace App\Filament\Resources\InvestmentProjects\RelationManagers;
 
+use App\Models\ChannelPartner;
 use App\Models\Company;
 use App\Models\InvestmentDocument;
+use App\Models\Investor;
 use App\Services\CompanyStorageService;
 use App\Support\CompanyMedia;
 use Filament\Actions\Action;
@@ -17,6 +19,8 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Polymorphic document store — registered on InvestmentProjectResource,
@@ -26,8 +30,6 @@ use Filament\Tables\Table;
 class DocumentsRelationManager extends RelationManager
 {
     protected static string $relationship = 'documents';
-
-    protected static ?string $title = 'Documents';
 
     /**
      * Shared across InvestmentProjectResource, ProjectSettlementResource and
@@ -43,6 +45,21 @@ class DocumentsRelationManager extends RelationManager
         return false;
     }
 
+    /** Investor and channel partner documents are NID copies and contracts: investments.manage only. */
+    public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
+    {
+        if ($ownerRecord instanceof Investor || $ownerRecord instanceof ChannelPartner) {
+            return auth()->user()?->hasPermission('investments.manage') ?? false;
+        }
+
+        return parent::canViewForRecord($ownerRecord, $pageClass);
+    }
+
+    public static function getTitle(Model $ownerRecord, string $pageClass): string
+    {
+        return __('Documents');
+    }
+
     protected function ownerCompany(): Company
     {
         return CompanyMedia::require($this->getOwnerRecord());
@@ -51,10 +68,10 @@ class DocumentsRelationManager extends RelationManager
     public function form(Schema $schema): Schema
     {
         return $schema->components([
-            Select::make('category')->options(InvestmentDocument::CATEGORIES)->default('other')->required(),
-            TextInput::make('label')->maxLength(120)->placeholder('e.g. Settlement sheet — cycle 1'),
+            Select::make('category')->label(__('Category'))->options(InvestmentDocument::categoryOptions())->default('other')->required(),
+            TextInput::make('label')->label(__('Label'))->maxLength(120)->placeholder(__('e.g. Settlement sheet — cycle 1')),
             FileUpload::make('file_path')
-                ->label('File')
+                ->label(__('File'))
                 ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
                 ->maxSize(10240)
                 ->disk(fn (): string => app(CompanyStorageService::class)->privateDiskName())
@@ -69,27 +86,30 @@ class DocumentsRelationManager extends RelationManager
 
     public function table(Table $table): Table
     {
-        return $table->columns([
-            TextColumn::make('category')
-                ->badge()
-                ->formatStateUsing(fn (string $state): string => InvestmentDocument::CATEGORIES[$state] ?? $state),
-            TextColumn::make('label')->limit(40)->placeholder('-'),
-            TextColumn::make('uploadedBy.name')->label('Uploaded by')->placeholder('-'),
-            TextColumn::make('created_at')->dateTime()->sortable(),
-        ])->headerActions([
-            CreateAction::make()->mutateDataUsing(fn (array $data): array => [
-                ...$data,
-                'company_id' => $this->getOwnerRecord()->company_id,
-                'uploaded_by' => auth()->id(),
-            ]),
-        ])->recordActions([
-            Action::make('download')
-                ->label('Download')
-                ->icon('heroicon-o-arrow-down-tray')
-                ->url(fn (InvestmentDocument $record): string => route('investment-documents.download', $record))
-                ->openUrlInNewTab(),
-            EditAction::make(),
-            DeleteAction::make(),
-        ]);
+        return $table->modifyQueryUsing(fn (Builder $query): Builder => auth()->user()?->hasPermission('investments.manage')
+            ? $query
+            : $query->whereNotIn('category', InvestmentDocument::SENSITIVE_CATEGORIES))->columns([
+                TextColumn::make('category')
+                    ->label(__('Category'))
+                    ->badge()
+                    ->formatStateUsing(fn (string $state): string => InvestmentDocument::categoryLabel($state)),
+                TextColumn::make('label')->label(__('Label'))->limit(40)->placeholder('-'),
+                TextColumn::make('uploadedBy.name')->label(__('Uploaded by'))->placeholder('-'),
+                TextColumn::make('created_at')->label(__('Uploaded at'))->dateTime()->sortable(),
+            ])->headerActions([
+                CreateAction::make()->mutateDataUsing(fn (array $data): array => [
+                    ...$data,
+                    'company_id' => $this->getOwnerRecord()->company_id,
+                    'uploaded_by' => auth()->id(),
+                ]),
+            ])->recordActions([
+                Action::make('download')
+                    ->label(__('Download'))
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->url(fn (InvestmentDocument $record): string => route('investment-documents.download', $record))
+                    ->openUrlInNewTab(),
+                EditAction::make(),
+                DeleteAction::make(),
+            ]);
     }
 }

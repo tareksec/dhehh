@@ -2,8 +2,10 @@
 
 namespace App\Filament\Resources\Resellers\Tables;
 
+use App\Filament\Resources\Resellers\Actions\ResellerPasswordActions;
 use App\Models\Customer;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -15,6 +17,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 class ResellersTable
@@ -22,6 +25,7 @@ class ResellersTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->withSum('depositEntries as deposit_balance', 'amount'))
             ->columns([
                 TextColumn::make('reseller_status')
                     ->label('Status')
@@ -44,6 +48,12 @@ class ResellersTable
                         ? "{$record->company->domain}/store/{$state}"
                         : $state)
                     ->copyable()
+                    ->toggleable(),
+                TextColumn::make('deposit_balance')
+                    ->label(__('Deposit'))
+                    ->state(fn (Customer $record): float => (float) $record->deposit_balance)
+                    ->numeric(2)
+                    ->sortable()
                     ->toggleable(),
                 TextColumn::make('created_at')->label('Applied')->since()->sortable(),
             ])
@@ -82,6 +92,10 @@ class ResellersTable
                     ])),
                 ViewAction::make(),
                 EditAction::make(),
+                ActionGroup::make([
+                    ResellerPasswordActions::setPassword(),
+                    ResellerPasswordActions::emailResetLink(),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

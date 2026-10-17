@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages\CourierWidgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Filament\Pages\CourierMerchantDashboard;
 use App\Filament\Pages\CourierPaymentHistory;
 use App\Filament\Resources\CourierBookings\CourierBookingResource;
@@ -36,6 +37,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  */
 class CourierQuickLinksWidget extends StatsOverviewWidget
 {
+    use GuardsWidgetRendering;
+
     public ?int $providerId = null;
 
     public function mount(?int $providerId = null): void

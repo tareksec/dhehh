@@ -363,18 +363,18 @@ class MetaEventsManager extends Page implements HasTable
             return [];
         }
 
-        $setting = StorefrontSetting::withoutGlobalScopes()
+        // Every site of the company (Blade and Next.js) has its own pixels.
+        $pixelIds = StorefrontSetting::withoutGlobalScopes()
             ->where('company_id', $account->company_id)
-            ->first();
-
-        if (! $setting) {
-            return [];
-        }
-
-        $pixelIds = array_column(
-            app(StorefrontMetaTrackingService::class)->pixelConfigurations($setting),
-            'pixel_id',
-        );
+            ->get()
+            ->flatMap(fn (StorefrontSetting $setting): array => array_column(
+                app(StorefrontMetaTrackingService::class)->pixelConfigurations($setting),
+                'pixel_id',
+            ))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
 
         return $pixelIds === [] ? [] : array_combine($pixelIds, $pixelIds);
     }

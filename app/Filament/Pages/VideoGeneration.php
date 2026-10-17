@@ -5,13 +5,19 @@ namespace App\Filament\Pages;
 use App\Filament\Clusters\AiTools;
 use App\Filament\Concerns\OptimizesUploadedImages;
 use App\Filament\Concerns\SelectableFromMediaHub;
+use App\Filament\Pages\Concerns\SavesVideosToDrive;
 use App\Jobs\GenerateVideoJob;
 use App\Models\Company;
 use App\Models\GeneratedImage;
 use App\Models\GeneratedVideo;
+use App\Models\Offer;
+use App\Models\Product;
 use App\Services\AuditLogService;
 use App\Services\CompanyContext;
 use App\Services\PromptEnhancement\PromptEnhancementService;
+use App\Services\VideoGeneration\GeneratedVideoAttacher;
+use App\Services\VideoGeneration\VideoAttachmentException;
+use App\Services\VideoGeneration\VideoGovernanceService;
 use App\Services\VideoGeneration\VideoProviderResolver;
 use App\Services\VideoGeneration\VideoProviderSettingsService;
 use App\Support\CompanyMedia;
@@ -30,6 +36,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Url;
 
 /**
  * The Video Generation tool (12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md, Phase
@@ -49,12 +56,18 @@ use Illuminate\Validation\ValidationException;
  * Generation, with `video_generation.*` guides. It is hidden when the picked
  * provider never sends the prompt (Stability image-to-video).
  *
- * Attach-to-record actions, favourites, and governance are later phases
- * (plan §12) — this page only generates and lists.
+ * A finished video can be attached (Phase 3) to a product page or an
+ * offer's hero through GeneratedVideoAttacher, starred, or copied to the
+ * company's Google Drive (Phase 4). The Video Library's "Reuse" link opens
+ * this page with `?from=<id>` to prefill the form. Phase 5 governance
+ * (VideoGovernanceService): a per-role monthly video cap is enforced before
+ * anything is queued, and a role on the review list gets its videos marked
+ * "pending review", which blocks attaching until a reviewer approves.
  */
 class VideoGeneration extends Page
 {
     use OptimizesUploadedImages;
+    use SavesVideosToDrive;
     use SelectableFromMediaHub;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedFilm;
@@ -72,6 +85,13 @@ class VideoGeneration extends Page
     /** @var array<string, mixed>|null */
     public ?array $data = [];
 
+    /**
+     * `?from=<generated_video_id>` — the Video Library's "Reuse" link. Read
+     * once in mount() to prefill the form, then irrelevant.
+     */
+    #[Url]
+    public ?string $from = null;
+
     /** Per-request memo so one render does not query the same 12 rows three times. */
     private ?Collection $recentGenerationsCache = null;
 
@@ -85,8 +105,51 @@ class VideoGeneration extends Page
         $this->form->fill($this->initialFormState());
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Blank form by default; prefilled from an existing generation (prompt,
+     * settings, and the same starting image) when the Video Library links
+     * here with `?from=<id>`.
+     *
+     * @return array<string, mixed>
+     */
     protected function initialFormState(): array
+    {
+        $state = $this->blankFormState();
+        $fromId = (int) $this->from;
+
+        if ($fromId <= 0 || ! $this->hasSelectedCompany()) {
+            return $state;
+        }
+
+        $source = GeneratedVideo::query()
+            ->where('tool', GeneratedVideo::TOOL_VIDEO_GENERATION)
+            ->find($fromId);
+
+        if ($source === null) {
+            return $state;
+        }
+
+        return [
+            ...$state,
+            'prompt' => (string) $source->prompt,
+            'context' => array_key_exists((string) $source->context, GeneratedVideo::CONTEXTS) ? $source->context : 'general',
+            'aspect_ratio' => array_key_exists((string) $source->aspect_ratio, GeneratedVideo::ASPECT_RATIOS)
+                ? $source->aspect_ratio
+                : GeneratedVideo::DEFAULT_ASPECT_RATIO,
+            'duration_preset' => array_key_exists((string) $source->duration_preset, GeneratedVideo::DURATION_PRESETS)
+                ? $source->duration_preset
+                : GeneratedVideo::DEFAULT_DURATION_PRESET,
+            'provider_profile_id' => app(VideoProviderSettingsService::class)->find(app(CompanyContext::class)->company(), $source->provider_profile_id)
+                ? $source->provider_profile_id
+                : $this->defaultProfileId(),
+            // Same array shape the video-reference quick-pick uses (see there).
+            'source_image' => filled($source->source_image_path) ? [(string) Str::uuid() => $source->source_image_path] : null,
+            'source_generated_image_id' => $source->source_generated_image_id,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    protected function blankFormState(): array
     {
         return [
             'prompt' => '',
@@ -390,6 +453,25 @@ class VideoGeneration extends Page
             ]);
         }
 
+        $user = Auth::user();
+        $governance = app(VideoGovernanceService::class);
+
+        // Checked before the form is dehydrated, so a blocked request never
+        // stores its uploaded starting image.
+        if ($user !== null && $governance->wouldExceedCap($company, $user)) {
+            Notification::make()
+                ->title(__('Monthly video allowance used'))
+                ->body(__('You have used your monthly video allowance for this company. It resets on the 1st.'))
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $reviewStatus = ($user !== null && $governance->roleRequiresReview($company, $user->effectiveRole()))
+            ? GeneratedVideo::REVIEW_PENDING
+            : GeneratedVideo::REVIEW_NOT_REQUIRED;
+
         // Dehydrate the form: this persists an uploaded/media-hub-picked
         // image through optimizeImageUpload() and turns source_image into
         // its stored path.
@@ -427,6 +509,7 @@ class VideoGeneration extends Page
             'model' => $profile['model'] ?: null,
             'aspect_ratio' => $aspectRatio,
             'duration_preset' => $durationPreset,
+            'review_status' => $reviewStatus,
             'status' => GeneratedVideo::STATUS_QUEUED,
         ]);
 
@@ -435,19 +518,38 @@ class VideoGeneration extends Page
             'context' => $context,
             'provider' => $profile['label'],
             'api_format' => $profile['api_format'],
+            'review_status' => $reviewStatus,
         ]);
 
         GenerateVideoJob::dispatch($record->getKey());
 
         $this->recentGenerationsCache = null;
+        $this->from = null;
 
-        $this->form->fill($this->initialFormState());
+        $this->form->fill($this->blankFormState());
 
         Notification::make()
             ->title('Video generation started')
-            ->body('This can take a few minutes — it will appear below and you will be notified when it is ready.')
+            ->body($reviewStatus === GeneratedVideo::REVIEW_PENDING
+                ? __('This can take a few minutes. The video will need a reviewer’s approval before it can be put on a product or offer.')
+                : 'This can take a few minutes — it will appear below and you will be notified when it is ready.')
             ->success()
             ->send();
+    }
+
+    /**
+     * How many more videos the current user may generate this month, or null
+     * when their role has no cap. Surfaced under the form.
+     */
+    public function remainingMonthlyAllowance(): ?int
+    {
+        $user = Auth::user();
+
+        if ($user === null || ! $this->hasSelectedCompany()) {
+            return null;
+        }
+
+        return app(VideoGovernanceService::class)->remainingThisMonth(app(CompanyContext::class)->company(), $user);
     }
 
     /** Normalize a FileUpload's dehydrated state (string or [id => path]) to a path. */
@@ -482,13 +584,232 @@ class VideoGeneration extends Page
         return $this->recentGenerationsCache = GeneratedVideo::query()
             ->where('user_id', Auth::id())
             ->where('tool', GeneratedVideo::TOOL_VIDEO_GENERATION)
+            ->with('linked')
             ->latest()
             ->limit(12)
             ->get();
     }
 
+    /** Keeps the gallery polling while a video is generating or its Drive copy is uploading. */
     public function hasPendingGenerations(): bool
     {
-        return $this->recentGenerations()->contains(fn (GeneratedVideo $row): bool => ! $row->isTerminal());
+        return $this->recentGenerations()->contains(fn (GeneratedVideo $row): bool => ! $row->isTerminal() || $row->isSavingToDrive());
+    }
+
+    // --- Phase 3: attach a finished video to a record -----------------------
+
+    /**
+     * Put a finished video on a product page. Mounted per generation from
+     * the gallery with a `{ generation }` argument.
+     */
+    public function attachToProductAction(): Action
+    {
+        return Action::make('attachToProduct')
+            ->label(__('Add to a product'))
+            ->icon(Heroicon::OutlinedShoppingBag)
+            ->modalHeading(__('Add this video to a product'))
+            ->modalDescription(__('The video plays on the product page, below the photos. It replaces the product’s current video, if it has one.'))
+            ->modalSubmitActionLabel(__('Attach'))
+            ->schema([
+                Select::make('product_id')
+                    ->label(__('Product'))
+                    ->required()
+                    ->searchable()
+                    ->native(false)
+                    ->options(fn (): array => $this->productOptions())
+                    ->getSearchResultsUsing(fn (string $search): array => $this->productOptions($search)),
+            ])
+            ->action(function (array $arguments, array $data): void {
+                $generation = $this->resolveGeneration($arguments);
+                $product = $generation !== null
+                    ? Product::query()->find($data['product_id'] ?? null)
+                    : null;
+
+                if ($generation === null || $product === null) {
+                    Notification::make()->title(__('Could not attach the video'))->danger()->send();
+
+                    return;
+                }
+
+                try {
+                    app(GeneratedVideoAttacher::class)->attachToProduct($generation, $product);
+                } catch (VideoAttachmentException $exception) {
+                    Notification::make()
+                        ->title(__('Could not attach the video'))
+                        ->body($exception->getMessage())
+                        ->danger()
+                        ->send();
+
+                    return;
+                }
+
+                app(AuditLogService::class)->record('ai_video.attached', $generation, null, [
+                    'target' => 'Product #'.$product->getKey().' — '.$product->name,
+                ]);
+
+                $this->recentGenerationsCache = null;
+
+                Notification::make()
+                    ->title(__('Added to :name', ['name' => $product->name]))
+                    ->body(__('The video now plays on the product page.'))
+                    ->success()
+                    ->send();
+            });
+    }
+
+    /**
+     * Play a finished video in an offer / landing page's hero slot. Mounted
+     * per generation with a `{ generation }` argument.
+     */
+    public function attachToOfferAction(): Action
+    {
+        return Action::make('attachToOffer')
+            ->label(__('Use as an offer hero video'))
+            ->icon(Heroicon::OutlinedRectangleGroup)
+            ->modalHeading(__('Use this video in an offer’s hero'))
+            ->modalDescription(__('The video plays in the landing-page hero. The cover image stays as the poster and the social share image.'))
+            ->modalSubmitActionLabel(__('Set hero video'))
+            ->schema([
+                Select::make('offer_id')
+                    ->label(__('Offer / landing page'))
+                    ->required()
+                    ->searchable()
+                    ->native(false)
+                    ->options(fn (): array => $this->offerOptions())
+                    ->getSearchResultsUsing(fn (string $search): array => $this->offerOptions($search)),
+            ])
+            ->action(function (array $arguments, array $data): void {
+                $generation = $this->resolveGeneration($arguments);
+                $offer = $generation !== null
+                    ? Offer::query()->find($data['offer_id'] ?? null)
+                    : null;
+
+                if ($generation === null || $offer === null) {
+                    Notification::make()->title(__('Could not attach the video'))->danger()->send();
+
+                    return;
+                }
+
+                try {
+                    app(GeneratedVideoAttacher::class)->attachToOffer($generation, $offer);
+                } catch (VideoAttachmentException $exception) {
+                    Notification::make()
+                        ->title(__('Could not attach the video'))
+                        ->body($exception->getMessage())
+                        ->danger()
+                        ->send();
+
+                    return;
+                }
+
+                app(AuditLogService::class)->record('ai_video.attached', $generation, null, [
+                    'target' => 'Offer #'.$offer->getKey().' — '.$offer->title,
+                ]);
+
+                $this->recentGenerationsCache = null;
+
+                Notification::make()
+                    ->title(__('Hero video updated'))
+                    ->body(__('“:title” now plays this video.', ['title' => $offer->title]))
+                    ->success()
+                    ->send();
+            });
+    }
+
+    // --- Phase 4: favourites & Google Drive ----------------------------------
+
+    /** Star / unstar a video for the Video Library. Mounted with `{ generation }`. */
+    public function toggleFavoriteAction(): Action
+    {
+        return Action::make('toggleFavorite')
+            ->label(__('Favourite'))
+            ->icon(Heroicon::OutlinedStar)
+            ->action(function (array $arguments): void {
+                $generation = $this->resolveGeneration($arguments);
+
+                if ($generation === null) {
+                    return;
+                }
+
+                $generation->forceFill(['is_favorite' => ! $generation->is_favorite])->save();
+
+                $this->recentGenerationsCache = null;
+
+                Notification::make()
+                    ->title($generation->is_favorite ? __('Added to favourites') : __('Removed from favourites'))
+                    ->success()
+                    ->send();
+            });
+    }
+
+    /** Copy a finished video to the company's Google Drive folder. Mounted with `{ generation }`. */
+    public function saveToDriveAction(): Action
+    {
+        return Action::make('saveToDrive')
+            ->label(__('Save to Google Drive'))
+            ->icon(Heroicon::OutlinedCloudArrowUp)
+            ->action(function (array $arguments): void {
+                $generation = $this->resolveGeneration($arguments);
+
+                if ($generation === null) {
+                    Notification::make()->title(__('Could not save to Google Drive'))->danger()->send();
+
+                    return;
+                }
+
+                $this->queueDriveSave($generation);
+
+                $this->recentGenerationsCache = null;
+            });
+    }
+
+    /**
+     * Resolve a GeneratedVideo from a mounted action's `generation` argument,
+     * scoped to the current user's own rows (and, through CompanyScope, the
+     * selected company).
+     */
+    protected function resolveGeneration(array $arguments): ?GeneratedVideo
+    {
+        $id = (int) ($arguments['generation'] ?? 0);
+
+        if ($id <= 0 || ! $this->hasSelectedCompany()) {
+            return null;
+        }
+
+        return GeneratedVideo::query()
+            ->where('user_id', Auth::id())
+            ->where('tool', GeneratedVideo::TOOL_VIDEO_GENERATION)
+            ->find($id);
+    }
+
+    /** @return array<int, string> */
+    protected function productOptions(string $search = ''): array
+    {
+        if (! $this->hasSelectedCompany()) {
+            return [];
+        }
+
+        return Product::query()
+            ->when($search !== '', fn ($query) => $query->where('name', 'like', "%{$search}%"))
+            ->orderBy('name')
+            ->limit(30)
+            ->pluck('name', 'id')
+            ->all();
+    }
+
+    /** @return array<int, string> */
+    protected function offerOptions(string $search = ''): array
+    {
+        if (! $this->hasSelectedCompany()) {
+            return [];
+        }
+
+        return Offer::query()
+            ->landingPages()
+            ->when($search !== '', fn ($query) => $query->where('title', 'like', "%{$search}%"))
+            ->orderByDesc('id')
+            ->limit(30)
+            ->pluck('title', 'id')
+            ->all();
     }
 }

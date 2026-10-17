@@ -53,6 +53,14 @@ class StockMovementForm
                                 default => 'Optional context for this stock movement.',
                             }),
 
+                        Select::make('damage_source')
+                            ->label(__('Damage source'))
+                            ->options(fn (): array => StockMovement::damageSources())
+                            ->native(false)
+                            ->visible(fn (Get $get): bool => $get('type') === 'damage')
+                            ->required(fn (Get $get): bool => $get('type') === 'damage')
+                            ->helperText(__('Pick "Customer return damage" for pieces a customer sent back damaged and "Shipment damage" for pieces found damaged when a shipment was opened.')),
+
                         TextInput::make('reference_type')
                             ->label('Reference Type')
                             ->maxLength(255),

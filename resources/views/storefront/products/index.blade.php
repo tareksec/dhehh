@@ -1,25 +1,6 @@
 @extends(\App\Support\StorefrontThemeRegistry::layoutView($setting->storefrontTheme()))
 
-@push('meta-events')
-    @php
-        $metaTracking = app(\App\Services\StorefrontMetaTrackingService::class);
-        $metaListData = [
-            'content_ids' => $products->getCollection()->pluck('id')->map(fn ($id) => (string) $id)->values()->all(),
-            'content_type' => 'product',
-            'content_category' => $category?->name,
-            'search_string' => ($search ?? '') !== '' ? $search : null,
-        ];
-    @endphp
-    @if (! isset($previewSlug) && $category && $metaTracking->browserEventEnabled($setting, 'ViewCategory', request()))
-        <script>fbq('trackCustom', 'ViewCategory', {{ Illuminate\Support\Js::from(array_filter($metaListData)) }}, {eventID: {{ Illuminate\Support\Js::from($metaTracking->eventId('view-category')) }}});</script>
-    @endif
-    @if (! isset($previewSlug) && $metaTracking->browserEventEnabled($setting, 'ViewItemList', request()))
-        <script>fbq('trackCustom', 'ViewItemList', {{ Illuminate\Support\Js::from(array_filter($metaListData)) }}, {eventID: {{ Illuminate\Support\Js::from($metaTracking->eventId('view-item-list')) }}});</script>
-    @endif
-    @if (! isset($previewSlug) && ($search ?? '') !== '' && $metaTracking->browserEventEnabled($setting, 'Search', request()))
-        <script>fbq('track', 'Search', {{ Illuminate\Support\Js::from(array_filter($metaListData)) }}, {eventID: {{ Illuminate\Support\Js::from($metaTracking->eventId('search')) }}});</script>
-    @endif
-@endpush
+@include('storefront.products.partials.listing-meta-events')
 
 @php
     $sortOptions = [
@@ -27,7 +8,7 @@
         'price_asc' => 'Price: Low to high',
         'price_desc' => 'Price: High to low',
     ];
-    $baseProductsUrl = isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index');
+    $baseProductsUrl = \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null);
 @endphp
 
 @section('content')
@@ -54,7 +35,7 @@
                     </a>
                     @foreach ($categories as $chip)
                         @php
-                            $chipUrl = isset($previewSlug) ? route('storefront.preview.categories.show', [$previewSlug, $chip->slug]) : route('storefront.categories.show', $chip->slug);
+                            $chipUrl = \App\Support\StorefrontUrl::route('categories.show', [$chip->slug], $previewSlug ?? null);
                         @endphp
                         <a class="inline-flex min-h-11 shrink-0 snap-start items-center rounded-full border px-4 text-sm font-medium transition {{ $category?->id === $chip->id ? 'border-[var(--storefront-brand)] bg-[var(--storefront-brand)] text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400 dark:border-white/10 dark:text-gray-300' }}" href="{{ $chipUrl }}" @if ($category?->id === $chip->id) aria-current="page" @endif>
                             {{ $chip->name }}

@@ -2,9 +2,15 @@
 
 namespace App\Services\Investment;
 
+use App\Models\ChannelPartner;
+use App\Models\Investment;
 use App\Models\Investor;
 use App\Models\InvestorDraft;
+use App\Models\InvestorGroup;
+use App\Models\InvestorSecurityInstrument;
 use App\Services\CompanyContext;
+use App\Services\InvestorOnboardingService;
+use App\Support\InvestorIdentity;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Illuminate\Support\Facades\Auth;
@@ -30,7 +36,7 @@ use Throwable;
  */
 class InvestorImportService
 {
-    public const SAMPLE_HEADINGS = ['name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'nid_number', 'address', 'stamp_number', 'cheque_number', 'is_channel_partner', 'channel_partner_phone', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
+    public const SAMPLE_HEADINGS = ['name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'nid_number', 'address', 'stamp_number', 'cheque_number', 'channel_partner_phone', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
 
     private const STRING_FIELDS = ['name', 'display_name', 'guardian_name', 'email', 'nominee_name', 'nominee_relation'];
 
@@ -49,15 +55,19 @@ class InvestorImportService
     /** Label-to-field lookup built from the config aliases. */
     private ?array $aliases = null;
 
+    /** Project / payment method / date chosen for the whole import. */
+    private array $investmentDefaults = [];
+
     /**
      * @return array{created: int, ignored_columns: list<string>}
      */
-    public function importFile(string $path, string $originalName): array
+    public function importFile(string $path, string $originalName, array $investment = []): array
     {
+        $this->investmentDefaults = $this->investmentDefaults($investment);
         $extension = Str::lower(pathinfo($originalName, PATHINFO_EXTENSION));
 
         if ($extension === 'txt') {
-            return $this->importText((string) file_get_contents($path), InvestorDraft::SOURCE_TEXT, $originalName);
+            return $this->importText((string) file_get_contents($path), InvestorDraft::SOURCE_TEXT, $originalName, $investment);
         }
 
         if (in_array($extension, ['xlsx', 'ods'], true)) {
@@ -103,8 +113,9 @@ class InvestorImportService
     /**
      * @return array{created: int, ignored_columns: list<string>}
      */
-    public function importText(string $text, string $source = InvestorDraft::SOURCE_TEXT, ?string $sourceName = null): array
+    public function importText(string $text, string $source = InvestorDraft::SOURCE_TEXT, ?string $sourceName = null, array $investment = []): array
     {
+        $this->investmentDefaults = $this->investmentDefaults($investment);
         $text = $this->cleanText($text);
 
         if (trim($text) === '') {
@@ -121,11 +132,125 @@ class InvestorImportService
     }
 
     /**
-     * Validate a reviewed draft, create the Investor and delete the draft.
+     * Validate a reviewed draft, then in one transaction create the Investor
+     * (or use the linked existing one), record the investment from the
+     * sheet when a project and amount are set, and delete the draft.
      */
     public function confirm(InvestorDraft $draft): Investor
     {
         $companyId = (int) $draft->company_id;
+        $createsInvestment = $draft->willCreateInvestment();
+        $existing = null;
+
+        if ($createsInvestment || filled($draft->project_id) || filled($draft->group_id) || (float) $draft->investment_amount > 0) {
+            if (filled($draft->group_id) && filled($draft->project_id)) {
+                throw ValidationException::withMessages(['group_id' => __('Pick a group or a project for the investment amount, not both.')]);
+            }
+
+            $targetRule = filled($draft->group_id)
+                ? ['group_id' => ['required', Rule::exists('investor_groups', 'id')->where('company_id', $companyId)->where('status', InvestorGroup::STATUS_OPEN)]]
+                : ['project_id' => ['required', Rule::exists('investment_projects', 'id')->where('company_id', $companyId)->whereNull('group_id')->whereIn('status', InvestorDraft::OPEN_PROJECT_STATUSES)]];
+
+            Validator::make([
+                'project_id' => $draft->project_id,
+                'group_id' => $draft->group_id,
+                'investment_amount' => $draft->investment_amount,
+                'payment_method' => $draft->payment_method,
+                'invested_at' => $draft->invested_at?->toDateString(),
+            ], [
+                ...$targetRule,
+                'investment_amount' => ['required', 'numeric', 'gt:0'],
+                'payment_method' => ['required', Rule::in(array_keys(Investment::PAYMENT_METHODS))],
+                'invested_at' => ['required', 'date'],
+            ], [
+                'project_id.required' => __('Pick a group for the investment amount, or clear the amount.'),
+                'project_id.exists' => __('The chosen project is not open for investments.'),
+                'group_id.required' => __('Pick a group for the investment amount, or clear the amount.'),
+                'group_id.exists' => __('The chosen group is not open for new members.'),
+                'investment_amount.required' => __('Enter the investment amount.'),
+                'investment_amount.gt' => __('Enter the investment amount.'),
+                'payment_method.required' => __('Pick the payment method.'),
+                'invested_at.required' => __('Enter the investment date.'),
+            ])->validate();
+        }
+
+        if ($draft->existing_investor_id) {
+            $existing = Investor::query()->where('company_id', $companyId)->find($draft->existing_investor_id);
+
+            if (! $existing) {
+                throw ValidationException::withMessages(['existing_investor_id' => __('The linked existing investor was not found.')]);
+            }
+
+            if (! $createsInvestment) {
+                throw ValidationException::withMessages(['project_id' => __(':name is already an investor. Pick a project and amount to add a new investment for them, or discard this draft.', ['name' => $existing->name])]);
+            }
+
+            $data = [];
+        } else {
+            $data = $this->validatedInvestorData($draft, $companyId);
+        }
+
+        [$investor, $investment] = DB::transaction(function () use ($draft, $data, $companyId, $existing, $createsInvestment): array {
+            $investor = $existing ?? Investor::query()->create([...$data, 'company_id' => $companyId]);
+            $investment = null;
+
+            if ($createsInvestment && filled($draft->group_id)) {
+                // The money joins a group as a new member; the stamp and cheque
+                // become the security instrument of its first project row.
+                app(InvestmentTargets::class)->place(InvestorGroup::query()->findOrFail($draft->group_id), $investor, [
+                    'amount' => $draft->investment_amount,
+                    'payment_method' => $draft->payment_method,
+                    'invested_at' => $draft->invested_at?->toDateString(),
+                    'paperwork' => array_filter([
+                        'stamp_serial_numbers' => filled($draft->stamp_number)
+                            ? array_values(array_filter(array_map('trim', explode(',', (string) $draft->stamp_number))))
+                            : null,
+                        'cheque_number' => $draft->cheque_number,
+                    ]),
+                ], Auth::user());
+            } elseif ($createsInvestment) {
+                $investment = Investment::query()->create([
+                    'company_id' => $companyId,
+                    'project_id' => $draft->project_id,
+                    'investor_id' => $investor->getKey(),
+                    'amount' => $draft->investment_amount,
+                    'payment_method' => $draft->payment_method,
+                    'invested_at' => $draft->invested_at?->toDateString(),
+                    'received_by' => Auth::id(),
+                ]);
+
+                if (filled($draft->stamp_number) || filled($draft->cheque_number)) {
+                    InvestorSecurityInstrument::query()->create([
+                        'investment_id' => $investment->getKey(),
+                        'stamp_serial_numbers' => filled($draft->stamp_number)
+                            ? array_values(array_filter(array_map('trim', explode(',', (string) $draft->stamp_number))))
+                            : null,
+                        'cheque_number' => $draft->cheque_number,
+                    ]);
+                }
+            }
+
+            // A portal sign-up: its sign-in and KYC files move to the new investor.
+            app(InvestorOnboardingService::class)->draftConfirmed($draft, $investor);
+
+            $draft->delete();
+
+            return [$investor, $investment];
+        });
+
+        if ($investment) {
+            // Same pending capital voucher the project's Investments tab books.
+            app(InvestmentLedgerService::class)->recordInvestmentReceived($investment);
+        }
+
+        return $investor;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validatedInvestorData(InvestorDraft $draft, int $companyId): array
+    {
         $data = collect(InvestorDraft::INVESTOR_FIELDS)
             ->mapWithKeys(fn (string $field): array => [$field => $draft->getAttribute($field)])
             ->all();
@@ -133,23 +258,42 @@ class InvestorImportService
 
         Validator::make($data, [
             'name' => ['required', 'string', 'max:255'],
+            'nid_number' => ['required', function (string $attribute, mixed $value, \Closure $fail) use ($companyId): void {
+                $owner = Investor::query()->where('company_id', $companyId)->where('nid_hash', InvestorIdentity::hash((string) $value) ?? '-')->first();
+
+                if ($owner) {
+                    $fail(__('This NID / passport number already belongs to investor :name.', ['name' => $owner->name]));
+                }
+            }],
             'phone' => ['required', 'string', 'max:255', Rule::unique('investors', 'phone')->where('company_id', $companyId)],
             'email' => ['nullable', 'email', 'max:255'],
             'date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
-            'channel_partner_id' => ['nullable', Rule::exists('investors', 'id')->where('company_id', $companyId)],
+            'channel_partner_id' => ['nullable', Rule::exists('channel_partners', 'id')->where('company_id', $companyId)],
         ], [
             'name.required' => __('Name is missing.'),
+            'nid_number.required' => __('NID / passport number is missing. It is the investor ID, so it is required.'),
             'phone.required' => __('Phone is missing.'),
             'phone.unique' => __('Phone :phone already belongs to another investor.', ['phone' => (string) $draft->phone]),
             'email.email' => __('Email :email is not valid.', ['email' => (string) $draft->email]),
         ])->validate();
 
-        return DB::transaction(function () use ($draft, $data, $companyId): Investor {
-            $investor = Investor::query()->create([...$data, 'company_id' => $companyId, 'is_channel_partner' => (bool) $data['is_channel_partner']]);
-            $draft->delete();
+        return $data;
+    }
 
-            return $investor;
-        });
+    /**
+     * @return array{project_id?: int, group_id?: int, payment_method?: string, invested_at?: string}
+     */
+    private function investmentDefaults(array $investment): array
+    {
+        return array_filter([
+            'project_id' => filled($investment['project_id'] ?? null) ? (int) $investment['project_id'] : null,
+            'group_id' => filled($investment['group_id'] ?? null) ? (int) $investment['group_id'] : null,
+            'payment_method' => array_key_exists((string) ($investment['payment_method'] ?? ''), Investment::PAYMENT_METHODS) ? $investment['payment_method'] : null,
+            'invested_at' => filled($investment['invested_at'] ?? null) ? (string) $investment['invested_at'] : null,
+            'channel_partner_id' => filled($investment['channel_partner_id'] ?? null)
+                ? ChannelPartner::query()->whereKey((int) $investment['channel_partner_id'])->value('id')
+                : null,
+        ], fn ($value): bool => $value !== null);
     }
 
     public function sampleCsv(): StreamedResponse
@@ -359,6 +503,7 @@ class InvestorImportService
         DB::transaction(function () use ($records, $source, $sourceName, $companyId, $batchId): void {
             foreach ($records as $record) {
                 InvestorDraft::query()->create([
+                    ...$this->investmentDefaults,
                     ...$this->draftAttributes($record['values'], $record['notes'], $companyId),
                     'company_id' => $companyId,
                     'batch_id' => $batchId,
@@ -431,16 +576,20 @@ class InvestorImportService
                     $attributes['import_notes'][] = ['message' => 'Date of birth ":value" could not be read. Enter it by hand.', 'params' => ['value' => Str::limit($text, 40)]];
                 }
             } elseif ($field === 'investment_amount') {
-                $attributes['import_notes'][] = ['message' => 'Investment amount in the file: :amount. After confirming, add the investment under Investments.', 'params' => ['amount' => $this->latinDigits($text)]];
-            } elseif ($field === 'is_channel_partner') {
-                $attributes['is_channel_partner'] = in_array(Str::lower($text), array_map(Str::lower(...), config('investor_import.yes_values', [])), true);
+                $amount = (string) preg_replace('/[^\d.]/', '', $this->latinDigits($text));
+
+                if ($amount !== '' && is_numeric($amount) && (float) $amount > 0) {
+                    $attributes['investment_amount'] = round((float) $amount, 2);
+                } else {
+                    $attributes['import_notes'][] = ['message' => 'Investment amount ":value" could not be read. Enter it by hand.', 'params' => ['value' => Str::limit($text, 40)]];
+                }
             } elseif ($field === 'channel_partner') {
                 $partner = $this->findChannelPartner($text, $companyId);
 
                 if ($partner) {
                     $attributes['channel_partner_id'] = $partner->getKey();
                 } else {
-                    $attributes['import_notes'][] = ['message' => 'Channel partner ":value" was not found among investors. Pick them by hand.', 'params' => ['value' => Str::limit($text, 60)]];
+                    $attributes['import_notes'][] = ['message' => 'Channel partner ":value" was not found among channel partners. Add them under Channel Partners, then pick them here.', 'params' => ['value' => Str::limit($text, 60)]];
                 }
             }
         }
@@ -449,16 +598,36 @@ class InvestorImportService
             $attributes['email'] = Str::lower($attributes['email']);
         }
 
+        // Someone who already invested before (same NID / passport number —
+        // the investor ID, owner's rule) gets this row's investment added to
+        // their record instead of a duplicate investor, even if their phone
+        // number has changed since.
+        $nidHash = InvestorIdentity::hash($attributes['nid_number'] ?? null);
+
+        if ($nidHash !== null) {
+            $existing = Investor::query()->where('company_id', $companyId)->where('nid_hash', $nidHash)->first();
+
+            if ($existing) {
+                $attributes['existing_investor_id'] = $existing->getKey();
+                $attributes['import_notes'][] = ['message' => 'NID matches existing investor :name. Confirming adds the investment to them; their details are not changed.', 'params' => ['name' => $existing->name]];
+
+                if (filled($attributes['phone'] ?? null) && $attributes['phone'] !== $existing->phone) {
+                    $attributes['import_notes'][] = ['message' => 'The phone in the file (:new) differs from the saved phone (:old). Update it on the investor if it has changed.', 'params' => ['new' => $attributes['phone'], 'old' => (string) $existing->phone]];
+                }
+            }
+        }
+
         return $attributes;
     }
 
-    private function findChannelPartner(string $value, int $companyId): ?Investor
+    /** The channel partner named in a row: by NID / partner ID, phone, or exact name. */
+    private function findChannelPartner(string $value, int $companyId): ?ChannelPartner
     {
-        $query = fn () => Investor::query()->where('company_id', $companyId);
+        $query = fn () => ChannelPartner::query()->where('company_id', $companyId);
         $phone = $this->normalizePhone($value);
 
         if (preg_match('/\d{6,}/', $phone)) {
-            $partner = $query()->where('phone', $phone)->first();
+            $partner = $query()->whereNid($value)->first() ?? $query()->where('phone', $phone)->first();
 
             if ($partner) {
                 return $partner;

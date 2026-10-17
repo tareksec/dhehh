@@ -1,17 +1,17 @@
 <header class="storefront-header sticky top-0 z-40 border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
     <div class="mx-auto flex min-h-[60px] w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-5 lg:px-6">
         <a class="flex min-h-10 min-w-0 items-center gap-2.5" href="{{ $homeUrl }}">
-            @if ($logoUrl)
-                <img class="h-9 w-auto max-w-[200px] shrink-0 object-contain sm:max-w-[240px] {{ $logoDarkUrl ? 'dark:hidden' : '' }}" src="{{ $logoUrl }}" alt="{{ $company->name }} logo" width="800" height="281">
-                @if ($logoDarkUrl)
-                    <img class="hidden h-9 w-auto max-w-[200px] shrink-0 object-contain sm:max-w-[240px] dark:block" src="{{ $logoDarkUrl }}" alt="{{ $company->name }} logo" width="800" height="281">
+            @if ($brandLogoUrl)
+                <img class="h-9 w-auto max-w-[200px] shrink-0 object-contain sm:max-w-[240px] {{ $brandLogoDarkUrl ? 'dark:hidden' : '' }}" src="{{ $brandLogoUrl }}" alt="{{ $brandName }} logo" width="800" height="281">
+                @if ($brandLogoDarkUrl)
+                    <img class="hidden h-9 w-auto max-w-[200px] shrink-0 object-contain sm:max-w-[240px] dark:block" src="{{ $brandLogoDarkUrl }}" alt="{{ $brandName }} logo" width="800" height="281">
                 @endif
-                <span class="sr-only">{{ $company->name }}</span>
+                <span class="sr-only">{{ $brandName }}</span>
             @else
                 <span class="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[var(--storefront-brand)] text-sm font-semibold text-white">
-                    {{ mb_substr($company->name, 0, 1) }}
+                    {{ mb_substr($brandName, 0, 1) }}
                 </span>
-                <span class="min-w-0 truncate text-base font-bold">{{ $company->name }}</span>
+                <span class="min-w-0 truncate text-base font-bold">{{ $brandName }}</span>
             @endif
         </a>
 
@@ -110,7 +110,7 @@
                                 Track an order
                             </a>
                             @if ($setting->reseller_program_enabled ?? true)
-                                <a class="flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white" href="{{ $resellerUrl }}" role="menuitem" @click="open = false">
+                                <a class="flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white" href="{{ in_array($authCustomer->reseller_status, [null, 'none'], true) ? $resellerUrl : ($resellerStatusUrl ?? $resellerUrl) }}" role="menuitem" @click="open = false">
                                     <svg class="h-5 w-5 shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372A9.337 9.337 0 0 0 21 18.872M15 19.128v-.003c0-1.113-.285-2.16-.786-3.071M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766v-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"/></svg>
                                     {{ in_array($authCustomer->reseller_status, [null, 'none'], true) ? 'Become a reseller' : 'Reseller status' }}
                                 </a>

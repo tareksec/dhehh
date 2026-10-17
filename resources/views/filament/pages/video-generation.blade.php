@@ -14,6 +14,13 @@
             <form wire:submit="generate" id="video-generation-form" class="space-y-6">
                 {{ $this->form }}
             </form>
+
+            @php($remaining = $this->remainingMonthlyAllowance())
+            @if (! is_null($remaining))
+                <p class="mt-4 text-xs {{ $remaining === 0 ? 'text-danger-600 dark:text-danger-400' : 'text-gray-500 dark:text-gray-400' }}">
+                    {{ __('Monthly allowance: :count video(s) left this month.', ['count' => $remaining]) }}
+                </p>
+            @endif
         </x-filament::section>
 
         <div
@@ -85,6 +92,57 @@
                                 >
                                     Download
                                 </x-filament::button>
+                                @if ($generation->isAttachable())
+                                    <x-filament::button
+                                        size="xs"
+                                        color="gray"
+                                        icon="heroicon-o-shopping-bag"
+                                        wire:click="mountAction('attachToProduct', { generation: {{ $generation->id }} })"
+                                    >
+                                        {{ __('Product') }}
+                                    </x-filament::button>
+                                    <x-filament::button
+                                        size="xs"
+                                        color="gray"
+                                        icon="heroicon-o-rectangle-group"
+                                        wire:click="mountAction('attachToOffer', { generation: {{ $generation->id }} })"
+                                    >
+                                        {{ __('Offer hero') }}
+                                    </x-filament::button>
+                                @endif
+                            </div>
+
+                            @if (in_array($generation->review_status, [\App\Models\GeneratedVideo::REVIEW_PENDING, \App\Models\GeneratedVideo::REVIEW_REJECTED], true))
+                                <div class="space-y-1">
+                                    <x-filament::badge :color="$generation->review_status === \App\Models\GeneratedVideo::REVIEW_PENDING ? 'warning' : 'danger'" icon="heroicon-o-shield-check">
+                                        {{ $generation->review_status === \App\Models\GeneratedVideo::REVIEW_PENDING ? __('Pending review — cannot be attached yet') : __('Rejected by a reviewer') }}
+                                    </x-filament::badge>
+                                    @if ($generation->review_note)
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('Reviewer’s note: :note', ['note' => $generation->review_note]) }}</p>
+                                    @endif
+                                </div>
+                            @endif
+
+                            <div class="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3 dark:border-white/5">
+                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                    @if ($generation->linkedLabel())
+                                        {{ __('Attached to') }} <span class="font-medium text-gray-700 dark:text-gray-300">{{ $generation->linkedLabel() }}</span>
+                                    @else
+                                        {{ __('Not attached to a record yet.') }}
+                                    @endif
+                                </p>
+
+                                <div class="flex flex-wrap items-center gap-2">
+                                    @include('filament.pages.partials.video-drive-status', ['video' => $generation])
+                                    <x-filament::button
+                                        size="xs"
+                                        :color="$generation->is_favorite ? 'warning' : 'gray'"
+                                        :icon="$generation->is_favorite ? 'heroicon-s-star' : 'heroicon-o-star'"
+                                        wire:click="mountAction('toggleFavorite', { generation: {{ $generation->id }} })"
+                                    >
+                                        {{ $generation->is_favorite ? __('Favourited') : __('Favourite') }}
+                                    </x-filament::button>
+                                </div>
                             </div>
                         @endif
                     </div>

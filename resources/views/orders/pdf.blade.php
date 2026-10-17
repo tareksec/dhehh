@@ -28,11 +28,34 @@
     </style>
 </head>
 <body>
-    @php($company = $company ?? ['name' => config('app.name', 'Business Dashboard'), 'currency' => 'BDT'])
-    @php($invoice = $invoice ?? \App\Services\CompanySettingsService::INVOICE_DEFAULTS)
-    @php($showImages = (bool) ($invoice['show_images'] ?? true))
-    @php($showWeight = (bool) ($invoice['show_weight'] ?? true))
-    @php($invoiceLogoPath = $company['logo_path'] ?? $company['dark_logo_path'] ?? null)
+    @php
+        $company = $company ?? ['name' => config('app.name', 'Business Dashboard'), 'currency' => 'BDT'];
+        $invoice = $invoice ?? \App\Services\CompanySettingsService::INVOICE_DEFAULTS;
+        $showImages = (bool) ($invoice['show_images'] ?? true);
+        $showWeight = (bool) ($invoice['show_weight'] ?? true);
+        $invoiceLogoPath = $company['logo_path'] ?? $company['dark_logo_path'] ?? null;
+        $currency = $company['currency'] ?? 'BDT';
+        $subTotal = (float) $order->subtotal;
+        $discount = (float) $order->discount;
+        $vat = (float) $order->vat;
+        $grandTotal = (float) $order->total_amount;
+        $paid = (float) $order->paid_amount;
+        $due = (float) $order->due_amount;
+        // Same buyer view as orders.partials.invoice: a reseller's own-courier
+        // customer sees only the reseller's store, logo and retail prices.
+        // Every reseller-portal order carries the reseller's name (owner rule, 2026-10-07).
+        $buyerView = $order->showsResellerPricesToBuyer();
+        if ($buyerView) {
+            $subTotal = $grandTotal = $due = $order->buyerTotal();
+            $discount = $vat = $paid = 0.0;
+        }
+        if ($order->showsResellerBranding()) {
+            $invoiceLogoPath = $resellerLogoPath ?? null;
+            $company = [...$company, 'name' => $order->reseller?->resellerStoreName() ?? '', 'address' => null, 'phone' => null, 'email' => null];
+            $invoice = [...$invoice, 'hotline' => null, 'support_hotline' => null, 'facebook_label' => null,
+                'whatsapp' => null, 'website' => null, 'thank_you' => null];
+        }
+    @endphp
     <div class="top">
         <div class="brand">
             @if (filled($invoiceLogoPath))
@@ -88,23 +111,27 @@
                     @endif
                     <td>{{ $item->product?->name }}</td>
                     @if ($showWeight)
-                        <td class="right">{{ $item->product?->weight_kg ? rtrim(rtrim(number_format((float) $item->product->weight_kg, 3), '0'), '.').' kg' : '—' }}</td>
+                        <td class="right">{{ $item->unitWeightKg() ? rtrim(rtrim(number_format($item->unitWeightKg(), 3), '0'), '.').' kg' : '—' }}</td>
                     @endif
                     <td class="right">{{ $item->quantity }}</td>
-                    <td class="right">{{ $company['currency'] ?? 'BDT' }} {{ \App\Support\MoneyFormatter::number((float) $item->unit_price) }}</td>
-                    <td class="right">{{ $company['currency'] ?? 'BDT' }} {{ \App\Support\MoneyFormatter::number((float) $item->subtotal) }}</td>
+                    <td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($buyerView ? $item->buyerUnitPrice() : (float) $item->unit_price) }}</td>
+                    <td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($buyerView ? $item->buyerSubtotal() : (float) $item->subtotal) }}</td>
                 </tr>
             @endforeach
         </tbody>
     </table>
 
     <table class="totals">
-        <tr><td>Subtotal</td><td class="right">{{ $company['currency'] ?? 'BDT' }} {{ \App\Support\MoneyFormatter::number((float) $order->subtotal) }}</td></tr>
-        <tr><td>Discount</td><td class="right">{{ $company['currency'] ?? 'BDT' }} {{ \App\Support\MoneyFormatter::number((float) $order->discount) }}</td></tr>
-        <tr><td>VAT</td><td class="right">{{ $company['currency'] ?? 'BDT' }} {{ \App\Support\MoneyFormatter::number((float) $order->vat) }}</td></tr>
-        <tr class="grand"><td>Total</td><td class="right">{{ $company['currency'] ?? 'BDT' }} {{ \App\Support\MoneyFormatter::number((float) $order->total_amount) }}</td></tr>
-        <tr><td>Paid</td><td class="right">{{ $company['currency'] ?? 'BDT' }} {{ \App\Support\MoneyFormatter::number((float) $order->paid_amount) }}</td></tr>
-        <tr><td>Due</td><td class="right">{{ $company['currency'] ?? 'BDT' }} {{ \App\Support\MoneyFormatter::number((float) $order->due_amount) }}</td></tr>
+        <tr><td>Subtotal</td><td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($subTotal) }}</td></tr>
+        @unless ($buyerView)
+            <tr><td>Discount</td><td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($discount) }}</td></tr>
+            <tr><td>VAT</td><td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($vat) }}</td></tr>
+        @endunless
+        <tr class="grand"><td>Total</td><td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($grandTotal) }}</td></tr>
+        @unless ($buyerView)
+            <tr><td>Paid</td><td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($paid) }}</td></tr>
+        @endunless
+        <tr><td>Due</td><td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($due) }}</td></tr>
     </table>
 
     <div class="footer">
@@ -128,7 +155,10 @@
             <p>Customer: {{ $order->customer?->name ?? $order->customer_name }}</p>
             <p>Phone: {{ $order->customer?->phone }}</p>
             <p>Address: {{ $order->customer?->address }}</p>
-            <p>COD: {{ $company['currency'] ?? 'BDT' }} {{ \App\Support\MoneyFormatter::number((float) $order->due_amount) }}</p>
+            <p>COD: {{ $currency }} {{ \App\Support\MoneyFormatter::number($due) }}</p>
+            @if ($buyerView && $order->reseller_parcel_id)
+                <p>Parcel ID: {{ $order->reseller_parcel_id }}{{ $order->reseller_courier_name ? ' ('.$order->reseller_courier_name.')' : '' }}</p>
+            @endif
             @if (! empty($invoice['show_barcode']))
                 <div>{!! \App\Support\Code128::svg($order->order_number, 40, 1) !!}</div>
             @endif

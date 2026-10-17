@@ -3,15 +3,35 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\NotifiesWebsiteOfStorefrontChanges;
 use App\Services\StorefrontMetaTrackingService;
 use App\Support\StorefrontListingCache;
+use App\Support\StorefrontSiteDesign;
 use App\Support\StorefrontThemeRegistry;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 
 class StorefrontSetting extends Model
 {
     use BelongsToCompany;
+    use NotifiesWebsiteOfStorefrontChanges;
+
+    /**
+     * A company can run more than one storefront, each with its own settings
+     * row. `blade` is the server-rendered Blade storefront (the reseller
+     * store) and every row that existed before sites were split; `nextjs` is
+     * the headless Next.js site (the main storefront), served through
+     * /api/v1/storefront/*. At most one row of each type per company.
+     */
+    public const SITE_BLADE = 'blade';
+
+    public const SITE_NEXTJS = 'nextjs';
+
+    public const SITE_TYPES = [
+        self::SITE_BLADE => 'Blade storefront (reseller store)',
+        self::SITE_NEXTJS => 'Next.js site (main storefront)',
+    ];
 
     public const CHECKOUT_POLICY_OFF = 'off';
 
@@ -280,6 +300,10 @@ class StorefrontSetting extends Model
         'contact_info' => 'Contact info',
         'social_links' => 'Social links',
         'bottom_bar' => 'Bottom bar (copyright & legal links)',
+        'custom_links' => 'Custom links column',
+        'custom_text' => 'Custom text',
+        'payment_methods' => 'Payment badges',
+        'image' => 'Image / badge',
     ];
 
     // Backward-compatible default: every company created before the footer
@@ -307,6 +331,7 @@ class StorefrontSetting extends Model
 
     protected $fillable = [
         'company_id',
+        'site_type',
         'storefront_theme',
         'homepage_template',
         'marketplace_announcement_enabled',
@@ -455,13 +480,32 @@ class StorefrontSetting extends Model
         'header_menu',
         'footer_menu',
         'footer_blocks',
+        'home_sections',
+        'site_design',
         'reseller_program_enabled',
+        'reseller_cost_per_unit',
+        'reseller_packaging_cost_per_unit',
+        'reseller_return_charge',
+        'reseller_min_withdrawal',
+        'reseller_subdomain_setup_minutes',
+        'reseller_guide_enabled',
+        'reseller_guide_intro',
+        'reseller_guide_rules',
+        'reseller_payment_method_ids',
+        'reseller_guide_show_figures',
+        'reseller_announcement_enabled',
+        'reseller_announcement',
         'social_links',
         'is_published',
+        'nextjs_site_enabled',
+        'nextjs_site_domain',
+        'nextjs_site_domain_verified',
     ];
 
     protected $casts = [
         'is_published' => 'boolean',
+        'nextjs_site_enabled' => 'boolean',
+        'nextjs_site_domain_verified' => 'boolean',
         'customer_accounts_enabled' => 'boolean',
         'marketplace_announcement_enabled' => 'boolean',
         'marketplace_quote_enabled' => 'boolean',
@@ -528,7 +572,19 @@ class StorefrontSetting extends Model
         'header_menu' => 'array',
         'footer_menu' => 'array',
         'footer_blocks' => 'array',
+        'home_sections' => 'array',
+        'site_design' => 'array',
         'reseller_program_enabled' => 'boolean',
+        'reseller_cost_per_unit' => 'decimal:2',
+        'reseller_packaging_cost_per_unit' => 'decimal:2',
+        'reseller_return_charge' => 'decimal:2',
+        'reseller_min_withdrawal' => 'decimal:2',
+        'reseller_subdomain_setup_minutes' => 'integer',
+        'reseller_guide_enabled' => 'boolean',
+        'reseller_guide_rules' => 'array',
+        'reseller_payment_method_ids' => 'array',
+        'reseller_guide_show_figures' => 'boolean',
+        'reseller_announcement_enabled' => 'boolean',
         'social_links' => 'array',
         'typography_base_size' => 'integer',
         'typography_heading_weight' => 'integer',
@@ -558,6 +614,181 @@ class StorefrontSetting extends Model
     public function footerBlocks(): array
     {
         return $this->footer_blocks ?: self::DEFAULT_FOOTER_BLOCKS;
+    }
+
+    /**
+     * The Next.js home page's sections in order (Home Page Builder), clean and
+     * bounded; the default layout while nothing is saved. The Blade storefront
+     * does not read this.
+     *
+     * @return list<array{type: string, data: array<string, mixed>}>
+     */
+    public function homeSections(): array
+    {
+        return StorefrontSiteDesign::homeSections($this->home_sections);
+    }
+
+    /** Top bar, header, footer colours and floating help button of the Next.js site, defaults filled in. */
+    public function siteDesign(): array
+    {
+        return StorefrontSiteDesign::design($this->site_design);
+    }
+
+    public function isNextjs(): bool
+    {
+        return $this->site_type === self::SITE_NEXTJS;
+    }
+
+    public function isBlade(): bool
+    {
+        return ! $this->isNextjs();
+    }
+
+    /**
+     * What an order or payment stores to remember its site: this row's id for
+     * a Next.js site, NULL for the Blade storefront (the default everywhere).
+     */
+    public function recordedSiteId(): ?int
+    {
+        return $this->isNextjs() ? (int) $this->getKey() : null;
+    }
+
+    public function scopeBlade(Builder $query): Builder
+    {
+        return $query->where($this->qualifyColumn('site_type'), self::SITE_BLADE);
+    }
+
+    public function scopeNextjs(Builder $query): Builder
+    {
+        return $query->where($this->qualifyColumn('site_type'), self::SITE_NEXTJS);
+    }
+
+    /**
+     * The company's Blade storefront settings (the reseller store). This is
+     * also what every company-level feature that predates the site split
+     * (WooCommerce, CRM messaging, reminders, the reseller program) reads.
+     * Looked up without the company scope so it works in jobs and webhooks.
+     */
+    public static function bladeFor(?int $companyId): ?self
+    {
+        return $companyId ? static::withoutGlobalScopes()->blade()->where('company_id', $companyId)->first() : null;
+    }
+
+    /** The company's Next.js site settings (the main storefront), if it has one. */
+    public static function nextjsFor(?int $companyId): ?self
+    {
+        return $companyId ? static::withoutGlobalScopes()->nextjs()->where('company_id', $companyId)->first() : null;
+    }
+
+    /**
+     * The row company-level features read (WooCommerce, CRM messaging, lead
+     * reminders): the Next.js site once the company has one — it is the main
+     * storefront — otherwise the Blade storefront. The reseller store and the
+     * Blade carts always use the Blade row (see bladeFor()).
+     */
+    public static function primaryFor(?int $companyId): ?self
+    {
+        return static::nextjsFor($companyId) ?? static::bladeFor($companyId);
+    }
+
+    public function isPrimary(): bool
+    {
+        return (bool) static::primaryFor((int) $this->company_id)?->is($this);
+    }
+
+    /**
+     * "Show on" choices for a slide or page: each of the company's sites,
+     * keyed by its settings row id. "All sites" is the empty choice.
+     *
+     * @return array<int, string>
+     */
+    public static function siteChoicesFor(?int $companyId): array
+    {
+        if (! $companyId) {
+            return [];
+        }
+
+        return static::withoutGlobalScopes()
+            ->with('company')
+            ->where('company_id', $companyId)
+            ->orderBy('site_type')
+            ->get()
+            ->mapWithKeys(fn (self $row): array => [$row->getKey() => $row->siteTypeLabel().' · '.($row->siteDomain() ?: '—')])
+            ->all();
+    }
+
+    /** Domain this site is served on: the company's storefront domain, or the Next.js site's own. */
+    public function siteDomain(): ?string
+    {
+        return $this->isNextjs() ? $this->nextjs_site_domain : $this->company?->domain;
+    }
+
+    public function siteTypeLabel(): string
+    {
+        return __(self::SITE_TYPES[$this->site_type ?: self::SITE_BLADE] ?? self::SITE_TYPES[self::SITE_BLADE]);
+    }
+
+    /**
+     * Whether the company's headless Next.js storefront may read the ERP's
+     * /api/v1/storefront/* endpoints. A domain is not required to be set yet
+     * so the site can be developed against the API before it goes live.
+     */
+    public function nextjsSiteEnabled(): bool
+    {
+        return $this->isNextjs() && (bool) $this->nextjs_site_enabled;
+    }
+
+    /**
+     * Whether $host is the Next.js site domain of a company other than
+     * $exceptCompanyId. Looked up without the company scope: a domain is
+     * global across all companies, exactly like `companies.domain`.
+     */
+    public static function nextjsDomainTaken(?string $host, ?int $exceptCompanyId = null): bool
+    {
+        $host = Company::normalizeDomain($host);
+
+        if ($host === null) {
+            return false;
+        }
+
+        return static::withoutGlobalScopes()
+            ->nextjs()
+            ->where('nextjs_site_domain', $host)
+            ->when($exceptCompanyId, fn ($query) => $query->where('company_id', '!=', $exceptCompanyId))
+            ->exists();
+    }
+
+    /**
+     * Why $domain cannot be a company's Next.js site domain, or null when it
+     * is free. A domain is global: it may not already be a storefront or
+     * reseller-portal domain, a reseller's own store domain, or another
+     * company's Next.js site.
+     */
+    public static function nextjsDomainConflict(?string $domain, ?int $companyId = null): ?string
+    {
+        $host = Company::normalizeDomain($domain);
+
+        if ($host === null) {
+            return null;
+        }
+
+        $usedByCompany = Company::withoutGlobalScopes()
+            ->where(fn ($query) => $query->where('domain', $host)->orWhere('reseller_portal_domain', $host))
+            ->exists();
+
+        if ($usedByCompany) {
+            return __('This domain is already used as a storefront or portal domain.');
+        }
+
+        if (Customer::withoutGlobalScopes()->where('reseller_custom_domain', $host)->exists()) {
+            return __('This domain is already used as a reseller store domain.');
+        }
+
+        if (static::nextjsDomainTaken($host, $companyId)) {
+            return __('This domain is already used by another Next.js site.');
+        }
+
+        return null;
     }
 
     protected static function booted(): void
@@ -624,6 +855,10 @@ class StorefrontSetting extends Model
             $setting->marketplace_sidebar_enabled ??= true;
             $setting->marketplace_product_limit ??= 10;
             $setting->reseller_program_enabled ??= true;
+            $setting->reseller_guide_enabled ??= true;
+            $setting->reseller_guide_show_figures ??= false;
+            $setting->reseller_announcement_enabled ??= false;
+            $setting->reseller_subdomain_setup_minutes ??= 10;
         });
 
         static::saved(function (StorefrontSetting $setting): void {

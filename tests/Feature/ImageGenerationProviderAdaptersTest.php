@@ -8,6 +8,7 @@ use App\Services\ImageGeneration\ImageProviderResolver;
 use App\Services\ImageGeneration\Providers\CustomOpenAiCompatibleProvider;
 use App\Services\ImageGeneration\Providers\GoogleImageProvider;
 use App\Services\ImageGeneration\Providers\OpenAiImageProvider;
+use App\Services\ImageGeneration\Providers\OpenRouterImageProvider;
 use App\Services\ImageGeneration\Providers\StabilityImageProvider;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -163,6 +164,7 @@ class ImageGenerationProviderAdaptersTest extends TestCase
         $this->assertInstanceOf(OpenAiImageProvider::class, $resolver->byFormat('openai'));
         $this->assertInstanceOf(GoogleImageProvider::class, $resolver->byFormat('google'));
         $this->assertInstanceOf(StabilityImageProvider::class, $resolver->byFormat('stability'));
+        $this->assertInstanceOf(OpenRouterImageProvider::class, $resolver->byFormat('openrouter'));
         $this->assertInstanceOf(CustomOpenAiCompatibleProvider::class, $resolver->byFormat('custom'));
         $this->assertFalse($resolver->supports('midjourney'));
 
@@ -181,9 +183,11 @@ class ImageGenerationProviderAdaptersTest extends TestCase
         $this->assertTrue(app(StabilityImageProvider::class)->supportsOperation($i2i));
         $this->assertTrue(app(StabilityImageProvider::class)->supportsOperation($bg));
         $this->assertFalse(app(GoogleImageProvider::class)->supportsOperation($i2i));
+        $this->assertTrue(app(OpenRouterImageProvider::class)->supportsOperation($i2i));
+        $this->assertFalse(app(OpenRouterImageProvider::class)->supportsOperation($bg));
 
         $resolver = app(ImageProviderResolver::class);
-        $this->assertEqualsCanonicalizing(['openai', 'stability', 'custom'], $resolver->formatsSupporting($i2i));
+        $this->assertEqualsCanonicalizing(['openai', 'stability', 'openrouter', 'custom'], $resolver->formatsSupporting($i2i));
         $this->assertSame(['stability'], $resolver->formatsSupporting($bg));
     }
 
@@ -232,6 +236,70 @@ class ImageGenerationProviderAdaptersTest extends TestCase
 
         $this->assertSame($png, $result->images[0]);
         Http::assertSent(fn ($request): bool => $request->url() === 'https://self-hosted.local/v1/images/edits');
+    }
+
+    public function test_openrouter_adapter_posts_to_the_images_endpoint_and_decodes_base64(): void
+    {
+        $png = $this->pngBytes();
+        Http::fake(['openrouter.ai/api/v1/images' => Http::response(['data' => [['b64_json' => base64_encode($png), 'media_type' => 'image/png']], 'usage' => ['cost' => 0.01]], 200)]);
+
+        $result = app(OpenRouterImageProvider::class)->generate($this->request([
+            'model' => 'google/gemini-2.5-flash-image',
+            'apiKey' => 'sk-or-test',
+        ]));
+
+        $this->assertSame($png, $result->images[0]);
+        $this->assertSame('OpenRouter', $result->meta['provider']);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://openrouter.ai/api/v1/images'
+            && $request->hasHeader('Authorization', 'Bearer sk-or-test')
+            && $request['model'] === 'google/gemini-2.5-flash-image'
+            && $request['aspect_ratio'] === '1:1'
+            && ! array_key_exists('input_references', $request->data()));
+    }
+
+    public function test_openrouter_image_to_image_sends_the_source_as_an_input_reference(): void
+    {
+        $png = $this->pngBytes();
+        $reference = $this->pngBytes(8, 8);
+        Http::fake(['openrouter.ai/api/v1/images' => Http::response(['data' => [['b64_json' => base64_encode($png)]]], 200)]);
+
+        $result = app(OpenRouterImageProvider::class)->generate($this->request([
+            'operation' => ImageGenerationRequest::OP_IMAGE_TO_IMAGE,
+            'referenceImage' => $reference,
+            'apiKey' => 'sk-or-test',
+        ]));
+
+        $this->assertSame($png, $result->images[0]);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://openrouter.ai/api/v1/images'
+            && data_get($request->data(), 'input_references.0.url') === 'data:image/png;base64,'.base64_encode($reference));
+    }
+
+    /**
+     * Admins commonly enter the bare API root (the convention every
+     * OpenAI-SDK-compatible client documents), not the full `/images` path —
+     * confirms that override is completed rather than used verbatim.
+     */
+    public function test_openrouter_adapter_appends_images_to_a_bare_base_url_override(): void
+    {
+        $png = $this->pngBytes();
+        Http::fake(['openrouter.ai/api/v1/images' => Http::response(['data' => [['b64_json' => base64_encode($png)]]], 200)]);
+
+        app(OpenRouterImageProvider::class)->generate($this->request([
+            'apiKey' => 'sk-or-test',
+            'baseUrl' => 'https://openrouter.ai/api/v1',
+        ]));
+
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://openrouter.ai/api/v1/images');
+    }
+
+    public function test_openrouter_adapter_requires_an_api_key(): void
+    {
+        Http::fake();
+
+        $this->expectException(ImageGenerationException::class);
+        $this->expectExceptionMessageMatches('/needs an API key/');
+
+        app(OpenRouterImageProvider::class)->generate($this->request(['apiKey' => null]));
     }
 
     public function test_stability_image_to_image_uses_the_sd3_endpoint_with_strength(): void

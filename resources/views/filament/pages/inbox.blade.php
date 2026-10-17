@@ -801,6 +801,12 @@
                                             @endif
 
                                             <div class="flex flex-wrap items-center justify-end gap-2 text-xs opacity-80">
+                                                @if ($message->revoked_at)
+                                                    <span class="inline-flex items-center gap-1" title="{{ __('Deleted for everyone on WhatsApp - the ERP keeps the original copy') }}">
+                                                        <x-filament::icon icon="heroicon-o-trash" class="h-3 w-3" />
+                                                        {{ __('Deleted on WhatsApp') }}
+                                                    </span>
+                                                @endif
                                                 @if ($message->generated_by === 'ai')
                                                     <span>AI assistant</span>
                                                 @elseif ($message->generated_by === 'page')

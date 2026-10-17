@@ -24,7 +24,7 @@ class ConversationMessage extends Model
     protected $fillable = [
         'conversation_id', 'direction', 'type', 'body', 'media_path', 'media_mime',
         'external_message_id', 'delivery_status', 'delivery_channel', 'sent_by', 'generated_by',
-        'ai_confidence', 'ai_meta', 'raw_payload', 'sent_at',
+        'ai_confidence', 'ai_meta', 'raw_payload', 'sent_at', 'revoked_at',
     ];
 
     protected $casts = [
@@ -32,6 +32,7 @@ class ConversationMessage extends Model
         'ai_meta' => 'array',
         'ai_confidence' => 'decimal:3',
         'sent_at' => 'datetime',
+        'revoked_at' => 'datetime',
     ];
 
     protected static function booted(): void

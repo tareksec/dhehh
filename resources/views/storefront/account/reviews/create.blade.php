@@ -1,10 +1,8 @@
 @extends('storefront.account.layout')
 
 @php
-    $storeUrl = isset($previewSlug)
-        ? route('storefront.preview.account.reviews.store', [$previewSlug, $order->order_number])
-        : route('storefront.account.reviews.store', $order->order_number);
-    $ordersUrl = isset($previewSlug) ? route('storefront.preview.account.orders', $previewSlug) : route('storefront.account.orders');
+    $storeUrl = \App\Support\StorefrontUrl::route('account.reviews.store', [$order->order_number], $previewSlug ?? null);
+    $ordersUrl = \App\Support\StorefrontUrl::route('account.orders', [], $previewSlug ?? null);
 @endphp
 
 @section('account-content')

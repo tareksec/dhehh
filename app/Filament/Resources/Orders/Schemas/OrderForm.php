@@ -6,16 +6,18 @@ use App\Filament\Forms\Components\CustomerSourceSelect;
 use App\Filament\Forms\Components\CustomerTypeSelect;
 use App\Filament\Forms\Components\EmailInput;
 use App\Filament\Forms\Components\PhoneInput;
+use App\Filament\Pages\FraudChecker;
 use App\Models\CourierProvider;
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\OrderPayment;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Services\CompanyContext;
-use App\Services\CustomerRiskSettingsService;
 use App\Services\ExternalCourierFraudService;
 use App\Services\ShippingFeeService;
+use App\Support\FraudCheckReport;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -29,6 +31,7 @@ use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Components\Html;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -36,6 +39,15 @@ use Illuminate\Support\HtmlString;
 
 class OrderForm
 {
+    /**
+     * Every input that feeds Total amount / Due amount recalculates this many
+     * milliseconds after typing stops. They used to recalculate only on blur
+     * (`live(onBlur: true)`), but on a phone the keyboard is usually dismissed
+     * without the field losing focus, so a typed Shipping Fee never reached
+     * the Total amount (owner report, 2026-10-10).
+     */
+    public const TOTALS_DEBOUNCE_MS = 500;
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -106,7 +118,7 @@ class OrderForm
                         Flex::make([
                             Actions::make([
                                 Action::make('checkExternalCourierFraud')
-                                    ->label('Courier Fraud Check')
+                                    ->label(__('Courier Fraud Check'))
                                     ->icon('heroicon-o-shield-exclamation')
                                     ->color('warning')
                                     ->action(function (Get $get, Set $set): void {
@@ -114,7 +126,7 @@ class OrderForm
 
                                         if (! $customer?->phone) {
                                             Notification::make()
-                                                ->title('Select a customer with a phone number first')
+                                                ->title(__('Select a customer with a phone number first'))
                                                 ->warning()
                                                 ->send();
 
@@ -127,67 +139,19 @@ class OrderForm
 
                             Html::make(function (Get $get): HtmlString {
                                 $result = $get('external_fraud_result');
+                                $customer = Customer::find($get('customer_id'));
 
-                                if (! is_array($result)) {
+                                if (! is_array($result) || ! $customer?->phone) {
                                     return new HtmlString('');
                                 }
 
-                                $ratio = $result['overall_success_ratio'] ?? null;
-                                $threshold = app(CustomerRiskSettingsService::class)
-                                    ->int('external_fraud_low_ratio_threshold');
+                                $phone = app(ExternalCourierFraudService::class)->normalizePhone($customer->phone);
 
-                                [$color, $label] = match (true) {
-                                    $ratio === null => ['#9ca3af', 'No courier history found'],
-                                    $ratio < $threshold => ['#ef4444', "High risk — {$ratio}% success"],
-                                    default => ['#22c55e', "Good — {$ratio}% success"],
-                                };
-
-                                $rows = collect($result)
-                                    ->except('overall_success_ratio')
-                                    ->map(function (array $stats, string $driver): string {
-                                        $total = max(1, (int) $stats['total']);
-                                        $successRate = round(($stats['success'] / $total) * 100, 1);
-
-                                        return '<tr>'
-                                            .'<td style="padding:2px 10px 2px 0;font-weight:600;">'.e(ucfirst($driver)).'</td>'
-                                            .'<td style="padding:2px 10px;text-align:right;">'.e((string) $stats['total']).'</td>'
-                                            .'<td style="padding:2px 10px;text-align:right;color:#22c55e;">'.e((string) $stats['success']).'</td>'
-                                            .'<td style="padding:2px 10px;text-align:right;color:#ef4444;">'.e((string) $stats['cancel']).'</td>'
-                                            .'<td style="padding:2px 0;text-align:right;">'.e((string) $successRate).'%</td>'
-                                            .'</tr>';
-                                    })
-                                    ->implode('');
-
-                                $table = $rows !== ''
-                                    ? '<div style="overflow-x:auto;max-width:100%;">'
-                                        .'<table style="font-size:0.8125rem;opacity:0.85;border-collapse:collapse;font-variant-numeric:tabular-nums;white-space:nowrap;">'
-                                        .'<thead><tr style="opacity:0.6;">'
-                                        .'<th style="text-align:left;padding:2px 10px 2px 0;">Courier</th>'
-                                        .'<th style="padding:2px 10px;text-align:right;">Total</th>'
-                                        .'<th style="padding:2px 10px;text-align:right;">Delivered</th>'
-                                        .'<th style="padding:2px 10px;text-align:right;">Undelivered</th>'
-                                        .'<th style="padding:2px 0;text-align:right;">Confidence</th>'
-                                        .'</tr></thead><tbody>'.$rows.'</tbody></table>'
-                                        .'</div>'
-                                    : '';
-
-                                // Steadfast's fraud-check API also says how many
-                                // other merchants have reported this customer.
-                                $reports = collect($result)
-                                    ->except('overall_success_ratio')
-                                    ->filter(fn (array $stats): bool => ($stats['reports'] ?? 0) > 0)
-                                    ->map(fn (array $stats, string $driver): string => '<span style="color:#ef4444;font-size:0.8125rem;">'
-                                        .e(__(':courier: :count fraud reports from other merchants', ['courier' => ucfirst($driver), 'count' => $stats['reports']]))
-                                        .'</span>')
-                                    ->implode('');
-
-                                return new HtmlString(
-                                    '<div style="display:flex;flex-direction:column;gap:4px;font-size:0.875rem;min-width:0;max-width:100%;">'
-                                    .'<span style="color:'.$color.';font-weight:600;">'.e($label).'</span>'
-                                    .$table
-                                    .$reports
-                                    .'</div>'
-                                );
+                                return new HtmlString(view('filament.fraud-check.compact', [
+                                    'report' => new FraudCheckReport($result, $phone, (int) (app(CompanyContext::class)->id() ?? $customer->company_id)),
+                                    'fullReportUrl' => FraudChecker::canAccess() ? FraudChecker::getUrl(['phone' => $phone], panel: 'admin') : null,
+                                    'storeData' => true,
+                                ])->render());
                             }),
                         ])
                             // Stacks the button above the result (full width on
@@ -251,9 +215,16 @@ class OrderForm
 
                 Section::make('Items')
                     ->columnSpanFull()
+                    ->description(fn (?Order $record): ?string => $record?->reseller_own_courier
+                        ? __('The reseller sends this order with their own courier and has paid for these items in advance, so only the reseller can add or change items, from the reseller portal.')
+                        : null)
                     ->schema([
                         Repeater::make('items')
                             ->relationship()
+                            // Owner rule (2026-10-06): staff never add or change
+                            // items on an own-courier order; a disabled repeater
+                            // is not saved either.
+                            ->disabled(fn (?Order $record): bool => (bool) $record?->reseller_own_courier)
                             ->table([
                                 TableColumn::make('Product'),
                                 TableColumn::make('Variation'),
@@ -264,10 +235,23 @@ class OrderForm
                             ->schema([
                                 Select::make('product_id')
                                     ->label('Product')
-                                    ->relationship('product', 'name', fn ($query) => $query->where('is_active', true))
+                                    // Active products only, except the one this line already
+                                    // has: an old order's product may have been switched off
+                                    // (a Nuport import creates its missing products inactive),
+                                    // and its name must still show on the edit page.
+                                    ->relationship('product', 'name', fn ($query, ?OrderItem $record) => $query->where(
+                                        fn ($products) => $products
+                                            ->where('is_active', true)
+                                            ->when($record?->product_id, fn ($products, $productId) => $products->orWhere($products->getModel()->getQualifiedKeyName(), $productId)),
+                                    ))
                                     ->searchable()
                                     ->live()
                                     ->required()
+                                    // Admin-only tag: nothing the customer sees shows it.
+                                    ->belowContent(Text::make(__('Upsell'))
+                                        ->badge()
+                                        ->color('success')
+                                        ->visible(fn (?OrderItem $record): bool => (bool) $record?->is_upsell))
                                     ->afterStateUpdated(function (Get $get, Set $set, $state): void {
                                         $product = Product::find($state);
 
@@ -324,7 +308,7 @@ class OrderForm
                                     ->minValue(1)
                                     ->default(1)
                                     ->required()
-                                    ->live(onBlur: true)
+                                    ->live(debounce: self::TOTALS_DEBOUNCE_MS)
                                     ->afterStateUpdated(function (Get $get, Set $set): void {
                                         self::setItemSubtotal($get, $set);
                                         self::setOrderTotalsFromRepeater($get, $set);
@@ -335,7 +319,7 @@ class OrderForm
                                     ->prefix('৳')
                                     ->minValue(0)
                                     ->required()
-                                    ->live(onBlur: true)
+                                    ->live(debounce: self::TOTALS_DEBOUNCE_MS)
                                     ->afterStateUpdated(function (Get $get, Set $set): void {
                                         self::setItemSubtotal($get, $set);
                                         self::setOrderTotalsFromRepeater($get, $set);
@@ -348,6 +332,11 @@ class OrderForm
                             ])
                             ->columns(4)
                             ->defaultItems(1)
+                            // An item added after the order was created is an
+                            // upsell (owner request, 2026-10-05).
+                            ->mutateRelationshipDataBeforeCreateUsing(fn (array $data, string $operation): array => $operation === 'edit'
+                                ? [...$data, 'is_upsell' => true]
+                                : $data)
                             ->addActionLabel('Add item')
                             ->reorderable(false)
                             ->live()
@@ -371,7 +360,7 @@ class OrderForm
                             ->default(0)
                             ->minValue(0)
                             ->required()
-                            ->live(onBlur: true)
+                            ->live(debounce: self::TOTALS_DEBOUNCE_MS)
                             ->afterStateUpdated(fn (Get $get, Set $set) => self::setOrderTotals($get, $set)),
 
                         TextInput::make('vat')
@@ -380,7 +369,7 @@ class OrderForm
                             ->default(0)
                             ->minValue(0)
                             ->required()
-                            ->live(onBlur: true)
+                            ->live(debounce: self::TOTALS_DEBOUNCE_MS)
                             ->afterStateUpdated(fn (Get $get, Set $set) => self::setOrderTotals($get, $set)),
 
                         Hidden::make('shipping_zone'),
@@ -392,11 +381,21 @@ class OrderForm
                             ->default(0)
                             ->minValue(0)
                             ->required()
-                            ->live(onBlur: true)
+                            ->live(debounce: self::TOTALS_DEBOUNCE_MS)
                             ->helperText(fn (Get $get): ?string => $get('shipping_zone')
                                 ? 'Auto-detected zone: '.ucfirst($get('shipping_zone')).'. Adjust if needed.'
                                 : 'Could not detect a zone from the customer address — set manually if needed.')
                             ->afterStateUpdated(fn (Get $get, Set $set) => self::setOrderTotals($get, $set)),
+
+                        // Set when a reseller's own-courier order is placed
+                        // (per-piece packaging charge); shown only on those.
+                        TextInput::make('packaging_fee')
+                            ->label(__('Packaging charge'))
+                            ->numeric()
+                            ->prefix('৳')
+                            ->readOnly()
+                            ->dehydrated(false)
+                            ->visible(fn (Get $get): bool => (float) ($get('packaging_fee') ?? 0) > 0),
 
                         TextInput::make('total_amount')
                             ->numeric()
@@ -409,7 +408,7 @@ class OrderForm
                             ->default(0)
                             ->minValue(0)
                             ->required()
-                            ->live(onBlur: true)
+                            ->live(debounce: self::TOTALS_DEBOUNCE_MS)
                             ->afterStateUpdated(fn (Get $get, Set $set) => self::setOrderTotals($get, $set))
                             // Once the order exists, paid_amount is derived from the
                             // Payments History ledger (OrderPayment rows, recomputed by
@@ -490,7 +489,8 @@ class OrderForm
             $subtotal
             - (float) ($get($prefix.'discount') ?? 0)
             + (float) ($get($prefix.'vat') ?? 0)
-            + (float) ($get($prefix.'shipping_fee') ?? 0),
+            + (float) ($get($prefix.'shipping_fee') ?? 0)
+            + (float) ($get($prefix.'packaging_fee') ?? 0),
             0
         );
         $due = max($total - (float) ($get($prefix.'paid_amount') ?? 0), 0);

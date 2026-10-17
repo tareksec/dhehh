@@ -15,9 +15,9 @@ class SettlementService
 {
     /**
      * @param  string  $outcome  profit | loss_investor_borne | loss_manager_borne
-     *                            (v3 P1.3 — deed clause 4 / channel-partner
-     *                            agreement clause 4). Ignored when net profit is
-     *                            positive.
+     *                           (v3 P1.3 — deed clause 4 / channel-partner
+     *                           agreement clause 4). Ignored when net profit is
+     *                           positive.
      */
     public function calculateAndSettle(
         InvestmentProject $project,
@@ -61,7 +61,9 @@ class SettlementService
                 }
             }
 
-            $investments = $lockedProject->investments()->with('investor')->get();
+            // Owner (2026-09-28): an investment leaves the settlement from the
+            // moment its principal is withdrawn.
+            $investments = $lockedProject->investments()->active()->with('investor')->get();
             $externalInvested = round((float) $investments->sum('amount'), 2);
 
             if ($externalInvested <= 0) {
@@ -78,10 +80,18 @@ class SettlementService
             $netProfit = round($totalRevenue - $totalCost, 2);
 
             $grouped = $investments->groupBy('investor_id');
+            $isGroupProject = filled($lockedProject->group_id);
 
             if ($netProfit < 0) {
                 if (! in_array($outcome, ['loss_investor_borne', 'loss_manager_borne'], true)) {
                     throw new RuntimeException('Net profit is negative. Choose how the loss is borne (per the contract) and give a reason.');
+                }
+
+                // In a group the principal stays invested in the next project. A loss that
+                // eats into it needs the owner's rule for reducing a member's stake, which
+                // is not decided yet: never settle it silently.
+                if ($isGroupProject && $outcome === 'loss_investor_borne') {
+                    throw new RuntimeException(__('A loss borne by the investors cannot be settled on a group project yet: it needs the owner\'s rule for reducing a member\'s stake. Settle it as "company bears the loss", or ask for this rule to be built.'));
                 }
                 if (blank($lossReason)) {
                     throw new RuntimeException('A loss reason is required when settling a losing project.');
@@ -112,33 +122,36 @@ class SettlementService
                 'settled_at' => now(),
             ]);
 
+            // A group's members stay in the group, so their principal carries on into the
+            // next project and only the profit is paid. A member whose withdrawal notice
+            // matured at the end of this project gets the principal back as well.
+            $principalLeaving = $isGroupProject ? $this->principalLeaving($lockedProject, $investments) : [];
+
             foreach ($figures['payout_rows'] as $row) {
+                $principalReturned = $isGroupProject ? round($principalLeaving[$row['investor_id']] ?? 0.0, 2) : $row['principal'];
+
                 SettlementPayout::query()->create([
                     'company_id' => $lockedProject->company_id,
                     'settlement_id' => $settlement->id,
                     'investor_id' => $row['investor_id'],
                     'investment_amount' => $row['principal'],
+                    'principal_returned_amount' => $isGroupProject ? $principalReturned : null,
                     'profit_share_amount' => $row['profit_share'],
-                    'total_payout' => round($row['principal'] + $row['profit_share'], 2),
+                    'total_payout' => round($principalReturned + $row['profit_share'], 2),
                     'recipient_name' => $row['recipient_name'],
                 ]);
             }
 
-            $partnerIds = $investments->pluck('investor.channel_partner_id')->filter()->unique()->values();
-
-            if ($partnerIds->count() > 1) {
-                throw new RuntimeException('A project currently supports only one channel partner.');
-            }
-
-            $partnerId = $partnerIds->first();
-
-            if ($partnerId && $figures['channel_payout'] > 0) {
-                ChannelPartnerPayout::query()->create([
-                    'company_id' => $lockedProject->company_id,
-                    'settlement_id' => $settlement->id,
-                    'investor_id' => $partnerId,
-                    'amount' => $figures['channel_payout'],
-                ]);
+            // Several partners per project (owner, 2026-09-28): one payout each.
+            foreach ($figures['partner_rows'] as $partnerId => $amount) {
+                if ($amount > 0) {
+                    ChannelPartnerPayout::query()->create([
+                        'company_id' => $lockedProject->company_id,
+                        'settlement_id' => $settlement->id,
+                        'channel_partner_id' => $partnerId,
+                        'amount' => $amount,
+                    ]);
+                }
             }
 
             $lockedProject->forceFill(['status' => 'settled'])->saveQuietly();
@@ -154,6 +167,22 @@ class SettlementService
 
             return $settlement->load(['payouts', 'channelPartnerPayouts']);
         });
+    }
+
+    /**
+     * Principal that goes back with this project's payouts, per investor: the
+     * rows of members who leave the group at the end of this project.
+     *
+     * @return array<int, float> investor id => amount
+     */
+    private function principalLeaving(InvestmentProject $project, Collection $investments): array
+    {
+        return $investments->load('groupMember')
+            ->filter(fn ($investment): bool => $investment->groupMember !== null
+                && (int) $investment->groupMember->leaves_after_sequence === (int) $project->sequence_in_group)
+            ->groupBy('investor_id')
+            ->map(fn (Collection $rows): float => round((float) $rows->sum('amount'), 2))
+            ->all();
     }
 
     /** Promote a reviewed draft settlement to confirmed (v3 P1.4). */
@@ -206,7 +235,7 @@ class SettlementService
     }
 
     /**
-     * @return array{investor_pool: float, channel_payout: float, company_net: float, annualized: float|null, rate_per_lac: float|null, payout_rows: list<array{investor_id:int, principal:float, profit_share:float, recipient_name:string}>}
+     * @return array{investor_pool: float, channel_payout: float, partner_rows: array<int, float>, company_net: float, annualized: float|null, rate_per_lac: float|null, payout_rows: list<array{investor_id:int, principal:float, profit_share:float, recipient_name:string}>}
      */
     private function allocateProfit(
         InvestmentProject $project,
@@ -214,8 +243,8 @@ class SettlementService
         float $externalInvested,
         float $capitalBase,
         float $companyContribution,
-        \Illuminate\Support\Collection $investments,
-        \Illuminate\Support\Collection $grouped,
+        Collection $investments,
+        Collection $grouped,
     ): array {
         $investorPool = round($netProfit * ((float) $project->investor_share_percent / 100), 2);
         $configuredChannelPool = round($netProfit * ((float) $project->channel_partner_share_percent / 100), 2);
@@ -223,10 +252,14 @@ class SettlementService
         // The channel partner's 10% is prorated over EXTERNAL investor capital
         // only — the company's own gap-fill contribution is neither "referred"
         // nor "direct investor" capital, so it never enters this calculation.
-        $partnerReferredCapital = round((float) $investments
+        // Each partner gets the pool's share for the capital of the investors
+        // they brought in (owner, 2026-09-28: several partners per project).
+        $partnerRows = $investments
             ->filter(fn ($investment) => filled($investment->investor->channel_partner_id))
-            ->sum('amount'), 2);
-        $channelPayout = round($configuredChannelPool * ($partnerReferredCapital / $externalInvested), 2);
+            ->groupBy(fn ($investment) => (int) $investment->investor->channel_partner_id)
+            ->map(fn (Collection $referred): float => round($configuredChannelPool * ((float) $referred->sum('amount') / $externalInvested), 2))
+            ->all();
+        $channelPayout = round(array_sum($partnerRows), 2);
 
         $ratePerLac = round($investorPool / max($capitalBase / 100000, 0.01), 2);
 
@@ -266,6 +299,7 @@ class SettlementService
         return [
             'investor_pool' => $investorPool,
             'channel_payout' => $channelPayout,
+            'partner_rows' => $partnerRows,
             'company_net' => round($netProfit - $allocatedProfit - $channelPayout, 2),
             'annualized' => $annualizedReturn,
             'rate_per_lac' => $ratePerLac,
@@ -279,13 +313,13 @@ class SettlementService
      * capital — unless it was the company's negligence or breach, in which case
      * the company bears all of it and investors get their principal back.
      *
-     * @return array{investor_pool: float, channel_payout: float, company_net: float, annualized: null, rate_per_lac: float|null, payout_rows: list<array{investor_id:int, principal:float, profit_share:float, recipient_name:string}>}
+     * @return array{investor_pool: float, channel_payout: float, partner_rows: array<int, float>, company_net: float, annualized: null, rate_per_lac: float|null, payout_rows: list<array{investor_id:int, principal:float, profit_share:float, recipient_name:string}>}
      */
     private function allocateLoss(
         string $outcome,
         float $netProfit,
         float $capitalBase,
-        \Illuminate\Support\Collection $grouped,
+        Collection $grouped,
     ): array {
         $loss = round(-$netProfit, 2); // positive
         $payoutRows = [];
@@ -304,6 +338,7 @@ class SettlementService
             return [
                 'investor_pool' => 0.0,
                 'channel_payout' => 0.0,
+                'partner_rows' => [],
                 'company_net' => round($netProfit, 2), // company eats the whole loss
                 'annualized' => null,
                 'rate_per_lac' => null,
@@ -332,6 +367,7 @@ class SettlementService
         return [
             'investor_pool' => $investorPool,
             'channel_payout' => 0.0,
+            'partner_rows' => [],
             // netProfit is negative; adding back what investors bear leaves the
             // company's own gap-fill share of the loss (also negative, or zero).
             'company_net' => round($netProfit + $externalLossBorne, 2),

@@ -30,7 +30,8 @@ class InvestorContractDownloadController extends Controller
             && $user->canAccessCompany((int) $company->getKey()),
             404,
         );
-        abort_unless($user->hasPermission('investments.view'), 403);
+        // Signed contracts are visible to investments.manage only (owner's rule).
+        abort_unless($user->hasPermission('investments.manage'), 403);
         abort_if(blank($record->contract_document_path), 404);
 
         try {

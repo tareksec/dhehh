@@ -26,7 +26,6 @@ return [
         'address' => ['address', 'present address', 'permanent address', 'ঠিকানা', 'বর্তমান ঠিকানা', 'স্থায়ী ঠিকানা'],
         'stamp_number' => ['stamp', 'stamp no', 'stamp number', 'স্ট্যাম্প', 'স্ট্যাম্প নম্বর', 'স্ট্যাম্প নং', 'স্ট্যাম্প নাম্বার'],
         'cheque_number' => ['cheque', 'cheque no', 'cheque number', 'check no', 'check number', 'চেক', 'চেক নম্বর', 'চেক নং', 'চেক নাম্বার'],
-        'is_channel_partner' => ['is channel partner', 'is partner', 'also channel partner', 'চ্যানেল পার্টনার কি না'],
         'channel_partner' => ['channel partner', 'channel partner phone', 'channel partner name', 'referred by', 'reference', 'referrer', 'চ্যানেল পার্টনার', 'রেফারেন্স', 'রেফার করেছেন'],
         'nominee_name' => ['nominee', 'nominee name', 'নমিনি', 'নমিনির নাম'],
         'nominee_nid_or_passport' => ['nominee nid', 'nominee nid / passport', 'nominee nid or passport', 'nominee passport', 'নমিনি nid', 'নমিনি nid / passport', 'নমিনির nid', 'নমিনির nid / passport', 'নমিনির এনআইডি', 'নমিনি এনআইডি', 'নমিনির জাতীয় পরিচয়পত্র'],
@@ -40,9 +39,6 @@ return [
 
     // Known columns that are not imported and not reported as unknown.
     'skip' => ['sl', 'sl no', 'serial', 'serial no', 'no', '#', 'ক্রমিক', 'ক্রমিক নং', 'ক্রম', 'ক্র নং'],
-
-    // Values read as "yes" for the "is channel partner" column.
-    'yes_values' => ['yes', 'y', 'true', '1', 'partner', 'হ্যাঁ', 'হা'],
 
     // The "Sample CSV" download: the owner's own investor sheet layout
     // (INV sheets). The title line above the header is optional.

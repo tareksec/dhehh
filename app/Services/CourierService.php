@@ -8,6 +8,9 @@ use App\Models\CourierProvider;
 use App\Models\CourierReturn;
 use App\Models\CourierStatusLog;
 use App\Models\Order;
+use Closure;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
@@ -154,7 +157,7 @@ class CourierService
         }
 
         $payload = $this->steadfastPayload($order, $data);
-        $response = app(SteadfastCourierClient::class)->createOrder($provider, $payload);
+        $response = $this->callCourier('Steadfast', fn (): array => app(SteadfastCourierClient::class)->createOrder($provider, $payload));
         $consignment = $response['consignment'] ?? [];
 
         if (($response['status'] ?? null) !== 200 || blank($consignment['tracking_code'] ?? null)) {
@@ -196,9 +199,9 @@ class CourierService
             ]);
         }
 
-        $response = filled($booking->tracking_id)
+        $response = $this->callCourier('Steadfast', fn (): array => filled($booking->tracking_id)
             ? app(SteadfastCourierClient::class)->statusByTrackingCode($booking->provider, $booking->tracking_id)
-            : app(SteadfastCourierClient::class)->statusByInvoice($booking->provider, $booking->order->order_number);
+            : app(SteadfastCourierClient::class)->statusByInvoice($booking->provider, $booking->order->order_number));
 
         if (($response['status'] ?? null) !== 200 || blank($response['delivery_status'] ?? null)) {
             throw ValidationException::withMessages([
@@ -244,7 +247,7 @@ class CourierService
             'special_instruction' => $this->courierNote($order, $data['note'] ?? null),
         ], fn ($value): bool => $value !== null && $value !== '');
 
-        $response = app(PathaoCourierClient::class)->createOrder($provider, $payload);
+        $response = $this->callCourier('Pathao', fn (): array => app(PathaoCourierClient::class)->createOrder($provider, $payload));
         $consignment = $response['data'] ?? [];
 
         if (blank($consignment['consignment_id'] ?? null)) {
@@ -276,7 +279,7 @@ class CourierService
             ]);
         }
 
-        $response = app(PathaoCourierClient::class)->orderInfo($booking->provider, (string) $booking->tracking_id);
+        $response = $this->callCourier('Pathao', fn (): array => app(PathaoCourierClient::class)->orderInfo($booking->provider, (string) $booking->tracking_id));
         $orderStatus = $response['data']['order_status'] ?? null;
 
         if (blank($orderStatus)) {
@@ -327,7 +330,7 @@ class CourierService
             'value' => (string) (float) ($order->total_amount ?? 0),
         ], fn ($value): bool => $value !== null && $value !== '');
 
-        $response = app(RedxCourierClient::class)->createParcel($provider, $payload);
+        $response = $this->callCourier('RedX', fn (): array => app(RedxCourierClient::class)->createParcel($provider, $payload));
         $trackingId = $response['tracking_id'] ?? null;
 
         if (blank($trackingId)) {
@@ -357,7 +360,7 @@ class CourierService
             ]);
         }
 
-        $response = app(RedxCourierClient::class)->parcelInfo($booking->provider, (string) $booking->tracking_id);
+        $response = $this->callCourier('RedX', fn (): array => app(RedxCourierClient::class)->parcelInfo($booking->provider, (string) $booking->tracking_id));
         $status = $response['parcel']['status'] ?? null;
 
         if (blank($status)) {
@@ -412,7 +415,7 @@ class CourierService
             'comments' => $this->courierNote($order, $data['note'] ?? $this->itemDescription($order)),
         ], fn ($value): bool => $value !== null && $value !== '');
 
-        $response = app(ECourierClient::class)->placeOrder($provider, $payload);
+        $response = $this->callCourier('E-Courier', fn (): array => app(ECourierClient::class)->placeOrder($provider, $payload));
         $trackingId = $response['ID'] ?? $response['id'] ?? null;
 
         if (($response['success'] ?? true) === false || blank($trackingId)) {
@@ -442,7 +445,7 @@ class CourierService
             ]);
         }
 
-        $response = app(ECourierClient::class)->track($booking->provider, (string) $booking->tracking_id);
+        $response = $this->callCourier('E-Courier', fn (): array => app(ECourierClient::class)->track($booking->provider, (string) $booking->tracking_id));
         $status = $response['status'] ?? data_get($response, 'query_data.status');
 
         if (is_array($status)) {
@@ -475,6 +478,41 @@ class CourierService
             str_contains($status, 'transit'), str_contains($status, 'shipped') => CourierBooking::STATUS_IN_TRANSIT,
             default => CourierBooking::STATUS_BOOKED,
         };
+    }
+
+    /**
+     * The courier clients ->throw() on an HTTP error, so a booking the
+     * courier refuses (bad phone, wrong keys, duplicate invoice, ...) used
+     * to surface as a raw exception: no readable message on the Book
+     * courier popup, and a bulk booking stopped at that order. Turn it into
+     * a validation error carrying the courier's own reason. Status syncs go
+     * through here too.
+     *
+     * @param  Closure(): mixed  $call
+     */
+    protected function callCourier(string $courier, Closure $call): array
+    {
+        try {
+            return (array) $call();
+        } catch (RequestException $exception) {
+            $body = $exception->response->json();
+            $reason = collect(is_array($body) ? [$body['message'] ?? null, $body['errors'] ?? null, $body['error'] ?? null] : [])
+                ->flatten()
+                ->filter(fn ($value): bool => is_string($value) && filled($value))
+                ->unique()
+                ->implode(' ');
+
+            throw ValidationException::withMessages([
+                'courier' => __(':courier refused the booking: :reason', [
+                    'courier' => $courier,
+                    'reason' => $reason !== '' ? $reason : 'HTTP '.$exception->response->status(),
+                ]),
+            ]);
+        } catch (ConnectionException) {
+            throw ValidationException::withMessages([
+                'courier' => __('Could not reach :courier. Check the internet connection and try again.', ['courier' => $courier]),
+            ]);
+        }
     }
 
     protected function assertProviderUsable(Order $order, CourierProvider $provider, string $driver, string $label): void

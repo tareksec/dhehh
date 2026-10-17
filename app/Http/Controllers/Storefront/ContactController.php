@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\CompanyFaq;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
+use App\Support\StorefrontSeo;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -36,6 +37,8 @@ class ContactController extends Controller
             ->orderBy('question')
             ->get();
 
+        StorefrontSeo::current()->page(__('Contact us'))->index();
+
         return StorefrontThemeRegistry::page('contact.show', [
             'company' => $company,
             'setting' => $setting,
@@ -58,6 +61,13 @@ class ContactController extends Controller
     protected function previewStorefront(Company $company): StorefrontSetting
     {
         abort_unless(app()->environment(['local', 'testing']) || auth()->check(), 404);
+
+        // Same gate as PreviewController::previewCompany(): a signed-in staff
+        // member may only preview their own company/companies, never another
+        // company's by slug (set() below would otherwise switch the scope).
+        if (auth()->check()) {
+            abort_unless(auth()->user()->canAccessCompany($company->getKey()), 404);
+        }
 
         $this->context->set($company);
 

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Expenses\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Filament\Concerns\HasDrilldownStatCards;
 use App\Filament\Resources\ExpenseCategories\ExpenseCategoryResource;
 use App\Models\Expense;
@@ -27,6 +28,7 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  */
 class ExpenseCategorySummaryWidget extends StatsOverviewWidget implements HasActions
 {
+    use GuardsWidgetRendering;
     use HasDrilldownStatCards;
     use InteractsWithActions;
 

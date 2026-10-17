@@ -4,7 +4,9 @@ namespace App\Filament\Resources\Products\Schemas;
 
 use App\Filament\Concerns\OptimizesUploadedImages;
 use App\Filament\Concerns\SelectableFromMediaHub;
+use App\Filament\Forms\Components\AttachedVideoPreview;
 use App\Filament\Resources\Categories\Schemas\CategoryForm;
+use App\Filament\Resources\Resellers\ResellerResource;
 use App\Models\Category;
 use App\Models\Product;
 use App\Support\CompanyMedia;
@@ -243,6 +245,8 @@ class ProductForm
                             ->hintAction(static::selectFromMediaHubAction())
                             ->downloadable()
                             ->openable(),
+                        AttachedVideoPreview::make('video_preview')
+                            ->columnSpanFull(),
                     ])
                     ->columns(2)
                     ->collapsible()
@@ -275,6 +279,13 @@ class ProductForm
                                     ->prefix('৳')
                                     ->minValue(0)
                                     ->helperText('Leave empty to use the product sale price.'),
+                                TextInput::make('reseller_suggested_price')
+                                    ->label(__('Suggested selling price for resellers'))
+                                    ->numeric()
+                                    ->prefix('৳')
+                                    ->minValue(0)
+                                    ->visible(fn (): bool => ResellerResource::resellerModuleEnabledForCurrentContext())
+                                    ->helperText(__('The market price resellers see for this variation. Their customers pay it unless the reseller sets their own price, which can be anything at or above what the reseller pays (the Sale Price above plus the reseller cost per unit). Leave empty and the reseller must set a price before it can be sold.')),
                                 TextInput::make('cost_price')
                                     ->label('Cost Price')
                                     ->numeric()
@@ -286,6 +297,13 @@ class ProductForm
                                     ->default(0)
                                     ->minValue(0)
                                     ->required(),
+                                TextInput::make('weight_kg')
+                                    ->label(__('Variation weight (kg)'))
+                                    ->numeric()
+                                    ->minValue(0)
+                                    ->step('0.001')
+                                    ->suffix('kg')
+                                    ->helperText(__('Leave empty to use the product weight.')),
                                 Toggle::make('is_active')
                                     ->label('Active')
                                     ->default(true),

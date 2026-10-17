@@ -8,6 +8,8 @@ use App\Models\Offer;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
 use App\Services\OfferPricingService;
+use App\Support\CompanyMedia;
+use App\Support\StorefrontSeo;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -56,11 +58,21 @@ class OfferController extends Controller
         $type = in_array($type, [Offer::TYPE_SINGLE, Offer::TYPE_COMBO], true) ? $type : null;
 
         $offers = Offer::query()
+            ->landingPages()
             ->published()
             ->when($type, fn ($query) => $query->where('type', $type))
             ->with('items.product')
             ->latest()
             ->get();
+
+        $seo = StorefrontSeo::current()->page(__('Offers'));
+
+        // The single/combo filter repeats the full list.
+        if ($type === null) {
+            $seo->index();
+        } else {
+            $seo->noindexFollow();
+        }
 
         return StorefrontThemeRegistry::page('offers.index', [
             'company' => $company,
@@ -75,6 +87,14 @@ class OfferController extends Controller
     protected function showView(Offer $offer, Company $company, StorefrontSetting $setting, ?string $previewSlug = null): View
     {
         $offer->load(['items.product', 'items.productVariant']);
+
+        StorefrontSeo::current()
+            ->page(
+                $offer->meta_title ?: $offer->title,
+                $offer->meta_description ?: $offer->short_description,
+                CompanyMedia::publicUrl($offer->cover_image, $company),
+            )
+            ->index();
 
         return StorefrontThemeRegistry::page('offers.show', [
             'company' => $company,
@@ -116,6 +136,7 @@ class OfferController extends Controller
     protected function findPublishedOffer(string $slug): Offer
     {
         return Offer::query()
+            ->landingPages()
             ->where('slug', trim($slug))
             ->where('status', Offer::STATUS_PUBLISHED)
             ->firstOrFail();
@@ -124,7 +145,7 @@ class OfferController extends Controller
     /** Preview may show a Draft/Archived offer too — CompanyScope (already set by previewStorefront()) still keeps this to the previewed company only. */
     protected function findOfferForPreview(string $slug): Offer
     {
-        return Offer::query()->where('slug', trim($slug))->firstOrFail();
+        return Offer::query()->landingPages()->where('slug', trim($slug))->firstOrFail();
     }
 
     protected function domainStorefront(Request $request): array

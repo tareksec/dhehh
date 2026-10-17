@@ -8,13 +8,16 @@ use App\Filament\Widgets\CrmSalesMetrics;
 use App\Jobs\AiAutoReplyJob;
 use App\Jobs\RefreshMessengerProfileJob;
 use App\Jobs\StoreIncomingMessageJob;
+use App\Models\Category;
 use App\Models\ChatOrderLink;
 use App\Models\Company;
 use App\Models\Conversation;
 use App\Models\ConversationChannel;
 use App\Models\ConversationMessage;
 use App\Models\CrmAiRun;
+use App\Models\Customer;
 use App\Models\Lead;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\User;
@@ -82,6 +85,12 @@ class CrmSalesAutomationTest extends TestCase
     private function link(): ChatOrderLink
     {
         return ChatOrderLink::query()->create(['conversation_id' => $this->conversation->id, 'prefill' => ['items' => []]]);
+    }
+
+    /** createOrderLink() is protected — exercised directly, same as other reflection-based tests in this suite. */
+    private function createOrderLink(array $input): array
+    {
+        return (new \ReflectionMethod(AiReplyService::class, 'createOrderLink'))->invoke(app(AiReplyService::class), $this->conversation, $input);
     }
 
     public function test_customer_image_reaches_vision_model_without_a_caption(): void
@@ -500,5 +509,185 @@ class CrmSalesAutomationTest extends TestCase
         Cache::forget('crm:human-present:'.$this->conversation->id);
         Livewire::test(Inbox::class)->set('selectedConversationId', $this->conversation->id)->set('humanPresentMarkedAt', microtime(true) - 16)->call('refreshInbox')->assertHasNoErrors();
         $this->assertTrue($this->conversation->hasHumanPresent());
+    }
+
+    // --- Proactive mode (opt-in) ---------------------------------------
+
+    public function test_prompt_key_is_ignored_when_reply_keys_already_answer_by_default(): void
+    {
+        $key = 'product:'.$this->product->id;
+        $reply = app(SalesReplyRenderer::class)->render(
+            $this->conversation,
+            ['reply_keys' => [$key], 'product_detail' => 'price', 'prompt_key' => 'delivery_area', 'language' => 'en'],
+            [['result' => ['reply_options' => [$key]]]],
+        );
+        $this->assertSame('Lamp — BDT 400', $reply);
+    }
+
+    public function test_proactive_mode_lets_the_renderer_combine_an_answer_and_one_follow_up_question(): void
+    {
+        $key = 'product:'.$this->product->id;
+        $reply = app(SalesReplyRenderer::class)->render(
+            $this->conversation,
+            ['reply_keys' => [$key], 'product_detail' => 'price', 'prompt_key' => 'delivery_area', 'language' => 'en'],
+            [['result' => ['reply_options' => [$key]]]],
+            true,
+        );
+        $this->assertSame("Lamp — BDT 400\nWhich area should we deliver to?", $reply);
+    }
+
+    public function test_proactive_mode_setting_flows_through_the_full_ai_reply_pipeline(): void
+    {
+        $this->settings(['proactive_mode_enabled' => true]);
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence()
+                ->push(['content' => [['type' => 'tool_use', 'id' => 'lookup-1', 'name' => 'lookup_product', 'input' => ['name' => 'Lamp']]], 'usage' => ['input_tokens' => 10, 'output_tokens' => 10]])
+                ->push($this->response(['reply_keys' => ['product:'.$this->product->id], 'prompt_key' => 'delivery_area', 'product_detail' => 'price', 'language' => 'en'])),
+            'graph.facebook.com/*' => Http::response(['messages' => [['id' => 'proactive-1']]]),
+        ]);
+        app(AiReplyService::class)->maybeReply($this->conversation);
+        $this->assertSame("Lamp — BDT 400\nWhich area should we deliver to?", $this->conversation->messages()->where('direction', 'outgoing')->sole()->body);
+    }
+
+    // --- Objection handling (opt-in) -------------------------------------
+
+    public function test_price_objection_still_hard_escalates_by_default(): void
+    {
+        Http::fake();
+        $this->incoming('দামটা একটু কমানো যাবে?');
+        app(AiReplyService::class)->maybeReply($this->conversation);
+        Http::assertNothingSent();
+        $this->assertSame('pending', $this->conversation->fresh()->status);
+        $this->assertFalse($this->conversation->fresh()->ai_enabled);
+    }
+
+    public function test_objection_handling_enabled_lets_a_mild_price_objection_reach_the_agent(): void
+    {
+        $this->settings(['objection_handling_enabled' => true]);
+        $this->incoming('দামটা একটু কমানো যাবে?');
+        Http::fake([
+            'api.anthropic.com/*' => Http::response($this->response(['reply_keys' => [], 'prompt_key' => 'thanks', 'language' => 'bn'])),
+            'graph.facebook.com/*' => Http::response(['messages' => [['id' => 'objection-1']]]),
+        ]);
+        app(AiReplyService::class)->maybeReply($this->conversation);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'anthropic'));
+        $this->assertSame('open', $this->conversation->fresh()->status);
+    }
+
+    public function test_refund_request_still_hard_escalates_even_with_objection_handling_enabled(): void
+    {
+        $this->settings(['objection_handling_enabled' => true]);
+        Http::fake();
+        $this->incoming('আমি রিফান্ড চাই');
+        app(AiReplyService::class)->maybeReply($this->conversation);
+        Http::assertNothingSent();
+        $this->assertSame('pending', $this->conversation->fresh()->status);
+    }
+
+    // --- Multi-product cart ---------------------------------------------
+
+    public function test_create_order_link_accepts_multiple_items_in_one_call(): void
+    {
+        $mug = Product::query()->create(['name' => 'Mug', 'sku' => 'AUTO-MUG', 'price' => 150, 'sale_price' => 150, 'cost_price' => 50, 'stock' => 20, 'unit' => 'pcs', 'is_active' => true, 'status' => 'available']);
+
+        $result = $this->createOrderLink(['items' => [
+            ['product_id' => $this->product->id, 'quantity' => 2],
+            ['product_id' => $mug->id, 'quantity' => 1],
+        ]]);
+
+        $this->assertTrue($result['found']);
+        $this->assertSame(['Lamp', 'Mug'], $result['items']);
+        $link = ChatOrderLink::query()->findOrFail($result['link_id']);
+        $this->assertCount(2, $link->prefill['items']);
+        $this->assertSame(2, $link->prefill['items'][0]['quantity']);
+    }
+
+    public function test_create_order_link_merges_into_the_same_open_link_across_messages(): void
+    {
+        $mug = Product::query()->create(['name' => 'Mug', 'sku' => 'AUTO-MUG2', 'price' => 150, 'sale_price' => 150, 'cost_price' => 50, 'stock' => 20, 'unit' => 'pcs', 'is_active' => true, 'status' => 'available']);
+
+        $first = $this->createOrderLink(['items' => [['product_id' => $this->product->id, 'quantity' => 1]]]);
+        $second = $this->createOrderLink(['items' => [['product_id' => $mug->id, 'quantity' => 3]]]);
+
+        $this->assertSame($first['link_id'], $second['link_id']);
+        $link = ChatOrderLink::query()->findOrFail($second['link_id']);
+        $this->assertSame(['Lamp', 'Mug'], array_column($link->prefill['items'], 'name'));
+
+        // Re-stating the same product updates its quantity instead of duplicating the line.
+        $this->createOrderLink(['items' => [['product_id' => $this->product->id, 'quantity' => 5]]]);
+        $link = $link->fresh();
+        $this->assertCount(2, $link->prefill['items']);
+        $this->assertSame(5, $link->prefill['items'][0]['quantity']);
+    }
+
+    // --- Grounded cross-sell / upsell (opt-in) ---------------------------
+
+    public function test_cross_sell_tool_is_not_offered_by_default(): void
+    {
+        $tools = (new \ReflectionMethod(AiReplyService::class, 'toolDefinitions'))
+            ->invoke(app(AiReplyService::class), app(AiSettingsService::class)->all($this->company, AiSettingsService::TOOL_MESSAGING));
+        $this->assertNotContains('lookup_related_products', array_column($tools, 'name'));
+    }
+
+    public function test_cross_sell_enabled_lets_the_agent_suggest_one_related_product(): void
+    {
+        $category = Category::query()->create(['name' => 'Home', 'slug' => 'home', 'is_active' => true]);
+        $this->product->update(['category_id' => $category->id]);
+        $related = Product::query()->create(['name' => 'Lampshade', 'sku' => 'AUTO-SHADE', 'price' => 120, 'sale_price' => 120, 'cost_price' => 40, 'stock' => 15, 'unit' => 'pcs', 'is_active' => true, 'status' => 'available', 'category_id' => $category->id]);
+        $this->settings(['cross_sell_enabled' => true]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence()
+                ->push(['content' => [['type' => 'tool_use', 'id' => 'lookup-1', 'name' => 'lookup_product', 'input' => ['name' => 'Lamp']]], 'usage' => ['input_tokens' => 10, 'output_tokens' => 10]])
+                ->push(['content' => [['type' => 'tool_use', 'id' => 'related-1', 'name' => 'lookup_related_products', 'input' => ['product_id' => $this->product->id]]], 'usage' => ['input_tokens' => 10, 'output_tokens' => 10]])
+                ->push($this->response(['reply_keys' => ['product:'.$this->product->id, 'related:'.$related->id], 'product_detail' => 'price', 'language' => 'en'])),
+            'graph.facebook.com/*' => Http::response(['messages' => [['id' => 'cross-sell-1']]]),
+        ]);
+
+        app(AiReplyService::class)->maybeReply($this->conversation);
+
+        $body = $this->conversation->messages()->where('direction', 'outgoing')->sole()->body;
+        $this->assertStringContainsString('Lamp — BDT 400', $body);
+        $this->assertStringContainsString('You might also like: Lampshade — BDT 120', $body);
+    }
+
+    // --- Personalization by purchase history (opt-in) --------------------
+
+    public function test_qualification_context_includes_personalization_only_when_enabled(): void
+    {
+        $customer = Customer::query()->create(['name' => 'Rahim', 'phone' => '01700000000']);
+        $this->conversation->update(['customer_id' => $customer->id]);
+        $order = Order::query()->create(['customer_id' => $customer->id, 'order_date' => today(), 'status' => 'draft']);
+        $order->items()->create(['product_id' => $this->product->id, 'quantity' => 1, 'unit_price' => 400]);
+
+        $service = app(SalesQualificationService::class);
+
+        $default = $service->context($this->conversation->fresh());
+        $this->assertArrayNotHasKey('is_returning_customer', $default);
+        $this->assertArrayNotHasKey('items', $default['recent_orders'][0]);
+
+        $personalized = $service->context($this->conversation->fresh(), true);
+        $this->assertTrue($personalized['is_returning_customer']);
+        $this->assertSame(['Lamp'], $personalized['recent_orders'][0]['items']);
+    }
+
+    public function test_personalization_enabled_mentions_returning_customer_signal_in_the_system_prompt(): void
+    {
+        $customer = Customer::query()->create(['name' => 'Rahim', 'phone' => '01700000000']);
+        $this->conversation->update(['customer_id' => $customer->id]);
+        $order = Order::query()->create(['customer_id' => $customer->id, 'order_date' => today(), 'status' => 'draft']);
+        $order->items()->create(['product_id' => $this->product->id, 'quantity' => 1, 'unit_price' => 400]);
+        $this->settings(['personalization_enabled' => true]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response($this->response(['reply_keys' => [], 'prompt_key' => 'thanks', 'language' => 'bn'])),
+            'graph.facebook.com/*' => Http::response(['messages' => [['id' => 'personalization-1']]]),
+        ]);
+
+        app(AiReplyService::class)->maybeReply($this->conversation->fresh());
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'anthropic')
+            && str_contains((string) $request['system'], 'is_returning_customer":true')
+            && str_contains((string) $request['system'], 'PERSONALIZATION IS ON'));
     }
 }

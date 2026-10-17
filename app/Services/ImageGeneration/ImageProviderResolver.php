@@ -5,6 +5,7 @@ namespace App\Services\ImageGeneration;
 use App\Services\ImageGeneration\Providers\CustomOpenAiCompatibleProvider;
 use App\Services\ImageGeneration\Providers\GoogleImageProvider;
 use App\Services\ImageGeneration\Providers\OpenAiImageProvider;
+use App\Services\ImageGeneration\Providers\OpenRouterImageProvider;
 use App\Services\ImageGeneration\Providers\StabilityImageProvider;
 
 /**
@@ -20,6 +21,7 @@ class ImageProviderResolver
         'openai' => OpenAiImageProvider::class,
         'google' => GoogleImageProvider::class,
         'stability' => StabilityImageProvider::class,
+        'openrouter' => OpenRouterImageProvider::class,
         'custom' => CustomOpenAiCompatibleProvider::class,
     ];
 

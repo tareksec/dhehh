@@ -12,7 +12,1425 @@ All notable production changes to Business Dashboard are documented here.
 
 **Technical Notes:** `CustomerInfolist` moves the `address` entry into the Customer section; `CustomersTable` adds a wrapped, searchable `address` column. New string "Customer Address" is in `lang/en.json` and `lang/bn.json`. No migrations.
 
----
+## [2.83.1] - 2026-10-17
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Imported Nuport orders of products with no stock** no longer ask for stock when edited. Saving an imported order on its Edit page showed the "Not enough stock" popup for any product whose stock was 0 and offered to add stock, which would have put stock in that was never there. Imported orders are history and never take stock, so the popup is skipped for them (like WooCommerce orders).
+- **The Edit order page shows the product name of an old order whose product is switched off.** The product box only listed active products, so a line for an inactive product (such as the products "Create missing products" makes) showed an empty name. The product the line already has is always listed now.
+
+### Technical Notes
+
+- `HandlesStockShortages::haltWhenStockIsShort()` returns early for a saved order with `isHistoricalImport()`; `OrderForm`'s item `product_id` select adds `OR products.id = <the line's product_id>` to its active-products query. Test: `NuportOrderImportTest::test_an_imported_order_of_a_zero_stock_product_shows_normally_and_never_asks_for_stock`.
+## [2.83.0] - 2026-10-17
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Import Nuport orders: SKU mapping and "Create missing products"**, so no Nuport order is skipped because of a product the ERP does not have.
+  - **SKU mapping**: a box in the import dialog with one line per retired or renamed Nuport SKU, written `NUPORT-SKU = ERP-SKU`. Those lines use the ERP product or variant with that SKU. The mapping is remembered for the next import. The preview shows which mappings were used and how many orders each covered; a line whose ERP SKU does not exist is ignored and listed, never guessed.
+  - **Create missing products** (off by default): a product that no SKU or mapping finds is created **inactive, with stock 0 and cost price 0**, using the Nuport SKU, name and the last non-zero unit price. A line with no SKU gets the SKU `NUPORT-<name>`. The preview lists every product that would be created. Set the real cost price in the product afterwards; the cost of already imported order lines stays 0.
+  - The command takes the same two settings: `php artisan orders:import-nuport <file> <company-slug> --map=<file> --create-missing --apply`.
+
+### Technical Notes
+
+- `NuportOrderImportService::run()` gained `$skuMap` (text) and `$createMissing`. The mapping wins over a direct SKU match. With `$createMissing` the service plans every invoice once first so a new product carries the last non-zero price in the file. New products are saved just before the order that needs them; a second run finds them by SKU (or by name for the SKU-less ones) and creates nothing twice. The remembered mapping is an `app_settings` row `nuport_import_sku_map_<company id>`. Tests: `NuportOrderImportTest` (22 tests).
+## [2.82.0] - 2026-10-17
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Orders → Import Nuport orders**: copies the wholesale customers' past orders from Nuport's **Export As CSV** into the ERP, so each customer's purchases, payments and status are in one place.
+  - It starts as a **preview** that saves nothing: how many orders are new, which products are not found, the totals per status, and how many customers are new or already exist. Turn **Preview only** off to save.
+  - Each order keeps its Nuport number (SO-1309), date, lines, delivery fee, discount, paid amount and due, delivery status, notes, and the Steadfast consignment ID in the note.
+  - Statuses: Delivered = Completed, Approved = Confirmed, In-Transit and Processing = Processing, returned parcels = Returned, Cancelled = Cancelled. Cancelled orders marked "Test Order" or "Fake Order" are skipped; other cancelled orders come in without any payment.
+  - Customers are matched by phone number (01712345678, +8801712345678 and 8801712345678 are one customer); a new phone creates a customer.
+  - An order whose product is not found by SKU is skipped and listed; create the product and import the same file again.
+  - **It never changes stock or any account balance**, and sends no new-order alerts. Payments are history only, with no account.
+  - Importing the same file again never duplicates orders. A newer export refreshes the status, delivery fee, discount and payment of orders already imported.
+  - The same import also runs from the server: `php artisan orders:import-nuport <file> <company-slug> --apply` (without `--apply` it only previews).
+
+### Technical Notes
+
+- `App\Services\NuportOrderImportService` (also `orders:import-nuport`, and `ListOrders::importNuportOrdersAction()`) reads Nuport's export, one row per product line with the order money only on the first row of each invoice. No migration. New `Order::SOURCE_NUPORT_IMPORT` (`nuport_import`, fits `orders.source` varchar 32) marks an imported order; `Order::isHistoricalImport()` makes `OrderWorkflowService::sync()` skip stock movements (for create, status change and later edits), `OrderNotificationObserver` skip the new-order and status alerts, and the `saved` hook skip `CustomerRiskService::evaluateOrder()`.
+- The invoice becomes `order_number` and `external_reference` (unique per company), so a second run finds the order again. `shipping_zone` is stored as `imported` so `Order::creating` does not replace Nuport's delivery fee with the zone fee. Lines are saved with `OrderItem::withoutEvents()` and the workflow is synced once per order; the real export (1,340 invoices, 2,311 lines) imports in about 20 seconds in the test database. Discount = list-price total of the lines minus Sales Amount, so the ERP total equals Sales Amount plus Delivery Fee; invoices where the file's own columns disagree (32 in the real export) are listed in the preview. One `OrderPayment` per order, `account_id` NULL, so no `TransactionLedger` row is posted; customer balances come from the imported due of accounted orders (`Customer::syncCurrentBalance()`), so a customer who already has an opening balance for the same dues is counted twice (the preview counts such customers).
+- Deploy note: the upload action runs in the web request (`set_time_limit(0)`, `ignore_user_abort`); on a slow server or a short proxy timeout use the artisan command. Tests: `NuportOrderImportTest` (17 tests).
+## [2.81.1] - 2026-10-16
+
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **Investor portal SMS codes now read "{company} Investment Portal login OTP is 123456. It expires in 1 minute." (or "... password reset OTP is ..."), and the code is valid for 1 minute instead of 10.** Owner request 2026-10-16. Before, the text was "Your {company} OTP is 123456. Use it to sign in to the investor portal. It expires in 10 minutes." The message follows the investor's language, and the sign-in and forgot-password pages now say "It expires in 1 minute." A second request inside the first minute still keeps the code already sent. Customer and reseller codes are unchanged.
+
+### Technical Notes
+
+- `InvestorPortalAccountService::sendCode()` words its own message (portal name = `:company Investment Portal`, reason = `$purpose` `login` or `reset`); `CODE_VALID_MINUTES` 10 -> 1. The two "Use it to ... the investor portal" keys in `lang/` were replaced by three new keys, and the helper text key on `Investor\Pages\Auth\Login` / `ForgotPassword` changed from "...10 minutes." to "...1 minute.". Test: `InvestorPortalTest::test_the_investor_code_sms_names_the_portal_and_the_reason_and_lives_one_minute`.
+## [2.81.0] - 2026-10-16
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **IMS investor feed.** A new key type **Investor sync (investors and payouts for IMS)** opens `/api/v1/sync/investor/*`: investors (name, phone, NID, group, approved bank accounts), groups, projects with their progress percentage, investments, and payouts with amount, status, date and a link to the payment screenshot (`GET /payouts/{id}/proof`). Read only, one company per key, and never a customer or a supplier. Owner decisions 2026-10-15 (details and the planned "IMS reports a payout" step in `docs/api/ims-sync-api.md`).
+
+### Technical Notes
+
+- `CompanyApiKey::SCOPE_INVESTOR_SYNC`, `ResolveCompanyFromApiKey` hint per scope, `InvestorSyncFeed` (extends `ImsSyncFeed`), `InvestorSyncController`, `Investor::groupMemberships()`. Two interface strings added or reworded in both language files (the key-type name and the key helper text). Tests: `InvestorSyncApiTest` (10).
+## [2.80.0] - 2026-10-15
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Admin: one list to set the suggested selling price of every variation.** Owner request 2026-10-15 ("একসাথে অনেকগুলোর দাম বসানোর টুল"). **Resellers → Variation selling prices** lists every active variation of a variable product with its wholesale price (read only) and its suggested selling price, which is typed straight in the row and saved on leaving the field (blank clears it). A filter shows the variations with no suggested price yet, a product filter and search narrow the list, and two bulk actions give the selected rows the same price or clear it. There is no percentage rule. A variation with no suggested price is still not sold in a reseller's store until the reseller sets a price.
+- **Damaged goods are counted, and labelled by where they came from.** Owner decision 2026-10-15. A stock movement of type **Damage** now has a required **Damage source**: *Customer return damage*, *Shipment damage* (found damaged when a carton or shipment is opened) or *Other damage*. It shows in the stock movement list (with a filter) and in a product's movement history, and the **Total Damage** card on Products now opens the damage list. Older damage entries stay unlabelled. On a returned or refunded order, **Put returned goods back in stock** now takes two numbers per item, *Good pieces* (added back to stock) and *Damaged pieces* (counted as customer-return damage and not added to stock), so a damaged exchange or return is counted too.
+- **Reseller portal: tab bar on phones.** Owner request 2026-10-15. Below the large-screen width, approved resellers get a bar fixed to the bottom of the screen with Dashboard, Products, a raised **Create order** button, Orders and Earnings; the page being viewed is highlighted. The sidebar still holds everything else. It is not shown on large screens, on the sign-in and apply pages, or to a pending application.
+- **Reseller dashboard: announcement, first steps and best sellers.** Owner request 2026-10-15. (1) **Announcement:** Reseller Settings has a new **Portal announcement** section (on/off and the text, up to 500 characters; the text is required while it is on); the text shows in a banner at the top of every approved reseller's dashboard and is escaped, never taken as HTML. (2) **Get started:** a checklist of four steps (name your store, add products, add a payout account, get your first order), each ticked from the reseller's own records and linking to where it is done, with a progress bar; it disappears when all four are done. (3) **Best-selling products:** the five products this reseller sold the most pieces of in the last 30 days, from their own confirmed, processing and completed orders only.
+- **Public reseller guide: the return charge.** Owner request 2026-10-15. The guide now says that when an order is returned a return charge is taken from the reseller's deposit, once for that order, for store-delivered and own-courier orders alike. It appears only while the return charge in Reseller Settings is above zero, and the amount is shown only when **Show money figures on the guide** is on.
+- **Reseller Settings: "Test subdomain setup" and a Cloudflare + Coolify guide.** Owner request 2026-10-15. The button opens a made-up name under the company's domain and says which step is missing: the wildcard DNS record, or the wildcard SSL certificate (with the reason). `docs/reseller-subdomain-setup.md` (in Bangla) walks the owner through the Cloudflare and Coolify side step by step; the owner does that part.
+
+### Changed
+
+- **A returned or refunded order can never be moved to trash.** Owner decision 2026-10-15, so the returned goods and the damage counted from it are never lost. The order page's delete button is hidden, the list's *Move to trash* skips these orders (and says so), and the order model refuses to be soft-deleted in these statuses. Permanent deletion from the trash is unchanged.
+- **Restoring a trashed order brings its sale back.** Owner decision 2026-10-15. Restoring an order from the trash recreates its stock sale for every status, including an order that was returned when an earlier version let it be trashed. (An order whose stock is short still cannot be restored, and the message says so.) Taking an order's stock effects out now also removes the damage written off for it.
+
+### Technical Notes
+
+- Stock rules (2026-10-15): migration `2026_10_15_120000_add_damage_source_to_stock_movements` adds nullable `stock_movements.damage_source`; `StockMovement::damageSources()`, `StockMovementService::prepareForSave()` clears it on non-damage rows and refuses an unknown value (the form requires it only for new damage entries, so the IMS sync and older code paths still work). A damaged returned piece is booked as a `return` (+n) and straight away a `damage` (-n, source `customer_return`, tied to the order), so on-hand stock does not change and `Order::returnedQuantities()` counts it as checked. `OrderWorkflowService::deleteStockMovements()` removes `sale`, then `damage`, then `return` so stock never dips; `restoreFromTrash()` is called from the model's `restored` hook. `Order::canBeMovedToTrash()`, `OrderResource::canDelete()` and a `deleting` hook (not on force delete) enforce the trash rule.
+- Variation prices tool: new `ResellerVariationPriceResource` (model `ProductVariant`, Resellers cluster, index only; needs the reseller module and view rights on Products, editing needs update rights). No migration or new model.
+- Reseller portal: tab bar is `resources/views/filament/reseller/bottom-nav.blade.php`, drawn from the panel's `LAYOUT_END` hook through `ModuleGuard`; the portal theme CSS adds bottom padding on small screens, so **`npm run build` is needed**. Dashboard additions: migration `2026_10_15_130000_add_reseller_announcement_to_storefront_settings` (`reseller_announcement_enabled` boolean default false, `reseller_announcement` text), `Dashboard::announcement()`, `firstSteps()`, `bestSellers()`.
+- `ResellerSubdomainProbe::diagnose()` returns `ok` / `dns` / `https` (with the connection error), `isLive()` uses it. `ResellerGuideController` passes `returnCharge`. Tests: `OrderReturnedStockTest` (14), `ResellerVariationPriceToolTest` (6), `ResellerPortalBottomNavTest` (3), `ResellerPortalDashboardExtrasTest` (7), `ResellerSubdomainSetupCheckTest` (4), `ResellerGuidePageTest` (+1).
+## [2.79.0] - 2026-10-15
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Admin: reset a reseller's password, or email them a reset link.** Owner request 2026-10-15. On **Resellers** (the list's action menu, and the top of a reseller's View and Edit pages) there are two new actions for a pending or approved reseller, for staff who may edit customers. **Set a new password** lets staff choose one (with confirmation and the usual strength rules): the reseller is signed out on every device and any pending reset code or link stops working. The password is never emailed or written to the audit log. **Email a password reset link** sends a link to the email address the reseller set in their Profile (the action is disabled with a reason when they have none). The link opens the portal's own "Choose a new password" page on the reseller's portal address, works once and expires after 60 minutes (confirmed by the owner 2026-10-15); the reseller picks their own password. The email goes out through the company's own mail settings (Storefront Settings → Customer Notifications & Reminders) or the server's mailer; if neither can really send, the action says so instead of pretending, and a link that could not be sent is not left valid. Both actions are written to the audit log with the staff member. The existing SMS-code reset on the sign-in page is unchanged.
+- **Orders: "Put returned goods back in stock".** Owner decision 2026-10-15 (see Changed). On the order page of a **Returned** or **Refunded** order, staff with permission to add stock movements get this action: it lists each item with how many were sold and how many are already back, and staff enter the pieces that are in good condition (damaged ones are simply left out). It adds a **Return** stock movement tied to the order, can be done in parts, and never takes back more than was sold.
+
+### Changed
+
+- **Bangla for "profit" on reseller screens.** Owner decision 2026-10-15: the English still says profit, and the Bangla now reads **আয়** (the column and headings **আমার আয়**) instead of "লাভ"; the admin list of reseller profits reads "রিসেলারের আয়". The reports' own "Profit" ("লাভ") and the investors' "Your profit" are unchanged.
+- **A returned order no longer puts its goods back on the shelf by itself.** Owner decision 2026-10-15, for every order (store, website, WooCommerce, reseller portal alike). Marking an order **Returned** (or later **Refunded**) used to delete its sale from the stock ledger at once, so the pieces counted as in stock before anyone had looked at them. Now the sale stays until staff record what is in good condition with **Put returned goods back in stock**. A **Cancelled** order, which never left, still gives its stock back immediately, and so does moving any order to the trash (its sale and any Return movements recorded for it are removed together, so nothing is counted twice). Customer dues, sales reports and the reseller's profit still follow the order status exactly as before; only the shelf waits for staff. Restoring a returned order from the trash does not bring its sale back.
+
+### Technical Notes
+
+- Reseller password reset by staff: no migration (it reuses `customers.password_reset_code` / `password_reset_expires_at`). `CustomerAccountService::issueResetLink()` (random 48-character token, hashed like the SMS code, `RESET_LINK_MINUTES` = 60, lifts an earlier lock), `cancelReset()`, `resetCodeIsValid()` (does not use the code up), `setPasswordByStaff()`; `ResellerPasswordResetService` (`setPassword()`, `sendLink()` with the statuses `sent` / `no_email` / `no_portal` / `mail_not_set_up` / `send_failed` / `not_a_reseller`, audit actions `reseller.password_set_by_staff` and `reseller.password_reset_link_sent`; Laravel signs the whole URL including the host, so the link is generated as if the request had come to the reseller's portal host, even though staff are on the admin host). `StorefrontNotificationService::emailDeliveryAvailable()` (company SMTP filled in, or a default mailer that is not `log` / `array`) and `sendResellerPasswordResetEmail()` with the `ResellerPasswordResetLink` mailable and a plain-text view that prints the link unescaped (`&` in the query string must not become `&amp;`). `ResellerPasswordResetActions` are shared by the Resellers table, `ViewReseller` and `EditReseller`. The portal panel's `passwordReset()` second page is now `ResetPasswordByLink` (Filament's signed `password-reset/reset` route; it looks the reseller up inside the portal's company only and checks the one-time token through `CustomerAccountService::resetPassword()`, so five wrong tries lock it). Tests: `ResellerPasswordResetByStaffTest` (19, including the real portal Livewire endpoint).
+- Portal ↔ admin audit: `ResellerPortalAdminFlowTest` (8) drives both sides through their real pages and actions: an order placed on the portal arrives with the right company, source, buyer, lines, variation and prices; a draft holds no stock; the admin's Change status action takes stock from the exact item (a product with variations shows the sum of its variations), gives it back on cancel and on return, makes the profit payable on completion and takes it back on return (plus the return charge); two resellers asking for the last pieces cannot both be confirmed and stock never goes negative; the portal refuses more than the shelf holds; own-courier orders with a variation follow the same rules; companies and resellers see only their own orders. No application bug was found.
+- Returned stock rule: `OrderWorkflowService::sync()` only deletes the order's sale movements when `Order::keepsStockOutUntilGoodsAreChecked()` is false (that is true for `returned` and `refunded`); `deleteStockMovements()` now removes the order's `sale` movements first and then its `return` movements; `Order::returnedQuantities()`; new `PutReturnedGoodsBackInStockAction` (header action on `ViewOrder`, needs `create` on `StockMovement`, quantities worked out under a row lock on the order, `reference_type` / `reference_id` point at the order). No migration. Tests: `OrderReturnedStockTest` (8); `ResellerPortalAdminFlowTest` follows the new rule.
+- Bangla wording: the reseller-only keys were renamed from "commission" to "profit" and their Bangla changed to "আয়"; new keys `My profit` (আমার আয়), `Reseller profit` / `Reseller profits` (admin list). The shared `Profit` and the investors' `Your profit` keys are untouched.
+## [2.78.0] - 2026-10-15
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **IMS data feed: returns, deleted records and stock-loss values.** `GET /api/v1/sync/sale-returns` lists every returned or refunded sale with its return date, value and lines; orders carry `returned_amount`; stock movements carry their date, the record behind them and an estimated value; deleted expenses and deleted order payments stay in the feed flagged `deleted`, so IMS can tell that a profit figure changed. (Owner request 2026-10-15; details in `docs/api/ims-sync-api.md`.)
+
+### Changed
+
+- **IMS data feed: no supplier information either.** Owner rule 2026-10-15 ("সাপ্লায়ারের তথ্যও investor দেখবে না"). The `suppliers` and `supplier-payments` feeds are removed and purchases no longer name their supplier.
+- **IMS data feed: no customer information, ever.** Owner rule 2026-10-15. The `customers` and `customer-payments` feeds are removed, orders no longer carry the customer's name or phone, and the free-text notes on payments, expenses and stock movements are no longer sent (they can name people). IMS is meant to show only a running project's unit sales, never who bought.
+
+### Fixed
+
+- **A refused SMS was counted as sent.** BulkSMSBD-style gateways answer HTTP 200 even when they refuse the SMS (no balance, wrong sender ID, IP not whitelisted) and put the real result in a reply code. The system now reads that code (`response_code` in the JSON, or a plain code): anything other than `202` is a failed send, so a login code that never left no longer shows "sent", and the WhatsApp-to-SMS fallback no longer stops at a refused SMS. The refusal and its meaning (for example 1007 Balance Insufficient, 1032 IP not whitelisted) are written to the log. Gateways that send no reply code keep going by HTTP status.
+- **SMS numbers are now sent with the country code** (`8801XXXXXXXXX`, as the BulkSMSBD documentation shows) instead of the stored `01XXXXXXXXX`.
+- **Login, registration and password-reset SMS follow the gateway's OTP format** `Your {Company} OTP is {code}. Use it to … It expires in N minutes.` (storefront customers, reseller portal and investor portal). BulkSMSBD asks for this format for OTP messages. The investor portal texts (English and Bangla) changed too.
+
+### Technical Notes
+- Migration `2026_10_15_100000` adds `deleted_at` to `expenses` and `order_payments`; both models now soft-delete, and the rest of the ERP still treats a deleted row as gone. Stock movements are deliberately not soft-deleted: shared-stock sums read the ledger without model scopes and would count deleted rows. A deleted stock movement is still found by the daily `ids_only` check.
+- No new interface text, so no language-file changes. Tests: `ImsSyncApiTest` 26 (5 new).
+- Seven tests that were already red on `main` after the SMS-format change (country-code numbers, OTP wording) were brought in line: `ProjectCompletedMessageTest` (3) reads the sent number without the `88` prefix, `ResellerApplicationVerificationTest` (4) reads the code from the `OTP is` wording. Test-only change.
+- `StorefrontNotificationService::sendSms()` reads the reply through `smsGatewayCode()`; known codes are in `SMS_GATEWAY_CODES`. Phone goes through `PhoneLinks::internationalDigits()`.
+- Tests: new `StorefrontSmsGatewayTest` (5); OTP-wording assertions updated in `StorefrontApiAccountTest`, `StorefrontCustomerAuthTest`, `ResellerPortalPasswordResetTest`, `InvestorPortalTest`.
+- Agent rules (`CLAUDE.md` Commit policy and `AGENTS.md`, which had the opposite "never commit without permission" lines): finished work is now committed and pushed to a topic-named feature branch (`feature/<topic>`) without waiting to be asked; pushing or merging to `main` still needs the owner's explicit approval. No code change.
+## [2.77.0] - 2026-10-14
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **One click to arrange the Next.js footer like the reference site (owner request).** The Footer Builder (Navigation, menus & SEO tab) has a new **Load the starter footer** button on the Next.js row. It fills the Footer Builder and the footer menu with the footer of `zamzamint.netlify.app`: the brand with the about text and the social icons, **Quick links** (Home, Shop, About Us, Contact Us, Promotions), a **Customer Service** column (Delivery Information, Return, Refund & Exchange, Terms and Conditions, Privacy Policy), **Our Office** (address, email, two phone numbers, trade licence line), **Safety Payments** badges (bKash, Nagad, Rocket, Cards) and the bottom bar (copyright, "Developed by Bright Hive Digital", "Developed with ♥ for Bangladesh"). Nothing is saved until **Save changes**, and every word can be edited afterwards. A link to a page (About, Contact, Delivery, Returns, Terms, Privacy) is added only when the site has a published page with that name; the message after loading lists the ones that were left out, so create those pages under Site → Pages and add them. The reference's *Request for Quote* and *Reselling Program* links are not added because the Next.js site has no such pages yet.
+- **Bottom bar: a link on the middle text.** The Footer Builder's bottom bar has a new optional **Middle text link**, so "Developed by …" can link to the developer's site.
+
+### Changed
+
+- **The Next.js footer looks like the reference footer.** Section headings, links, payment badges and the bottom bar use the reference's sizes and colours on a dark footer, the brand and office columns are a little wider, phone numbers are separated by commas, and the copyright text now fills `{year}` and `{company_name}` (the Blade footer already did; the Next.js footer showed the tokens as typed).
+
+### Technical Notes
+
+- Starter footer: new `App\Support\StorefrontFooterStarter::layout()` (blocks, Quick links menu and the labels of page links left out; pages matched by normalised title or slug among the site's published pages, `forSite()`), used by the `loadStarterFooter` header action of the Footer Builder section (`NextjsDesignSections::loadStarterFooterAction()`, section key `footer_builder`, visible on the Next.js row only). It only sets the form state (`footer_blocks`, `footer_menu`). The about text is the reference's Bangla sentence, read from `lang/bn.json` whatever language the admin uses. The contact block carries the reference's own office details (address, email, two phones, trade licence) as editable text; they are not read from another company. No migration. `bottom_bar` data gains `center_url` (`StorefrontSiteDesign::footerBlockData()`, cleaned like other links); the Blade footer ignores it. Website: `Footer.tsx` restyled, `{year}` / `{company_name}` filled in the copyright and middle text, `center_url` rendered as a link. New `NextjsFooterStarterTest` (10).
+## [2.76.0] - 2026-10-14
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **One click to arrange the whole Next.js home page like the reference site (owner request).** The Home Page Builder (Website Design tab) has a new **Load the starter layout** button. It fills the builder with every section of `zamzamint.netlify.app` — hero, trust strip (Fast Delivery, Easy Payment, Smart Gadgets, Quality Check), Shop by Category, *Best Deals Today*, *Latest Gadgets*, the *Flash Deal* band, four category rows (*Best Audio Picks*, *Fans & Cooling*, *Kitchen Essentials*, *Beauty & Lifestyle*), *Order Easily on WhatsApp* and the *Wholesale Gadgets in Bangladesh* text — and adds the top bar links *Mobile App* and *Track Order* when there are none. Your categories are matched by name (a spelling such as "Cocker" or "Gift and Crafts" still matches; a row with none of its categories is left out). Nothing is saved until you press **Save changes**, and every word can be edited afterwards. A second button, **Fill empty category details**, adds the short line and icon the category cards show to the categories that have none — a tagline or icon you already set is never changed.
+- **A product row can mix several categories.** The *Product row* section's category choice is now a multi-select (up to 8): the row shows one product from each chosen category in turn. Rows saved with one category keep working.
+- The *Shop on mobile* section is now the target of the top bar's *Mobile App* link (`/#mobile-app`), and the folded *SEO text* shows the first paragraph and opens the rest with *Read more*.
+
+### Technical Notes
+
+- Starter home page: new `App\Support\StorefrontHomeStarter` (sections, top bar links, category matching by normalised name, blank-only tagline/icon fills) used by two header actions of the Home Page Builder section (`NextjsDesignSections`: `loadStarterLayout` only sets the form state; `fillCategoryDetails` writes the blank category fields straight away, per category only when the user may update it, always inside the settings row's company). `product_row` data now holds `category_ids` (the old `category_id` is merged in by `StorefrontSiteDesign`); `GET /site` serves `category_slugs` plus `category_slug` (the first) for older websites; `PRODUCT_SOURCES['category']` reads "Chosen categories". 14 new keys in `lang/en.json` and `lang/bn.json`. New `NextjsHomeStarterTest` (11).
+## [2.75.0] - 2026-10-14
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller deposit: a cancelled order gives the money back.** When an own-courier order that was paid (in whole or in part) from the reseller's deposit is cancelled, the amount taken from the deposit goes back to it automatically, once, and shows in the deposit balance beside the portal's user menu. Only the deposit part returns: money the reseller sent to the store (bKash, bank and so on) is not refunded automatically. Staff see **Returned to the reseller's deposit** on the order page. (Owner decision 2026-10-12.)
+- **Resellers → Deposits (admin).** A new page lists every reseller's deposit movements: money sent above an order's total, what orders used, what a cancelled order returned, and adjustments made by staff, each with its date, reseller, order, reason and who did it. **Add to deposit** and **Deduct from deposit** change a reseller's deposit by hand; a reason is always required, a deduction can never take the deposit below zero, and each change is kept in the list and in the audit log. The Resellers list has a sortable **Deposit** column and each reseller's page shows the deposit. Permission: Sales view to see, Sales update to adjust. (Owner decision 2026-10-12.)
+- **Reseller Settings: choose and add the payment methods resellers pay their advance into.** Under **Own-courier advance payments** the admin ticks which of the store's payment methods (the manual send-money / bank ones on Storefront → Payment Methods) resellers may use, and can add methods that exist only for the reseller portal (name, number, instructions, on / off; they may even reuse the store's name, e.g. a different bKash number). Resellers see the ticked store methods and the reseller-only ones when they place or change an own-courier order. Reseller-only methods never appear at the storefront checkout, in the website API or on the store's Payment Methods page, and changing the store's list never changes them. Until the admin saves a choice, every active manual store method stays available exactly as before. (Owner decision 2026-10-12.)
+- **Reseller application: prove the phone number with an SMS code when it already belongs to a customer.** On the reseller portal's **Become a reseller** page, a brand-new number applies as before, but a number that already has a customer record (past orders, a storefront account or an existing reseller) first gets a 6-digit SMS code (valid 10 minutes, five tries, one SMS a minute); the old record is used and its password set only after the code is entered. The form can send the code again or go back to change the number. Without an SMS gateway such a number cannot be proven, so the form says to contact the store. (Owner decision 2026-10-12.)
+- **Products with variations (size, colour) now work in the reseller program.** Owner decisions 2026-10-12 and 2026-10-14. There is no separate reseller price on a variation: its own (wholesale) price, plus the company's **Reseller cost per unit** (as for an ordinary product), is what a reseller pays for it. The admin enters a **Suggested selling price for resellers** on each variation (Products → Variations): the market price a reseller sees and their customers pay by default. The reseller can override it with their own customer price per variation, never below what they pay, in the portal (**Products → Variation prices**, or the bulk "suggested + %" action), and earns the difference as profit, the same as ordinary products. A variation with neither a suggested price nor a reseller price is **never sold at the wholesale rate**: the reseller is asked to set a price and, until then, it cannot be bought in their store or ordered from the portal. On a reseller's store each variation shows the reseller's price, the cart and checkout charge it and record the profit, and what the reseller pays is **never** shown there. In the portal a reseller can now order these products (store-delivered or with their own courier, and add them to an own-courier order): they choose the option on each line, and stock is the variation's own. The portal's product list and details show the reseller their cost, price and profit per variation.
+- **Reseller advance: pay online with the store's active gateway.** Owner decision 2026-10-14. Under **Paid to** (create order, change order, **Send payment again**) a reseller now also sees **Pay online (ZiniPay / PayStation)** whenever the store has an online payment gateway switched on and set up (Integrations → Payment Gateway), next to the send-money numbers. Choosing it asks for no number or transaction ID: the reseller is taken to the gateway's secure page for exactly what is still owed (after the deposit); when the gateway confirms it (on the way back, or by its webhook if they never return) the payment is entered in the order's Payments History once and the order shows as paid, so staff can pack the parcel without checking anything by hand. An unfinished online payment shows **Waiting for the online payment** with a **Pay now** button on the Orders list, and is replaced when the reseller starts another payment (online or send-money). Staff cannot verify or reject an online payment by hand. Own-courier orders stay available when the store has only the gateway and no send-money number.
+- **Reseller return charge.** Owner decision 2026-10-14. When a reseller's order is returned (store-delivered or own courier), a return charge of **50 per order** (not per piece) is taken from the reseller's deposit, once. The amount is set in **Reseller Settings → Money rules → Return charge per order** (0 = no charge). A cancellation before delivery is unchanged (the deposit part goes back); a return gives nothing back. If the deposit holds less, it goes below zero and the reseller's next credits make that up first; a deposit below zero pays nothing on new orders. The charge shows in **Resellers → Deposits**, on the order for staff, and in the reseller's order details.
+
+### Changed
+
+- **Resellers earn "profit", not "commission".** Owner decision 2026-10-14: what a reseller keeps is the price they sell at minus the store's cost, so every reseller-facing screen now says **profit** (the portal's Orders, Products, Earnings, dashboard, create / change order, product details, the public reseller guide, the older store account page and the Reseller Settings help texts, plus the admin list of reseller profits). The arithmetic and the payable-after-delivery rule are unchanged. Investor and channel-partner "commission" screens are different things and keep their wording. Internal names (tables, classes) are unchanged.
+
+### Security
+
+- **A reseller account could be taken over by anyone who knew its phone number.** Applying on the portal with an existing customer's or reseller's number replaced that account's password (and the older plain `/reseller` form overwrote its name and business name). Both now require the SMS proof above; the plain storefront form no longer touches an existing number at all and sends the applicant to the portal's application page.
+
+### Technical Notes
+
+- Deposit refund: `ResellerDepositEntry::TYPE_REFUND` (positive entry, no migration); `ResellerOwnCourierService::refundDeposit()` returns `used - already refunded` for the order under the reseller's row lock (same as `applyDeposit()`), so it is idempotent; it runs from the `Order` `saved` hook when an own-courier order's `status` changes to cancelled (staff transition, WooCommerce sync or a direct update all pass through it). `refundedTo()` feeds the order page. Tests: 5 new in `ResellerOwnCourierOrderTest` (deposit part only, once only, not-cancelled/no-deposit, other reseller untouched, staff view).
+- Admin deposits: migration `2026_10_12_100000_add_created_by_to_reseller_deposit_entries` (nullable `created_by` → users); `ResellerDepositEntry::TYPE_ADJUSTMENT` (signed amount, reason in `note`) and `TYPES` labels; `ResellerDepositService::adjust()` validates direction / amount / reason and refuses a deduction above the balance under the reseller row lock shared with `applyDeposit()` and `refundDeposit()`; `ResellerDepositResource` (Resellers cluster, read-only table, header actions `addToDeposit` / `deductFromDeposit`, approved resellers of the current company only); `ResellerDepositEntry` is added to the audit observer list and to `User::MODEL_MODULES` (sales). Tests: `ResellerDepositAdminTest` (13).
+- Reseller payment methods: migration `2026_10_12_110000_add_reseller_payment_methods` (`storefront_payment_methods.reseller_only`, unique per `(company_id, reseller_only, name)` replacing `(company_id, name)` — new index created before the old is dropped for MySQL's foreign key; `storefront_settings.reseller_payment_method_ids` JSON, NULL = never chosen); `StorefrontPaymentMethod::scopeForStore()` is applied in `StorefrontCheckoutService::activePaymentMethods()` (storefront checkout + website API) and in the Payment Methods resource; `ResellerOwnCourierService::paymentMethods()` = reseller-only active + (chosen store ids, or all active store methods while NULL); `ResellerSettings::savePaymentMethods()` syncs the repeater (update in place, create, delete unless a `storefront_payments` row uses it — then switched off). Laravel's `Unique::where()` formats a boolean `false` as an empty string, so the store form's name rule uses `0`. Tests: `ResellerPaymentMethodsTest` (10) + 2 in `ResellerOwnCourierOrderTest`.
+- Application verification: `CustomerAccountService::findByPhone()` (any spelling of the number, current company only) and `applicationVerification()` (none / sms / unavailable) reuse the storefront sign-up code (`sendRegistrationCode()` / `verifyRegistrationCode()`, cached per company + number, hashed). `Apply` is two steps in one Livewire form (`verifyingPhone`); the pending details wait in the session with only the password hash; the number is normalised with `Phone::normalize()`; an adopted record's `remember_token` is rotated; `register()` no longer calls Filament's base flow (it repeats its create / `Registered` / sign-in steps). `ResellerController::apply()` refuses an existing number. Tests: `ResellerApplicationVerificationTest` (9).
+- Variations for resellers: migrations `2026_10_12_120000_add_reseller_prices_to_variants` (`reseller_products.variant_prices` JSON {variant id: customer price}) and `2026_10_15_100000_add_reseller_suggested_price_to_variants` (nullable `product_variants.reseller_suggested_price`, the admin's suggested selling price; `ProductVariant::resellerSuggestedPrice()`; shown in the product form only while the reseller module is on); `ResellerPricing::variantPrice()` = the reseller's pick, else the suggested price, never below the cost, null when neither exists, and `variantBlocked()` makes the storefront treat such a variation as out of stock (`StorefrontProductPage`), refuse it in `CartController` and drop it in `StorefrontCart::items()`; `ResellerOrderPlacementService::suggestedPrice()` / `defaultPrice()` are nullable and a line without a price gets `Enter your price.`; `ProductVariant::resellerCost($costPerUnit)` (= its own price + the company's cost per unit, null without a price) / `baseSalePrice()` and a reseller-aware `effectiveSalePrice()` (same request-scoped `ResellerPricing` context as `Product::selling_price`, so admin, reports, jobs and the Next.js API are unchanged); `ResellerPricing::variantPriceFor()` / `variantBasePriceFor()` / `variantPrice()`; `StorefrontCart` freezes the variation's `reseller_base_price` on the order item, so `ResellerCommissionService` needs no change; `ResellerOrderPlacementService` takes `variant_id` on each line (`lineVariant()`, per-variation stock via `lineStock()`, `basePrice()` / `defaultPrice()` / `suggestedPrice()` take the variation, order items store `product_variant_id` / `variant_label`), and `OrderStockCheckService` already handled variation rows. Portal: `Products::variationRows()` / `saveVariationPrices()` and a `variationPrices` record action; `CreateOrder` / `EditOrder` have an Option select. Not changed: the older storefront reseller account page (`/account/reseller`) still prices only ordinary products. Tests: `ResellerVariationPricingTest` (12), `ResellerVariationOrderTest` (16), +6 in `ResellerPortalProductsTest`.
+- Online reseller advance: no migration. `ResellerOwnCourierService::onlineGateway()` (setting on, gateway configured via `PaymentGatewayResolver::isConfigured()`), `paymentOptions()` (manual methods + the pseudo option `ONLINE`), `startOnlinePayment()` (closes unfinished online attempts, creates a pending `StorefrontPayment` with `gateway` zinipay/paystation and `purpose` reseller_advance for `outstandingAmount()`, calls the gateway with a signed portal return URL and the webhook on the company's own domain because `RestrictPortalHosts` serves only `/portal` on the portal host, keeps `payment_url` in `payload`), `recordOnlinePayment()` (called by `StorefrontPaymentService::verifyAndFinalize()` when the gateway marks it completed, and again on a repeat call; under a row lock it enters one `OrderPayment`, identified by a `[payment #id]` marker in its note so the return and the webhook cannot both enter it, and credits any overpayment), `paymentState()` has a new `paying` state. New route `reseller.portal.orders.payment-return` (`ResellerOnlinePaymentReturnController`: signed link with `hasValidSignatureWhileIgnoring`, same company as the portal host, asks the gateway, never trusts the query string). `ViewOrder` offers Verify / Reject only for manual payments. Tests: `ResellerOnlineAdvancePaymentTest` (18).
+- Return charge: migration `2026_10_14_100000_add_reseller_return_charge` (`storefront_settings.reseller_return_charge`, default 50). `ResellerDepositEntry::TYPE_RETURN_CHARGE` (negative entry); `ResellerOwnCourierService::chargeReturn()` (called from the `Order` `saved` hook when a reseller order's status becomes returned; takes the company's current setting, the same reseller row lock as `applyDeposit()` / `refundDeposit()`, once per order), `returnChargeOf()`, `spendableDeposit()` (`max(0, depositBalance())`, used wherever an order spends the deposit). The staff deduction in `ResellerDepositService` still refuses to go below zero. Tests: `ResellerReturnChargeTest` (11).
+## [2.74.0] - 2026-10-14
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investor portal: new look (minor).** The owner picked design "F" with design "B"'s menu (mock-ups: the "Investor Portal Redesign" canvas, row G).
+  - **Menu in groups:** *Overview* (Dashboard, My investments, Statement), *Money* (Payouts, Requests, Bank accounts), *Account* (Documents, Agreements, Profile), then *Channel partner*. The menu sits in a dark sidebar with the company logo at the top and the person (Profile, sign out) at the bottom; the top bar is gone. A logo made for light backgrounds sits on a white chip there; a company's dark-mode logo is shown as it is.
+  - **Look:** light grey ground, white rounded tiles, near-black ink with a lime highlight, Hind Siliguri for Bangla and English.
+  - **Dashboard:** greets the person by name with today's date. The tiles are: capital at work, with profit received, profit confirmed but not yet paid, and total paid; a ring of **capital by group**; a tile per project with a ten-block progress bar; this year's **project calendar** (paid, profit confirmed, completed, running, upcoming); and the **next payout**, with its four steps (project completed, profit confirmed, payment sent, screenshot added). The profit chart and the latest statement lines follow. Everything a project card said before is still on it.
+  - **English / বাংলা switch** in the sidebar and above the sign-in forms. The choice is kept for the browser and on the person's account (the language their portal SMS use too); a staff preview changes only its own browser. Accounts start with no language, so nothing changes for anyone until they use the switch.
+  - **Phones:** a bottom menu (Home, Investments, Payouts, Menu).
+  - Technical notes: `SetInvestorPortalLocale` middleware (also persistent for Livewire), route `investor/language/{locale}` (`InvestorPortalLocaleController`), `InvestorPortalCards::calendar()` / `nextPayout()`, `Dashboard::capitalShares()`; panel `->topbar(false)`, user menu in the sidebar, ink primary colour, new theme CSS. No migration. Tests in `InvestorPortalGroupViewTest` and `InvestorPortalTest`.
+
+- **Read-only data feed for IMS (`/api/v1/sync/*`).** The ERP can now be read by IMS (`tareksec/ims`), which asked for products, stock, purchases, suppliers, shipments, sales with their payments, customers and expenses.
+  - API keys now have a **type**. In **Settings → Integrations → Website API → Generate API key** choose **Website** (the old kind) or **Data sync (read-only feed for IMS)**. A Data sync key opens only the new feed; a Website key cannot read it, and a Data sync key cannot use the website API (`403 wrong_key_scope`). Every key that existed before is a Website key.
+  - 14 resources (`products`, `categories`, `stock-movements`, `suppliers`, `purchases`, `supplier-payments`, `containers`, `shipments`, `customers`, `orders`, `order-payments`, `customer-payments`, `expenses`, `expense-categories`) plus `ping`. `GET` only; nothing can be changed through it.
+  - Paging by cursor (no skipped or repeated record, even when many were saved in the same second), `updated_since` (inclusive), `status`, `date_from`/`date_to`, `ids_only`. Money is a two-decimal string; times are ISO 8601 UTC. An order carries its lines, its payments with **their own dates** and its costs; deleted orders stay in the feed flagged `deleted`.
+  - Limit: 300 requests per minute per key. Contract and answers to IMS's questionnaire: `docs/api/ims-sync-api.md`.
+  - Technical notes: migration `2026_10_13_100000_add_scope_to_company_api_keys` (adds `scope`, default `website`); `ImsSyncFeed`, `SyncController`, the `sync-api` rate limiter; `ResolveCompanyFromApiKey` takes the key scope as a parameter. 21 tests in `ImsSyncApiTest`. No webhooks for IMS yet.
+- **Investor Groups (group-based investment), step 1 of 6.** Investors now join a **group** instead of a single project. New menu **Investments → Investor Groups**:
+  - A group is **Open** (members can be added), **Running** (membership frozen) or **Closed**. Staff add members with their amount, payment details and the usual pending capital voucher, and can take a deposit back while the group is still Open.
+  - **Start group** (needs `investments.manage`) freezes the members and creates **Project 1** (code `G1-P01`) starting on the chosen date, ending two calendar months later, with every member's amount copied into it. The profit maths, settlement, payouts and batches are unchanged: they still read the project's investments.
+  - The money is booked **once**, when the member joins the group. The copies in a project book no second voucher.
+  - Projects show their group; the project list has a Group column and filter. A group project's investment rows cannot be typed in, edited or deleted by hand; money goes into the group.
+  - **Close group** needs a reason, every project settled and every member out.
+  - Existing projects are moved into groups by one command, `php artisan investments:backfill-groups` (**always run `--dry-run` first**): project 1 → G1, project 2 → G2 …, each becoming Project 1 of its group. Nothing is deleted or recalculated, no voucher is booked, project codes are not renamed and automatic cycles stay off.
+- **Investor Groups, step 2 of 6: the automatic 2-month cycle.** A group with **Automatic cycles** switched on (Running groups only) now closes its project when the project's two calendar months are over and starts the next one the same day, with the group's active members copied in. A member who left is not copied again. The finished project is ready for **Calculate & Settle** while the next one is already running.
+  - The dates are counted from the day the group went Running, in calendar months, so a group started on the 31st closes on 31 Oct, 31 Dec, 28 Feb, 30 Apr … without drifting.
+  - It never starts two projects for one date. If whole cycles were missed (the server was off, or automatic cycles were switched on late) it does **not** catch up on its own: the group page shows "Behind by N cycle(s)" and staff confirm with **Start the next project now**, which starts exactly one project per confirmation.
+  - New command `php artisan investments:advance-groups [--company=] [--dry-run]`, scheduled hourly (each company's own midnight is used). Groups migrated from old projects start with Automatic cycles **off**; staff switch it on after checking the dates.
+  - **New warning before settling:** when the capital base (investors + company contribution) is not the landed cost, the project page shows how far apart they are and why that changes the profit per lakh. It never blocks settling.
+- **Investor Groups, step 3 of 6: new money and leaving.**
+  - **New money goes into an open group.** A portal top-up, a payout the investor reinvests, and an investor imported or signed up through Investor Drafts now join an **open** group as a new member (the usual pending capital voucher is booked once). They never join a group that has started. If the group an investor asked for has started by the time staff approve, staff pick another open group in the approval box. Projects that are not in a group still take money the old way.
+  - **Leaving a group.** A withdrawal request or notice is about a group. After the 60-day notice, the member leaves at the **first project end after the notice runs out** (a notice that ends exactly on the project's end date leaves that day). They are not copied into the next project, and the cycle marks the notice honored. Everyone else stays.
+  - **What a group project pays.** Members who stay keep their principal in the group, so their payout is **the profit only**; a member who leaves gets **principal + profit**. The profit maths (pool, rate per lakh, annualized return) are unchanged. Projects outside a group still pay principal + profit as before. *Owner to confirm this rule: see the release note below.*
+  - A loss that the **investors** bear cannot be settled on a group project yet (it would reduce the stake of members who stay, and that rule is not decided). "Company bears the loss" works.
+  - The stamp and cheque numbers typed with an investor draft are kept on the member and become the security instrument of the member's first project row, once.
+- **Investor Groups, step 4 of 6: the payment screenshot.** When staff pay by hand, they can now upload a **screenshot or slip** (image or PDF) of the payment: in the **Mark as Paid** box, or later with **Payment screenshot** on a paid payout; the same for channel-partner commissions and for the payouts of a payout batch. A newer upload replaces the one shown (the older file stays on record). The person paid sees it in the portal: a **Payment screenshot** button on their Payouts (investors) or Commissions (partners) page, and the file in their Documents list. Nobody else can open it, and a payout that is not paid yet cannot take one.
+- **Investor Groups, step 5 of 6: the investor portal.**
+  - **Dashboard → My investments** now shows each group the investor is in (code, name, how much of their money is in it, since when) with **a card per project**: a **progress bar** with the end date while the project runs; the bar full and **"Project N completed"** when its two months are over; then the profit, "You receive" and **"Payment on the way"**; then **"Paid"**. A project card **leaves the dashboard once its payout is paid and the payment screenshot is uploaded**; the full result stays on the **Payouts** page for good. A group that has not started shows "This group has not started yet".
+  - **The totals are right for groups.** A member's money is counted **once** (each project holds a copy of it): *Capital at work* is the money in running groups, plus a leaving member's principal until their last payout is paid, plus projects outside any group; *Total invested* is one deposit per membership; the **Statement** lists one deposit per membership, so deposit + profit − payouts equals the principal still in the group. A channel partner's "capital at work" for their investors uses the same rule.
+  - **Payouts** shows **Capital returned** ("Stays invested" for a member who stays) and the group and project number; **My investments** names the group and calls a finished cycle **Completed**.
+  - A withdrawn row is no longer shown as a card on the dashboard (it stays on My investments and the statement).
+- **Investor Groups, step 6 of 6: the "project completed" SMS.** When a group project's two months are over, every investor in it can get an SMS. The wording is the owner's, so it starts **empty and nothing is sent** until it is written: **Investor Portal Settings → Messages → Project completed message** (use `:name`, `:group` and `:project`). It goes out through the company's existing SMS gateway; one message per investor per project; numbers on the opt-out list are skipped; a gateway problem never stops the cycle. Every completion is written to the audit log (how many investors, how many SMS sent). Until step 3, **do not run the backfill on real data**: the top-up, reinvest and import screens still pick a single project, and they skip group projects.
+
+**Technical Notes:**
+- Migration `2026_10_12_100000_create_investor_groups_tables` (additive): `investor_groups`, `investor_group_members`, `investment_projects.group_id` / `sequence_in_group` (unique per group), `investments.group_member_id`. Index names are explicit (MySQL 64-character limit).
+- `InvestorGroup` / `InvestorGroupMember` use `BelongsToCompany` and are in `MultiCompanyIsolationTest`, the audit-observer list and `User::MODEL_MODULES`. `InvestorGroupService` (add member, start, close, create project, snapshot), `GroupCycleCalendar` (calendar-month dates counted from the anchor with no-overflow, so a 31st anchor never drifts), `InvestorGroupBackfillService`, `InvestmentWithdrawalService::withdrawGroupMember()`.
+- `Investment` refuses a row on a group project unless it points at a member of that group and investor. The pick-a-project flows (investor draft, import, portal top-up, reinvest) skip group projects (`InvestmentProject::ungrouped()`).
+- Step 2: `InvestorGroupCycleService` (`decide()` is read-only, `advance()` does one step in a transaction and dispatches `InvestorGroupProjectCompleted` after the commit; a failing listener is reported, never undoes the cycle), `AdvanceInvestorGroups` command (per company, company timezone, `ModuleGuard`), `InvestmentProject::capitalBaseGap()`, schedule entry in `bootstrap/app.php` (`hourly`, `withoutOverlapping`, `onOneServer`). `InvestorGroup` refuses Automatic cycles unless the group is Running. 13 more lang keys (en + bn).
+- Step 3: migration `2026_10_12_110000_add_group_targets_to_investor_flows` (additive): `group_id` on `investor_requests`, `investor_drafts`, `investment_withdrawal_notices`; `next_group_id` / `reinvestment_member_id` on `investor_cycle_elections`; `paperwork` / `leaves_after_sequence` on `investor_group_members`; `settlement_payouts.principal_returned_amount` (NULL = whole principal, every payout made before groups). `InvestmentTargets` is the one place that lists open groups and places money (`g<id>` / `p<id>` keys). `SettlementService` computes `total_payout = principal returned + profit` (group project: principal only for members with `leaves_after_sequence` = this project). `InvestorGroupCycleService::maturedNotices()` / notices applied before the next snapshot, also by the dry run and the confirmed catch-up. 23 more lang keys (en + bn).
+- Step 4: the screenshot is an `InvestmentDocument` of the new category `payment_proof` attached to the payout (`HasPaymentProof` on `SettlementPayout` / `ChannelPartnerPayout`), kept in the company's private storage and served only by the existing admin download (`investments.view`) and the portal download (`InvestorPortalService::documents()` now also lists the proofs of the person's own payouts, nothing else of a payout). `PayoutProofService`, `PayoutProofAction` (shared field / action / column). No migration. 9 more lang keys (en + bn).
+- Step 6: migration `2026_10_12_120000_add_project_completed_message_to_companies` (`companies.investor_project_completed_message`, NULL = off); listener `SendProjectCompletedMessages` (auto-discovered, on `InvestorGroupProjectCompleted`) sends through `StorefrontNotificationService::sendSms` with a 30-day per-investor guard. 4 more lang keys (en + bn).
+- Step 5: `InvestorPortalCards` (cards: state, progress via `GroupCycleCalendar::progressPercent`, done rule), `InvestorPortalService::capitalAtWork()` / `workingCapital()` / `totalInvested()` / membership-based `statement()` / `partnerSummary()`, partial `filament/investor/pages/partials/project-card.blade.php`. 18 more lang keys (en + bn). Run `npm run build` on deploy (new utility classes in the portal views). Checked in a browser on a disposable database (desktop and phone widths).
+- Tests: `ProjectCompletedMessageTest` (9), `InvestorPortalGroupViewTest` (14), `PayoutPaymentProofTest` (12), `InvestorGroupMoneyFlowsTest` (18) and `InvestorGroupExitTest` (11: notice on/after the boundary, several deposits, everyone leaves, the signed-invoice payouts with a leaver ৳2,077,486.16 and ৳7,748.62 for a stayer, profit-only next project, old projects unchanged, voucher amount of the payout), plus `GroupCycleCalendarTest` (12), `InvestorGroupCycleTest` (22: boundary days, 31st anchor, leap-safe February, missed cycles, one project per confirmation, withdrawn member skipped, settled project untouched, per-company and timezone, scheduler entry), `InvestorGroupTest` (32; includes the signed-invoice figures: pool ৳2,76,005.20, ৳3,874.31 per lakh, ৳7,748.62 for ৳2 lakh, 23.25% a year, and a group project settling exactly like an old-style project). 77 new lang keys (en + bn).
+- Maintenance: added `16_INVESTOR_GROUPS_PLAN.md`, the approved plan for group-based investment (investors join groups, each group runs a new project every calendar 2 months, payment screenshot on payouts, portal progress bar). Planning document only; no code or data changes.
+## [2.73.0] - 2026-10-12
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller portal: product details.** A reseller reported that their dashboard did not show the product details and images. On **Products**, a new **Details** button (also opened by clicking a row) shows a slide-over with a large photo gallery, the product video, the description (with a **Copy description** button for posting), brand, SKU, category, unit, weight, stock, minimum order quantity and the variations with their own photos, price and stock, plus the reseller's own cost, suggested price, own price and commission per unit. It shows only that reseller's own figures: another reseller's price or store is never visible, and the company's purchase cost and wholesale tiers are not shown.
+- **Reseller portal: bigger list photos and a fuller photo download.** The Products list thumbnail is larger and falls back to the first gallery photo when there is no main image. **Download photos** now also includes the photos of the product's variations, and the button shows whenever any photo exists. **Create order** shows the chosen product's photo, name, SKU and brand under the product field.
+- **Reseller portal: a modern front page.** The Dashboard is redesigned. A welcome banner in the store's own colour shows the reseller's name and the money they can withdraw now, with **Withdraw** and **Create order** buttons and their pending, in-process and already-withdrawn amounts. Below it: one-tap shortcuts (create an order, add products, withdraw, share the store link with the phone's share sheet); four overview cards (parcels waiting, this month's orders, sales and commission) with a ▲/▼ percentage against the same days of last month and a 14-day trend line; a store card where the link looks like a browser address bar (copy, visit, share on WhatsApp / Facebook) with a QR code to scan and a "Live" or "Setting up your store address" badge; an **Order pipeline** (Confirmed, Processing, Shipping, Completed, plus Cancelled and Returned) where each step opens the Orders page already filtered to that stage; recent orders with the first product's photo, a coloured status badge and the amount; and the commission chart as a smooth filled line. It works on phones and in dark mode, and every number is only the signed-in reseller's own.
+- **Reseller portal: filter Orders by stage.** `/portal/orders?stage=shipping` (and confirmed, processing, completed, cancelled, returned) lists only that stage, with a banner and a **Show all orders** link. An unknown stage in the address is ignored.
+- **Reseller portal wears the store's colour and a Bangla-friendly font.** The portal's buttons, links and highlights now use the company's **Storefront Settings → theme colour** (the colour its reseller stores already use) instead of Filament's default amber, including the sign-in page; a company with no storefront settings keeps amber. Text uses **Hind Siliguri** (SIL Open Font License), self-hosted, which reads well in Bangla and English together. Cards, tables and the sidebar have softer rounded corners and the top bar is frosted.
+
+### Fixed
+
+- **Reseller portal: order status labels were not translated.** The status badges on the Orders page and the dashboard showed English even in Bangla; they now go through the translations (new keys **Confirmed** and **Shipping**).
+
+### Technical Notes
+
+- Product details: `Products::detailsFor()` builds the slide-over data (partial `filament.reseller.pages.partials.product-details`) from the table's own company-scoped, active+available query and `$this->picks` (this reseller's rows only). New `Product::allImagePaths()` (main + gallery + active variation photos, no repeats) feeds the zip (`ResellerProductPhotosController`) and the button. `CreateOrder::productPreview()`. 15 new lang keys (en + bn). `ResellerPortalProductsTest` +6 (details content, hidden cost/tiers, variations, thumbnail fallback, two-reseller isolation, zip with variation photos), `ResellerPortalCreateOrderTest` +1. No migration.
+- Dashboard redesign: `Dashboard::kpis()` (this month to date against the same days of last month, 14-day series, from one orders query and one commissions query for this reseller only), `pipeline()` (one grouped query, stage decided by `Order::workflowStage()`), `recentOrders()` / `orderSummary()` (first product's photo through `CompanyMedia::filamentPublicUrl`), `greeting()` (company time zone), `storeQrCode()` / `subdomainIsSettingUp()`. The old `thisMonth*()` helpers were folded into `kpis()`. New partial `filament.reseller.pages.partials.sparkline`. `CommissionTrend` is now a filled `line` chart with no hard-coded colour, so it follows the brand colour.
+- Stage filter: `Order::scopeInWorkflowStage()` mirrors `workflowStage()` in SQL (new `Order::SHIPPING_DELIVERY_STATUSES`, also used by `workflowStage()`); `Orders` has a `#[Url] $stage` property with `activeStage()` / `clearStage()`.
+- QR code: `App\Support\QrCodeSvg` draws an inline SVG data URI on the server with `chillerlan/php-qrcode`, which `filament/filament` already requires (not a new package, but not a direct `composer.json` dependency either); it returns null on any failure so the page just hides the QR. No third-party QR service sees the store link.
+- Theme: `ResellerPanelProvider::brandColorStyle()` (HEAD_END hook inside `ModuleGuard::run`) writes `--primary-50..950` from `storefrontSetting->normalizedThemeColor()` through the existing `DynamicColorService`, and `->font('Hind Siliguri', provider: LocalFontProvider::class)` names the face; `@font-face` rules and the rounded/frosted polish live in `resources/css/filament/reseller/theme.css`. Font files and `OFL.txt` are in `resources/fonts/hind-siliguri/` (400/500/600/700, Bangla + Latin subsets). Run `npm run build` on deploy.
+- Tests: new `ResellerPortalDashboardRedesignTest` (18 tests: month comparison, no-percentage case, two resellers in one company and a reseller of another company, pipeline, the SQL stage scope against `workflowStage()` for 42 status/courier combinations, the stage filter and its isolation, front page content, subdomain badge, greeting by time zone, order rows, chart, brand colour per company and its default, QR helper, sparkline).
+## [2.72.0] - 2026-10-11
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **A title and description for every public page.** Until now every storefront page, including every product, showed the home page's title and description in browser tabs, Google results and link previews. Now a product page reads "Steel Bolt | Your Store" with the start of the product description; a category, a custom page, an offer and the contact page do the same, using the page's own meta title and meta description where the admin entered them. The product and category photo, and the page or offer cover, become the share picture. The home page keeps the site title.
+- **Canonical address on every indexable page.** Each page names its own address without tracking parameters (`?utm_source=...`), so a shared or advertised link does not split the page into duplicates in search results.
+- **`robots.txt` per domain.** A storefront domain now tells crawlers to skip the cart, checkout, account, order tracking and complaint pages, and names its sitemap. The app's own domain keeps the admin-only rules.
+- **`sitemap.xml` per storefront domain.** It lists the home page, the shop, the contact page, categories that have products, available products (with their last-changed date), published pages and published offer landing pages. Draft pages and offers, coming-soon and inactive products and empty categories are not listed. A reseller's own store has no sitemap, because it repeats the company's catalog at other prices. The list is cached for 10 minutes and refreshed when a product or category changes; a catalog over 45,000 addresses is split behind a sitemap index.
+- **Structured data (JSON-LD) so results can show price and stock.** A product page carries the product's name, photos, SKU, brand, price (or the cheapest and dearest variant), currency and stock (in stock, pre-order, out of stock); a product with no price publishes no price. Product and category pages carry a breadcrumb trail. The home page carries the organisation (name, logo, phone, email and the social profiles the admin entered) and the site search. No star rating is published, because the product page shows no reviews. A reseller's own store publishes no price markup.
+- **Share previews know the site.** Pages now send the site name, the page address and the language (`en_US` or `bn_BD`) to Facebook and other link previews, and a product page is typed as a product.
+
+### Changed
+
+- **Only the plain shop, category and offer lists are indexed.** Search results, sorted, filtered and later pages, and the single/combo filter on the offers page tell search engines not to index them (`noindex, follow`) in every theme; before, only Marketplace Pro did this, and search results were not covered.
+- **Private pages are never indexed.** A page is kept out of search results unless its controller says it may be indexed, so the cart, checkout, order tracking, account, complaint and every new page start out private.
+- The default meta description ("Shop products from ...") is now translated.
+
+### Technical Notes
+
+- New `App\Support\StorefrontSeo` (kept on the request, so one request never inherits another's values), `StorefrontSchema` (JSON-LD builders) and `StorefrontSitemap`; new `Storefront\SeoFilesController` for `/robots.txt`, `/sitemap.xml` and `/sitemap-{n}.xml`, behind `ResolveCompanyFromDomain:optional`. The storefront layout prints the tags; `HomeController`, `ProductIndexController`, `ProductShowController`, `PageController`, `OfferController` and `ContactController` fill them in once for every theme.
+- `public/robots.txt` is deleted and the `location = /robots.txt` block is removed from `nginx.template.conf`: the route answers instead. A static file would shadow the route, and that nginx block (no fallback) would turn the missing file into a 404 that crawlers read as "no rules" even though Laravel produced the body. `SecurityHardeningTest` now fails if either comes back. The robots rules for the admin (`/admin`, `/livewire`) are unchanged.
+- `StorefrontListingCache::sitemap()` reuses the per-company generation that product and category saves already bump.
+- The Marketplace Pro listing no longer pushes its own robots tag.
+- New `StorefrontSeoTest` (24 tests) and 2 reseller-host tests in `ResellerSubdomainTest`. 2 new lang keys ("Shop products from :name", "Contact us").
+- Not done: `hreflang` (visitors cannot switch language by address yet, so Bangla and English share one address), product and category meta fields in the admin (the title and description come from the product or category itself), and a canonical host for `www` against the bare domain (set a redirect on the web server).
+## [2.71.0] - 2026-10-11
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Weight field on product variations.** In the product form, under Variations, each variation now has a "Variation weight (kg)" field. Leave it empty and the variation uses the product's weight. A filled weight is used for:
+  - the storefront delivery charge (weight-based) on the Blade checkout, the website checkout and landing-page offers;
+  - the Weight column on the printed invoice and PDF, and the item weight and Total Weight on the order page;
+  - the website API (`variants[].weight_kg` on the product detail).
+- **WooCommerce import keeps the variation weight and the description format.**
+  - A variation's weight comes across with the variation. An empty weight in WooCommerce stays empty, so the variation uses the product weight.
+  - The full description is imported as formatted text instead of plain text: headings, bold and italic, lists, links, tables, images, paragraphs and line breaks appear in the product form's description box and on the storefront as they were on the old site. Scripts and unsupported markup are removed.
+  - Products imported before this change keep their plain-text description until the import is run again (`php artisan woocommerce:import-products {company-slug}`), which also refreshes their prices and weights from WooCommerce.
+
+### Technical Notes
+
+- New migration `2026_10_11_100000_add_weight_kg_to_product_variants` adds nullable `product_variants.weight_kg` (`decimal(8,3)`, same as `products.weight_kg`). Existing variations stay NULL, so nothing changes for them until a weight is entered.
+- New `ProductVariant::effectiveWeightKg()` and `OrderItem::unitWeightKg()` (variation weight, else product weight). `StorefrontDeliveryService::quote()` reads the line's `variant` when present; `OfferCheckoutController` now passes the offer item's variation to it.
+- 2 new lang keys in `en.json` and `bn.json`. New `ProductVariantWeightTest` (8 tests).
+- New `App\Support\WooCommerceDescription` converts the WooCommerce description to the HTML the rich editor stores: it removes comments, scripts, styles and `[caption]` wrappers, adds the `<p>` and `<br>` that WordPress only adds on display (`wpautop`), then renders through Filament's `RichContentRenderer` (sanitised). Markup the editor cannot parse falls back to plain text instead of failing the import.
+- `WooCommerceImportService` reads `weight` of each variation (kg, like the product weight; only a value above 0 is set). New `WooCommerceDescriptionTest` (7 tests); `WooCommerceImportTest` now expects the description as HTML and checks the variation weights.
+## [2.70.0] - 2026-10-10
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Marketplace Pro product listing page.** The product list, category and search pages have their own Marketplace Pro design: breadcrumb, page title with product count, a filter sidebar on desktop and a slide-in filter panel on phones (categories, "In stock only", and a minimum/maximum price), a sort menu, and an empty state that suggests categories. Other themes keep their current listing page.
+- **Stock and price filters on the product list.** `in_stock=1`, `min_price` and `max_price` in the address work without JavaScript and can be shared as a link. Filtered, sorted and later pages tell search engines not to index them (`noindex, follow`).
+- **Marketplace Pro product page.** The page has:
+  - a gallery with thumbnails, zoom on hover and the discount badge;
+  - a buy box with the price, the struck-through original price, "Save ৳X", the VAT note, a stock pill (in stock / only N left / pre-order / out of stock) and the bulk pricing table;
+  - variant rows with quantity steppers, "Add to cart" and "Buy now" buttons, and "Ask on WhatsApp";
+  - delivery time and the admin trust items under the buy box;
+  - the description, "You may also like" with Marketplace Pro cards, and a sticky buy bar above the bottom navigation on phones.
+
+  The cart form, field names and routes are the same as before.
+- **Marketplace Pro product card** on the home and listing pages: discount badge, stock badge, orange quick-add button, "Only N left", and the minimum order quantity. All text is in English and Bangla.
+- **Marketplace Pro cart page.** Each cart row shows the photo, category, name, the chosen option, the price of one piece, a stock pill (in stock / only N left / pre-order), the minimum order quantity and the line total, with a quantity stepper, Update and Remove. For a product with wholesale prices it also says how many more pieces unlock the next price ("Add 6 more to pay ৳140 each"). The order summary shows the items, the subtotal, "Delivery: calculated at checkout" and the VAT note, with "Proceed to checkout" and "Continue shopping". On phones the subtotal and checkout button stay above the bottom navigation. The empty cart offers "Browse products". The update, remove and checkout routes are unchanged, and all text is in English and Bangla.
+
+- **Marketplace Pro checkout page.** The checkout is one numbered flow: contact details, delivery address, payment method and an optional order note, with an order summary beside it (thumbnails, subtotal, VAT, parcel weight, delivery charge, delivery time and the total). Typing the address detects Inside or Outside Dhaka and updates the delivery charge, the delivery time and the total at once. The new-customer delivery advance note, the verified-advance note, the pre-order advance, the manual payment instructions (account number, sender number, transaction ID) and the online gateway note all appear as before, and ordering stays blocked when there is no usable payment path. On phones the live total and "Place order" stay above the bottom navigation. Every form field, field name and the checkout rules are unchanged, and all text is in English and Bangla.
+- **Marketplace Pro order-success page.** After an order it shows the order number, a status ("Awaiting confirmation" until the team confirms), every item with its price and line total, the subtotal, discount, VAT, delivery charge, packaging fee, total, the amount paid and the amount due, the delivery details with the delivery time for the customer's area, the payment made at checkout (and whether it is still being verified), the WhatsApp group, the complaint link, "Track this order" and "Continue shopping". All text is in English and Bangla.
+- **Marketplace Pro order-tracking page.** Customers type the order number and the phone used on the order (the same two-factor lookup as before; a link from the success page or a signed-in customer needs no phone). The found order shows a four-step progress bar (Order placed, Confirmed, On the way, Delivered) that follows the order and delivery status; a cancelled, returned or refunded order stops after the first step and says so. Below it: the delivery update with the courier name, tracking ID and booking status, the tracking updates as a timeline with the latest one marked, the items with their photos, and a summary with the subtotal, discount, VAT, delivery charge, packaging fee, total, amount paid and amount due, the delivery area and time, and buttons for a complaint, the helpline and more shopping. A reseller's customer still sees only the reseller's prices: item lines and one total, never the store's breakdown. All text is in English and Bangla.
+
+### Fixed
+
+- The struck-through old price on the shared product card showed the selling price instead of the original price.
+- On the product page, each variant row showed the product's price instead of the variant's own price. The cart charges the variant price, so the page now shows that.
+- On the shared cart page (every theme except Marketplace Pro), the amount at the end of each row was the price of one piece, so a line of 2 pieces at ৳150 showed ৳150 instead of ৳300. It now shows the line total.
+- On the shared order-success page (every theme except Marketplace Pro), every item line, the subtotal, the delivery charge and the amount due all printed the order total. They now show the item's own line total, the real subtotal, the real delivery charge and the amount still due (VAT, discount and packaging fee rows appear when they apply), and the payment box shows the payment's own amount.
+- On the checkout page (every theme), sending the form with an empty address and getting an error back left the delivery charge, delivery time and total blank, because the address reached the page's script as nothing instead of text. It is now always text.
+- On the shared order-tracking page (every theme except Marketplace Pro), every item line printed the amount due of the whole order, so an order with two products showed the same amount twice. Each line now shows its own line total (or the reseller's price for a reseller's customer).
+- The shared order-tracking page and its tracking-update lines were English only. They now go through the translation files, so they follow the visitor's language.
+
+### Technical Notes
+
+- New `App\Support\StorefrontListingFilters`, used by `ProductIndexController` and the preview listing. Filtered listings skip `StorefrontListingCache`. Price bounds are cast to `DECIMAL`, so SQLite compares them as numbers.
+- New `StorefrontUrl::home()` helper and a `@stack('head')` in the storefront layout.
+- The quick-add double-submit script moved to `storefront/partials/quick-add-script.blade.php`. The listing Meta Pixel events moved to `storefront/products/partials/listing-meta-events.blade.php`. Both are shared by every theme.
+- New `App\\Support\\StorefrontProductPage` holds the purchase facts every theme's `products.show` shows: gallery URLs, variants, stock, MOQ, quantity bounds, tiers and discount.
+- The product page script moved to `storefront/products/partials/product-page-script.blade.php`. Its button text comes from `data-count-label`, so it can be translated. The ViewContent pixel event moved to `product-meta-events.blade.php`.
+- New views: `themes/marketplace-pro/products/show.blade.php`, `themes/marketplace-pro/partials/product-card.blade.php` and `themes/marketplace-pro/products/index.blade.php`. 51 new lang keys in `en.json` and `bn.json`.
+- New `App\Support\StorefrontCartLine` holds what one cart row shows and allows: stock, pre-order, quantity bounds, photo URL, line total and the next wholesale step. The shared and Marketplace Pro `cart.show` both read it.
+- The cart Meta Pixel ViewCart event and the double-submit script moved to `storefront/cart/partials/cart-meta-events.blade.php` and `cart-script.blade.php`, shared by every theme. New view `themes/marketplace-pro/cart/show.blade.php`; 20 more lang keys.
+- New `App\Support\StorefrontCheckoutPage` (payment choices, the default one, whether ordering is blocked, delivery charges, the signed-in customer, the autosave URL) and `App\Support\StorefrontOrderSuccessPage` (the order's real amounts, the payment made, the links, the status label). The shared and Marketplace Pro `checkout.show` and `checkout.success` read them, so a theme only changes the design.
+- The checkout page's Alpine state, form script (autosave, leave-page guard, double-submit lock) and Meta Pixel InitiateCheckout event, and the success page's Purchase event, moved to `storefront/checkout/partials/` and are shared by every theme. The submit buttons take their sending text from `data-pending-label`, and the script handles more than one button.
+- New views `themes/marketplace-pro/checkout/show.blade.php` and `success.blade.php`; 56 more lang keys.
+- New `StorefrontMarketplaceProPagesTest`.
+- New `App\Support\StorefrontTrackPage` holds what the tracking page shows about a found order: the progress steps and their state, the order and delivery status labels, the courier parcel, the items with the buyer's prices (`showsResellerPricesToBuyer()`), the amounts and the delivery area and time. The shared and Marketplace Pro `track.show` both read it.
+- `OrderTrackController::trackingUpdates()` now wraps its titles and messages in `__()`; the English text is unchanged. New view `themes/marketplace-pro/track/show.blade.php`; 44 more lang keys (including the courier status labels In Transit, Picked Up, Booked, Not Booked and Booking Pending).
+- `StorefrontMarketplaceProPagesTest` now has 42 tests (9 new for tracking).
+## [2.69.4] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **The SMS gateway moved from Storefront Settings to Settings → Integrations → SMS Gateway.** The URL template, API key and sender ID are now edited there, per site (use the Site picker, like Payment Gateway). Values already saved keep working — nothing needs to be re-entered. Saving Storefront Settings no longer touches the SMS keys.
+
+### Technical Notes
+
+- SMS keys (`sms_api_url`, `sms_api_key`, `sms_sender_id`; `StorefrontNotificationService::SMS_CREDENTIAL_KEYS`) still live in the encrypted `storefront_settings.notification_credentials`; no migration. `Integrations::save()` merges only these keys into the stored array, and `EditStorefrontSetting::mutateFormDataBeforeSave()` re-adds them so the Storefront Settings form (which no longer has the fields) cannot wipe them. Tests: `IntegrationsPageTest` (+2).
+## [2.69.3] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Create/Edit Order: Total amount and Due amount now include the Shipping Fee as soon as you type it.** Before, the totals only recalculated when the field lost focus, so on a phone (where closing the keyboard leaves the field focused) a typed Shipping Fee of ৳110 never reached the Total amount, which kept showing only the products' ৳200. Shipping Fee, Discount, Vat, Paid amount and each item's Quantity and Unit price now update the totals about half a second after you stop typing.
+
+**Technical Notes:**
+- `OrderForm`: the six totals inputs changed from `live(onBlur: true)` to `live(debounce: OrderForm::TOTALS_DEBOUNCE_MS)` (500 ms). The saved order was never wrong (`OrderWorkflowService::sync()` recomputes it from items + fees after every save); only the on-screen total was stale. New tests in `OrderFormTest`: `test_shipping_fee_is_added_to_the_total_amount_on_the_live_create_form` and `test_inputs_feeding_the_order_totals_recalculate_while_typing_not_only_on_blur`. No migration, no new strings.
+## [2.69.2] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Investor portal sign-in, sign-up and password-reset pages: the company logo is now a standard size** (4rem high) instead of the tiny sidebar size. The logo in the signed-in header is also a standard size now (2.75rem high instead of Filament's tiny 1.5rem).
+
+**Technical Notes:**
+- `brandLogoHeight('2.75rem')` on the investor panel; rule added to `resources/css/filament/investor/theme.css` (`.fi-simple-layout .fi-logo`); `!important` is needed because Filament sets the height inline.
+## [2.69.1] - 2026-10-10
+
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **Investor portal sign-in page:** the heading under the company logo now reads **Investor Dashboard**, so it is clear which sign-in this is.
+
+**Technical Notes:**
+- `Login::getHeading()`; 1 new lang key (en + bn); assertion added to `test_the_login_page_has_a_forgot_password_link`.
+## [2.69.0] - 2026-10-10
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investor portal: staff can set a password.** On an investor's or channel partner's page, **Portal access → Set a portal password** (needs `investments.portal_manage`) opens the portal account if there is none, sets the password and makes it active, so the person can sign in with their phone number and that password at once, without an SMS. Audited as `investor_portal.password_set_by_staff`; not offered for a disabled account.
+- **Investor portal sign-in: "Forgot your password?" link** under the password field, opening the existing SMS-code reset page.
+
+**Technical Notes:**
+- `InvestorPortalAccountService::setPasswordByStaff()`; link added to `Login::form()`. New tests in `InvestorPortalTest`. 6 new lang keys (en + bn).
+## [2.68.0] - 2026-10-10
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **A reseller's new store subdomain sets itself up and shows when it will be live.** After a reseller picks a subdomain on **My Store**, the page shows "Setting up <name>.<domain> (DNS and SSL)" with a countdown, checks every 15 seconds whether the address already opens over HTTPS, and switches to "Your store address … is live." on its own. Nothing to do on the reseller's side and no per-reseller server work: the wildcard DNS record covers every name, and the SSL certificate comes from the wildcard certificate or, new, from an on-demand proxy, because `/internal/tls-ask` now also approves the subdomain of every approved reseller. Until the address is ready the reseller's shared store link stays the long `/store/<slug>` link, so nobody gets a link that does not open yet. The countdown length is **Resellers → Reseller Settings → Subdomain set-up time (minutes)** (Super Admin, default 10).
+- **The name at the top of the reseller portal's user menu now opens the Profile page.**
+
+### Technical Notes
+
+- Subdomain set-up: migration `2026_10_10_100000_add_reseller_subdomain_status` (`customers.reseller_subdomain_changed_at` / `reseller_subdomain_live_at`, `storefront_settings.reseller_subdomain_setup_minutes` default 10). Subdomains chosen before it (no `changed_at`) count as live. `Customer::resellerSubdomainIsReady()` / `resellerSubdomainReadyAt()`; `resellerStoreUrl()` uses the subdomain only once it is ready. New `App\Services\ResellerSubdomainProbe` (DNS points at the company domain's IPs + an HTTPS request that succeeds), polled by `MyStore::checkSubdomain()`. `TlsAskController` also answers 200 for approved resellers' subdomains. Profile link: `ResellerPanelProvider` `userMenuItems(['profile' => ...->url(Profile::getUrl())])`. Tests: `ResellerSubdomainTest` +5, `ResellerPortalDashboardTest` +1, `ResellerSettingsPageTest` updated. 7 new lang keys (en + bn). `docs/deployment.md` updated.
+## [2.67.0] - 2026-10-09
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **WhatsApp Web Login (CRM → WhatsApp Web Login).** Link the WhatsApp Business app to the ERP by scanning a QR code, the same way as WhatsApp Web. Every 1:1 chat the phone shares — the full history and every new message, sent or received — is saved into the CRM Inbox with photos, voice notes, videos and documents, and every WhatsApp contact is saved as a customer record linked to the matching customer or lead by phone. The page shows the connection status, the QR code, history sync progress and how many chats, messages and contacts were saved. In English and Bangla.
+- **Chats and customer info survive a ban.** The archive belongs to the ERP: logging out, deleting the channel or WhatsApp banning the number never deletes saved chats, messages or contacts. A "delete for everyone" on WhatsApp keeps the original message in the ERP and marks it **Deleted on WhatsApp** in the Inbox.
+
+### Fixed
+
+- **Connect WhatsApp App (Coexistence) could fail at the last step.** The page only accepted Meta's popup reply from `www.facebook.com`, so when Facebook opened as `web.facebook.com` (common in Bangladesh) the WhatsApp Business Account ID and phone number ID were lost and the connection failed with an unclear error. Any Facebook address is now accepted, the page waits a few seconds for Meta's reply, and if the IDs still do not arrive it says so clearly instead of trying to connect without them.
+
+### Changed
+
+- WhatsApp Web chats are read-only in the ERP Inbox — reply from the phone app (internal notes still work). The AI auto-reply, read receipts and SMS fallback never run for them.
+
+### Security
+
+- The bridge API key is stored encrypted per company; every webhook from the bridge is HMAC-SHA256 signed with a per-channel secret and rejected otherwise.
+
+### Technical Notes
+
+- **New service to deploy:** `whatsapp-bridge/` (Node.js 20+, Baileys `7.0.0-rc14`, Dockerfile included). It needs `BRIDGE_API_KEY` and a **persistent** `DATA_DIR` volume; run it as its own Coolify app. See `whatsapp-bridge/README.md`. Unofficial WhatsApp Web client — not a Meta API.
+- Migration `2026_10_05_100000_add_whatsapp_web_archive_support`: `conversation_channels.web_status/web_phone/web_connected_at/web_disconnected_at/web_history_synced_at`, `conversation_messages.revoked_at`, new company-owned `whatsapp_contacts` table (channel_id nullOnDelete). `connection_type = 'web'` marks these channels.
+- New routes `POST /webhooks/whatsapp-web/{channel}` and `/media` (CSRF-exempt, throttle 600/min). Messages are archived by queued `ImportWhatsAppWebMessagesJob` / `SyncWhatsAppWebContactsJob` (idempotent on `waweb:{channel}:{id}`), so a queue worker must run. Media uploads need PHP `post_max_size` large enough for the attachments.
+- Rules for WhatsApp Web channels, with the relevant clauses of WhatsApp's Terms of Service, Business App terms, Messaging Guidelines and Business Messaging Policy quoted word for word (checked 2026-10-06), are in `docs/whatsapp-web-rules.md` and referenced from `CLAUDE.md`.
+- New `WhatsAppWebArchiveTest` (12 tests) and bridge unit tests (`npm test` in `whatsapp-bridge/`, 10 tests).
+## [2.66.1] - 2026-10-09
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Investor portal: the profile in the top-right menu now opens the Profile page.** The name at the top of the user menu was plain text; it is now a link to the Profile page.
+
+**Technical Notes:**
+- `InvestorPanelProvider` sets a URL on the `profile` user-menu item. New test `test_the_user_menu_name_links_to_the_profile_page`.
+## [2.66.0] - 2026-10-09
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **One module's error no longer takes the whole app down** (owner request after the v2.63.0 outage). Errors are kept inside the part that failed:
+  - **Sidebar counts:** if the number next to a menu item (Investor Requests, Payout Batches, Investor Drafts, Reseller Payout Requests, Inbox) cannot be worked out, that count simply does not show. The menu and every page keep working.
+  - **Dashboard and page widgets:** a widget that fails shows a small "This section could not be loaded" card in its place. The rest of the dashboard or page works as normal. Shared parts drawn on every page (sidebar, company switcher, banners, toolbars) leave out only the part that failed.
+  - **A crashed page** in the admin panel or a portal shows "This page could not be opened. The other sections keep working" with **Go to the dashboard**, **Try again** and **Go back** buttons, instead of the bare "500 Server Error". 403/404 pages and sign-in redirects are unchanged.
+  - **Missing database table** (e.g. an update that did not finish): the pages of that one section show "This section is temporarily unavailable", and its tabs and buttons on other pages are hidden. Everything else keeps working. The section turns back on by itself as soon as the update finishes.
+  - Every error caught this way is **reported to Super Admins** (bell notification titled "Module error …" and **Settings → Deploy Error Logs**), at most once an hour per error, so nothing is hidden silently.
+- **New automatic check (GitHub Actions "MySQL migrations")** runs every database update against MySQL 8.4, the production version, on every branch push and pull request. A database update that would fail on the live server now shows up as a red check on its branch, before it reaches `main`.
+
+### Technical Notes
+
+- `App\Support\ModuleGuard::run($section, $callback, $fallback)` catches, logs and reports through `DeploymentErrorReporter` (source `module:<section>`, throttled 1/hour per section and error via `Cache::add`). `ModuleGuard::renderView()` renders a nested view and, on failure, restores the view factory's component/section/stack state that Laravel flushes, so the page around it survives. Isolation is on everywhere except `local` and `testing` (where errors still throw); override with `ISOLATE_MODULE_ERRORS` (`config('app.isolate_module_errors')`).
+- Badges: trait `App\Filament\Concerns\HasGuardedNavigationBadge` (write the count in `navigationBadge()`). Widgets: trait `GuardsWidgetRendering` (all 19 widgets; the widget view is rendered inside the guard in `filament.widgets.guarded`). Render hooks: `App\Support\GuardedViewManager` replaces Filament's `ViewManager` (`AppServiceProvider::register()`, `extend()`), so every render hook of every panel is guarded. Its `renderHook()` copies Filament's; re-check it on a Filament upgrade.
+- Crashed pages: `App\Support\PanelErrorPages` (first path segment `admin` / `investor` / `portal`; Livewire updates use the Referer) renders the self-contained `panel-errors.module` view from `bootstrap/app.php`'s exception renderer, only for real 500s.
+- Missing tables: `App\Support\ModuleHealth` (scoped; table list cached 10 minutes and dropped on `MigrationsEnded`). Admin panel middleware `TurnOffPagesWithMissingTables` answers a resource page whose model table is missing with a 503 page. `Gate::before` denies every ability on such a model (models in `User::MODEL_MODULES`). Off in `local` / `testing`, like `ModuleGuard`.
+- New `ModuleGuardTest` (12 tests). It enforces that every navigation badge and every widget in `app/` goes through the guard, and it reproduces the 2026-10-08 state (dropped `investor_requests` table). Without the guard that state answers 500; with it, `/admin` opens. 10 new lang keys (en + bn).
+- New workflow `.github/workflows/mysql-migrations.yml` (MySQL 8.4 service, `migrate --force` from empty, then checks nothing is pending). Checked locally against MySQL 8.0: all 219 migrations run; the unfixed v2.63.0 agreement migration fails with error 1059 (exit 1), the same error as production; the fixed one also finishes a database left half-migrated by it.
+## [2.65.0] - 2026-10-09
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Lead CRM sales agent: 5 opt-in intelligence upgrades (proactive mode, objection handling, multi-product cart, cross-sell, personalization).** Each is a per-company toggle in **Integrations → Auto Messaging**, off by default, so no existing company's agent behavior changes until an admin turns one on.
+  - **Proactive follow-up questions.** After fully answering, the agent may also ask one natural next-step question (size/colour, quantity, delivery area or purchase timeframe) to help move the sale forward, instead of stopping at a bare answer.
+  - **Mild price-objection handling.** A "can you reduce it a bit?" message no longer always hands off to a human. The agent may acknowledge it and restate real value from grounded facts — it can never invent, offer or apply a discount. Refunds, complaints and explicit human requests still always hand off.
+  - **Multi-product cart.** The customer can add more than one product to the same checkout link across the conversation ("I want 2 shirts" ... later "add a lamp too"), instead of each request for create_order_link replacing the previous one.
+  - **Grounded cross-sell / upsell.** The agent may suggest one real, same-category related product alongside its answer — never invented, never offered on every message.
+  - **Personalization by purchase history.** The agent can greet a returning customer and acknowledge past orders instead of treating every conversation as a first-time visitor.
+
+### Technical Notes
+
+- `AiSettingsService::DEFAULTS` gains `proactive_mode_enabled`, `objection_handling_enabled`, `cross_sell_enabled`, `personalization_enabled` (all `false`), wired through `Integrations.php`'s existing per-tool fill-state/fields/save plumbing.
+- `AiReplyService::systemPrompt()` builds each rule as a ternary on its setting, defaulting to the exact prior rule text when off so the default prompt is byte-for-byte unchanged; two purely additive rules (cross-sell, personalization) are empty strings when off.
+- `AiReplyService::HANDOFF_KEYWORDS` split: refund/complaint/human-request keywords always hard-escalate; a new `OBJECTION_KEYWORDS` (discount/bargaining) escalates too unless `objection_handling_enabled`.
+- `AiReplyService::toolDefinitions()` now takes `$settings` — `lookup_related_products` is only appended to the tools array (not just discouraged by prompt text) when `cross_sell_enabled`, so the model cannot call a tool that was never offered.
+- `create_order_link`'s schema changed from flat `product_id`/`variant_id`/`quantity` to an `items` array; `AiReplyService::createOrderLink()` merges newly-requested items into the conversation's existing open `ChatOrderLink` (same product+variant updates its quantity, otherwise appends a line) instead of always creating/overwriting a single-item link. The storefront checkout (`ChatOrderController`) already looped over `prefill.items`, so no checkout-side change was needed.
+- `lookup_related_products` reuses the exact same-category/active/in-stock signal `ProductShowController` already uses for the storefront's own "related products", rather than inventing a new one.
+- `SalesReplyRenderer::render()` gains an `$allowFollowUpPrompt` parameter (default `false`): off, a `prompt_key` only renders when it's the only thing being said (unchanged); on, it can be appended after a verified answer. Also gains a `related` reply-key type.
+- `SalesQualificationService::context()` gains an `$includePersonalization` parameter (default `false`): off, `recent_orders` keeps its exact original `order_number`/`status`-only shape; on, it eager-loads each order's product names and adds `is_returning_customer`/`lead_source`.
+
+## [2.64.1] - 2026-10-08
+
+**Release type:** Hotfix Update
+
+### Fixed
+
+- **Admin panel showing "500 Server Error" after the v2.63.0 deploy.** On the live MySQL database the migration `2026_10_08_100200_create_agreement_tables` failed. The unique index on `agreement_acceptances` got an automatic name 68 characters long, and MySQL allows at most 64. The deploy's migration stopped halfway: `agreement_templates` and `agreement_acceptances` were created, but the migration was not recorded, and the later `investor_requests` and `payout_batches` tables were never created. The sidebar counts for **Investor Requests** and **Payout Batches** query those tables on every admin page, so every page answered 500. Each later deploy then failed again with "table already exists".
+
+### Technical Notes
+
+- The unique index now has a short explicit name (`agreement_acceptances_template_account_unique`). The migration skips any table that already exists and only adds the missing index, so the next deploy's `deploy:migrate` finishes it on a half-migrated database and then runs `2026_10_08_100300` / `100400`. No data is changed.
+- New `MigrationIdentifierLengthTest` fails when any table or index name is over 64 characters. The test suite runs on SQLite, which has no such limit, so this class of error used to show up only in production.
+- The same test found two older index names over the limit: `broadcast_recipients` (68) in `2026_08_28_000300` and `investment_documents` (71) in `2026_09_07_100200`. Both now have explicit short names, so a fresh MySQL install works. On production those migrations failed the same way earlier and were finished by `hasTable` guards (CHANGELOG: "Duplicate column name 'opted_out_at'"), so production has the tables but **not** these two indexes: the duplicate guard on broadcast recipients and a lookup index on documents. That is not urgent and is not fixed here.
+## [2.64.0] - 2026-10-08
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **"Open investor portal" button on an investor's or channel partner's page.** One click opens the investor portal in a **new tab**, already signed in as that person, so staff can see exactly what the investor sees without asking for a password. It is look-only: staff can see everything but change nothing (they cannot accept an agreement, add a payment account, send or cancel a request, or change a password), the visit is **not** counted as the person signing in, and the audit log shows the staff member as the one who opened it. It works even before the person has set a password. Needs **Investments: Manage Investor Portal Access** (Super Admin by default) and the portal switched on. A yellow "Staff preview" bar at the top of the portal reminds staff whose portal they are in. If the person has no portal account yet, one is created (no SMS is sent; it shows as "Invited" until a real invite is sent). A person whose portal access is disabled, or whose phone number has a portal application waiting for review, cannot be opened.
+
+**Technical Notes:**
+- Staff preview: the dashboard and the portal are on different hosts, so `Admin\InvestorPortalOpenController` (`GET /admin/investor-portal/{investors|channel-partners}/{id}/open`, `auth`, `investments.portal_manage`, same company check as the document downloads) issues a one-time token through `InvestorPortalStaffEntryService` (60 seconds, only its hash is cached, works once, only on the issuing company's portal, re-checks that the staff member is still active and allowed) and redirects to `<portal host>/investor/staff-entry/{token}` (`InvestorPortalStaffEntryController`, throttled). That logs the account in on the `investor` guard without "remember me" and sets `InvestorPortalStaffPreview::SESSION_KEY` in the portal session only. `InvestorPortalAccount::canAccessPanel()` lets a staff preview in with no password set, never a disabled account. `AuditLogService` attributes what a preview records (`investor_portal.staff_entry_issued`, `investor_portal.staff_entered`, document downloads) to the staff user (`user_id`), not to the investor (`actor_*`). `InvestorPortalAccountService::ensureAccount()` is the account creation shared with `invite()`. The token lives in the cache, so the dashboard and portal must share a cache store (they do: same app).
+- Look-only rule for portal pages: anything that changes data calls `refuseInStaffPreview()` (trait `InvestorPortalPage`) and hides its button while `isStaffPreview()`. Done for `Profile::save`, `Agreements::accept`, `BankAccounts` add and `Requests` new / cancel; every new portal page that writes must do the same. No migration. 7 new lang keys (en + bn).
+## [2.63.0] - 2026-10-08
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investor portal: sign-up through a channel partner's invite link.** On a channel partner's page, **Portal access → Turn on invite link** gives the partner a personal sign-up link (shown in their portal under **Invite investors**, with Copy and WhatsApp share). A new investor applies with it: their details, nominee, NID copy and photo, and a password. The application lands in **Investor Drafts** (source "Investor portal sign-up") with the uploaded documents; **Confirm** creates the investor and opens their portal account (the documents move to the investor), **Reject application** turns it down with a reason the applicant sees when they sign in. While waiting, the applicant sees only their application status. Money, the deposit and the signed deed are still handled at the office.
+- **Payment accounts.** Investors and partners add a bank account (with 9-digit BEFTN routing number) or bKash/Nagad/Rocket number in the portal; it waits for approval on their page's new **Payment accounts** tab (approve / reject with reason; staff can also add one, approved at once). The approved account becomes the one payments go to; an approved account is never edited — a change is a new account. Account numbers are stored encrypted.
+- **Portal agreements.** **Investments → Portal agreements**: staff write the investor agreement and the channel partner agreement, then publish them. A published version cannot be changed (a change is a new version, which everyone is asked to accept again). In the portal, **Agreements** shows the text and records "I have read and agree" with time, IP, device and a fingerprint of the exact text. This sits beside the signed paper deed, which stays the contract of record.
+- **Investor requests.** In the portal, **Requests → New request**: add money to an open project (top-up), a withdrawal notice, what to do with an unpaid payout (withdraw / reinvest / partial reinvest), or a question. **Investments → Investor Requests** (badge = pending) lets staff approve or reject with a note the investor sees. Approving runs the existing flow: a top-up adds the investment and its pending capital voucher (only after the money has arrived), a withdrawal records the 60-day notice from the day the investor sent it, a payout choice records the cycle election (needs the settle permission). One pending request per kind and project/payout.
+- **Payout batches.** **Investments → Payout Batches → New payout batch** picks the pending investor and channel-partner payouts of confirmed settlements and sends each to the payee's approved payment account (payouts without one, or with a reinvest choice, are listed as left out). A **different user** approves the batch (even a Super Admin cannot approve their own). Then **Make payment list** produces a CSV of payee, bank, branch, routing number, account number / mobile number and amount to pay from the bank or by hand; the file is stored, fingerprinted (SHA-256) and every download is logged. Payments that bounced are marked **failed** with a reason (the payout is free for a new batch); **Record as paid** marks the rest paid with the bank reference and books **one** pending investor-payout voucher for the batch. Trashing that voucher makes the payouts unpaid again, as before. A batch can be cancelled until it is recorded paid. New permissions **Investments: Make Payout Batches** and **Investments: Approve Payout Batches** (Super Admin only by default). The NCC Bank BEFTN upload file is not built yet: it waits for the bank's own file template.
+
+### Changed
+
+- **Mark as Paid** on a settlement's investor or partner payout now refuses a payout that is in a live payout batch, and a reinvest can no longer be recorded on such a payout (take it out of the batch first).
+- The audit log no longer copies a record's hidden fields (such as encrypted account numbers) into its old/new values. Payment accounts, investor requests, portal agreements and payout batches are now recorded in the audit log.
+
+### Technical Notes
+
+- Plan: `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md` Phases 3–4 (§15 build log). Migrations: `2026_10_08_100000_add_investor_portal_onboarding` (`channel_partners.invite_code` / `invite_enabled`, `investor_drafts.portal_account_id`, `investor_portal_accounts.investor_draft_id` / `rejection_reason`), `2026_10_08_100100_create_investor_bank_accounts_table`, `2026_10_08_100200_create_agreement_tables` (`agreement_templates`, `agreement_acceptances`), `2026_10_08_100300_create_investor_requests_table`. Additive; nothing backfilled.
+- New models `InvestorBankAccount`, `AgreementTemplate`, `AgreementAcceptance` (immutable), `InvestorRequest` (all company-scoped, in `User::MODEL_MODULES` as investments and in `MultiCompanyIsolationTest`). New services `InvestorOnboardingService` (sign-up → draft; `InvestorImportService::confirm()` calls `draftConfirmed()`; deleting a portal draft rejects the application), `InvestorBankAccountService`, `AgreementService`, `InvestorRequestService`. Portal accounts gain statuses `pending` / `rejected` (applicants may sign in to see their status only; new page role `holder`). New portal pages Register, Agreements, Payment accounts, Requests, Invite investors; new admin `AgreementTemplateResource`, `InvestorRequestResource`, `BankAccountsRelationManager` (investor and partner pages).
+- `InvestmentDocument` gains the `investor_photo` category (sensitive) and no longer writes a portal user's id into `uploaded_by` (staff only).
+- New `InvestorPortalOnboardingTest` (13 tests). 154 new lang keys (en + bn).
+- Payout batches (Phase 5): migration `2026_10_08_100400_create_payout_batches_tables` (`payout_batches`, `payout_batch_items` — payable and payee morphs, a copy of the payment account with the number encrypted). New models `PayoutBatch`, `PayoutBatchItem` (company-scoped, in `User::MODEL_MODULES` and `MultiCompanyIsolationTest`), `PayoutBatchService` (create / remove item / approve / export / mark failed / complete / cancel; permission and maker ≠ checker checked in the service), `PayoutCompletionService` (shared by the single-row Mark as Paid and batches: payout status, voucher, settlement `paid_out`). `VoucherLinkedPayoutsService::voucherRestored()` skips a payout that has joined a new live batch. New `PayoutBatchResource` (list with the New batch modal, view with Approve / Make payment list / Record as paid / Cancel, items with Take out / Mark failed). The payment list is a CSV (UTF-8, formula-like cells neutralised) on the private disk under `payout-batches/{company}/`.
+- New `PayoutBatchTest` (13 tests). 72 new lang keys (en + bn).
+
+- **Investors list: project picker on the table toolbar.** On **Investments → Investors** there is now a **project dropdown** ("All projects" or one project) at the top left of the table. Picking a project shows only the investors who invested in it. It works through the same "Project" filter as the filter menu, so the filter badge, the "Active filters" chip and "Reset filters" all follow it. The existing search box is unchanged.
+
+**Technical Notes:**
+- `InvestorResource::projectFilterOptions()` feeds both the filter menu and the toolbar picker. `ListInvestors::setProjectFilter()` writes the chosen project into `tableFilters` / `tableDeferredFilters` (an id that is not one of the company's projects is ignored). The toolbar is `resources/views/filament/investors/list-toolbar.blade.php`, hooked on `TablesRenderHook::TOOLBAR_START` scoped to `ListInvestors` in `AdminPanelProvider`. No migration. 3 new `lang` keys (en + bn).
+## [2.62.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investor portal (first part).** Investors and channel partners can now sign in to their own portal at `investor.<company domain>/investor` (or a custom domain) from a phone. An investor sees their investments with each project's status and result, a statement of every investment, profit or loss, payment and reinvestment (printable / save as PDF), their payouts with the printable payout report, and their documents (their own papers plus their project's contract and cost receipts). A channel partner sees the investors they brought in (by the name used on shared papers only, no phone or NID) and their commissions, paid and due. Profit only appears once staff confirm the settlement.
+- Sign-in by phone + password, or phone + a 6-digit SMS code (when the company's SMS gateway is set up); "forgot password" by SMS code. Nobody can sign in until staff invite them: **Portal access → Invite to the investor portal** on an investor's or channel partner's page sends an SMS link (valid 7 days) to set a password. Staff can disable access (the person is signed out at once) and enable it again. One person who is both an investor and a partner gets one sign-in that shows both.
+- **Investments → Investor Portal Settings:** turn the portal on or off and see its address; the custom domain is Super Admin only. New permission **Investments: Manage Investor Portal Access** (`investments.portal_manage`), held only by Super Admin by default.
+- The Audit Log now shows actions done by portal users (investor portal and reseller portal), marked "(portal)".
+
+### Technical Notes
+
+- Plan: `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md` (Phases 1–2 built; §15 lists the answers assumed and where the build differs from the plan). Phases 3–7 (self sign-up/KYC, requests, payout batches, notifications, period pool engine) wait for the owner's answers.
+- Migrations: `2026_10_07_130000_add_investor_portal_to_companies_table` (`investor_portal_enabled` default false, `investor_portal_domain` unique), `2026_10_07_130100_create_investor_portal_accounts_table`, `2026_10_07_130200_add_actor_to_audit_logs_table` (nullable `actor_type` / `actor_id`). Additive; nothing is backfilled.
+- New Filament panel `investor` (`InvestorPanelProvider`, guard `investor`, provider `investor_portal_accounts`, theme `resources/css/filament/investor/theme.css` — `npm run build` needed on deploy). New `InvestorPortalAccount` model (company-scoped), `InvestorPortalAccountService` (invite, password, SMS codes: hashed, 10 min, 5 tries, 1 send/min), `InvestorPortalService` (every portal query, pinned to the signed-in investor/partner), `ResolveCompanyFromInvestorPortalDomain`, `Company::forInvestorPortalHost()` / `investorPortalHost()` / `investorPortalUrl()`, portal download/report controllers with ownership checks (`InvestmentReportController::investorPayoutView()` is shared).
+- `RestrictResellerPortalHost` renamed `RestrictPortalHosts` and now guards both portal hosts. `AuditLogService` writes non-staff actors to the new actor columns. "investor"/"investors" added to the reserved reseller subdomain labels; the investor portal domain counts as taken for reseller custom domains.
+- New `InvestorPortalTest` (19 tests); `MultiCompanyIsolationTest` covers `InvestorPortalAccount`. 120 new lang keys (en + bn). DNS/Coolify steps: `docs/deployment.md` → Investor Portal Domain.
+## [2.61.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **The Next.js site's home page, header and footer follow the approved design, and every part of it is customised from the dashboard (owner request).** A new **Website Design** tab on the Next.js site's row in Site → Storefront Settings (the Blade storefront has no such tab) holds:
+  - **Home Page Builder** — add, remove, hide and reorder the home page sections: *Hero slider* (banner height, seconds per slide, dots, arrows), *Trust strip* (icon, title and subtitle for up to 6 highlights, 16 icons), *Shop by category* (heading, chosen categories in the order picked, how many, cards with icon and tagline or round pictures, product count), *Deals banner* (the gradient "Best deals today" banner with the biggest discounts, a collection or trending/new products, its own colours and link), *Product row* (latest, one category, biggest discounts, or a Flash Sale / Trending / New Arrivals collection; 1–24 products; 4, 5 or 6 columns; its own "View all"), *Flash sale band* (badge, heading, text, countdown, button, background colour — title, text and end time default to the Flash Sale offer's own), *Image banners* (upload up to 6 images with links), *Shop on mobile* (WhatsApp / call buttons and phone pictures with products), *Text block*, *SEO text with Read more* (supports `{company_name}`, `{address}`, `{products_count}`, `{categories_count}`) and the *Business account callout*. Until an owner saves their own order, the default layout is hero, trust strip, categories, deals, latest products, flash sale, trending and new arrivals. A section's heading left blank uses the website's own default heading; the default layout carries no copy of its own.
+  - **Top Bar** (the thin dark strip: social icons, a short message, up to 6 quick links with small icons, background colour), **Header** (tagline, search hint, which icons to show, support label and phone, the "All categories" button and its label, sticky or not), **Product Cards** (price and discount-badge colours; show or hide the stock label, Add to cart, wishlist heart, quick view and star rating) and the **Floating Help Button** ("Need help?" — its text and link, else a WhatsApp chat with the WhatsApp number).
+- **Footer Builder: build any footer you need.** Four new section types — **Custom links column** (a heading and links to pages, categories, tracking, the account or any URL — for example *Customer Service*), **Custom text** (heading, text, button), **Payment badges** (bKash, Nagad, Rocket, Cards … in a colour each) and **Image / badge** (an uploaded picture with a link, for example a trade licence). The **Contact info** section can now show an address, email, several phone numbers, the support hours and a trade-licence line (blank fields use the company's own details), **Brand & about** a tagline, and the **Bottom bar** a middle and a right-hand text (`{heart}` shows a red heart, as in "Developed with ♥ for Bangladesh"). Small sections (social links, text, payments, image) sit under the column before them unless **Show as its own column** is on, and the footer's background colour is chosen on the Next.js row. The new sections show on the Blade storefront's footer too.
+- **Category tagline** — a short line (for example "Earbuds · TWS · Headsets") under a category's name on the Next.js site's category cards (Categories → Tagline). **Hero slide texts** — the slide form now offers the small label above the heading, heading, sub-heading and button label that the slide already supported; leave them empty for a clean image banner.
+- **Dashboard edits reach the website within seconds.** Saving storefront settings (home page, header, footer, menus), a hero slide, a page, a category or an offer now sends a `storefront.updated` webhook to the company's website (about 5 seconds later, at most once per 5 seconds), so the Next.js site refreshes instead of waiting for its cache to expire. Nothing is sent when no website webhook is set up.
+- **The product list can sort by biggest discount and show only products on sale** (used by the home page's "Biggest discounts" and "View all promotions"). A product card tells the website which live collections the product is in, which drives its "New" badge.
+
+### Technical Notes
+
+- Migration `2026_10_08_100000_add_site_design_to_storefront_settings_and_tagline_to_categories`: `storefront_settings.home_sections` and `site_design` (JSON, NULL = defaults), `categories.tagline` (80), `storefront_slides.eyebrow` (60). New `App\Support\StorefrontSiteDesign` cleans everything before it leaves the ERP (unknown section types dropped, text trimmed and cut, numbers clamped, colours `#RRGGBB` only, links only a path / http(s) / mailto: / tel: — never `javascript:`, `data:` or `//host`); `StorefrontSetting::homeSections()` / `siteDesign()` use it. `StorefrontSiteConfigService` adds `design` and `home_sections` to `GET /site` (category ids → slugs, banner / footer images resolved only inside the company's own storage, sections that would be empty dropped, SEO tokens filled) and cleans/resolves the footer blocks (custom links → slugs, contact blanks → the company's details). `GET /categories` adds `tagline`, `GET /slides` adds `eyebrow`, product cards add `collection_kinds`, `GET /products` takes `sort=discount` and `on_sale=1`, menu items carry `icon` (top bar). New concern `NotifiesWebsiteOfStorefrontChanges` (StorefrontSetting, StorefrontSlide, StorefrontPage, Category, Offer) → `WebsiteWebhookDispatcher::dispatchStorefrontUpdated()` (cache-debounced, queued with a 5 s delay); documented in `docs/api/website-integration.md`. Admin: `Filament\Resources\StorefrontSettings\Schemas\NextjsDesignSections` (new `nextjs_design` tab, Next.js row only; the Blade row never stores `home_sections` / `site_design`), the Footer Builder in `StorefrontSettingResource`, Blade partials `footer-blocks/{custom_links,custom_text,payment_methods,image}` plus tagline / contact / bottom-bar additions. Contract: `docs/api/storefront-api.md`.
+- Tests: new `NextjsSiteDesignTest` (22: defaults, cleaning and clamping, slug / image resolution and company isolation, trust-strip fallback, SEO tokens, top bar links, footer blocks and fallbacks, tagline, discount sort, collection kinds, admin form opens with the effective layout and saves, Blade row has no tab and stores nothing, Blade footer renders the new blocks). About 200 new keys in `lang/en.json` and `lang/bn.json`.
+- **The website (`zamzamint-new-website-theme`) must be deployed with this release:** it reads `design`, `home_sections`, the new footer blocks, `tagline`, `eyebrow` and `collection_kinds`; an older website simply ignores them.
+## [2.60.4] - 2026-10-07
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **A rejected or cancelled payout voucher now makes the payout unpaid again.** Until now only moving the voucher to trash did this. When the voucher created by **Mark as Paid** is rejected or cancelled, the investor payout, channel-partner payout or reseller withdrawal goes back to **pending** (**approved** for reseller requests), and a settlement that was fully paid out goes back to **confirmed**. The payout can then be paid again with a new voucher. Restoring a rejected or cancelled voucher from trash doesn't mark the payout paid again.
+
+**Technical Notes:**
+- `VoucherLinkedPayoutsService::voucherVoided()` is called from `VoucherService::reject()` and `cancel()`, and from trash (`voucherTrashed()` calls it). No migration.
+## [2.60.3] - 2026-10-07
+
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **Orders from a reseller's online store are now invoiced in the reseller's name too (owner rule).** Until now only the orders a reseller placed from the reseller portal showed the reseller's store name and logo; an order a customer placed on the reseller's own store (`/store/<name>`, the reseller's subdomain or own domain) still printed the company's name, logo, contact details and the internal "Storefront checkout" note. Now every order that belongs to a reseller carries the reseller's store name and logo and none of the company's details, on the printed invoice, the bulk print, the PDF invoice, the courier cut-slip and the order summary card. Amounts are unchanged (the customer already paid the reseller's price). Orders without a reseller keep the company invoice.
+
+### Technical Notes
+
+- `Order::showsResellerBranding()` is now simply "the order has a reseller" (`reseller_customer_id` set — portal orders and reseller-store checkouts). New `ResellerCommissionTest::test_an_order_from_the_resellers_store_is_invoiced_in_the_resellers_name` (real checkout on `/store/<slug>`, then print and summary card); `ResellerOwnCourierOrderTest`'s company-invoice test now uses an order without a reseller. No migration, no new lang keys.
+
+## [2.60.2] - 2026-10-07
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Every reseller-portal order is now invoiced in the reseller's name (owner rule).** Orders a reseller placed from the portal for the store to deliver (cash on delivery) still printed the company's name, logo, email and address and the internal "Reseller portal order" note. Now every order from the reseller portal — store-delivered or own courier — shows the reseller's store name and logo and none of the company's contact details or the internal note, on the printed invoice, the "Print invoices" bulk print, the PDF invoice, the courier cut-slip and the order summary card. Amounts are unchanged: on a store-delivered order the customer still sees the reseller's price, the delivery charge and the due amount. Orders from other sources keep the company invoice.
+
+### Technical Notes
+
+- New `Order::showsResellerBranding()` (a reseller order whose `source` is `reseller_portal`, or any own-courier order) decides the invoice brand; `showsResellerPricesToBuyer()` (own courier only) still decides the prices. Used in `orders/partials/invoice.blade.php`, `orders/pdf.blade.php`, `OrderPdfController` (reseller logo) and `OrderSummaryCardService`. `ResellerOwnCourierOrderTest`: the store-delivered invoice test now expects the reseller's brand (print, bulk print, PDF, summary card), plus a new test that a non-portal order keeps the company invoice. No migration, no new lang keys.
+## [2.60.1] - 2026-10-07
+
+**Release type:** Security Update
+
+### Security
+
+- **Staff only see and edit the users of their own companies.** Before, the Users page listed every user in the system, so someone with "Users: Manage" could open and change (name, email, password, active status) a user who works only in another company. Now, apart from a Super Admin, the Users page shows only users who share at least one company with you (and yourself), and opening any other user shows "not found". A Super Admin still sees everyone.
+
+### Technical Notes
+
+- `User::canSeeUser()` and the `User::visibleTo()` query scope. `UserResource::getEloquentQuery()` applies the scope (list, view, edit, bulk actions, global search), and `Gate::before` denies every ability on a `User` the signed-in user can't see. `UserManagementEscalationTest` gains 3 tests (16 total); its test manager now shares the factory's default company unless a test gives it one.
+## [2.60.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller guide page (owner request).** A public page on the reseller portal (`reseller.<company domain>/portal/guide`) that a new reseller reads before joining: how the program works in four steps, pricing and commission, withdrawals, their own store (subdomain / custom domain only when switched on), the two delivery options (the own-courier rules only when the store has a payment method), the store's own **rules and regulations**, and **Apply now** / **Sign in** buttons at the top, in the header and at the bottom. Modern layout with the store's colour, logo and dark mode, phone friendly, English and Bangla. Managed on **Resellers → Reseller Settings → Reseller guide page**: turn the page on or off, write the introduction, add, reorder and remove rules, and choose whether to show the minimum withdrawal and packaging charge (off by default; reseller costs are never shown). While the page is on, the storefront's **Become a reseller** links open it instead of the application form, and the portal's application form links to it; someone who has already applied still goes to the portal.
+
+### Technical Notes
+
+- Reseller guide: migration `2026_10_07_110000_add_reseller_guide_to_storefront_settings_table` adds `reseller_guide_enabled` (default on), `reseller_guide_intro`, `reseller_guide_rules` (JSON list of `{title, body}`) and `reseller_guide_show_figures` (default off) to the Blade storefront row. New `Reseller\ResellerGuideController` + `resources/views/reseller/guide.blade.php` at `GET /portal/guide` (route `reseller.portal.guide`, portal host only via `ResolveCompanyFromResellerPortalDomain` / `RestrictResellerPortalHost`; 404 when the page is off). New `Company::resellerJoinUrl()` used by the storefront layout, Marketplace Pro home and account profile; the header's "Reseller status" link for someone who already applied goes to the portal. `ResellerPanelProvider` adds the guide link above the application form (`AUTH_REGISTER_FORM_BEFORE`). 70 new lang keys. New `ResellerGuidePageTest` (5 tests).
+
+## [2.59.1] - 2026-10-07
+
+**Release type:** Security Update
+
+### Security
+
+- **Staff can only give access to their own companies.** Before, anyone with "Users: Manage" could give a user (themselves included) access to any company in the system. Now, apart from a Super Admin, the company list on a user's page shows only the companies the editor can access themselves, and only those can be added, removed or made the default. If a user also has access to companies the editor can't see, that access stays as it is. A Super Admin can still assign any company.
+
+### Technical Notes
+
+- `User::assignableCompanyIds()` (all active companies for a Super Admin, otherwise the user's own active companies) and `User::resolveCompanyAccessChange()`, used by `CreateUser`/`EditUser`. `UserForm` limits both company fields' options and their loaded values to the assignable companies. A request naming another company fails Filament's option validation; the target's other companies and their default are carried over on save. `UserManagementEscalationTest` gains 5 tests.
+## [2.59.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Hero slides and custom pages can be limited to one site (owner decision).** Each slide and page has a new **Show on** choice: *All sites* (what every existing slide and page keeps being) or one of the company's sites — the Blade storefront (reseller store) or the Next.js site (main storefront). The Blade storefront and the Next.js site each show only their own and the shared ones; menu items and footer links to a page that belongs to the other site are left out. The Slides and Pages lists show where each one appears, and picking a site on a slide follows that site's theme and homepage template. Offers were already separate: landing-page offers belong to the Blade storefront and Collections (Flash Sale, Trending, New Arrivals) to the Next.js site.
+
+### Changed
+
+- **WooCommerce, CRM messaging and lead follow-up reminders now use the Next.js site's settings (owner decision).** Once a company has a Next.js site it is the main storefront, so these company-level features read its settings (the WooCommerce tab on Integrations, the SMS/WhatsApp details and the *Lead Follow-up Reminders* section live on that site); a company without one keeps using its Blade storefront. The reseller store/program and the Blade abandoned-cart reminders stay on the Blade storefront settings.
+
+### Technical Notes
+
+- Migration `2026_10_07_120000_add_storefront_setting_id_to_slides_and_pages`: nullable `storefront_setting_id` (NULL = all sites) on `storefront_slides` and `storefront_pages`, `nullOnDelete` (deleting a site returns its slides/pages to all sites). `StorefrontSlide::forCompanyTheme()` takes the site (the cached company list is filtered in memory, so the cache key is unchanged); `StorefrontPage::forSite()` is used by the Blade page route, layout menus/footer, the API pages, and the API menu/footer resolution.
+- `StorefrontSetting::primaryFor()` (Next.js row else Blade) and `isPrimary()` are read by `WooCommerceImportService`, `WooCommerceOrderSyncService`, `WooCommerceWebhookController`, the Integrations page, `Crm\BroadcastService`, `Crm\ConversationMessengerService` and `SendLeadFollowUpReminders`.
+- Tests: new `StorefrontSiteContentTest` (8); new cases in `StorefrontApiTest`, `WooCommerceOrderWebhookTest`, `LeadFollowUpReminderTest`; `IntegrationsPageTest` updated for the primary-row WooCommerce tab. 3 new lang keys in `lang/en.json` and `lang/bn.json`.
+## [2.58.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Changed
+
+- **All reseller settings in one place: Resellers → Reseller Settings (owner rule).** A new page under the Resellers menu controls the whole reseller program for the current company: the module and its domains (**Reseller module enabled**, **Reseller subdomains enabled**, **Reseller custom domains enabled**, **Reseller portal domain** — Super Admin only, as before), the money rules (**Reseller cost per unit**, **Packaging charge per piece (own courier)**, **Minimum reseller withdrawal**), **Show reseller program** on the storefront, and the list of payment channels resellers pay own-courier advances into (with a link to Payment Methods, which the storefront checkout shares). These settings were removed from the company form and from Storefront Settings (its Reseller Settings section and the Footer Builder toggle). Opening the page needs the Settings: Manage permission.
+
+### Technical Notes
+
+- New `App\Filament\Pages\ResellerSettings` (Resellers cluster) writes `companies.reseller_*` (only for a Super Admin; the section is disabled for others and ignored on save) and `storefront_settings.reseller_*`; the portal domain is normalised and must be unique. `CompanyResource` and `StorefrontSettingResource` no longer have these fields; `HasStorefrontSettingsNavigation` drops the `reseller` section. No migration. New `ResellerSettingsPageTest` (5 tests); `ResellerCommissionTest` and `PhaseFourAdminPagesTest` updated. `docs/deployment.md` and `13_RESELLER_PORTAL_PLAN.md` point to the new page.
+## [2.57.1] - 2026-10-07
+
+**Release type:** Security Update
+
+### Security
+
+- **Signing up now needs an SMS code.** A new storefront account takes over the customer record (and order history) of the same phone number, so before, anyone who knew a customer's number could sign up with it and see that customer's past orders and address. Now, when the store has an SMS gateway, the sign-up form (Blade storefront and the Next.js site's API) texts a 6-digit code to the number and the account is created only after the code is entered. The code is valid for 10 minutes; five wrong codes throw it away; asking again within a minute does not send a second SMS. A taken phone or email is refused before any code is sent. Without an SMS gateway, a brand-new number still signs up in one step, but a number that already has a customer record cannot sign up (the visitor is asked to contact the store). In English and Bangla.
+
+### Technical Notes
+
+- `CustomerAccountService`: new `ensureCanRegister()`, `registrationVerification()` (`VERIFY_SMS` / `VERIFY_NONE` / `VERIFY_UNAVAILABLE`), `sendRegistrationCode()` / `verifyRegistrationCode()` (hashed code in the cache, keyed per company and normalized phone); `register()` accepts `password_hash`. Blade: `AccountAuthController::register()` keeps only the password hash in the session, new `account/register/verify` (GET/POST) and `account/register/resend` routes (domain + preview), new view `storefront/account/register-verify`. API: `POST /account/register` takes `code`; answers `202 verification_required`, `422 otp_invalid`, `422 verification_unavailable` (`docs/api/storefront-api.md`). Offer checkout's automatic account (random password) is unchanged. 11 new lang keys. `StorefrontApiAccountTest` +4, `StorefrontCustomerAuthTest` +2 (existing sign-up tests now go through the code). No migrations.
+- **The Next.js website must handle `202 verification_required` (show a code field and resend the form with `code`)**; until it does, sign-up on the Next.js site fails on a store with an SMS gateway.
+## [2.57.0] - 2026-10-07
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **The Blade storefront and the Next.js site now have separate storefront settings (owner decision).** In Site → Storefront Settings a company has one row per site: the **Blade storefront** (the reseller store) and the **Next.js site** (the main storefront). Each is customised on its own — colours, fonts, content, menus, footer, contact details, checkout and delivery rules, payment gateway, notifications and Meta pixel. The list shows one row per site with a **Site** badge and that site's own domain. The Next.js row keeps the *Enable Next.js site API* switch, the Next.js domain and its verified flag; the Blade domain stays where it was.
+- **New site → Site type.** Creating a storefront setting asks which kind of site it is; a company can have at most one of each. A new Next.js site can **start as a copy of the Blade storefront settings** (colours, content, checkout rules, integrations; credentials are carried over intact) or from blank defaults.
+- **Integrations → Site.** When a company has both sites, the Integrations page asks which site's payment gateway, Meta pixel and website webhook settings you are editing. WooCommerce and the AI tools remain company-wide (WooCommerce uses the Blade row).
+
+### Changed
+
+- **Existing Next.js setup is split automatically.** Companies that had already switched on the Next.js site or given it a domain get their own Next.js row (a copy of their Blade settings, carrying the switch and domain); the Blade row loses those fields. Nothing changes for the Blade storefront, the reseller program or any existing order.
+- The Next.js site API (`/api/v1/storefront/*`) now reads **only the company's Next.js row**; a company with just a Blade row answers `403 nextjs_site_disabled`.
+- Website webhooks are sent for every site that has one configured (once per distinct URL).
+
+### Technical Notes
+
+- Migration `2026_10_07_100000_add_site_type_to_storefront_settings_table`: `storefront_settings.site_type` (`blade` default | `nextjs`), `unique(company_id, site_type)` replacing `unique(company_id)`, nullable `storefront_setting_id` on `orders` and `storefront_payments` (NULL = Blade storefront, every existing record), and the data split above (idempotent). Reversible.
+- `Company::storefrontSetting()` is now the **Blade** row (all earlier code keeps working); new `Company::nextjsSetting()` / `storefrontSettings()`, `StorefrontSetting::bladeFor()` / `nextjsFor()` / `siteDomain()` / `recordedSiteId()`, `Order::siteSetting()` and `StorefrontPayment::siteSetting()` (own Next.js row, else Blade). `StorefrontCheckoutService::createOrder()` takes the site; ZiniPay/PayStation webhooks, Meta conversions/dispatch and the website webhook dispatcher read the order's or payment's own site. Abandoned-cart reminders, CRM messaging, lead reminders, WooCommerce and the slide pages stay on the Blade row.
+- Tests: `NextjsSiteSettingsTest` rewritten (17 tests: separate rows, one per type, domain handling never touching the company domain, per-site sections, list, create with/without copy, migration split); new cases in `StorefrontApiTest`, `StorefrontApiCheckoutTest`, `StorefrontMetaTrackingTest`, `StorefrontPaystationPaymentTest`, `WebsiteWebhookDispatchTest`, `IntegrationsPageTest`. 9 new lang keys in `lang/en.json` and `lang/bn.json`.
+## [2.56.0] - 2026-10-06
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Packaging charge on reseller own-courier orders.** New setting **Packaging charge per piece (own courier)** under Site → Storefront Settings → Reseller Settings. When a reseller sends an order with their own courier, this amount times the number of pieces is added to the order as a **Packaging charge** (shown on Create order's summary, in the reseller's order details, and on the admin order page and edit form). It is part of the total the reseller pays in advance and is never shown to the reseller's customer. Orders the store delivers never carry it. With the setting at 0 nothing changes.
+- **A reseller's customer only ever sees the reseller's price and store (owner rules).** On an own-courier order the reseller sets the price their customer pays for each product (**Your customer's price**, at least the store price); the store still charges the reseller its own price. Everything the customer can see shows only the reseller's side: the printed invoice and the PDF invoice carry the reseller's **store name and logo** (not the company's name, logo, hotline, e-mail, address, website or social links), items and totals at the reseller's price, and a **Due Amount** equal to that total (also on the courier slip); no store price, packaging charge, advance or internal note; the courier and parcel ID are the reseller's. The shareable order summary card shows the reseller's store name with Total and Due. The reseller's portal shows their own sale as the **Sale amount** and, separately, **You pay the store**.
+- **Resellers can change their own-courier orders (owner rules).** A **Change** button on the portal's Orders list opens the order until the store verifies any of the advance (and never once the parcel is packed or the order is closed). The reseller can add products, raise quantities, change their customer's prices, and correct the courier name, parcel ID and their customer's name, phone and address. Products already on the order cannot be removed or lowered. When the total goes up, the page shows the extra and asks for its payment details; the reseller sends **only the extra**, which is listed beside the first payment. Staff verify each payment in turn from the order page, and **Mark parcel packed** appears only once the whole total is verified. A rejected payment is sent again for the unpaid part only. The admin order page lists every payment and what is **Still to receive**; the portal's order details list them with what is **Still to send**.
+
+- **Reseller deposit (owner rule).** When paying for an own-courier order the reseller can enter the **Amount sent** (blank means exactly what is owed; never less). When staff verify a payment they confirm the **Amount received** (they can correct it). Whatever the verified payments hold above the order's total goes to the reseller's **Deposit**, shown in the portal's top bar on every page. The deposit pays the advance of the reseller's next own-courier orders (and the extra after a change) automatically, before anything else; only the rest has to be sent, and when the deposit covers it all no payment details are asked. The deposit cannot be withdrawn. If less arrived than was owed, the order shows **Part received — send the rest** and the reseller sends the remainder.
+
+### Changed
+
+- **Staff can no longer add or change items on a reseller's own-courier order.** The Items list on the admin edit form is locked on these orders, with a note that only the reseller can change them from the portal (they have paid for these items in advance). Other order fields stay editable.
+
+### Fixed
+
+- **Confirming an order with too little stock did nothing.** Change status → Confirmed (on the order page or in bulk) on a draft whose products are short left the order as a draft with no visible message. It now names each short product with the ordered and in-stock quantities, and bulk Change status lists every skipped order with its reason.
+- **Mark parcel packed on a reseller's draft order took no stock.** Packing now confirms the draft first, so the packed products leave stock; when stock is short it says which products and marks nothing.
+
+### Technical Notes
+
+- Migration `2026_10_06_100000_add_reseller_packaging_cost`: `storefront_settings.reseller_packaging_cost_per_unit`, `orders.packaging_fee` (both default 0) and `order_items.reseller_retail_price` (nullable). `OrderWorkflowService::sync()` and the admin order form's live total now add `packaging_fee`. New `Order::showsResellerPricesToBuyer()` / `buyerTotal()` and `OrderItem::buyerUnitPrice()` / `buyerSubtotal()` are used by every buyer-facing view (invoice partial, `orders.pdf`, `OrderSummaryCardService`, storefront account and tracking pages). Run migrations on deploy.
+- Reseller order edits: `ResellerOrderPlacementService::quoteEdit()` / `updateOwnCourierOrder()`; new portal page `App\Filament\Reseller\Pages\EditOrder` (`/portal/orders/{record}/edit`). New `Order::resellerAdvancePayments()`; `ResellerOwnCourierService` gains `sentAmount()`, `outstandingAmount()`, `canEdit()`, and `submitPayment()` now records only the outstanding amount; `paymentState()` / `canMarkPacked()` look at all advance payments. `OrderPdfController` passes the reseller's logo. No new migration for this part.
+- Migration `2026_10_06_110000_create_reseller_deposit_entries_table` (new company-owned `ResellerDepositEntry`: +overpayment / −used, balance = sum). `ResellerOwnCourierService::depositBalance()`, `applyDeposit()` (a completed `StorefrontPayment` with gateway `reseller_deposit` plus an `OrderPayment` with no account — the cash was already posted with the earlier order's payment, which records the full amount received), `verifyPayment(..., $received)` credits the overpayment, new payment state `short`. Deposit payments do not lock an order for the reseller's changes. `OrderPayment` sets `received_by` only for a staff `User` (a reseller signed in to the portal is a `Customer`). Top-bar badge via `PanelsRenderHook::USER_MENU_BEFORE` on the reseller panel. Run migrations on deploy.
+- `OrderStatusWorkflowService` checks stock (`OrderStockCheckService::shortages()`) before moving an order into an accounted status and reports it under `stage`; `ResellerOwnCourierService::markPacked()` confirms a draft inside the same transaction.
+- Tests: `ResellerOwnCourierOrderTest` (now 30 tests); `MultiCompanyIsolationTest` lists `ResellerDepositEntry`. New lang keys in `lang/en.json` and `lang/bn.json`.
+## [2.55.0] - 2026-10-06
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Fraud check card on the Create order form.** Picking a customer still runs the courier fraud check, but the result is now a card in the same style as the **Fraud Checker** page: Safe / Risky / No courier history with the delivery rate, total / delivered / cancelled parcels, one line per connected courier, fraud reports from other merchants, a blacklist warning (with its reason) and this store's earlier orders for the number. **Full report** opens the Fraud Checker page for that number in a new tab, already checked. The **Courier Fraud Check** button (skips the 24-hour cache) stays. Now in English and Bangla.
+- **Fraud Checker for resellers.** The reseller portal has a new **Fraud Checker** menu item with the same page, and its **Create order** page shows the same card as soon as the customer's phone number is typed. The check runs on the store's own courier accounts. Resellers see only the courier history and the verdict: never the store's customer names, order history or blacklist reasons, no "set up this courier" cards, and no **Refresh live data** button, so a reseller always gets the 24-hour cached result and cannot make the store's courier panels log in again and again.
+
+### Technical Notes
+
+- New `App\Support\FraudCheckReport` (summary, verdict, courier cards, store history, blacklist) and `App\Filament\Concerns\ChecksCourierFraud` (shared page logic; `showsStoreData()` / `canRefresh()` decide the differences), used by the admin `FraudChecker`, the new `App\Filament\Reseller\Pages\FraudChecker` and both create-order forms. Views moved to `resources/views/filament/fraud-check/` (`page`, new `compact`); the reseller theme now scans that folder. The page accepts `?phone=` and checks it on open. `OrderForm`'s inline-styled result table replaced by the compact card. 6 new lang keys. New `ResellerFraudCheckerTest` (6 tests); `FraudCheckerPageTest` +2 (10 total). No migrations.
+## [2.54.1] - 2026-10-06
+
+**Release type:** Security Update
+
+### Security
+
+- **Order details could be opened by any staff login.** The storefront preview's order-confirmation pages (`/storefront/<store>/checkout/success/<id>` and the offer thank-you page) had no check, so any signed-in staff member, whatever their role, could show a customer's name, phone and address by trying order numbers 1, 2, 3… These pages now need the same permission as opening the order in the admin panel ("Sales: View").
+- **Staff could preview another company's storefront.** Eight storefront preview pages (pages, contact, complaints, cart, checkout, order tracking, reviews, account orders) did not check the company. A staff member of one company could open another company's preview by its address and even send a complaint into it. They now return "not found" unless the staff member belongs to that company (Super Admin still sees all).
+- **Changing or resetting a customer password now signs out their other devices.** Before, an old login (for example on a shared or lost phone) stayed signed in, and "remember me" kept working, after the password was changed. The device that made the change stays signed in.
+- **Only a Super Admin can change permissions now.** Before, a custom role with the "Users: Manage" permission could change any user's role (its own included, even to Super Admin), create roles, and change what each role may do. It could also edit, delete or reset the password of a Super Admin account. Now only a Super Admin can change a user's role, create a role or open the role permissions screen ("Manage Roles"), and only a Super Admin can change a Super Admin's account. Other staff with "Users: Manage" can still add users and edit names, emails, passwords, active status and companies. They see the role but cannot change it, and a user they add starts as Sales Staff until a Super Admin sets the role.
+- **Limits on repeated tries:** the storefront preview's sign-in, register, forgot/reset-password and change-password forms, the live storefront's change-password form, and the Meta (Facebook/Instagram) message webhook now limit how many requests one address can send per minute, like the other sign-in forms already did.
+- **Extra browser protection headers:** every page now tells the browser to use HTTPS only (sent on HTTPS pages only), and a basic Content-Security-Policy blocks other sites from framing the app, `<base>` tag hijacking and browser plugins. Scripts are not restricted yet, so nothing on the site changes.
+- **Security updates for third-party packages:** Laravel 13.23 → 13.34 (debug-page XSS), Filament 5.7.5 → 5.8.4 (an already-used two-factor code could be used again), league/commonmark 2.8.3 → 2.10.3 (several denial-of-service and filter-bypass issues), league/flysystem 3.35 → 3.36. In the browser bundle, `@grpc/grpc-js` (pulled in by Firebase) is forced to 1.14.5. `composer audit` and `npm audit` now report no known vulnerabilities.
+
+### Fixed
+
+- **Storefront preview: the order-confirmation page crashed.** Links built for preview pages used the wrong parameter name, so the preview "Order placed" page showed an error instead of the order.
+
+### Technical Notes
+
+- New `App\Http\Middleware\InvalidateStaleCustomerSession` (appended to the `web` group): stamps `password_hash_customer` (same key and format as the reseller panel's `AuthenticateSession`) after each request and signs the customer guard out when it no longer matches. Only the customer guard is touched, so a staff session in the same browser is kept. `CustomerAccountService::updatePassword()` / `resetPassword()` also rotate `remember_token`.
+- Each storefront controller's `previewStorefront()` now applies the same `canAccessCompany()` check as `PreviewController::previewCompany()`.
+- `StorefrontUrl::prepend()` used the key `slug` for the preview route's `{company}` parameter (it also clashed with a route's own `{slug}`); it now uses `company`.
+- Dependencies: `composer update` of only the affected packages (no `--with-dependencies`, so no major bumps of Guzzle etc.); `package.json` gains an `overrides` entry for `@grpc/grpc-js`. Filament's published assets in `public/` were refreshed by `filament:upgrade`.
+- `SecurityHeaders`: `Content-Security-Policy: frame-ancestors 'self'; base-uri 'self'; object-src 'none'` (not set when the response already has its own policy) and `Strict-Transport-Security: max-age=31536000` on secure requests (no `includeSubDomains`, since not every company/reseller domain is guaranteed HTTPS). A script-level CSP is still a separate pass (plan 09 step 3.4).
+- `User::canChangePermissions()` (Super Admin only) and `canModifyUser()`. `Gate::before` denies every ability except `view`/`viewAny` on a Super Admin `User` record for non-Super-Admins. In `UserForm` the role field is disabled and the inline "Create role" refuses (403) for non-Super-Admins. `CreateUser` forces `User::defaultRole()` and `EditUser` drops `role` from the save, so a hand-crafted request can't change it. `UserRoleResource::canAccess()` requires a Super Admin (it used to be `canManageUsers()`). The users table's `DeleteBulkAction` now uses `authorizeIndividualRecords('delete')`; it previously deleted the whole selection with no per-record check. New `tests/Feature/UserManagementEscalationTest.php` (8 tests).
+- Throttles: preview `account/login`, `register`, `forgot-password` (5/min), `reset-password`, `password` and the domain `account/password` at 10/min; `POST /webhooks/meta` at 600/min.
+- New `tests/Feature/StorefrontPreviewAndSessionSecurityTest.php` (5 tests). `SecurityHardeningTest` gains 4 tests (CSP, own CSP kept, HSTS only on HTTPS, throttled routes).
+## [2.54.0] - 2026-10-06
+
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **"Already booked" for an order that was never booked.** Book courier treated an order as already booked whenever its **Delivery status** was anything but "Not booked". That field can move without any courier booking — chosen on the Create order form, or set to "In transit" by **Change status → Shipping** — so such an order was skipped by bulk Book courier ("0 order(s) booked · 1 already booked"), and its own Book courier button was hidden. Booking is now decided by the order's actual courier booking: an order with no live booking can be booked (including after a cancelled or failed booking). Orders that really cannot be booked are still skipped: a live booking exists, the order is delivered / partly delivered / returned, the order is cancelled / returned / refunded, or the reseller ships it with their own courier.
+- **Bulk Book courier now says why each order was skipped**, one line per order with its number (for example "Already booked (tracking ID …)" or "The order is Cancelled."), instead of a single "already booked" count. The popup text is updated to match. In English and Bangla.
+- **Order list: "Delivered" / "Returned" buttons read like a status.** Right after an order is booked, its row showed a green **Delivered** button (and a red **Returned** one). These are quick actions that mark the parcel delivered or returned by hand, not the order's status, but they looked like the order had been delivered. They are now **Mark delivered** / **Mark returned** (also on the order page), and the confirmation says it moves the order to Delivered without asking the courier. Booking itself never marks an order delivered: it stays at its order status with Delivery = Booking pending until the courier reports progress.
+- **Courier callbacks that were turned away left no trace.** A callback with a missing or wrong Auth token (or when no token is saved on the provider) was rejected silently, so a Callback URL / token mismatch looked exactly like the courier never calling. Each rejected call is now listed in **Courier → Webhook Logs** as **Rejected**, with the reason and what to fix.
+- **Courier actions that failed silently** — Sync courier status, Update status, Cancel booking, Mark delivered / returned — now show a success or failure message with the reason. A courier's HTTP error during a status sync becomes a readable reason (also in the scheduled sync's last error).
+- **Steadfast callbacks are answered the way Steadfast's webhook guide shows** (200 with `{"status":"success","message":"Webhook received successfully."}` instead of 202).
+
+### Added
+
+- **Webhook Logs: Process now, and a warning when callbacks are stuck.** A saved callback is applied by the queue worker. When callbacks wait more than 5 minutes, the Webhook Logs page now says the queue worker does not seem to be running, and each waiting or failed callback has a **Process now** button.
+- **Cancel booking explains itself:** the confirmation says it only marks the booking cancelled in this app and that the parcel must also be cancelled in the courier's own panel.
+
+### Technical Notes
+
+- New `Order::courierBookingBlocker()` (reads `latestCourierBooking`, which the orders list eager-loads). `OrdersTable::canBookCourier()` / new `courierBookingBlocker()` (adds the current-company check) and `ViewOrder::canBookCourier()` use it; `bookCourierBulk()` lists per-order skip reasons. 10 new lang keys. `OrderCourierBookingFeedbackTest` +4 tests (10 total). No migrations.
+- `CourierWebhookController` logs rejected calls (`status = rejected`, deduped per body, payload kept only up to 16 KB) and answers Steadfast with 200. `CourierWebhookLogResource::processNowAction()` runs `ProcessCourierWebhook` inline; `ListCourierWebhookLogs::getSubheading()` warns on pending logs older than 5 minutes. `CourierBookingFeedback::run()` wraps the other courier actions. Status-sync client calls also go through `CourierService::callCourier()`. New `CourierStatusFlowAuditTest` (6 tests); `SteadfastApiGuideTest` / `CourierIntegrationTest` updated for the 200 response and the rejected-call log. 14 more lang keys.
+## [2.53.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Next.js site in Site → Storefront Settings.** A new **Next.js Site** section lets you switch the headless Next.js website (for example zamzamint.com) on or off, enter its domain and mark the domain verified. The settings list has a new **Sites** column that shows each company's Blade storefront and its Next.js site side by side. Both sites keep reading the same storefront settings (theme colours, fonts, contact details, menus, footer, banners, payment and delivery rules), so nothing is configured twice. A domain can't be reused by another company, a reseller's store or another Next.js site.
+- **Collections in Offers.** **Offers** now has a third type, **Collection**, for **Flash Sale**, **Trending** and **New Arrivals**. Pick the products in display order, set when the collection starts and ends (a Flash Sale needs an end time, which runs its countdown) and optionally a **deal price** per product. Collections are only product lists for the Next.js site: they never appear as offer landing pages, in the `/offers` list or in the offer checkout, and aren't offered when generating AI images or videos.
+- **Storefront API for the Next.js website** (`/api/v1/storefront/…`). The website, which has no backend of its own, reads site settings, categories, products (with images, variations, ratings, minimum order quantity and wholesale quantity prices), hero slides, live collections and content pages from the ERP. It uses the company's existing API key and works only while *Enable Next.js site API* is on. See `docs/api/storefront-api.md`.
+- **Checkout for the Next.js website.** The website can now take real orders through the ERP (`POST /api/v1/storefront/checkout/quote`, `…/checkout`, `…/checkout/payments/{payment}/finalize`, `GET …/orders/{order_number}`). The website sends only the product, quantity and customer details; the ERP works out every price, delivery charge (inside/outside Dhaka from the address), VAT, new-customer delivery advance, pre-order advance, courier-risk advance, checkout-policy block and the payment options exactly as the Blade checkout does, and starts the ZiniPay/PayStation payment when an advance or full online payment is needed. The order is created only after the gateway confirms the payment. A double click or a retry never places a second order, a changed total is refused with the new total, and a stale cart (minimum order quantity, stock) is reported instead of being changed silently.
+- **Wholesale price rule for the website (owner decision):** a live Flash Sale / Trending / New Arrivals **deal price** wins over wholesale quantity prices; otherwise the quantity price reached applies; otherwise the normal selling price. A variation always keeps its own price, and a deal that is not lower than the selling price is ignored.
+- **Customer accounts, order tracking and reviews for the Next.js website.** Customers of the website can create an account, sign in with a password or with a 6-digit code sent by SMS or email, reset a forgotten password by SMS, see their order history, follow an order's status and courier updates, order the same items again, change their profile and password, and review the products of an order once it is completed. It works like the Blade storefront's account pages and uses the same **Customer accounts** switch in Storefront Settings, the same SMS gateway and the same rules (a registration reuses the customer record of the same phone number, so earlier orders appear straight away). Anyone can also track an order without an account with the order number and the phone number it was placed with, or with the link on the order confirmation. A new review waits in **Product Reviews** until you approve it, exactly as before.
+
+### Fixed
+
+- **Signing in with an e-mail address ignored capital letters inconsistently.** The password sign-in compared the e-mail exactly while the one-time-code sign-in did not, so `Name@Example.com` worked for one and not the other. Both now ignore capitals.
+
+### Security
+
+- **A password-reset code can no longer be guessed.** Five wrong reset codes now lock that account's reset until the code's 15-minute window ends (before, the 6 digits could be tried without limit). This protects both the Blade storefront and the new website.
+
+### Technical Notes
+
+- `CLAUDE.md` (agent memory) now records that zamzamint.com is the wholesale ZamZam International site and zamzamgadgetbd.com the retail ZamZam Gadget site, and the owner's decisions for the Next.js website. `Company::CORE_COMPANIES` and `docs/storefront-go-live.md` still carry the old "Gift Items / Gadget Items" labels (not changed here).
+- New migrations (run `php artisan migrate --force`; both only add columns, existing rows are unchanged): `2026_10_03_100000_add_nextjs_site_to_storefront_settings_table` (`nextjs_site_enabled` default off, unique `nextjs_site_domain`, `nextjs_site_domain_verified`) and `2026_10_03_110000_add_collection_fields_to_offers_tables` (`offers.collection_kind`, `starts_at`, `ends_at`; `offer_items.deal_price`).
+- `Offer::TYPE_COLLECTION`; scopes `landingPages()`, `collections()`, `liveCollections()`. `OfferController`, `OfferCheckoutController` and the image/video generation offer pickers now use `landingPages()`. Switching an offer away from *Collection* clears its kind and schedule.
+- `StorefrontSetting::nextjsDomainConflict()` / `nextjsDomainTaken()`; `Company::hostIsTakenByThePlatform()` also treats a Next.js domain as taken. Server-side checks live in `HandlesNextjsSiteDomain` (Create/Edit pages) in addition to the form rules.
+- New `EnsureNextjsSiteEnabled` middleware (403 `nextjs_site_disabled`), the `storefront-api` rate limiter (600/min per API token + 3000/min per IP; defined in `AppServiceProvider`), `StorefrontController`, `StorefrontCatalogService` and `StorefrontSiteConfigService`. `Product::reviews()` relation added. No new company-owned model, so `MultiCompanyIsolationTest` is unchanged; `StorefrontApiTest` covers isolation between two companies.
+- The existing server-to-server `/api/v1` routes are untouched and are not gated by the Next.js switch.
+- **Phase 2 (checkout) —** the Blade `Storefront\CheckoutController` now delegates to the new shared `StorefrontCheckoutService::process()` (totals, checkout policy, advance eligibility, online/full payment, order creation) with no behaviour change; the API controller `Api\V1\StorefrontCheckoutController` calls the same method. New: `CheckoutOutcome`, `StorefrontApiCartResolver` (Blade line rules without silent changes), `ForceJsonResponse` middleware (storefront API only), `Support\StorefrontApi\{Signing,OrderSummary}`, `StorefrontCatalogService::unitPrice()` / `dealFor()`, `StorefrontMetaTrackingService::contextFromClient()`, and an optional `$clientIp` argument on `StorefrontCheckoutPolicyService::evaluate()`.
+- No migration and no new model. Payment `ref` and order `token` are HMACs of the payment/order id and company derived from `APP_KEY` (rotating `APP_KEY` invalidates links already sent to customers). `return_url`/`cancel_url` must be https on the company's `nextjs_site_domain` (localhost allowed only in `local`/`testing`). Visitor IP comes from the website (`client_ip`); without it IP rules are skipped.
+- Tests: new `StorefrontApiCheckoutTest` (26) and a deal-rule case in `StorefrontApiTest`; the existing Blade checkout, payment and policy tests pass unchanged.
+- 32 new translation keys in `lang/en.json` and `lang/bn.json`.
+- **Phase 3 (accounts, tracking, reviews).** Migration `2026_10_06_100000_create_storefront_customer_tokens_table` (run `php artisan migrate --force`; a new table, nothing existing changes): `storefront_customer_tokens` (company, customer, SHA-256 token hash, expiry, last use) with the company-scoped model `StorefrontCustomerToken`, added to `MultiCompanyIsolationTest`. The website's server sends the token as `X-Customer-Token` next to the company API key (`AuthenticateStorefrontCustomer`, `EnsureStorefrontAccountsEnabled` middleware, `StorefrontCustomerSession`).
+- New `Api\V1\StorefrontAccountAuthController`, `StorefrontAccountController` and `StorefrontOrderTrackingController`; `Support\StorefrontApi\{AccountPayload,TrackingSummary,Phone}`; `OrderSummary` gains `status_label`, `order_date` and the product `slug` per item. The `storefront-auth` rate limiter (20/min per visitor — the `client_ip` the website forwards, not its own address).
+- New shared `StorefrontOrderTrackingService` (status history + courier) now also feeds the Blade tracking page, whose output is unchanged. `CustomerAccountService::resetPassword()` gained the attempt lock and `resetLockedFor()`; `attemptLogin()` matches e-mail case-insensitively.
+- Phones from the website are normalised to the local `01XXXXXXXXX` form (the same as checkout) before any lookup, so `+880…` and `01…` are one customer and one lockout counter.
+- Tests: new `StorefrontApiAccountTest` (33) — gates, registration, sign-in, lockouts, codes, reset, profile/password, orders, reorder, reviews, tracking, cross-company and per-visitor limits.
+- No new translation keys in the ERP: the API answers with stable error codes and the website words them.
+## [2.52.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **Book courier did nothing when the booking failed.** Clicking **Book courier** (order list or order page) or **Book Steadfast** showed nothing and booked nothing when the booking could not go through. When the courier refused it (wrong phone, wrong API keys, duplicate invoice, ...), the courier's error was not caught at all. A customer-risk block or a provider mismatch was hidden because it matched no field in the popup. Now a successful booking shows **Courier booked** with the tracking ID. A failed one shows **Courier booking failed** with the reason — the courier's own message, "could not reach the courier", or the risk review that blocks it — and the popup stays open so the courier or details can be changed. In English and Bangla.
+- **Bulk Book courier stopped at a refused order.** A courier refusal on one order no longer stops the rest of the batch. The result now lists each failed order with its reason (it used to say "see Status Logs", where nothing was recorded).
+
+### Added
+
+- **Upsell filter on the orders list.** New **Upsell items** filter: **With upsell items** shows orders that had an item added after they were created, **Without upsell items** the rest. Admin-only, like the Upsell tag. In English and Bangla.
+
+### Technical Notes
+
+- `CourierService::callCourier()` wraps the Steadfast / Pathao / RedX / E-Courier create calls and turns `RequestException` / `ConnectionException` into a `ValidationException` (key `courier`) with the courier's message. New `Orders\Actions\CourierBookingFeedback` (notifications + `halt()`), used by the order list's **Book courier** and the order page's **Book courier** / **Book Steadfast**; `bookCourierBulk()` reports per-order reasons. `TernaryFilter has_upsell` on `OrdersTable` (`whereHas('items', is_upsell)`). New `OrderCourierBookingFeedbackTest` (6 tests). No migrations.
+## [2.51.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **Items could not be added to an order after it was created.** On a confirmed order, adding an item failed with "Insufficient stock" — even after stock was added to the new item's product. The block came from one of the order's *existing* items: when that product's stock had gone below zero (for example after a WooCommerce sale, which is never blocked), every save re-checked the unchanged line and refused it. Lines whose quantity does not go up are no longer blocked, and adding stock to a product that is below zero is no longer refused either; only stock actually being taken out must be available.
+
+### Added
+
+- **"Not enough stock" popup when editing an order.** Raising a quantity or adding an item on a confirmed / processing / completed order now shows the same popup as Create order when something is short, asking only for the stock beyond what the order already took ("Adding · In stock · Short by"). **Add stock and save order** adds the stock and saves. If a product is already below zero, the popup asks for enough to cover that too. WooCommerce orders are never stopped. In English and Bangla.
+- **Upsell tag.** An item added to an order after it was created is saved as an upsell and shows an **Upsell** badge under the product on the order's edit and view pages. The tag is admin-only — the invoice, PDF, storefront tracking and the customer's account do not show it.
+
+### Technical Notes
+
+- `StockMovementService::validate()` blocks negative stock only when the movement lowers stock compared with what it booked before (new `takesStock()`). `OrderStockCheckService::shortages()` takes the saved order and subtracts its booked sale quantities; `short` now covers stock already below zero. Popup moved from `CreateOrder` into the new `Pages/Concerns/HandlesStockShortages` trait, used by `CreateOrder::beforeCreate()` and `EditOrder::beforeSave()`. Migration `2026_10_05_110000_add_is_upsell_to_order_items_table` adds `order_items.is_upsell` (boolean, default false); the order form's items repeater sets it on rows created on the edit page. New `OrderUpsellTest` (6 tests); `OrderStockShortageTest` now 11 tests.
+## [2.50.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller portal: Forgot password.** The portal sign-in page now has a **Forgot password?** link. The reseller enters their phone number and gets a 6-digit code by SMS (valid for 15 minutes, the same reset code as the storefront account), then sets a new password and is signed straight in. **Send a new code** goes back to the phone step. A code is sent only to a pending or approved reseller of that company, and the reply is the same for any number, so the form does not reveal who is a reseller. Needs the store's SMS settings (Storefront → Notifications); without them the page says reset by SMS is not available and to contact the store.
+
+### Technical Notes
+
+- New `App\Filament\Reseller\Pages\Auth\ForgotPassword` (extends Filament's `RequestPasswordReset`, both steps on one page) registered with `->passwordReset()` on the reseller panel; reuses `CustomerAccountService::sendPasswordResetCode()` / `resetPassword()`. Filament's e-mailed link is not used. Tests: `ResellerPortalPasswordResetTest` (includes a run through the real portal Livewire endpoint).
+## [2.49.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Next.js site in Site → Storefront Settings.** A new **Next.js Site** section lets you switch the headless Next.js website (for example zamzamint.com) on or off, enter its domain and mark the domain verified. The settings list has a new **Sites** column that shows each company's Blade storefront and its Next.js site side by side. Both sites keep reading the same storefront settings (theme colours, fonts, contact details, menus, footer, banners, payment and delivery rules), so nothing is configured twice. A domain can't be reused by another company, a reseller's store or another Next.js site.
+- **Collections in Offers.** **Offers** now has a third type, **Collection**, for **Flash Sale**, **Trending** and **New Arrivals**. Pick the products in display order, set when the collection starts and ends (a Flash Sale needs an end time, which runs its countdown) and optionally a **deal price** per product. Collections are only product lists for the Next.js site: they never appear as offer landing pages, in the `/offers` list or in the offer checkout, and aren't offered when generating AI images or videos.
+- **Storefront API for the Next.js website** (`/api/v1/storefront/…`). The website, which has no backend of its own, reads site settings, categories, products (with images, variations, ratings, minimum order quantity and wholesale quantity prices), hero slides, live collections and content pages from the ERP. It uses the company's existing API key and works only while *Enable Next.js site API* is on. See `docs/api/storefront-api.md`.
+- **Checkout for the Next.js website.** The website can now take real orders through the ERP (`POST /api/v1/storefront/checkout/quote`, `…/checkout`, `…/checkout/payments/{payment}/finalize`, `GET …/orders/{order_number}`). The website sends only the product, quantity and customer details; the ERP works out every price, delivery charge (inside/outside Dhaka from the address), VAT, new-customer delivery advance, pre-order advance, courier-risk advance, checkout-policy block and the payment options exactly as the Blade checkout does, and starts the ZiniPay/PayStation payment when an advance or full online payment is needed. The order is created only after the gateway confirms the payment. A double click or a retry never places a second order, a changed total is refused with the new total, and a stale cart (minimum order quantity, stock) is reported instead of being changed silently.
+- **Wholesale price rule for the website (owner decision):** a live Flash Sale / Trending / New Arrivals **deal price** wins over wholesale quantity prices; otherwise the quantity price reached applies; otherwise the normal selling price. A variation always keeps its own price, and a deal that is not lower than the selling price is ignored.
+
+### Technical Notes
+- `CLAUDE.md` (agent memory) now records that zamzamint.com is the wholesale ZamZam International site and zamzamgadgetbd.com the retail ZamZam Gadget site, and the owner's decisions for the Next.js website. `Company::CORE_COMPANIES` and `docs/storefront-go-live.md` still carry the old "Gift Items / Gadget Items" labels (not changed here).
+- New migrations (run `php artisan migrate --force`; both only add columns, existing rows are unchanged): `2026_10_03_100000_add_nextjs_site_to_storefront_settings_table` (`nextjs_site_enabled` default off, unique `nextjs_site_domain`, `nextjs_site_domain_verified`) and `2026_10_03_110000_add_collection_fields_to_offers_tables` (`offers.collection_kind`, `starts_at`, `ends_at`; `offer_items.deal_price`).
+- `Offer::TYPE_COLLECTION`; scopes `landingPages()`, `collections()`, `liveCollections()`. `OfferController`, `OfferCheckoutController` and the image/video generation offer pickers now use `landingPages()`. Switching an offer away from *Collection* clears its kind and schedule.
+- `StorefrontSetting::nextjsDomainConflict()` / `nextjsDomainTaken()`; `Company::hostIsTakenByThePlatform()` also treats a Next.js domain as taken. Server-side checks live in `HandlesNextjsSiteDomain` (Create/Edit pages) in addition to the form rules.
+- New `EnsureNextjsSiteEnabled` middleware (403 `nextjs_site_disabled`), the `storefront-api` rate limiter (600/min per API token + 3000/min per IP; defined in `AppServiceProvider`), `StorefrontController`, `StorefrontCatalogService` and `StorefrontSiteConfigService`. `Product::reviews()` relation added. No new company-owned model, so `MultiCompanyIsolationTest` is unchanged; `StorefrontApiTest` covers isolation between two companies.
+- The existing server-to-server `/api/v1` routes are untouched and are not gated by the Next.js switch.
+- **Phase 2 (checkout) —** the Blade `Storefront\CheckoutController` now delegates to the new shared `StorefrontCheckoutService::process()` (totals, checkout policy, advance eligibility, online/full payment, order creation) with no behaviour change; the API controller `Api\V1\StorefrontCheckoutController` calls the same method. New: `CheckoutOutcome`, `StorefrontApiCartResolver` (Blade line rules without silent changes), `ForceJsonResponse` middleware (storefront API only), `Support\StorefrontApi\{Signing,OrderSummary}`, `StorefrontCatalogService::unitPrice()` / `dealFor()`, `StorefrontMetaTrackingService::contextFromClient()`, and an optional `$clientIp` argument on `StorefrontCheckoutPolicyService::evaluate()`.
+- No migration and no new model. Payment `ref` and order `token` are HMACs of the payment/order id and company derived from `APP_KEY` (rotating `APP_KEY` invalidates links already sent to customers). `return_url`/`cancel_url` must be https on the company's `nextjs_site_domain` (localhost allowed only in `local`/`testing`). Visitor IP comes from the website (`client_ip`); without it IP rules are skipped.
+- Tests: new `StorefrontApiCheckoutTest` (26) and a deal-rule case in `StorefrontApiTest`; the existing Blade checkout, payment and policy tests pass unchanged.
+- 32 new translation keys in `lang/en.json` and `lang/bn.json`.
+## [2.48.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller orders with the reseller's own courier.** On **Create order** a reseller now chooses **The store delivers (cash on delivery)** or **My own courier (I pay the full amount in advance)**. With their own courier they enter the courier name and the parcel/consignment ID they booked, and the advance payment details: which of the store's payment methods they paid to (the active send-money/bank methods from Storefront → Payment Methods), the number or account they paid from, and the transaction ID. These orders are charged at the store's price (the base price; the normal price for a product with no wholesale rate), with no delivery charge and no commission — the reseller pays that total in advance. The same parcel ID cannot be used on two of the reseller's orders. If the store has no payment method set up, the option is shown but disabled.
+- **Checking and packing these orders (admin).** The order page shows a **Reseller's own courier** section with the parcel ID in large type, the courier, the payment state and transaction details, and when it was packed; the store's courier booking is hidden for these orders. **Verify reseller payment** (choosing the account the money arrived in) records it in the order's Payments History so the order shows as paid; **Reject reseller payment** sends it back to the reseller. **Mark parcel packed** is available only after the payment is verified. The order list has a **Reseller's own courier** filter and a hideable **Reseller parcel ID** column (searchable). The advance also appears on Storefront → Payments as **Reseller advance (own courier)** with a **Check on order** link.
+- **Reseller's view.** The portal **Orders** list shows the parcel ID with the payment state (waiting, verified, rejected) or **Packed**, and the order details show the courier, parcel ID, payment and packing. A rejected payment can be sent again with **Send payment again**.
+
+### Changed
+
+- **Reseller portal: Create order is a button.** **Create order** is no longer in the portal menu; it opens from a **Create order** button at the top of the **Orders** page.
+
+### Technical Notes
+
+- Migration `2026_10_05_100000_add_reseller_own_courier_to_orders_table`: `orders.reseller_own_courier`, `reseller_courier_name`, `reseller_parcel_id`, `reseller_parcel_packed_at` (+ index on reseller and parcel ID). Run migrations on deploy.
+- The advance is a manual `StorefrontPayment` with the new purpose `reseller_advance` (`Order::resellerAdvancePayment()`); new `App\Services\ResellerOwnCourierService` (submit, verify, reject, mark packed). `ResellerOrderPlacementService::place()` takes an optional own-courier array. Own-courier orders get no default courier provider and skip the courier fraud check. Tests: `ResellerOwnCourierOrderTest`.
+## [2.47.0] - 2026-10-05
+
+**Release type:** Minor Feature Update
+
+### Fixed
+
+- **Orders with two or more items would not save.** When a confirmed (or processing / completed) order had an item that was out of stock, saving did nothing visible: the "Insufficient stock" error had no field to show on, and the order was left half-saved with only some of its stock taken out. The order is now saved all-or-nothing, and a stock error while saving or editing an order is shown as a message.
+
+### Added
+
+- **"Not enough stock" popup on Create order.** Placing a confirmed / processing / completed order now checks every item first. If any product (or variation) is short, a popup lists each one with how many were ordered, how many are in stock and how many are missing. Staff who can add stock can type how many to add (at least the missing amount) and press **Add stock and place order** — the stock is added as a stock adjustment ("Stock added from the order form") and the order is placed. Others see the list and go back to change the items. Draft orders do not take stock out, so they are saved without the popup. In English and Bangla.
+
+### Technical Notes
+
+- New `App\Services\OrderStockCheckService` (`shortages()` totals lines per product + variant like `OrderWorkflowService::syncStockMovements()`; `addStock()` books an `adjustment` movement). `CreateOrder::beforeCreate()` mounts the `stockShortage` action and halts. `CreateOrder` and `EditOrder` now use database transactions and the new `ReportsStockErrors` trait. New `OrderStockShortageTest` (7 tests). No migrations.
+## [2.46.0] - 2026-10-04
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Fraud Checker page (Courier → Fraud Checker).** Type a customer's mobile number and see, before taking an order, how that number has done on your connected couriers (Pathao, Steadfast, RedX). The page shows a Safe / Risky verdict, the overall delivery success rate, total / delivered / cancelled parcel tiles, a card per courier with its own numbers and success bar (or "Not configured" with a link to Courier → Providers), fraud reports filed by other merchants (Steadfast), a blacklist warning when the number is on your blacklist, and this store's own order history for the number. **Refresh live data** skips the 24-hour cache. Safe / Risky uses your existing **External courier success ratio review threshold** from Customer Risk Settings — no new rules. Open to staff who can view sales. In English and Bangla.
+
+### Technical Notes
+
+- New `App\Filament\Pages\FraudChecker` + `filament.pages.fraud-checker` view. Reuses `ExternalCourierFraudService::checkByPhone()` (same cache and `customer_risk_events` audit log as the order form's Courier Fraud Check); the service gains `configuredDrivers()` and a public `normalizePhone()`. Blacklist lookup filters company explicitly (global + current company). New `FraudCheckerPageTest` (8 tests). No migrations.
+## [2.45.0] - 2026-10-04
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller portal: Create order.** An approved reseller can now place an order for their own customer from the portal (new **Create order** page, second in the menu). They enter the customer's name, phone, delivery address and optional note, then add products from their own store with a quantity and their own selling price (never below the base price; a product with no wholesale rate sells at the normal price and earns no commission). The page shows the live subtotal, the store's delivery charge for that address, VAT, what the customer pays (cash on delivery) and the reseller's commission. The order arrives as a draft for the store to review and confirm, like a storefront order, shows up in the reseller's **Orders** list with its status, and the commission is credited as usual. A customer is matched by phone; a phone that belongs to another reseller's account only receives the order (that reseller's own details are not overwritten). Orders from the portal are labelled **Reseller portal** in the admin.
+
+### Fixed
+
+- **New-order alert link.** The "New order received" alert (and the status-change alert) now always links to the admin order page. It used the current panel's order page, which does not exist when the order is created from the reseller portal.
+## [2.44.0] - 2026-10-03
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller store logos.** On the portal's **My Store** page a reseller can upload their own logo — one for light mode and an optional one for dark mode. It replaces the store name at the top of their store (the company's own logo is never shown there); with no logo the store name is shown as before. Uploads are compressed to WebP like other logos. The always-dark marketplace theme header shows the dark logo.
+
+### Changed
+
+- **Reseller portal wording and layout.** The link under the sign-in form now reads **Become a reseller** (it said "sign up for an account"). **My Store** has a **Visit store** button that opens the store, in place of **Copy link**. On the dashboard, **Recent orders** now sits above the commission chart.
+
+## [2.43.0] - 2026-10-03
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Server check for Bangla ad images** (groundwork for the AI Tools → Content Creation ad builder). An admin can run `php artisan ad-creative:check-rendering --render` on the server to see whether it can put Bangla text on an image correctly. The image library already in the app (GD) breaks Bangla: conjuncts like স্বাস্থ্য don't join, and ি / ে land on the wrong side of the letter. The check reports OK or FAIL for each requirement and, with `--render`, saves a sample picture to look at.
+
+### Technical Notes
+
+- New `App\Services\AdCreative\TextRenderingCapability` and `ad-creative:check-rendering` command. Checks: GD, the `imagick` extension, the ImageMagick `raqm` delegate (HarfBuzz/FriBidi shaping), and a probe: ক্ষ drawn shaped must be at most 0.60 of its three code points' combined width (measured: Imagick + raqm 0.51, GD 0.81). Exits non-zero when not ready.
+- **Deploy change:** `ext-imagick` added to `composer.json` `require`, the only way Nixpacks installs a PHP extension; `composer.lock` changes only its content-hash and platform list. CI (`.github/workflows/deploy.yml`) now installs `imagick`. Local machines without imagick: `composer install --ignore-platform-req=ext-imagick` (the app itself still boots).
+- Bundled font: Hind Siliguri Regular/Bold (SIL OFL 1.1, Indian Type Foundry) in `resources/fonts/ad-creative/` with `OFL.txt`.
+- Plan: `14_AI_TOOL_MENU_CONTENT_CREATION_PLAN.md` (Phase 0 results).
+
+## [2.42.2] - 2026-10-03
+
+**Release type:** Hotfix Update
+
+### Fixed
+
+- **Reseller portal: "Become a reseller" and sign-in did nothing.** Submitting either form on `reseller.<domain>` neither saved the application nor signed anyone in, and showed no error (so admin never saw the applicants). Two causes: the portal host sent the app's own form-submit address back to the portal page (the app uses a randomised `livewire-<code>/update` address, which the host rule did not recognise), and, once that passes, the company was not resolved from the portal address on those submits, so an application would have been saved under the default company. Both fixed; wrong passwords now show the error message again. Applications that were attempted while this was broken were never saved — applicants need to apply again.
+
+### Technical Notes
+
+- `RestrictResellerPortalHost` lets every `livewire`/`livewire-<hash>` path through; `ResellerPanelProvider` marks `ResolveCompanyFromResellerPortalDomain` as persistent middleware. New `ResellerPortalLivewireHttpTest` posts the real Livewire update request (apply, wrong password, login).
+
+## [2.42.1] - 2026-10-03
+
+**Release type:** Hotfix Update
+
+### Fixed
+
+- **Reseller portal showed "500 Something went wrong" to everyone not logged in, and failed storefront forms showed the same page.** In production the app swaps unexpected errors for a plain error page, but it also did that for two things that are not errors: "you need to log in" and "a form field is invalid". So opening `reseller.<domain>/portal` as a guest (instead of being sent to the sign-in page) and, outside the admin panel, a wrong password or an invalid storefront form (instead of coming back with the message) ended on the 500 page. Both now behave normally. Real errors still show the plain error page. Local and test runs never showed this, because the swap is off there.
+
+### Technical Notes
+
+- `bootstrap/app.php`: the production error-page render hook now skips `AuthenticationException`, `ValidationException` and `HttpResponseException`. New `ProductionErrorPagesTest` runs as the production environment.
+
+## [2.42.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Remove link button in the Documentation article editor.** Click inside a link and press the new "Remove link" (broken-chain) button in the toolbar to remove the link and keep the text — no need to retype it.
+
+**Technical Notes:**
+- Filament's `RichEditor` has no built-in unlink tool, so `DocumentationArticleResource` registers a custom `unlink` `RichEditorTool` (`extendMarkRange('link').unsetLink()`) and lists it in `toolbarButtons()` next to `link`.
+
+## [2.41.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Channel partners are now separate from investors.** A new **Investments → Channel Partners** section keeps each partner's own record: name, phone, address, **NID / passport as the partner ID** (it can't repeat, and Bangla digits and spaces don't matter), a payment account (bKash / Nagad / Rocket / bank / cash, with account number, account name, bank and branch), notes, and an active switch.
+  - **Accounts on the partner page:** how many investors they brought in, those investors' active capital, and the commission earned, paid and due. There are tabs for the investors they brought in, their commission (one row per settlement, with a link to the voucher), and their documents.
+  - **Documents:** new types for the channel partner's **NID / passport copy** and **agreement**. Like investor NID copies, only users with `investments.manage` can see or download them.
+  - A partner who has investors or payouts can't be deleted.
+
+### Changed
+
+- **Channel partners no longer come from the investor list.** On the investor form, in the import dialogs, in the draft review and in **Assign channel partner**, the channel partner is picked from the Channel Partners list. The investor form's "This investor is also a Channel Partner" switch, the "Partner" column, the "Channel Partners" filter and the partner payout tab on investors are gone. Each investor still shows the partner who brought them, and the **Channel Partner** filter on the investor list still works.
+- **A project can have several channel partners.** The settlement pays each partner separately: the project's channel-partner share, in proportion to the capital of the investors that partner brought in. Investors without a partner still add to the company's share, as before. The old rule "a project currently supports only one channel partner" is removed.
+- **Import:** a row's channel-partner column is matched against Channel Partners by partner ID (NID), phone or exact name. The "is channel partner" column is no longer read.
+
+**Technical Notes:**
+- New migration `2026_09_28_150000_create_channel_partners_table`. Run `php artisan migrate --force`. It is not reversible. What it does:
+  - creates `channel_partners`.
+  - copies every investor who acted as a partner (flagged, named as someone's partner, or paid a partner payout) into it, keeping `legacy_investor_id`.
+  - repoints `investors.channel_partner_id` and `investor_drafts.channel_partner_id` to `channel_partners`.
+  - moves `channel_partner_payouts.investor_id` to `channel_partner_id`, with one payout per partner per settlement.
+  - drops `is_channel_partner` from `investors` and `investor_drafts`.
+  - the old investor rows are kept because they may have their own investments. A row that was only a partner still appears in the investor list and can be deleted there if it has no investments.
+- New `ChannelPartner` model (`BelongsToCompany`, `User::MODEL_MODULES` → `investments`, audited, added to `MultiCompanyIsolationTest`) and `ChannelPartnerResource`, with `ReferredInvestorsRelationManager`, `PayoutsRelationManager` and the shared `DocumentsRelationManager`. `PartnerPayoutsRelationManager` on investors is deleted.
+- `SettlementService::allocateProfit()` returns `partner_rows` (partner id => amount), and one `ChannelPartnerPayout` is created per partner. `Investment` no longer rejects a second partner in a project.
+
+## [2.40.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **View button on the Documentation articles list.** Opens the article's public `/guides` page in a new tab. Only shown for articles that are both Published and Publicly shareable — otherwise the page wouldn't exist to view.
+
+**Technical Notes:**
+- `DocumentationArticleResource` table: `viewGuidePage` action, visible only when `is_published && is_public`; table query eager-loads `category` to avoid an N+1 for both this action and the existing Category column.
+
+## [2.39.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Documentation article slug auto-fills from the title.** Type a Title and the Slug fills in on its own — no need to type it manually. Editing the Slug yourself is still possible; once it has a value, typing in Title no longer overwrites it.
+- **Public Guides page for sharing Documentation with people outside the admin panel.** `/guides` lists every published *and* publicly-shareable Documentation article by category, and `/guides/{category}/{article}` shows one — no login required. Meant for people who need to read the guides (e.g. an external developer team) but should not get an admin panel account: Dashboard and other admin pages show business data to any signed-in user regardless of permissions, so a limited account is not a safe way to share this.
+- **Documentation article: "Publicly shareable" toggle.** Off by default, so nothing is exposed at `/guides` unless deliberately turned on. An article stays visible to signed-in staff in the Documentation menu either way — the toggle only controls whether it also shows up at the public, no-login `/guides` page.
+
+**Technical Notes:**
+- Title's `afterStateUpdated` sets `slug` to `Str::slug($title)` only while `slug` is still empty — same pattern as `OfferForm`.
+- New `DocumentationGuideController` (`index`, `show`) + `resources/views/guides/*` + `resources/views/components/layouts/guides.blade.php`. Only articles that are both `is_published` and `is_public` are queryable there; anything else 404s (unpublished, or published-but-internal). The internal Documentation page and its `is_published`-only filter are unchanged. New migration `2026_09_29_090000_add_is_public_to_documentation_articles_table` (default `false`). `/docs` was already taken by the existing product marketing page, so this uses `/guides`.
+
+## [2.38.0] - 2026-09-29
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Upload a file to import Markdown into a Documentation article.** The **Import Markdown** modal (**Settings → Documentation → article → Content**) now also accepts a `.md`/`.txt` file upload, alongside the existing paste box — either works.
+
+**Technical Notes:**
+- The upload uses `FileUpload::storeFiles(false)`, so the file is never written to disk: its raw `TemporaryUploadedFile` content is read directly and discarded once converted through the same `DocumentationArticleResource::markdownToHtml()` used by the paste box.
+
+## [2.37.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Import Markdown into Documentation articles.** The article editor (**Settings → Documentation**) has an **Import Markdown** button next to the Content field. Paste raw Markdown (headings, bold, lists, tables, code blocks) and it converts to properly formatted rich text — pasting Markdown directly into the editor only produced a plain paragraph.
+
+**Technical Notes:**
+- **Documentation Markdown import:** `DocumentationArticleResource::markdownToHtml()` uses `league/commonmark`'s `GithubFlavoredMarkdownConverter` (was already a transitive dependency; now declared directly in `composer.json`). Wired to the Content field's `hintAction`.
+
+## [2.36.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Changed
+
+- **Moving a payout voucher to trash makes the payout unpaid again.** This covers investor settlement payouts, channel-partner payouts and reseller withdrawal requests. If the voucher that was created when the payout was marked paid goes to **Trash**, the payout goes back to **pending**, or **approved** for reseller requests, and can be paid again. Restoring the voucher marks it paid again. A settlement that was fully paid out goes back to **confirmed** while any payout is unpaid.
+- **A rejected or cancelled principal-withdrawal voucher makes the investment Active again.** Until now, only moving that voucher to trash did this. The withdrawal date, voucher link and note stay as history, and the investment can be withdrawn again with a new voucher.
+- Confirmed with the owner: an **approved** voucher still can't be moved to trash.
+
+**Technical Notes:**
+- New `VoucherLinkedPayoutsService` (`voucherTrashed()` / `voucherRestored()`), called by `VoucherTrashService`. The voucher link on the payout is kept so a restore can find it. A restore does nothing if the voucher was rejected or cancelled.
+- `VoucherService::reject()` and `cancel()` call `InvestmentWithdrawalService::voucherVoided()` (renamed from `voucherTrashed()`). New `Voucher::isVoid()` (rejected or cancelled). The `Investment` model counts "withdrawn" only while its voucher exists and isn't void.
+- `ProjectSettlement` allows one step back, from `paid_out` to `confirmed`, and only while one of its payouts is unpaid again. Otherwise its status still only moves forward.
+- No migration.
+
+## [2.35.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **In-app Documentation.** A new **Documentation** menu (visible to everyone signed in) is a step-by-step guide hub for the app itself, browsable by category with a search box. Admins with the Settings permission write and organize the guides from **Settings → Documentation** — a rich-text editor per article, grouped into categories, with a Published toggle so drafts stay hidden until ready.
+
+**Technical Notes:**
+- New tables `documentation_categories` (`name`, `slug`, `icon`, `sort_order`) and `documentation_articles` (`documentation_category_id`, `title`, `slug`, `content`, `sort_order`, `is_published`) — migration `2026_09_28_140000_create_documentation_tables`. Not company-scoped: the same guides show for every company, since they document the app, not business data.
+- `DocumentationArticleResource` (Settings cluster, `canManageSettings()` gated) manages articles; categories are created inline from the article form. `Documentation` page (standalone, top-level nav, open to any signed-in user) lists published articles by category and renders content with `RichContentRenderer`.
+
+- **Voucher trash.** A voucher is never deleted directly. **Move to trash** (on the voucher list and the voucher page) moves it to **Finance → Vouchers → Trash**. From there it can be **restored** or **deleted permanently**. Only users with the new **Voucher: Move to Trash, Restore and Delete Permanently** (`voucher.delete`) permission can do any of this. Super admins have it automatically; give it to other roles in user settings. The trash shows who moved each voucher and when.
+  - An **approved** voucher can't be moved to trash, because its money has already been booked (expense, payment or account transaction).
+  - If a principal-withdrawal voucher goes to trash, its investment becomes **Active** again. Restoring the voucher marks it **Withdrawn** again, and a permanent delete leaves it **Active**. The withdrawal date and note are kept.
+
+### Changed
+
+- **Settlements leave withdrawn investments out.** A settlement calculated after an investor withdrew their principal no longer includes that investment, so it gets no profit share and its principal isn't paid out again. Settlements made before the withdrawal are not changed.
+
+**Technical Notes:**
+- New migration `2026_09_28_140000_add_soft_deletes_to_vouchers_table` adds `deleted_at` (indexed) and `deleted_by` (FK users, `nullOnDelete`). Run `php artisan migrate --force`. Existing vouchers are unaffected.
+- `Voucher` uses `SoftDeletes`, so all Eloquent queries (lists, reports, sums) skip trashed vouchers. `nextVoucherNumber()` also checks trashed vouchers, so a number is never reused. Every FK to `vouchers` is `nullOnDelete` or `cascadeOnDelete`, so a permanent delete is safe. Attachment rows cascade; their files are left in storage.
+- New `VoucherTrashService` (`trash` / `restore` / `deletePermanently`), new `User::canDeleteVoucher()`, and a new page `TrashedVouchers` at `/vouchers/trash`. `VoucherResource::canDelete()` stays `false`.
+- `InvestmentWithdrawalService::voucherTrashed()` / `voucherRestored()`. The `Investment` model allows withdrawn → active only while the withdrawal voucher is in trash, and counts "withdrawn" only while that voucher exists. An investment that has ever had a withdrawal voucher cannot be deleted.
+- `SettlementService::calculateAndSettle()` uses `investments()->active()`.
+
+## [2.34.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investors who take their principal back are kept on record as "Withdrawn".** Each investment has a **Status**: **Active** or **Withdrawn**. Use **Withdraw principal** on the investment page, or in the investor's or project's Investments tab, after the investor has taken their money back. Enter the date, the fund source it was paid from, the payment method and reference, and an optional note.
+  - **Fixed rule:** every withdrawal creates a pending **Investor Payout** debit voucher in **Finance → Vouchers** for the full amount, and the investment turns **Withdrawn** only once that voucher exists. If the voucher can't be created, for example because the fund source has no linked account, nothing changes.
+  - A withdrawn investment can't be deleted or edited, and can't be withdrawn twice. Its page shows the withdrawal date, the voucher (with a link) and its status.
+  - The investor list shows each investor's **Status**: **Active** while any investment is active, **Withdrawn** once all of them are withdrawn. There is a **Status** filter, and investors are never deleted.
+
+**Technical Notes:**
+- New migration `2026_09_28_130000_add_withdrawal_status_to_investments_table` adds `status` (default `active`, indexed), `withdrawn_at`, `withdrawal_voucher_id` (FK `vouchers`, `nullOnDelete`) and `withdrawal_note`. Existing investments become `active`. Run `php artisan migrate --force`.
+- New `InvestmentWithdrawalService::withdraw()` locks the investment, calls `VoucherService::submit()` (debit, `investor_payout`, fund source's account), then sets the status, all in one transaction. The `Investment` model refuses `status = withdrawn` without a withdrawal voucher, and refuses to change or delete a withdrawn investment.
+- `Investor::investmentStatus()` works it out from the investments. Nothing is stored on the investor.
+- Settlement calculations are unchanged: withdrawn investments are still counted if the project is settled later. This is left for the owner to decide.
+
+## [2.33.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Filter the investor list by project.** The investor list has a **Project** filter (pick one or more projects) and a **Projects** column showing which projects each investor has invested in. There is also a **Channel Partner** filter.
+- **Select many investors at once.** The investor list now has checkboxes. **Assign channel partner** sets the channel partner for all selected investors who don't have one yet. Investors who already have a channel partner are left unchanged and counted in the message; change those one by one from their edit page (that still needs the channel-partner permission and a reason).
+- **Channel partner when importing.** The **Import Excel / CSV** and **Paste text** dialogs have a **Channel partner for this import (optional)** section. The chosen partner is set on every new investor in that import. A row that names its own channel partner keeps it, and investors who already exist are not changed. The drafts bulk action is now **Set project / payment / channel partner**.
+- **Upload NID, nominee NID, signed contract (stamp paper) and cheque copies on the investor form.** The create and edit forms have a **Paper copies** section with one upload box for each. The files go to the investor's Documents tab in private storage. Only users with `investments.manage` see this section.
+
+### Changed
+
+- **Removed the "Upload documents by NID" button** from the investor list. It matched files to investors by the file name only, with no way to pick the investor or the document type. Use the upload boxes on the investor form instead.
+
+**Technical Notes:**
+- `InvestorResource::PAPER_COPY_UPLOADS`, `splitPaperCopies()`, `attachPaperCopies()`; `CreateInvestor::handleRecordCreation()` and `EditInvestor::handleRecordUpdate()` save the uploads as `InvestmentDocument` rows in the same transaction as the investor.
+- `InvestorImportService::investmentDefaults()` also accepts `channel_partner_id` (checked against the current company).
+- Deleted `InvestorDocumentUploadService` and the `document_keywords` config. No migration.
+
+## [2.32.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Quote status updates for connected websites.** When staff change the status of an inquiry that a connected website sent in (for example Tasneem Knit or Noor Solar), the website is notified straight away, so its customers can see where their quote stands. Only inquiries the website itself sent are reported.
+- **No more duplicate inquiries from website retries.** A website can now send its own quote number with an inquiry. If the same inquiry is sent again (for example after a timeout), the ERP returns the one it already has instead of adding a second lead.
+
+### Technical Notes
+
+- **Migration:** `2026_09_28_120000_add_external_reference_to_leads_table` adds nullable `leads.external_reference` with a unique `(company_id, external_reference)` index. It is additive.
+- **API:** `POST /api/v1/leads` accepts optional `external_reference` (max 190). A repeat returns the existing lead with `200`; the response now includes `external_reference`.
+- **Webhook:** new `lead.status_updated` event (`id`, `external_reference`, `status`, `updated_at`) via `WebsiteWebhookDispatcher::dispatchLeadStatusUpdated()`, fired from `Lead::updated` when `status` changes and `external_reference` is set. Same signing, queue job and per-company settings as the existing events.
+- **Docs:** `docs/api/website-integration.md` and `website-integration.openapi.yaml` updated. New `docs/api/website-mapping-tasneem-noor.md`: a path-by-path, field-by-field mapping from each website team's own (incorrect) integration doc to the real API, linked from `website-integration.md`.
+- No new user-visible strings, so no `lang/` changes.
+
+## [2.31.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **The NID / passport number is now the investor ID.** A phone number can change; the NID does not, so every investor is tracked by their NID / passport number:
+  - It is required when adding an investor, and one number can belong to only one investor. Spaces, dashes and Bangla digits don't matter: `1990 1234-56789` and `১৯৯০১২৩৪৫৬৭৮৯` are the same number.
+  - The investor list shows it as **Investor ID (NID / Passport)**, and you can search the list by it.
+  - Excel/CSV/text import recognises returning investors by NID, even if their phone number has changed. The draft says when the phone in the file differs from the saved one.
+  - A new **NID missing** filter lists older investors who don't have an NID yet.
+- **Paper copies of NID cards and contracts.**
+  - New document types: investor's NID / passport copy, nominee's NID / passport copy, project contract (same for all investors), cheque copy and stamp copy.
+  - Upload them on the investor's **Documents** tab.
+  - A project's contract is uploaded **once on the project**, and it covers every investor in that project.
+  - **Upload documents by NID** on the investor list takes many scans at once. Name each file with the investor's NID and what it is, for example `1479939603_nid.jpg`, `1479939603_nominee.jpg`, `1479939603_contract.pdf`, `1479939603_cheque.jpg`, `1479939603_stamp.jpg`. Each file is attached to the investor with that NID. Files whose NID matches no investor are listed.
+  - Each investor has a **Paper copies** checklist, shown on their page and as a column in the list: NID copy, nominee's NID copy (when there is a nominee), and a contract for every project they invested in. The **Paper copies missing** filter shows who still has something missing.
+
+### Fixed
+
+- **Investor Drafts list now shows NID, address, nominee NID, nominee phone, stamp no. and cheque no.** These were already being read from the uploaded file and saved on the draft, but the list table had no columns for them, so an import looked like it had skipped those fields. NID is shown next to Phone by default; the other five are available via the column-toggle button (hidden by default, same as the existing Father/Spouse and Nominee Name columns).
+
+### Security
+
+- **Only users with the `investments.manage` permission can see or download NID copies, contracts, and cheque and stamp copies.** Users who can only view investments no longer see these files in any Documents tab, and the download link refuses them. This also covers the contract file on an investment's security instrument. Other investment documents, such as settlement sheets and receipts, stay visible with `investments.view`.
+
+**Technical Notes:**
+- New migration `2026_09_28_110000_add_nid_hash_to_investors_and_investor_drafts`: adds `nid_hash` (keyed HMAC of the normalised number, since `nid_number` is encrypted), with an index on `(company_id, nid_hash)`. Existing rows are backfilled. Run `php artisan migrate --force`. Uniqueness is enforced by the models, not a DB unique index, so the deploy never fails on old duplicate data.
+- `App\Support\InvestorIdentity` (normalize/hash), `InvestorDocumentUploadService`, `InvestmentDocument::SENSITIVE_CATEGORIES`, `Investor::documentChecklist()` / `scopeMissingDocuments()` / `scopeWhereNid()`. The file-name keywords live in `config/investor_import.php`.
+- Existing investors without an NID keep working, but saving them from the edit form now requires one.
+
+## [2.30.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller portal foundation.** Approved resellers (and applicants) now have their own login and dashboard, separate from the main storefront and the admin panel: `reseller.<company-domain>` (or a fully custom domain set in Company Management, for a company that wants one). Only that address opens the portal — every other page on it redirects there, and the portal itself is unreachable from the main shop or `/admin`.
+  - **Become a reseller** (footer/menu link, and the "Your Store" account page) now opens the portal's own apply form instead of the old in-storefront page: name, phone, business name, an optional note, and a password — approval alone is then enough to log in, no separate storefront account needed.
+  - A pending applicant can log in right away and sees a plain "under review" page; a rejected one is kept out, with the admin's note shown if there is one, instead of the dashboard.
+  - The dashboard pages themselves (overview, orders, products, earnings, withdrawals, store settings, profile) are described in the entries below.
+- **Reseller portal: Overview and Orders.** An approved reseller's dashboard (`reseller.<domain>/portal`) now shows: available to withdraw, orders waiting for delivery, this month's orders/sales/commission, a store-link card (**Copy link**, **Share on WhatsApp**, **Share on Facebook** — with a banner instead if the store has no link yet), a 6-month commission chart, and the last 5 orders. A new **Orders** page lists every order credited to the reseller — date, customer (full name, phone and address — the owner's decision, 2026-09-28), items, sale amount, status, and commission — with status and date-range filters, search by order number, and a read-only detail view (items, timeline, commission). Resellers never edit an order from here.
+- **Reseller portal: Products & pricing page.** An approved reseller's portal now has a full **Products** page (`reseller.<domain>/portal/products`): the company catalog with an **In my store** switch per product, **Suggested price**, **Your cost**, an editable **Your price** (never below Your cost), and the resulting **Commission per unit**. Filters for category, in/not in store, and no wholesale rate. Bulk **Add to store**, **Remove from store**, and **Set price = suggested + %** (skips anything not already in the store or without a wholesale rate). Each product also has **Copy link**, **Share on WhatsApp**, and **Download photos** (zips the product's featured image and gallery for posting).
+- **Reseller portal: Earnings, Withdrawals, My Store and Profile.** The rest of the reseller's own dashboard (`reseller.<domain>/portal`):
+  - **Earnings** — every commission (one per order) with status (Pending delivery / Payable / Cancelled) and date-range filters, search by order number, and a **Monthly totals** table for the last 12 months. Cancelled and returned orders are not counted.
+  - **Withdrawals** — the balance cards, a **Request withdrawal** form (the store's minimum and the reseller's available balance are enforced, the same as on the old "Your Store" page), and the full history with each request's status and transaction reference — or the store's reason if it was rejected.
+  - **Saved payout accounts** — bKash / Nagad / Rocket numbers and bank details saved once and picked from a list when requesting a withdrawal, with an optional label and one default account. The first account saved becomes the default; ticking **Save this account for next time** on the withdrawal form saves it too. Changing or deleting a saved account never changes a request already sent.
+  - **My Store** — change the store's URL name (a warning says links already shared will stop working) and the **Store name** shown at the top of the store.
+  - **The store header shows only the reseller's own name.** Inside a reseller's store (`/store/{slug}`) the header now carries the reseller's **Store name** (or, if empty, their business name) instead of the company's name and logo — the owner's decision (2026-09-28). The company's own store is unchanged, and so are the footer and page title.
+  - **Profile** — name, email, and a password change (needs the current password). The phone number is the login, so it is read-only.
+- **Reseller custom domains.** A company can switch on **Reseller custom domains enabled** (Company Management, Super Admin only, off by default). Approved resellers can then enter their own domain (e.g. `myshop.com`) on the portal's **My Store** page. The page shows the DNS record to add (a CNAME to the company's domain, or an A record with the same IP); **Check DNS** confirms it points to the server and makes the domain live — only that reseller's store opens there, and the portal never does. Changing the domain means checking again. Domains already used by the platform (company domains, anything under them, portal domains) or by another store are refused. A new `/internal/tls-ask` endpoint tells an on-demand-SSL proxy (Caddy) which domains may get a certificate — only verified reseller domains. The proxy itself is a server task (`docs/deployment.md`).
+- **Reseller store subdomains.** A company can switch on **Reseller subdomains enabled** (Company Management, Super Admin only, off by default). Then every approved reseller can pick a **Store subdomain** in the portal's **My Store** page, and their store opens at `name.<company-domain>` — only that reseller's products, prices and attribution, with the cart and checkout staying on the same address. Names are lowercase letters, numbers and dashes (3–40 characters), unique per company, and a reserved list (`www`, `reseller`, `admin`, `portal`, …) is refused. The portal itself is never reachable on a store subdomain, and `/store/{slug}` there only opens the subdomain's own reseller. Switching the company off makes the subdomains stop working and store links fall back to the long `/store/{slug}` form. The server needs a wildcard DNS record and wildcard SSL certificate first (`docs/deployment.md`).
+- **The old "Your Store" page now opens the reseller portal.** An approved reseller who opens **My Account → Your Store** (or its sidebar link) is taken to their portal at `reseller.<company-domain>/portal` — the portal has its own sign-in, so they sign in once there. The staff preview keeps the old page, since it has no portal address. `docs/deployment.md` has a new **Reseller Portal Domain** section (DNS record, Coolify domain, `npm run build`).
+- **Reseller prices and commission.** An approved reseller now sets their own selling price for each product in their store (**My Account → Your Store**):
+  - **Your cost** = the product's lowest wholesale tier price + one **Reseller cost per unit** the store sets once, the same for every product (**Storefront Settings → Reseller Settings**, a new tab in the settings sidebar).
+  - **Suggested price** = the product's normal selling price. Leaving the price blank sells at the suggested price.
+  - Any price at or above **Your cost** is allowed. The difference is the reseller's commission.
+  - Products without wholesale tiers, and products with variants, sell at the normal price and earn no commission.
+- **Customers of a reseller pay the reseller's price.** Once a visitor opens a reseller's store link (`/store/{slug}`), they see that reseller's prices for the reseller's products on the whole storefront until their session ends, and the order is credited to that reseller. The wholesale price table is hidden from them, because it shows the reseller's own buying rate.
+- **Commission becomes payable when the order is delivered.** If the order is cancelled, returned or refunded, the commission is cancelled. Resellers see money available to withdraw, money waiting for delivery, money being paid out, their total withdrawn, and recent commissions on their store page.
+- **Withdrawal requests.** A reseller asks for a withdrawal (bKash / Nagad / Rocket / bank, with their account number). They cannot ask for more than they have available, or less than the **Minimum reseller withdrawal** set in **Storefront Settings → Reseller Settings**. Staff handle requests under **Resellers → Withdrawal requests**: **Approve**, **Mark paid**, or **Reject** (with a reason).
+- **Paying a withdrawal books it in Finance automatically.** **Mark paid** asks for the transaction ID, which fund source the money was paid from, and an expense category (both are pre-filled with the ones used last time). It creates a pending debit voucher in **Finance → Vouchers**. Once the voucher is approved there, the payout is recorded as an expense and deducted from that account. If the voucher can't be created (for example, the fund source has no linked account), the request is not marked paid. The voucher number shows on the withdrawal request. A rejected request returns the money to the reseller's available balance. **Resellers → Commissions** lists every commission.
+
+- **A reseller's store links stay inside their store.** Opening a product, category, cart, or the store's own home from inside `/store/{slug}` used to send the visitor to the main shop's page instead — the price and commission still worked (kept in the session), but the visitor left the reseller's curated catalog. Every such link inside a reseller store now stays under `/store/{slug}`, across every storefront theme. Checkout, order tracking, and account pages are unaffected — they still work through the same shop-wide session, as before.
+
+### Security
+
+- **The audit log no longer records a reseller's id as a staff user.** On the reseller portal the default login guard is the customer guard, so the audit log's "who" was being filled with a reseller's id — a database error at best, another person's name in the log at worst. Changes made from the portal are now logged without a staff user attached; staff actions are unchanged.
+- **Reseller application preview is limited to your own company.** A signed-in staff member could open another company's reseller application page in preview (`/storefront/{company}/reseller`), and could even submit an application there. The preview now returns "not found" unless the staff member belongs to that company. Super admins are not affected. This uses the same check as the storefront preview.
+
+### Technical Notes
+
+- **Migrations:**
+  - `2026_09_28_110000_add_reseller_pricing_columns` adds nullable `reseller_products.price`, nullable `order_items.reseller_base_price`, and `storefront_settings.reseller_cost_per_unit` / `reseller_min_withdrawal` (default 0).
+  - `2026_09_28_110100_create_reseller_commissions_table` (one row per order).
+  - `2026_09_28_110200_create_reseller_payout_requests_table`.
+  - All are additive. Existing orders get no commission rows.
+- **Pricing:** new request-scoped `ResellerPricing` (registered with `scoped()`).
+  - `ResolveResellerFromSlug` remembers the reseller in the session, and `ResolveCompanyFromDomain` restores it on every storefront request. The storefront's own links point at main-store routes, so the URL alone could not carry the reseller.
+  - `Product::selling_price` / `normalizedTiers()` ask it; `baseSellingPrice()` returns the raw price. Nothing outside a storefront request activates it.
+  - The sale price is never below the base price, even if tier prices rise after the reseller set their price.
+- **Orders and commissions:**
+  - The cart freezes `reseller_base_price` onto each reseller-priced order item (COD path and the online-payment snapshot).
+  - `StorefrontCart::orderResellerId()` credits the order to the reseller who priced it.
+  - `ResellerCommissionService::sync()` runs from `Order::saved` and `OrderItem::saved` / `deleted`. Payable = `delivery_status = delivered` or `status = completed`; cancelled = cancelled/returned/refunded.
+  - Available balance = payable commission − paid − open requests. It can go below zero if a delivered order is later returned after a withdrawal, and later earnings cover it.
+  - Withdrawal requests take a per-reseller cache lock.
+  - New `ResellerPayoutService::markPaid()` locks the request, submits a `business_expense` debit voucher through `VoucherService::submit()` (fund source's account, chosen expense category, reseller's method as `payment_method`, transaction ID as `transaction_id`), then marks the request paid with `voucher_id`. It all happens in one transaction, and unlike the investment payouts a voucher failure is not swallowed. `reseller_payout_requests.voucher_id` (nullable FK, `nullOnDelete`) is part of the new table's migration.
+- **Models and permissions:** new `ResellerCommission` and `ResellerPayoutRequest` models (`BelongsToCompany`, added to `MultiCompanyIsolationTest`, `User::MODEL_MODULES` → `sales`). New Filament resources `ResellerCommissionResource` (read-only) and `ResellerPayoutRequestResource`, in the Resellers cluster, gated like `ResellerResource`.
+- **Security fix:** `ResellerController::previewStorefront()` gains the `canAccessCompany()` gate. `ResellerStoreController`'s preview is already limited to the signed-in reseller customer's own company.
+- **Settings page:** new `reseller` tab in `HasStorefrontSettingsNavigation`, with `'reseller'` inserted into `StorefrontSettingResource::$sectionKeys` (sections are mapped to tabs by position).
+- **Translations:** new strings go through `__()`; 71 keys added to `lang/en.json` + `lang/bn.json`.
+- **Store-link fix (13_RESELLER_PORTAL_PLAN.md, Phase 1):** new `App\Support\StorefrontUrl::route($family, $params, $previewSlug)` resolves a storefront route name to the staff-preview family (`storefront.preview.*`, when `$previewSlug` is passed), then the reseller-store family (`storefront.reseller_store.*`, when the request carries a `storefront_reseller` attribute — set only by `ResolveResellerFromSlug` — for the 10 families that have one), then the plain main-store family. Checkout, account, offers, tracking, contact and complaint pages have no reseller-store route yet, so they intentionally keep resolving to the main-store URL — `ResellerPricing`'s session-remembered reseller already keeps price/commission correct there. A new `storefront.reseller_store.show` route (`GET /store/{resellerSlug}`) was added as the reseller store's home. Replaced the `isset($previewSlug) ? route('storefront.preview.X', ...) : route('storefront.X', ...)` pattern with this helper across the shared layout, every storefront theme's homepage, and all product/category/cart/checkout/account/offer partials and pages (57 call sites, no user-visible text changed). `CartController::redirectToCheckout()` now also resolves through the helper. New `StorefrontResellerLinkScopeTest` crawls the rendered HTML of every reseller-store page across all 3 registered themes and asserts every product/category/cart/checkout link stays under `/store/{slug}`.
+- **Reseller portal (13_RESELLER_PORTAL_PLAN.md, Phase 2 — portal foundation):**
+  - Migration `2026_09_28_120000_add_reseller_portal_domain_to_companies_table` adds nullable unique `companies.reseller_portal_domain`, admin-managed (Company Management, super admin only), normalised the same way as `companies.domain`.
+  - `Company::forResellerPortalHost($host)` (the DB lookup a request's host resolves against) and `Company::resellerPortalHost()` (the forward direction, used to build the "Become a reseller" link) are the single source of truth for the rule: `reseller_portal_domain` if set, else `"reseller."` + `domain`, only for a company with `reseller_module_enabled`. Both are guarded with `Schema::hasTable('companies')`, since the first is called from global middleware that runs on every request, including ones in tests with no `companies` table.
+  - New `App\Providers\Filament\ResellerPanelProvider` registers a second Filament panel (`id: 'reseller'`, `authGuard('customer')`), at the path `/portal` on **every** host — Filament's own `->domain()` only matches one fixed hostname, which can't express "any company's domain, prefixed with reseller.", so host resolution is done by this app's own middleware instead, exactly as the main storefront already does for company domains.
+  - New `App\Http\Middleware\ResolveCompanyFromResellerPortalDomain` (in the panel's own middleware, mirrors `ResolveCompanyFromDomain`) puts the portal's company in `CompanyContext`; `App\Http\Middleware\RestrictResellerPortalHost` (global `web` middleware, and also in `AdminPanelProvider`'s own stack, since the admin panel doesn't route through the `web` group) redirects every non-`/portal` path to `/portal` on a portal host, and 404s `/portal` on every other host — this is what keeps the admin panel and the portal off each other's hosts.
+  - `Customer` now implements `FilamentUser` + `HasName`. `canAccessPanel()` allows a pending or approved reseller belonging to the host's resolved company (rejected, inactive, or a different company all fail — a wrong-company or rejected reseller gets a 403 from Filament's own `Authenticate` middleware, never a 200).
+  - New `App\Filament\Reseller\Pages\Auth\Login` reimplements `authenticate()` on top of the existing `CustomerAccountService::attemptLogin()` (phone **or** email + password, same rate limiting) instead of Filament's own email-only `EloquentUserProvider` lookup. New `App\Filament\Reseller\Pages\Auth\Apply` (`->registration()`) reuses `ResellerController::apply()`'s exact business rule (match by phone, never downgrade an already-approved reseller) and additionally sets a password, so approval alone is enough to log in.
+  - New `App\Filament\Reseller\Pages\Dashboard` is the panel's only page for now — a pending/rejected/approved-with-placeholder status page. Full dashboard pages (orders, products, earnings, withdrawals) are Phase 3–5.
+  - Password reset inside the portal is not in this phase — a reseller who forgets their password can still reset it from the main storefront's forgot-password page (same account, same `customers` table).
+  - New `ResellerPortalTest`: host isolation both directions (portal path 404s off-host, admin panel redirects away from the portal host, root of the portal host redirects to `/portal`), a disabled reseller module 404s its would-be portal host, a custom `reseller_portal_domain` replaces (not adds to) the `reseller.` default, cross-company access is a 403 (never the other company's data), pending vs. rejected vs. approved each see the right page, and applying creates the pending `Customer` with a hashed password.
+  - **Translations:** 12 new keys in `lang/en.json` + `lang/bn.json` (portal/apply strings). `Company` admin-resource labels are plain English, unwrapped in `__()`, matching every other label already in `CompanyResource.php` (a super-admin-only screen).
+- **Reseller portal (13_RESELLER_PORTAL_PLAN.md, Phase 3 — Overview + Orders):** owner's answers to the two remaining §2.1 questions gathered first via `AskUserQuestion` (full customer info shown to resellers; the reseller's own name/brand only, no company branding, on the store page — the latter feeds Phase 5, not used yet). Recorded directly in the plan file.
+  - `Dashboard`'s "coming soon" placeholder (approved branch only; pending/rejected status pages are unchanged) replaced with: `ResellerCommissionService::balances()` for the stat cards (already existed, reused as-is); `waitingForDeliveryCount()` (`Order::ACCOUNTED_STATUSES` minus delivered/returned/cancelled/failed delivery statuses — no existing scope for this, built fresh); `thisMonth*()` methods filtered on `order_date >= startOfMonth()`; `recentOrders()` (`resellerOrders()->latest('order_date')->limit(5)`); the store-link card reuses `ResellerStoreController::storeUrl()`'s exact `'https://'.$company->domain.route(...)` construction, with a warning banner instead when `reseller_slug` is still blank.
+  - New `App\Filament\Reseller\Widgets\CommissionTrend` (`Filament\Widgets\ChartWidget`, same shape as the existing `SalesPurchaseTrend`), grouping `ResellerCommission.amount` by month of `created_at` (not `payable_at`, which is null for a still-pending commission and would otherwise vanish from the chart until delivery) via the same DB-portable `date_format`/`to_char`/`strftime` pattern `ReportService` already uses. Embedded directly in the dashboard's Blade view via `@livewire()`, since this page is a plain `Filament\Pages\Page`, not Filament's own `Dashboard` page class, so it has no built-in widgets slot.
+  - New `App\Filament\Reseller\Pages\Orders` (same standalone-table shape as `Products`), scoped to `Customer::resellerOrders()`. Columns: order number, date, **full** customer name/phone/address (`Order::customer`, not the denormalized `customer_name`), item count, sale amount, a status badge (`Order::workflowStage()` — the same derived "Confirmed/Processing/Shipping/Delivered/Completed/Cancelled/Returned/Refunded" value the admin's own order-workflow UI is built around, falling back to the raw `status` label for `draft`, which `workflowStage()` can return but `WORKFLOW_STAGES` has no label for), and commission (amount + `ResellerCommission::STATUSES` label, or an em dash when the order has no reseller-priced lines). Filters: `status` (`Order::STATUSES`), and a from/until date-range `Filter` on `order_date` (no existing date-range filter pattern in this codebase to copy — built fresh with two `DatePicker`s). A row action opens a read-only detail modal (`->modalContent()` + a plain Blade partial: items, totals, commission, and the order's `statusTransitions` as a timeline) — resellers never get an edit/status-change action.
+  - New `ResellerPortalDashboardTest`: the dashboard renders end-to-end over real HTTP for an approved reseller (proving the embedded chart widget renders too, not just the page shell), the Orders page is scoped to the reseller's own company (never another reseller's orders), full customer info and the synced commission both show correctly, and a pending/rejected reseller's `Orders::canAccess()` is false.
+  - **Translations:** 14 new keys in `lang/en.json` + `lang/bn.json`; several column/stat labels (Order, Date, Customer, Phone, Address, Items, Subtotal, Name, Available to withdraw, Waiting for delivery, Your price) were already present from earlier phases and reused as-is rather than duplicated.
+- **Reseller portal (13_RESELLER_PORTAL_PLAN.md, Phase 4 — Products & pricing):**
+  - New `App\Filament\Reseller\Pages\Products` (`Filament\Pages\Page implements HasTable`, following the same standalone-table shape as `Products\Pages\BulkUpdateStock`), registered as the panel's second page. `canAccess()` requires an approved reseller — a pending or rejected applicant gets a 403 if they reach the URL directly, same as Filament's own panel-level check.
+  - Reuses the exact business rules already established for the storefront's own reseller price page (`ResellerStoreController`/`ResellerPricing`), not new ones: "in store" toggling creates/deletes the `reseller_products` row exactly like `ResellerStoreController::toggleProduct()`; "Your price" is rejected below `ResellerPricing::basePrice()` exactly like `ResellerStoreController::updatePrice()`; a price can only be set once a product is picked (matches the existing `firstOrFail()` behaviour). Picks/prices are loaded once per request into Livewire state (`$picks`) and reloaded after every write, so every cell stays consistent without a per-cell query.
+  - "Set price = suggested + %" computes `suggested_price * (1 + percent / 100)`, floored at the base price, and silently skips (with a count in the notification) any selected product not already in the reseller's store or without a wholesale rate — it never adds a product to the store on its own.
+  - New `App\Http\Controllers\Reseller\ResellerProductPhotosController` streams a zip of a product's `image` + `gallery_images` (via `CompanyStorageService::locatePublic()`). Registered at `/portal/products/{product}/photos`, guarded by `auth:customer` + `ResolveCompanyFromResellerPortalDomain` (applied explicitly, since this is a plain route outside the Filament panel's own middleware stack) and an explicit company-match check in the controller; the `/portal` path prefix is what lets `RestrictResellerPortalHost`'s allow-list pass it through on the portal host.
+  - "Copy link" uses the existing `App\Support\ClipboardCopy::alpineHandler()` (already used elsewhere for copy-to-clipboard actions); "Share on WhatsApp" opens `https://wa.me/?text=...` (a generic share, not `PhoneLinks::whatsappUrl()`, which needs a specific recipient's number).
+  - New `ResellerPortalProductsTest`: catalog is scoped to the portal's own company, in-store toggling creates/deletes the pick row, price floor enforcement, bulk add/remove, bulk set-price-from-suggested skips unpicked/no-rate products, and the photo-download route 404s a product from a different company.
+  - **Translations:** 16 new keys in `lang/en.json` + `lang/bn.json`.
+- **Reseller portal (13_RESELLER_PORTAL_PLAN.md, Phase 5 — Earnings, Withdrawals, My Store, Profile):**
+  - **Migrations (additive):** `2026_09_29_100000_add_reseller_store_name_to_customers_table` (nullable `customers.reseller_store_name`) and `2026_09_29_100100_create_reseller_payout_accounts_table`. New `ResellerPayoutAccount` model (`BelongsToCompany`, added to `MultiCompanyIsolationTest`), `Customer::resellerPayoutAccounts()`, `Customer::resellerStoreName()` (`reseller_store_name` → `business_name` → `name`) and `Customer::resellerStoreUrl()` (the Dashboard now delegates to it).
+  - **Shared payout logic:** the withdrawal request (per-reseller cache lock, balance re-check) moved out of `ResellerStoreController::requestPayout()` into `ResellerCommissionService::requestPayout()`; the storefront page and the portal both call it, so the rule cannot drift apart.
+  - **Pages** (`App\Filament\Reseller\Pages`, all `canAccess()` = approved reseller through the new `ForApprovedResellers` trait): `Earnings` (table over `ResellerCommission`; monthly totals grouped with the new DB-portable `ResellerCommission::monthExpression()`, cancelled excluded), `Withdrawals` (balance cards + history table; the request form is a header `Action` modal — `minValue`/`maxValue` validation, then the locked re-check in the service), `PayoutAccounts` (table + add/edit/delete/make-default; `store()` updates an existing method + details instead of duplicating it), `MyStore` (slug rules identical to the old page: `alpha_dash`, unique within the company, ignoring the reseller's own row), `Profile`.
+  - **Profile security:** a new password needs the current one (`Hash::check`); wrong attempts are throttled with `RateLimiter` (5 per 15 minutes per reseller); the session's `password_hash_customer` is refreshed (as Filament's own `EditProfile` does) so the change does not log the reseller out; profile and password changes are recorded in `storefront_customer_activities`, like the storefront profile page. An email already used by another login account, or one that fails `EmailFormat::PATTERN`, is refused as a form error (the model's own `saving` check would otherwise throw a `ValidationException` with a key the form cannot show).
+  - **Store header (§2.1 Q3):** `storefront/layout.blade.php` derives `$brandName` / `$brandLogoUrl` / `$brandLogoDarkUrl` from the `storefront_reseller` request attribute (reseller's name, no logo) or the company; both header partials (`partials/layout/header` and `themes/marketplace-pro/...`) use them. `<title>`/meta and the footer are unchanged.
+  - **`AuditLogService::actorId()`:** `audit_logs.user_id` is now filled only when the signed-in principal is a `User`. Filament's `Authenticate` middleware switches the default guard to `customer` on the portal, which made `Auth::id()` a reseller id (FK violation on MySQL, or a wrong attribution). Found by this phase's tests, which save a `Customer` from the portal.
+  - **Fixes to earlier unreleased phases, found while building this one:** `CommissionTrend` no longer counts cancelled commissions (the service keeps `amount` on a cancelled row); the panel now has its own Vite theme (`resources/css/filament/reseller/theme.css`, registered in `vite.config.js` and `ResellerPanelProvider::viteTheme()`) — Filament's precompiled stylesheet carries none of the generic Tailwind classes the portal's Blade views use (`grid-cols-*`, `justify-between`, `text-right`, …), and only the admin panel had a theme that scanned `resources/views/filament/**`. **`npm run build` is needed at deploy** (`public/build` is not committed). Navigation labels for Dashboard / Orders / Products are now translated and every page has a `navigationSort`.
+  - **Translations:** 39 new keys in `lang/en.json` + `lang/bn.json`, including four that Phase 3 already used but never added (`From`, `Until`, `Orders`, `Commission (last 6 months)`).
+  - New `ResellerPortalAccountTest` (25 tests): scoping of earnings, withdrawals and saved accounts to the signed-in reseller, minimum/maximum/lock enforcement, default-account rules, slug uniqueness per company, password change/throttle, the audit-log actor, HTTP rendering of every new page, and the store header for every registered theme (with mutation checks confirming the header, chart, audit and balance tests fail when the code they cover is broken).
+  - **Phase 6 — switch-over:** `ResellerStoreController::edit()` redirects (`redirect()->away()`) an approved reseller to `Company::resellerPortalHost()` + `/portal` when the company has one, and the account layout's "Your Store" link points there. The POST/PATCH endpoints of the old page are left in place (still company- and reseller-scoped) and staff preview is unchanged. `PROJECT_GUIDE.md` and `docs/deployment.md` document the portal and its DNS/Coolify steps. Tests in `ResellerSelfServiceTest` / `ResellerCommissionTest` now expect the redirect.
+
+## [2.29.0] - 2026-09-28
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investor drafts can now record the investment too.** When importing an Excel/CSV file or pasted text, open **Investment for this import (optional)** and pick the **project**, **payment method** and **investment date**. The **বিনিয়োগ (৳)** amount of each row is read into its draft. When the draft is confirmed, the investment is added to that project, and the stamp and cheque numbers are saved as its security instrument. If the project receives money into a fund source, the pending capital voucher is created too, the same as when an investment is added by hand.
+  - Each draft's review page has an **Investment** section, where project, amount, payment method and date can be changed.
+  - **Set project / payment** sets these for many selected drafts at once.
+  - A draft with an amount but no project shows **Needs fixing** until a project is picked or the amount is cleared. A closed or settled project cannot take new investments.
+- **Returning investors get only the new investment, not a duplicate.** When a row's phone number matches an investor who already exists, the draft is linked to that investor automatically, and a note says so. Confirming adds only the new investment to them. Their name, NID, nominee and other details are not changed. On the review page, **Add to an existing investor** links or unlinks a draft by hand.
+
+**Technical Notes:**
+- New migration `2026_09_28_100000_add_investment_fields_to_investor_drafts_table` (`existing_investor_id`, `project_id`, `investment_amount`, `payment_method`, `invested_at`). Run `php artisan migrate --force`.
+- `InvestorImportService::confirm()` creates the `Investment` (+ `InvestorSecurityInstrument` when stamp/cheque numbers exist) in the same transaction as the investor, then calls `InvestmentLedgerService::recordInvestmentReceived()`. The `Investment` model's own rules (investment window, one channel partner per project) still apply and block the confirm with their message.
+
+## [2.28.1] - 2026-09-27
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Image Generation works with OpenRouter.** On **Settings → Integrations → Image Providers**, **Provider type** now has an **OpenRouter (unified image API)** option. Before, an OpenRouter key could only be added as **Custom**, and every image, including "Start from an image", failed with "Custom image provider rejected the request (HTTP 404): Not Found". To fix an existing profile, change its **Provider type** to **OpenRouter** and save. The Base URL (`https://openrouter.ai/api/v1`) and model can stay as they are.
+
+### Technical Notes
+
+- New `OpenRouterImageProvider` adapter, registered in `ImageProviderResolver` and `ImageProviderSettingsService::API_FORMATS`. It posts to OpenRouter's single `POST /api/v1/images` endpoint (appending `/images` when the Base URL is the bare API root), sends `aspect_ratio`/`resolution`/`n`, and for image-to-image adds the source photo as a base64 data URL in `input_references` on the same call. The generic "Custom" adapter assumes OpenAI's `/images/generations` + `/images/edits` routes, which OpenRouter does not have.
+- Production needs a running queue worker (`php artisan queue:work`) for Image Generation; without one, generations stay "Queued" forever.
+
+## [2.28.0] - 2026-09-27
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Put an AI video on a product page or an offer page.** In **AI Tools → Video Generation**, a finished video now has two more buttons next to **Download**:
+  - **Product** — pick a product. The video plays on the product page, under the photos, with the first photo as its cover. It replaces the product's current video, if it has one.
+  - **Offer hero** — pick an offer / landing page. The video plays in the page's top banner, silent and on a loop, behind the headline. The offer's cover image stays as the video's first frame and as the picture used when the page is shared. Visitors whose device asks for less motion see the cover image instead.
+  - Each video shows which product or offer it is attached to.
+  - A video waiting for a reviewer's approval, or rejected, cannot be attached.
+- **Remove a video from a product or offer.** When a product or offer has a video, its edit form shows the video with a **Remove video** link (Products → Product Images; Offers → the cover image section). Removing it takes it off the storefront. The clip stays in Video Generation, so you can attach it again. Videos cannot be uploaded here; they only come from Video Generation.
+- **Video Library** (AI Tools → Video Library). Every video your company has made, in one table:
+  - Search by prompt. Filter by purpose, status, who made it, review, favourites, attached to a product or offer, and saved to Google Drive.
+  - Per video: **Play**, **Download**, **Reuse** (opens Video Generation with the same prompt, settings and starting image), and **Add to favourites**.
+- **Favourite** button on each finished video in Video Generation. Starred videos can be filtered in the Video Library.
+- **Save to Google Drive.** A finished video can be copied to your company's Google Drive folder from Video Generation or the Video Library. You get a notification when it is there, and the button turns into **Open in Google Drive**. The storefront still plays the video from the app's own storage; Drive only holds a copy.
+  - Setup, by a super admin: the Google service account from **Settings → Backups → Google Drive Backup** is reused. Add the folder on **Settings → Integrations → Video Providers → Save to Google Drive** (paste the folder link) and share that folder with the service-account email shown there. Use a folder in a **Shared Drive**: Google may refuse uploads into a normal My Drive folder.
+  - If Google refuses an upload, the video shows **Failed** with Google's reason, and you can retry.
+  - Until the folder is set, the button is hidden.
+- **Video Governance** (AI Tools → Tool Menu → **Video Governance** button, super admins only), the same controls Image Governance has:
+  - **Monthly video cap per role.** 0 means unlimited; super admins are never capped; failed videos do not count. A user who has used their allowance is told so and nothing is generated. Video Generation shows how many videos are left this month.
+  - **Approval before attaching.** Videos made by the chosen roles are marked "pending review" and cannot be put on a product or offer until a reviewer approves them in the Video Library (**Approve** / **Reject** with a reason). The creator sees the badge and the reviewer's note.
+  - **This month's usage:** videos generated and estimated spend, by person and by provider.
+  - New permission **AI Tools: Video Generation — approve others' videos for attaching** (`ai_tools.video_generation.review`), given to the built-in Manager role.
+  - Everything is off until a super admin sets values.
+
+**Technical Notes:** new `GeneratedVideoAttacher` (`attachToProduct()` / `attachToOffer()`) writes the stored clip path into `products.video_path` / `offers.video_path` (the columns came with the Phase 1 migrations) and sets the generation's `linked` morph. It refuses an unfinished row, a row whose clip is missing, a row awaiting or failing review, and a record from another company (`VideoAttachmentException`). `VideoGeneration` gains `attachToProduct` / `attachToOffer` actions, scoped to the user's own rows, and records `ai_video.attached` in the audit log. New read-only `AttachedVideoPreview` form field (never dehydrated, no upload) on `ProductForm` and `OfferForm`, with a `removeVideo` hint action. `storefront/products/show.blade.php` gains a `data-product-video` block; `storefront/offers/blocks/hero.blade.php` plays `video_path` over `cover_image` (`motion-reduce:hidden`). New strings go through `__()` with keys in `lang/en.json` and `lang/bn.json`. Plan: `12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md` Phases 3–4. Phase 4: new `VideoLibrary` page (AI Tools cluster, `ai_tools.video_generation`); `VideoGeneration` gains `toggleFavorite` / `saveToDrive` actions and `?from=<id>` prefill. New `SaveVideoToDriveJob` (queued, one try, sets/clears `CompanyContext`) → `VideoDriveExporter` → new `GoogleDriveBackupService::uploadStream()` (resumable upload, streamed from the public disk, `supportsAllDrives=true`); the backup `upload()` is unchanged. Per-company folder in `companies.settings->ai_tools->video_drive->folder_id`. **Migration:** `2026_09_27_100000_add_google_drive_columns_to_generated_videos_table` adds `drive_status`, `drive_file_id`, `drive_url`, `drive_saved_at`, `drive_error` to `generated_videos`. Audit event `ai_video.saved_to_drive`. Phase 5: new `VideoGovernanceService` (`companies.settings->ai_tools->video_governance`, cap = count of non-failed videos this month) and super-admin `VideoGovernance` page (hidden from the sidebar, linked from the Tool Menu header). `VideoGeneration::generate()` checks the cap before dehydrating the form and sets `review_status`; `VideoLibrary` gains `approveReview` / `rejectReview` (audit `ai_video.review_approved` / `ai_video.review_rejected`). `User::ROLE_PERMISSIONS['manager']` gains `ai_tools.video_generation.review`. **Migration:** `2026_09_28_100000_grant_video_review_permission_to_manager_role` appends that permission to the stored Manager role only if the row already has `ai_tools.video_generation`, leaving everything else unchanged.
+
+## [2.27.1] - 2026-09-27
 
 **Release type:** Maintenance Update
 
@@ -38,6 +1456,7 @@ All notable production changes to Business Dashboard are documented here.
   - The "External Fraud Check (Merchant Panel Login)" section is no longer shown for Steadfast.
 
 **Technical Notes:** `SteadfastCourierClient` gains `ping()` and `fraudCheck()` (`GET /fraud_check/score/{phone}`), URL-encodes path values, and retries only connection errors and 5xx. It never retries a 4xx: the guide says 10 failed logins in 5 minutes lock the key for 60 minutes, booking included. `SteadfastFraudClient` now calls the API instead of scraping the portal (the portal code is removed). After a 401 it skips lookups with the same keys for 15 minutes. The guide does not name the response fields, so `parseScore()` accepts the common spellings, at the top level or under `data`. A response with no delivered or cancelled count is treated as a failed check, never as a clean 0/0. `ExternalCourierFraudService` passes a Steadfast provider's booking API keys and `base_url` to the client. `CourierProviderInterface` gains `verifyWebhookRequest()` and `webhookSkipReason()`, with defaults in `AbstractCourierAdapter`. `CourierWebhookController` uses them and reads `Idempotency-Key`. `ProcessCourierWebhook` marks skipped events `ignored`. `CourierService::normalizeSteadfastStatus()` now returns `?string`. New strings go through `__()` with keys in `lang/en.json` and `lang/bn.json`. No migrations.
+
 ## [2.26.0] - 2026-09-27
 
 **Release type:** Minor Feature Update
@@ -50,6 +1469,7 @@ All notable production changes to Business Dashboard are documented here.
 - **Video guides on the Prompt Enhancer page.** Settings → Integrations → Prompt Enhancer → **Context guides** now lists four video guides next to the image ones. Labels now start with "Image —" or "Video —", so the two "General" guides are easy to tell apart. As before, leave a guide blank to keep the built-in default.
 
 **Technical Notes:** `config/prompt_guides.php` gains four `video_generation.*` contexts and a separate `video_provider_styles` map (only `custom`). The image `provider_styles` entry for Stability asks for keyword tags, which suits images but not a video motion prompt. `PromptEnhancementService` picks the medium from the context key prefix (`video_generation.*` → video): the system prompt's first and last lines say video / on-screen text, and `PromptGuideRepository::providerStyle($format, $medium)` reads the matching style map. The `enhance()` signature is unchanged. `VideoGenerationClient` gains `usesTextPrompt()` (`StabilityVideoProvider` returns false). `VideoGeneration` stores `original_prompt` (the column already existed). No migrations. Plan: `12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md` Phase 2.
+
 ## [2.25.1] - 2026-09-27
 
 **Release type:** Patch/Fix Update
@@ -69,6 +1489,7 @@ All notable production changes to Business Dashboard are documented here.
 - **Sample CSV** now downloads in the same layout as your INV sheet.
 
 **Technical Notes:** `InvestorImportService` finds the header row below a title line, reads every Excel sheet, folds Bangla spelling variants when matching column names, and skips SL/total rows. The sample layout and new aliases live in `config/investor_import.php`. No migrations.
+
 ## [2.25.0] - 2026-09-27
 
 **Release type:** Minor Feature Update
@@ -90,6 +1511,7 @@ All notable production changes to Business Dashboard are documented here.
 - **AI Expense Scan is renamed Smart Scan** everywhere it shows: the settings page, **Finance → Smart Scans**, and its messages.
 
 **Technical Notes:** `ImageProviderSettings`, `VideoProviderSettings`, `PromptEnhancerSettings` and `ExpenseScanSettings` moved from the `AiTools` to the `Settings` cluster and use the new `OpenedFromIntegrations` trait (hidden from navigation, breadcrumb to Integrations). Their URLs are now `/admin/settings/{slug}` (slugs unchanged); a `301` route redirects the old `/admin/ai-tools/{slug}`. `Integrations::aiToolProviderLinks()` builds the cards, showing each only to users who can open that page. `ImageGovernance` stays in `AiTools` with `$shouldRegisterNavigation = false`, linked from the `imageGovernance` header action on `ToolMenu`. New and renamed labels go through `__()` with keys in `lang/en.json` and `lang/bn.json`. No migrations.
+
 ## [2.24.0] - 2026-09-27
 
 **Release type:** Minor Feature Update
@@ -109,6 +1531,7 @@ All notable production changes to Business Dashboard are documented here.
 - New migration `2026_09_26_100000_create_investor_drafts_table` (`investor_drafts`, company-owned; `nid_number` / `nominee_nid_or_passport` encrypted like on `investors`). Run `php artisan migrate --force`.
 - New `InvestorDraft` model (`BelongsToCompany` + `CompanyScope`), `App\Services\Investment\InvestorImportService` (reading with the existing `openspout/openspout` dependency), `InvestorDraftResource` in the Investments cluster. Column/label names live in `config/investor_import.php`.
 - Drafts need the `investments.manage` permission. Uploaded files are deleted right after they are read.
+
 ## [2.23.1] - 2026-09-26
 
 **Release type:** Patch/Fix Update
@@ -137,6 +1560,7 @@ On other devices:
   - `saveImage()` writes to MediaStore on Android 10+.
   - `AndroidManifest.xml` gains a `<queries>` block for the seven messenger package names, needed for Android 11+ package visibility.
 - `OrderSummaryCardService` drops the text share links. It adds `customer_phone` (international digits), per-row `key` on totals, and card `labels`.
+
 ## [2.23.0] - 2026-09-25
 
 **Release type:** Minor Feature Update
@@ -167,6 +1591,7 @@ On other devices:
 - Migration `2026_09_25_120100_add_last_company_selection_to_users_table` adds nullable `users.last_company_selection` (company id or `all`). `CompanySwitchController` writes it. `SetCurrentCompany` uses it only when the session has no company yet, and still checks access.
 - New `App\Support\PhoneLinks`, `App\Services\OrderSummaryCardService`, `CourierService::courierNote()`. The courier note text is always English because the courier reads it. It is not UI text.
 - New tests: `OrderManagementFeaturesTest`, plus new cases in `CourierIntegrationTest` and `CompanySelectionPersistenceTest`.
+
 ## [2.22.0] - 2026-09-25
 
 **Release type:** Minor Feature Update
@@ -176,6 +1601,7 @@ On other devices:
 - **AI Expense Scan can now read expenses pasted as text, not just photos.** The scan page (Finance → Expense Scans → Scan photo or text, or **Scan with AI** on the Expenses list) has a new **"Or paste expenses as text"** box. Paste several expenses at once, one per line in any format (for example a WhatsApp message or a notes-app list, in Bangla or English). They are read into draft lines exactly like a photo: dates, amounts, suggested category and suggested pay-from account, with the same review and **Publish** step before anything is posted. A scan can have photos, pasted text, or both. The pasted text is shown on the review page and on each published expense as its source.
 
   **Technical Notes:** migration `2026_09_25_110000_add_source_text_to_expense_scans_table` adds a nullable `expense_scans.source_text` column. `ExpenseScanReader` sends the pasted text to the model as a delimited text block alongside any photos, and a scan needs at least one of the two.
+
 ## [2.21.0] - 2026-09-25
 
 **Release type:** Minor Feature Update
@@ -227,6 +1653,7 @@ On other devices:
 - `axios` was removed. It was unused (`resources/js/bootstrap.js` deleted), which drops ~14 KB gzip from the storefront bundle.
 - New tests: `StorefrontVatAndDeliveryTimeTest`, `tests/Unit/TranslationParityTest`. `StorefrontThemeTest` was updated for the owner's new hero, copy and utility-bar rules.
 - New agent rule in `CLAUDE.md` / `AGENTS.md`: every new user-visible string goes into both `lang/en.json` and `lang/bn.json`.
+
 ## [2.20.0] - 2026-09-25
 
 **Release type:** Minor Feature Update
@@ -244,6 +1671,7 @@ On other devices:
   - **Setup:** a Super Admin sets the AI model and API key on the new **AI Tools → Expense Scan** page. Any Anthropic (Claude) or OpenAI-compatible vision model works. This key is separate from the CRM and Prompt Enhancer keys, so its cost can be tracked on its own.
 
   **Technical Notes:** migration `2026_09_24_100000_create_expense_scans_tables` adds `expense_scans` and `expense_scan_items` (both company-owned: `BelongsToCompany` + `CompanyScope`, added to `MultiCompanyIsolationTest`) and a nullable `expenses.expense_scan_id` FK (`nullOnDelete`). Drafts are deliberately kept out of `expenses`, because an `Expense` posts to the ledger in its `saved` hook. Photos are stored privately through `CompanyStorageService` (`private/expense-scans/`) and served by the new permission-checked `expense-scans.image` route. The vision call runs in the new queued `ProcessExpenseScanJob` (`tries=1`, `timeout=240`). It sets `CompanyContext` explicitly and restores it afterwards, so it also works under `QUEUE_CONNECTION=sync`. **Production needs a running queue worker for scans to be read off the request.** New services `ExpenseScanConfigService` (encrypted per-company settings at `settings->ai_tools->expense_scan`), `ExpenseScanReader` (vision prompt + `record_expenses` tool; re-validates every category/account id, amount and date the model returns), and `ExpenseScanPublisher` (transactional publish, category de-duplication, duplicate hint). `AiLlmClient` gained an optional `$maxTokens` constructor argument (default unchanged at 1024). `ExpenseCategory::createWithUniqueSlug()` now holds the unique-slug logic previously inlined in `ExpenseForm`. New permission key `expenses.ai_scan` is not added to any built-in role.
+
 ## [2.19.0] - 2026-09-20
 
 **Release type:** Minor Feature Update
@@ -253,6 +1681,7 @@ On other devices:
 - **New external Website Integration API** (Settings → Integrations → Website API), so a company's own customer-facing website can sync with ZamZam ERP: two-way product price/stock sync, website → ERP order and inquiry submission, and one-way ERP → website order status tracking. Real-time in both directions — inbound via a REST API, outbound via signed webhooks. Generate a per-company API key and (optionally) a webhook URL/secret from the new tab; full contract, auth, and webhook signature verification are documented in `docs/api/website-integration.md` and `docs/api/website-integration.openapi.yaml` (importable straight into Postman), with a staging setup walkthrough in `docs/api/staging-setup.md`.
 
   **Technical Notes:** new `routes/api.php` (registered in `bootstrap/app.php`), authenticated by a new per-company `CompanyApiKey` model (SHA-256-hashed bearer token, looked up before company context exists — same `withoutGlobalScopes()` precedent as `ChatOrderLink`) via the new `ResolveCompanyFromApiKey` middleware, which sets `CompanyContext` for the request. New endpoints under `/api/v1`: `GET/PATCH products/{sku}`, `GET products`, `POST orders` (idempotent on `external_reference`, new `Order::SOURCE_API`), `GET orders/{order_number}`, `POST leads` (reuses the existing `Lead::SOURCES['website']`, no model change needed). A `PATCH products/{sku}` stock update is never a raw column overwrite — `Product::setStockFromProductForm()` (already used by the admin Product form) now accepts an optional reference/reason override so the resulting `StockMovement` is stamped as API-originated, ledger-safe like every other stock change. Outbound webhooks (`order.status_updated`, `product.updated`) go through a new `WebsiteWebhookDispatcher` service + queued `DispatchWebsiteWebhookJob` (HMAC-SHA256-signed, `X-ZamZam-Signature` header), configured per company on a new encrypted `storefront_settings.website_api_credentials` column (same pattern as `woocommerce_credentials`); an API-originated stock change is deliberately not echoed back as a webhook to the same company that made it (checked via the `StockMovement.reference_type` it was stamped with), while every other stock/price/order-status change still notifies normally. New `CompanyApiKey` is added to `MultiCompanyIsolationTest`'s company-scope contract test.
+
 ## [2.18.2] - 2026-09-17
 
 **Release type:** Patch/Fix Update
@@ -262,6 +1691,7 @@ On other devices:
 - **Orders: auto shipping fee could stay ৳0 even with a correctly detected zone, when a company has more than one courier provider.** `ShippingFeeService` priced a detected zone using whichever active courier provider happened to have the lowest database id — not necessarily the one actually marked "Set as default courier." A company with a second courier added later (or fees only configured on the real default) would silently get ৳0 shipping on every order regardless of the customer's address, and the CRM sales bot's delivery-fee quote had the same problem.
 
   **Technical Notes:** `ShippingFeeService::defaultCourierProvider()` now delegates to `CourierProvider::defaultForCompany()` — the same "is_default, falling back to the sole active provider" lookup already used to pre-assign `courier_provider_id` on new orders — instead of its own inconsistent `orderBy('id')->first()` query.
+
 ## [2.18.1] - 2026-09-17
 
 **Release type:** Patch/Fix Update
@@ -271,6 +1701,7 @@ On other devices:
 - **Orders: auto shipping-cost zone detection now reads a customer's address in Bangla too, and a manually typed shipping fee is no longer wiped out when auto-detection fails.** Previously the zone matcher only recognized a district's official English spelling (e.g. "Chattogram"), so an address written in Bangla script (ঢাকা, চট্টগ্রাম, …) or an older/informal English spelling (Chittagong, Comilla, Bogra, Barisal, Jessore, …) always fell through to "Could not detect a zone from the customer address" — and on top of that, if staff then typed the shipping fee in by hand, saving the order silently reset it back to ৳0.
 
   **Technical Notes:** `ShippingFeeService::determineZone()` now also matches each configured zone keyword against `BangladeshDistricts::aliasesFor()` (the Bengali name and any older English spelling for that district/suburb). `Order`'s `creating` hook now only auto-computes `shipping_fee` when one hasn't already been set to a real amount, so a manual entry survives even when `shipping_zone` stays null.
+
 ## [2.18.0] - 2026-09-15
 
 **Release type:** Minor Feature Update
@@ -283,6 +1714,7 @@ On other devices:
   - Both are optional and off by default — existing configurations (main model handles images inline, voice notes unanswered) are unchanged unless explicitly turned on.
 
   **Technical Notes:** new `AiVisionDescriber` and `AiVoiceTranscriber` services; new encrypted `image_api_key`/`voice_api_key` settings alongside the existing per-tool credential shape in `AiSettingsService`. `DownloadConversationMediaJob` now also queues the AI reply job for incoming voice notes (previously only images), and `AiReplyService` writes the transcript/description onto the source message's own `body` so it flows through the existing text-based reply pipeline unchanged.
+
 ## [2.17.0] - 2026-09-13
 
 **Release type:** Minor Feature Update
@@ -371,6 +1803,7 @@ On other devices:
 - New `App\Support\StorefrontListingCache` (`storefront-home-products:`, `storefront-categories:`, `storefront-products:` cache keys). The product-listing page is parameterized by category/sort/page, so instead of enumerating every combination to forget, its keys carry a per-company "generation" number that `forgetCompany()` bumps — old keys simply become unreachable and expire via TTL, on any cache driver. `Product`, `Category`, and `StorefrontSetting` now call it from their existing `saved`/`deleted` hooks (`Category`/`StorefrontSetting` already forgot the separate, pre-existing `storefront-home:{companyId}` slide cache there; that call is unchanged).
 - Production Redis is now also the recommended session backend: `SESSION_DRIVER=redis` with `SESSION_CONNECTION=session` (new `redis.session` connection in `config/database.php`, `REDIS_SESSION_DB` defaults to its own database `2`, separate from the queue's `0` and cache's `1`) so a busy storefront isn't reading/writing a session row in MySQL on every request, and a `cache:clear` can never sign out every active session along with it. `.env.production.example`/`.env.example` and `docs/deployment.md` ("Redis on Coolify") updated accordingly; `database` remains supported for both if Redis isn't available yet.
 - Full suite: 1213 passed (as of the Sales Automation navigation-sort fix above).
+
 ## [2.15.0] - 2026-09-10
 
 **Release type:** Minor Feature Update
@@ -413,6 +1846,7 @@ On other devices:
   - **Access:** new permission keys `ai_tools.menu`, `ai_tools.image_generation`, `ai_tools.image_generation.review`, plus reserved `ai_tools.video_generation` / `ai_tools.content_creation`. Super Admin and the built-in Manager role hold the first three by default; all are selectable on custom roles.
 
   **Technical Notes:** new `generated_images` table (`BelongsToCompany` + `CompanyScope`, registered in `MultiCompanyIsolationTest`). `companies.settings` gains `ai_tools.image_generation` (provider list), `ai_tools.prompt_enhancer`, `ai_tools.image_governance`, `prompt_guides`, and `image_brand_style` — each owned by its own service (`ImageProviderSettingsService`, `PromptEnhancerConfigService`, `ImageGovernanceService`, `PromptGuideRepository`); `AiSettingsService` is not involved. Provider adapters and every LLM call are `Http::fake()`-mocked in tests.
+
 ## [2.13.4] - 2026-09-08
 
 **Release type:** Patch/Fix Update
@@ -420,6 +1854,7 @@ On other devices:
 ### Changed
 
 - **Hero Slides gained a per-slide "Fit to frame" toggle.** When on, that banner image is always shown in full — never cropped — with a thin strip of the banner background above/below if it isn't the exact banner ratio (the same "fit to screen" behaviour mobile already uses, now available on desktop for a specific slide). Off by default, so the standard edge-to-edge crop-to-fit is unchanged. New `storefront_slides.fit_to_frame` column; the storefront applies it as a `.storefront-image-banner-fit` class that forces `object-fit: contain` at every breakpoint.
+
 ## [2.13.3] - 2026-09-08
 
 **Release type:** Patch/Fix Update
@@ -427,6 +1862,7 @@ On other devices:
 ### Changed
 
 - **The Marketplace Pro storefront's hero banner is shorter on desktop**, so the "Shop by category" row directly below it stays in view without scrolling on large screens. Its slot ratio changes from `3:1` to `4:1` (`1920×480`, capped at `30rem` / 480px tall on monitors ≥1920px wide), and the Hero Slides upload editor now locks new artwork to that same ratio. Mobile is unchanged, and the Built-in and Noor Solar themes keep their existing banner sizes. `StorefrontThemeRegistry::BANNER_SPECS`, `.storefront-image-banner` (scoped `body[data-storefront-theme='marketplace_pro']`).
+
 ## [2.13.2] - 2026-09-08
 
 **Release type:** Patch/Fix Update
@@ -434,6 +1870,7 @@ On other devices:
 ### Fixed
 
 - **An image field whose preview is stuck on "Loading / Waiting for size" can now always be cleared.** When the preview of an already-saved image can't load — a slow or failing company-media URL, an offline mobile webview, the dev server under load — FilePond's own remove ("×") button never appears, so a required image field looked permanently occupied and the whole form couldn't be saved. Every FileUpload in the app now carries a small **"Remove"** action in its label row (next to "Select From Media"), added once globally via `FileUpload::configureUsing()` in `AppServiceProvider` (`App\Support\FileUploadClearAction`). It sits outside FilePond so it's always reachable; one click empties the field. The stored file is left in storage — same as the native remove — so a mis-click is recoverable from the Media Hub. The action is only shown while the field actually holds a value.
+
 ## [2.13.1] - 2026-09-08
 
 **Release type:** Patch/Fix Update
@@ -441,6 +1878,7 @@ On other devices:
 ### Changed
 
 - **Inbox message thread redesigned as modern chat bubbles** (WhatsApp/Messenger-style, owner-approved design pass). Messages now render as colored rounded bubbles — amber for your replies, neutral cards for the customer's — instead of plain callout boxes, with consecutive messages from the same side grouped together (no repeated spacing, and only the last bubble in a run gets the rounded "tail" corner). The conversation list now shows a colored initials avatar per contact instead of a generic channel icon. Delivery status is now a tick icon (single/double/red alert) next to the timestamp, with the status text kept for screen readers; the WhatsApp→SMS fallback badge and internal-note bubbles were restyled to match. The reply composer is now a floating pill shape. Purely visual — every Livewire binding, filter, and keyboard/screen-reader behavior on the page is unchanged.
+
 ## [2.13.0] - 2026-09-07
 
 **Release type:** Minor Feature Update
@@ -462,6 +1900,7 @@ On other devices:
 ### Fixed
 
 - **The courier booking form now reliably pre-fills the recipient name, phone, and address from the order.** The prefill (plus the COD default) is now applied through one shared `CourierService::bookingFormDefaults()` via the action's `->fillForm()`, instead of per-field `->default()` calls that could come up blank.
+
 ## [2.12.0] - 2026-09-06
 
 **Release type:** Minor Feature Update
@@ -476,6 +1915,7 @@ On other devices:
   - Manual bKash/Nagad numbers for Offer-page checkouts and other non-gateway storefront content are unaffected and stay on Storefront Settings.
 - **AI Integration's provider/model fields now have a "quick setup" picker.** Each AI tool's tab (Auto Messaging, Ad Assistant, Landing Page Builder) gained two optional, searchable dropdowns above the existing free-text fields: pick a popular OpenAI-compatible provider (DeepSeek, Groq, OpenRouter, Mistral, xAI, Together AI, Fireworks AI, Perplexity, OpenAI, or a self-hosted Ollama/vLLM endpoint) to auto-fill its provider name, base URL, and API format, then pick from that provider's own short list of well-known models (searchable) to fill the Model field. Both pickers are pure convenience — the underlying Provider/Base URL/Model fields stay 100% free-text, so any provider or model not listed can still be typed in directly, same as before.
 - **Offers now have "Preview" and "Open Page" buttons** — on the list and on the edit page, next to "Generate Landing Page with AI" — since there was previously no way to actually see a generated (or hand-built) landing page. "Preview" works for any offer regardless of status (admin-only, bypasses the published check, same convention as the storefront's own preview). "Open Page" is the real customer-facing URL and only appears once the offer is Published and the company has a domain set.
+
 ## [2.11.4] - 2026-09-05
 
 **Release type:** Patch/Fix Update
@@ -483,6 +1923,7 @@ On other devices:
 ### Changed
 
 - **Every admin page now uses the full width available beside the sidebar on desktop.** The panel content was previously capped at 80rem (Filament's default `7xl`) and centred, leaving wide empty gutters on large monitors — forms, tables, and dashboards now stretch edge to edge. Phones and tablets are unaffected: their viewport is already narrower than the old cap, so only the desktop layout widens. Set once on the panel via `->maxContentWidth(Width::Full)` in `AdminPanelProvider`; the login and other simple/centred auth pages keep their own narrow width.
+
 ## [2.11.3] - 2026-09-02
 
 **Release type:** Patch/Fix Update
@@ -495,6 +1936,7 @@ On other devices:
   - **The 8-second inbox poll no longer writes to the database on every tick** — `markHumanPresent()` (the AI pause window) is now throttled to once per minute; explicit conversation selections still mark presence immediately, and `markRead()` keeps running each tick so unread badges stay accurate.
   - **The Android shell now declares `android:windowSoftInputMode="adjustResize"`** (was missing from the Capacitor default) so the viewport resizes when the soft keyboard opens — the composer no longer risks hiding behind the keyboard in the mobile app. The inbox already sizes itself with `100dvh` and re-syncs scroll, so keyboard-open now keeps the latest message and the composer visible.
   - Regression coverage: `tests/Feature/InboxSmoothnessTest.php` (body search, load-more expansion, composer reset markup, manifest resize) + updated markup assertions in `InboxPageTest`.
+
 ## [2.11.2] - 2026-08-31
 
 **Release type:** Patch/Fix Update
@@ -502,6 +1944,7 @@ On other devices:
 ### Fixed
 
 - **A WooCommerce order whose sold quantity exceeded the ERP's own tracked stock silently never synced at all.** The stock ledger's usual negative-stock guard — correct for a manually-entered ERP sale — was also blocking every WooCommerce order sync once a product's real-world sales outpaced its ERP stock record, failing with a 500 that showed no useful reason anywhere reachable. A WooCommerce order's sale already happened on the storefront regardless of ERP stock, so a sync can no longer be blocked this way; the shortfall is now surfaced as a note directly on the order instead (e.g. "Sold below available stock, now negative on hand and needs restocking: Product X (-4).") so it's obvious the product needs restocking. Manually-entered ERP sales are still correctly blocked when stock is insufficient — unaffected.
+
 ## [2.11.1] - 2026-08-31
 
 **Release type:** Patch/Fix Update
@@ -509,6 +1952,7 @@ On other devices:
 ### Fixed
 
 - **The new "Sync an order now" button (Settings → Integrations → WooCommerce, added in v2.11.0) failed instantly with a generic "Error while loading page" instead of opening its order-ID prompt.** A string `->action('methodName')` on a Filament action with a `->schema()` attached is wired as a raw click handler that calls the method directly with no arguments, bypassing the modal that's supposed to collect the form first — a hard PHP error against the method's required parameter. Switched to a closure action (the pattern already used by the order "Change status" action), which correctly opens the modal first.
+
 ## [2.11.0] - 2026-08-30
 
 **Release type:** Minor Feature Update
@@ -516,6 +1960,7 @@ On other devices:
 ### Added
 
 - **Settings → Integrations → WooCommerce has a new "Sync an order now" button.** Pulls one order straight from WooCommerce's own REST API by its order ID and runs it through the exact same sync logic a real webhook delivery uses. Two uses in one: manually backfilling an order a webhook never delivered (e.g. one sent before a secret was saved), and diagnosing *why* a sync fails — any error is shown verbatim in the notification, instead of only in a server log or WooCommerce's own delivery log (which hides response bodies unless `WP_DEBUG` is on).
+
 ## [2.10.3] - 2026-08-30
 
 **Release type:** Patch/Fix Update
@@ -523,6 +1968,7 @@ On other devices:
 ### Fixed
 
 - **A rejected WooCommerce webhook delivery now explains itself in WooCommerce's own delivery log**, instead of showing a bare status code with no way to tell why without server access. A missing/blank webhook secret (404) or a signature that doesn't match the secret saved in Settings → Integrations → WooCommerce (403) now return a small JSON body — `error: no_webhook_secret_saved` / `signature_mismatch`, plus a plain-language hint and whether the signature header even arrived — viewable from WooCommerce's own "Recent Deliveries" → response tab. No secret or signature value is ever included.
+
 ## [2.10.2] - 2026-08-30
 
 **Release type:** Patch/Fix Update
@@ -536,6 +1982,7 @@ On other devices:
 - **Recording a payment on an order's edit page could silently undo itself.** Paid Amount/Due Amount on the edit form are read-only once an order exists (corrections go through the Payments History ledger below), but read-only alone didn't stop their stale, page-load-time values from being resubmitted — saving the order after adding a payment there could overwrite the just-recorded amount back to what it was before, so the invoice's Paid/Due lines never reflected it either. Those two fields are no longer written by the edit form at all now; only the Payments History ledger can change them. The order screen also refreshes its own Paid/Due Amount immediately after a payment is added, edited, or deleted, instead of only on the next page load.
 - **Every list in the app now shows its newest record on top by default** — Orders, Customers, Products, Users, and every other list/relation table that didn't already set its own sort order previously showed the oldest record first and the newest at the very bottom (Filament's own built-in fallback sorts by ID ascending). A list that already had an intentional sort (alphabetical, drag-to-reorder, etc.) is unaffected.
 - **The order "Change status" action now reports a real error instead of appearing to do nothing** if something unexpected goes wrong mid-transition (a database error, a courier-sync failure, etc.) — previously an error here could fail without any visible feedback. The success notification also now names the resulting status (e.g. "MAIN-20260830-001 is now Confirmed.") instead of a generic message.
+
 ## [2.10.1] - 2026-08-29
 
 **Release type:** Patch/Fix Update
@@ -543,6 +1990,7 @@ On other devices:
 ### Fixed
 
 - **v2.10.0's automatic-migration deploy step broke production startup**: the `nixpacks.toml` `[start]` override hardcoded `heroku-php-apache2` as the web-server command (a Railway/Heroku-buildpack assumption), which doesn't exist on this app's actual host (a Contabo VPS running Coolify) — every deploy's new container failed its healthcheck with `heroku-php-apache2: command not found`. Coolify's own rollback-on-unhealthy behavior caught this automatically each time (the site never actually went down), but no new deploy could ever go live. The `[start]` override is removed entirely — Nixpacks' own auto-detected start command (already proven working) is used again — and `php artisan deploy:migrate` now runs via **Coolify's native "Post-deployment Command"** setting instead, which executes inside the already-healthy container rather than needing to know how it was started.
+
 ## [2.10.0] - 2026-08-29
 
 **Release type:** Minor Feature Update
@@ -561,6 +2009,7 @@ On other devices:
 - **Deploy error notifications**: new `nixpacks.toml` `[start]` command runs `php artisan deploy:migrate; heroku-php-apache2 /app/public` (`;` not `&&` — a total crash in the command must never stop the site from starting). New `App\Console\Commands\DeployMigrate` wraps `migrate --force --isolated` in a try/catch and always exits 0; a failure is handed to the new `App\Services\DeploymentErrorReporter`, which logs it, persists a new `deployment_errors` row (`App\Models\DeploymentError` — deliberately not company-scoped, same precedent as `MobileCrashReport`, excluded from `MultiCompanyIsolationTest` on purpose), and notifies every active `role = 'super_admin'` user via a new `App\Notifications\DeploymentErrorAlert` database notification (`danger()`, two actions: "Copy Error Log" using the identical Alpine `navigator.clipboard.writeText` + `$tooltip` snippet Filament's own `->copyable()` uses — extracted into `App\Support\ClipboardCopy` — and "View Full Log"). New super-admin-only `App\Filament\Resources\DeploymentErrors\DeploymentErrorResource` at Settings → Deploy Error Logs (list + view, row-level "Copy Log", delete/bulk-delete for housekeeping) is where the log survives after the notification is gone. New migration `2026_08_29_010000_create_deployment_errors_table`. New tests `DeploymentErrorReporterTest` (persistence + notification targeting/actions) and `DeployMigrateCommandTest` (a real forced migration failure via a throwaway `--path`, not a mock, confirms the command still exits 0).
 - **App version rollback**: new `App\Support\CoolifySettings` (global `AppSetting`-backed, encrypted — `base_url`, `api_token`, `application_uuid` — same pattern as `FirebaseSettings`) and `App\Services\CoolifyDeploymentService`, which calls Coolify's own public API (verified directly against `coollabsio/coolify`'s source, not guessed): `GET /api/v1/deployments/applications/{uuid}` to list recent deployments (filtered to `status === 'finished'`, current live one excluded) and `POST /api/v1/applications/{uuid}/rollback` (`{"commit": "<sha>"}`) to queue a redeploy of an older commit. New `App\Filament\Pages\CoolifyDeploymentSettings` (Settings → Deployment Settings, credential form + a "Test Connection" button) and `App\Filament\Pages\AppVersions` (Settings → App Versions, lists the last 5 rollback-eligible deployments with a confirm-then-rollback button per row) — both super-admin only. New tests `CoolifyDeploymentSettingsTest`, `CoolifyDeploymentServiceTest` (via `Http::fake`, including the exact request shape sent to Coolify), and `AppVersionsPageTest` (drives the real rollback action through Livewire).
 - Full `php artisan test` for both features together: 1023 passed, 0 failed. No frontend build assets changed (Blade + inline styles only), so `npm run build` was not required.
+
 ## [2.9.0] - 2026-08-29
 
 **Release type:** Minor Feature Update
@@ -576,6 +2025,7 @@ On other devices:
 ### Technical Notes
 
 - Parcel ID uses the existing `courier_bookings.provider_reference` column — no new migration. `resources/views/orders/partials/invoice.blade.php` reads `$order->latestCourierBooking?->provider_reference`; `OrderInfolist.php`'s Courier section gained a matching `TextEntry` right after Tracking ID. New/updated tests: `InvoiceDesignTest::test_invoice_shows_barcode_weight_delivery_partner_and_cut_slip` and `test_invoice_hides_parcel_id_when_the_booking_has_no_provider_reference`.
+
 ## [2.8.1] - 2026-08-29
 
 **Release type:** Maintenance Update
@@ -624,6 +2074,7 @@ On other devices:
 ### Technical Notes
 
 - `resources/css/app.css`'s `.storefront-image-banner` rule changed from `height: calc(100vh / N)` to `aspect-ratio` (`45 / 16` mobile, `3 / 1` desktop from `1024px` up), matching `App\Support\StorefrontThemeRegistry::BANNER_SPECS`. Mobile now uses `object-fit: contain` on the slide `<img>` (was `object-fit: cover` via a Tailwind class on the element, removed so the CSS above is the single source of truth); desktop keeps `cover`. Also made the ratio itself explicit at the front of each Hero Slides form field's helper text (`StorefrontThemeRegistry::BANNER_SPECS['note']`) instead of only mentioning it mid-sentence. Regression test `StorefrontBannerTest::test_banner_height_uses_the_requested_viewport_ratios` (which had locked in the old, buggy vh-based CSS) replaced with `test_banner_height_is_driven_by_its_declared_aspect_ratio_not_viewport_height` and `test_banner_fits_to_screen_on_mobile_without_cropping`.
+
 ## [2.6.0] - 2026-08-28
 
 **Release type:** Minor Feature Update
@@ -662,6 +2113,7 @@ On other devices:
 
 - New shared trait `App\Filament\Concerns\HasDrilldownStatCards` (used by `VoucherSummaryWidget`, `AccountSummaryWidget`, `ExpenseCategorySummaryWidget`) provides the modal-building plumbing; `BusinessOverview`'s own existing drilldown code on the main Dashboard is untouched. All three widgets now reuse `BusinessOverview`'s view (`filament.widgets.business-overview` — genuinely generic markup, its docblock updated to say so) so the `<x-filament-actions::modals />` these mounted actions need actually render. Since Account/Expense have a variable number of cards (one per account/category, not a fixed set), each card's `wire:click` embeds only that record's numeric ID (never its name/text, which would need JS-string escaping) — the specific record is then re-resolved inside the modal's own closures via Filament's `array $arguments` closure-injection (any Action closure parameter literally named `$arguments` receives the mounted action's arguments). Voucher/Fund Transfer cards (a fixed, known set) pass a `type`/`bucket` or `status` argument the same way. New tests: 5 in `DashboardSummaryCardsTest` covering all three widgets' modal content.
 - **Unmatched-item total bug root cause**: `subtotal`/`total_amount` are always recalculated by `OrderWorkflowService::sync()` purely from the OrderItems that actually exist (triggered by every `OrderItem`'s own `saved`/`deleted` hook) — correct in general (it's the one place totals get computed everywhere in the app), but a line item that never became an `OrderItem` (because no ERP product matched it) was invisible to that calculation, silently vanishing from the total. `WooCommerceOrderSyncService::syncItems()` now returns which line items were unmatched; when any were, `reconcileTotalsWithWooCommerce()` recomputes `subtotal`/`total_amount`/`due_amount` using the exact same formula `OrderWorkflowService::sync()` uses, except the subtotal is summed directly from *every* line item WooCommerce reported (matched or not), not only the ones that became a real `OrderItem` row. New tests: `test_an_order_with_an_unmatched_item_still_gets_woocommerces_full_total_not_just_shipping`, `test_totals_still_reconcile_correctly_when_only_some_items_are_unmatched`.
+
 ## [2.4.3] - 2026-08-28
 
 **Release type:** Patch/Fix Update
@@ -678,6 +2130,7 @@ On other devices:
 
 - **Summary card sizing**: same technique the main Dashboard's own stat cards already use (`.zz-business-overview-stat` in `theme.css`) — a CSS class added to each `Stat` via `->extraAttributes(['class' => '...'], merge: true)`, scoped so it only affects these three widgets' cards. New `.zz-voucher-summary-stat`/`.zz-account-summary-stat`/`.zz-expense-summary-stat` rules shrink the label to 11px and the value to 18px (down from Filament's defaults of 14px/30px) and tighten padding to 10px. New test: `DashboardSummaryCardsTest::test_voucher_summary_cards_use_the_compact_stat_style`, plus assertions added to the existing Account/Expense summary tests.
 - Root cause of the print-inside-the-app issue: yesterday's mobile-browser fix made `window.print()` work correctly in real mobile browsers, but Android's own WebView (which is what the app's UI actually runs inside) never implements `window.print()` at all — calling it there was always a silent no-op, browser fix or not. Added a native bridge (`android/app/src/main/java/com/zamzamint/erp/PrintBridge.java`, registered by `MainActivity` as `window.ZzPrintBridge`) that drives Android's own `PrintManager`/`WebView.createPrintDocumentAdapter()` — the standard way a WebView page is printed natively. Both invoice print pages now call `window.ZzPrintBridge.print()` when it's present (i.e. running inside the app) and fall back to `window.print()` otherwise (real browsers, unaffected). **Requires a new Android app build to reach devices** — unlike a web-only fix, this doesn't take effect just by deploying the server; the owner needs to install the next app update once built. New tests: `InvoiceDesignTest::test_print_button_falls_back_to_the_native_android_bridge_inside_the_app`, plus an assertion added to `OrderBulkPrintTest`.
+
 ## [2.4.2] - 2026-08-27
 
 **Release type:** Patch/Fix Update
@@ -703,6 +2156,7 @@ On other devices:
 - **Owner also asked to hide the "Built for repeat and wholesale buyers / Open business account" card for retail-only companies** (e.g. ZamZam Gadget) while keeping it for wholesale-only companies (e.g. ZamZam International) — this already exists as a per-company toggle (Storefront Settings → Marketplace Pro Features → "Business account callouts"), so no code change was needed; just needs switching off for the retail company via the dashboard.
 - New tests: `StorefrontThemeTest::test_marketplace_hero_is_full_width_without_promo_cards_and_uses_a_real_arrow_icon`, `test_marketplace_trust_strip_scrolls_horizontally_on_mobile`.
 - Found (not fixed here — unrelated, admin-only, flagged separately): `resources/views/filament/pages/inbox.blade.php` has its own, different single-byte encoding issue.
+
 ## [2.4.1] - 2026-08-27
 
 **Release type:** Patch/Fix Update
@@ -715,6 +2169,7 @@ On other devices:
 ### Technical Notes
 
 - `WooCommerceOrderSyncService::syncItems()`: SKU match first, then falls back to `Product.slug` matched against `Str::slug($lineItem['name'])` — the exact normalization `WooCommerceImportService::importProduct()` already applies when a product doesn't have its own WooCommerce-supplied slug, so a product previously imported through that flow matches correctly here too. Still skips (and now also notes) anything matching neither. New tests: `test_a_line_item_with_a_blank_sku_matches_by_product_name_instead`, `test_an_unmatched_line_item_leaves_a_visible_note_on_the_order`.
+
 ## [2.4.0] - 2026-08-27
 
 **Release type:** Minor Feature Update
@@ -735,6 +2190,7 @@ On other devices:
 - **Shipping-fee overwrite root cause**: `Order::creating()` auto-fills `shipping_zone`/`shipping_fee` from `ShippingFeeService::feeFor()` whenever `shipping_zone` is still `null` on a brand-new order — correct for admin-created orders (no shipping charge exists yet to preserve), wrong for a WooCommerce-synced order, which always already has a real `shipping_total` in its webhook payload. `WooCommerceOrderSyncService::upsertOrder()` now sets `shipping_zone` (via the same `ShippingFeeService::determineZone()`, for reporting/filtering consistency, defaulting to `''` rather than `null` when nothing matches) *before* filling in WooCommerce's real `shipping_fee`, so the `creating` hook's condition (`shipping_zone === null`) never fires and the real value survives. New regression test `WooCommerceOrderWebhookTest::test_shipping_fee_and_total_use_woocommerces_real_values_not_the_erp_zone_calculator` configures a company whose ERP-calculated fee would differ from WooCommerce's real one if the bug were still present — confirmed it fails without the fix (reverted the fix locally, re-ran, got the exact "70.0 is not 150.0" mismatch) before restoring it. The existing webhook tests never caught this because their fixture's `shipping_total` happened to be `'0.00'`, which coincidentally matches the ERP calculator's own zero-fee fallback for an unconfigured shipping zone.
 - **ERP → WooCommerce status push**: new `App\Jobs\PushWooCommerceOrderStatusJob` (queued) calls `WooCommerceOrderSyncService::pushStatusToWooCommerce()`, which `PUT`s `{status}` to `/wp-json/wc/v3/orders/{id}` using the same Consumer key/secret Basic Auth pattern `WooCommerceImportService` already uses. New `WooCommerceOrderSyncService::REVERSE_STATUS_MAP` (Order status → WooCommerce status — a reasonable default, not a confirmed business rule, same caveat as the existing forward `STATUS_MAP`; ERP's extra `confirmed` state and WooCommerce's simpler status list both collapse to WooCommerce `processing`, ERP `returned` maps to WooCommerce's closest equivalent `refunded`). Triggered from `Order::booted()`'s `updated()` hook whenever `status` changes on an existing WooCommerce-sourced order. **Loop prevention**: a new transient (non-persisted) `Order::$suppressWooCommercePush` property, set by `WooCommerceOrderSyncService::upsertOrder()`/`markCancelled()` before saving a status change that just arrived FROM a webhook — without it, every WooCommerce → ERP sync would immediately queue a push of that same status straight back to WooCommerce. New `tests/Feature/WooCommerceOrderStatusPushTest.php` (6 tests: queues correctly for a WooCommerce order's status change, never queues for a non-WooCommerce order, never queues for a webhook-originated change, sends the correctly-mapped status via the REST API, and two safe-no-op cases — missing credentials, non-WooCommerce source).
 - **Copy icons**: all three are Filament's native `TextColumn::make(...)->copyable()` — no custom JS. `CustomersTable`'s existing `phone` column gained it directly. `OrdersTable` gained two brand-new columns that didn't exist before: `customer.phone` (`->toggleable()`, placeholder `-`) and `latestCourierBooking.tracking_id` (`->toggleable()`, placeholder `-`, blank until a courier is booked) — both eager-loaded via `modifyQueryUsing()` (added `latestCourierBooking` to the existing `with([...])` alongside `customer`/`latestFraudCheck`/`latestRiskReview`) to avoid N+1 queries. New `tests/Feature/CopyableColumnsTest.php` (4 tests) asserts the `fi-copyable` CSS class Filament renders when `->copyable()` is active actually lands on the phone/tracking-ID values, not just that the pages load.
+
 ## [2.3.1] - 2026-08-27
 
 **Release type:** Patch/Fix Update
@@ -747,6 +2203,7 @@ On other devices:
 
 - Reordering was a pure `navigationSort` change across the 13 `NavigationCluster` subclasses in `app/Filament/Clusters/` — no routes changed for anything except Customer Success. The `CustomerSuccess` cluster class is now deleted; its 5 owning Resources/Pages (`CustomerRiskProfileResource`, `CustomerBlacklistResource`, `CustomerRiskReviewResource`, `CustomerRiskEventResource`, `CustomerRiskSettings`) now declare `$cluster = Courier::class`, moving their URLs from `/admin/customer-success/*` to `/admin/courier/*` (updated in `tests/Feature/CustomerRiskTest.php`). Verified the full requested order programmatically (`getNavigationSort()` per cluster) before shipping.
 - **`tests/Feature/ReleaseNotesTest.php` made version-agnostic**: 6 assertions hardcoded the exact version/date/type-label string (`v2.2.0`, `Released 2026-08-26`, `Minor Feature`), so the very next `cut-release` CI run (this round auto-cut `v2.3.0`) broke this test file again — the same class of maintenance the auto-cut feature was supposed to reduce, just one file over. All 6 now read the expected value from `AppRelease::latestPublished()` at test time instead of a literal, so this file no longer needs a manual touch on every future release cut.
+
 ## [2.3.0] - 2026-08-27
 
 **Release type:** Minor Feature Update
@@ -795,6 +2252,7 @@ On other devices:
 - **Found and fixed a real bug in this same round's own security-hardening work**: the brand-neutral error views above originally lived at `resources/views/errors/{status}.blade.php` — but that is Laravel's own conventional `errors::` view-namespace path (registered app-wide by `Illuminate\Foundation\Exceptions\Handler`'s `RegisterErrorViewPaths`), so simply having a file there made Laravel's *default* exception rendering use it for literally any HTML-rendering exception, completely independent of `StorefrontErrorPages::appliesTo()` — a webhook/admin/API client that doesn't send `Accept: application/json` (WooCommerce's real webhook deliveries, confirmed live) would still get this branded page even though `appliesTo()` correctly said not to intervene, since `bootstrap/app.php`'s closure returning `null` only means "fall through to Laravel's default", and that default itself was contaminated. Fixed by moving the views to `resources/views/storefront/errors/*` (a path Laravel never auto-discovers) and having the closure render that path explicitly — excluded requests now correctly fall all the way through to Laravel's own true default handling. New regression test `SecurityHardeningTest::test_a_403_on_an_excluded_route_never_renders_the_branded_storefront_page` (a real HTTP round trip, not a unit-level `appliesTo()` check, since that's exactly what let this ship in the first place).
 - Full `php artisan test` (no `--env` flag) — see UPDATE_NOTES.md for the exact count from this round's final run.
 - **Releases are now cut automatically on every push to `main`**, closing the gap that let 25 real commits ship without ever converting `[Unreleased]` into a dated version (the reason `v2.2.0` above needed a manual catch-up in the first place). New `.github/workflows/deploy.yml` job `cut-release` (runs after `tests` passes, `permissions: contents: write`) calls `php artisan release:cut --apply`, which is a no-op whenever `[Unreleased]` has no bullet content and otherwise: converts `[Unreleased]` into a new `## [x.y.z] - <date>` entry, infers the version bump and release type from which sections actually have content (`Added` → Minor Feature Update/bump MINOR; `Security` alone → Security Update; `Changed`/`Fixed` alone → Patch/Fix Update; only `Technical Notes` → Maintenance Update — all four bump PATCH except Minor, matching `docs/release-policy.md`'s version table exactly; `Added` wins over `Security` when both are present, e.g. `v2.2.0`/`v2.1.0` before it, both "Minor Feature Update" despite real security fixes inside them — "Security Update" is reserved for when that's the release's whole point, not merely present in it), then syncs `config/release.php`, `.env.example`, `.env.production.example`, and `docs/deployment.md`'s example env block to the new version/type/date, and commits+pushes that back to `main` with `[skip ci]` (so the bot's own commit doesn't re-trigger the workflow — the next run would find `[Unreleased]` already empty and no-op anyway). A commit can still request `major`/`critical_fix`/`hotfix`/`initial` on purpose by writing an explicit `**Release type:** X` line as the first line under `[Unreleased]` — those four are deliberately never auto-inferred, since a breaking/urgent release should never happen by accident. New `App\Support\ReleaseCutter` (pure, testable: `plan()` takes/returns plain strings, `apply()` is the only place that touches disk) and `php artisan release:cut` (`--apply` required to actually write; without it, always a safe dry run regardless of what `CHANGELOG.md` currently holds). New `tests/Feature/ReleaseCutterTest.php` (16 tests). This only ever updates the repo's own fallback defaults — the production server's actual `APP_VERSION`/`APP_RELEASE_TYPE`/`APP_RELEASE_DATE` env values (Coolify) still override those defaults if set at all; per `docs/release-policy.md` every release should also update those, but since the app's user-facing version displays (Release Notes page, in-app update banner, push notifications) already read `AppRelease::latestPublished()` straight from `CHANGELOG.md` rather than those env vars, **the recommended production setup is to not set `APP_VERSION`/`APP_RELEASE_TYPE`/`APP_RELEASE_DATE` in Coolify at all**, so the repo's auto-bumped fallback always wins and nothing there ever needs a manual touch again.
+
 ## [2.2.0] - 2026-08-26
 
 **Release type:** Minor Feature Update

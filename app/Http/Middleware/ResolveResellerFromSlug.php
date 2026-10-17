@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Company;
 use App\Models\Customer;
+use App\Services\ResellerPricing;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -27,6 +28,11 @@ class ResolveResellerFromSlug
 
         $slug = $request->route('resellerSlug');
 
+        // On a reseller's own subdomain the host already picked the store, so
+        // /store/{slug} may only name that same reseller.
+        $hostReseller = $request->attributes->get('storefront_reseller');
+        abort_if($hostReseller instanceof Customer && $hostReseller->reseller_slug !== $slug, 404);
+
         $reseller = Customer::query()
             ->where('company_id', $company->getKey())
             ->where('reseller_slug', $slug)
@@ -36,6 +42,7 @@ class ResolveResellerFromSlug
         abort_unless($reseller, 404);
 
         $request->attributes->set('storefront_reseller', $reseller);
+        app(ResellerPricing::class)->remember($request->session(), $company, $reseller);
 
         return $next($request);
     }

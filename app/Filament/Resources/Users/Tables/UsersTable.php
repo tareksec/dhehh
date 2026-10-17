@@ -58,7 +58,9 @@ class UsersTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    // Checked per selected user, so a Super Admin in the
+                    // selection is skipped for anyone who isn't one.
+                    DeleteBulkAction::make()->authorizeIndividualRecords('delete'),
                 ]),
             ]);
     }

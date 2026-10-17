@@ -41,6 +41,11 @@ return [
 
     'debug' => (bool) env('APP_DEBUG', false),
 
+    // App\Support\ModuleGuard: when true, a failing navigation badge, render
+    // hook or widget shows its fallback and is reported instead of breaking
+    // the whole page. Unset = on everywhere except local and testing.
+    'isolate_module_errors' => env('ISOLATE_MODULE_ERRORS') === null ? null : (bool) env('ISOLATE_MODULE_ERRORS'),
+
     /*
     |--------------------------------------------------------------------------
     | Application URL

@@ -1,6 +1,2801 @@
 # Update Notes
 
-This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
+This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
+
+## 2026-10-17 (evening) - Imported orders of zero-stock products: no stock popup, product name shown
+
+Owner question (Bangla): how will the orders of products whose stock is 0 show? Answer: the Orders list and the order page show them normally (the imported line keeps the product name and the Nuport price; stock stays 0 and never goes below, because an import takes no stock). Checking it found two problems on the Edit order page, fixed here:
+
+- Saving an imported Completed/Confirmed/Processing order whose product has stock 0 showed the "Not enough stock" popup and offered "Add stock and save order" (stock that never existed). `HandlesStockShortages::haltWhenStockIsShort()` now skips saved orders that are `isHistoricalImport()`, like WooCommerce orders.
+- The product box on the Edit page lists active products only, so a line whose product is inactive (what "Create missing products" creates) showed an empty name. `OrderForm` now also lists the product the line already has.
+
+Checked: the new test fails without either fix and passes with both; saving an imported order and moving it Confirmed to Completed creates no stock movement and stock stays 0. No new strings, no live data touched.
+
+Not changed (reachable only by hand): an imported order cannot move from a non-stock status to a stock status (the workflow table has no such step), so `OrderStatusWorkflowService::ensureStockFor()` needed no change.
+
+Verification: `php artisan test --filter=NuportOrderImportTest` 23 passed; full plain `php artisan test`: 2,549 passed, 1 skipped, 0 failed; Pint clean.
+
+Commit status: committed on branch `feature/nuport-sku-map` and pushed to main with the owner's approval (2026-10-17).
+
+## 2026-10-17 (later) - Nuport import: SKU mapping and "Create missing products"
+
+Owner request (Bangla): match the Nuport order products' SKUs to the ERP products' SKUs so no order is missed.
+
+Finding: the live ERP (read from the logged-in browser pane, nothing changed) has 35 products and 84 variant SKUs. Of the 91 distinct SKUs in the Nuport export, 79 match exactly; 12 do not. Without any fix 343 of 1,275 importable orders are skipped (ZMGLPN 188, ZMGRRLPWB-OLD 86, ZMGRRLP 49, ZMGWRP 26, ZMGLRLP 15, ZMGLPNK 5, ZMGSMS 2, ZMGLPS-1 1, Courier Poly, Bubble Poly). The 3 "-R" return invoices (SO-0443-R, SO-0444-R, SO-0445-R: quantity 0, sales 0) carry no sale and stay skipped.
+
+What changed (`NuportOrderImportService`, `ListOrders`, `ImportNuportOrders`, lang, tests):
+
+- **SKU mapping**: textarea in the import dialog (and `--map=<file>`), one `NUPORT-SKU = ERP-SKU` per line; wins over a direct match; ERP SKU must exist as a variant or product SKU, else the line is ignored and listed. Remembered per company in `app_settings` (`nuport_import_sku_map_<company id>`).
+- **Create missing products** toggle (and `--create-missing`), off by default: creates the product inactive, stock 0, cost price 0, selling price = last non-zero unit price in the file; SKU-less lines get `NUPORT-<NAME>`. Preview lists them. A second run creates nothing twice.
+- 9 new keys in `lang/en.json` + `lang/bn.json`.
+
+Checked on the real file against the live SKU list (in-memory test DB with a throwaway product per live SKU, nothing on live): no fix 929 new orders; mapping `ZMGRRLPWB-OLD = ZMGRRLPWB` and `ZMGLPN = ZMGLPNW` 1,178; mapping + create missing 1,272 (8 products to create, 0 errors, only the 65 test/fake and 3 return invoices skipped); create missing only 1,272 (10 products).
+
+Open points for the owner:
+
+- The two mappings above were my reading; the owner confirmed both (2026-10-17): `ZMGRRLPWB-OLD` is the Black box at 420 (the ERP's `ZMGRRLPWB` variant of `ZMGRRLPW`); `ZMGLPN` has the same Nuport name "Love Pearl Necklace" as the ERP's `ZMGLPNW` but sold at 950/450/380 against 200-240. (The line keeps its own Nuport unit price either way.)
+- Created products have cost price 0, so the imported lines show no cost and profit looks too high for them. Give each product its real cost; old lines keep 0.
+- Created products do not touch stock or the website (inactive, stock 0).
+
+Needs Bangla review: all 9 new keys.
+
+Verification: `php artisan test --filter=NuportOrderImportTest` 22 passed; full plain `php artisan test`: 2,548 passed, 1 skipped, 0 failed; Pint clean. No live data was written.
+
+Commit status: committed on branch `feature/nuport-sku-map` (cut from origin/main v2.82.0) and pushed to main with the owner's approval (2026-10-17).
+
+## 2026-10-17 - Import Nuport orders (customer purchases, payment, status)
+
+Owner request: the wholesale team sells through Nuport (app.nuport.io); only customers had been brought over. They asked how to bring in what each customer bought, the payment and the status. I downloaded the real export from Nuport (owner said yes: 1,340 invoices, 2,311 lines, SO-0001 21 Aug 2025 to SO-1309 15 Oct 2026) and built the import from it.
+
+Why a CSV import and not a live sync first: Nuport's webhook (23 events, none switched on) sends status changes only for new events, with no paid amount (only "Payment Due" / "Payment Collected"), and its REST API has one-order-by-invoice lookup but no list-all-orders call. Docs: nuport.readme.io. The webhook receiver is the planned second step (see Not done).
+
+Owner decisions applied (2026-10-17, "go with the assumptions above"):
+
+- Cancelled orders with reason "Test Order" or "Fake Order" are skipped (65 in the export); the other cancelled orders come in as Cancelled with no payment (5 of them had a payment in Nuport; it is not copied).
+- Status map: Delivered = Completed (Payment Due keeps its due), Approved = Confirmed, In-Transit and Processing = Processing, Flagged (returned and pending return) = Returned, Cancelled = Cancelled. Any other status is skipped and listed, never guessed.
+- Payments are history only: `account_id` NULL, so no account ledger row and no account balance moves.
+- The 66 orders still open in Nuport (Approved, In-Transit, Processing) also do not touch stock: the PDF stock entered on 2026-10-16 is the physical stock.
+
+What changed:
+
+- New `app/Services/NuportOrderImportService.php`; `Order::SOURCE_NUPORT_IMPORT` + `isHistoricalImport()`; `OrderWorkflowService::sync()`, `OrderNotificationObserver` and the `saved` fraud-check hook skip imported orders; header action **Import Nuport orders** on the Orders list (`ListOrders`, preview first, "Preview only" on by default); command `php artisan orders:import-nuport {file} {company-slug} [--apply]`; 29 new keys in `lang/en.json` + `lang/bn.json`; `tests/Feature/NuportOrderImportTest.php` (17 tests).
+- Rules: invoice = `order_number` = `external_reference`; customers matched by phone in any spelling, a new phone creates a customer (`regular`); lines at list price, discount = line total minus Sales Amount, shipping fee = Delivery Fee, so ERP total = Sales Amount + Delivery Fee; one account-less payment per order mirroring the paid amount; order skipped whole if a product is not found by SKU (variant SKU, then product SKU, then exact name for a line with no SKU).
+- Re-running a file (or a newer export) finds orders by invoice and refreshes only status, delivery status, delivery fee, discount and payment; lines, notes and customer are left alone.
+
+Checked on the real file (in-memory test database, never the live or demo DB, with a throwaway product per SKU): preview 0.4 s; import 20 s; 1,272 orders created (Completed 1,029, Confirmed 53, Processing 13, Returned 80, Cancelled 97), 893 payments, 711 customers; skipped 65 test/fake cancelled + 3 return invoices with quantity 0 (SO-0443-R, SO-0444-R, SO-0445-R); 0 errors; second run created 0 and changed 0. Sales, paid and per-status counts match the CSV; customer balances add up to the imported due of the accounted orders (6,609,815); stock movements, ledger rows and fraud checks created: 0.
+
+Open points for the owner:
+
+- **Before the real import:** the live ERP's product SKUs were not checked (the dashboard login in the browser pane had expired and passwords are not entered by the agent). Run the preview on the live Orders page first; any product it lists as "not found" (the export has retired SKUs such as `ZMGRRLPWB-OLD`, `ZMGRRLPW-DUP-…-DELETED`, and lines named Courier Poly / Bubble Poly with no SKU) must exist before those orders can come in.
+- **Opening balance:** if the customers brought over earlier already carry their Nuport due as an opening balance, importing the orders counts that due twice. The preview shows how many matched customers have an opening balance; check those before saving.
+- Nuport's screen shows 1,346 orders but the export has 1,340 (I exported with the default filters and no date range); the 6 missing were not looked for. Compare the live order count after the import.
+- 32 invoices have totals that disagree with their own lines in Nuport (edited by hand there); the file's Sales Amount, Delivery Fee and Paid are used and these invoices are listed in the preview.
+- Customer Tag (NEW / REGULAR / VIP), order source (WhatsApp, Website…), Steadfast status text and the Nuport "Entry By" are not imported as fields; the consignment ID and cancel reason are in the order note.
+
+Not done: the webhook receiver for new orders and status changes (needs a signed endpoint, `whsec_` secret as an admin setting; payment amount would need the per-invoice API call); the six variant products' per-colour stock from the 2026-10-16 PDF is still waiting for the owner's colour split.
+
+Needs Bangla review: all 29 new keys, in particular ":count customers already have an opening balance. Check it so their dues are not counted twice.", ":status: :orders orders, sales :sales, paid :paid, due :due", "Totals do not match the lines on :count orders (the file totals are used): :list".
+
+Verification: `php artisan test --filter=NuportOrderImportTest` 17 passed (138 assertions); Pint clean. The full suite on the working tree (before moving to main) had 8 online-payment failures from unrelated uncommitted PayStation work; the main-based copy was re-checked, see the result in the commit report.
+
+Commit status: committed on main (cherry-picked from d6a09df7 onto v2.81.1, without the AI inbox branch). Pushed with the owner's approval.
+
+## 2026-10-16 - Investor portal SMS code: wording and 1-minute expiry
+
+Owner instruction (in Bangla): investor OTP SMS should read "Tasneem investment portal + [reason] + OTP code" and expire in 1 minute; later "commit, push, and push to main".
+
+- `InvestorPortalAccountService::sendCode()`: message is now `{company} Investment Portal login OTP is 123456. It expires in 1 minute.` (reason `login`) or `... password reset OTP is ...` (reason `reset`); `CODE_VALID_MINUTES` 10 -> 1. Investors only; customer and reseller codes are unchanged.
+- The portal name is the company name + " Investment Portal" (the same name the portal's header shows). If the company is named "Tasneem Knitting" the SMS says "Tasneem Knitting Investment Portal"; rename the company, or ask for a separate portal-name setting, if the shorter "Tasneem Investment Portal" is wanted.
+- Login and Forgot-password pages: helper text now says "It expires in 1 minute."
+- Known edge: a second request inside the first minute keeps the code already sent (the existing double-tap guard), so asking again at about 50 seconds gives no fresh code until the old one expires.
+- Files: `InvestorPortalAccountService.php`, `Filament/Investor/Pages/Auth/Login.php`, `ForgotPassword.php`, `lang/en.json` + `lang/bn.json` (2 keys replaced by 3, 1 changed), `tests/Feature/InvestorPortalTest.php` (+1 test).
+- Not done: no real SMS sent. Branched from `main` (v2.81.0) on purpose: the BulkSMSBD gateway work (reply code, 880 numbers, customer OTP wording) is already on `main` from `1565d5eb`, so a parallel copy of it in a long-running local tree was left out.
+
+Needs Bangla review: ":company ইনভেস্টমেন্ট পোর্টাল", ":portal লগইন OTP হলো :code। এটি ১ মিনিট পর মেয়াদোত্তীর্ণ হবে।", ":portal পাসওয়ার্ড রিসেট OTP হলো :code। এটি ১ মিনিট পর মেয়াদোত্তীর্ণ হবে।" and the 1-minute helper text in `lang/bn.json` (written by the agent).
+
+Verified: plain `php artisan test` in a clean worktree of `main` (v2.81.0) plus this change: 2526 passed, 1 skipped, 0 failed (24351 assertions). Also `--filter` over `InvestorPortalTest`, `InvestorPortalStaffEntryTest`, `TranslationParityTest`, `StorefrontSmsGatewayTest`, `ResellerPortalPasswordResetTest`: 60 passed. No real SMS sent.
+
+Commit status: committed on `feature/investor-otp-wording` and pushed to `main` on the owner's explicit approval (2026-10-16).
+
+## 2026-10-14 (later still) - Agent rule: commit and push new work to a topic-named feature branch
+
+Owner request (in Bangla): add a rule for the agent — after any new work, commit it and push it to a feature branch, and name that branch after the session's relevant topic.
+
+What changed: `CLAUDE.md` → Commit policy, and `AGENTS.md` (the file other agents read; its three "no commit / ask before pushing / no push without permission" lines contradicted the new rule, so they were replaced by it). Finished work (tests, bilingual keys, CHANGELOG and UPDATE_NOTES done, checks passing) is committed and pushed to `feature/<topic>` without being asked, in both repositories; one topic per branch; a branch the session's instructions already designate wins. The rule that `main` moves only on the owner's explicit approval stays, because Coolify deploys `main` on push. No force-push or history rewrite on a pushed branch.
+
+Good to know: new sessions start from the default branch, so the rule only reaches them once this branch is merged to `main`. The website repository has no rules file; this one covers it.
+
+Commit status: committed and pushed to `feature/agent-commit-and-branch-rule` (not `main`).
+
+## 2026-10-14 - SMS gateway checked against the BulkSMSBD API
+
+Owner logged in to bulksmsbd.net and asked for a check of the SMS code against its API page; then "সব গুলো ঠিক করে দেও".
+
+- Fixed: reply code in an HTTP 200 (anything but 202 = failed, logged with its meaning).
+- Fixed: number sent as `8801XXXXXXXXX`.
+- Fixed: OTP SMS wording `Your {Company} OTP is {code}. …` (customer, reseller, investor portal; 2 investor keys renamed in `lang/en.json` and `lang/bn.json`).
+- Not changed: `type=text` stays in the URL template; whether Bangla text needs another `type` is not on the page the owner showed. Send one Bangla test SMS to check.
+- Verified: StorefrontSmsGatewayTest (new) and the SMS/OTP-related test files passed; full suite on the clean worktree before the rebase onto v2.77.0: 2058 passed, 2 failed (`WhatsAppWebArchiveTest`, heroicons SVG missing in the test copy of vendor — fails without this change too).
+
+Needs Bangla review: the 2 investor OTP strings in `lang/bn.json`.
+
+Commit status: committed and pushed to main with owner approval (2026-10-14).
+
+## 2026-10-14 (later) - Starter footer like zamzamint.netlify.app, loaded from the Footer Builder
+
+Owner request (in Bangla): design the footer too, like the reference site.
+
+What I did: read the reference footer's markup and rebuilt it as Footer Builder blocks (`App\Support\StorefrontFooterStarter`): brand with about text and social icons, Quick links, Customer Service, Our Office (address, email, two phones, trade licence), Safety Payments badges (bKash, Nagad, Rocket, Cards) and the bottom bar (copyright, "Developed by Bright Hive Digital", "Developed with ♥ for Bangladesh"). Like the home page it is a button, not something I set in your database (which I cannot reach): after deploying the ERP and the website, open Site → Storefront Settings → the Next.js site → Navigation, menus & SEO → **Footer Builder** → **Load the starter footer** → **Save changes**.
+
+Website: `Footer.tsx` now uses the reference's sizes and colours on a dark footer (headings, links, badges, bottom bar), a wider brand and office column, comma-separated phone numbers, and it fills `{year}` / `{company_name}` in the copyright (the Blade footer already did; the Next.js footer printed the tokens). The bottom bar has a new optional **Middle text link** so "Developed by …" can link out.
+
+Things to know:
+- **Pages:** the links to About Us, Contact Us, Delivery Information, Return/Refund & Exchange, Terms and Privacy Policy go to your own published pages, found by title or slug for the Next.js site. A page that does not exist yet is left out and named in the message after loading; create it under Site → Pages and add the link. I did not create the pages or write their text (policy wording is yours).
+- **Request for Quote / Reselling Program** from the reference are not added: the Next.js site has no such pages yet. **Promotions** links to the discounted-products list (`/products?sort=discount&sale=1`).
+- **Social icons:** the Facebook and WhatsApp icons come from Footer Builder → Social links, as before; the starter does not copy the reference's profile URLs. Add them there if they are not set.
+- **Contact details** are the reference's own (the address in Uttara, info@zamzamint.com, +8801325224400, +8801894449445, trade licence TRAD/DNCC/049335/2025); the about text is the reference's Bangla sentence with the company's name. The "Developed by Bright Hive Digital" line is the reference's too. Edit or delete any of them after loading.
+- The starter replaces the footer blocks and the footer menu in the form (a confirm dialog says so). Nothing is saved until Save changes.
+- The width of the footer follows the rest of the site (a little wider than the reference's), so it lines up with the header and the home page.
+
+Needs Bangla review: 7 new admin labels in `lang/bn.json` (Load the starter footer, its dialog and message, Starter footer loaded, Middle text link and its help). The footer's Bangla about text is the reference's own sentence, not a translation of mine.
+
+Tests: new `NextjsFooterStarterTest` (10); real-browser check on a throwaway database through the real admin (button, confirm dialog, Save, 7 blocks and the 5-link menu persisted, no JS or server errors) and the website footer on desktop and phone, dark and light backgrounds. Website `tsc` and `npm run build` are clean.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট ও পুশ কর এবং মেইনে পুশ কর", 2026-10-14), both repositories; `origin/main` (v2.76.0) merged first.
+
+## 2026-10-14 - Starter home page like zamzamint.netlify.app, loaded from the Home Page Builder
+
+Owner request (in Bangla): arrange the home page like `https://zamzamint.netlify.app/` with every section — doing it by hand in the admin takes too long.
+
+What I did: read the reference site's code and rebuilt its home page as Home Page Builder sections (`App\Support\StorefrontHomeStarter`): hero, trust strip, Shop by Category, Best Deals Today, Latest Gadgets, Flash Deal, four category rows, Order Easily on WhatsApp, Wholesale Gadgets in Bangladesh (SEO text with Read more), plus top bar links Mobile App / Track Order. The wording is the reference site's own. Two new buttons on the Home Page Builder: **Load the starter layout** (draft until Save) and **Fill empty category details** (blank taglines / icons only).
+
+Why a button and not "I set it up": the layout is stored in the live database, which I cannot reach from here. Deploy, open Site → Storefront Settings → the Next.js site → Website Design → Home Page Builder, press **Fill empty category details**, then **Load the starter layout**, then **Save changes**.
+
+Also: a product row can now mix several categories (the reference groups e.g. Audio + Earbuds); the SEO text folds to its first paragraph; the "Shop on mobile" section has the `#mobile-app` anchor.
+
+Things to know:
+- The *Flash Deal* band shows only when a **Flash Sale** collection (Offers) with products exists, and its countdown needs an end time on that offer — the reference site uses a fake timer, the ERP uses the real one. The *Best Deals Today* banner shows products that are really on sale.
+- Hero slides are untouched (Site → Hero Slides); the reference's three slides are not copied because your live slides have your own banners.
+- The starter's phone / WhatsApp buttons use the numbers saved in the site settings (the SEO text names +8801325224400, as the reference does — edit it if that is not your WhatsApp number).
+- The headings are English (as on the reference); admin-entered content is not translated yet, so they stay English in Bangla mode. Category rows named after the reference's "Kitchen" and "Lipstick" are matched to your Air Fryer / Cocker / Cosmetics categories.
+- Needs Bangla review: the 14 new admin labels in `lang/bn.json` (Load the starter layout, Fill empty category details and their messages, Chosen categories).
+
+Tests: new `NextjsHomeStarterTest` (11) and the existing 22 design tests pass. Real-browser check on a throwaway database with your real category names: both buttons, the confirm dialogs, Save, the home page with all 12 sections (desktop and phone), SEO fold and the Mobile App link.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট ও পুশ কর এবং মেইনে পুশ কর", 2026-10-14), both repositories.
+
+## 2026-10-15 - IMS feed: our side of the work (no customer data, returns, deleted records)
+
+Owner: "IMS এ কখনই কাস্টমার ইনফো দেখানো যাবে না ... এখন যেমন আছে তেমনই রাখ ... আমাদের দিকের কাজ গুলো শেষ কর" after reading IMS's second requirements document (profit-focused: sales, payments, returns, expenses, stock losses). The project/branch tag on sales was left as it is on purpose; unit sales per project for the investor dashboard is a separate, undecided piece.
+
+What changed (uncommitted):
+- `ImsSyncFeed`: removed `customers` and `customer-payments`; orders lost the customer block; notes dropped from payments, expenses and stock movements; new `sale-returns` resource (returned / refunded orders, return date from the status history, whole-order value); `returned_amount` on orders; `order-payments` and `expenses` now include deleted rows flagged `deleted` / `deleted_at`; stock movements gained `movement_date`, `reference_type`, `reference_id`, `unit_cost` (the product's current cost) and `estimated_value`.
+- Migration `2026_10_15_100000_add_soft_deletes_to_expenses_and_order_payments`; `Expense` and `OrderPayment` use `SoftDeletes`. Stock movements were left alone because shared-stock sums use `withoutGlobalScopes()` and would count deleted rows.
+- `docs/api/ims-sync-api.md` updated (endpoints, data rules, answer 7, open decision 3).
+- Tests: `ImsSyncApiTest` now 26 (new: no customer data anywhere, deleted expense kept, deleted payment kept and order total follows, sale returns, stock loss values).
+
+Not done (needs the owner): project tag on sales and per-project unit sales for the investor dashboard; a period-closed flag; signed webhooks; OpenAPI file and staging; the IMS-facing handover file.
+
+Also fixed: 7 tests that were already failing on main (the SMS now goes out as 8801XXXXXXXXX with the OTP wording) — `ProjectCompletedMessageTest` and `ResellerApplicationVerificationTest`; tests only, no app code.
+
+Known limits to tell IMS: the ERP has no partial returns and no refund payment record; stock-loss money uses today's cost price; expenses have no project, purchase or shipment link and no foreign-currency fields.
+
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-15 (owner approved "কমিট এবং পুশ করে মেইন এ পুশ কর"); pushed to main on 2026-10-15. Deploy: run `php artisan migrate --force` (new migration).
+
+## 2026-10-15 (later still) - IMS investor feed (phase 1 of the two-way link)
+
+Owner's answers to my questions: unit sales per project are not needed now, only the project's percentage; so "final sale" status is moot; the payout system stays in the ERP, IMS shows every payout's information, IMS can make payouts and those show in the ERP too (two-way); IMS payout = a record, the ERP marks that payout paid then continues as usual, ERP staff approve; IMS may show name and group, payout amount/date/status/screenshot, bank accounts, NID and phone; cost of goods = order-line unit_cost x quantity. Also: IMS must have a way to send a bank instruction and the ERP must have the same option.
+
+Built now (uncommitted): the read side. `InvestorSyncFeed` + `InvestorSyncController` + routes `/api/v1/sync/investor/*` behind a new key type `investor_sync` (separate from the business key on purpose: it carries NID, phone and bank accounts). Resources: investors, groups, projects (progress_percent), investments, payouts, and `payouts/{id}/proof`. Only approved bank accounts are shared. Tests: `InvestorSyncApiTest` (10; mutation-checked: sharing pending accounts and using the wrong key scope each fail a test). `docs/api/ims-sync-api.md` has the new section and the plan for the rest.
+
+Not built: (2) IMS reporting a payout (`POST .../payouts/{id}/report`) with an ERP approval screen; (3) the bank instruction from IMS and from the ERP: blocked on the bank's file format / host-to-host access, never guessed.
+
+Needs Bangla review: the new key-type label "ইনভেস্টর সিংক (IMS-এর জন্য ইনভেস্টর ও পেআউট)" and the reworded key helper text.
+
+Commit status: committed and pushed to claude/nifty-carson-r2vpby on 2026-10-15 (owner approved "কমিট এবং পুশ কর"); not on main.
+
+## 2026-10-15 (later) - IMS feed: no supplier information
+
+Owner: "সাপ্লায়ারের তথ্যও investor দেখবে না". Removed the `suppliers` and `supplier-payments` resources from `ImsSyncFeed` and the supplier from `purchases`; the feed now has 11 resources. The investor portal itself shows no supplier data (checked). `ImsSyncApiTest`: purchase test now asserts no supplier anywhere, plus 404s for both removed paths; `docs/api/ims-sync-api.md` and the IMS handover page updated.
+
+Commit status: committed and pushed to claude/nifty-carson-r2vpby on 2026-10-15 (owner approved "কমিট এবং পুশ কর এবং মেইনে পুশ কর"); pushed to main on 2026-10-15.
+
+## 2026-10-14 - Investor portal redesign (design G)
+
+Owner reviewed six HTML directions on the design canvas and decided: "B এর মেনু অপশন গুলো থাকবে কিন্তু ডিজাইন হবে F এর" (B's menu, F's design). Mock-up of the result: canvas row G (desktop, phone dashboard, phone menu).
+
+What changed:
+- Navigation groups Overview / Money / Account (+ the existing Channel partner group) on the portal pages; panel without a top bar, user menu in the sidebar, ink primary colour, Hind Siliguri, new `resources/css/filament/investor/theme.css`.
+- Dashboard rebuilt as tiles: hero totals, capital-by-group ring, project tiles (ten-block progress; all old card texts and `data-project-card` kept), this year's project calendar, next-payout steps, profit chart, latest statement.
+- English / বাংলা switch (`investor/language/{locale}`, `SetInvestorPortalLocale`): session first, then the account's `locale` (was never set before, so no one's portal changes until they switch). Switching also sets the account's SMS language. Staff preview: browser only.
+- Phone bottom menu (render hook `BODY_END`).
+- The sidebar shows only a real dark logo; when a company has none, its light logo sits on a white chip (`darkLogoUrl(fallbackToLight: false)` for this panel).
+
+Not done: Bangla digits (numbers stay 0-9, as everywhere in the app; i18n plan `digit_style`); dates on cards still use the English `d M Y` format. Not checked in a real browser yet — only by tests and the built CSS.
+
+Needs Bangla review: 18 new keys (Overview, Investments, Menu, Quick menu, Language, Legend, Capital by group, Across :count groups, Project calendar :year, Next payout, Now, Upcoming, Done, In progress, Still to come, Payment sent, Profit confirmed, Screenshot added).
+
+Tests: 6 new (dashboard tiles, payout steps until the screenshot, calendar year, grouped menu + phone menu, language switch for signed-in and guest).
+
+Commit status: committed and pushed to claude/nifty-carson-r2vpby on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); not on main.
+
+## 2026-10-15 (later) - Owner's answers: returned goods stay out of stock until staff check them; reseller Bangla word "আয়"
+
+The owner answered four questions on 2026-10-15: (1) commit and push the password-reset and audit work to the work branch **and** `main`; (2) the emailed reset link stays valid for **60 minutes**; (3) when an order is Returned, **staff put the goods back in stock themselves after checking them**; (4) on reseller screens "profit" is written **"আমার আয়"** in Bangla.
+
+**Returned orders keep their goods out of stock — a rule change for every order, not only reseller orders**
+- Before: marking an order Returned (or Refunded) deleted its sale from the stock ledger at once, so the pieces counted as in stock immediately.
+- Now: the sale stays. On a Returned or Refunded order's page the new action **Put returned goods back in stock** (staff who may add stock movements) shows each item with *sold / already put back / can still be put back*; staff enter the pieces in good condition, damaged pieces are left out, it can be done in parts, and it never exceeds what was sold. It adds a *Return* stock movement tied to the order.
+- Unchanged: **Cancelled** still gives stock back at once (it never left). Customer dues, sales reports and the reseller's profit still follow the order status. The return charge for resellers is unchanged.
+- **My choices (say if you want different):** (a) **Refunded** keeps the goods out too (a refund after a return would otherwise have restocked it behind the rule); (b) moving a returned order to the **trash** removes its sale and any Return movements recorded for it together, so the shelf is as before the order; (c) **restoring** a returned order from the trash does not bring its sale back (the pieces are then counted as on the shelf), so check stock after restoring one.
+- Deploy: nothing to run. Orders that were already Returned have already put their goods back; only returns made from now on wait for staff.
+
+**Bangla for profit on reseller screens**
+- "Profit" is "আয়" in all the reseller-only texts, and the column / headings are "আমার আয়" (new key `My profit`); the admin list is "রিসেলারের আয়" / "রিসেলারদের আয়". English still says profit. The reports' own `Profit` ("লাভ") and the investors' `Your profit` are untouched.
+- Because the owner wrote "আমার আয়" (my income), the Bangla headings are first person; the sentences that talk to the reseller say "আপনার আয়".
+
+Needs Bangla review (7 new keys): Put returned goods back in stock (and with `:order`), the long text on its dialog, Add to stock, "Sold :sold, already put back :back, can still be put back :left.", ":count pieces were added back to stock.", "Nothing was added to stock.". Plus the "আয়" wording above.
+
+Tests: `OrderReturnedStockTest` (8): a returned order keeps its goods out (also after delivery), cancelled still gives them back, partial / later put-back with the damaged pieces left out, never more than sold, the action only on returned / refunded orders and only with the stock permission, trash releases without double counting, dues and sales still follow the status. `ResellerPortalAdminFlowTest` updated for the new rule.
+
+Full suite (plain `php artisan test`, no `--env`) with everything on 2026-10-15, after merging `origin/main` (v2.78.0 and later; the asset build passes too): **2488 passed, 1 skipped, 0 failed**. One existing test (`ResellerSubdomainTest` countdown) compared two `now()` readings to the exact second and failed once when the clock ticked between them; it passed alone and is now tolerant of a second. Pint passes.
+
+Commit status: Committed and pushed to `claude/reseller-module-status-v9tobe` and to `main` on owner approval (2026-10-15: "কাজের ব্রাঞ্চ ও main দুটোতেই পুশ").
+
+## 2026-10-15 (evening) - Owner's answers on the next batch: damaged goods, trash rule, price tool, dashboard, guide, subdomain guide
+
+Owner request (in Bangla): "কী কী লাগবে প্রশ্ন করে জেনে নেও।" Asked, and the owner answered: do the mobile tab bar, the dashboard checklist / best-sellers / announcement, the public guide's return-charge note, and the Cloudflare / `TRUSTED_PROXY_HOPS` work (owner does Coolify and Cloudflare, we write the guide); variation suggested prices by "একসাথে অনেকগুলোর দাম বসানোর টুল"; and on returned goods: restoring a trashed order brings its sale back, a returned order **never** goes to trash (or the returned-product record is lost), and damaged goods must be counted: a damaged product that came back from a customer who got an exchange parcel, and damaged pieces found when a new shipment's cartons are opened, each **labelled** (customer-return damage vs shipment damage).
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+
+1. **Returned / refunded orders: no trash; restore recreates the sale.** `Order::canBeMovedToTrash()`; the order page's delete button is hidden, the list's bulk "Move to trash" skips and reports them, and the model refuses a soft delete in those statuses. `restored` now calls `OrderWorkflowService::restoreFromTrash()`, which rebuilds the sale for every status.
+2. **Damaged goods with a source label.** New column `stock_movements.damage_source` (migration `2026_10_15_120000`): *Customer return damage* / *Shipment damage* / *Other damage*; required on the stock movement form for a damage entry; column + filter in the movement list and history; the Total Damage card links to the damage list. **Put returned goods back in stock** now asks *Good pieces* and *Damaged pieces* per item; damaged pieces are booked as a Return and straight away written off as a customer-return Damage (net zero on the shelf, counted in Total Damage). Shipment damage is entered with the existing stock movement form (type Damage, source Shipment damage).
+3. **Resellers → Variation selling prices.** One list of every active variation with the wholesale price (read only) and an editable suggested price, a "no suggested price yet" filter and two bulk actions (same price, clear). No percentages.
+4. **Reseller portal tab bar on phones** (Dashboard, Products, raised Create order, Orders, Earnings).
+5. **Dashboard: announcement** (Reseller Settings → Portal announcement; migration `2026_10_15_130000`), **Get started** checklist (4 steps), **Best-selling products** (last 30 days).
+6. **Public guide:** return-charge sentence (and amount with the figures switch).
+7. **Subdomains:** `docs/reseller-subdomain-setup.md` (Bangla step-by-step for Cloudflare + Coolify) and a **Test subdomain setup** button on Reseller Settings. `TRUSTED_PROXY_HOPS`: the ERP has no such setting (`TRUSTED_PROXIES=*`, unchanged); it belongs to the Next.js website (2 behind Cloudflare orange cloud + Traefik, 1 behind Traefik only).
+
+Looked at in a real browser (Chromium, throw-away SQLite file with made-up data, never the demo DB; deleted afterwards): at 390 px the announcement banner, the Get started card, the best sellers and the tab bar with the raised button render, the current tab is highlighted, content is not hidden behind the bar, and at 1280 px the bar is not displayed.
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- A third damage source **Other damage**, so an entry that is neither a customer return nor a shipment is not forced into a wrong group. Older damage entries have no source (shown as "-").
+- **Refunded** orders are also never trashed (they keep the same returned-goods record as Returned).
+- A damaged returned piece shows as two movements (Return then Damage) in the product's history, so on-hand stock stays right and the order's "checked" count includes it.
+- Best sellers count **pieces** over the **last 30 days** from confirmed / processing / completed orders (cancelled, returned and draft ones are left out); no money amounts, because a reseller's own-courier orders and store orders price their lines differently.
+- Get started steps: name your store, add products (an active pick), add a payout account, get your first order (any order credited to the reseller, including one from their store).
+- The announcement is one text for everyone (the admin writes it in the language they want); it cannot be required to be in two languages.
+- The guide's return-charge sentence shows only while the charge in Reseller Settings is above 0; the amount only with "Show money figures on the guide".
+- The variation prices page needs view rights on Products, and update rights to edit.
+- The subdomain guide recommends a **separate** Traefik resolver (`cloudflare`) with a DNS-only wildcard record, so the other sites' certificates keep working; the Coolify step that sends `*.offer.zamzamint.com` to the app is written from Coolify's documentation and **not tested on the live server**. "Test subdomain setup" opens the name from the app server itself, so on a host that cannot reach its own public address it can say "HTTPS does not work" while a browser opens it fine.
+
+Deploy: `php artisan migrate` (two migrations: `stock_movements.damage_source`, `storefront_settings.reseller_announcement_*`) and `npm run build` (new portal CSS). Then fill the suggested prices (Resellers → Variation selling prices) and write an announcement if wanted.
+
+Needs Bangla review (new keys): Customer return damage (কাস্টমার ফেরত ড্যামেজ), Shipment damage (শিপমেন্টের ড্যামেজ), Other damage (অন্যান্য ড্যামেজ), Damage source, Good pieces (ভালো পিস), Damaged pieces (ড্যামেজ পিস), the Put-returned-goods dialog texts, the trash message, Variation selling prices (ভেরিয়েশনের বিক্রয় দাম), Set the same price, Clear the suggested price, Portal announcement, Get started steps (Name your store, Add products to your store, Add a payout account hint, Get your first order), Best-selling products, :count piece / pieces, Portal menu, the guide's return-charge sentences, Test subdomain setup and its three result messages.
+
+Tests: `OrderReturnedStockTest` (14), `ResellerVariationPriceToolTest` (6), `ResellerPortalBottomNavTest` (3), `ResellerPortalDashboardExtrasTest` (7), `ResellerSubdomainSetupCheckTest` (4), `ResellerGuidePageTest` (6, +1). Full `php artisan test` (plain, no `--env`): 2514 passed, 1 skipped, 1 failed on the first run — `ResellerPortalCreateOrderTest` counted exactly one link to the create-order page, and the new tab bar adds a second; the test now ignores the tab bar and checks it separately (17 passed on its own). Nothing else failed. `npm run build` OK.
+
+Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-15). **Not pushed to `main`**: the owner checks the brief first and approves `main` himself.
+
+## 2026-10-15 - Admin: reset a reseller's password / email a reset link; portal ↔ admin audit
+
+The owner (in Bangla): *"From the admin, resellers' passwords can be reset, and a password reset request can be sent by email to the email the reseller set."* and *"Check whether the portal and the admin dashboard are connected without problems, whether stock works properly, and whether orders work properly."*
+
+**1. Password reset from the admin** (nothing to deploy: no migration, no `npm run build`)
+- Admin → Resellers: **Set a new password** (staff choose it; the reseller is signed out everywhere; it is not emailed) and **Email a password reset link** (to the reseller's own email; the button is disabled with a reason when they have none). They are in the list's action menu and at the top of a reseller's View and Edit pages, only for staff who may edit customers and only for a pending or approved reseller.
+- The link opens the portal's "Choose a new password" page on the reseller's portal address; it works once and expires after **60 minutes** (the owner confirmed it on 2026-10-15). A pending SMS code is replaced by a link and the other way round.
+- Email is sent with the company's own SMTP (Storefront Settings → Customer Notifications & Reminders) or the server's mail setting. If neither can really send (the server's `MAIL_MAILER` is `log`), the action says "Email is not set up" and sends nothing. **On production, check that one of the two is set up before relying on it.**
+- Both actions are in the audit log with the staff member; the password is never written there.
+- The mail is written in the language of the staff member who sends it (the reseller's own language is not stored).
+
+**2. Audit of the portal and the admin** — result: **no bug found; the connection works.** New `ResellerPortalAdminFlowTest` checks it through the real pages on both sides. What it proved, and what to know:
+- A portal order arrives in the admin Orders list with the right company, source "Reseller portal", buyer, lines, variation label and prices, as a **Draft**.
+- **A draft holds no stock** (same as every order in this system). Stock moves when staff *Confirm*: the sale is taken from the exact item (for a product with variations: from that variation; the product shows the sum). Cancel and Return give it back automatically.
+- Two resellers can each place a draft for the last pieces. Staff can confirm the first; the second is refused with an error and stays a draft, so **stock never goes negative**. The portal also refuses an order bigger than the shelf holds at the moment of ordering.
+- Completing the order makes the reseller's profit payable; a later return takes it back and charges the return charge (50, from the deposit).
+- The portal shows the new status after staff change it; each company sees only its own orders, and a reseller only their own.
+- **Decided by the owner (2026-10-15): returned goods no longer go back on the shelf by themselves.** See the entry "Owner's answers: returned goods stay out of stock until staff check them" above.
+
+Needs Bangla review (20 new keys): Set a new password, the two long texts on the Set password and Email link dialogs, Email a password reset link, Send link, the five messages when a link cannot be sent, the portal page's "Choose a new password" and "This reset link is invalid or has expired…", and the three lines of the email itself. The note about "Storefront Settings → Customer Notifications & Reminders" uses the English menu names in Bangla text.
+
+Tests: `ResellerPasswordResetByStaffTest` (19): staff set a password (old one stops, signed out, audit has no password, weak / mismatched refused, pending reset cancelled), the link is emailed to the reseller's own address on the portal host with a valid signature (and the email prints it unescaped), no email / email not set up / failed send leave nothing valid, the link works once through the Livewire page and through the real endpoint, tampered / expired / another company's / wrong-token links are refused, a rejected reseller gets nothing, the actions are on the list / view / edit pages, staff without permission cannot see or force them, another company's reseller cannot be reached. `ResellerPortalAdminFlowTest` (8): see above.
+
+Full suite before the return-stock rule: 2443 passed, 1 skipped, 0 failed; the final run is in the entry above.
+
+Commit status: Committed and pushed to `claude/reseller-module-status-v9tobe` and to `main` on owner approval (2026-10-15: "কাজের ব্রাঞ্চ ও main দুটোতেই পুশ").
+
+## 2026-10-14 (later) - Correction: the admin sets a suggested selling price on each variation
+
+The owner (in Bangla) after the first brief: my change was a serious mistake. With no price set by the reseller, a customer could buy one piece **at the wholesale price**. The system must work like this: **the admin enters a probable selling rate for the reseller on each variation, so the reseller sees what the market price is; the reseller can override it with their own.**
+
+What changed (on top of commit `84fe781`):
+1. **Admin → Products → Variations**: new field **Suggested selling price for resellers** (shown only while the reseller module is on). It is the default customer price. The reseller still pays the variation's own price (Sale Price) + the company's Reseller cost per unit.
+2. **Customer price of a variation** = the reseller's own price (portal → Products → Variation prices), else the admin's suggested price, never below what the reseller pays. Commission = that price − what the reseller pays.
+3. **Neither set** (no suggested price, and the reseller has not set one): the variation is **not sold at the wholesale rate**. On the reseller's store it shows as out of stock and cannot be added to the cart; in the portal the order line asks the reseller to enter a price (`Enter your price.`), the details table says **Set your price**, and the bulk "suggested + %" action skips it. A variation with no price at all (sale price empty or 0) cannot be ordered either.
+4. **Wording: "commission" is now "profit"** for resellers (owner: *"there is no commission here; the reseller earns a profit = the price they sell at minus our cost"*). Changed everywhere a reseller or the store's reseller admin sees it: portal Orders / Products / Earnings / dashboard / create & change order / product details / order details, the public reseller guide, the older store account page, the Reseller Settings help texts, the admin list of reseller profits (was "Commissions") and the payout voucher purpose ("Reseller profit payout — ..."). 19 old keys were replaced and `Profits` was added in `lang/en.json` and `lang/bn.json`. **Not changed:** the arithmetic, the payable-after-delivery rule, internal names (`ResellerCommission`, `reseller_commissions`, `commission_per_unit` columns), and the investor / channel-partner screens (they have their own, unrelated commission). The bulk "suggested + %" price action is also unchanged.
+5. Nothing changes for ordinary products, the plain (non-reseller) store, the API or the Next.js site.
+
+Deploy: `php artisan migrate` — new migration `2026_10_15_100000_add_reseller_suggested_price_to_variants` (one nullable column on `product_variants`). `npm run build` is not needed.
+
+**Please confirm:**
+- Variations that already exist have **no suggested price**, so for resellers who already have such a product in their store they stop being buyable until the admin fills the new field (or the reseller sets a price). The admin should fill it once per variation after deploying.
+- If the suggested price is lower than what the reseller pays (wholesale + cost per unit), customers are charged what the reseller pays, with no profit for the reseller (same rule as ordinary products).
+
+Needs Bangla review (new keys): Suggested selling price for resellers (and its long helper text), "You pay :cost. There is no suggested price, so set yours to sell it.", Set your price, Enter your price. **Profit wording:** the owner said "প্রফিট"; the Bangla uses "লাভ", which is what the existing `Profit` key already uses in the reports. Say if you prefer "প্রফিট" for the reseller screens (a one-line change per key).
+
+Tests: `ResellerVariationPricingTest` (12, +3): suggested price as the default / raised to cost, a variation with no suggested price is never sold at the wholesale rate (pricing + reseller store cart + checkout), the plain store never shows the suggested prices, staff enter the field, it is hidden while the module is off. `ResellerVariationOrderTest` (16, +2): a variation with no suggested price needs the reseller's own price (store and own-courier delivery), a variation without a price cannot be ordered. `ResellerPortalProductsTest` (18, +1): the same in the portal (details, bulk %, saving).
+
+Full suite (plain `php artisan test`, no `--env`), after the suggested price and the profit wording: **2265 passed, 1 skipped, 0 failed** (365 s). Pint passes on the changed PHP files.
+
+Commit status: committed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-14, "কাজের ব্রাঞ্চে কমিট ও পুশ করুন এবং মেইনে পুশ কর"), on top of `84fe781`, then `origin/main` (v2.74.0) merged and the full suite re-run (2416 passed, 1 skipped, 0 failed). Pushed to `main` the same day.
+
+## 2026-10-14 - Owner's answers: variation price, online gateway, return charge (three changes on the branch)
+
+The owner answered the open points on 2026-10-14. Three changes follow from them; each has its own entry below. Nothing here is on `main` yet.
+
+1. **Variations: no separate reseller price.** The owner: the wholesale rate *is* the reseller rate; the admin needs no extra price. So the **Reseller price** field on a variation is gone (it only ever existed on this branch), and a variation costs the reseller **its own price + the company's "Reseller cost per unit"** (the same formula as an ordinary product's wholesale tier + that cost). The first version sold a variation at that price when nothing else was set; the owner called that a serious mistake and the later entry "Correction: the admin sets a suggested selling price" replaces it. See also the entry "products with variations".
+2. **Online gateway as an advance option.** The owner: whichever gateway is active is shown. See "pay the advance online".
+3. **Return charge of 50 per returned order, from the reseller's deposit.** See "return charge".
+
+Full suite (plain `php artisan test`, no `--env`) with all three changes: **2259 passed, 1 skipped, 0 failed** (379 s).
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-14). Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-14 - Reseller advance: pay online with the store's active gateway
+
+Owner decision (2026-10-14): "the gateway that is active will show". Under **Paid to** a reseller sees **Pay online (ZiniPay)** or **Pay online (PayStation)** when the store has an online payment gateway switched on and set up, in addition to the send-money numbers (those stay as the owner confirmed on 2026-10-12).
+
+What changed:
+1. **Create order / Change order / Send payment again**: the new option needs no number or transaction ID. The reseller is taken to the gateway's secure page for exactly what is still owed (after the deposit pays its part).
+2. **Confirmation**: the gateway sends the reseller back to a signed portal link and also calls its webhook; either one asks the gateway whether the money arrived (the amount must match), marks the payment completed and enters it in the order's Payments History **once**. Staff then see the order as paid and can pack the parcel; nothing is checked by hand. Staff cannot Verify / Reject an online payment.
+3. **Unfinished payment**: the order shows **Waiting for the online payment** with a **Pay now** button; starting another payment (online or send-money) closes the unfinished one. A payment the gateway reports as failed shows "Rejected — send again".
+4. Own-courier orders stay available when the store has only the gateway and no send-money number.
+
+Deploy: no migration. The gateway must already be configured (Integrations → Payment Gateway) and its webhook must reach the company's own domain (the app builds `https://<company domain>/webhooks/zinipay|paystation/<payment>`).
+
+**Please confirm / know:**
+- The online option takes the **exact** amount owed; it does not accept a bigger amount (the send-money flow still lets a reseller send more and credit the extra to the deposit).
+- Nothing is posted to a cash/bank account for an online payment (as for online storefront payments); the order's Payments History carries it with the method "Other" and a note naming the gateway.
+- I did not try a live ZiniPay / PayStation payment: the tests fake the gateway's answers. A first real payment on staging is worth doing before this goes live.
+
+Needs Bangla review (new keys): Pay online (:gateway), Pay now, Waiting for the online payment, Confirmed by the gateway, Not completed, Online (:gateway), the sentence on the Paid-to helper, and the two notices after a payment (received / not completed).
+
+Tests: `ResellerOnlineAdvancePaymentTest` (18): the option appears only when the gateway is on and set up (ZiniPay and PayStation); choosing it when it is not is refused and creates nothing; an order starts a pending gateway payment for the right amount with a signed return link and a webhook on the company's domain; the webhook confirms and enters the money once even if it arrives twice; the signed return does the same and a later webhook changes nothing; an unsigned, tampered or other-company link verifies nothing; pending / wrong-amount / failed answers never complete it; an unfinished attempt is replaced by a new one or by a send-money payment; a gateway error creates no order; the deposit pays first; staff cannot verify by hand; the portal form skips the number and transaction ID and goes to the gateway; send-money still needs them; own courier with only the gateway; Pay now and Send payment again on the Orders list; paying the extra of a raised order online; another reseller's payment is unreachable.
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval. Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-14 - Reseller return charge (50 per returned order, from the deposit)
+
+Owner decision (2026-10-14): an order cancelled before delivery gives the money back to the reseller's account (built on 2026-10-12); after a return, "50 taka per return" is charged. Asked in Bangla: it comes from the reseller's credit (the deposit balance), once per order (not per piece).
+
+What changed:
+1. When a reseller's order becomes **Returned** (store-delivered or own courier), one deposit entry of **−50** is made, with the order and the reason in its note. The amount is **Reseller Settings → Money rules → Return charge per order** (default 50; 0 = no charge).
+2. A return gives nothing back (the deposit part is returned only on a cancellation).
+3. If the deposit holds less than the charge it goes **below zero**; later credits make that up first, and a deposit below zero pays nothing on new orders (the placement code spends `max(0, balance)`). The staff "Deduct" action still refuses to go below zero.
+4. Shown: **Resellers → Deposits** (type "Return charge (order returned)"), the order for staff (a "Return charge" section), the reseller's order details, and the reseller's deposit badge (which can show a minus).
+
+Deploy: `php artisan migrate` (`2026_10_14_100000_add_reseller_return_charge`: one column, default 50).
+
+**Please confirm (readings of the owner's words):**
+- "Returned" status is the trigger, not "was delivered first": an order can reach Returned from Confirmed, Processing, Shipping or Completed, and all of them are charged.
+- The charge is taken for **every** returned reseller order, including own-courier orders whose advance was paid by send-money or online; only the deposit is touched. If an own-courier return should also give the money back (minus the charge), that is a separate rule to decide.
+- A reseller whose deposit is empty ends up with a negative deposit instead of an uncollected charge.
+- The public reseller guide does not mention the return charge yet.
+
+Needs Bangla review (new keys): Return charge per order and its helper text, Return charge, Return charge (order returned), Taken from the reseller's deposit, the sentence in the reseller's order details.
+
+Tests: `ResellerReturnChargeTest` (11): the default of 50; a returned store-delivered order; an own-courier order (charge only, no deposit back); once only however often the order is saved or refunded afterwards; nothing for a cancelled, delivered or non-reseller order; the amount follows the company's setting and 0 means none; each company uses its own setting and deposits; a deposit below zero pays nothing and later credits cover it first; staff see it in the Deposits list and on the order; the reseller sees why; the setting is saved and cannot be negative.
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval. Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-12 - Reseller program: products with variations (owner decision 1, reworked on 2026-10-14)
+
+Owner decision (asked one by one, in Bangla), then corrected on 2026-10-14: *the wholesale rate is the reseller rate; the admin does not set a separate reseller price; the reseller sets their own customer price; we add only the wholesale rate, the packaging cost and, with our courier, the courier cost.*
+
+What changed:
+1. **Admin → Products → Variations**: a variation's own **Sale Price** is the wholesale rate; the new **Suggested selling price for resellers** is the market price a reseller sees (see the entry "Correction: the admin sets a suggested selling price"). The earlier "Reseller price" field was removed before it reached `main`.
+2. **What the reseller pays for a variation** = its own price + the company's **Reseller cost per unit** (as for an ordinary product). Packaging stays the own-courier packaging charge per piece; delivery is the store's delivery charge (or the reseller's own courier).
+3. **Reseller portal → Products**: a product with variations shows "From ৳X" for cost / suggested price and a commission range; the **Variation prices** action sets the customer price per variation (never below what the reseller pays; blank = the admin's suggested price, raised to the cost if lower; none = cannot be sold until a price is set); the bulk "Set price = suggested + %" works per variation; the details slide-over lists cost, price and commission per variation. The "No wholesale rate" filter now only lists a product with variations when none of them is active.
+4. **Reseller's store**: each variation shows the reseller's price; the cart / checkout charge it and record the commission (customer price − what the reseller pays). What the reseller pays is not output on the store at all (tested, including the page's hidden JSON).
+5. **Reseller portal → Create order / Change order**: products with variations can be ordered. Each line has an **Option** picker; stock is the variation's own; the same rules as ordinary products (price at least what the reseller pays, one line per option, own-courier orders charge the base price + packaging with no commission, adding a variation to an own-courier order asks only for the extra). Recent orders on the dashboard show the option.
+
+Deploy: `php artisan migrate` (`2026_10_12_120000_add_reseller_prices_to_variants`: one nullable column on `reseller_products`). `npm run build` is not needed for this step.
+
+**Please confirm (readings of the owner's words):**
+- "The wholesale rate" of a variation is **the variation's own price**, not the product's wholesale tier price (tiers apply to the base product only on the storefront, and a variation line never gets a tier). If the tier should be used for every variation of a product instead, say so.
+- The company's "Reseller cost per unit" **is** added (the same as for ordinary products). A variation with no price of its own uses the product's price; one with no price at all cannot be sold.
+- Until a reseller sets a price, a variation sells at the admin's suggested price (never at the wholesale rate); with no suggested price either it cannot be sold.
+- The older storefront account page for resellers (`/account/reseller`, before the portal) still prices only ordinary products; the portal is the place for variations.
+
+Needs Bangla review (new keys): Variation prices, Per variation, the sentence in the Variation prices modal, "This variation has no price yet, so it cannot be sold." and the details note.
+
+Tests: `ResellerVariationPricingTest` (9): the price rules (chosen / normal raised to cost, cost = own price + cost per unit, none without a price), no change outside a reseller session, another reseller's or company's data never used, the storefront shows the reseller's prices and never what the reseller pays (in the HTML and the JSON), an order through the reseller store records price / base / commission, the plain store records none, the admin edits the variation's price and the reseller's cost follows. `ResellerVariationOrderTest` (14): the portal order with commission, option required and valid, price floor, the variation's own stock (and pre-order), duplicates, catalog rules, outside-store products refused, another reseller's price ignored, the option picker and pricing in the form, own-courier orders, the buyer-facing price, adding a variation to an own-courier order, stock and duplicates on edit. `ResellerPortalProductsTest` +5: per-variation prices and the floor, isolation, details, bulk %, the filter.
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12), reworked and pushed on 2026-10-14 with owner approval. Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-12 - Reseller application: SMS code proves ownership of an existing number (owner decision 5) — also a security fix
+
+Owner decision (asked one by one, in Bangla): applying with a phone number that already belongs to a customer must prove the number with an SMS code before the old record is used.
+
+**Why it mattered:** the portal's Become a reseller page found any customer by phone and **set a new password on that record**. Anyone who knew an approved reseller's number could apply with it, choose a password and sign in as that reseller (their orders, balance and withdrawals). The older plain `/reseller` form likewise overwrote an existing person's name and business name. Both are closed now.
+
+What changed (Reseller portal → Become a reseller; storefront /reseller):
+1. **New number:** applies exactly as before, no code.
+2. **Number that already has a customer record** (storefront account, past orders, or a reseller): the form sends a 6-digit SMS code to that number (10 minutes, five tries, one SMS a minute, hashed, per company + number) and shows a code step with **Send a new code** and **Use a different number**. Only after the right code does it use the old record, set the password and sign in; until then the old record is not touched at all. Any spelling of the number (+880…, 880…, 01…) counts.
+3. **No SMS gateway:** such a number cannot be proven; the form says to contact the store, and nothing changes.
+4. The older plain storefront form (`/reseller`) no longer reuses an existing number: it shows an error and the portal application link (or "contact the store" when the company has no portal host).
+
+I assumed the code is needed **only when the number already exists** (as written in the decision); a brand-new number is not asked for a code. Tell me if every applicant should be verified when SMS is on.
+
+Deploy: nothing to run. It needs the company's SMS gateway (Integrations) for the code; each code costs one SMS.
+
+Needs Bangla review (new keys): the code-step helper text, "Verification code", "Verify and apply", "Use a different number", and the four error / notice sentences.
+
+Tests: new `ResellerApplicationVerificationTest` (9): new number needs no code; an existing number is untouched until the code (the password hash only waits in the session); wrong code changes nothing and five wrong codes burn the code; knowing an approved reseller's number cannot replace their password; other spellings need the code and never duplicate; no SMS gateway means no takeover; resend once a minute and change the number; another company's number is a new number here; the plain storefront form never takes over a number. The old "approved reseller stays approved on re-application" test was rewritten for the new rule.
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-12 - Reseller Settings: payment methods for the advance (owner decision 4)
+
+Owner decision (asked one by one, in Bangla): the admin chooses which payment methods resellers send the advance to, from the existing list; Reseller Settings can also add methods only for the reseller panel; the reseller sees both; the storefront's list does not change the reseller-only ones.
+
+What changed (Resellers → Reseller Settings → Own-courier advance payments):
+1. **Store payment methods resellers can use**: tick boxes for the store's active manual (send-money / bank) methods. Resellers see only the ticked ones. A method added to the store later stays hidden until ticked.
+2. **Reseller-only payment methods**: add / rename / switch off / remove methods (name, number, instructions) that only the reseller portal uses. The name may equal a store method's (different number). Removing one that a payment already used switches it off instead of deleting it.
+3. Reseller-only methods are **never** shown at the storefront checkout, in the website API (`/checkout` payment methods) or in Storefront → Payment Methods, and a forged request naming one is rejected.
+4. **Nothing changes until the admin saves a choice**: while no choice is saved, every active manual store method is offered, exactly as today, so no company loses its payment channel on deploy.
+
+Deploy: `php artisan migrate` (`2026_10_12_110000_add_reseller_payment_methods`). No setting to change.
+
+**Please confirm (a reading of the owner's answer):** the owner said the methods "come from the Integrations page's payment gateway". The Integrations → Payment Gateway tab holds only the ZiniPay / PayStation credentials (online card / mobile-banking payments), while the list of bKash / Nagad / bank numbers lives under **Storefront → Payment Methods**. I built the choice from that Payment Methods list, because the reseller advance is a manual send-money payment (sender number + transaction ID, checked by staff). Offering the online gateway (pay and verify automatically) as an advance option is a separate, bigger piece of work — say so if that is what was meant.
+
+Needs Bangla review (new keys): the section description, "Store payment methods resellers can use", "Reseller-only payment methods", the two helper texts and "Add reseller-only method" (long sentences, please read them once).
+
+Tests: new `ResellerPaymentMethodsTest` (10): everything offered until a choice is saved, the admin's choice (and an unticked / later-added method stays hidden, ticking none means none), a deactivated method is never offered, forged ids rejected, reseller-only methods added then updated in place (no duplicate rows, same name as a store method allowed, switched off), duplicate names refused, removal deletes unless a payment used it, the store's list changes never touch reseller-only methods and the store's Payment Methods page never lists them, never offered at the storefront (checkout page, forged POST), another company's methods and choices never offered. Plus 2 in `ResellerOwnCourierOrderTest` (paying into a reseller-only method; an unticked store method is refused). A real bug the tests caught: the saved ids kept array keys and would have been stored as an object — fixed with `array_values`.
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-12 - Admin: Resellers → Deposits (list + add / deduct with a reason) (owner decision 3)
+
+Owner decision (asked one by one, in Bangla): the admin has a page with each reseller's deposit and every entry, and can add or deduct with a required reason, all logged. Built as decided.
+
+What changed (Admin → Resellers → Deposits):
+1. **Deposits** page: every deposit entry with date, reseller (+ phone), type (sent above an order total / used on an order / returned when an order was cancelled / adjusted by staff), amount (+ green, − red), order, reason / note and who did it ("Automatic" for system entries). Filters: reseller, type.
+2. **Add to deposit** / **Deduct from deposit** buttons: pick an approved reseller, amount, **reason (required)**. The form shows the deposit now. Each adjustment is one entry with the reason and the staff member, and also goes to the **Audit Logs** page.
+3. The **Resellers** list has a sortable **Deposit** column; a reseller's page shows the deposit.
+4. Permissions follow Sales: **sales.view** sees the page, **sales.update** gets the two buttons. Super admin has both.
+
+Deploy: `php artisan migrate` (`2026_10_12_100000_add_created_by_to_reseller_deposit_entries`, one nullable column). No setting.
+
+Decision I had to make (not from the owner — please confirm): **a deduction larger than the deposit is refused** ("The deposit holds only X, so Y cannot be deducted"), so a deposit never goes negative. Entries are never edited or deleted; a mistake is corrected by another adjustment.
+
+Needs Bangla review (new keys): Returned (order cancelled) (ফেরত (অর্ডার বাতিল)), Adjusted by staff (স্টাফ সমন্বয় করেছেন), Done by (যিনি করেছেন), Sent above an order total (অর্ডারের মোটের বেশি পাঠানো), Reason / note (কারণ / নোট), Deposit entry / Deposit entries (জমার এন্ট্রি), and the two modal headings.
+
+Tests: new `ResellerDepositAdminTest` (13): reason / staff member / positive entry, deduct and empty, over-deduction refused and nothing changes, reason / amount / direction required, audit log row with the staff member, the page lists every entry with type / reason / who, add + deduct from the page and the reason is mandatory, over-deduction from the page notifies and changes nothing, another company's resellers and entries are never listed or adjustable, only approved resellers, view-only staff do not get the buttons, the Resellers list and page show the deposit. Full suite (plain `php artisan test`, no `--env`) after all five items: **2229 passed, 1 skipped, 0 failed** (540 s).
+
+Note: while writing this I ran `php artisan migrate` once by mistake on the local development SQLite file (not the test database): it only added this one column, no data was touched. Tests use their own in-memory database.
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval (2026-10-12). Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-12 - Reseller deposit: a cancelled order gives the money back (owner decision 2)
+
+Owner decision (asked one by one, in Bangla): a cancelled order that was paid from the reseller's deposit returns the money to the deposit automatically. Built as decided, nothing added.
+
+What changed (Orders → own-courier orders, Reseller portal deposit):
+1. When an own-courier reseller order becomes **Cancelled** (staff, WooCommerce sync or any other path), what it took from the deposit goes back as one new deposit entry (type `refund`, positive). The balance beside the portal's user menu goes up at once.
+2. It runs once only: saving the order again, or running it twice, returns nothing more.
+3. Only the **deposit part** returns. Money the reseller sent to the store (bKash, bank) is not refunded by this. Returned / Refunded orders are not covered either (the owner said "cancelled").
+4. Staff see **Returned to the reseller's deposit** on the order page when something came back.
+
+Deploy: nothing to run (no migration, no setting).
+
+Needs Bangla review (new key): Returned to the reseller's deposit (রিসেলারের জমায় ফেরত গেছে).
+
+Questions for the owner:
+- If the reseller already **sent money to the store** for a cancelled order, who refunds it, and how? Today staff would use the new deposit adjustment page (next item) to add it to the deposit, or pay it back outside the system.
+- Should **Returned** and **Refunded** orders also give the deposit part back? (Only Cancelled does now.)
+
+Tests: 5 new in `ResellerOwnCourierOrderTest` (36 in the file, all passing): deposit part only, once only however often saved, not cancelled / nothing from the deposit, another reseller's deposit untouched, staff see the returned amount. Full suite (plain `php artisan test`, no `--env`) after all five items: **2229 passed, 1 skipped, 0 failed** (540 s).
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` on owner approval ("এরপর শেষের কাজ গুলো একে একে শেষ করে ফেল ... তোমার কাজের ব্রাঞ্ছে কমিট এবং পুশ করবে", 2026-10-12). Pushed to `main` on owner approval (2026-10-14: "মেইনে পুশ কর"), after merging `origin/main` (v2.74.0); full suite on the merged tree 2416 passed, 1 skipped, 0 failed.
+
+## 2026-10-13 - Read-only data feed for IMS
+
+Owner asked "যা চায় করে দেও" after sharing IMS's `ERP-INTEGRATION-REQUIREMENTS.md` (IMS wants to pull the ERP's business data). Built the read-only feed `/api/v1/sync/*` (uncommitted, on top of the investor-group work).
+
+What changed:
+- `company_api_keys.scope` (migration `2026_10_13_100000`): `website` (default, every old key) or `sync`. `ResolveCompanyFromApiKey` now takes the scope as a parameter and answers `403 wrong_key_scope` when a key is used on the wrong API, so a website developer's key can never read purchases/costs and a sync key can never write products.
+- `ImsSyncFeed` (14 resources, keyset paging on `updated_at`+`id`, inclusive `updated_since`, status/date filters, `ids_only`), `SyncController` (`ping`, `index`), route group `v1/sync`, `sync-api` rate limiter (300/min/key).
+- The Website API keys table on the Integrations page shows the key type and the Generate action asks for it (4 new keys: "Key type", "Website (products, orders, leads)", "Data sync (read-only feed for IMS)", the helper text; "Type" already existed).
+- `docs/api/ims-sync-api.md`: the contract, how IMS should poll, and the answers to IMS's questionnaire.
+
+Not built (not asked / not decided): webhooks to IMS, an IP allow-list, a currency-rate feed (the ERP has one base currency), any write path.
+
+Owner decisions open (listed at the end of `docs/api/ims-sync-api.md`): who is the source of truth for investor accounting (IMS plans its own, this ERP already has one); one business = one IMS project; what must not be copied to IMS; which sale status is "final" for profit sharing.
+
+Needs Bangla review: the 3 new key-type strings in `lang/bn.json`.
+
+Tests: `ImsSyncApiTest` (21). Mutation-checked: dropping the cursor tie-break, making `updated_since` exclusive, disabling the scope check, hiding deleted orders and ignoring the time offset each make a test fail.
+
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
+
+## 2026-10-12 - Investor groups, steps 1–6: final check
+
+Everything from G1 to G6 below is in the working tree, uncommitted. Final full `php artisan test` (plain, no `--env`) after all six steps: **2180 passed, 2 skipped, 0 failed** (19,961 assertions). `npm run build` OK. Pint clean. New migrations: `2026_10_12_100000_create_investor_groups_tables`, `2026_10_12_110000_add_group_targets_to_investor_flows`, `2026_10_12_120000_add_project_completed_message_to_companies` (all ran on a fresh SQLite database; names are within MySQL's 64-character limit and `MigrationIdentifierLengthTest` passes).
+
+Deploy order when the owner approves: `php artisan migrate`, `npm run build`, then `php artisan investments:backfill-groups --dry-run` and read it with the owner **before** the real run (the five projects → G1–G5); after that staff check each group's dates and switch Automatic cycles on. The open questions are collected in section 11 of `16_INVESTOR_GROUPS_PLAN.md`.
+
+## 2026-10-12 - Investor groups, step 6 (G6): the "project completed" SMS
+
+Owner (rule R7 of the plan): when a project cycle finishes the investor gets a congratulation message on their mobile. Built phase G6 of `16_INVESTOR_GROUPS_PLAN.md` (still uncommitted, on top of G1–G5).
+
+What changed:
+- `InvestorGroupProjectCompleted` (raised by the cycle after the commit) now has a listener, `SendProjectCompletedMessages`. It sends the company's **Project completed message** to every investor who has money in the finished project (a member leaving at this boundary is included; one withdrawn earlier is not), through the SMS gateway already set for the company. `:name`, `:group`, `:project` are replaced.
+- **The text is the owner's.** `companies.investor_project_completed_message` starts empty and **nothing is sent while it is empty**; staff write it at Investor Portal Settings → Messages. The owner's draft from the plan is shown as the example in the helper text (and its Bangla translation in `lang/bn.json`), not used as a default.
+- One message per investor per project (guard also survives a repeated event); numbers on the CRM opt-out list are skipped; a missing or failing gateway never stops the cycle; every completion is written to the audit log with the counts.
+
+Needs Bangla review: the 4 new keys (e.g. "Project completed message" → "প্রজেক্ট সম্পন্নের বার্তা").
+
+Tests: `ProjectCompletedMessageTest` (9): empty message sends nothing but logs, placeholders, no double send, leaver included / earlier leaver not, opt-out, no gateway, failing gateway, settings page.
+
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
+
+## 2026-10-12 - Investor groups, step 5 (G5): the investor portal (progress bar, completed state, totals)
+
+Owner (rules R6/R7 of the plan): the investor sees a progress bar and "Project-2 completed", and after the payout is paid and its screenshot uploaded the project leaves the dashboard and stays on the Payouts page. Built phase G5 of `16_INVESTOR_GROUPS_PLAN.md` (still uncommitted, on top of G1–G4).
+
+What changed:
+- `InvestorPortalCards` builds the dashboard: groups the investor is in, a card per project (one card even if they have two deposits in it): running (progress), completed (bar full, "Project N completed", "The company is calculating your profit."), payment pending (profit, "You receive"), paid (screenshot still to come), and **done = payout paid AND screenshot uploaded → hidden**. A withdrawn row is hidden too. An open group shows "has not started yet".
+- The totals no longer count a member's money once per project: `capitalAtWork` = active members of **running** groups + leaving members until their last payout is paid + old-style projects not settled yet; `total_invested` = one deposit per membership + old-style rows; the statement lists one deposit per membership (a leaver's principal comes back inside their last payout, so there is no separate "withdrawn" line for them); partner "capital at work" uses the same rule.
+- Payouts page: Capital returned ("Stays invested") and "Group · Project N"; My investments: group name, "Completed".
+- Checked in a real browser on a throwaway SQLite database (desktop and 390 px): cards, progress bars, states and the totals look right. No demo or real data was touched.
+
+Decisions I made (say so if you disagree):
+- **Old projects already paid before this feature** (e.g. Project-01) have no screenshot, so after the migration their card stays on the dashboard as "Paid — screenshot to come" until staff upload one. That is the owner's rule applied literally. If you would rather hide payouts paid before a date, tell me the date.
+- Money waiting in an open group is *invested* but not *at work*.
+- A leaving member's capital counts as at work until their final payout is marked paid.
+
+Needs Bangla review: the 18 new keys (e.g. "Project :number completed" → "প্রজেক্ট :number সম্পন্ন", "Payment on the way" → "পেমেন্ট আসছে", "Stays invested" → "বিনিয়োগেই থাকছে").
+
+Tests: `InvestorPortalGroupViewTest` (14): progress at 0/49/98%, completed state, settled and paid states, the card leaving when paid + screenshot, open group, one card for two deposits, no leakage between investors, capital at work / total invested / statement balance, a leaver's capital until the last payout, old-style projects unchanged, partner capital.
+
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
+
+## 2026-10-12 - Investor groups, step 4 (G4): the payment screenshot
+
+Owner (Q3 of the plan): staff pay by hand and upload a payment screenshot in the admin; the investor sees it in the portal. Built phase G4 of `16_INVESTOR_GROUPS_PLAN.md` (still uncommitted, on top of G1–G3).
+
+What changed:
+- The screenshot is an `InvestmentDocument` (category `payment_proof`, label "Payment screenshot") attached to the payout, in the company's private storage. This reuses the existing document store, download checks and audit instead of new columns (the plan had proposed columns on the payout tables; no migration was needed).
+- `PayoutProofService::attach()`: only a PAID payout takes one; a newer upload becomes the one shown and the older stays; audit `payout_payment_proof_uploaded`.
+- Staff: **Mark as Paid** on an investor payout and on a channel-partner payout has an optional upload field; a paid payout gets a **Payment screenshot / Replace screenshot** action; the payout tables and the payout-batch items table show a "Screenshot" tick that opens the file. The action needs `investments.settle`; the file opens for `investments.view`. Image or PDF, up to 5 MB.
+- Portal: Payouts (investors) and Commissions (partners) get a **Payment screenshot** button when one exists; Documents lists it ("Payment for <project>"). `InvestorPortalService::documents()` includes only the `payment_proof` papers of the person's own payouts; another person's file, or another company's, is a 404.
+
+Decision I made: the screenshot is optional when marking paid (the payout can be paid first and the screenshot added after); the owner's rule that a project leaves the investor's dashboard only after "paid + screenshot uploaded" is applied in step 5 (dashboard).
+
+Needs Bangla review: the 9 new keys (e.g. "Payment screenshot" → "পেমেন্টের স্ক্রিনশট", "Replace screenshot" → "স্ক্রিনশট বদলান").
+
+Tests: `PayoutPaymentProofTest` (12). Mutation-checked: widening the portal scope to every payout's proof fails the suite.
+
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
+
+## 2026-10-12 - Investor groups, step 3 (G3): new money into open groups, leaving a group, what a group pays
+
+Owner: "এক এক করে শেষ কর, টেস্ট যোগ করবে ক্রিটিকাল ক্যালকুলেশনে". Built phase G3 of `16_INVESTOR_GROUPS_PLAN.md` on top of G1 and G2 (still uncommitted).
+
+**One rule I had to decide, and the owner must confirm it.** The old engine pays every investor "principal + profit" at the end of each project. In a group the same members continue into the next project, so paying the principal each time would pay it out while it is still invested. I built it this way: **a member who stays is paid the profit only (the principal carries on into the next project); a member who leaves is paid principal + profit.** The owner's example (৳2 lakh earns ৳7,748.62 a cycle) fits this. If the owner wants "principal + profit every project, with the investor choosing to reinvest", the change is in one place (`SettlementService`, the `principalLeaving()` block) and its tests.
+
+What changed:
+- `InvestmentTargets` lists where new money can go: open groups, then projects outside any group (`g<id>` / `p<id>`) and places the money: a new group member (one capital voucher) or a plain investment. Used by the portal top-up and reinvest request, the staff request queue (staff can pick another open group at approval), the payout election (staff and portal), investor drafts / import / sign-up confirmation.
+- `InvestorRequestService`, `CycleElectionService`, `InvestorImportService`, `InvestorDraft` (+ resource), the portal Requests page, the request queue and the payout election now take a group. The old project fields still work for projects outside a group.
+- Withdrawal request/notice is per group. `InvestorGroupCycleService` applies notices that have run out by a project's end date (inclusive) before copying members into the next project: the member becomes `withdrawn` from that day with `leaves_after_sequence` = that project, and the notice is `honored`. Also in the dry run, in `NO_MEMBERS` (everyone leaves) and in a confirmed catch-up (counted at the right project end, not at the day staff press the button).
+- `SettlementService` for a group project: `total_payout` = principal returned + profit, with `principal_returned_amount` (0 for members who stay). A loss borne by investors is refused on a group project (the settle dialog does not offer it) because it would reduce the stake of members who stay; "company bears the loss" works (stayers 0, leavers principal). Staff payout table has a "Principal returned" column (hidden by default) and the payout report shows the line.
+- Stamp / cheque numbers from a draft are kept on the member (`paperwork`) and become the security instrument of the member's first project row, once. Witnesses and deed scans are added by staff on that first row (Q5).
+
+Decisions I made (say so if you disagree):
+- Members leave at the first project end on or after the notice's end date (`effective_at` = notice day + 60).
+- A leaving member is marked withdrawn at the boundary; their principal reaches them through the final payout (one voucher), not through a separate withdrawal voucher.
+- A notice for a group is honored by the cycle, not by hand (the "Mark honored" button is hidden for group notices; "Cancel" still works until the boundary).
+
+Known gaps for the next steps: the investor portal's statement and "My investments" still list one deposit per project row (G5 changes them to one per membership), and the portal Payouts page does not show the principal-returned column yet (G5).
+
+Needs Bangla review: the 23 new keys (e.g. "Add to group", "Principal returned" → "ফেরত দেওয়া মূল টাকা", "Left after project").
+
+Tests: `InvestorGroupMoneyFlowsTest` (18) and `InvestorGroupExitTest` (11) new; two old tests updated for the new field name / wording (`InvestmentSettlementTest` election action, `InvestorImportTest` message). Mutation-checked: returning the principal to everyone, or leaving one project late, fails the suite. Full `php artisan test`: see the line at the end of this entry.
+
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
+
+## 2026-10-12 - Investor groups, step 2 (G2): the 2-month cycle and the capital-base warning
+
+Owner: "এক এক করে শেষ কর, টেস্ট যোগ করবে ক্রিটিকাল ক্যালকুলেশনে". Built phase G2 of `16_INVESTOR_GROUPS_PLAN.md` on top of G1 (still uncommitted).
+
+What changed:
+- `InvestorGroupCycleService`: `decide()` (read-only) and `advance()` (one step, in a transaction, group row locked). When the latest project's end date (calendar, from the group's anchor) has arrived: it is closed (`running` → `closed`, ready to settle) and project N+1 starts with the active members copied in. At most one project per call, and only while today is inside that project's own window. If whole cycles were missed it closes the finished project, starts nothing and reports BEHIND; staff press **Start the next project now** (one project per confirmation). If no active member is left it closes the project and starts nothing (the group page says "Close the group").
+- `php artisan investments:advance-groups [--company=] [--dry-run]`: per active company, in the company's timezone, wrapped in `ModuleGuard`; only Running groups with Automatic cycles on. Scheduled hourly (`withoutOverlapping`, `onOneServer`) so each company's midnight is caught; safe to run repeatedly. A "behind" group is written to the audit log once a day.
+- `InvestorGroupProjectCompleted` event (project, group, next project) is dispatched after the commit. Nothing listens yet: the congratulation message is G6 and waits for the owner's text.
+- Group page: "Cycle" line (behind / nobody left) and the **Start the next project now** action. The Automatic cycles switch is refused unless the group is Running.
+- Capital base vs landed cost: `InvestmentProject::capitalBaseGap()` (null when the difference is ৳1 or less, or no landed cost yet); the project page shows a "Capital base vs landed cost" line and the Calculate & Settle dialog shows a warning callout. Warning only, never a block.
+
+Decisions I made (say so if you disagree):
+- Cycle boundaries follow the **calendar from the anchor**, not each project's own `end_date`. For the five old projects the anchor is the project's start date, so Project 1's calendar end can differ by a day or two from its recorded end date (60 days vs 2 months). Staff should compare the dates before switching Automatic cycles on for a migrated group.
+- A group with missed cycles waits for staff instead of creating several catch-up projects at once.
+- The company contribution is not copied to the next project (Q8).
+
+Needs Bangla review: the 13 new keys (e.g. "Start the next project now" → "পরের প্রজেক্ট এখনই শুরু করুন", "Capital base vs landed cost" → "মূলধন ভিত্তি বনাম ল্যান্ডেড কস্ট").
+
+Tests: `InvestorGroupCycleTest` (22) new. Mutation-checked: making the end date inclusive-exclusive the other way, or dropping the missed-cycle check, fails the suite. Full `php artisan test`: see below.
+
+Commit status: committed on claude/nifty-carson-r2vpby and pushed on 2026-10-14 (owner approved "কমিট এবং পুশ কর"); merged into main and pushed on 2026-10-14 (owner approved "মেইনে পুশ কর").
+
+## 2026-10-12 - Investor groups, step 1 (G1): groups, members, Project 1, backfill
+
+Owner: "প্ল্যানের ফাইল কমিট করে কাজ শুরু করে এক এক করে শেষ কর, টেস্ট যোগ করবে ক্রিটিকাল ক্যালকুলেশনে যাতে ডিপ্লয়ের আগেই ধরা পড়ে।" Built phase G1 of `16_INVESTOR_GROUPS_PLAN.md`.
+
+What changed:
+- New tables and models: `InvestorGroup` (G1, G2 … per company; Open → Running → Closed, one-way), `InvestorGroupMember` (one row per deposit); `investment_projects.group_id` / `sequence_in_group`, `investments.group_member_id`. The plan's `cycle_starts_on` column was left out: a project's own `start_date` / `end_date` already say it.
+- `InvestorGroupService`: `addMember` (open group only, books the one capital voucher), `startGroup` (Open → Running, creates Project 1 dated from the chosen day, copies the members), `closeGroup`, `createProject` / `snapshotMembers` (used by the daily cycle in G2).
+- `GroupCycleCalendar`: project N runs from anchor + (N−1)×2 months to anchor + N×2 months, always counted from the anchor with Carbon's no-overflow, so a 31st anchor gives 31 Oct, 31 Dec, 28 Feb, 30 Apr … without drift.
+- Admin: Investments → Investor Groups (list, create, view, edit; Members and Projects tabs; Start group and Close group actions; Withdraw deposit while Open). Projects get a Group column, filter and summary line; snapshot rows have no Create/Edit/Delete.
+- Guards: `Investment` refuses a row on a group project unless it is a copy of a member of that group; the money maths in `SettlementService` are untouched.
+- Withdrawing a snapshot row (the old project-level Withdraw) also marks its member withdrawn when it is the member's latest row, so later projects skip that member. Voiding or restoring the withdrawal voucher flips the member back and forth, the same as the investment.
+- `php artisan investments:backfill-groups [--company=] [--dry-run] [--force]` moves each project into its own group (project 1 → G1 …), copying amount, date, payment details and voucher to members; withdrawn investments become withdrawn members; no voucher is booked; project codes stay; groups start Running with automatic cycles OFF. Projects still Open or without investments are skipped and listed.
+
+Decisions I made (say so if you disagree):
+- A project in status **Open** is skipped by the backfill (a group has no project while it collects money). The owner decides what it is.
+- The pick-a-project screens (investor draft, import, portal top-up, reinvest) hide group projects until G3 makes them target an open group. **Do not run the backfill on real data before G3** or those screens will have nothing to pick.
+- Deed, witnesses and cheque/stamp entry for a group member still live on the investment record (the project's copy); recording them once at the group level (Q5) needs a change to those tables and is planned with G3.
+- Closing a group needs every project settled and every member out (their latest project row withdrawn, or the deposit withdrawn while the group was Open).
+
+Needs Bangla review: all 77 new keys in `lang/bn.json` (e.g. "Start group" → "গ্রুপ শুরু করুন", "Automatic cycles" → "স্বয়ংক্রিয় চক্র", "Withdraw deposit" → "জমা তুলে নিন", "Investor Groups" → "বিনিয়োগকারী গ্রুপ").
+
+Tests: new `GroupCycleCalendarTest` (12) and `InvestorGroupTest` (32); `MultiCompanyIsolationTest` lists the two new models. Full `php artisan test` (plain, no `--env`): **2093 passed, 2 skipped, 0 failed** (run before the last test and style fixes; the group, calendar and translation tests were rerun after and pass).
+
+Commit status: not committed yet (the owner approved committing the plan file only; waiting for approval to commit the code).
+
+## 2026-10-12 - Investor groups: the plan (`16_INVESTOR_GROUPS_PLAN.md`)
+
+Owner request (in Bangla): the investment module must be group-based (investors join a group; a group runs Project-1, 2, 3 … every calendar 2 months; manual payout with a payment screenshot; closed projects move to the Payouts page). After the owner answered the questions, the owner approved the plan: "প্ল্যানের ফাইল কমিট করে কাজ শুরু করে এক এক করে শেষ কর, টেস্ট যোগ করবে ক্রিটিকাল ক্যালকুলেশনে যাতে ডিপ্লয়ের আগেই ধরা পড়ে।" This entry is the plan document only; each build phase (G1–G6) gets its own entry below.
+
+Commit status: committed locally on owner approval (2026-10-12). Not pushed; the owner has not said to push.
+
+## 2026-10-12 - Reseller portal: owner decisions on the five open questions (nothing built yet)
+
+The owner answered the five open reseller questions (asked one by one, in Bangla). Recorded in `13_RESELLER_PORTAL_PLAN.md` §11 so nobody builds from memory:
+1. **Variations:** admin sets a wholesale price per variation; the reseller can change their customer price; commission as for ordinary products; the wholesale price never appears on a reseller storefront.
+2. **Deposit refund:** a cancelled order paid from the deposit returns the money to the deposit automatically.
+3. **Admin deposit page:** list + add/deduct adjustments, a reason is required, everything logged.
+4. **Payment methods for advances:** admin picks from the Integrations payment methods and can add reseller-only methods in Reseller Settings; resellers see both.
+5. **Phone already in use on the application:** SMS-code proof of ownership before the old record is reused.
+
+Only documentation changed in this step. Suggested build order (needs the owner's go-ahead): (2) deposit refund — small; (3) admin deposit page; (4) payment methods; (5) SMS-code check; (1) variations — the biggest (new wholesale price per variation, portal ordering and pricing, storefront must never show it).
+
+Commit status: committed and pushed to the branch and main on owner approval ("যে কাজ গুলো হয়ে সেগুলো কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-12).
+
+## 2026-10-12 - Reseller portal: modern front page (dashboard), store colour and font
+
+Owner request (in Bangla): make the reseller portal's front page more modern; after my proposal the owner approved items 1-7 (hero, overview cards with trend, quick actions, store card, order pipeline / recent orders / area chart, theme). Items 8-11 of the proposal (mobile bottom tab bar, first-steps checklist, best-selling products, admin-managed announcement banner) were **not** requested yet.
+
+What changed (Reseller portal → Dashboard, Orders, whole panel):
+1. **Welcome banner** in the store's colour: greeting by the company's local time, the reseller's name, the amount available to withdraw, **Withdraw** / **Create order** buttons, and pending commission / withdrawal in process / total withdrawn.
+2. **Overview cards**: parcels waiting, this month's orders, sales and commission, each with ▲/▼ % against the **same days of last month** (shown only when last month has something to compare) and a 14-day trend line.
+3. **Quick actions**: create order, add products, withdraw, share store (uses the phone's share sheet, else copies the link).
+4. **Store card**: link styled like an address bar with copy / visit / WhatsApp / Facebook, a QR code drawn on the server, and a Live / "Setting up your store address" badge (the earlier subdomain work).
+5. **Order pipeline** (Confirmed, Processing, Shipping, Completed, plus Cancelled / Returned) — each step opens `/portal/orders?stage=...`, a new stage filter on the Orders page with a "Show all orders" link. **Recent orders** now show the first product's photo and a coloured status badge.
+6. **Commission chart** is a smooth filled line instead of bars, in the brand colour.
+7. **Theme**: the portal uses the company's **Storefront Settings → theme colour** (not Filament's amber; amber stays if the company has no storefront settings), the Hind Siliguri font (self-hosted, SIL OFL, files in `resources/fonts/hind-siliguri/`), rounder cards and tables, frosted top bar; dark mode and phone width checked.
+Also: stage badges on the Orders page are now translated (they were raw English).
+
+Looked at in a real browser (Chromium on a throw-away SQLite file with made-up data, never the demo DB): desktop, 390 px phone and dark mode all render; clicking the Shipping step lands on the filtered Orders list and "Show all orders" clears it. The scratch server, database and storage files were deleted afterwards.
+
+Deploy: `npm run build` (new CSS, font files and Tailwind classes). No migration. No new setting.
+
+Things to know / decide:
+- The brand colour comes from the **Blade storefront row's theme colour**. If the owner wants the portal on a different colour from the stores (e.g. the admin "dashboard colour"), say so; it is one line in `ResellerPanelProvider::brandColorStyle()`.
+- Filament makes buttons from the 400 shade with dark text, so a very light theme colour gives pale buttons. Nothing to do now; mention if a company's colour looks wrong.
+- The QR code uses `chillerlan/php-qrcode`, already installed because Filament requires it; it is not listed in `composer.json` itself. If Filament ever drops it the QR hides itself (no error).
+- The percentage compares **this month to date with the same days of last month** (so the 5th of the month is not set against a whole month). Hover text on the percentage says so.
+- Still open from the proposal: mobile bottom tab bar, first-steps checklist, best-selling products, and an announcement banner (the banner must be admin-managed, so it needs a Reseller Settings field first).
+
+Needs Bangla review (new keys): Good morning (সুপ্রভাত), Good afternoon (শুভ অপরাহ্ন), Good evening (শুভ সন্ধ্যা), Quick actions (দ্রুত কাজ), Add products (প্রোডাক্ট যোগ করুন), Share store (স্টোর শেয়ার করুন), Compared with the same days of last month, vs last month (গত মাসের তুলনায়), This month so far, See parcels on the way (পথে থাকা পার্সেল দেখুন), Setting up your store address, Live (লাইভ), QR code of your store link, Scan to open your store, Order pipeline (অর্ডারের ধাপ), View all orders, Showing :stage orders only., Show all orders, Pending commission (অপেক্ষমাণ কমিশন), Confirmed (নিশ্চিত), Shipping (শিপিংয়ে).
+
+Tests: new `ResellerPortalDashboardRedesignTest` (18), existing `ResellerPortalDashboardTest` / `ResellerPortalAccountTest` unchanged and passing. Full `php artisan test` (plain, no `--env`) on the final code: **2074 passed, 1 skipped, 0 failed**; `npm run build` OK.
+
+Commit status: committed and pushed to the branch and main on owner approval ("যে কাজ গুলো হয়ে সেগুলো কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-12).
+
+## 2026-10-11 - Reseller portal: product details, bigger photos, fuller photo download
+
+Owner report: a reseller says their dashboard did not give them the product details and images. Review found the portal list showed only a 40 px thumbnail, name, SKU, category and prices — no description, gallery, brand, stock, variations or video (images themselves rendered fine). Owner answers (in Bangla): 1) the details button must also show the reseller's cost, but one reseller must never see another's data; 2), 3), 4) ok.
+
+What changed (Reseller portal → Products / Create order):
+1. **Details** button (and row click) opens a slide-over: gallery with thumbnails, video, description + **Copy description**, SKU, brand, category, unit, weight, stock (+ pre-order), minimum order quantity, variations (label, SKU, price, stock, photos), and **this reseller's** cost, suggested price, own price and commission. Not shown: the company's purchase cost, wholesale tiers, other resellers' prices or stores (data comes only from the reseller's own picks).
+2. List thumbnail 64 px, falls back to the first gallery photo.
+3. **Download photos** zip now includes active variation photos; the button shows whenever any photo exists.
+4. **Create order** shows the chosen product's photo, name, SKU and brand.
+
+Not changed (needs an owner decision): products with variations still cannot be priced by the reseller or ordered from the portal (no wholesale rate). The new details only say they sell at their own price with no commission, which is what the code already does.
+
+Needs Bangla review: the 15 new keys (Your price and commission, Add this product to your store to set your price., Product details, SKU, Brand, Unit, Weight, Pre-order, Minimum order quantity, Copy description, No description yet., Variations, Variation, Variations are sold at their own price, with no reseller price or commission., View in my store).
+
+Tests: `ResellerPortalProductsTest` 12 (6 new, incl. two resellers on one product), `ResellerPortalCreateOrderTest` +1. Full `php artisan test` (plain, no `--env`): **2056 passed, 1 skipped, 0 failed**. `npm run build` OK. No migration.
+
+Commit status: committed and pushed to the branch and main on owner approval ("যে কাজ গুলো হয়ে সেগুলো কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-12).
+
+## 2026-10-10 - Reseller plan: subdomain DNS + SSL through Cloudflare
+
+Owner instruction (in Bangla): write into the plan that this is to be done with Cloudflare. Added a "Phase 7 follow-up" section to `13_RESELLER_PORTAL_PLAN.md`: the owner decision, the one-time wildcard-record plan, and three things still to confirm on the live Cloudflare account (proxied or not and `TRUSTED_PROXY_HOPS`; whether the free Universal certificate covers `*.offer.zamzamint.com`, which as a second-level name it normally does not; the set-up time default). Documentation only, no code or lang changes.
+
+Commit status: committed and pushed to the branch and main on owner approval ("যে কাজ গুলো হয়ে সেগুলো কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-12).
+
+## 2026-10-10 - Storefront SEO: page titles, canonical, robots.txt, sitemap and structured data
+
+Reason — the owner said "পরবর্তী কাজ কর" (do the next task) after phase 5 was pushed to `main`. The remaining items were AJAX mini-cart, multi-size images, caching/SEO and Lighthouse CI; SEO was the recommendation. A look at the storefront found that every page, including every product, had the home page's `<title>` and description, and that there was no canonical address, sitemap or structured data.
+
+What changed:
+- **Titles and descriptions:** product (name + start of the description, photo), category (name + description or tagline, photo), listing ("All products", or "Results for ..."), custom page (meta title/description, else title and excerpt), offer (meta title/description, else title and short description), offers list and contact page ("Contact us"). The title reads "page | site title"; the home page keeps the site title.
+- **Indexing:** a page is private unless its controller calls `index()`. Indexed: home, shop, category, product, custom page, offer, offers list, contact. Search results, sorted, filtered and later listing pages and the offers type filter are `noindex, follow` (all themes; Marketplace Pro's own push is gone). Cart, checkout, track, account, complaints and previews are `noindex, nofollow`.
+- **Canonical + Open Graph:** canonical = the page's address without its query string, on the host that was visited. `og:url`, `og:site_name`, `og:locale` (`en_US` / `bn_BD`) and `og:type` (`product` on product pages).
+- **robots.txt:** now a route. A storefront domain disallows `/admin`, `/livewire`, `/cart`, `/checkout`, `/account`, `/track`, `/complaints`, `/store/*/cart`, `/store/*/checkout` and names `Sitemap:`. The app's domain keeps `/admin` and `/livewire`. `public/robots.txt` is deleted and the `location = /robots.txt` block is removed from `nginx.template.conf` (a static file would shadow the route, and that nginx block would turn the missing file into a 404 that crawlers ignore; `SecurityHardeningTest` guards both). **The nginx change takes effect at the next Coolify deploy** (Nixpacks re-renders the template).
+- **sitemap.xml:** home, shop, contact, categories with available products, available products (`lastmod`), published pages (this site), published offer landing pages and the offers list. A reseller's own store (subdomain or custom domain) has no sitemap. Cached 10 minutes with the company's listing-cache generation, so a product or category save refreshes it. More than 45,000 addresses split into `/sitemap-{n}.xml` behind an index.
+- **JSON-LD:** `Product` (name, photos, SKU, brand, `Offer`/`AggregateOffer`, currency, stock) with no price when the product has none; `BreadcrumbList` on product and category pages; `Organization` (name, logo, phone, email, social profiles; WhatsApp links left out) and `WebSite` with the product search on the home page. No `aggregateRating`: the product page shows no reviews and search engines require markup to match what the page shows. A reseller's store gets no price markup (reseller price differs from the company's). `</script>` in a product name cannot break out of the tag.
+- Default meta description is now translated. 2 lang keys: "Shop products from :name" → ":name থেকে পণ্য কিনুন", "Contact us" → "যোগাযোগ করুন".
+
+Needs Bangla review: "Shop products from :name", "Contact us".
+
+Decisions to confirm with the owner:
+- **Reseller stores stay indexable** (as before) with their own canonical address, but are not in the sitemap and publish no price markup. If resellers should not appear in search at all, say so and they become `noindex`.
+- **`hreflang` not added:** Bangla and English share one address (the visitor's language is not in the URL), so there is nothing to point between.
+- **Product/category meta title and description fields** do not exist; the title and description come from the product or category itself. Adding admin fields needs a migration and Filament form changes — only on request.
+- **`www` vs bare domain:** the canonical uses the host the visitor used. If both open the site, set a redirect from one to the other at Coolify/DNS.
+- After deploy, submit `https://<domain>/sitemap.xml` in Google Search Console and check a product with the Rich Results Test.
+
+Verified: `StorefrontSeoTest` (24 tests), 2 new reseller-host tests and the changed `SecurityHardeningTest` pass. Full suite (plain `php artisan test`): 2123 passed, 1 skipped, 0 failed (2097 before this change). Pint is clean on the new files; `routes/web.php` and `SecurityHardeningTest` already failed Pint before this change (not reformatted). No CSS/JS changed, so no `npm run build`.
+
+Commit status: committed and pushed with the owner's approval (2026-10-11: "কমিট এবং পুশ কর এবং মেইন এ পুশ কর").
+
+## 2026-10-11 - Weight field on product variations
+
+Reason — the owner asked (in Bangla) to add a weight field to the variation part of the product form.
+
+What changed:
+- Product form → Variations: each variation has a new "Variation weight (kg)" field (numeric, 0 or more, 3 decimals, `kg` suffix). Empty = use the product's weight.
+- New nullable column `product_variants.weight_kg` (migration `2026_10_11_100000_add_weight_kg_to_product_variants`). Existing variations stay empty, so nothing changes for them.
+- Where the weight is used (variation weight, else product weight): `StorefrontDeliveryService::quote()` (Blade checkout, website checkout API and landing-page offers — `OfferCheckoutController` now passes the offer item's variation), the invoice and PDF weight column, the order page item weight and Total Weight (`OrderItem::unitWeightKg()`), and the website API product detail (`variants[].weight_kg`, documented in `docs/api/storefront-api.md`).
+- Not changed: the reseller order flow has no variations.
+- 2 lang keys in `en.json` and `bn.json`. Needs Bangla review: "Variation weight (kg)" → "ভেরিয়েশনের ওজন (কেজি)", "Leave empty to use the product weight." → "খালি রাখলে প্রোডাক্টের ওজন ব্যবহার হবে।".
+
+Second request the same day — the owner asked that the WooCommerce import bring the variation weight and the full product description "in the exact format" (today the description is plain text), suggesting markdown in the Filament description box:
+- Variation weight: `WooCommerceImportService::importVariation()` now reads the variation's `weight` (kg, same assumption as the product weight; empty or 0 is not set).
+- Description: kept as **HTML**, not markdown. The product form's description box is a rich editor that stores HTML and the storefront renders HTML, so markdown text would show up as literal `**` and `#` signs. New `App\Support\WooCommerceDescription` adds the paragraph and line-break tags WordPress only adds on display, removes scripts/styles/comments/`[caption]`, and passes the result through Filament's sanitising `RichContentRenderer`. Headings, bold/italic, lists, links, tables, images and alignment survive (checked); Bangla text survives.
+- Known limits: images inside a description still point at the old site (not downloaded), so they break if the old site goes away; page-builder shortcodes (Elementor, Divi) other than `[caption]` stay as text, as before; the weight is read as kg without checking the WooCommerce weight unit setting (existing behaviour for the product weight). Already imported products keep their plain-text description until the import is run again (this also refreshes their price and weight).
+
+Verified: new `WooCommerceDescriptionTest` (7 tests); `WooCommerceImportTest` updated (description now HTML, variation weights checked); new `ProductVariantWeightTest` (8 tests: fallback to product weight, form saves the weight, form rejects a negative weight, delivery quote with a mixed cart, order item weight, invoice shows the variation weight, API variants carry the weight).
+
+Commit status:
+
+- Not committed. Commit and push require explicit user approval.
+
+## 2026-10-10 - Marketplace Pro phase 5f: order track page
+
+Reason — the owner said "পরবর্তি কাজ কর" (do the next task) after the checkout and success pages. The order track page is the last page of phase 5.
+
+What changed:
+- Marketplace Pro `track/show`: breadcrumb, the lookup form (order number and the phone used on the order), a "not found" alert, and for a found order: the order number, date, status pill and total; a four-step progress bar (Order placed, Confirmed, On the way, Delivered; vertical on phones, horizontal from 640px); the delivery update with courier name, tracking ID and booking status; the tracking updates as a timeline with the latest marked; the items with photos; a summary (subtotal, discount, VAT, delivery, packaging, total, paid, due); delivery area and time; buttons for a complaint, the helpline and more shopping.
+- Progress rules (`StorefrontTrackPage`): Placed is current for a draft order; Confirmed when the order is confirmed or processing, or a courier booking exists; On the way when the delivery status is picked up, in transit or partial delivered; Delivered when the delivery status is delivered or the order is completed. A cancelled, returned or refunded order (or a returned delivery) stops after the first step and shows "This order was cancelled/returned/refunded." A failed or cancelled courier booking is not treated as a failed order.
+- Privacy and reseller rules are unchanged: the lookup still needs the order's phone (a signed link or the owning signed-in customer needs none). A reseller's own-courier customer sees item lines and one total at the reseller's prices; the page never prints the store's subtotal, delivery, paid or due for them. The page does not show the customer's name or address.
+- Shared logic: new `StorefrontTrackPage`. `OrderTrackController::trackingUpdates()` now translates its titles and messages.
+- Bug fix (all themes except Marketplace Pro): the shared track page printed the order's amount due on every item line. Each line now shows its own line total. The shared page's text is now translated (it was English only).
+- 44 more lang keys. Needs Bangla review: "On the way" → "পথে আছে", "In Transit" → "ট্রানজিটে আছে", "Picked Up" → "কুরিয়ার সংগ্রহ করেছে", "Admin confirmed" → "অ্যাডমিন নিশ্চিত করেছে", "Total due" → "মোট বাকি", "Delivery status updated to :status." → "ডেলিভারি স্ট্যাটাস আপডেট হয়ে :status হয়েছে।".
+
+Verified: `StorefrontMarketplaceProPagesTest` has 42 tests (9 new for tracking: own view and lookup, shared view and per-line prices, phone required and unknown order, the success-page link without a phone, progress steps, cancelled order, courier and updates, reseller prices, Bangla). The shared per-line test fails on the old view and passes now. Playwright at 360/768/1366px against the scratchpad SQLite database (placed, on the way with a courier parcel, delivered, not found, empty): 0px horizontal overflow and no console errors in any state.
+
+Next: phase 5 is complete. Not requested yet: AJAX mini-cart, multi-size images, caching/SEO, Lighthouse CI.
+
+Commit status: committed and pushed with the owner's approval (2026-10-10: "যত টুকু কাজ হয়েছে পুরোটা কমিট করে পুশ কর এবং মেইনে পুশ কর"). One commit carries phases 5d, 5e and 5f.
+
+## 2026-10-10 - Marketplace Pro phase 5d + 5e: checkout and success pages
+
+Reason — the owner said "চেকআউট শুরু কর" (start checkout) after phases 5a-5c were committed as `2a6d67e`.
+
+What changed:
+- Marketplace Pro `checkout/show`: four numbered cards (contact, delivery address with the detected area, payment method with the manual/online instructions, order note), an order summary with thumbnails, VAT, parcel weight, live delivery charge, delivery time and total, the advance notes, and a phone bar with the live total and the order button. Ordering stays blocked without a payment path or when a pre-order has no online payment.
+- Marketplace Pro `checkout/success`: order number, status (a draft order reads "Awaiting confirmation"), items with unit price and line total, subtotal, discount, VAT, delivery, packaging, total, paid and due, the delivery details with the area's delivery time, the payment box, WhatsApp group, complaint, Track this order, Continue shopping.
+- Shared logic: `StorefrontCheckoutPage` and `StorefrontOrderSuccessPage`. The Alpine state (kept character for character, so the `vat: 95` test still holds), the form script and the pixel events are partials under `storefront/checkout/partials/`. The shared pages use them too. No checkout rule changed: prices, delivery, VAT, advances and payments still come from `StorefrontCheckoutService`.
+- Bug fix (all themes except Marketplace Pro): the shared success page printed the order total on every item line, the subtotal and the delivery charge. It now prints the real values and the amount due.
+- Bug fix (all themes): an empty address after a failed submit reached the page script as `null`, which blanked the delivery charge and total. It is now a string.
+- 56 more lang keys. Needs Bangla review: "Send Money to" → "সেন্ড মানি করুন", "Awaiting confirmation" → "নিশ্চিতকরণের অপেক্ষায়", "Place order / continue to payment" → "অর্ডার করুন / পেমেন্টে যান", "Weight-based rate:" → "ওজন অনুযায়ী রেট:", ":actual kg (charged as :billed kg)" → ":actual কেজি (হিসাব হবে :billed কেজি)", "Your sender number" → "আপনার সেন্ডার নম্বর".
+- The success page's WhatsApp group text still comes from `StorefrontSetting::whatsappGroupMessage()`, whose default is Bangla text kept in the model constant. I did not change it.
+
+Verified: `StorefrontMarketplaceProPagesTest` has 33 tests (14 new for checkout and success). The two regression tests for the shared success amounts and the empty address fail on the old code. The 66 existing shared checkout tests pass unchanged. Playwright at 360/768/1366px on a scratchpad SQLite database: 0px overflow, the area detection moves the delivery charge (70 inside Dhaka, 110 outside), the total and the phone bar follow, an order was placed through the page and the success page shows the right amounts, and the server-side error state focuses the error box and marks 4 fields invalid. Full `php artisan test` (plain, no `--env`): 2076 passed, 1 skipped. Pint and `npm run build` pass.
+
+Next in phase 5: the order track page.
+
+Commit status: committed together with phase 5f (see above) with the owner's approval.
+
+## 2026-10-10 - Marketplace Pro phase 5a: listing page + product card
+
+Reason — the owner said "পরবর্তি ধাপের কাজ শুরু কর" (start the next phase). The plan's phase 5 is the shopping path (listing, product, cart, checkout, success, track). This is the first part: listing and product card. The branch was restarted from the latest `main`, because the previous work was already merged there.
+
+What changed:
+- Marketplace Pro listing/category/search page (`themes/marketplace-pro/products/index.blade.php`). Desktop: a 260px filter sidebar. Mobile: a slide-in filter panel (Esc and the backdrop close it). Also a sort menu, breadcrumb, product count and an empty state with category chips.
+- Filters: `in_stock`, `min_price`, `max_price` (query string; `StorefrontListingFilters`). Filtered pages skip the listing cache. Filtered, sorted and later pages get `noindex, follow`.
+- Marketplace Pro product card, used on the home and listing pages.
+- Bug fix: the shared card's struck-through price showed the selling price, not the original price.
+- 28 lang keys in en.json and bn.json.
+
+Needs Bangla review: "Availability" → "স্টক", "MOQ :count :unit" → "সর্বনিম্ন অর্ডার :count :unit", "Breadcrumb" → "ব্রেডক্রাম্ব".
+
+Verified: `StorefrontMarketplaceProPagesTest` (7). Full `php artisan test` (plain, no `--env`): 2050 passed, 1 skipped. `npm run build` passes and Pint passes. Playwright at 360/768/1366px on a scratchpad SQLite database showed 0px horizontal overflow.
+
+### Phase 5b: product page (owner: "ওকে এখন পরবর্তি কাজ কর", 2026-10-10)
+
+- Marketplace Pro `products/show`:
+  - gallery and buy box: price, original price, "Save", VAT note, stock pill, bulk pricing table, variant rows, quantity, Add to cart / Buy now, WhatsApp;
+  - delivery time box and admin trust items;
+  - description, related products with Marketplace Pro cards, and a sticky buy bar on phones.
+- The shared logic moved to `StorefrontProductPage`. The script and pixel event moved to partials. The Built-in and Noor Solar product pages use the same partials and look the same as before.
+- Bug fix (all themes): variant rows showed the product price, but the cart charges the variant's own price. They now show the variant price.
+- 23 more lang keys. Needs Bangla review: "Save :amount" → ":amount সাশ্রয়", "Unit price" → "একক দাম".
+- `StorefrontThemeTest` fallback check now uses a page Marketplace Pro does not override (Noor Solar cart).
+
+Verified: `StorefrontMarketplaceProPagesTest` has 12 tests. The 5 product page tests check the add to cart and Buy now form posts. Full `php artisan test`: 2054 passed and 1 skipped. The one failure was the expected fallback check above, which I fixed; after that `StorefrontThemeTest` passes 16/16. Pint and `npm run build` pass. Playwright at 360px and 1366px showed 0px overflow, and the variant counter reads "Add to cart (2)".
+
+### Phase 5c: cart page (owner: "পরবর্তি কাজ কর", 2026-10-10)
+
+- Marketplace Pro `cart/show`: breadcrumb, title and item count, one card per row (photo, category, name, option, price each, stock pill, MOQ, line total, quantity stepper, Update, Remove), a sticky order summary on desktop (items, subtotal, delivery "Calculated at checkout", VAT note, Proceed to checkout, Continue shopping), a sticky subtotal and checkout bar above the bottom navigation on phones, and an empty state with "Browse products".
+- Wholesale hint per row: "Add N more to pay ৳X each" (nearest tier above the quantity that is cheaper than today's price; base products only, as variants never get tier prices). It is hidden under a reseller price, because `normalizedTiers()` hides tiers there.
+- New `StorefrontCartLine` (shared logic). The shared cart view uses it too. The ViewCart pixel event and the double-submit script moved to partials.
+- Bug fix (all themes except Marketplace Pro): the shared cart row printed the unit price where the line total belongs. A regression test fails on the old view.
+- 20 more lang keys. Needs Bangla review: "Add :count more to pay :price each" → "আরও :countটি নিলে প্রতিটি :price", ":vat is added at checkout" → "চেকআউটে :vat যোগ হবে", "Prices include :vat" → "দামে :vat ধরা আছে", "Calculated at checkout" → "চেকআউটে হিসাব হবে".
+- The shared cart page's own text is still hardcoded English; it is translated only for Marketplace Pro in this phase.
+
+Verified: `StorefrontMarketplaceProPagesTest` has 19 tests (7 new for the cart). Playwright at 360/768/1366px: 0px horizontal overflow, the stepper, Update (5 pieces switched to the 5+ wholesale price) and Remove (with the confirm) work, and the empty state renders. Full `php artisan test` (plain, no `--env`): 2062 passed, 1 skipped. Pint and `npm run build` pass.
+
+Next in phase 5: checkout and success, then track.
+
+Commit status: committed and pushed to `claude/erpf-marketplace-pro-customization-5m95cn` (phases 5a, 5b and 5c together) on owner approval ("ওকে কমিট এবং পুশ কর", 2026-10-10). Not pushed to `main`.
+
+## 2026-10-10 - SMS gateway moved to Integrations
+
+Owner instruction: "sms gateway ইন্টিগ্রেশন টা সাইট সেটিংস থেকে সরিয়ে integration পেজে sms gateway এর সেটিংস যুক্ত কর।"
+
+- Storefront Settings no longer has the SMS URL template / API key / sender ID fields; Settings → Integrations has a new **SMS Gateway** tab (per site via the Site picker).
+- Saving Integrations merges only the three SMS keys into `notification_credentials`; `EditStorefrontSetting` re-adds the stored SMS keys so Storefront Settings cannot wipe them. No migration.
+- Needs Bangla review: the 8 new SMS Gateway strings in `lang/bn.json`.
+- Verified: IntegrationsPageTest, TranslationParityTest, NextjsSiteSettingsTest, LeadFollowUpReminderTest, StorefrontResellerAndAbandonedCartTest passed. Full suite on the working branch: 2061 passed, 8 failed — all online-payment tests (`StorefrontApiCheckoutTest` x7, `StorefrontPaystationPaymentTest` x1) on files this change does not touch.
+
+Commit status: committed and pushed to main with owner approval (2026-10-10).
+
+## 2026-10-10 - Orders: shipping fee now reaches Total amount while typing
+
+Owner report (in Bangla, with a phone screenshot of Create Order): Shipping Fee showed ৳110 but Total amount / Due amount stayed at the products' ৳200 — the shipping amount was not added. Fix it and add a separate test.
+
+Root cause (reproduced in a real mobile Chromium against a scratch SQLite database): `shipping_fee` (and discount, vat, paid_amount, item quantity, item unit price) were `live(onBlur: true)`, so the totals were recalculated only when the field lost focus. On a phone the keyboard is usually closed without a blur, so no request was sent and Total/Due stayed stale. A Livewire test cannot see this because it never blurs a field; the form maths in `setOrderTotals()` was already correct and the saved order was never wrong (`OrderWorkflowService::sync()` recomputes it after every save).
+
+What changed:
+- `OrderForm`: those six inputs are now `live(debounce: OrderForm::TOTALS_DEBOUNCE_MS)` (500 ms), so the totals update about half a second after typing stops, with or without a blur. Applies to Create and Edit Order (same schema).
+- Browser check after the fix: type 110 into Shipping Fee, do nothing else → Total and Due go from ৳200 to ৳310 after ~0.5 s.
+- Tests (`OrderFormTest`): `test_shipping_fee_is_added_to_the_total_amount_on_the_live_create_form` (shipping typed last, typed first, with quantity/discount/vat/paid changes, and the saved order's total/due) and `test_inputs_feeding_the_order_totals_recalculate_while_typing_not_only_on_blur` (fails on the old `live(onBlur: true)`, verified).
+- No new strings (nothing to translate), no migration.
+
+Noticed, not changed: choosing a customer again resets Shipping Fee to the detected zone's fee (৳0 if the address matches no zone), wiping a fee that was typed by hand earlier. That is the existing `setShippingFee()` behaviour; say if it should keep a manual fee.
+
+Verification: `php artisan test tests/Feature/OrderFormTest.php` — 6 passed. Full `php artisan test` (plain, no `--env`) — **2052 passed, 2 skipped, 0 failed** (18698 assertions, ~522 s). Pint passed on the changed PHP files. `npm run build` not needed — no frontend source changed (it was only built locally to run the real-browser check).
+
+Commit status: committed and pushed to the branch `claude/optimistic-knuth-m5okxp` on owner approval ("কমিট ও পুশ কর", 2026-10-10). Not pushed to main.
+
+## 2026-10-12 - Investor portal: sign-in logo size
+
+Owner request (in Bangla): the logo on the portal sign-in page became small; make it a standard size. Investor theme CSS (`.fi-simple-layout .fi-logo`, 4rem high). Follow-up (owner): the signed-in header logo was also tiny, so the panel now uses `brandLogoHeight('2.75rem')`. No strings.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-12).
+
+## 2026-10-11 - Investor portal: sign-in heading
+
+Owner request (in Bangla): write "Investor Dashboard" under the company logo on the portal login page. `Login::getHeading()` returns it. Needs Bangla review: "ইনভেস্টর ড্যাশবোর্ড".
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-11).
+
+## 2026-10-10 - Investor portal: staff-set password and forgot-password link
+
+Owner request (in Bangla): a super admin can create a password so the person can sign in to the investor portal, and add Forgot password on the login page. Added **Portal access → Set a portal password** (`InvestorPortalAccountService::setPasswordByStaff`) and the "Forgot your password?" link on the portal login (the reset page itself already existed; the custom login form had dropped Filament's link). Tests added. Needs Bangla review: the 6 new keys (e.g. "Set a portal password").
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-10).
+
+## 2026-10-10 - Reseller portal: profile link in the user menu, subdomain set-up countdown
+
+Owner request (in Bangla, with a screenshot of the portal's user menu): link the profile page from the profile icon; and after a reseller sets a subdomain, DNS and SSL should be created and connected automatically, with a time shown for when the domain will be live.
+
+What changed:
+- The reseller's name at the top of the portal's user menu opens **Profile** (`/portal/profile`).
+- **My Store**: after a reseller saves a new subdomain, a card shows "Setting up <host> (DNS and SSL)" with a live countdown, checks the address every 15 seconds (`ResellerSubdomainProbe`: DNS points at the company domain's server and HTTPS answers with a valid certificate), and shows "Your store address <host> is live." once it opens. If the countdown ends first it says it is taking longer and keeps checking.
+- Until then the reseller's store link (dashboard, share buttons) stays the long `/store/<slug>` link; it switches to the subdomain once the check passes or the set-up time has passed. Subdomains chosen before this change count as live.
+- The countdown length is a Super Admin setting: **Reseller Settings → Subdomain set-up time (minutes)**, default **10** (my estimate; change it to what the server really takes).
+- `/internal/tls-ask` now also says yes to every approved reseller's subdomain, so an on-demand SSL proxy (Caddy) can issue each subdomain's certificate on its first visit without a wildcard certificate or a DNS provider token.
+
+What "automatic" needs on the server (one time, not per reseller; `docs/deployment.md`):
+1. Wildcard DNS `*.<company domain>` → the server (for offer.zamzamint.com that is `*.offer.zamzamint.com`). This one record covers every future subdomain, so no DNS work per reseller.
+2. SSL: either a wildcard certificate in Traefik (needs the DNS provider's API token), or the Caddy on-demand proxy that asks `/internal/tls-ask`.
+3. The app server must be able to reach its own public address (the live check calls the subdomain over HTTPS).
+Creating a separate DNS record per subdomain through a DNS provider's API was not built: the wildcard record makes it unnecessary, and which DNS provider is used is not known.
+
+Needs Bangla review: the 7 new keys ("Your store address :host is live.", "Setting up :host (DNS and SSL)", "Expected to be live in", "This is taking longer than usual. We keep checking automatically.", "Nothing to do on your side. …", "Subdomain set-up time (minutes)", and its helper text).
+
+Tests: `ResellerSubdomainTest` +5 (countdown and long link while pending, live check, change restarts set-up, legacy counts as live, tls-ask for subdomains), `ResellerPortalDashboardTest` +1 (profile link), `ResellerSettingsPageTest` (setting saved by Super Admin only). Full `php artisan test` (plain, no `--env`, after merging main): **2049 passed, 1 skipped, 0 failed** (13 investor-portal tests only failed until `npm run build` refreshed the Vite manifest). `npm run build` OK.
+
+Deploy: `php artisan migrate` (new migration `2026_10_10_100000_add_reseller_subdomain_status`) and `npm run build`.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-10).
+## 2026-10-09 - Fix Connect WhatsApp App (Coexistence) last step
+
+Reason — owner said Coexistence could not be connected from the ERP, so they stopped going that way. I found two code problems and the owner said "ওকে ঠিক করে দেও" (OK, fix them).
+
+What changed:
+- `connect-whats-app-business-app.blade.php`: the popup listener accepted only `https://www.facebook.com`; Meta can answer from `web.facebook.com` (common in Bangladesh) or `m.facebook.com`, so the WABA ID and phone number ID were dropped. It now accepts any https `facebook.com` host. The FB.login callback also waits up to 5 seconds for the popup's FINISH message, which can arrive after the callback.
+- `ConnectWhatsAppBusinessApp::completeEmbeddedSignup()`: stops with a clear, translated message when the code, WABA ID or phone number ID is empty, before exchanging the code or saving a channel (it used to try anyway and fail with an unclear Meta error).
+- 2 lang keys in en/bn ("Could not complete the connection" was previously untranslated, plus the new explanation).
+
+Not verified: a real Meta popup cannot be run from the cloud session; the owner needs to try the connection again. If it still fails, the owner should report which step fails (no Connect button = no Configuration ID; popup error; or ERP error text).
+
+Needs Bangla review: the 2 new keys.
+
+Tests: new `test_missing_waba_or_phone_number_id_stops_before_exchanging_the_code` in `EmbeddedSignupTest`; `EmbeddedSignupTest` + `TranslationParityTest` pass. Full `php artisan test` (plain, no `--env`): 1684 passed, 2 skipped.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`, then merged with main and pushed to `main`, on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-09). The whole branch (WhatsApp Web archive, rules, this fix) goes to main.
+
+## 2026-10-06 - WhatsApp terms quoted word for word in the rules file
+
+Reason — owner asked "সব টার্মস গুলো যুক্ত করেছ?" (did you add all the terms?). I said only a summary of the relevant parts was there, two pages had not been read fully, and offered to quote the relevant clauses word for word. Owner: "১ নম্বরটা কর, তারপর কমিট এবং পুশ কর" (do option 1, then commit and push).
+
+What changed (docs only): `docs/whatsapp-web-rules.md` "What WhatsApp's terms say" now quotes, word for word with links and dates:
+- WhatsApp Terms for WhatsApp Business App (effective 2026-09-23): Restrictions (a)–(h), Compliance (opt-in, opt-out), Acceptable Use (e)–(h), (l), (m), Enforcement, section 12 Termination. (The 2026-10-05 version used a search-result summary because the page URL I had was 404; the right URL was found.)
+- WhatsApp Terms of Service (effective 2021-01-04): Our Terms And Policies, Legal And Acceptable Use, Harm To WhatsApp Or Our Users, termination.
+- WhatsApp Messaging Guidelines (2026-09-23): "… scrape data, or use unofficial clients …".
+- WhatsApp Business Messaging Policy (2026-09-23): opt-in, opt-out, at-scale messaging, permanent prohibition.
+- Help Center "About unofficial apps" is listed as not quoted: its body loads only in a browser and could not be read from the cloud session.
+Every quote fragment (25) was checked by script against the downloaded page text.
+
+New finding for the owner: Business App terms section 12 says that when the terms end the company must "delete any user information Company obtained in breach of these Business App Terms". Archived chats may count as obtained in breach. The file says so; rule 1 (keep the archive) stays because the owner asked for it, and any deletion after a ban is the owner's legal decision.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7` on owner approval ("১ নম্বরটা কর, তারপর কমিট এবং পুশ কর", 2026-10-06), together with the two entries below.
+
+## 2026-10-05 - WhatsApp Web rules + terms check (before ERP sending)
+
+Reason — owner asked whether the ERP can also send text/image/voice/video/files through the WhatsApp Web channel, then said (Bangla) "add the rules first, and first check WhatsApp's terms".
+
+What changed (docs only, no code):
+- New `docs/whatsapp-web-rules.md`: summary of WhatsApp Terms of Service, Business App terms, the unofficial-apps help page and the Business Messaging Policy (checked 2026-10-05, with links), and 9 rules for web channels (permanent archive; sending off by default; reply only to customers who messaged first; no bulk/automation/AI; honour opt-out; one-at-a-time with admin-set limits; stop on ban/logout; save and attribute every sent message; no SMS fallback).
+- `CLAUDE.md`: new "WhatsApp Web (QR) channel rule" section pointing to that file.
+
+Terms finding to tell the owner: linking an unofficial WhatsApp Web client breaks WhatsApp's terms even for read-only use; sending raises the risk. The official no-risk way to send media from the ERP is the Cloud API / Coexistence channel the app already has.
+
+Open owner decisions: build ERP sending on the web channel or not; if yes, the pause and per-minute/per-hour limits (rule 6).
+
+Commit status: committed and pushed on owner approval (2026-10-06), with the entry above.
+
+## 2026-10-05 - WhatsApp Web (QR) login: full chat archive that survives a ban
+
+Reason — owner asked (Bangla): add WhatsApp Web login so all WhatsApp Business app messages load, everything sent in the app so far is saved in the ERP, customer messages are not lost even if the WhatsApp Business number is banned, and all customer info is saved in our database.
+
+What changed:
+- New `whatsapp-bridge/` Node.js service (Baileys 7.0.0-rc14): QR login as a linked device ("Desktop" identity + all history sync types, so WhatsApp sends the full history), archives 1:1 chats only (groups/status/channels skipped), contacts, media, and "delete for everyone" markers. Disk-backed outbox: events are kept until the ERP answers 2xx. Read-only — never sends WhatsApp messages. Dockerfile + README.
+- ERP: new CRM page **WhatsApp Web Login** (super admin; bridge URL + encrypted API key, link device / show QR, status, history progress, chats/messages/contacts saved, log out). Webhook `WhatsAppWebWebhookController` (HMAC-signed, per-channel secret in `app_secret`), jobs `ImportWhatsAppWebMessagesJob` / `SyncWhatsAppWebContactsJob`, `WhatsAppWebArchiveService`, `WhatsAppWebBridgeClient`, `WhatsAppWebSettingsService`, model `WhatsAppContact` (+ isolation test entry), migration (channel web_* columns, `conversation_messages.revoked_at`, `whatsapp_contacts`).
+- Inbox shows **Deleted on WhatsApp** on revoked messages. `ConversationMessengerService` refuses to send on web-archive chats (before creating a message, so no SMS fallback fires) and skips read receipts. Channels list hides Test & Subscribe / Edit for web channels.
+
+My decisions (say if you want different):
+- Read-only archive: replies stay on the phone. Sending through an unofficial WhatsApp Web client raises the ban risk the owner is worried about. Can be added later.
+- History import links chats to existing customers/leads by phone but does **not** create leads (thousands of old chats would flood the lead pipeline); every chat's number is still saved in `whatsapp_contacts`. Live incoming messages from unknown numbers create a lead (channel `auto_create_leads`).
+- Only 1:1 chats; groups are skipped.
+- If the same number is also connected by Coexistence, its chats appear under both channels (separate conversations).
+- Risk to tell the owner: WhatsApp Web automation is unofficial (not a Meta API); WhatsApp may unlink or restrict the number. Data already saved is unaffected.
+
+Deploy needs: a separate bridge app with a persistent volume and `BRIDGE_API_KEY`, a running queue worker, and PHP/web server body limits big enough for media.
+
+Needs Bangla review: 49 new keys in `lang/bn.json` (WhatsApp Web Login page, statuses, Inbox "Deleted on WhatsApp", read-only error).
+
+Tests: new `tests/Feature/WhatsAppWebArchiveTest.php` (12) and `whatsapp-bridge` `npm test` (10) pass. Full `php artisan test` (plain, no `--env`): 1683 passed, 2 skipped. `npm run build` clean. Bridge smoke-started locally (health, session API, outbox persisted events while the ERP was unreachable); a real QR scan could not be tested from the cloud sandbox (no WhatsApp network access).
+
+Commit status: committed and pushed on owner approval (2026-10-06), with the entries above.
+
+## 2026-10-09 - Investor portal: user menu opens Profile
+
+Owner request (in Bangla): in the investor portal, clicking the profile name in the header's popup should open the Profile page. `InvestorPanelProvider` now gives the `profile` user-menu item the Profile page URL. Test added in `InvestorPortalTest`. No new strings.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-09).
+
+## 2026-10-08 - Keep one module's error inside that module (error isolation)
+
+Owner request (in Bangla), after the v2.63.0 outage: if a module or part of the app has a problem or error, it must not affect the whole app. Only that specific module or part should show the error. The owner approved all five steps proposed, one after another.
+
+What changed:
+1. **Sidebar badges:** `HasGuardedNavigationBadge` on the 5 badges (Inbox, Investor Drafts, Investor Requests, Payout Batches, Reseller Payout Requests). On an error the badge is hidden.
+2. **Render hooks and widgets:** `GuardedViewManager` guards every Filament render hook in every panel. `GuardsWidgetRendering` covers all 19 widgets, which show a "could not load" card on an error.
+3. **Crashed pages:** `PanelErrorPages` plus the `panel-errors.module` view show a clear page with buttons instead of "500 | Server Error". This covers the admin panel and the portals, including Livewire actions sent from them.
+4. **Missing tables:** `ModuleHealth` plus the `TurnOffPagesWithMissingTables` middleware and a `Gate::before` check. That section shows "temporarily unavailable" and turns itself back on after `migrate`.
+5. **CI:** `.github/workflows/mysql-migrations.yml` runs migrations on MySQL 8.4 for every push and pull request.
+
+All caught errors are reported to Super Admins (bell plus Deploy Error Logs, source `module:…`), at most once per hour each. Local development and the test suite still throw errors as before (`ISOLATE_MODULE_ERRORS` overrides).
+
+Decisions I made without asking, for the owner to confirm or change:
+- The crashed-page screen is a standalone page (logo-less, no sidebar) with Dashboard / Try again / Back buttons. It does not draw the full panel sidebar, because that page must work even when the shared panel parts are what failed.
+- A section with a missing table stays in the menu. Opening it shows "temporarily unavailable" (503) rather than hiding it, so staff can see it exists and is down. Its relation tabs and buttons on other pages are hidden.
+- Reports are throttled to one per hour per section and error.
+
+Limits (cannot be isolated): the database or Redis being down, a broken `.env`, or a PHP syntax error in a file every page loads. Step 5 is the protection for those. **Note:** Coolify deploys `main` as soon as it is pushed, so the new MySQL check only protects us if a branch's checks are green before it is merged or pushed to `main`.
+
+Needs Bangla review (added with a Bangla value, please check the wording): "Module error (the rest of the app keeps working): :section", "This section could not be loaded. The rest of the page keeps working, and the error has been reported.", "This page could not be opened", "There is a problem in this part of the app. The other sections keep working, so you can carry on with them.", "The error has been recorded and reported to the administrators.", "Go to the dashboard", "Try again", "Go back", "This section is temporarily unavailable", "Part of its data is not ready yet (an update did not finish). The other sections keep working, so you can carry on with them."
+
+Verification:
+- New `ModuleGuardTest` (12 tests). Without the guard the "missing `investor_requests`" test reproduces the production 500 (`no such table: investor_requests`). Without the view-state restore, the inline-widget test fails with a `ViewException`.
+- MySQL 8.0 installed in the session container: the old v2.63.0 migration fails with exactly production's error 1059 and leaves the same half state. The fixed migration finishes it. All 219 migrations run from empty with `APP_ENV=production`.
+- Error page checked in headless Chromium at phone width (390px), in Bangla.
+- Full `php artisan test` (plain, no `--env`): 2017 passed, 1 skipped, 0 failed. `npm run build` passes. Pint passes on the changed PHP files (`bootstrap/app.php` and one line in `LowStockProducts.php` were already failing Pint before this change and were left as they were).
+
+Commit status: committed and pushed to `ccr-59b8ca5b-4zc27z`, then to `main` once the branch's MySQL migrations check passed (owner approved 2026-10-09: "হ্যাঁ, কমিট করে পুশ করো এবং মেইন এ পুশ কর").
+
+## 2026-10-09 - Lead CRM sales agent: 5 opt-in intelligence upgrades (proactive mode, objection handling, multi-product cart, cross-sell, personalization)
+
+Owner request, across several turns: make the CRM sales agent behave more like an intelligent human sales agent rather than a generic chatbot. I proposed a list of areas to work on; the owner asked for each one in turn ("do the next task on your list"): proactive mode, objection handling, multi-product cart, cross-sell, personalization. All five were implemented, then lost when this session's container was recycled before they were committed (per CLAUDE.md, nothing is committed without explicit approval, and the uncommitted working tree does not survive a container restart). The owner asked to redo them, and the branch was restarted from the then-current `main` (the branch's own earlier PR #7 was closed, not merged, and `main` had advanced ~50 releases past the branch's old base — see Technical Notes).
+
+What changed — each is a per-company toggle in **Integrations → Auto Messaging**, stored via `AiSettingsService`, off by default so no existing company's agent behavior changes until an admin opts in:
+
+1. **Proactive follow-up questions** (`proactive_mode_enabled`). After fully answering, the agent may also ask one natural next-step question (variant, quantity, delivery area, purchase timeframe) in the same message, to help move the sale forward instead of stopping cold at a bare answer.
+2. **Mild price-objection handling** (`objection_handling_enabled`). "Can you reduce it a bit?" no longer always escalates to a human — the agent may acknowledge it and restate real value from grounded catalog facts, but can never invent, offer or apply a discount. Refunds, complaints and explicit human requests still always hand off, on or off.
+3. **Multi-product cart**. `create_order_link`'s tool schema changed from a single flat item to an `items` array; calling it again with a new item merges into the same still-open `ChatOrderLink` (same product+variant updates its quantity, a new one appends) instead of overwriting the cart. No new toggle — this is a straight capability fix, not a behavior change a company would want to opt out of.
+4. **Grounded cross-sell / upsell** (`cross_sell_enabled`). A new `lookup_related_products` tool — reusing the exact same-category/active/in-stock signal `ProductShowController` already uses for the storefront's own "related products" — is only added to the tools array sent to the model when this is on, so the model cannot call a tool it was never offered.
+5. **Personalization by purchase history** (`personalization_enabled`). `SalesQualificationService::context()` can optionally eager-load past order line items and surface `is_returning_customer`/`lead_source`, so the agent may greet a returning customer naturally — never inventing a specific past-order detail the customer hasn't themselves mentioned.
+
+Important files: `app/Services/Crm/AiSettingsService.php` (DEFAULTS + save()), `app/Filament/Pages/Integrations.php` (fill-state/fields/save wiring for the 4 new toggles), `app/Services/Crm/AiReplyService.php` (keyword split, conditional system-prompt rules, `toolDefinitions($settings)`, `lookupRelatedProducts()`, rewritten `createOrderLink()`/new `mergeCartItems()`), `app/Services/Crm/SalesReplyRenderer.php` (`$allowFollowUpPrompt` param, `related` reply-key type), `app/Services/Crm/SalesQualificationService.php` (`$includePersonalization` param), `tests/Feature/CrmSalesAutomationTest.php` (12 new tests).
+
+Decisions made without asking, for the owner to confirm or change:
+- Multi-product cart has no on/off toggle — treated as a bug fix (the storefront checkout already looped over multiple cart items; only the AI side was artificially limited to one), not a behavior change worth gating.
+- Cross-sell suggests at most one related product per reply, from the same category only, same as the storefront's own related-products widget — no new "related products" concept invented.
+
+Verification:
+- `php artisan test --filter=CrmSalesAutomationTest`: 45 passed (33 pre-existing + 12 new), 0 failed.
+- Full `php artisan test` (plain, no `--env`): 1870 passed, 146 failed, 2 skipped. The 146 failures are pre-existing and unrelated (environment gap: `Vite manifest not found` — no frontend build in this container). Confirmed zero regressions: stashed all changes, re-ran the full suite on a clean `main` (146 failed, 1858 passed — the same 12-test gap), diffed the sorted list of failing test names between both runs — byte-for-byte identical.
+- This container was freshly provisioned and had neither `vendor/` nor PHP 8.4 (the project's composer.lock now requires `^8.4`, the container only shipped 8.3); installed PHP 8.4 + required extensions (gd, imagick, sqlite3, intl, bcmath, zip) via the Sury PHP APT repo for this session, then `composer install`. This is a one-off session setup, not a code change.
+
+Commit status: not yet committed — awaiting the owner's explicit commit/push approval, same policy as every other change in this log.
+
+## 2026-10-08 - Hotfix: admin panel 500 after the investor-portal deploy (MySQL 64-character index name)
+
+The owner reported "500 Server Error" on the live site after today's pushes.
+
+Cause: `2026_10_08_100200_create_agreement_tables` auto-named the unique index on `agreement_acceptances` `agreement_acceptances_agreement_template_id_portal_account_id_unique`. That name is 68 characters, and MySQL's limit is 64 (error 1059). Tests run on SQLite, which has no limit, so they passed. On the server, `deploy:migrate` caught the error. By design it does not fail the deploy, and it reports the error to super admins. The tables `agreement_templates` and `agreement_acceptances` (minus the index) were left behind, the migration was not recorded, and `investor_requests` / `payout_batches` were never created. The navigation badges of `InvestorRequestResource` and `PayoutBatchResource` query those tables on every admin page, which caused the 500.
+
+What changed:
+- The migration gives the index a short explicit name and is safe to re-run on the half-migrated database: an existing table is skipped, and only the missing index is added.
+- New `MigrationIdentifierLengthTest` guards every table and index name against the 64-character limit.
+- The same test found two older index names over the limit: `broadcast_recipients` (68) in `2026_08_28_000300` and `investment_documents` (71) in `2026_09_07_100200`. Both now have explicit short names, so a fresh MySQL install works. On production those migrations failed the same way earlier and were finished by `hasTable` guards (CHANGELOG: "Duplicate column name 'opted_out_at'"), so production has the tables but **not** these two indexes: the duplicate guard on broadcast recipients and a lookup index on documents. That is not urgent and is not fixed here.
+
+After deploy: Coolify's post-deployment `php artisan deploy:migrate` should now finish all pending migrations. To confirm, run `php artisan migrate:status` on the server: `2026_10_08_100200`, `100300` and `100400` should show "Ran". If the 500 remains, `storage/logs/laravel.log` names the actual error.
+
+Verification:
+- `MigrationIdentifierLengthTest` passes. Before the rename it listed exactly the three long names.
+- Simulated production's half-migrated state on a disposable SQLite file in the scratchpad (not the demo database): `agreement_templates` and `agreement_acceptances` existed without the index and the migration was unrecorded. `php artisan migrate` then finished `100200`, `100300` and `100400`, creating `investor_requests`, `payout_batches` and the new index. Not run on a real MySQL server, because none is available in this environment.
+- Full `php artisan test` (plain, no `--env`): 2005 passed, 1 skipped, 0 failed. `npm run build` passes.
+
+Commit status: committed and pushed to `ccr-59b8ca5b-4zc27z` and `main` with the owner's approval (2026-10-08).
+
+## 2026-10-08 - "Open investor portal" button (look-only staff preview of the investor portal)
+
+Owner request (in Bangla): "এডমিন থেকে ইনভেস্টরদের পোর্টালে এক ক্লিকে প্রবেশ করার জন্য ইনভেস্ট ভিউ পেজের হেডারে বাটন যোগ কর … আমাদের এডমিন প্যানেল থেকে এক ক্লিকে ইনভেস্টর পোর্টালে লগিন অপশন থাকতে হবে এবং এটা নতুন ট্যাবে ওপেন হবে।" (The existing Portal access → Invite flow stays as it is.)
+
+What changed:
+- New header button **Open investor portal** next to **Portal access** on the investor's page (and, for consistency, on the channel partner's page). It is a plain link with `target="_blank"`, so the browser opens the new tab itself (no pop-up blocker).
+- The dashboard and the portal are on different hosts and cannot share a login, so the link goes to `GET /admin/investor-portal/{investors|channel-partners}/{id}/open` on the dashboard host, which checks the staff member and redirects the tab to `<portal host>/investor/staff-entry/{one-time token}`. The token lasts 60 seconds, works once, only on that company's portal, and is refused if the staff member lost the permission in the meantime.
+- The tab is a **staff preview**: signed in as the person, with a yellow "Staff preview" bar on every page. It is look-only. The password-change form is hidden, and accepting an agreement, adding a payment account, sending or cancelling a request are hidden and refused on the server (`refuseInStaffPreview()` in `InvestorPortalPage`; every future portal page that writes must call it). It is **not** the person's sign-in (`last_login_at` and the "login" audit entry are untouched). What it records in the audit log (`investor_portal.staff_entry_issued`, `investor_portal.staff_entered`, document downloads) is attributed to the staff user, not the investor.
+- Works even if the person has not set a password yet.
+- Files: `InvestorPortalOpenAction`, `Admin\InvestorPortalOpenController`, `InvestorPortal\InvestorPortalStaffEntryController`, `InvestorPortalStaffEntryService`, `Support\InvestorPortalStaffPreview`, banner view `filament/investor/staff-preview-banner`, `InvestorPortalAccountService::ensureAccount()` (account creation shared with `invite()`), `InvestorPortalAccount::canAccessPanel()`, `AuditLogService`. No migration. 7 new lang keys. Docs: CHANGELOG, `docs/roles-and-permissions.md`, plan §15 build log.
+
+Decisions I made without asking, for the owner to confirm or change:
+1. **Who can use it:** the same permission as "Portal access", `investments.portal_manage` (Super Admin only by default). Staff with only `investments.manage` do not see the button.
+2. **No portal account yet:** the click creates one (status "invited", no invite date, no SMS, no link) so there is someone to look at. It then shows as "Invited" in **Investor Portal Settings** counts, although nobody was invited. The **Portal access** button still says "Invite to the investor portal" for such a person; a real invite reuses the same account.
+3. **Never opened:** a disabled account (enable it first), a person without a phone number, and a phone number that has a portal application waiting for review.
+4. **Look-only** (not "act as"): staff cannot accept agreements or change anything on the person's behalf.
+
+Needs Bangla review (added with a Bangla value, please check the wording): "Open investor portal", "Opens the investor portal in a new tab, signed in as this person. You can look at everything but change nothing.", "Could not open the portal", "This staff link has expired. Open the portal again from the dashboard.", "Staff preview: you are looking at the portal as :name (opened by :staff). Nothing can be changed here, and it does not count as :name signing in.", "A staff preview cannot change a password.", "This phone number has a portal application waiting for review, so the portal cannot be opened as this person yet."
+
+Known gap, not caused by this change: an **unsigned-in** visitor of any plain `/admin/...` route that uses the `auth` middleware (print pages, downloads, this button) gets a 500 ("Route [login] not defined") instead of the sign-in page, because the app does not set `redirectGuestsTo`. No data is exposed. Not fixed here.
+
+Verification:
+- New `InvestorPortalStaffEntryTest` (18 tests): the button on both pages and who sees it; the route's permission, company and refusal rules (disabled, no phone, portal off, application waiting); the token (works once, expires, wrong portal, account disabled or staff member deactivated in between); not counted as a sign-in; audit attribution; the banner; an account with no password is locked out when it is not a preview; every write path is refused in a preview and still works for the person themselves.
+- Checked in headless Chromium against a disposable database (deleted afterwards), twice: before and after merging main's Phase 3–5. Clicking the button on the investor's page opened a new tab on the portal host at the dashboard with the "Staff preview" bar; the Agreements page shows the agreement without the accept button, Payment accounts and Requests have no add / new button, Profile has no password form.
+- Full `php artisan test` (plain, no `--env`) on the merged code: 2004 passed, 1 skipped, 0 failed. `npm run build` passes. Pint passes on the changed PHP files.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর"). Built and tested on top of `origin/main` v2.63.0 (portal Phases 3–5), which was merged into the branch; the only merge conflicts were in `CHANGELOG.md`, `UPDATE_NOTES.md` and `InvestorPortalAccount::canAccessPanel()`.
+
+## 2026-10-08 - Investor portal, Phase 5 (payout batches)
+
+Owner request (in Bangla): "পরবর্তি কাজ কর" — continue with the next phase of `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md`. Sits on top of the uncommitted Phases 3–4 below (it uses their payment accounts).
+
+What changed:
+- **Investments → Payout Batches.** New payout batch: pending investor and channel-partner payouts of confirmed settlements, each to the payee's approved default payment account; payouts without one, or with a reinvest choice, are listed as left out. A different user approves (never the maker, even Super Admin). Make payment list: a CSV (payee, bank, branch, routing, account number or mobile number, amount), stored privately with its SHA-256; every download is logged and a changed file is refused. Mark failed (with reason) frees a payout for a new batch; Record as paid marks the rest paid with the bank reference and books one pending investor-payout voucher for the batch (fund source chosen on the batch, or the projects' shared payout fund source). Trashing that voucher makes the payouts unpaid again (existing rule). Cancel until recorded paid.
+- New permissions `investments.payout_batch_create` / `investments.payout_batch_approve` (Super Admin only by default).
+- The settlement page's Mark as Paid (investor and partner) now goes through the new `PayoutCompletionService` and refuses a payout in a live batch; a reinvest cannot be recorded on such a payout.
+- Audit log: hidden model fields (encrypted account numbers) are no longer copied into the log; payment accounts, investor requests, portal agreements and payout batches are now audited.
+
+My reading, used here (say if any is wrong):
+- P10 is still open: **no NCC BEFTN file was built** — only the CSV list. Send NCC Bank's BEFTN bulk-upload template or a sample file and the company account details, and the bank file will be added.
+- A payout with a reinvest / partial-reinvest choice stays on the settlement page (not in batches), because today its voucher is booked for the full amount while the reinvestment books its own.
+- Recording paid is allowed straight after approval (for a batch paid by hand through bKash/Nagad without a file).
+
+Needs Bangla review: the 72 new `lang/bn.json` keys (written by me).
+
+Tests: new `PayoutBatchTest` (13 tests: only approved accounts offered, full flow with one voucher and `paid_out`, maker ≠ checker for Super Admin, permissions, a payout in a live batch is not offered / not paid by hand / no reinvest, failed item freed and left out of the voucher, voucher trash/restore, cancel and take out, stored file hash + audited downloads + tamper refused, CSV formula cells neutralised, account number encrypted and kept out of the audit log, channel-partner payout, admin pages). `MultiCompanyIsolationTest` covers the 2 new models. Full `php artisan test` (plain, no `--env`): **1983 passed, 2 skipped, 0 failed** (17994 assertions). No frontend asset changed (no `npm run build` needed).
+
+Commit status: committed and pushed to the branch and main on owner approval ("ওকে যে পর্যন্ত কাজ হইছে সেটা কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-08).
+
+## 2026-10-08 - Investor portal, Phases 3–4 (sign-up, payment accounts, agreements, requests)
+
+Owner request (in Bangla): "পরবর্তি কাজ কর" — continue with the next phases of `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md`.
+
+What changed:
+- **Sign-up through a partner's invite link** (owner's draft: "the investor self-registers through a referrer's invite link and the admin verifies"). Staff turn the link on per partner (Portal access → Turn on invite link). The application becomes an Investor Draft (source portal) with the NID copy and photo; Confirm creates the investor and activates the account (documents move to the investor); Reject application keeps a reason the applicant sees. Applicants can sign in but see only their status.
+- **Payment accounts** (bank with 9-digit routing number, or bKash/Nagad/Rocket): added in the portal, approved/rejected on the investor's or partner's page (new tab); approval makes it the default; approved accounts are locked; numbers encrypted.
+- **Portal agreements**: staff write and publish the investor and partner agreement texts (Investments → Portal agreements); published versions are immutable; acceptance records time, IP, device and a hash of the text. Beside the paper deed, not instead of it.
+- **Requests**: top-up, withdrawal notice, payout choice (withdraw/reinvest/partial), question. Staff queue at Investments → Investor Requests. Approval runs the existing flows (new investment + pending capital voucher; 60-day withdrawal notice from the request date; `CycleElectionService`), each needing that flow's permission (manage / settle; questions need portal_manage).
+
+My reading of the open questions, used here (say if any is wrong):
+- P7: sign-up only with a partner's invite link (the draft says so); the applicant uploads NID copy (both sides) and photo, nominee NID optional; staff review in Investor Drafts. No separate "KYC verified" flag: confirming the draft is the verification, and every existing investor counts as verified (their paper KYC is done).
+- P8: the portal agreement sits **beside** the paper deed. No agreement text was written by me — staff paste it.
+- P9: a top-up is only a request; the investment is added when staff approve after the money arrives (amount, date, method confirmed by staff). The deed/cheque/witness steps stay at the office.
+- Partners' existing inline payout details (on the partner record) were not copied into payment accounts; partners can add one in the portal or staff add one on their page.
+- Still not built: payout batches / NCC file (P10), SMS/WhatsApp notifications (P11), the period pool engine (D1–D10).
+
+Needs Bangla review: the 154 new `lang/bn.json` keys (written by me).
+
+Tests: new `InvestorPortalOnboardingTest` (13 tests: sign-up → draft with documents, invite code required, confirm activates + moves documents, reject/discard shows reason, payment accounts approval + default + lock + routing check, agreement publish/accept/hash/immutability/new version, top-up → investment, withdrawal → 60-day notice, reinvest → election only on own pending payout and only with the settle permission, support answer + cancel, portal and admin pages open). `MultiCompanyIsolationTest` covers the 4 new models. `npm run build` OK; new pages checked at 375 px. Full `php artisan test` (plain, no `--env`): **1970 passed, 2 skipped, 0 failed** (17633 assertions).
+
+Commit status: committed and pushed to the branch and main on owner approval ("ওকে যে পর্যন্ত কাজ হইছে সেটা কমিট এবং পুশ করে মেইনে পুশ কর", 2026-10-08).
+
+## 2026-10-08 - Investors list: project picker on the table toolbar
+
+Owner request (in Bangla), with a screenshot of the investor list and a red box at the top left of the table: "image এর চিহ্নিত জায়গায় প্রজেক্ট ভিত্তিক ফিল্টার অপশন যুক্ত কর এবং তার পাশে একটা সার্চ বার যুক্ত কর।"
+
+Follow-up from the owner after seeing two search boxes: "দুইটা সার্চ বক্স চলে আসছে, আগে থেকে ডিফল্টে একটা ছিল আমি খেয়াল করিনি। নতুন টা ডিলিট করে দেও। আগেরটা ঠিক ঠাক কাজ করছে।" So the search box I added is removed; the table's own search box stays as it was.
+
+What changed (final):
+- The left side of the table toolbar now holds a **project dropdown** ("All projects" + every project, newest first).
+- The dropdown writes into the existing "Project" filter (`tableFilters.project.values`), so the funnel badge, the "Active filters" chip and "Reset filters" follow it. Removing the chip puts the dropdown back to "All projects". If several projects were chosen in the filter menu, the dropdown shows "Several projects".
+- Files: `InvestorResource::projectFilterOptions()` (shared option list), `ListInvestors::setProjectFilter()`, new view `resources/views/filament/investors/list-toolbar.blade.php`, hook in `AdminPanelProvider` (scoped to `ListInvestors`, so no other table changes). 3 new keys in `lang/en.json` and `lang/bn.json`. No migration.
+
+Needs Bangla review (added with a Bangla value, please check the wording): "Filter by project", "All projects", "Several projects".
+
+Verification:
+- Tests in `InvestorIdentityAndDocumentsTest`: the picker filters through the project filter (pick, clear, unknown id ignored); the investor list page renders the picker and no second search box, and another list page (investment projects) has no picker.
+- Before the search box was removed, the picker and search were checked in headless Chromium against a disposable database (since deleted): picking a project cut 3 rows to 2, the chip and "All projects" restored 3 rows, and the layout held at 1500, 1280 and 390 px wide. After removing the search box I re-ran the tests only; I did not look at the page in a browser again.
+- Full `php artisan test` (plain, no `--env`) before the removal: 1919 passed, 1 skipped, 0 failed (it included one fix to `config/release.php`, see below). After the removal: **1919 passed, 1 skipped, 0 failed**.
+- `config/release.php` here is main's copy (2.62.0) because this branch's `CHANGELOG.md` starts from main's; without it `ReleaseNotesTest` fails on the version mismatch. It is not part of this feature and matches main until the branch merges main.
+- `npm run build` and Pint pass.
+
+Commit status: Committed (`babe627`) and merged with `origin/main` (`31399f6`), pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর"). Full suite on the merged state: 1960 passed, 1 skipped, 0 failed.
+
+## 2026-10-07 - Investor portal, Phases 1–2 (portal, sign-in, read-only pages)
+
+Owner requests (in Bangla): (1) read the shared draft "12 — Investor Portal (Mudarabah) Module Plan" and write a detailed implementation plan; (2) "ইমপ্লিমেন্ট কর" — implement it.
+
+What changed:
+- New `15_INVESTOR_PORTAL_IMPLEMENTATION_PLAN.md` (the plan, owner questions P1–P11 / D1–D10 in Bangla, and §15 build log).
+- Phases 1–2 built: a third Filament panel `investor` at `investor.<company domain>/investor` (or a custom domain), off until **Investments → Investor Portal Settings** turns it on. Staff invite an investor or channel partner from their page (**Portal access**, SMS link valid 7 days); the person sets a password, then signs in with phone + password or phone + SMS code; reset by SMS code. Pages: Dashboard, My investments, Statement (printable), Payouts (with the existing payout report), Documents, My investors and Commissions (partners), Profile. Every query is pinned to the signed-in investor/partner (`InvestorPortalService`); settlement figures appear only once confirmed.
+- `RestrictResellerPortalHost` → `RestrictPortalHosts` (both portals). `audit_logs.actor_type/actor_id` record portal users. New permission `investments.portal_manage` (Super Admin only by default).
+- Migrations: 3 additive (`companies` + 2 columns, `investor_portal_accounts`, `audit_logs` + actor). No backfill; nothing changes for any company until the portal is turned on.
+- Docs: `docs/deployment.md` (Investor Portal Domain: DNS, Coolify, admin steps), `PROJECT_GUIDE.md`, `docs/roles-and-permissions.md`, CHANGELOG `[Unreleased]` (Minor Feature Update).
+
+My reading of the open questions, used for Phases 1–2 (say if any is wrong; details in the plan §15):
+- P1 address `investor.<domain>/investor`; P2 password + SMS code (SMS only when the gateway is set); P3 invite by SMS link; P4 a partner sees investor display name, capital at work and join date only; P5 "Channel partner"; P6 an investor downloads their project's contract, cost receipts and purchase documents, not settlement sheets/investor reports/bank slips.
+- The statement is built from the records each time (no stored ledger yet) and has no running balance, because whether a reinvested payout is also marked paid is up to staff today.
+- Not built (need owner input first): self sign-up and KYC, bank accounts, agreements (P7–P8), requests (P9), payout batches / NCC (P10), SMS/WhatsApp texts (P11), the period pool engine (D1–D10).
+
+Needs Bangla review: the 120 new `lang/bn.json` keys for the portal (written by me; please check the wording, especially the SMS texts "Your :company investor portal …").
+
+Tests: new `InvestorPortalTest` (19 tests: host boundary, reseller portal unaffected, invite → set password once, expired link, one account for investor + partner, password / SMS-code sign-in, 5 wrong codes, disabled account locked out at once, other company refused, draft settlement hidden, all pages open, another investor's document/report is 404, partner sees no contact details, admin settings + invite action, permission). `MultiCompanyIsolationTest` covers `InvestorPortalAccount`. Reseller portal suites pass unchanged. `npm run build` OK. Phone-width (375 px) screenshots checked for every page. Full `php artisan test` (plain, no `--env`): **1934 passed, 2 skipped, 0 failed** (15896 assertions); the affected files were re-run after the last layout tweaks.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-07).
+
+## 2026-10-08 - Next.js home page, header and footer follow the approved design; everything is customised from the dashboard
+
+Owner request (in Bangla, with a screenshot of the design from the upstream repo `sajiduzzaman-im/zamzam-international`): the forked site had drifted to a Blade-theme look — the home page must be exactly that design, the dashboard must have every option to customise it, header and footer must match, and the Footer Builder must be able to build a custom footer.
+
+What changed (details in CHANGELOG `[Unreleased]`):
+- New **Website Design** tab on the Next.js row (Home Page Builder, Top Bar, Header, Product Cards, Floating Help Button). The Blade row has no such tab and never stores it.
+- Footer Builder: Custom links column, Custom text, Payment badges, Image / badge; richer Contact info and Bottom bar; footer background colour; Blade footer renders the new blocks too.
+- API: `design`, `home_sections`, cleaned footer blocks, category `tagline`, slide `eyebrow`, product `collection_kinds`, `sort=discount`, `on_sale=1`. New `StorefrontSiteDesign` cleans everything (colours, links, numbers) — never raw admin input.
+- Website repo (`bhd4232/zamzamint-new-website-theme`): top bar, header, hero, trust strip, category cards, deals banner, product rows, flash-sale band, WhatsApp section, SEO text, dark footer, floating help — all driven by the above.
+
+My decisions (say if you want different):
+- The upstream repo is not reachable from this session (private; add_repo was refused), and the fork only carries its first commit, which is an older design than the screenshot. The design was rebuilt **from the screenshot** (spacing, colours, card layout, sections); fonts come from the ERP typography setting (the screenshot's font could not be identified) — pick a font in Storefront Settings → Storefront Typography.
+- The screenshot's "Inventory not synced yet / Sync now" line was a mock-data leftover and is not rebuilt (the ERP is the live source).
+- The default home layout has no per-category rows and no WhatsApp / SEO text sections (those need copy only the owner can write); the owner adds them in the Home Page Builder. The category cards show categories alphabetically unless the owner picks categories (the pick order is kept) — categories have no sort number.
+- "New" badge = the product is in a live **New Arrivals** collection (no automatic "new" rule, per the earlier owner rule). Prices on cards are orange by default (changeable).
+
+Needs Bangla review: all ~200 new admin labels in `lang/bn.json` (Website Design tab, Home Page Builder sections, Footer Builder blocks) and the website's new interface strings (`home.*`, `help.*`, `footer.*`, `product.new`).
+
+Also: saving settings / slides / pages / categories / offers now sends a debounced `storefront.updated` webhook (5 s delay, once per 5 s) so the Next.js site shows dashboard edits within seconds (the website's webhook route already accepts it); set the webhook URL and secret under Integrations → Website API.
+
+Tests: new `NextjsSiteDesignTest` (22). Full plain `php artisan test`: **1923 passed, 1 skipped, 0 failed**; website `tsc --noEmit` and `npm run build` clean. Browser checks on a throwaway database: desktop 1920 / 1440 / 1100, tablet, phone, dark mode, Bangla; mobile menu, categories dropdown, add to cart, Read more, link safety, sticky header; admin Website Design tab.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট ও পুশ কর এবং মেইনে পুশ কর", 2026-10-07), in both repositories; ERP `origin/main` (v2.60.3) merged first.
+
+## 2026-09-29 - Rejected or cancelled payout vouchers make the payout unpaid (missing part of the earlier voucher-trash work)
+
+Reason — owner: "পেআউটের ভাউচার রিজেক্ট হলে পেআউট অপরিশোধিত হবে- এটাকি ইমপ্লিমেন্ট করেছিলে?" — the owner asked whether the rule "a rejected payout voucher makes the payout unpaid" had been implemented.
+
+It had not. When I asked about trashed payout vouchers, I left rejected and cancelled ones out on purpose and said so ("পেআউটের ভাউচার রিজেক্ট বা ক্যানসেল হলে পেআউট এখনো পরিশোধিত-ই থাকে"). The owner's answer to the trash question was yes; this asked for the same rule for reject. It is now done.
+
+What changed:
+- `VoucherService::reject()` and `cancel()` call `VoucherLinkedPayoutsService::voucherVoided()` next to the withdrawal hook. Trash calls the same method, so all three paths behave the same way.
+- Effect: `SettlementPayout` / `ChannelPartnerPayout` go from paid to pending with `paid_at` cleared. A `paid_out` settlement goes back to `confirmed`. A `ResellerPayoutRequest` goes from paid to approved.
+- Restoring a rejected or cancelled voucher from trash does not mark anything paid again (already the case through `isVoid()`).
+
+Verification:
+- New test in `VoucherTrashTest`: reject and cancel for two investor payouts (only the affected one turns pending, and the settlement goes back to confirmed), a restore after reject that does not re-pay, and reseller withdrawals rejected and cancelled.
+- `VoucherTrashTest` + `InvestmentWithdrawalTest`: 15 passed. Full `php artisan test` (plain, no `--env`): **1557 passed, 0 failed**. Pint passes.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
+## 2026-10-07 - Reseller-store orders invoiced in the reseller's name too
+
+Owner answer (in Bangla): yes, invoice the reseller-store orders in the reseller's name as well.
+
+What changed: `Order::showsResellerBranding()` = the order has a reseller (`reseller_customer_id`). That covers the portal orders (previous change) and every order a customer places on a reseller's store (`/store/<name>`, reseller subdomain or custom domain). Their invoice print, bulk print, PDF, cut-slip and summary card show the reseller's store name and logo, no company name/contact details and no internal "Storefront checkout" note. Amounts unchanged. Orders without a reseller keep the company invoice.
+
+Tests: new `ResellerCommissionTest::test_an_order_from_the_resellers_store_is_invoiced_in_the_resellers_name` (checkout on the reseller store, then print + summary card); `ResellerOwnCourierOrderTest` company-invoice test uses an order without a reseller. Full `php artisan test` (plain, no `--env`): **1916 passed, 1 skipped, 0 failed**.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
+## 2026-10-07 - Reseller-portal orders invoiced in the reseller's name
+
+Owner report (in Bangla, with a screenshot): a reseller placed this order but the invoice is in our company's name; every order from the reseller portal must be invoiced in that reseller's own name — treat it as important.
+
+Cause: the reseller brand was tied to own-courier orders only (`showsResellerPricesToBuyer()`), so a store-delivered (cash on delivery) portal order printed ZamZam International's name, logo, email, address and the internal "Reseller portal order" note.
+
+What changed:
+- New `Order::showsResellerBranding()`: any order with a reseller and `source = reseller_portal` (or any own-courier order). Invoice print, bulk print, PDF, courier cut-slip and order summary card now show the reseller's store name and logo, no company contact details and no internal note, for all of these orders.
+- Prices unchanged: a store-delivered portal order already charges the reseller's price, so the customer sees that price, the delivery charge and the due amount as before. Own-courier orders keep their retail-price view.
+- Orders from other sources (including a customer buying on the reseller's online store, `/store/<name>`) keep the company invoice — the request named portal orders only. Say if the reseller-store orders should also carry the reseller's name.
+
+Tests: `ResellerOwnCourierOrderTest` (31 tests): store-delivered portal order shows the reseller brand on print, bulk print, PDF and summary card; a non-portal order keeps the company brand. Full `php artisan test` (plain, no `--env`): **1915 passed, 1 skipped, 0 failed**.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
+## 2026-10-07 - Users page: staff see and edit only their own companies' users
+
+Reason — owner: "ওকে ইউজার মিনিট আপডেট করে দাও, কোন ইউজার তার নিজের কোম্পানির ইউজারদের দেখলে এবং এডিট করতে পারবে।" (a user can see and edit only the users of their own company). Closes the open item from the entry below.
+
+What changed:
+- `User::canSeeUser()` / `scopeVisibleTo()`: a Super Admin sees everyone; anyone else sees themselves and users sharing at least one of their active companies.
+- `UserResource::getEloquentQuery()` uses the scope, so another company's user is missing from the list and opening their page gives 404. `Gate::before` returns false for every ability on such a user (defence in depth).
+- My reading (say if different): a user with no company at all is visible only to a Super Admin; a user who is in your company and also another company is visible, with the other company's access protected by the previous change.
+- No new user-visible strings, so no lang keys.
+
+Tests:
+- `UserManagementEscalationTest` +3 (16). With the rule reverted, the 2 visibility tests fail (the Super Admin one is a control).
+- Full `php artisan test` (plain, no `--env`): 1908 passed, 2 skipped (14958 assertions).
+
+Commit status: committed and pushed to `claude/security-audit-fixes` and `main` on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
+## 2026-10-07 - Reseller guide page (rules before joining)
+
+Owner request (in Bangla): a reseller documentation page with a modern UI, so a new reseller can read our rules and regulations before joining, with call-to-action buttons.
+
+What changed:
+- New public page **`reseller.<company domain>/portal/guide`** (or the custom portal domain + `/portal/guide`). Sections: hero with **Apply now** / **Read the rules**, How it works (4 steps), Pricing and commission, Your own store, Orders and delivery, Rules and regulations, and a final **Apply now** / **I already have an account** band. Sticky header with Sign in / Apply now. Store colour (Blade storefront theme colour), logo, dark mode, mobile layout.
+- Nothing on the page is invented: the how-it-works text describes what the system already enforces (commission on delivered orders only, taken back on return; withdraw to bKash/Nagad/Rocket/bank; own-courier advance, edit until verified, pay only the extra, overpayment to a non-withdrawable deposit; customer invoice with the reseller's shop name). Subdomain / custom-domain lines show only when those are on; the own-courier card shows only when the store has a payment method (names only, never account numbers).
+- **The store's own rules come from the admin**: Resellers → Reseller Settings → **Reseller guide page** — on/off, introduction (blank = standard text), a list of rules (title + optional details, reorderable), and **Show money figures** (minimum withdrawal + packaging charge per piece; off by default). Reseller cost per unit is never shown. Until rules are added the page says the store has not published extra rules yet. **Please add your real rules there before sharing the link.**
+- Links: while the page is on, the storefront's "Become a reseller" links (footer, account menu, profile, Marketplace Pro home) open the guide; the portal's application form shows "Read the reseller guide". Someone who already applied ("Reseller status") goes to the portal. Page off → links go straight to the application form, and `/portal/guide` is 404.
+
+Deploy: run migration `2026_10_07_110000_add_reseller_guide_to_storefront_settings_table`; `npm run build` (new Tailwind classes).
+
+Tests: new `ResellerGuidePageTest` (5). `npm run build` OK. Full `php artisan test` (plain, no `--env`): **1895 passed, 1 skipped, 0 failed**.
+
+Needs Bangla review: the 70 new guide / settings keys ("রিসেলার গাইড", "নিয়ম ও শর্তাবলি", "এখনই আবেদন করুন", …).
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
+## 2026-10-07 - "Users: Manage" limited to the editor's own companies
+
+Reason — owner: "এখনো খোলা: "Users: Manage" থাকা কেউ যেকোনো user-কে যেকোনো কোম্পানিতে যোগ করতে পারে। এটা আটকাতে হবে" (block adding users to any company). Follow-up to the 2026-10-03 security audit fixes (already on main).
+
+What changed:
+- `User::assignableCompanyIds()` / `resolveCompanyAccessChange()`; `CreateUser` / `EditUser` apply it; `UserForm` shows and loads only assignable companies in "Assigned Companies" / "Default Company".
+- My reading of the rule (say if different): a non-Super-Admin may add/remove only companies they can access; a user's access to other companies is kept untouched; the default company only moves to one of the editor's companies; Super Admin unchanged.
+- No new user-visible strings (Filament's own "invalid" message covers a tampered request), so no lang keys.
+
+Tests:
+- `UserManagementEscalationTest` +5 (13 total). With the rule reverted, 3 fail; the other 2 are controls (own companies still manageable, Super Admin assigns any).
+- Full `php artisan test` (plain, no `--env`): 1889 passed, 2 skipped (14743 assertions).
+
+Still open (owner decision): a "Users: Manage" holder can still edit (name, email, password, active) a user who belongs only to other companies, because the Users list is not company-scoped.
+
+Commit status: committed and pushed to `claude/security-audit-fixes` and `main` on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07).
+
+## 2026-10-06 - All reseller settings on Resellers → Reseller Settings
+
+Owner rule (in Bangla): every reseller setting goes in the Reseller Settings option and everything is controlled from there.
+
+Before: module + subdomains + custom domains + portal domain on the company form (Super Admin only); cost per unit, packaging charge, minimum withdrawal in Storefront Settings → Reseller Settings; "Show reseller program" in Storefront Settings → Footer Builder; the payment channels in Payment Methods.
+
+What changed:
+- New page **Resellers → Reseller Settings** (`App\Filament\Pages\ResellerSettings`) with all of those for the current company. Module/domain fields stay Super Admin only (shown disabled to other staff, and a forged change is ignored on save). Portal domain normalised and unique across companies.
+- Removed from the company form and from Storefront Settings (section and footer toggle).
+- Payment channels are **listed** on the page with a link to Payment Methods, not edited there: the same methods are the storefront checkout's manual payment options, so editing them in two places would be confusing. Say if you want them editable on this page too.
+- Who can open it: users with Settings: Manage (same as Storefront Settings). In "All companies" view it asks to choose a company.
+- Docs updated: `docs/deployment.md` (where to switch subdomains/custom domains on), `13_RESELLER_PORTAL_PLAN.md` (admin side; own-courier orders are no longer read-only for the reseller).
+
+Tests: new `ResellerSettingsPageTest` (5: Super Admin saves everything; portal domain unique; settings manager can change money rules but not the module; no access without the permission; old places no longer show the fields); `ResellerCommissionTest` moved to the new page; `PhaseFourAdminPagesTest`'s Storefront Settings section list no longer has `reseller`. Full `php artisan test` (plain, no `--env`): **1868 passed, 1 skipped, 0 failed**.
+
+Needs Bangla review: the new keys on the page ("টাকার নিয়ম", "রিসেলার মডিউল চালু", "নিজস্ব কুরিয়ারের অগ্রিম পেমেন্ট", …).
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07), merged with `origin/main` v2.57.0 and v2.57.1 (separate Blade / Next.js storefront settings): the reseller settings keep using the Blade storefront row (`Company::storefrontSetting()`), as v2.57.0 intends; conflicts in CHANGELOG/UPDATE_NOTES, lang files and `PhaseFourAdminPagesTest` resolved by keeping both sides; `NextjsSiteSettingsTest` now expects no `reseller` section on the Blade site either. Full suite after the merges: **1890 passed, 1 skipped, 0 failed**.
+
+
+
+## 2026-10-07 - Sign-up needs an SMS code (account takeover by phone number)
+
+Reason — owner asked "পরবর্তী কাজ কি", I listed the open item "registration adopts an existing customer record by phone without proving ownership" as the first thing to fix, owner said "ওটিপি সিকিউরিটি যোগ করো".
+
+What changed:
+- Blade storefront sign-up: form → 6-digit SMS code page (`/account/register/verify`, with "Send a new code" and "Change details") → account. Only the password hash waits in the session.
+- Next.js API `POST /account/register`: without `code` → SMS + `202 verification_required`; same form again with `code` → `201`. Errors `otp_invalid`, `verification_unavailable`. Documented in `docs/api/storefront-api.md` §6.
+- Code: 10 minutes, 5 tries, 1-minute resend cooldown, one per company + phone; taken phone/email refused before any SMS.
+
+My decisions (say if you want different):
+- With an SMS gateway, **every** sign-up needs the code (also brand-new numbers — otherwise someone could pre-register a stranger's number and later see that person's guest orders).
+- Without an SMS gateway: brand-new numbers still sign up directly; a number that already has a customer record can't sign up ("contact us").
+- Offer landing-page checkout still creates its account automatically with a random password (the buyer doesn't learn it, so it can't be used to take over the record).
+
+**Not done — needs the website repo:** the Next.js site (`zamzamint-new-website-theme`) does not show a code field yet; access to that repo was denied in this session. Until it is updated, sign-up on the Next.js site fails on a store with an SMS gateway (sign-in, checkout and tracking are not affected). Owner chose to push to main anyway (2026-10-07).
+
+Needs Bangla review: the 11 new keys (sign-up code page, "This phone number already has orders with us…", "We couldn't send a verification code…").
+
+Tests: `StorefrontApiAccountTest` (+4: adoption via code, existing number needs code / no SMS → refused, five wrong codes + quick resend, taken number before SMS, failed SMS), `StorefrontCustomerAuthTest` (+2; existing sign-ups go through the code). Registration-related tests (92): all pass except 1 that needs `intl`. Full plain `php artisan test` on this server (PHP 8.4 without intl): 1870 tests, 189 failures, all "intl extension required", 0 other failures; after merging `origin/main` (separate Blade / Next.js storefront settings): 1886 tests, 189 failures, all intl, 0 other.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-07); `origin/main` merged first — CHANGELOG `[Unreleased]` sections combined, lang files rebuilt as main's keys plus ours.
+
+## 2026-10-07 (follow-up) - Show on for slides and pages; WooCommerce, CRM messaging and lead reminders read the Next.js row
+
+Owner answers (in Bangla) to the two open questions after the settings split: (1) separate hero slides, custom pages and offers per site — **do it**; (2) the company-level features **read the Next.js row**.
+
+What changed:
+- Slides and pages: new **Show on** (`storefront_setting_id`, NULL = all sites — every existing record). Blade shows all + Blade-only, the Next.js API shows all + Next.js-only; menus/footer legal links drop pages of the other site; lists show a **Show on** column; choosing a site on a slide sets that site's theme/template; a site id from another company is refused.
+- Offers: nothing to add — they are already separate by type in the code (landing-page offers are only served by the Blade `OfferController`/`OfferCheckoutController`; Collections only by the API/`StorefrontCatalogService`, so a Flash Sale deal never changes a Blade price). Say if you still want an explicit **Show on** on offers.
+- `StorefrontSetting::primaryFor()` = the Next.js row once the company has one, else the Blade row. WooCommerce (import, order sync, webhook secret, Integrations tab), CRM messaging (SMS/WhatsApp broadcasts and failed-message fallback) and lead follow-up reminders now read it. The Lead Follow-up Reminders section and the WooCommerce tab appear only on that row.
+
+My decisions (say if you want different):
+- **Reseller stays on the Blade row.** I read "Next.js row" as the company-level integrations only: the reseller program/store is the Blade storefront by your own decision, and the Blade abandoned-cart reminders belong to Blade carts (the Next.js site keeps its cart in the browser).
+- A page's **slug is still unique per company**, so the two sites cannot each have an "about" page with the same address; give them different slugs (e.g. `about`, `about-main`).
+- Existing slides/pages stay on **All sites** until you pick a site for each — the Next.js site will show the same banners as before until you do.
+- Deleting a site's settings row returns the slides/pages limited to it to **All sites**.
+- The payment-method list is still shared by both sites.
+
+Tests: `StorefrontSiteContentTest` (8) plus cases in `StorefrontApiTest`, `WooCommerceOrderWebhookTest`, `LeadFollowUpReminderTest`; the pages/slides/Woo behaviours were checked to fail when the old behaviour is put back.
+
+Needs Bangla review: 3 new keys ("যেখানে দেখাবে", "সব সাইট" and the Show-on help text).
+
+Commit status: NOT committed — waiting for the owner's explicit approval. On top of `origin/main` v2.57.0.
+
+## 2026-10-07 - Separate storefront settings for the Blade storefront (reseller store) and the Next.js site (main storefront)
+
+Owner decision (in Bangla, after seeing both sites in one Storefront Settings row): Blade and Next.js must be **separate rows** so each can be customised on its own; **Blade = reseller store, Next.js = main storefront**. This replaces the 2026-10-03 decision that both read one shared row (CLAUDE.md updated).
+
+What changed:
+- `storefront_settings.site_type` (`blade` default | `nextjs`), unique per `(company_id, site_type)`. Existing rows stay Blade. The old Next.js switch/domain on a Blade row is moved into a new Next.js row (a full copy of the Blade settings) by the migration; the Blade row loses those fields. Idempotent and reversible; tried on a copy of the e2e database (up, down, up).
+- API: `EnsureNextjsSiteEnabled` serves only the Next.js row (`403 nextjs_site_disabled` for a company with just a Blade row). Everything else in the API already took the row from the request, so it follows.
+- Admin: Storefront Settings lists one row per site (Site badge, that site's own domain); the create form has **Site** (Blade / Next.js) and, for Next.js, **Start from a copy of the Blade storefront settings** (credentials copied from the stored encrypted values, not re-encrypted); the Next.js row hides *Reseller Settings* and the Blade domain, the Blade row hides *Next.js Site*. Saving a Next.js row never writes `companies.domain`.
+- Integrations page: **Site** select (when there are two rows) for the payment gateway, Meta pixel and website webhook fields; WooCommerce and AI stay company-wide (WooCommerce = Blade row).
+- Orders and payments started on the Next.js site keep `storefront_setting_id` (NULL = Blade); ZiniPay/PayStation webhooks, Meta conversions and the status-change dispatch use `Order::siteSetting()` / `StorefrontPayment::siteSetting()`. The website webhook goes to every site that has one configured, once per distinct URL+secret.
+
+My decisions (say if you want different):
+- **Company-level features read the Blade row** (reseller program, WooCommerce import/sync, CRM WhatsApp/SMS, abandoned-cart and lead reminders, slide pages' theme). Since the Next.js site is now the main storefront, you may want some of these (e.g. CRM messaging credentials) to live on the Next.js row instead — a one-line change each.
+- **Slides, pages, offers and the payment-method list are still shared by both sites** (they are not in the settings row). The Next.js site shows the same hero slides and pages as the Blade store until they get a "show on: all sites / this site" choice — not built; tell me if you want it next.
+- Site type cannot be changed after creation (create the other site instead).
+- The abandoned-cart reminder command only runs for Blade rows; the Next.js site keeps its cart in the browser, so it has no server-side carts.
+
+Tests: `NextjsSiteSettingsTest` rewritten (17); new cases in `StorefrontApiTest`, `StorefrontApiCheckoutTest`, `StorefrontMetaTrackingTest`, `StorefrontPaystationPaymentTest`, `WebsiteWebhookDispatchTest`, `IntegrationsPageTest`. The webhook, Meta and API-row tests were checked to fail when the old behaviour is put back.
+
+Needs Bangla review: the 9 new keys (e.g. "সাইট", "ব্লেড স্টোরফ্রন্ট (রিসেলার স্টোর)", "Next.js সাইট (মূল স্টোরফ্রন্ট)", the Site-type and copy-from-Blade help texts).
+
+Commit status: NOT committed — waiting for the owner's explicit approval. Working tree on top of `origin/main` v2.56.0.
+
+## 2026-10-06 - Reseller deposit: overpayments credited and used on the next orders
+
+Owner rule (in Bangla): if a reseller pays more than the ordered amount, the extra is added to the reseller's balance and shown in the header. Asked three things; answers: the reseller enters the amount sent and staff correct it when verifying; the balance is a **separate deposit, used on the next orders, not withdrawable**; shown in the **portal's top bar**.
+
+What changed:
+- New table `reseller_deposit_entries` / `ResellerDepositEntry` (company-scoped; +credit, −used).
+- Portal payment forms (Create order, Change order, Send payment again): optional **Amount sent** (blank = exactly what is owed, never less).
+- Staff **Verify reseller payment**: **Amount received** (pre-filled with what the reseller said). The full received amount is recorded in the order's Payments History (and the chosen account); what verified payments hold above the total is credited to the deposit once.
+- The deposit pays first on every new own-courier order and on the extra after a change; only the rest is asked for. When it covers everything, the payment section is hidden and the order is ready to pack.
+- New state **Part received — send the rest** when less arrived than owed; the reseller can send the rest from Orders.
+- Top-bar **Deposit** badge for approved resellers. Order details (admin and portal) show deposit payments and what an order added to the deposit.
+- Fix found on the way: `OrderPayment` filled `received_by` from whoever was signed in, which in the portal is a reseller (`Customer`), breaking the foreign key to users. Now only a staff user is recorded.
+
+My decisions (say if you want different):
+- When an order paid (partly) from the deposit is cancelled, the deposit is **not** given back automatically — staff would need to handle it. Tell me if cancelling should return it.
+- Staff cannot yet adjust a deposit by hand (e.g. a refund outside the system), and the admin has no deposit list per reseller; only the order pages show it.
+- The order that was overpaid shows the full amount received as paid (more than its total, due 0), so the account balance matches the money that arrived; the later order shows the deposit part as a payment without an account.
+
+Tests: 5 new in `ResellerOwnCourierOrderTest` (overpayment → deposit → used on the next order, fully covered order needs no payment and can be packed; amount below owed refused; staff set a lower amount received → short → reseller sends the rest; top bar + Create order uses the deposit; no badge for a pending reseller). `MultiCompanyIsolationTest` updated. Full `php artisan test` (plain, no `--env`): **1838 passed, 1 skipped, 0 failed**.
+
+Needs Bangla review: the 13 new keys ("জমা", "পাঠানো টাকা", "প্রাপ্ত টাকা", "আংশিক পাওয়া গেছে — বাকিটা পাঠান", …).
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes), then merged with `origin/main` v2.55.0 (fraud check card); conflicts in CHANGELOG/UPDATE_NOTES, lang files, the portal CreateOrder and ResellerPanelProvider resolved by keeping both sides. Full suite after the merge: 1863 passed, 1 skipped, 0 failed.
+
+## 2026-10-06 - Reseller's own-courier orders: reseller branding and Due on the invoice, reseller-only edits
+
+Owner answers (in Bangla): the invoice shows the reseller's **store name and logo** (not the reseller's own name); the customer **must see the Due Amount**; staff **cannot add or change items** on own-courier orders — the **reseller** adds or edits them. Asked how the advance works after an edit; answers: editable **until the store verifies the payment**, the reseller sends **only the extra**, and the total cannot go down (nothing removed or lowered). The reseller can change products/quantities/customer prices, courier name and parcel ID, and the customer's name, phone and address.
+
+What changed:
+- **Invoice (print + PDF) and summary card, buyer view:** reseller store name (`Customer::resellerStoreName()`) and logo (light, else dark; no company logo fallback) instead of the company's; company hotline, e-mail, address, website, Facebook, WhatsApp and thank-you line hidden; **Due Amount = the retail total** (invoice, courier slip, PDF Due/COD, card Total + Due).
+- **Found while doing this:** the PDF invoice (`orders.pdf`, Download PDF on the order) still printed the store's prices on own-courier orders — it now uses the same buyer view.
+- **Admin edit form:** Items repeater disabled on own-courier orders (a disabled repeater is not saved, so a forged request cannot change them either), with an explanation. Discount/VAT/shipping fields left as they were.
+- **Portal Change page** (`/portal/orders/{id}/edit`, button **Change** on Orders): `ResellerOrderPlacementService::updateOwnCourierOrder()` — existing lines keep their product and store price, quantity only up, customer price ≥ store price; new products at today's store price; stock checked with `OrderStockCheckService` (works for confirmed orders too); packaging charge grows by the added pieces; VAT recomputed; the order note's delivery address line follows the new address. Locked once any advance payment is verified, the parcel is packed, or the order is cancelled/returned/refunded/completed.
+- **Several advance payments per order:** `Order::resellerAdvancePayments()`. `submitPayment()` records only the outstanding amount (total − waiting − verified). `paymentState()`: verified when verified payments cover the total; rejected when the latest was rejected and money is still owed; else waiting / not sent. **Mark parcel packed** only when everything is verified. Admin verifies waiting payments oldest first; the order page lists all payments and **Still to receive**; the portal details list them with **Still to send**.
+
+My decisions (say if you want different):
+- The customer's Due on their invoice is the whole retail total (nothing the customer paid the reseller is recorded in the ERP).
+- The reseller's own phone is not printed on the invoice (only store name and logo, as asked).
+- An order that a confirmed status already took stock for can still be changed by the reseller until the payment is verified; the extra quantity is stock-checked.
+
+Tests: `ResellerOwnCourierOrderTest` now 25 (7 new: staff cannot change items, price/courier/customer change without extra payment, extra payment + packing waits for all of it, rejected extra resent for the extra only, nothing removed/lowered/below store price + stock, locked after verification, the portal page end to end incl. the real `/portal/orders/{id}/edit` URL and another reseller getting 404); the buyer-view test now checks the store name/logo, Due Amount and the PDF. Full `php artisan test` (plain, no `--env`): **1833 passed, 1 skipped, 0 failed**.
+
+Needs Bangla review: the 16 new keys, especially "বাড়তি টাকার পেমেন্ট", "এখন পাঠাবেন", "এখনও পাওয়া বাকি", "পরিবর্তন".
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes), then merged with `origin/main` v2.55.0 (fraud check card); conflicts in CHANGELOG/UPDATE_NOTES, lang files, the portal CreateOrder and ResellerPanelProvider resolved by keeping both sides. Full suite after the merge: 1863 passed, 1 skipped, 0 failed.
+
+## 2026-10-06 - Reseller module audit: stock errors, Book courier, courier callbacks
+
+Reason — owner asked to check the reseller module for breaks: when booking, a product out of stock showed no error; selecting orders and Book courier did not book; no callbacks came from the courier (the owner fixed these on main and asked whether the reseller module has them, or anything else).
+
+Findings and fixes:
+- **No stock error (found, fixed):** Change status → Confirmed on a draft (a reseller portal order arrives as a draft) with short stock left it as a draft, with the error under a field the action does not show — so nothing visible happened. `OrderStatusWorkflowService` now checks stock before moving into an accounted status and reports "Not enough stock: <product> (ordered N, in stock M)". Bulk Change status lists each skipped order with its reason.
+- **Book courier:** no reseller-specific problem. Own-courier orders are blocked with a reason by main's `Order::courierBookingBlocker()`; store-delivered reseller orders book like any other order.
+- **Callbacks:** a courier "delivered" callback moves a reseller's order to completed and makes the reseller's commission payable (checked in a test). Own-courier orders get no callbacks (the reseller's courier never calls us); staff move them by hand.
+- **Also found:** **Mark parcel packed** on a draft own-courier order took no stock. It now confirms the order first (stock checked, products named when short, nothing marked).
+
+Tests: 4 new cases in `ResellerOwnCourierOrderTest`.
+
+Needs Bangla review: "Not enough stock: :products. …", ":name (ordered :ordered, in stock :available)", ":count order(s) were skipped:", "Could not mark the parcel packed", "Parcel marked packed".
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes), then merged with `origin/main` v2.55.0 (fraud check card); conflicts in CHANGELOG/UPDATE_NOTES, lang files, the portal CreateOrder and ResellerPanelProvider resolved by keeping both sides. Full suite after the merge: 1863 passed, 1 skipped, 0 failed.
+
+## 2026-10-06 - A reseller's customer only sees the reseller's price
+
+Owner rule: "Reseller এর কাস্টমার প্রোডাক্টের খরচ কখনোই দেখবে না, কাস্টমার শুধু খুচরা রেট দেখবে যেটা reseller সেট করে দিবে। এইটা invoice এ এপ্লাই করতেই হবে।"
+
+Problem: on an own-courier order the order's prices are the store's price to the reseller (plus packaging), and the invoice packed with the parcel printed them.
+
+What changed: the reseller sets **Your customer's price** per line on own-courier orders too (at least the store price), kept in new `order_items.reseller_retail_price`; `unit_price` stays the store's price. Buyer-facing views use `Order::showsResellerPricesToBuyer()` / `buyerTotal()` and `OrderItem::buyerUnitPrice()` / `buyerSubtotal()`: invoice (retail items and totals only; no packaging, paid, due or internal note; reseller's courier and parcel ID), courier slip (no due), summary card (single Total), storefront account pages, tracking page (defensive; portal orders are not trackable there). Portal: Sale amount = the reseller's own sale; order details add "You pay the store". The invoice no longer has the packaging row from the previous entry. Store-delivered reseller orders are unchanged (their prices are already the reseller's).
+
+Superseded in part by the entry above (owner answers 2026-10-06): the invoice now shows the reseller's store name/logo and a Due Amount.
+
+Tests: 3 new cases in `ResellerOwnCourierOrderTest` (buyer sees only retail on invoice/card, price floor, store-delivered invoice unchanged); mutation-checked on the invoice and the card.
+
+Needs Bangla review: "Your customer's price", "Store price", "Your customer's price (on their invoice)", "You pay the store", "Order total", the updated Products description.
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes), then merged with `origin/main` v2.55.0 (fraud check card); conflicts in CHANGELOG/UPDATE_NOTES, lang files, the portal CreateOrder and ResellerPanelProvider resolved by keeping both sides. Full suite after the merge: 1863 passed, 1 skipped, 0 failed.
+
+## 2026-10-06 - Packaging charge on reseller own-courier orders
+
+Owner rule: "রিশেলারের নিজস্ব কুরিয়ার হলে প্যাকেজিং কস্ট যুক্ত হবে". Asked how it is counted; answer: a fixed amount **per piece**, the amount set by the admin.
+
+What changed: setting `reseller_packaging_cost_per_unit` (Reseller Settings section), `orders.packaging_fee`, added to the order total in `OrderWorkflowService::sync()` and the admin `OrderForm` live total; `ResellerOrderPlacementService::quote()` adds pieces x setting for own-courier orders only, so the advance payment includes it. Shown on the portal Create order summary and order details, admin infolist Totals and edit form (read-only, only when set); not on the buyer's invoice (see the entry above).
+
+Tests: new case in `ResellerOwnCourierOrderTest` (quote, order, advance, store-delivered order has none, re-sync, invoice, admin edit save), mutation-checked.
+
+Needs Bangla review: "Packaging charge", the setting label and help text, the updated Products description.
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-06), on top of `origin/main` v2.54.1 (security audit fixes), then merged with `origin/main` v2.55.0 (fraud check card); conflicts in CHANGELOG/UPDATE_NOTES, lang files, the portal CreateOrder and ResellerPanelProvider resolved by keeping both sides. Full suite after the merge: 1863 passed, 1 skipped, 0 failed.
+
+## 2026-10-06 - Fraud check on the Create order forms + Fraud Checker for resellers
+
+Reason — owner (in Bangla) asked how the Fraud Checker would show on the Create order page; after my proposal they said yes, resellers may use the fraud checker too: add it to the reseller order page and add the Fraud Checker page to the reseller dashboard.
+
+What changed:
+- **Admin Create / Edit order:** the old one-line result + inline-styled table under **Courier Fraud Check** is now a compact card (`filament.fraud-check.compact`) with the verdict, delivery rate, totals, one chip per connected courier, other merchants' fraud reports, blacklist hit with reason, this store's order history for the number, and **Full report** (opens the admin Fraud Checker with `?phone=` in a new tab, already checked from the cache). Same auto-check on customer pick and same cache-skipping button as before. The button label and its warning are now translated.
+- **Reseller portal:** new **Fraud Checker** menu item (after Orders) and the same card on **Create order**, shown when the phone field loses focus (only for a valid BD mobile number; a half-typed number clears it).
+- Shared logic: `FraudCheckReport` + `ChecksCourierFraud`, so admin and reseller screens always agree. Verdict still uses the `external_fraud_low_ratio_threshold` Customer Risk setting — no new rules.
+
+My decisions (say if you want different):
+- Resellers never see the store's own data for a number: customer name, order history, blacklist reason. They also don't see couriers the store hasn't set up.
+- Resellers get no **Refresh live data** (cache skip). Every check of a new number still logs in to the store's courier panels; there is no per-reseller limit on how many numbers they check. Tell me if you want a daily limit.
+- Reseller checks are logged in the same customer-risk audit log as staff checks, without a customer link.
+
+Needs Bangla review: the 6 new keys — "স্টোরের কুরিয়ারগুলোতে এই নম্বরের ডেলিভারি হিস্ট্রি চেক করে।", "কুরিয়ার সাড়া দেয়নি। কিছুক্ষণ পরে আবার চেষ্টা করুন।", ":ratio% ডেলিভারি হয়েছে", "পুরো রিপোর্ট", "কুরিয়ার ফ্রড চেক", "আগে ফোন নম্বরসহ একজন কাস্টমার সিলেক্ট করুন".
+
+Tests: new `ResellerFraudCheckerTest` (6: access + menu, no store data, no cache skip, only the reseller's own store's couriers, Create order card, `?phone=` link), `FraudCheckerPageTest` 10 (+2: admin order form card, `?phone=` link). Affected tests (`FraudCheckerPage`, `ResellerFraudChecker`, `ResellerPortal*`, `SalesOrder`, `OrderForm`, `TranslationParity`, `MultiCompanyIsolation`, `ExternalCourierFraud*`): all pass except 17 that need the `intl` extension. Full plain `php artisan test` on this server (PHP 8.4 without intl): 1827 tests, 181 failures, all "intl extension required", 0 other failures — needs a full run with intl locally. `npm run build` clean; both admin and reseller themes include the card styles.
+
+Commit status: committed and pushed to the branch and main on owner approval ("ওকে কমিট এবং পুশ কর, মেইনেও দাও", 2026-10-06).
+
+## 2026-10-03 - Security audit fixes (items 1–4)
+
+Reason — owner asked for a security check against a 9-point OWASP-style list ("আমাদের অ্যাপে এক সিকিউরিটি প্রবলেম গুলো কি আছে দেখ তো?"), then approved fixing items 1–4 ("হ্যাঁ, ১ থেকে ৪ নম্বর ঠিক করে দাও").
+
+What changed:
+1. Dependencies: `composer update laravel/framework 'filament/*' league/commonmark league/flysystem league/flysystem-local` (no `-w`; a `-w` run wanted Guzzle 8 / brick/math 1.0, rejected as too risky). `package.json` overrides `@grpc/grpc-js` to `^1.14.5`. `composer audit` / `npm audit --omit=dev`: 0 advisories. Filament assets in `public/` republished (file modes kept at 644).
+2. IDOR: `CheckoutController::successPreview()` and `OfferCheckoutController::thankYouPreview()` require `canPerformModelAbility('view', Order::class)` for signed-in staff.
+3. Cross-company preview: `previewStorefront()` in Page, OrderTrack, ProductReview, Cart, Complaint, Checkout, AccountOrders and Contact controllers now checks `canAccessCompany()`.
+4. Sessions: new `InvalidateStaleCustomerSession` middleware (web group); customer password change/reset rotates `remember_token`.
+- Found while testing: `StorefrontUrl::prepend()` passed the preview slug as `slug` instead of `company`, so the preview success page crashed. Fixed (one line).
+- No new user-visible strings, so no lang keys.
+
+Tests:
+- New `tests/Feature/StorefrontPreviewAndSessionSecurityTest.php` (5). With the fixes reverted, 4 of them fail (the 5th is a control).
+- Full `php artisan test` (plain, no `--env`): 1659 passed, 2 skipped (11415 assertions), re-run after the owner's permissions rule (2026-10-06). `npm run build` clean.
+- Local env note: this container needed PHP 8.4 (installed from the ondrej PPA) to run `composer install`.
+
+Follow-up, same change — owner said "এখন পরের কাজ কর" (now do the next task, i.e. audit items 5–7) and asked for a session-relevant branch name: branch renamed locally to `claude/security-audit-fixes`.
+5. Throttles added: preview login/register/forgot/reset/password routes, the domain `PUT /account/password`, and `POST /webhooks/meta` (600/min).
+6. `SecurityHeaders`: script-safe CSP (`frame-ancestors 'self'; base-uri 'self'; object-src 'none'`, kept off responses that set their own) and HSTS on HTTPS only, no `includeSubDomains`.
+- `SecurityHardeningTest` +4 tests; with the change reverted, 3 fail (the "own CSP kept" one is a control).
+Follow-up 2, same change — owner said "পরের কাজ কর" again. Next was the audit's open loose end (where `role`/`is_active` can be changed):
+- Found: a custom role with `users.manage` could set any user's role to `super_admin` (its own included), and could edit, reset the password of, or bulk-delete a Super Admin. Fixed with the `User::canAssignRole()`/`canModifyUser()` guards in `Gate::before`, `UserForm`, `CreateUser`/`EditUser`, and per-record authorization on the users bulk delete.
+- New `tests/Feature/UserManagementEscalationTest.php` (7). With the guards reverted, the 4 escalation tests fail; the bulk-delete test fails without `authorizeIndividualRecords` (it needs two Super Admins, or the existing "last Super Admin" rule hides the hole).
+- Owner then set the rule (2026-10-06): "কোন ইউজার তার নিজের পারমিশন পরিবর্তন করতে পারবে না একমাত্র সুপার এডমিনই পারমিশন পরিবর্তন করতে পারবে" (no user can change their own permissions; only a Super Admin can change permissions). Implemented as `User::canChangePermissions()` = Super Admin: role field disabled for others, `EditUser` ignores a submitted role, `CreateUser` forces the default role (Sales Staff), and the inline "Create role" and the User Roles screen ("Manage Roles") are Super Admin only. This replaces the earlier `canAssignRole()` guard (which only blocked Super Admin).
+- My reading of the rule (say if different): a non-Super-Admin with "Users: Manage" can still add users, but every new user starts as Sales Staff until a Super Admin sets the role. A Super Admin may change their own role (the existing "at least one active Super Admin" rule still applies).
+- `UserManagementEscalationTest` is now 8 tests. With the rule reverted, 5 fail; the other 3 are covered by the earlier Super Admin guards.
+- Still open for the owner (not changed): a "Users: Manage" holder can assign users to any company, because the Users screen is not company-scoped.
+- No new user-visible strings (the guard is a 403), so no lang keys.
+
+- Deliberately left as is (my decision, say if you want it changed): `TRUSTED_PROXIES=*` — documented in `docs/deployment.md` as required behind Coolify/Traefik, and the app port is reached only through Traefik; tightening it needs the server's proxy network range. `/health/version` details — the admin updater, deploy docs and tests depend on its fields, and nothing in it is secret. A script-level CSP is still a separate pass (plan 09 step 3.4).
+
+Commit status: committed and pushed to `claude/security-audit-fixes` on owner approval ("commit আর push কর", 2026-10-06); merged with `origin/main` (v2.54.0), full suite then 1834 passed, 2 skipped; pushed to `main` on owner approval ("মেইনে পুশ কর", 2026-10-06).
+
+## 2026-10-06 - Courier status flow audit: order vs courier status, callbacks, booking, labels
+
+Reason — owner (in Bangla): there are two status fields (order status and courier status); booking a courier makes the order look delivered; audit the flow, check whether anything breaks or gets stuck, whether the API calls and booking/sticker work, and whether the callback URL works — "no API callback has come from the courier yet".
+
+What I checked (each in a test, Steadfast payloads as in its webhook guide):
+- **Booking does not mark an order delivered.** Book courier (Steadfast answers `in_review`) leaves the order at Confirmed with Delivery = Booking pending. A `Pending` callback moves it to Processing / In transit; `Delivered` to Completed / Delivered. Status mapping (incl. `*_approval_pending` → In transit) is as in the 2026-09-27 guide work.
+- **What looked like "delivered":** after booking, the order row shows a green **Delivered** button (and red **Returned**) — quick actions for marking by hand, not the status. Renamed to Mark delivered / Mark returned, with a clearer confirmation. This is my best reading of the report; I can't see the owner's screen or data, so if an order's Delivery column itself says Delivered right after booking, send its Status Logs / Webhook Logs.
+- **Callback URL:** route `POST /webhooks/couriers/{provider id}` is CSRF-exempt, reachable without login, and HTTPS-aware behind Coolify (trusted proxies). Auth: `Authorization: Bearer <Webhook Auth Token>` + optional `X-Signature` HMAC. A call with no/wrong token, or when the provider has no token saved, is rejected with 401 — and was not logged anywhere, so it looked like the courier never called. Now logged as **Rejected** with the reason.
+- **Processing needs the queue worker.** A verified callback is saved as Pending and applied by `ProcessCourierWebhook` on the queue. `docs/deployment.md` runs the worker as a separate Coolify service; if it isn't running, callbacks stay Pending and orders never move. The Webhook Logs page now warns after 5 minutes and has **Process now**.
+- **API calls:** booking and status-sync HTTP errors now come back as readable reasons (booking part was done 2026-10-05; sync added now). The scheduled `couriers:sync-statuses` runs every 30 minutes and also needs the scheduler (`schedule:run` cron) running.
+- **Labels / stickers:** **Print label** appears only when the provider has a Label URL template. Steadfast has none, so there is no sticker for Steadfast bookings in the app — not built here (would need the sticker layout from the owner).
+- **Cancel booking** only marks the booking cancelled in the ERP; no courier cancel API is called. Its confirmation now says so. A re-booking of the same invoice can then be refused by Steadfast as a duplicate (the reason is shown).
+- **Pathao callbacks** (not used by the owner as far as I can see — the tracking IDs are Steadfast's): our adapter reads `order_status`, while Pathao's webhook sends an `event` field and expects an integration handshake. Not changed; needs checking against Pathao's current docs before Pathao is used.
+
+What changed:
+- `CourierWebhookController`: logs rejected calls (deduped per body; payload kept only up to 16 KB); answers Steadfast with 200 `{"status":"success","message":"Webhook received successfully."}` (Steadfast's guide; 202 is kept for the other couriers). I have not confirmed with Steadfast that 202 was a problem.
+- `CourierWebhookLogResource` / `ListCourierWebhookLogs`: Rejected status + filter, **Process now**, stuck-callback warning.
+- `CourierBookingFeedback::run()` for Sync / Update status / Cancel / Mark delivered / Mark returned (order list, order page, booking page). Status-sync calls wrapped in `CourierService::callCourier()`.
+- 14 new lang keys.
+
+Owner check after deploy:
+1. Courier → Providers → Steadfast: a **Webhook Auth Token** is saved; the same token is in Steadfast's panel → Webhook → Auth token; the Callback URL there is exactly the one shown on our provider page (https).
+2. Courier → Webhook Logs: after the next status change at Steadfast, a row should appear. **Rejected** → the token/URL fix it names. **Pending** for minutes → the queue worker service isn't running on Coolify (start it per `docs/deployment.md`; Process now works meanwhile). Nothing at all → Steadfast isn't calling the URL (check the URL in their panel and its Delivery health).
+
+Needs Bangla review: the 14 new keys, especially "ডেলিভারি হয়েছে চিহ্নিত করুন" / "রিটার্ন হয়েছে চিহ্নিত করুন" and the long stuck-callback and cancel-booking sentences.
+
+Tests: new `CourierStatusFlowAuditTest` (6; all 6 fail on the old code — the first only on the 200 response, its status flow already passed), updated `SteadfastApiGuideTest` and `CourierIntegrationTest`; `OrderCourierBookingFeedbackTest`, `CourierMonitoringTest`, `LiveCourierAdaptersTest`, `TranslationParityTest` pass. Full `php artisan test` (plain, no `--env`, PHP 8.4 with intl): **1818 passed, 1 skipped, 0 failed**.
+
+Commit status: committed and pushed to the branch and main on owner approval ("ওকে কমিট এবং পুশ করো মেইনেও পোস্ট করো", 2026-10-06), together with the "already booked" fix below.
+
+## 2026-10-06 - Book courier: "already booked" for a never-booked order
+
+Reason — owner sent a screenshot of bulk Book courier on a brand-new order: "0 order(s) booked · 1 already booked", although the order had never been booked.
+
+Cause (reproduced in tests): "can this order be booked" only checked `orders.delivery_status === not_booked`. That field changes without any courier booking: the Create order form has a Delivery Status select, and Change status → Shipping sets it to In transit (`OrderStatusWorkflowService`). Bulk booking reported every non-bookable order as "already booked", and the row/order-page Book courier buttons were hidden for it. I can't see the owner's order, so which of the two moved this one is not confirmed; both now book.
+
+What changed:
+- New `Order::courierBookingBlocker()`: blocks only a live courier booking (latest booking not cancelled/failed), a delivered/partly delivered/returned delivery, a cancelled/returned/refunded order, or a reseller's own-courier order. After a cancelled or failed booking a new one can be made.
+- `OrdersTable` (row + bulk) and `ViewOrder` use it; the current-company check stays. Bulk Book courier lists each skipped order with its reason.
+- 10 new lang keys (reasons, bulk summary, popup text, plus "Refunded" / "Partial Delivered" for the reason text).
+
+My decision (say if you want different): when an order's Delivery status says In transit but it has no booking, booking it is allowed and then sets Delivery status from the courier's answer (usually Booking pending).
+
+Needs Bangla review: the 10 new keys, especially "অর্ডারটি :status।" and "কুরিয়ার বুক করতে অর্ডারের কোম্পানিতে যান।"
+
+Tests: `OrderCourierBookingFeedbackTest` 10 (4 new; the 4 fail on the old code), plus `CourierIntegrationTest`, `ResellerOwnCourierOrderTest`, `SalesOrderTest`, `TranslationParityTest`. Full `php artisan test` (plain, no `--env`, PHP 8.4 with intl): **1812 passed, 1 skipped, 0 failed**.
+
+Commit status: committed and pushed to the branch and main on owner approval ("ওকে কমিট এবং পুশ করো মেইনেও পোস্ট করো", 2026-10-06).
+
+## 2026-10-06 - Headless Next.js storefront, phase 3 (customer accounts / order tracking / reviews)
+
+Reason — owner asked "ধাপ ৩ শুরু কর" after phase 2 reached `main`. Parity rule: nothing is re-implemented — the API calls the services the Blade account pages use.
+
+What changed (ERP, this repo):
+- **Customer token** — migration `2026_10_06_100000_create_storefront_customer_tokens_table`, `StorefrontCustomerToken` (hash only; 48 h, 30 d with remember; revoked on password reset/change, deactivation), `StorefrontCustomerSession`, middleware `AuthenticateStorefrontCustomer` + `EnsureStorefrontAccountsEnabled`.
+- **API** (`routes/api.php`, `v1/storefront`): `account/register|login|otp|otp/verify|password/forgot|password/reset|logout`, `account` (home), `account/profile`, `account/password`, `account/activity`, `account/orders[/{n}]`, `…/reorder`, `…/reviews`, and the public `orders/track` + `orders/{n}/tracking?token=`. Contract: `docs/api/storefront-api.md` §6.
+- **Shared code** — `StorefrontOrderTrackingService` (Blade tracking page now uses it, output unchanged); `CustomerAccountService` untouched in behaviour except: reset-code attempt lock (**Security**), e-mail login now case-insensitive.
+- **Order summary** gained `status_label`, `order_date`, item `slug`; checkout/finalize record "Order placed" in the account activity when the customer token is sent.
+- Tests: `StorefrontApiAccountTest` (33) + `MultiCompanyIsolationTest` entry; Blade tracking/auth/checkout tests pass unchanged. Verification: full ERP suite 1783 passed / 1 skipped / 0 failed (13,502 assertions); Pint clean on all touched PHP files; website `npm run typecheck` + `npm run build` pass; browser run (Playwright on a throwaway SQLite DB, real ERP + real `next start`, mock SMS gateway) passed every check — register, sign-in (+880 spelling, remember-me), OTP, forgot/reset, prefilled checkout, order tracking by link and by phone, review pending→approved, reorder, profile/password, sign-out, Bangla pages, no horizontal scroll at 390 px, httpOnly cookie not readable by scripts and the token absent from every response body.
+
+What changed (website repo `zamzamint-new-website-theme`): `/account/login|register|login/code|forgot-password`, `/account` (overview), `/account/orders[/n]`, `/account/profile`, `/track`; the login token lives only in the httpOnly `zi-customer` cookie, set by route handlers under `/api/account/*`; checkout is prefilled from the profile; the success page links to `/track?order&token`; header account/"Track order" links. ~170 new en+bn keys.
+
+Owner decisions / open items:
+- **Registration can adopt an existing customer record by phone number** (the Blade behaviour, kept for parity): someone who knows a customer's phone number can register an account for it and then sees that customer's past orders (items, address) without proving they own the phone. Suggested hardening, not done because it is a business decision: when the phone already belongs to a customer with orders, require the SMS code before the account is created (needs the SMS gateway configured).
+- Approved reviews reach the Next.js product page only after the website's 2-minute catalogue cache expires (no webhook is sent when a review is approved).
+- Order status shown to customers: a new website order is `draft` in the ERP until an admin confirms it; the website words it "Order received" (Blade shows "Draft").
+
+Needs Bangla review: the website's `auth.*`, `account.*`, `order.*`, `review.*`, `track.*`, `status.*`, `activity.*` keys (`src/i18n/messages.ts` in the website repo).
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-06) — both repos (ERP `Business-Dashboard` and `zamzamint-new-website-theme`) — and then pushed to `main` in both on the owner's request ("দুই রিপোর মেইনে পুশ কর", 2026-10-06). For the ERP, `origin/main` (v2.49.0–v2.51.0 and the courier-booking feedback fix) was merged into the branch first; only CHANGELOG/UPDATE_NOTES conflicted (both sides kept).
+
+## 2026-10-05 - Book courier not booking + Upsell filter on the orders list
+
+Reason — owner asked (in Bangla) for an orders-list filter by upsell items, and reported that clicking **Book courier** does not book.
+
+Cause (reproduced in a test): when a booking could not go through, nothing explained why. A courier refusal (Steadfast/Pathao/RedX/E-Courier HTTP 4xx — e.g. wrong phone, wrong keys, duplicate invoice) was thrown as a raw `RequestException` from the courier client — nothing booked, no readable reason. `CourierService`'s own errors (customer risk review pending, provider mismatch, missing customer) were raised under keys like `risk` / `provider` that match no popup field, so the popup just sat there. The bulk action caught only validation errors, so one HTTP refusal stopped the batch.
+
+I could not see which reason applies to the owner's order (no access to their data or courier account). After this change the popup says it.
+
+What changed:
+- `CourierService::callCourier()`: courier HTTP/connection errors become a readable validation error with the courier's own message.
+- New `app/Filament/Resources/Orders/Actions/CourierBookingFeedback.php`: success notification with the tracking ID; failure notification with the reason, popup kept open. Used by the list's **Book courier** and the order page's **Book courier** / **Book Steadfast**.
+- Bulk **Book courier**: keeps going past a refused order and lists each failed order number with its reason.
+- `OrdersTable`: new **Upsell items** filter (with / without).
+- 8 new lang keys in `lang/en.json` and `lang/bn.json`.
+
+Needs Bangla review: the 8 new keys, especially ":courier বুকিং নেয়নি: :reason" and "আপসেল আইটেমসহ / ছাড়া".
+
+Tests: new `OrderCourierBookingFeedbackTest` (6; 5 of them fail on the old code, all pass now), plus `CourierIntegrationTest`, `OrderUpsellTest`, `OrderStockShortageTest`, `TranslationParityTest`. Full `php artisan test` (plain, no `--env`, PHP 8.4 built with intl in the cloud session, after `npm run build`): **1775 passed, 1 skipped, 0 failed**.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-05).
+
+## 2026-10-05 - Adding items after an order is created + Upsell tag
+
+Reason — owner reported (in Bangla) that after an order is created, no new item can be added: it errors with "no stock", no popup appears, and adding 10 pcs of stock to the product did not help. They also asked that an item added after the order is created be saved as an **upsell**, with the tag shown only in the dashboard, never to the customer.
+
+Cause (reproduced in a test): every item save re-syncs *all* of the order's sale movements, and `StockMovementService::validate()` re-checked each one against current stock. When an existing line's product had gone below zero (a WooCommerce sale is never blocked), that unchanged line failed — so adding any item, even one with plenty of stock, was refused, and adding stock to the *new* item's product could not help. Separately, a purchase/adjustment that raised a below-zero product but left it still below zero was refused too. The popup existed on Create order only.
+
+What changed:
+- `StockMovementService::validate()`: negative stock blocks a movement only when it lowers stock compared with what it booked before (`takesStock()`). Unchanged/decreased order lines and stock additions pass.
+- `OrderStockCheckService::shortages()` takes the saved order and only asks for stock beyond what the order already took; `short` now also covers stock already below zero (before, the popup could add too little).
+- New trait `Pages/Concerns/HandlesStockShortages.php` holds the "Not enough stock" popup; `CreateOrder` and now `EditOrder` (`beforeSave`) use it. On edit it shows "Adding · In stock · Short by" and the button **Add stock and save order**. Not shown for WooCommerce orders or draft orders.
+- Upsell: migration adds `order_items.is_upsell`; the items repeater marks rows created on the edit page as upsell; an **Upsell** badge shows under the product on the order edit and view pages. Invoice/PDF/storefront/customer account do not read it.
+- 3 new lang keys in `lang/en.json` and `lang/bn.json`.
+
+My decisions (say if you want different): "after creation" = added on the admin Edit order page (WooCommerce re-syncs, the reseller portal and the storefront never mark upsell); editing an existing line's quantity does not make it an upsell; the tag is not shown in the reseller portal either; no upsell report/filter was added; the **Change status** (draft → confirmed) action still shows its existing stock error, not the popup.
+
+Needs Bangla review: "Upsell" (আপসেল), "Adding: … Short by" (যোগ হচ্ছে … কম আছে), "Add stock and save order" (স্টক যোগ করে অর্ডার সেভ করুন).
+
+Tests: `OrderStockShortageTest` (11, 4 new + 1 changed: raising a quantity above stock on edit now opens the popup) and new `OrderUpsellTest` (6) pass, plus `TranslationParityTest`. Full `php artisan test` (plain, no `--env`) in the cloud session after `npm run build`: 1523 passed, 1 skipped, 166 failed — every failure is "The intl PHP extension is required" (this session's stand-in PHP 8.4 has no intl; same 166 as the 2026-10-03 cloud run), none in the changed files. Re-run the full suite locally before release.
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-05).
+
+## 2026-10-05 - Reseller portal: Forgot password
+
+Owner asked to start the portal password reset ("পাসওয়ার্ড রিসেট এর কাজ শুরু কর").
+
+What changed: new `app/Filament/Reseller/Pages/Auth/ForgotPassword.php` registered with `->passwordReset()` in `ResellerPanelProvider`, so the portal login shows **Forgot password?**. Same rules as the storefront reset (`CustomerAccountService`): 6-digit SMS code, 15 minutes, then new password and sign-in. Only pending/approved resellers of the portal's company get a code; same reply for any number. Without SMS settings it says reset is not available. Rate limits: 2 code requests and 5 reset tries a minute per visitor.
+
+Tests: new `tests/Feature/ResellerPortalPasswordResetTest.php` (9 tests, mutation-checked), including the real portal Livewire endpoint. 11 new lang keys in en/bn.
+
+Needs Bangla review: the 11 new reset keys.
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-05).
+
+## 2026-10-05 - Reseller orders with the reseller's own courier
+
+Owner's process: many resellers book the parcel with their own courier, give the company the parcel ID and pay the full amount in advance; the company packs the parcel and puts that parcel ID on it. The owner said to start ("ওকে কাজ শুরু কর") without answering the four open questions, so these defaults were used (easy to change):
+
+- No commission on these orders: lines are charged at the base price (normal price without a wholesale rate), and the reseller keeps what their customer pays them.
+- Payment per order: send money to one of the store's active manual payment methods, then enter sender and transaction ID; staff verify on the order page. No prepaid balance.
+- No packaging fee and no delivery charge.
+- The parcel ID is required when the order is created; one parcel ID per reseller (not counting cancelled orders).
+
+Files: migration `2026_10_05_100000_add_reseller_own_courier_to_orders_table`, `ResellerOwnCourierService`, `ResellerOrderPlacementService`, `Order` (columns, `resellerAdvancePayment()`, no default courier for these), `StorefrontPayment::PURPOSE_RESELLER_ADVANCE`, portal `CreateOrder` + view, portal `Orders` + order-detail partial, admin `ViewOrder`, `OrderInfolist`, `OrdersTable`, `StorefrontPaymentResource`, lang en/bn, `ResellerOwnCourierOrderTest` (10 tests, mutation-checked).
+
+Needs Bangla review: all new keys (delivery choice, advance payment, parcel ID, admin verify/reject/packed labels).
+
+Commit status: committed and pushed to the branch on owner approval ("ওকে কাজ শুরু কর এইটা শেষ করে কমিট এবং পুশ করবে", 2026-10-05), then to main ("মেইনে পুশ কর").
+
+## 2026-10-04 - Create order moved from the menu to a button on Orders
+
+Reason — owner's screenshot: take **Create order** out of the sidebar and put a button in the marked area (top right of the Orders page) that opens the order page.
+
+What changed: `CreateOrder` no longer registers a menu item; `Orders` has a **Create order** header action linking to it; the menu order is back to Dashboard, Orders, Products, … (the earlier sort bump was undone). No new strings.
+
+Tests: one new test in `ResellerPortalCreateOrderTest` (not in the menu; one button link on Orders). Full suite below.
+
+Commit status: committed and pushed to the branch together with the own-courier work (owner approval 2026-10-05).
+
+## 2026-10-05 - Two-item orders not saving + "Not enough stock" popup
+
+Reason — owner asked (in Bangla) why an order with two items does not get placed, and asked for a warning popup with an option to add stock when a product is out of stock on submit.
+
+Cause (reproduced in a test): on the admin Create order page, a confirmed / processing / completed order takes stock out item by item. When one item had no stock, `StockMovementService::validate()` threw "Insufficient stock for this sale quantity." under the key `quantity`, which matches no form field — so nothing showed on screen. The panel has no database transactions, so the order and its items stayed saved with only part of the stock taken. Two in-stock items save fine; it is the out-of-stock item that blocks.
+
+What changed:
+- New `app/Services/OrderStockCheckService.php`: lists short products/variants for the form's items (lines of the same product are added together) and adds stock as an `adjustment` movement with reason "Stock added from the order form".
+- `CreateOrder`: before saving an accounted-status order, checks stock; if anything is short it opens the **Not enough stock** popup (ordered / in stock / short by per product, a quantity box per product defaulting to the shortage, minimum the shortage) and saves nothing. **Add stock and place order** adds the stock and places the order. Staff without `inventory.create` (e.g. Sales Staff) see the list without the add option.
+- `CreateOrder` and `EditOrder`: database transactions on, and new trait `Pages/Concerns/ReportsStockErrors.php` shows a stock error as a notification (also covers editing a confirmed order's quantity above stock).
+- 9 new lang keys in `lang/en.json` and `lang/bn.json`.
+
+My decisions (say if you want different): draft orders don't take stock, so no popup for them; added stock is recorded as a stock adjustment (not a purchase, since there is no supplier/cost); the popup is on Create order only — **Change status** (draft → confirmed) and the reseller portal still show their existing stock error.
+
+Needs Bangla review: the 9 new keys, especially "pcs to add" (পিস যোগ হবে) and "Short by" (কম আছে).
+
+Tests: new `tests/Feature/OrderStockShortageTest.php` (7) pass. Full suite: 1679 passed, 1 skipped (`php artisan test`, no `--env`, after `npm run build`).
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর এবং মেইনে পুশ কর", 2026-10-05).
+
+## 2026-10-03 - Fraud Checker page laid out like ParcelVai
+
+Reason — owner asked whether our fraud checker tool could be laid out like https://parcelvai.com/ and sent a screenshot of ParcelVai's result for their own number (verdict banner, summary tiles, per-courier cards).
+
+What changed:
+- New `app/Filament/Pages/FraudChecker.php` + `resources/views/filament/pages/fraud-checker.blade.php` under the Courier menu (`sales.view` permission, same as the courier dashboard). Phone input with +88 prefix, Check / Refresh live data, verdict banner, 4 summary tiles, overall bar, Steadfast merchant fraud reports, one card per courier (Pathao, Steadfast, RedX; unconfigured ones say so and link to Providers), blacklist warning, and this store's own orders for the number.
+- `ExternalCourierFraudService`: new `configuredDrivers()`, `normalizePhone()` made public, provider lookup moved into `activeProvider()`. Behaviour of `checkByPhone()` unchanged.
+- 33 new lang keys in `lang/en.json` and `lang/bn.json`.
+
+My decisions: Safe / Risky uses only the existing `external_fraud_low_ratio_threshold` setting (no new middle level, no ParcelVai-style "AI advice" text, since that would be invented rules). Paperfly and CarryBee (shown by ParcelVai) are not included — the app has no integration for them; adding them needs their API/panel access from the owner. The order form's existing fraud check is unchanged.
+
+Needs Bangla review: all 33 new keys (written by Claude), especially "Trusted" (বিশ্বস্ত), "Not configured" (কনফিগার করা নেই) and the threshold sentences.
+
+Tests: new `tests/Feature/FraudCheckerPageTest.php` (8), plus `ExternalCourierFraudCheckTest` and `TranslationParityTest` all pass; `CourierIntegrationTest` / `SalesOrderTest` pass except 10 table-page tests that hit the missing intl extension below. Full `php artisan test` (plain, no `--env`) in the cloud session: 1491 passed, 1 skipped, 166 failed — every failure is "The intl PHP extension is required" (the session's stand-in PHP 8.4 build has no intl); none involve these files. Re-run the full suite locally before release. `npm run build` clean.
+
+Commit status: committed and pushed to `ccr-ba78e320-bkghqi` on owner approval ("ওকে কমিট এবং পুশ কর", 2026-10-04), then merged with main (v2.45.0) and pushed to `main` on owner approval ("মেইনে পুশ কর", 2026-10-04). (The first commit message said 31 lang keys; it is 33.)
+
+## 2026-10-04 - Reseller portal: Create order
+
+Reason — owner asked for resellers to integrate their WooCommerce site, create orders and see order status like the main dashboard. I asked four scoping questions (Woo scope, order pricing/payment, status rights, Woo commission); the owner answered "No preference" and then narrowed the request: **"Reseller শুধু অর্ডার তৈরি করতে পারবে এইটা এড কর"** (resellers can create orders — add only this). So only **Create order** is built; the WooCommerce integration is **not** built and still needs the owner's answers (see the questions' options: orders flowing into the ERP by webhook, status pushed back, product import only; and how Woo prices/commission are treated).
+
+Order status was already visible: the portal's **Orders** page shows each order's stage and a read-only detail/timeline (Phase 3), and a portal-created order appears there.
+
+Rules used (no new business rules — the storefront checkout's): own store's products only; own selling price, never below the base price (no wholesale rate = normal price, no commission); cash on delivery; delivery charge and VAT from the store's settings; stock check; order created as `draft` with a new source `reseller_portal`, credited to the reseller; commission via the existing order observers; courier fraud check job dispatched as for storefront orders.
+
+My decisions (say if you want different): variant products are not offered (their lines have no reseller price); the buyer is matched by phone, and a phone that already belongs to a reseller account is not overwritten; the buyer's source is stored as "Other".
+
+Bug fixed on the way: `OrderNotificationObserver` built the admin "View order" link from the *current* panel, which fails (route not defined) when an order is created inside the reseller portal. It now names the admin panel.
+
+Needs Bangla review: 15 new keys in `lang/bn.json` (Create order page).
+
+Tests: `ResellerPortalCreateOrderTest` (15). Full suite: 1664 passed, 1 skipped (`php artisan test`, no `--env`).
+
+Commit status: committed and pushed to the branch and main on owner approval ("কমিট এবং পুশ কর, এরপর মেইন এ পুশ কর", 2026-10-04).
+
+## 2026-10-03 - Portal polish: Become a reseller link, Visit store, dashboard order, store logos
+
+Reason — owner's screenshots and requests: (1) sign-in page link "Become a reseller" instead of "sign up…", (2) **Visit store** button where **Copy link** was on My Store (Copy link removed there), (3) **Recent orders** above the commission chart on the dashboard, (4) reseller can set their business logo on My Store, light and dark.
+
+What changed: `Login::registerAction()` label; `my-store.blade.php` button; `dashboard.blade.php` order; new `customers.reseller_logo` / `reseller_logo_dark` (migration), `Customer::resellerLogoUrl()/resellerLogoDarkUrl()`; `MyStore` has two logo uploads (stored under the company's public `reseller-logos` folder; they do not use the admin `CompanyMedia` write check, which needs a staff user, and record nothing in the Media Hub); `storefront/layout.blade.php` feeds the reseller logos to every theme's header (a light-only logo is used in both modes; none = store name as before).
+
+My decisions: the dashboard's own Copy link / WhatsApp / Facebook buttons were left (only the marked My Store button changed); the always-dark marketplace-pro header shows the dark logo when there is one; 1 MB size limit like the admin logo fields; old logo files are not deleted when replaced.
+
+Needs Bangla review: 5 new keys ("Visit store", the two logo labels and their helper texts).
+
+Tests: 6 new in `ResellerPortalAccountTest`.
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-03).
+
+## 2026-10-03 - Content Creation (plan 14) Phase 0: Bangla rendering check, Imagick, bundled font
+
+Reason — owner asked for an AdBreezy-style ad creative builder, then said "কাজ শুরু কর" (start the work), and later "ডায়াগনস্টিক কমান্ড বানিয়ে শুরু কর" (start by building the diagnostic command) and "দুটোই কর, ফন্ট আর Imagick যোগ কর" (do both: add the font and Imagick).
+
+What changed:
+- Phase 0 spike: GD breaks Bangla shaping; Imagick (PECL 3.8.1 Windows build, ImageMagick 7.1.1-46 with raqm) renders it correctly; a browser canvas also does and stays the fallback. Results are in plan 14 §9.
+- New `app/Services/AdCreative/TextRenderingCapability.php` + `app/Console/Commands/CheckAdCreativeRendering.php` (`ad-creative:check-rendering [--font=] [--render]`).
+- `resources/fonts/ad-creative/HindSiliguri-{Regular,Bold}.ttf` + `OFL.txt` (Google Fonts repo, OFL).
+- `composer.json` / `composer.lock`: `ext-imagick` required (Nixpacks reads extensions only from here). `.github/workflows/deploy.yml`: `imagick` added to setup-php.
+- New `14_AI_TOOL_MENU_CONTENT_CREATION_PLAN.md` (numbered 14 because `13_RESELLER_PORTAL_PLAN.md` already exists upstream).
+- No user-visible UI strings (console output only), so no lang keys.
+
+Tests:
+- New `tests/Feature/CheckAdCreativeRenderingCommandTest.php` (4; the Imagick-only case is skipped locally because local PHP has no imagick).
+- Full `php artisan test` (plain, no `--env`): 1639 passed, 1 skipped (11341 assertions), run on top of `origin/main` (v2.42.1). `npm run build` clean; no frontend assets changed.
+
+Still open: after deploy, run `php artisan ad-creative:check-rendering --render` in the Coolify terminal. If `raqm` or shaping FAILs on the Nix ImageMagick build, switch the renderer to the browser-canvas fallback.
+
+Commit status: committed and pushed to `main` (owner approved: "কমিট + পুশ"). Only the Phase 0 files plus these notes; other sessions' pending changes were left unstaged.
+
+## 2026-10-03 - Hotfix 2: portal apply/login did nothing
+
+Reason — owner reported that after the first hotfix the portal login page opens, but signing up and logging in does nothing (no error), and admin shows no applicants.
+
+Root causes (both reproduced by posting the real Livewire request in a test before fixing):
+1. `RestrictResellerPortalHost` only let `livewire/...` through, but this app's Livewire update URL is the randomised `livewire-<hash>/update`, so on the portal host every form submit was redirected back to `/portal` (302) — nothing was saved or logged in. The earlier Phase tests used `Livewire::test()`, which skips HTTP middleware entirely, so they could not see this.
+2. Even with that fixed, Livewire only re-runs "persistent" middleware on update requests; `ResolveCompanyFromResellerPortalDomain` wasn't one, so the company was unresolved on submits and an application was saved to the default company (id 1) instead of the portal's. Now persistent.
+
+New `tests/Feature/ResellerPortalLivewireHttpTest.php` (4 tests, real HTTP Livewire endpoint): update URL not redirected, apply saves to the portal company as pending, wrong password returns the error, approved reseller logs in. Mutation check: dropping either fix fails the tests.
+
+Owner note: nothing was saved while it was broken, so applicants must apply again; no data to repair. Same fixes make the portal's tables/actions (Orders, Products, Withdrawals…) work after login.
+
+Commit status: committed and pushed to the branch and main on owner approval ("commit আর push কর এবং মেইনে পুশ কর", 2026-10-03).
+
+## 2026-10-03 - Hotfix: portal "500" for guests (and failed storefront forms)
+
+Reason — owner reported `reseller.zamzamint.com/portal` showing "500 Something went wrong". The owner ran a read-only debug command in the production terminal; it showed the real exception was `AuthenticationException` ("Unauthenticated") — a normal "send to login" signal, not a crash.
+
+Root cause: the production-only error-page hook in `bootstrap/app.php` (added for the security plan) caught every exception, including `AuthenticationException` and `ValidationException`, and replaced Laravel's login redirect / back-with-errors with the branded 500 page. Tests never saw it because the hook is off in `local`/`testing`. This is older than the reseller work: any guest hitting a login-protected page or any failed validation outside `/admin` got the 500 page in production.
+
+What changed: the hook now returns null for `AuthenticationException`, `ValidationException` and `HttpResponseException`. New `tests/Feature/ProductionErrorPagesTest.php` (3 tests) switches the app to the production environment: guest `/portal` redirects to `/portal/login`, a failed storefront validation redirects back with errors, and a real 404 still renders. I reproduced the 500 in the same test before fixing it.
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
+
+## 2026-10-04 - Headless Next.js storefront, phase 2 (quote / checkout / payment)
+
+Reason — owner asked "ধাপ ২ শুরু কর" and decided how a live Collection deal price combines with wholesale tier prices: **the deal price wins** ("ডিল-প্রাইসই কার্যকর").
+
+What changed (ERP, this repo):
+- **Shared checkout service.** `App\Services\StorefrontCheckoutService::process()` now holds every rule the Blade checkout applied (contact rules/normalising, delivery area + fee, VAT, checkout policy, pre-order / new-customer-delivery / courier-risk advance, full online payment, COD, manual send-money, stock check, order creation). `Storefront\CheckoutController` only builds the signed return URLs and handles the session/redirects; behaviour is unchanged (all existing checkout tests pass). `CheckoutOutcome` is the result object; `StorefrontCheckoutPolicyService::evaluate()` takes an optional visitor IP.
+- **Checkout API** in `routes/api.php` (`v1/storefront`, same key + Next.js switch, now with `ForceJsonResponse`): `POST checkout/quote`, `POST checkout`, `POST checkout/payments/{payment}/finalize`, `GET orders/{order_number}?token=`. `Api\V1\StorefrontCheckoutController`, `StorefrontApiCartResolver` (slug + variation + quantity → priced lines, every adjustment reported as an `issue`), `Support\StorefrontApi\{Signing,OrderSummary}`. Contract: `docs/api/storefront-api.md` §5.
+- **Price rule (decided):** variation price → live deal price → wholesale tier → selling price; a deal not lower than the selling price is ignored and variations never get a product-level deal (`StorefrontCatalogService::unitPrice()/dealFor()`; the API card's `deal` follows the same rule).
+- Safety: price/total never read from the browser (`expected_total` guard → 409 `price_changed`); idempotency by `client_request_id` + lock; return/cancel URLs must be https on `nextjs_site_domain`; the order is created only after the gateway verifies; payment `ref` / order `token` are HMACs (unguessable); visitor IP is forwarded by the website and never replaced by the Next.js server's IP; `StorefrontMetaTrackingService::contextFromClient()` is consent-aware.
+- Docs: `docs/api/storefront-api.md`, `PROJECT_GUIDE.md`, `CHANGELOG.md`, `CLAUDE.md`. No migration, no new model, no new translation key in this repo (API messages are developer-facing English like phase 1).
+- Tests: `StorefrontApiCheckoutTest` (26: gate, JSON errors, deal > tier > selling, ignored client prices, variations, MOQ/stock issues, delivery/VAT/payment options, COD order, price change, retry idempotency, visitor IP, policy block, manual payment, PayStation preorder/new-customer/courier-risk/full online payment with `Http::fake`, finalize once, return URL host rules, order token, cross-company isolation) and a deal-rule case in `StorefrontApiTest`.
+
+What changed (website repo `bhd4232/zamzamint-new-website-theme`):
+- `/checkout` (live ERP quote, address → delivery area, payment methods incl. send-money fields, advance notice and "Pay now" step, stale-cart fix button), `/checkout/payment/return` (finalizes on the server), `/checkout/success` (order summary by number + token; clears the cart), proxy routes `/api/checkout` and `/api/checkout/quote` (whitelist of browser fields, visitor IP via `TRUSTED_PROXY_HOPS`, per-IP rate limits, fixed return/cancel URLs from `SITE_URL`), cart drawer "Proceed to checkout" enabled, ~65 new interface strings in Bangla + English, mobile header no longer overflows at 390px.
+
+Verification:
+- ERP: full `php artisan test` (no `--env`) — **1693 passed, 0 failed** (12,461 assertions; 1666 before this phase + 27 new). The 376 Blade checkout/payment/policy tests were also run on their own right after the refactor. `vendor/bin/pint --test` is clean on the touched PHP files.
+- End to end on a **disposable** SQLite database (no seeder / `demo:refresh` / `migrate:fresh`): ERP `artisan serve` + `next start` + headless Chromium. COD order with a deal price and a 12-pcs tier price (ERP order 11,060 = 10,990 + 70, items priced server-side), double-click placed one order, inside/outside Dhaka detected from the address, send-money requires sender number + trx id and is recorded, pre-order advance with no gateway blocks the button with a clear message, stale quantity reported and fixed in one click, a spoofed `price` / `client_ip` / `return_url` from curl is ignored (409 `price_changed`), wrong success-token shows "not found", Bangla page, no horizontal scroll at 390px, ERP key absent from `.next/static`. Hosted-gateway flows (PayStation/ZiniPay) are covered by PHPUnit with `Http::fake`, not by a live gateway.
+- Website: `npm run typecheck` and `npm run build` pass (needs no ERP).
+
+My decisions (say if you want different):
+- When an advance is required, the customer first sees a "Pay ৳X now" step (with the owner's own message) instead of being redirected silently; clicking it opens the gateway. Retrying the same form returns the same payment.
+- The order-success link is `/checkout/success?order=…&token=…`; it empties the cart only if the order is less than 30 minutes old.
+- Order status/ERP-internal fields are never shown to customers; payment-method names, instructions and the advance messages are shown exactly as the admin entered them (not translated).
+- ERP API validation/policy messages are English (developer-facing), so a policy block shows the ERP's English sentence to the customer; translating those is part of the admin-content translation plan, not done here.
+
+Not done / needs a decision: customer login, order tracking, review submission (phase 3); DNS cut-over on Coolify (phase 4); Meta pixel / conversion events for the Next.js site (the API accepts `meta`, the website sends none and has no consent banner); a live PayStation/ZiniPay run (needs real credentials); OpenAPI file still does not describe the storefront endpoints; `TRUSTED_PROXY_HOPS` must be set correctly on Coolify (1 behind Traefik only, 2 behind Cloudflare + Traefik) or the visitor IP used by the policy rules is wrong.
+
+Needs Bangla review: the checkout / payment-return / success strings in the website's `src/i18n/messages.ts` (keys `checkout.*`, `payment_return.*`, `success.*`).
+
+Commit status: committed and pushed on owner approval ("কমিট এবং পুশ কর", 2026-10-05) — both repos (ERP `Business-Dashboard` and `zamzamint-new-website-theme`), branch `claude/loving-mendel-adxwam`. Then pushed to `main` in both repos on the owner's request ("২ রিপোর মেইনে পুশ কর", 2026-10-05); the ERP branch first merged `origin/main` (v2.47.0 + reseller own-courier work; conflicts only in CHANGELOG, UPDATE_NOTES and the two lang files, both sides kept; full suite 1750 passed).
+
+## 2026-10-03 - Headless Next.js storefront, phase 1 (read-only catalog API + website wiring)
+
+Reason — owner asked to connect the rebuilt zamzamint.com website (Next.js, no backend) to this ERP, then answered the design questions: both Blade and Next.js sites stay in the **Site → Storefront Settings** list and share its settings; Flash Sale / Trending / New Arrivals are managed as an option in **Offers**; the checkout must follow every Blade rule; Bangla + English; Coolify hosting; the frontend becomes the wholesale site. "ক) আর খ) দুটোতেই প্রস্তাবিতটা, ধাপ ১ শুরু কর".
+
+What changed (ERP, this repo):
+- **Next.js Site** section in Storefront Settings + **Sites** list column + "Open Next.js site" action. Migration `2026_10_03_100000_add_nextjs_site_to_storefront_settings_table` (off by default). Domain rules in `StorefrontSetting::nextjsDomainConflict()`, `Company::hostIsTakenByThePlatform()`, `HandlesNextjsSiteDomain`.
+- **Offers → type Collection** (Flash Sale / Trending / New Arrivals, schedule, per-product deal price). Migration `2026_10_03_110000_add_collection_fields_to_offers_tables`. Blade `/offers`, offer show/checkout and the AI image/video offer pickers exclude collections (`Offer::scopeLandingPages`).
+- **Storefront API** `routes/api.php` → `v1/storefront/*`: `StorefrontController`, `StorefrontCatalogService`, `StorefrontSiteConfigService`, `EnsureNextjsSiteEnabled`, `storefront-api` rate limiter (`AppServiceProvider`), `Product::reviews()`, `app/Support/StorefrontApi/{Media,RichText}`.
+- Docs: `docs/api/storefront-api.md`, `PROJECT_GUIDE.md`, `CHANGELOG.md`, `CLAUDE.md` (memory).
+- Tests: `NextjsSiteSettingsTest` (7), `OfferCollectionTest` (5), `StorefrontApiTest` (21); `PhaseFourAdminPagesTest` updated for the new `nextjs_site` section key.
+
+What changed (website repo `bhd4232/zamzamint-new-website-theme`, same branch name): mock catalog/dashboard/inventory-sync removed; server-only ERP client (`src/lib/erp.ts`, key never `NEXT_PUBLIC_`), cached + tagged data layer, ERP-driven theme/fonts/logo/menus/footer/contact/slides/collections/pages, Bangla + English UI (`src/i18n`), wholesale MOQ + tier prices, variations, reviews, JSON-LD, signed webhook `/api/erp/webhook`, `/api/catalog/products` for cart/wishlist refresh. Routes mirror the Blade ones (`/products`, `/category/x`, `/product/x`, `/pages/x`). Next.js bumped 14.2.18 → 14.2.35 (the old version carries a security advisory).
+
+Verification:
+- ERP: full `php artisan test` (no `--env`) — **1666 passed, 0 failed** (12,280 assertions). `TranslationParityTest` passes (740 keys in both files). `npm run build` for the ERP assets passes.
+- End to end against a **disposable** SQLite database (outside the repo; no seeder, `demo:refresh` or `migrate:fresh` used): ERP `artisan serve` + `next start`. Checked over real HTTP and in headless Chromium: API auth/403/rate limit, home/listing/category/product/page render with ERP data server-side, Bangla (browser language, cookie priority, switcher), wholesale tier pricing in the cart (12 pcs → ৳750, 50 pcs → ৳700), variation selection, wishlist refresh, header search, signed webhook (bad/missing signature 403, ping no-op, `product.updated` refreshes), ERP key absent from every browser asset and the rendered HTML. 19 scripted browser checks pass.
+- Website: `npm run typecheck`, `npm run build` (needs no ERP) pass.
+
+My decisions (say if you want different):
+- The Next.js site is the same settings row as Blade (one row per company), not a second row — `storefront_settings.company_id` is unique and used everywhere.
+- API key stays in the Next.js server only (no CORS, no browser calls). Rate limit 600 req/min per key.
+- Language: visitor's choice (cookie) → browser language → `DEFAULT_LOCALE` (default English). Same URLs for both languages (no `/bn` prefix) for now.
+- Display price on the website: live deal price, else the reached wholesale tier price, else the ERP selling price — **needs your confirmation**, and checkout must re-price on the server.
+- "Proceed to checkout" is disabled with an explanatory note until phase 2.
+
+Not done / needs a decision: checkout, payment, customer login, order tracking (phase 2–3); admin content translation (i18n plan Phase 4); the Blade "Flash deals" section still shows the first products, not Collections; full palette parity (background/surface/text colours) with the Blade theme; OpenAPI file not updated for the storefront endpoints; the API key has read **and** write power (no read-only scope yet).
+
+Needs Bangla review: 32 new keys in `lang/bn.json` (Next.js Site section, domain errors, Collection form, Flash Sale/Trending/New Arrivals wording) and the website's whole `src/i18n/messages.ts` Bangla dictionary (≈110 interface strings).
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03) — both repos, branch `claude/loving-mendel-adxwam`.
+
+## 2026-10-03 - Agent memory: company/domain map and headless Next.js storefront decisions
+
+Reason — owner asked to update the agent's memory after correcting a mix-up (zamzamint.com is the wholesale site, zamzamgadgetbd.com the retail site) and answering the open questions on connecting the rebuilt Next.js website to the ERP.
+
+What changed:
+- `CLAUDE.md` only: new sections "Companies and sites" and "Headless Next.js storefront" recording the owner-confirmed domain ↔ business map, that the Blade storefront stays alongside the Next.js site (both driven by the existing per-company settings), Coolify hosting, Offers-section options for Flash Sale/Trending/New, full checkout-rule parity via a shared service, Bangla + English, and the phase order.
+- No application code, migrations, translations or tests touched; no `CHANGELOG.md` entry (agent-instruction edit only, per `AGENTS.md`).
+
+Follow-up the same day: owner confirmed the frontend becomes the wholesale site and that the "site list" is Site → Storefront Settings; recorded the one-row-per-company / one-domain-per-company constraint and that the Blade storefront currently runs on offer.zamzamint.com.
+
+Open item: `Company::CORE_COMPANIES` and `docs/storefront-go-live.md` still call zamzamint.com "Gift Items" and zamzamgadgetbd.com "Gadget Items" — flagged in `CLAUDE.md` as stale, not changed here.
+
+Commit status: committed and pushed together with the entry above, on owner approval (2026-10-03).
+
+## 2026-10-01 - Reseller portal Phase 7b: reseller custom domains (app side)
+
+Reason — owner said "কাস্টম ডোমেইনের কাজ শুরু কর". Built everything the app can do; the server-side SSL proxy (Caddy vs Coolify API) is still an open decision, so the company switch stays off until that is set up.
+
+What changed:
+- Migration: `companies.reseller_custom_domains_enabled` (default off); `customers.reseller_custom_domain` (unique across all companies) and `reseller_custom_domain_verified_at`.
+- `Company::forResellerCustomDomainHost()` / `hostIsTakenByThePlatform()`; `ResolveCompanyFromDomain` resolves a verified custom domain to the reseller (same store scoping as subdomains). `ResellerDomainDnsChecker` (swappable in tests) compares the domain's IPs with the company domain's.
+- Portal **My Store**: **Your own domain** field, DNS instructions and **Check DNS**. A new/changed domain starts unverified.
+- `GET /internal/tls-ask` (throttled) for Caddy's on-demand TLS: 200 only for verified reseller domains.
+- Admin: **Reseller custom domains enabled** toggle (Super Admin only). `docs/deployment.md`: Caddy example and the Traefik-port caveat.
+
+My decisions (say if you want different): verification is a DNS-points-to-us check (no TXT token); a reseller can hold both a subdomain and their own domain; the toggle is separate from the subdomain one.
+
+Not done: nothing issues certificates yet — that is the proxy (server task). Without it a custom domain opens with a certificate error even after "verified".
+
+Needs Bangla review: 12 new keys in `lang/bn.json` (the "Your own domain" / Check DNS texts).
+
+Tests: `ResellerCustomDomainTest` (15); mutation check confirmed the unverified-domain and tls-ask tests fail without the verification filter. Full suite: 1585 passed (`php artisan test`, no `--env`); `npm run build` OK.
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-01).
+
+## 2026-10-01 - Reseller portal Phase 7a: reseller store subdomains
+
+Reason — owner asked whether resellers can add a subdomain/custom domain from their dashboard and have it go live automatically; then said "সাবডোমেইন দিয়ে শুরু কর". Owner's answers (asked via `AskUserQuestion`): subdomain **and** custom domain eventually; the domain shows **only the reseller's store**; a **company-level switch**, then all approved resellers. This phase is the subdomain half (7a); custom domains (7b) wait for the Caddy / Coolify-API decision.
+
+What changed:
+- Migration: `companies.reseller_subdomains_enabled` (default off) and `customers.reseller_subdomain` (unique per company).
+- `Company::forResellerSubdomainHost()` resolves `<label>.<company domain>`; `ResolveCompanyFromDomain` then scopes the request to that reseller like `/store/{slug}` does (`/` goes to `/products`). `StorefrontUrl` builds plain URLs on that host; `ResolveResellerFromSlug` only allows the host's own reseller there.
+- Portal **My Store**: a **Store subdomain** field (only when the company switch is on; validated, reserved names refused, clearable). `Customer::resellerStoreUrl()` returns the subdomain URL while the switch is on.
+- Admin: **Reseller subdomains enabled** toggle (Super Admin only, like the portal domain, because it needs server DNS/SSL work first).
+- `docs/deployment.md`: wildcard DNS + wildcard SSL steps.
+
+My decisions (say if you want different): reseller picks the label themselves, effective immediately (no admin approval); 3–40 characters; reserved list in `Company::RESERVED_RESELLER_SUBDOMAINS`; the company switch is Super Admin only.
+
+Needs Bangla review: 3 new keys in `lang/bn.json` ("Store subdomain", the format message, the helper text).
+
+Tests: `ResellerSubdomainTest` (16). Full suite: 1570 passed (`php artisan test`, no `--env`). No frontend change, so no `npm run build` needed.
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-01), together with the Phase 7 plan edit.
+
+## 2026-09-29 - Reseller portal Phase 6: switch-over
+
+Reason — owner said "ফেজ ৬ শুরু কর". Owner's answer to §2.1 Q5 (asked via `AskUserQuestion`): **redirect** the old My Account → Your Store page to the portal.
+
+What changed:
+- An approved reseller opening `/account/reseller` (or the sidebar's **Your Store**) is redirected to `reseller.<domain>/portal`. Staff preview keeps the old page. Guests, pending and rejected users behave exactly as before (login redirect / 403).
+- New **Reseller Portal Domain** section in `docs/deployment.md` (DNS, Coolify domain, custom domain, `npm run build`), a checklist line, and a portal paragraph in `PROJECT_GUIDE.md`.
+
+Things to know: the portal login is separate (different host), so a redirected reseller signs in again once. The old page's POST/PATCH endpoints still exist but are no longer reachable from any page — say if you want them removed. No new strings.
+
+Tests: two existing tests updated to expect the redirect. Full suite: 1554 passed (`php artisan test`, no `--env`).
+
+Commit status: not committed — waiting for owner approval, together with Phases 1–5 and the plan file.
+
+## 2026-09-29 - Reseller portal Phase 5: Earnings, Withdrawals, My Store, Profile
+
+Reason — owner said "Phase 5 শুরু কর" (start Phase 5). Its only open dependency (§2.1 Q3 — whose name is on a reseller's store) was already answered on 2026-09-28: the reseller's own name/brand only, no company name or logo. No new business question was needed.
+
+What changed:
+- **Earnings** page: every commission with status and date filters, search by order number, and monthly totals for the last 12 months (cancelled/returned orders not counted).
+- **Withdrawals** page: balance cards, the **Request withdrawal** form (same rules as the old "Your Store" page: the store's minimum, no more than the available balance), and the full history with status and transaction reference (or the store's reason on a rejection — the admin's internal note is never shown on any other status).
+- **Saved payout accounts** page: bKash / Nagad / Rocket / bank details saved once and picked on the withdrawal form; one default account; the first one saved becomes the default; a **Save this account for next time** switch on the withdrawal form. Editing or deleting a saved account never changes a request already sent (the request keeps its own copy of the details).
+- **My Store** page: the store's URL name (same rules as before: letters/numbers/dashes/underscores, unique within the company; a warning says shared links break if it changes) and the **Store name** shown at the top of the store.
+- **Store header:** inside a reseller's store (`/store/{slug}`) the header now shows only the reseller's Store name (falling back to business name, then their name) — no company name or logo (owner's Q3 answer). Both header partials (default and Marketplace Pro; Noor Solar uses the default). The company's own store is unchanged.
+- **Profile** page: name, email, password change (needs the current password; phone is read-only because it is the login).
+- Withdrawal-request logic moved into `ResellerCommissionService::requestPayout()` so the storefront page and the portal share one implementation.
+
+Business rules used: none invented. Minimum withdrawal, balance check, slug rules and email rules are the existing ones from the storefront pages; the store-name rule is the owner's Q3 answer. Small UX details I chose (not business rules, easy to change — please glance at them): the shop name falls back to business name; only the store header changed (the footer's brand block and the browser tab title still use the company's — say if those should change too); the slug-change warning text; a wrong current password is throttled to 5 tries per 15 minutes; a pending or rejected reseller sees only the Dashboard status page, not these pages.
+
+Also fixed while building this (all in still-uncommitted work):
+- **Audit log actor.** On the portal Filament switches the default guard to `customer`, so `AuditLogService` stored a reseller's id in `audit_logs.user_id` (a staff foreign key). It now attributes only staff users. Found because saving a `Customer` from the portal threw an FK error in tests. Portal changes are logged with no staff user.
+- **Portal styling.** Filament's precompiled CSS does not contain the generic Tailwind classes the portal's Blade views use (`grid-cols-*`, `justify-between`, `text-right`, …) and only the admin panel had a theme that scanned those views. Added `resources/css/filament/reseller/theme.css`, registered in `vite.config.js` and on the panel. **`npm run build` is required at deploy** (`public/build` is not in git); I ran it here and confirmed the built stylesheet contains those classes. I did not open the portal in a browser — pages are covered by HTTP render tests, not by eye.
+- **Commission chart** on the Dashboard counted cancelled commissions; it no longer does.
+- **Missing translation keys from Phase 3** (`From`, `Until`, `Orders`, `Commission (last 6 months)`) were used but never added; added now. Navigation labels for Dashboard / Orders / Products are now translated and the sidebar order is fixed.
+
+Needs Bangla review: the 39 new keys added to `lang/bn.json` this phase (Earnings, Withdrawals, saved accounts, My Store, Profile, plus the four Phase 3 keys above) — machine-reasonable translations, not owner-reviewed. I used "উত্তোলন" for withdrawal to match the keys already there.
+
+Tests: new `ResellerPortalAccountTest` (25 tests). I broke the code on purpose in four places (header branding, chart cancelled filter, audit actor, balance check) and confirmed the matching test fails each time. Full suite after the last code change: 1554 passed (`php artisan test`, no `--env`); `npm run build` succeeded.
+
+Not done / still open: portal-internal password reset (a reseller can still reset from the storefront's forgot-password page); §2.1 Q5 (what happens to the old **My Account → Your Store** page) — needed before Phase 6.
+
+Commit status: not committed — waiting for owner approval, together with the plan file and Phases 1–4 (all still pending).
+
+## 2026-09-28 - Reseller portal Phase 3: Overview + Orders
+
+Reason — owner said "পরবর্তি কাজ কর" (do the next work). Phase 3 needed §2.1 Q2 (how much of a buyer's info a reseller sees) answered first; asked it via `AskUserQuestion` alongside Q3 (needed for the still-pending Phase 5), rather than guessing, per CLAUDE.md's "never invent business rules" rule.
+
+Owner's answers (2026-09-28):
+- Customer info on orders: **full** name, phone, and address — not masked. Recorded in `13_RESELLER_PORTAL_PLAN.md` §2.1 Q2, replacing the plan's own masking recommendation.
+- Store page branding (feeds Phase 5, not used yet): the reseller's **own name/brand only** — no company name or logo on their store's header. Recorded in §2.1 Q3.
+
+What changed:
+- The **Dashboard** page's "coming soon" placeholder (approved resellers only — pending/rejected status pages are unchanged) is now the real overview: available-to-withdraw / waiting-for-delivery / this month's orders, sales, and commission stat cards; a 6-month commission chart; the last 5 orders; and a store-link card (Copy link / Share on WhatsApp / Share on Facebook), or a warning banner if the reseller has no store slug yet.
+- New **Orders** page: every order credited to the reseller, with full customer info, items, sale amount, status, and commission — filterable by status and date range, searchable by order number, with a read-only detail view (items, totals, commission, status timeline). Resellers cannot edit an order here.
+
+Business rules used (owner-confirmed, not invented): the two §2.1 answers above. Everything else (which existing balances/commission logic to reuse, how "waiting for delivery" and "this month" are computed, which order fields to show) is a technical implementation detail, built directly on the pricing/commission rules the owner already set in the earlier reseller-commission release.
+
+Needs Bangla review: the 14 new keys added to `lang/bn.json` this phase (dashboard/orders strings) — machine-reasonable translations, not owner-reviewed.
+
+Tests: new `ResellerPortalDashboardTest` (4 tests — dashboard renders end-to-end including the embedded chart widget, Orders page company-scoping, full customer info + commission sync, pending/rejected access denial). Full suite: 1529 passed (`php artisan test`, no `--env`). (Frontend build: see the Phase 5 note above — the portal gets its own Vite theme, which is also what makes these pages' layout classes compile.)
+
+Commit status: not committed — waiting for owner approval, together with Phase 1, the plan file, Phase 2, and Phase 4 (all still pending from before this phase).
+
+## 2026-09-28 - Reseller portal Phase 4: Products & pricing
+
+Reason — owner said "পরবর্তি কাজ সেরে ফেল" (finish the next work). Per the plan's phase-dependency table, Phase 4 (Products & pricing) only depends on Phase 2 (already built), not on any of the still-open §2.1 questions — so it could start without asking the owner anything new.
+
+What changed:
+- New **Products** page in the reseller portal (`reseller.<domain>/portal/products`): the company catalog with an **In my store** switch, **Suggested price**, **Your cost**, an editable **Your price**, and **Commission per unit**. Category / in-store / not-in-store / no-wholesale-rate filters.
+- Bulk actions: **Add to store**, **Remove from store**, **Set price = suggested + %** (skips anything not already picked, or with no wholesale rate, and says how many were skipped).
+- Per product: **Copy link**, **Share on WhatsApp**, **Download photos** (zips the product's own image + gallery for posting).
+- Every business rule reused, not reinvented, from the existing storefront reseller-price page: the "in store" toggle and the price floor are the exact same rules `ResellerStoreController` already enforces (`ResellerPricing::basePrice()`), just wired into the portal's own Filament table.
+
+Business rules used: none invented — everything here was already decided in the earlier reseller-pricing/commission release (owner's rule: price at or above wholesale-tier + per-unit cost) and in `13_RESELLER_PORTAL_PLAN.md` §3 row 3's own spec for this page.
+
+Needs Bangla review: the 16 new keys added to `lang/bn.json` this phase (Products page strings) — machine-reasonable translations, not owner-reviewed.
+
+Tests: new `ResellerPortalProductsTest` (6 tests — company scoping, in-store toggle create/delete, price-floor enforcement, bulk add/remove, bulk set-price-from-suggested skip logic, cross-company photo-download 404). Full suite: 1525 passed (`php artisan test`, no `--env`). (Frontend build: see the Phase 5 note above — the portal gets its own Vite theme, which is also what makes these pages' layout classes compile.)
+
+Commit status: not committed — waiting for owner approval, together with Phase 1, the plan file, and Phase 2 (all still pending from before this phase).
+
+## 2026-09-28 - Reseller portal Phase 2: portal foundation
+
+Reason — owner said "phase 2 এর কাজ শুরু কর" (start Phase 2's work). Phase 2 needed two of the five §2.1 questions answered first (domain approach, and how apply/account-creation works); asked both via AskUserQuestion rather than guessing, per CLAUDE.md's "never invent business rules" rule.
+
+Owner's answers (2026-09-28):
+- Domain: `reseller.<company-domain>` by default, plus an optional custom-domain field in Company Management (the plan's recommended option).
+- Apply + account: applying in the portal also sets the password — approval alone is enough to log in, no separate storefront registration. Same account can also log in as a shop customer (recommended option).
+
+What changed:
+- A second Filament panel (`reseller`) at `/portal`, reachable only at `reseller.<company-domain>` or a company's own custom portal domain — nowhere else. Off that host, `/portal` is a 404; on that host, everything else (including `/admin`) redirects to `/portal`.
+- **Become a reseller** (footer/menu, and the storefront account page) now points at the portal's apply form. Applying sets a password immediately, so approval alone is enough to log in.
+- Login is phone-or-email + password, the same rule and rate limiting the storefront already uses (not Filament's own email-only lookup).
+- After logging in: pending sees "under review", rejected is kept out (403, with the admin's note if there is one), approved sees a "dashboard coming soon" placeholder — the real dashboard (orders, products, earnings, withdrawals) is Phase 3–5.
+- Password reset inside the portal itself is deliberately not in this phase — the storefront's own forgot-password page still works for the same account. Small follow-up, not forgotten.
+
+Business rules used (owner-confirmed, not invented): the two §2.1 answers above. Everything else in this phase is a technical implementation detail already laid out in `13_RESELLER_PORTAL_PLAN.md` §2.2 (second panel, `customer` guard, middleware-based host resolution instead of Filament's own domain matching, since each company's domain is arbitrary — not a subdomain of one shared root).
+
+Needs owner confirmation: still open — §2.1 Q2 (how much of a buyer's info a reseller sees on an order) and Q3 (branding shown on the reseller's own store page), both needed before Phase 3 and Phase 5 respectively. Q5 (redirecting the old "Your Store" page) is Phase 6, not needed yet.
+
+Needs Bangla review: the 12 new keys added to `lang/bn.json` this phase (portal/apply strings) — machine-reasonable translations, not owner-reviewed.
+
+Tests: new `ResellerPortalTest` (9 tests — host isolation both directions, disabled-module 404, custom domain override, cross-company 403, pending/rejected/approved status pages, apply creates a pending login). Full suite: 1519 passed (`php artisan test`, no `--env`). No frontend assets changed, so `npm run build` was not needed.
+
+Commit status: not committed — waiting for owner approval, together with Phase 1 and the plan file (both still pending from before this phase).
+
+## 2026-09-28 - Reseller portal Phase 1: store-link fix
+
+Reason — owner asked for a reseller dashboard and the store-link fix; the plan (`13_RESELLER_PORTAL_PLAN.md`) splits the work into 6 phases, each its own commit. This is Phase 1, which needs none of the owner's still-open §2.1 answers (domain, customer PII, store branding, apply flow, old page redirect) — those gate Phase 2 onward.
+
+What changed:
+- New `App\Support\StorefrontUrl` helper picks the right route name (staff preview → reseller's mini-store → main store) for every storefront link, instead of the old two-way `isset($previewSlug) ? preview : main-store` check that never considered "inside a reseller's store."
+- Replaced that old pattern at all 57 call sites across the shared layout, every theme's homepage (Built-in, Marketplace Pro, Noor Solar), and the product/category/cart/checkout/account/offer/page views.
+- Added `GET /store/{resellerSlug}` as the reseller store's own home page.
+- Fixed `CartController::redirectToCheckout()`, which always redirected "buy now" to the main-store checkout even from inside a reseller's store.
+- Checkout, order tracking, account and offer pages intentionally still use the main-store URL — no reseller-store route exists for them yet, and the session (`ResellerPricing`) already keeps the price/commission correct there. Nothing about pricing or commission changed in this phase.
+
+No user-visible text changed (this is route-resolution only), so no new `lang/*.json` keys.
+
+Tests: `StorefrontResellerLinkScopeTest` (new) renders every reseller-store page across all 3 registered themes and asserts every product/category/cart/checkout link in the HTML stays under `/store/{slug}`. Full suite: 1510 passed (`php artisan test`, no `--env`). No frontend assets changed, so `npm run build` was not needed.
+
+Needs owner confirmation: none for this phase — Phase 2 (the portal itself) is blocked on the 5 questions in `13_RESELLER_PORTAL_PLAN.md` §2.1.
+
+Needs Bangla review: none (no new strings).
+
+Commit status: not committed — waiting for owner approval. The plan file `13_RESELLER_PORTAL_PLAN.md` itself (sent earlier, still untracked) would be committed together with this.
+## 2026-09-29 - Documentation editor: "Remove link" toolbar button
+
+Reason — owner: "প্রিভিয়াস লিংক রিমুভ করার অপশন যুক্ত কর।" (Add an option to remove the previous link.) Follows the report that changing an existing link's URL in the editor didn't take effect.
+
+What changed:
+- The Content editor toolbar (Settings → Documentation → article) has a new **Remove link** button next to Link. Click inside a link, press it, and the link is removed while the text stays. Filament's editor had no unlink tool, so it is a custom `RichEditorTool`.
+- Not changed: the underlying "URL edit does nothing" behavior — Filament's `setLink` silently ignores URLs that look like an unknown scheme (e.g. `host:8080/x`); waiting on the owner's exact URL to confirm.
+
+Files: `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`, `lang/en.json`, `lang/bn.json`, `tests/Feature/DocumentationModuleTest.php` (+1 test), `CHANGELOG.md`.
+
+Verification: `DocumentationModuleTest` 10 passed; full suite 1553 passed before merging main (re-run after merge below); Pint passed. Not verified in a browser (button behavior in the live editor not clicked through).
+
+Commit status: Committed and pushed to `claude/friendly-feynman-w4twzx` and `main` (owner approved: "হ্যাঁ, commit আর push কর").
+
+## 2026-09-28 - Channel partners separated from investors (own record, own accounts, several per project)
+
+Reason — owner: "চেনেল পার্টনার তো ইনভেস্টর লিস্ট থেকে আসবেনা। চেনেল পার্টনার সম্পূর্ণ আলাদা থাকবে তার হিসাব ও আলাদা হবে, ইনভেস্টরদের সাথে চ্যানেল পার্টনার কে মিশানো যাবেনা।" — channel partners must not come from the investor list, must be completely separate with their own accounts, and must not be mixed with investors.
+Answers to the follow-up questions:
+- The link stays per investor, as now: a partner earns only on the capital of the investors they brought in.
+- **Several partners per project.**
+- Fields to keep: name, phone, address, NID / passport (partner ID), payment account, and agreement and NID copies.
+
+What changed:
+- **Migration** `2026_09_28_150000` (irreversible; `down()` throws):
+  - creates `channel_partners` (company, name, phone, address, encrypted `nid_number` + `nid_hash`, payment_method, account_name/number, bank_name/branch, notes, is_active, legacy_investor_id).
+  - copies partner investors into it: flagged, referenced by investors or drafts, or paid a partner payout.
+  - drops and re-adds the FKs of `investors.channel_partner_id` and `investor_drafts.channel_partner_id` so they point at the copies.
+  - `channel_partner_payouts`: adds `channel_partner_id`, adds a unique index on (settlement_id, channel_partner_id), drops the old one-per-settlement unique index (looked up by its columns, because the name differs by driver) and drops `investor_id`.
+  - drops `is_channel_partner` from `investors` and `investor_drafts`.
+  - Verified on a scratch SQLite database migrated to just before this migration and seeded with a flagged partner investor, a referred investor and a paid ৳500 partner payout: the partner was copied with its name, phone, address, NID and a correct hash; the referred investor and the payout point at the new partner, and the payout is still ৳500 and paid.
+- **Models:**
+  - `ChannelPartner` (new): NID uniqueness per company like investors; `investors()`, `payouts()`, `documents()`, `referredCapital()`, `totalEarned/Paid/Due()`.
+  - `Investor::channelPartner()` now points at `ChannelPartner`. Removed from `Investor`: `referredInvestors()`, `channelPartnerPayouts()`, `totalChannelPartnerPayoutsPaidLifetime()`, the self-partner check and `is_channel_partner`.
+  - `InvestorDraft` points at `ChannelPartner`. `ChannelPartnerPayout` has `channelPartner()` instead of `investor()`.
+  - `InvestmentDocument` gets the categories `partner_nid` and `partner_agreement` (sensitive), and any document on a ChannelPartner is sensitive.
+- **Settlement:**
+  - `allocateProfit()` groups referred investments by partner and gives each partner `pool × their referred capital ÷ external capital`. `channel_payout` is the sum of those amounts.
+  - one `ChannelPartnerPayout` is created per partner.
+  - the "only one channel partner" checks are removed from `Investment` and `SettlementService`.
+  - the voucher purpose uses the partner's name.
+- **UI:**
+  - new `ChannelPartnerResource` (Investments cluster, sort 4). Its list shows the partner ID, investors brought in, commission earned and commission due; it has an Active filter.
+  - the view page has an Accounts section (investors, active capital, earned, paid, due), the payment account, and three tabs: investors brought in, commission (with voucher and settlement links) and documents.
+  - view needs `investments.view`; create/edit needs `investments.manage`; delete only when the partner has no investors and no payouts.
+  - the settlement's partner tab links to the partner.
+- **Investor side:**
+  - the partner switch, "Partner" column, "Channel Partners" filter, infolist lines and payout tab are removed.
+  - the channel partner select, the import/draft pickers and "Assign channel partner" list active `ChannelPartner`s.
+  - import finds the partner by NID, phone or exact name, and no longer reads `is_channel_partner` (`yes_values` config removed).
+
+Not changed, noted for the owner:
+- Old investor rows that only acted as partners stay in the investor list, because they may have investments. They can be deleted there once they have no investments.
+- Documents that were attached to those old investor rows were not moved to the partner. They are still on the investor record.
+
+Process note: while checking the migration I ran a one-off script whose "use an in-memory database" override did not take effect. It migrated this container's own git-ignored local dev database (`database/database.sqlite`, which had 1 company and no investors or vouchers) and the new migration stopped halfway. I made the migration re-runnable and finished it with `php artisan migrate` on that same local database. No demo, test or production data was involved. The migration check was then repeated on a separate scratch file, after confirming the connection pointed at it, and the file was deleted afterwards.
+
+**Needs Bangla review:** 22 new `lang/bn.json` keys (Channel Partners section and accounts), plus 2 changed texts (the import note for a partner not found, and the skipped-investor message of the bulk action).
+
+Important changed/new files:
+- `database/migrations/2026_09_28_150000_create_channel_partners_table.php`
+- `app/Models/{ChannelPartner (new),ChannelPartnerPayout,Investor,InvestorDraft,Investment,InvestmentDocument,User}.php`, `app/Providers/AppServiceProvider.php`
+- `app/Services/Investment/{SettlementService,InvestmentLedgerService,InvestorImportService}.php`, `config/investor_import.php`
+- `app/Filament/Resources/ChannelPartners/**` (new), `app/Filament/Resources/Investors/InvestorResource.php`, deleted `Investors/RelationManagers/PartnerPayoutsRelationManager.php`, `InvestorDrafts/InvestorDraftResource.php`, `ProjectSettlements/RelationManagers/ChannelPartnerPayoutsRelationManager.php`, `InvestmentProjects/RelationManagers/DocumentsRelationManager.php`
+- `lang/en.json`, `lang/bn.json`
+- tests: `ChannelPartnerTest.php` (new, 4 tests), `InvestmentSettlementTest.php`, `InvestorIdentityAndDocumentsTest.php`, `InvestorImportTest.php`, `MultiCompanyIsolationTest.php`
+
+Verification:
+- `ChannelPartnerTest`: 4 passed:
+  - created on its own page; never an investor row; filters investors; view page and "investors brought in" tab
+  - the NID partner ID is unique in any format
+  - partner agreement and NID copies are hidden and refused for an accountant (view only)
+  - an import row names its partner by the Bangla-digit NID
+- `InvestmentSettlementTest`: 60 passed, with rewritten tests:
+  - **two partners in one project are paid ৳6,000 and ৳4,000** (60/40 of the 10% pool on ৳100,000 profit), replacing the old "only one partner" test
+  - a partner with investors can't be deleted
+  - partner accounts (earned, paid, due) are on the partner, and the investor page has no partner tab
+  - the existing change-permission, audit, voucher and mark-paid tests now use `ChannelPartner`
+- Full `php artisan test` (plain, no `--env`): **1543 passed, 0 failed** (10231 assertions).
+- Pint passes on the changed files.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
+## 2026-09-29 - Documentation articles list: a View button to open the public page
+
+Reason — owner (screenshot of the articles list): "লিস্টে আর্টিকেল পেজের সোয়া করার জন্য কোন লিংক নেই। আর্টিক্যাল শো বাড়ানোর জন্য একটা লিঙ্ক বাটন যুক্ত কর।" (There's no link in the list to view the article page. Add a link button for it.)
+
+What changed:
+- **Settings → Documentation → articles list:** a **View** button (opens in a new tab) next to Edit, linking straight to the article's `/guides/{category}/{article}` page. Only shown when the article is both Published and Publicly shareable — for anything else, that page doesn't exist (404s), so the button is hidden rather than shown and broken.
+- Table query now eager-loads the `category` relationship (needed to build the URL; also removes an existing N+1 on the Category column).
+
+Important changed/new files:
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `lang/en.json`, `lang/bn.json`
+- `tests/Feature/DocumentationModuleTest.php` (+1 test: the View action is visible with the right URL for a published+public article, hidden for a published-but-internal one)
+- `CHANGELOG.md`
+
+Verification:
+- `DocumentationModuleTest`: 9 passed.
+- Full `php artisan test` (plain, no `--env`): **1552 passed, 0 failed** (10249 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
+
+## 2026-09-29 - Documentation article: "Publicly shareable" toggle
+
+Reason — owner: "internal only" বনাম "publicly shareable" এই ধরনের ফ্ল্যাগ যুক্ত করে দাও। (Add a flag for "internal only" vs "publicly shareable".) This was the gap flagged as "Not done" in the Public Guides entry below: every published article was visible at `/guides` with no way to keep some staff-only.
+
+What changed:
+- New `is_public` column on `documentation_articles` (boolean, default `false` — nothing already published becomes public by accident).
+- **Settings → Documentation → article form:** a **Publicly shareable** toggle, off by default, next to Published.
+- `/guides` and `/guides/{category}/{article}` now require both `is_published` **and** `is_public` — a published-but-internal article 404s there, same as an unpublished one.
+- The internal Documentation menu (signed-in staff) is unchanged: it still shows every published article regardless of this flag, since staff should see everything.
+
+Important changed/new files:
+- `database/migrations/2026_09_29_090000_add_is_public_to_documentation_articles_table.php` (new)
+- `app/Models/DocumentationArticle.php`, `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`, `app/Http/Controllers/DocumentationGuideController.php`
+- `lang/en.json`, `lang/bn.json`
+- `tests/Feature/PublicGuidesTest.php` (+1 test: a published-but-not-public article isn't listed and 404s directly; existing tests updated to mark their articles `is_public`)
+- `CHANGELOG.md`
+
+Verification:
+- `PublicGuidesTest`: 4 passed. `DocumentationModuleTest`: 8 passed (confirms the internal page is unaffected).
+- Full `php artisan test` (plain, no `--env`): **1551 passed, 0 failed** (10239 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
+
+## 2026-09-29 - Documentation article: slug auto-fills from title
+
+Reason — owner: "ডকুমেন্টেশনের টাইটেল লেখার পর স্লাগে ক্লিক করলে অটো টাইটেল থেকে স্ল্যাগ জেনারেট হয়ে যাবে ম্যানুয়ালে যেন লিখতে না হয়।" (After typing the title, clicking into the slug field should auto-generate the slug from the title, so it never has to be typed by hand.)
+
+What changed:
+- **Settings → Documentation → article form:** the Title field now sets Slug to `Str::slug(title)` automatically, the same pattern already used on `ExpenseCategoryResource`. It only fills Slug while it's still empty — matching `OfferForm`'s convention — so fixing a typo in an existing article's title never silently changes an already-saved slug.
+
+Important changed/new files:
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `tests/Feature/DocumentationModuleTest.php` (+2 tests: auto-fill on an empty slug, and no overwrite once slug already has a value)
+- `CHANGELOG.md`
+
+Verification:
+- `DocumentationModuleTest`: 8 passed.
+- Full `php artisan test` (plain, no `--env`): **1547 passed, 0 failed** (10218 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: not committed — waiting for owner approval (bundled with the public Guides page below in the same commit).
+
+## 2026-09-29 - Public Guides page: share Documentation with people outside the admin panel
+
+Reason — owner: "এই ডকুমেন্টেশন ডেভলপার টিমের সাথে কিভাবে শেয়ার করব?" (How do I share this documentation with the developer team?) Clarified the developer team is external and would need it from the Documentation module being written in Filament, not the separate `docs/api/` files already shared. Flagged first: the in-app Documentation page requires only `Auth::check()`, so giving them a limited admin account would still expose Dashboard business data — `BusinessOverview`, `SalesPurchaseTrend` and `TopBusinessPerformers` widgets have no `canView()` permission gate at all, they render for any signed-in user. Owner picked building a public page over granting a login or exporting a static file.
+
+What changed:
+- **`/guides`** (list, by category) and **`/guides/{category-slug}/{article-slug}`** (one article) — public, no login, read-only mirror of the Documentation module. Only `is_published` articles are ever queryable; an unpublished or unknown slug 404s, same as an unpublished `StorefrontPage`.
+- `/docs` was already in use (the existing static product-marketing page, `resources/views/marketing/docs.blade.php` — install/branding/backups instructions for whoever runs this ERP software, unrelated to what an owner writes in the Documentation module), so this uses `/guides` instead.
+- Minimal standalone layout (`resources/views/components/layouts/guides.blade.php`) — no admin branding, `noindex, nofollow` meta tag since this isn't meant to be a public marketing surface, just a link to hand to whoever needs it.
+
+Not done: no way yet to mark a category/article "internal only" vs "safe to share publicly" — every published article is visible at `/guides` to anyone with the link. If some guides should stay admin-only, that needs a separate flag before writing anything sensitive into the module.
+
+Important changed/new files:
+- `app/Http/Controllers/DocumentationGuideController.php` (new)
+- `resources/views/guides/{index,show}.blade.php`, `resources/views/components/layouts/guides.blade.php` (new)
+- `routes/web.php`
+- `tests/Feature/PublicGuidesTest.php` (new: published articles listed and rendered without auth; unpublished 404s both from the index and directly)
+- `CHANGELOG.md`
+
+Verification:
+- `PublicGuidesTest`: 3 passed.
+- Full `php artisan test` (plain, no `--env`): **1550 passed, 0 failed** (10225 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
+
+## 2026-09-28 - Documentation "Import Markdown": add file upload
+
+Reason — owner, after seeing the Import Markdown modal (screenshot): "এইটা কি এড করছ? ফাইল ইমপোর্ট এর অপশন কই?" (asked where the file-import option was — the modal only had a paste box, no file picker). Confirmed and added it: pasting a long document on mobile is painful.
+
+What changed:
+- **Settings → Documentation → article → Content → Import Markdown modal** now has a **Markdown file** upload field (`.md`/`.txt`) above the paste box. Either one works; at least one is required. The file is never written to disk — `FileUpload::storeFiles(false)` keeps it as a raw `TemporaryUploadedFile`, its content is read directly (`->get()`) and thrown away once converted.
+- Same conversion as before (`DocumentationArticleResource::markdownToHtml()`, already tested) — this only adds a second way to get text into that function.
+
+Important changed/new files:
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `lang/en.json`, `lang/bn.json` (also removed 2 keys the old modal-only text left orphaned)
+- `CHANGELOG.md`
+
+Verification:
+- `DocumentationModuleTest` (existing `markdownToHtml` conversion test still covers the shared conversion logic): 6 passed. `TranslationParityTest`: passed.
+- Full `php artisan test` (plain, no `--env`): **1545 passed, 0 failed** (10216 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not covered by an automated test: the file-upload wiring itself (Filament `FileUpload` → `TemporaryUploadedFile::get()`) — only the conversion function it feeds is tested. Not verified in a browser; the owner should try uploading the API guide `.md` file through the new file picker and confirm the formatting comes through correctly.
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
+
+## 2026-09-28 - Documentation module: "Import Markdown" button
+
+Reason — owner: pasted the API integration guide (Markdown) into a Documentation article's Content field, and it came in as one plain paragraph, not the original headings/bold/tables. Filament's Rich Editor is a WYSIWYG editor — it doesn't parse pasted Markdown syntax, it just inserts the raw characters as text. Owner picked adding an "Import Markdown" button over the alternatives (render to HTML and copy from a browser tab, or reformat manually).
+
+What changed:
+- **Content field → Import Markdown button** (`Settings → Documentation → article → Content`, hint icon): opens a modal with a textarea for raw Markdown; converts it with `league/commonmark`'s GitHub-Flavored Markdown converter (tables, headings, bold, lists, code blocks, autolinks) and replaces the Content field with the resulting rich text.
+- `league/commonmark` was already installed as a transitive dependency (via another package); added it directly to `composer.json` `require` since the app now calls it by name.
+- Also answered the owner's other question in chat: the Documentation module is **not** company-scoped — one setup applies to every company, same as this session's earlier CHANGELOG/PROJECT_GUIDE note already said.
+
+Important changed/new files:
+- `composer.json` (new direct dependency, no vendor change — already resolved in `composer.lock` at the same version)
+- `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `lang/en.json`, `lang/bn.json`, `CHANGELOG.md`
+- `tests/Feature/DocumentationModuleTest.php` (+1 test: headings/bold/lists/tables convert correctly)
+
+Verification:
+- `DocumentationModuleTest`: 6 passed. `TranslationParityTest`: passed.
+- Full `php artisan test` (plain, no `--env`): **1545 passed, 0 failed** (10208 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser — the owner should re-paste the API guide through the new button and confirm the formatting looks right before relying on it for other documents.
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
+
+## 2026-09-28 - Documentation module: fixes from automated PR review (Codex)
+
+Reason — an automated review bot (`chatgpt-codex-connector[bot]`) left 5 findings on PR bhd4232/Business-Dashboard#10 (the Documentation module committed earlier today), each citing a real `AGENTS.md` rule. Verified each and fixed all of them; this is a follow-up to the earlier "In-app Documentation module" entry, not a new feature.
+
+What changed:
+- **CHANGELOG.md:** moved the Documentation entry from the already-dated `[2.34.0]` section back into `[Unreleased]` — the release cutter only reads `[Unreleased]`, so it would otherwise never ship in a generated release.
+- **PROJECT_GUIDE.md:** added a "Documentation Module" subsection under "3. Current Core Modules" (route, access model, important files, focused test command) — this had been left only in chat/CHANGELOG.
+- **Filament-only UI:** rewrote `resources/views/filament/pages/documentation.blade.php` to use `x-filament::section`, `x-filament::input.wrapper`/`x-filament::input`, and `x-filament::button` instead of raw `<input>`/`<button>` and hand-styled Tailwind cards, matching the pattern used elsewhere (e.g. Inbox).
+- **Bilingual strings:** every new visible string in `Documentation.php`, `DocumentationArticleResource.php`, and the Blade view now goes through `__()`, with matching `lang/en.json` and `lang/bn.json` keys (reusing existing `Category`/`Name` keys where they already existed).
+- **Bug fix:** searching with no matches now clears `activeArticleId` instead of leaving a stale, non-matching article rendered in the content pane while the sidebar says "no guides match."
+
+Important changed/new files:
+- `CHANGELOG.md`, `PROJECT_GUIDE.md`, `lang/en.json`, `lang/bn.json`
+- `app/Filament/Pages/Documentation.php`, `app/Filament/Resources/DocumentationArticles/DocumentationArticleResource.php`
+- `resources/views/filament/pages/documentation.blade.php`
+- `tests/Feature/DocumentationModuleTest.php` (+1 regression test for the search-clears-selection fix)
+
+Verification:
+- `DocumentationModuleTest`: 5 passed (added the no-match-clears-selection test).
+- `TranslationParityTest`: passed.
+- Full `php artisan test` (plain, no `--env`): **1541 passed, 0 failed** (10178 assertions).
+- Pint: passed. `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/friendly-feynman-w4twzx` (owner approved: "হ্যাঁ, commit আর push কর") — updates PR bhd4232/Business-Dashboard#10.
+
+## 2026-09-28 - Trashed payout vouchers make the payout unpaid; rejected/cancelled withdrawal vouchers make the investment active
+
+Reason — owner, answering the three open questions: "১। ঠিক আছে ২। হ্যাঁ ৩। হ্যাঁ, সক্রিয় হবে"
+1. Approved vouchers can't go to trash — confirmed, no change.
+2. A reseller or settlement payout whose pending voucher goes to trash becomes unpaid again — yes.
+3. A rejected or cancelled withdrawal voucher makes the investment active again — yes.
+
+What changed:
+- **`VoucherLinkedPayoutsService` (new):**
+  - `voucherTrashed()` sets `SettlementPayout` / `ChannelPartnerPayout` rows linked to the voucher from `paid` to `pending` and clears `paid_at`. Their settlement goes from `paid_out` to `confirmed`. `ResellerPayoutRequest` goes from `paid` to `approved` and `paid_at` is cleared; the available balance is unchanged, because approved requests are already held.
+  - `voucherRestored()` does the reverse. `paid_at` becomes the voucher's created date, and the settlement goes back to `paid_out` when nothing is pending.
+  - The voucher link is kept so a restore can find the payout. "Mark paid" again creates a new voucher and replaces the link.
+- **`VoucherTrashService`** calls it on trash and restore, next to the withdrawal hooks.
+- **Withdrawal:** `VoucherService::reject()` and `cancel()` call `InvestmentWithdrawalService::voucherVoided()` (renamed from `voucherTrashed()`; trash uses it too). The new `Voucher::isVoid()` means rejected or cancelled. Restoring a void voucher from trash re-marks nothing, for investments and for payouts.
+- **Model rules:**
+  - `Investment` accepts "withdrawn" only while its voucher exists and is not void, and allows withdrawn → active when the voucher is trashed or void.
+  - `ProjectSettlement` allows `paid_out` → `confirmed` only while one of its payouts is pending again; every other status change still moves forward only.
+
+Scope: owner's answer 2 was about trashed vouchers, so a *rejected or cancelled* payout voucher still leaves the payout paid. The investment capital-in voucher (`investments.voucher_id`) is not linked to any status.
+
+**Needs Bangla review:** the trash confirmation text changed. It is 1 key, replacing the old one.
+
+Important changed/new files:
+- `app/Services/VoucherLinkedPayoutsService.php` (new), `app/Services/{VoucherTrashService,VoucherService}.php`, `app/Services/Investment/InvestmentWithdrawalService.php`
+- `app/Models/{Voucher,Investment,ProjectSettlement}.php`, `app/Filament/Resources/Vouchers/VoucherResource.php`
+- `lang/en.json`, `lang/bn.json`, `tests/Feature/{VoucherTrashTest,InvestmentWithdrawalTest}.php`
+
+Verification:
+- `VoucherTrashTest`: 6 passed. New tests: a settlement payout goes unpaid and the settlement goes back to confirmed on trash, and both return to paid / paid_out on restore; a reseller request goes paid → approved → paid.
+- `InvestmentWithdrawalTest`: 8 passed. New test: rejected → active, cancelled → active, restoring a trashed cancelled voucher keeps it active, and it can be withdrawn again with a new voucher.
+- Full `php artisan test` (plain, no `--env`): **1539 passed, 0 failed**.
+- Pint passes on the changed files. It also re-ordered imports and fixed spacing on a few older lines in `VoucherService.php`.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, আগে পুশ কর").
+
+## 2026-09-28 - Settlements leave withdrawn investments out; voucher trash (move to trash, restore, delete permanently)
+
+Reason — owner, answering the two open questions:
+1. "যখন উত্তলন হবে তখন থেকেই সেটেলমেন্ট থেকে বাদ যাবে" — from the moment of withdrawal, the investment is out of settlements.
+2. "ভাইচার কখনই সরাসরি ডিলিট করা যাবেনা, প্রথমে মুভ টু ট্রাশ এ যাবে এরপর ট্রাশ পেজ থেকে পার্মানেন্টলি ডিলিট হবে, তবে ডিলিট পারমিশন যার কাছে থাকবে শুধু সেই করতে পারবে।" — a voucher is never deleted directly: first move to trash, then permanent delete from a trash page, and only someone with the delete permission can do it.
+
+What changed:
+- **Settlement:** `SettlementService::calculateAndSettle()` reads `investments()->active()`. Settlements that already exist are untouched.
+- **Voucher trash:**
+  - Migration `2026_09_28_140000` adds `deleted_at` (indexed) and `deleted_by`. `Voucher` uses `SoftDeletes`. `nextVoucherNumber()` checks `withTrashed()` so a number is never reused.
+  - New permission `voucher.delete` ("Voucher: Move to Trash, Restore and Delete Permanently") and `User::canDeleteVoucher()` (super admin or the permission). It is not added to any role's defaults; the owner assigns it.
+  - `VoucherTrashService`: `trash()` refuses approved vouchers and stores `deleted_by`; `restore()`; `deletePermanently()` works only on trashed vouchers. All three need the permission.
+  - UI: **Move to trash** row action on the voucher list and header action on the voucher page. A **Trash (n)** button on the list opens the new `TrashedVouchers` page (`/vouchers/trash`, 403 without the permission), with **Restore** and **Delete permanently**. `VoucherResource::canDelete()` stays `false`, so there is no direct delete anywhere.
+- **Withdrawal link:**
+  - trashing a withdrawal voucher sets its investments back to `active`, keeping `withdrawn_at`, the voucher id and the note.
+  - restoring it sets them `withdrawn` again.
+  - a permanent delete leaves them `active`, and the FK nulls the voucher id.
+  - the `Investment` model allows withdrawn → active only while that voucher is in trash, and "withdrawn" needs a voucher that exists and is not in trash.
+
+My decision, which the owner should confirm:
+- **An approved voucher can't go to trash.** Approving has already booked the money (Expense / CustomerPayment / SupplierPayment / account transaction). Trashing it would leave that money on the books with no voucher behind it. A mistaken approved voucher needs a reversing entry instead.
+
+Not changed, for the owner to decide later:
+- Other records linked to a trashed *pending* voucher keep their state: a reseller payout marked paid, a settlement payout marked paid, or an investment's capital-in voucher. Only principal withdrawals are rolled back, because only they have the owner's "status only while a voucher exists" rule.
+- A **rejected** or **cancelled** withdrawal voucher does not reactivate the investment.
+- Attachment files of a permanently deleted voucher stay in storage; the database rows are removed.
+
+**Needs Bangla review:** 26 new `lang/bn.json` keys (trash texts).
+
+Important changed/new files:
+- `database/migrations/2026_09_28_140000_add_soft_deletes_to_vouchers_table.php`
+- `app/Models/{Voucher,Investment,User}.php`
+- `app/Services/VoucherTrashService.php` (new), `app/Services/Investment/{InvestmentWithdrawalService,SettlementService}.php`
+- `app/Filament/Resources/Vouchers/{VoucherResource,Pages/ListVouchers,Pages/ViewVoucher,Pages/TrashedVouchers}.php` (`TrashedVouchers` is new)
+- `lang/en.json`, `lang/bn.json`, `tests/Feature/VoucherTrashTest.php` (new), `tests/Feature/InvestmentWithdrawalTest.php`
+
+Verification:
+- `VoucherTrashTest`: 4 passed:
+  - no direct delete: trash → trash page → restore → trash → permanent delete
+  - approved can't be trashed
+  - an accountant without the permission can't trash and gets 403 on the trash page
+  - trashed voucher numbers are still reserved
+- `InvestmentWithdrawalTest`: 7 passed. New tests: a settlement after a withdrawal leaves it out; trash → active, restore → withdrawn, permanent delete → active.
+- Full `php artisan test` (plain, no `--env`): **1536 passed, 0 failed**.
+- Pint passes. It also re-formatted a few older lines in `SettlementService.php`.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
+## 2026-09-28 - API mapping note for Tasneem Knit / Noor Solar added to repo docs
+
+Reason — owner: "api mapping টা তুমি আমাদের অ্যাপের api Documentation এ যুক্ত করে দেও এবং তার পাথ বলে দেও।" The mapping note drafted earlier as a Claude Docs artifact (comparing each website team's assumed API to the real one) is now also in the repo, so it ships with the code and isn't only reachable through a chat link.
+
+What changed:
+- New `docs/api/website-mapping-tasneem-noor.md`: the same content as the artifact — `.env` values, a path-by-path table (their assumed endpoint → the real `/api/v1/...` one), field-by-field tables for leads/products/orders and for each outbound webhook event (including the new `lead.status_updated`), what ZamZam ERP doesn't have yet, a test checklist and cURL examples. Kept in Bangla, matching the artifact and the owner's own notes to these two teams.
+- `docs/api/website-integration.md` links to it right after the intro, so anyone starting from the main guide finds it.
+
+Not code — no migration, no test changes, no `lang/` changes.
+
+Commit status: Committed and merged into `main` via PR bhd4232/Business-Dashboard#9 (owner approved: "PR খুলে দাও").
+
+## 2026-09-28 - In-app Documentation module: step-by-step guides, editable from Filament
+
+Reason — owner: "আমাদের অ্যাপের মধ্যে ডকুমেন্টেশন মডিউল যুক্ত করতে বলেছিলাম যেখানে আমাদের অ্যাপের সকল দিকনির্দেশনা গুলো স্টেপ বাই স্টেপ লিখা থাকবে।" A documentation module inside the app itself, where all of the app's own instructions are written step by step. Scope, confirmed with the owner: a general documentation hub (not only the API docs), content editable from Filament (not a static file).
+
+What changed:
+- New tables `documentation_categories` (name, slug, icon, sort order) and `documentation_articles` (category, title, slug, rich-text content, sort order, published toggle). Not company-scoped — the guides are about the app itself, so every company sees the same ones.
+- **Settings → Documentation** (admin only, same `settings.manage`/super-admin gate as the other Settings pages): create/edit articles with a rich-text editor; a new category can be added right from the article form.
+- **Documentation** — a new top-level menu open to every signed-in user: categories down the side, a search box, and the selected article's content on the right. Only published articles show. This is the step-by-step guide hub itself.
+
+Not yet done: no content has been written into it yet — the module is the tool for the owner/admins to start writing the app's own guides (order flow, inventory, investments, etc.) inside Filament.
+
+Important changed/new files:
+- `database/migrations/2026_09_28_140000_create_documentation_tables.php`
+- `app/Models/{DocumentationCategory,DocumentationArticle}.php`
+- `app/Filament/Resources/DocumentationArticles/**`
+- `app/Filament/Pages/Documentation.php`, `resources/views/filament/pages/documentation.blade.php`
+- `tests/Feature/DocumentationModuleTest.php` (new)
+
+Verification:
+- `DocumentationModuleTest`: 4 passed (published-only listing, search filtering, permission gate for a manager without `settings.manage`, access granted for a super admin).
+- Full `php artisan test` (plain, no `--env`): **1534 passed, 0 failed** (9975 assertions).
+- `npm run build`: succeeded.
+- Not verified in a browser.
+
+Commit status: committed and pushed on owner approval ("commit আর push কর", 2026-10-03).
+
+## 2026-09-28 - Investment withdrawal: voucher first, then the status turns "Withdrawn"; the record is kept
+
+Reason — owner:
+- "কয়েকজন ইনভেস্টর তাদের ইনভেস্টমেন্ট উত্তলন করে নিয়েছেন তাদের লভ্যাংশ সহ … তাদের একটা রেকর্ড থাকবে ডিলিট/ট্রাশ হবে না, শুধু স্ট্যাটাস পরিবর্তন হবে।" Some investors took their investment back with profit. Keep their record, never delete or trash it, and only change the status.
+- Answers:
+  1. "প্রজেক্ট এর ২ মাস শেষে তাদের লভ্যাংশ তাদেরকে পরিশোধ করা হয়েছে এরপর তাদের সিদ্বান্ত অনুযায়ী তারা তাদের বিনিয়োগের মূল টাকা উত্তলন করেছে।" Profit was paid at the end of the 2-month cycle, and afterwards they withdrew the principal.
+  2. The status goes on each investment, and the investor shows "Withdrawn" once all their investments are: "ওকে".
+  3. "টাকা আগেই উত্তলন হয়ে গেছে … একটা ভাউচার তৈরি হতে হবে। একটা জিনিস ফিক্সড রুল করে দেও, যদি কোন ইনভেস্টর তাদের টাকা উত্তলন করে তাহলে ভাউচার তৈরি হবে এবং ভাউচার তৈরি হলেই কেবল স্ট্যাটাস পরিবর্তন হবে।" The money is already paid out, and a voucher must be created. Fixed rule: a withdrawal creates a voucher, and only a created voucher changes the status.
+
+What changed:
+- **Migration** `2026_09_28_130000`: `investments.status` (`active` / `withdrawn`, default `active`), `withdrawn_at`, `withdrawal_voucher_id` (FK vouchers, `nullOnDelete`) and `withdrawal_note`.
+- **`Investment` model:**
+  - refuses `status = withdrawn` without `withdrawal_voucher_id` (the fixed rule, enforced in the model and not only in the UI).
+  - refuses to change status/amount/project/investor/voucher of a withdrawn investment, and refuses to delete it.
+  - adds `withdrawalVoucher()`, `isWithdrawn()` and `scopeActive()`.
+- **`InvestmentWithdrawalService::withdraw()`:** one transaction with a row lock.
+  - It submits a debit `investor_payout` voucher for the full principal through `VoucherService::submit()`. The voucher uses the fund source's account, the payment method and the reference as `transaction_id`, and the purpose includes the investor, the project and the withdrawal date, because vouchers have no date field of their own.
+  - Then it sets the status. A voucher failure rolls everything back.
+  - The voucher is **pending**. The status changes when the voucher is *created*, as the owner said, not when Finance approves it.
+- **UI:**
+  - **Withdraw principal** action (manage only) on the investment page and in the Investments tabs of both the investor and the project. It asks for the date (past or today), fund source (defaults to the project's payout fund source), payment method, reference and note.
+  - Status column in both tabs. The project tab hides Edit/Delete for withdrawn rows.
+  - The investment page has a "Withdrawal" section with the date, a voucher link, the voucher status and the note.
+- **Investor status:** `Investor::investmentStatus()` works it out from the investments: active if any investment is active, withdrawn if all are, otherwise none. It shows as a Status column on the investor list, with a Status filter.
+
+Deliberately not changed; needs the owner's decision:
+- `SettlementService` still counts withdrawn investments. A project has only one settlement. If a withdrawal is recorded *before* that project's settlement is entered (for example, INV-1's cycle-1 settlement not yet in the system), excluding them would drop the profit they were actually paid. So they stay in until the owner says otherwise.
+- The profit paid at the end of the cycle is not part of this voucher. It belongs to the settlement payout, which has its own voucher.
+- If Finance rejects or deletes the withdrawal voucher, the investment stays "withdrawn". With `nullOnDelete`, a deleted voucher leaves the link empty.
+
+**Needs Bangla review:** 16 new `lang/bn.json` keys, for example "Withdraw principal" → "মূল টাকা উত্তোলন" and "Withdrawn" → "উত্তোলিত".
+
+Important changed/new files:
+- `database/migrations/2026_09_28_130000_add_withdrawal_status_to_investments_table.php`
+- `app/Models/{Investment,Investor}.php`, `app/Services/Investment/InvestmentWithdrawalService.php` (new)
+- `app/Filament/Resources/InvestmentRecords/{InvestmentRecordResource,Pages/ViewInvestmentRecord}.php`
+- `app/Filament/Resources/Investors/{InvestorResource,RelationManagers/InvestmentsRelationManager}.php`
+- `app/Filament/Resources/InvestmentProjects/RelationManagers/InvestmentsRelationManager.php`
+- `lang/en.json`, `lang/bn.json`, `tests/Feature/InvestmentWithdrawalTest.php` (new)
+
+Verification:
+- `InvestmentWithdrawalTest`: 5 passed:
+  - the voucher (debit, `investor_payout`, full amount, fund source's account) is created, then the status changes and the voucher is linked
+  - a fund source without an account creates no voucher and changes no status, and setting `withdrawn` directly is refused
+  - a withdrawn investment can't be deleted, edited or withdrawn twice
+  - the page action works for a super admin and is hidden for an accountant (view only)
+  - the investor status and filter (active while one investment is active)
+- `--filter='Invest|TranslationParity|MultiCompany'`: 111 passed.
+- Full `php artisan test` (plain, no `--env`): **1530 passed, 0 failed** (9967 assertions).
+- Pint passes. It also re-ordered the existing imports in `InvestmentRecordResource.php`.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
+## 2026-09-28 - Investor list: project filter, multi-select, channel partner on import, paper-copy uploads on the form
+
+Reason — owner, after using the investor list with the real INV-1 sheet:
+- "ইনভেস্টর শীট জখন আপলোড করি তখন পার্টনার চ্যানেল সিলেক্ট করার কোন অপশন আসেনা" — no way to pick the channel partner when importing.
+- "মূল লিস্টে মাল্টিপল লিস্ট সিলেক্ট করার অপশন নাই" — no multi-select on the investor list.
+- "nid upload এর জন্য একটা বাটন যুক্ত করেছ এটা কাজের মনে হচ্ছে না … ইনভেস্টর তৈরির ফর্মে nid, stamp -চুক্তিপত্র, check আপলোডের ঘর থাকার কথা" — the NID bulk-upload button is not useful; the investor form should have upload boxes for NID, the stamp-paper contract and the cheque.
+- "ইনভেস্টর লিস্ট প্রজেক্ট বাই প্রজেক্ট ফিল্টার করার অপশন থাকতে হবে। এটা মেন্ডাটরি।" — the investor list must filter by project.
+
+What changed:
+- **Project filter:** `SelectFilter('project')` (multiple, searchable) on the investor list, matching investors with an investment in any chosen project. New **Projects** badge column (project codes; `investments.project` is eager-loaded). A **Channel Partner** filter was added too.
+- **Multi-select:** bulk action **Assign channel partner** (manage only). It sets the partner only on selected investors with none, and skips investors who already have a partner or are the chosen partner. Changing an existing partner stays a one-by-one edit, because the model requires `investments.manage_channel_partner` and a reason for that.
+- **Channel partner on import:** a **Channel partner for this import (optional)** section in both import dialogs, and the same field in the drafts bulk action (renamed **Set project / payment / channel partner**). `InvestorImportService::investmentDefaults()` takes `channel_partner_id`. A row's own channel-partner column still wins. Linked existing investors are unchanged, as before.
+- **Paper copies on the investor form:** four upload boxes (investor NID copy, nominee NID copy, signed contract / stamp paper, cheque copy). They are multiple, PDF/JPG/PNG/WEBP, 10 MB each, stored in the company's private storage, and visible only with manage. On create or save they become `InvestmentDocument` rows on the investor in the same transaction. Edit clears the boxes after saving so a second save does not add the files again.
+- **Removed** the "Upload documents by NID" header action, `InvestorDocumentUploadService`, the `document_keywords` config and its 2 tests.
+
+Not done — waiting for the owner's answers: investors who withdrew their investment with profit (keep the record, only change the status). See the questions in the conversation.
+
+Noticed in the owner's screenshot (not changed):
+- Two investors (সৌরভ আহমেদ, আবীর ওয়াদুদ মজুমদার) have their phone saved in Bangla digits. Import matching by phone uses 0-9, so a re-import would not match them by phone. The NID still matches them.
+- মোঃ মিছবাহুর রাশিদ জাহিদ has NID `01766718192`, the same as the phone. It is probably wrong in the sheet.
+
+**Needs Bangla review:** 10 new `lang/bn.json` keys (the channel-partner and paper-copy texts). 7 keys used only by the removed button were deleted from both files.
+
+Important changed files:
+- `app/Filament/Resources/Investors/InvestorResource.php`, `Pages/{CreateInvestor,EditInvestor,ListInvestors}.php`
+- `app/Filament/Resources/InvestorDrafts/InvestorDraftResource.php`, `Pages/ListInvestorDrafts.php`
+- `app/Services/Investment/InvestorImportService.php`, `config/investor_import.php`
+- deleted `app/Services/Investment/InvestorDocumentUploadService.php`
+- `lang/en.json`, `lang/bn.json`, `tests/Feature/InvestorIdentityAndDocumentsTest.php`
+
+Verification:
+- `InvestorIdentityAndDocumentsTest`: 11 passed. There are 4 new tests: form uploads become documents on create and edit, the project filter, bulk assign channel partner (skips an investor who already has one), and an import with a channel partner. The 2 bulk-upload tests were removed.
+- `InvestorImportTest`, `InvestorFormTest` and `TranslationParityTest` pass. Pint passes.
+- Full `php artisan test` (plain, no `--env`): 1519 passed, 1 failed before merging `main`, all from `ReleaseNotesTest` (config/release.php behind the CHANGELOG). After merging `main`: **1525 passed, 0 failed**.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main এ পুশ কর").
+
+## 2026-09-28 - Quote status webhook for connected websites (lead.status_updated)
+
+Reason — owner: "কোটেশন স্ট্যাটাস webhook ERP-তে যোগ করো". Two website teams (Tasneem Knit, Noor Solar — noorsolaren.com is a separate company in the ERP) need the status of a quote they sent to come back to their site.
+
+What changed:
+- **Migration** `2026_09_28_120000_add_external_reference_to_leads_table`: nullable `leads.external_reference`, unique per company. Not run on the demo DB.
+- `POST /api/v1/leads` (`LeadController`): optional `external_reference`; a repeat returns the existing lead (200) instead of a duplicate. The response adds `external_reference`.
+- `Lead::booted()`: on `updated`, when `status` changed and `external_reference` is set → `WebsiteWebhookDispatcher::dispatchLeadStatusUpdated()` → event `lead.status_updated` with `id`, `external_reference`, `status`, `updated_at`.
+- Status values are the existing Lead statuses (`new`, `contacted`, `quoted`, `won`, `lost`); no new statuses were invented.
+- Docs: `docs/api/website-integration.md`, `docs/api/website-integration.openapi.yaml`.
+
+Tests:
+- `WebsiteApiLeadTest`: +2 (retry returns the same lead; the same reference in two companies stays two leads).
+- `WebsiteWebhookDispatchTest`: +3 (status change dispatches; lead without a website reference does not; edit without a status change does not).
+
+Needs owner decision (not built, not guessed):
+- `tracking_status` / `tracking_number` the website teams asked for: what steps to show customers.
+- Whether the website should see the internal status names (`won`/`lost`) as they are, or mapped to customer-facing labels on the website side.
+
+Found, not changed:
+- The `staging` branch (last commit 2026-08-23) does not contain the website API at all, so https://staging-app.zamzamint.com/api/v1/* returns 404. The staging server also shows full Laravel stack traces (`APP_DEBUG` is on).
+
+Commit status: committed and pushed to `claude/friendly-feynman-w4twzx`, then merged into `main` (owner approved: "ওকে মেইন এ পুশ কর").
+
+## 2026-09-28 - NID / passport number is the investor ID; NID and contract copies (manage only)
+
+Reason — owner, answering the design questions:
+1. "Investment.manage পারমিশন যাদের কাছে আছে তারাই দেখতে পারবে।" Only users with investments.manage may see the copies.
+2. "প্রতিটা প্রজেক্টে চুক্তি আলাদা। তবে ওই প্রজেক্ট এর সকল ইনভেস্টরের চুক্তিপত্র একই।" Each project has its own contract, and it is the same for every investor in that project.
+3. "…ইনভেস্টরের ক্ষেত্রে শুধু এনআইডি কার্ড দিয়েই তার ইনভেস্টর আইডি তৈরি করবে। এবং ইনভেস্টরের সকল কার্যক্রম এই এনআইডি দিয়েই ট্র্যাক করা হবে।" The NID alone makes the investor ID, and everything about an investor is tracked by it, because a phone number can change.
+
+What changed:
+- **Identity:**
+  - `App\Support\InvestorIdentity` normalises a number (uppercase, Bangla digits → 0-9, only letters and digits kept) and hashes it with HMAC-SHA256 keyed by `app.key`.
+  - New `nid_hash` column on `investors` and `investor_drafts` (migration `2026_09_28_110000`, backfills existing rows by decrypting `nid_number`).
+  - `Investor` keeps the hash in sync and refuses a second investor with the same NID in the company.
+  - Investor form: NID required plus a duplicate check. The quick "create investor" inside a project's Investments tab also requires NID.
+  - Investor list: "Investor ID (NID / Passport)" column, searchable by the exact number through the hash (search terms not split, so spaces work), and an "NID missing" filter.
+- **Import:**
+  - a returning investor is matched by NID (it was phone), even with a new phone number, and a note shows the phone difference.
+  - a new-investor draft needs an NID, and an NID that already exists asks to link the draft.
+  - twin drafts are detected by NID.
+  - the "phone already saved" message now says to link the draft or use another number (the DB still keeps phone unique per company).
+- **Document types:** investor NID copy, nominee NID copy, project contract (same for all investors), cheque copy, stamp copy. Document category labels are now translated.
+- **Access:**
+  - the six identity/contract categories, and any document attached to an investor, are hidden from Documents tabs and refused by the download controller without `investments.manage`.
+  - the investor's Documents tab is visible only with manage.
+  - the security-instrument contract download now needs manage.
+- **Checklist:**
+  - `Investor::documentChecklist()` covers the NID copy, the nominee NID copy (when there is a nominee), and a contract for every project invested in: a project contract on the project, or a signed copy on the investor.
+  - it shows as a "Paper copies" section on the investor page and a column in the list (manage only), with a "Paper copies missing" filter (`scopeMissingDocuments`).
+- **Bulk upload:**
+  - "Upload documents by NID" on the investor list takes up to 200 PDF/JPG/PNG/WEBP files of 10 MB each.
+  - `InvestorDocumentUploadService` finds the investor from a 6+-digit token in the file name (Bangla digits work).
+  - a keyword picks the category (nominee / contract / cheque / stamp, in English or Bangla; no keyword means the investor's own NID copy).
+  - files go to the company's private storage, temp uploads are deleted, and unmatched file names are listed.
+
+Checked with the owner's real `INV_1_10_04_2026.csv` (not committed): 19 of 19 drafts ready. Confirming gave 19 investors, all with an NID hash, and investments totalling ৳5,300,000. Importing it again linked all 19 by NID.
+
+**Follow-up (same day):** the owner uploaded that sheet again and pointed out the Investor Drafts list only showed Name / Phone / Father-Spouse / Nominee Name — NID, address, nominee NID, nominee phone, stamp no. and cheque no. were not visible, so it looked like the columns had not been read. They were being read and stored on the draft correctly (unchanged from above); the list table simply never had columns for them. Added `nid_number` (normalised, shown by default), `address`, `nominee_nid_or_passport`, `nominee_phone`, `stamp_number` and `cheque_number` as columns on the Investor Drafts table — `nid_number` visible by default next to Phone, the other five toggleable (hidden by default, same as the existing Father/Spouse and Nominee Name columns) via the column-toggle button. No new translation keys were needed; all six labels already existed in `lang/en.json`/`lang/bn.json`.
+
+**Needs Bangla review:** 44 new `lang/bn.json` keys, including 11 document category labels. 2 unused keys were removed from both files.
+
+Important changed/new files:
+- `database/migrations/2026_09_28_110000_add_nid_hash_to_investors_and_investor_drafts.php`
+- `app/Support/InvestorIdentity.php`, `app/Services/Investment/InvestorDocumentUploadService.php`
+- `app/Models/{Investor,InvestorDraft,InvestmentDocument}.php`
+- `app/Services/Investment/InvestorImportService.php`, `config/investor_import.php`
+- `app/Filament/Resources/Investors/{InvestorResource,Pages/ListInvestors}.php`
+- `app/Filament/Resources/InvestmentProjects/RelationManagers/{DocumentsRelationManager,InvestmentsRelationManager}.php`
+- `app/Filament/Resources/InvestorDrafts/InvestorDraftResource.php` (also the follow-up: new table columns)
+- `app/Http/Controllers/Admin/{InvestmentDocumentDownloadController,InvestorContractDownloadController}.php`
+- `lang/en.json`, `lang/bn.json`
+- tests: `tests/Feature/InvestorIdentityAndDocumentsTest.php` (new, 9 tests), `InvestorImportTest.php`, `InvestorFormTest.php` (test data now carries NIDs)
+
+Verification:
+- `InvestorIdentityAndDocumentsTest`: 9 passed:
+  - duplicate NID in any format is refused
+  - the form requires a unique NID
+  - search by NID works
+  - bulk upload by NID: categories and unmatched files
+  - the upload action works and cleans up its temp files
+  - the checklist, with one project contract covering all investors
+  - an accountant (view only) gets 403 on NID and contract copies but can still download a settlement sheet
+  - a draft without an NID is blocked
+  - the migration backfills the hash
+- `InvestorImportTest` 22, `InvestorFormTest`, `InvestmentSettlementTest` and `TranslationParityTest` pass.
+- Full `php artisan test` (plain, no `--env`): **1507 passed, 0 failed** (9426 assertions), re-verified after the follow-up column fix.
+- Pint passes on the changed files. Pint also re-formatted a few older lines in `InvestorResource.php`.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "হ্যাঁ, কমিট করে ব্রাঞ্চ আর main দুই জায়গাতেই পুশ কর").
+
+## 2026-09-28 - Reseller preview security fix + reseller prices, commission and withdrawals
+
+Reason — owner asked for the reseller module's status, then: "নিরাপত্তার ফাঁকটা আগে ঠিক করে দাও, আর কমিশন/পেয়াউট এড কর" (fix the security gap first, then add commission/payout).
+
+Business rules (owner's answers, 2026-09-28):
+- The reseller raises the price themselves. Their cost = the "wholesale rate" plus costs.
+- Wholesale rate = the product's existing tier price, taking the lowest tier.
+- Costs: one amount, the same for every product (owner confirmed), in Storefront Settings → **Reseller Settings**. It stays out of Footer Builder, and the footer shows only the reseller program link.
+- Suggested price = the product's normal selling price. The reseller may price anywhere at or above their cost.
+- Commission is payable when the order is delivered.
+- Payout: the reseller requests it, and the admin sets the minimum withdrawal.
+
+What changed:
+- **Security:** `ResellerController::previewStorefront()` now checks `canAccessCompany()`, the same as `PreviewController`. Before, any signed-in staff member of any company could preview, and submit applications on, another company's `/storefront/{slug}/reseller`. The regression test is in `StorefrontResellerAndAbandonedCartTest`. It fails without the fix (200 instead of 404).
+- **Pre-existing gap found and worked around:** every storefront link (product cards, product page add-to-cart, cart, checkout) points at main-store routes, never `/store/{slug}/...`. So a customer who clicked anything in a reseller's store left it, and the order was never credited to the reseller. Instead of rewriting 13 views, `ResellerPricing` remembers the reseller in the session when `/store/{slug}` is opened. `ResolveCompanyFromDomain` restores it on each storefront request, and `CartController` credits session-reseller catalog products.
+- **Pricing:** `app/Services/ResellerPricing.php` (new, request-scoped). `Product::selling_price` and `normalizedTiers()` use it, so every theme and view shows the reseller price and hides the tier table with no view changes. `Product::baseSellingPrice()` and `resellerWholesaleRate()` are new.
+- **Commission:** `app/Services/ResellerCommissionService.php` (new) and `app/Models/ResellerCommission.php` (new). They are synced from `Order::saved` and `OrderItem::saved`/`deleted`. `order_items.reseller_base_price` is frozen at checkout (`CheckoutController`, `StorefrontOrderPlacementService`, `StorefrontCart`).
+- **Withdrawals:** `app/Models/ResellerPayoutRequest.php` (new). Reseller side: `ResellerStoreController::updatePrice()` and `requestPayout()`, new routes (domain + preview), and a rewritten `storefront/account/reseller.blade.php` (all strings now `__()`). Admin side: `ResellerCommissionResource` and `ResellerPayoutRequestResource` (new, Resellers cluster), plus a new **Reseller Settings** section and sidebar tab (`reseller` key in `HasStorefrontSettingsNavigation`) with the two money fields. The page maps sections to tabs by position (`$sectionKeys`), so `'reseller'` is inserted at its index; `PhaseFourAdminPagesTest` now also checks that SEO stays under Navigation & SEO. Owner: keep them out of Footer Builder; the footer shows only the "Become a reseller" link, no numbers.
+- **Finance voucher on payout** (owner: "এটা এখনই যুক্ত কর"): `app/Services/ResellerPayoutService.php` (new). **Mark paid** now requires a fund source and an expense category (pre-filled from the last paid request) and creates a pending `business_expense` debit voucher. Finance approves it in the normal Voucher workflow, which books the Expense and debits the account. The voucher and the paid status are created in one transaction, so a failure leaves the request unpaid. `reseller_payout_requests.voucher_id` is added. I used `business_expense` and not `investor_payout` because commission is a selling cost: it should reduce profit, and the owner picks the expense category.
+- **Migrations:** `2026_09_28_110000_add_reseller_pricing_columns`, `..._110100_create_reseller_commissions_table`, `..._110200_create_reseller_payout_requests_table`. All are additive. They have **not** been run on the demo DB.
+- `User::MODEL_MODULES`: both new models → `sales`. `MultiCompanyIsolationTest`: both new models registered. `lang/en.json` + `lang/bn.json`: 71 new keys.
+
+Tests:
+- New `tests/Feature/ResellerCommissionTest.php` (10 tests): price floor, reseller price and credit across main-store routes, main store unaffected, blank = suggested price, no tiers = no commission, delivered → payable, returned → cancelled, withdrawal minimum/balance/double-request, admin mark paid (voucher fields, Finance approval → Expense) / reject, settings tab + footer shows no numbers, company scope.
+- `StorefrontResellerAndAbandonedCartTest` gains 1 security test. Its `createStore()` gets an optional invoice prefix.
+
+Needs owner confirmation (not guessed silently):
+- Products with variants and products without wholesale tiers get no reseller price or commission, because they have no wholesale rate.
+- "Delivered" also counts an order marked **Completed** without a courier delivery. A **partial delivered** order stays pending.
+
+Needs Bangla review:
+- "Mark paid" → "পরিশোধিত হিসেবে চিহ্নিত করুন"
+- "Reseller cost per unit" → "প্রতি পিসে রিসেলার খরচ"
+- "Withdrawal requests" → "উত্তোলনের অনুরোধসমূহ"
+
+Commit status: committed and pushed to `claude/reseller-module-status-v9tobe` (owner approved: "হ্যাঁ, commit আর push কর").
+
+## 2026-09-28 - Investor drafts record the investment; returning investors are linked, not duplicated
+
+Reason — owner: "১ আর ২ দুটোই করে দেও". The two follow-ups were: (1) when a draft is confirmed, also create the investment in a project, with the stamp and cheque numbers; (2) when the investor already exists, add the new investment to them instead of blocking or duplicating.
+
+What changed:
+- **Migration** `2026_09_28_100000`: `investor_drafts` gains `existing_investor_id` (FK investors), `project_id` (FK investment_projects), `investment_amount`, `payment_method` and `invested_at`.
+- **Import:**
+  - both dialogs (file and pasted text) have an optional "Investment for this import" section: project (open/running only), payment method and date, applied to every draft.
+  - the amount column (বিনিয়োগ (৳) / Investment / Amount) is read into `investment_amount`. It used to be only a note.
+  - a row whose phone matches an existing investor is linked automatically (`existing_investor_id`), with a note.
+- **Review:**
+  - a new "Add to an existing investor" select. When it is set, the identity and nominee sections are hidden, because they are not used.
+  - an Investment section with project, amount, payment method and date.
+  - table columns for existing investor, project and investment.
+  - a "Set project / payment" bulk action.
+- **Blocking rules** (`InvestorDraft::blockingIssues()`):
+  - linked draft: the investor must exist, and a project + amount are required. Nothing is created otherwise.
+  - new investor: same rules as before. The "phone already belongs to" message now says to link the draft.
+  - investment: an amount without a project → pick a project or clear the amount. With a project, it must be open/running, and a payment method and date are required.
+- **Confirm** (`InvestorImportService::confirm()`), in one transaction:
+  - creates the new investor, or uses the linked one, whose details are never changed.
+  - creates the `Investment` with `received_by` = the confirming user.
+  - creates an `InvestorSecurityInstrument` with `stamp_serial_numbers` (split on commas) and `cheque_number` when present.
+  - deletes the draft.
+  - after the commit, `InvestmentLedgerService::recordInvestmentReceived()` books the same pending capital voucher as the project's Investments tab. `Investment`'s own saving rules still apply: the investment window and one channel partner per project.
+- Success messages say what happened: investor added, investor added with an investment of X, or new investment of X added for Y.
+
+Checked with the owner's real `INV_1_10_04_2026.csv` (not committed):
+- imported with a project → 19 of 19 drafts ready.
+- Confirm selected → 19 investors, 19 investments totalling ৳5,300,000 (matches the sheet's total row), and 19 security instruments.
+- importing the same file again → all 19 linked to the existing investors, and confirming added 19 investments with no new investors.
+
+**Needs Bangla review:** 36 new `lang/bn.json` keys: the investment section and field labels, blocking messages, linked-investor texts, success messages, and project status and payment method labels (Open/Running/Closed/Settled, Cash/bKash/Bank/Other). 3 unused keys were removed from both files.
+
+Important changed/new files:
+- `database/migrations/2026_09_28_100000_add_investment_fields_to_investor_drafts_table.php`
+- `app/Models/InvestorDraft.php`
+- `app/Services/Investment/InvestorImportService.php`
+- `app/Filament/Resources/InvestorDrafts/{InvestorDraftResource,Pages/ListInvestorDrafts,Pages/EditInvestorDraft}.php`
+- `lang/en.json`, `lang/bn.json`
+- `tests/Feature/InvestorImportTest.php`
+
+Verification:
+- `php artisan test --filter=InvestorImportTest`: 22 passed. 5 are new:
+  - an import with a project creates the investment and security instrument on confirm.
+  - a returning investor is linked and gets only the investment, with their details unchanged.
+  - three blocked cases: linked with no project, amount with no project, closed project.
+  - the Set project / payment bulk action.
+  - linking an existing investor from the review form.
+- `TranslationParityTest` passes.
+- Full `php artisan test` (plain, no `--env`): **1498 passed, 0 failed** (9215 assertions).
+- Pint passes on the changed files.
+- Not verified in a browser.
+
+Commit status: Committed and pushed to `claude/investor-form-auto-fill-jnleul` and `main` (owner approved: "জি পুশ কর").
+
+## 2026-09-28 - Video Generation Phase 5: Video Governance (plan 12 complete)
+
+Reason — owner: "পরের কাজ গুলো কর" (do the next tasks) after Phase 4. Phase 5 is the last phase in `12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md` §12.
+
+What changed:
+- **Governance service and page:**
+  - `app/Services/VideoGeneration/VideoGovernanceService.php` holds the per-role monthly cap and review roles in `companies.settings->ai_tools->video_governance`, plus usage totals and `review()`.
+  - `app/Filament/Pages/VideoGovernance.php` + `resources/views/filament/pages/video-governance.blade.php` form the super-admin page. It is not in the sidebar; the Tool Menu header has a new **Video Governance** button (`ToolMenu.php`).
+- **Cap unit (plan §14(d)) — my call, easy to change:** videos per calendar month, failed ones excluded. Every request is one clip and Stability's clips are a fixed length, so a count matches what is spent. Switching to seconds later changes one method, not the stored settings.
+- **Video Generation:**
+  - The cap is enforced before the upload is saved, so a blocked request stores nothing.
+  - `review_status` is set to pending for review roles, and the audit log records it.
+  - An allowance line shows under the form. The gallery shows a pending/rejected badge with the reviewer's note, and the attach buttons stay hidden.
+- **Video Library:** Approve / Reject (with a reason) for holders of `ai_tools.video_generation.review`. The Review column is visible by default and shows the note.
+- **Permission:** `ai_tools.video_generation.review` is added to the Manager role and the custom-permission list (`app/Models/User.php`), and `docs/roles-and-permissions.md` is updated.
+- **Migration:** `2026_09_28_100000_grant_video_review_permission_to_manager_role.php` only **appends** the permission to the stored Manager role, and only if that role already has `ai_tools.video_generation`. I did not reuse Phase 0's full re-snapshot, because that overwrites any edits the owner made to built-in roles. It has **not** been run on the demo DB.
+- `VideoProviderSettings`: the cost hint no longer says "future" dashboard.
+- Plan doc 12: Phase 5 marked ✅ and the status line now says the plan is complete. `lang/en.json` + `lang/bn.json`: 33 new keys.
+
+Tests:
+- New `tests/Feature/VideoGovernanceServiceTest.php` (7) and `tests/Feature/VideoGovernancePageTest.php` (10). They cover page access, the Tool Menu button, save, usage, cap blocking, pending review, the gallery badge, approve/reject, the permission gate, and the additive migration.
+- Full `php artisan test`: 1519 passed (9153 assertions). `npm run build`: clean.
+
+Needs Bangla review:
+- "Video Governance" → "ভিডিও গভর্নেন্স" (transliteration)
+- "Monthly allowance: :count video(s) left this month." → "মাসিক সীমা: এই মাসে আর :countটি ভিডিও বানানো যাবে।"
+
+Commit status: committed and pushed to `main`.
+
+## 2026-09-27 - Video Generation Phase 4: Video Library, favourites, Save to Google Drive (plan 12)
+
+Reason — owner asked whether Google Drive or MEGA could be used for the video library. Answer given: neither can serve video to web pages reliably (Drive throttles popular files and is not a web host; MEGA is end-to-end encrypted, so no plain URL for `<video>`). Clips stay in the company's own storage (R2 when enabled). The owner then chose: "Phase 4-এর সাথে "Save to Google Drive" বোতামও যোগ কর" (do Phase 4 and add a Save to Google Drive button).
+
+What changed:
+- **Video Library** — new `app/Filament/Pages/VideoLibrary.php` + `resources/views/filament/pages/video-library.blade.php`.
+  - A table mirroring the Image Library, with search and filters (context, status, creator, review, favourites, attached, saved to Drive).
+  - Row actions: Play (modal, `partials/video-player.blade.php`), Reuse, Favourite, Download, Save to Google Drive / Open in Google Drive.
+  - It is in the AI Tools sidebar after Video Generation and uses the same `ai_tools.video_generation` permission. The table polls while a video is generating or a Drive copy is uploading.
+- **Video Generation page:**
+  - `toggleFavorite` and `saveToDrive` actions on each finished video. `partials/video-drive-status.blade.php` shows Save / Saving… / Open in Drive / Retry.
+  - `?from=<id>` prefill: prompt, context, aspect ratio, duration, provider, and the same starting image.
+  - The gallery keeps polling while a Drive copy uploads.
+- **Save to Google Drive:**
+  - `app/Filament/Pages/Concerns/SavesVideosToDrive.php` (shared queue logic).
+  - `app/Jobs/SaveVideoToDriveJob.php`, which notifies the requester on success or failure.
+  - `app/Services/VideoGeneration/VideoDriveExporter.php`, which holds the per-company folder in `companies.settings->ai_tools->video_drive->folder_id` and accepts a pasted folder link.
+  - `GoogleDriveBackupService` gains `hasServiceAccount()`, `serviceAccountEmail()` and `uploadStream()`. The upload is resumable and streamed, so there is no 5 MB multipart limit, and `supportsAllDrives=true` is set. The existing backup `upload()` is untouched.
+- **Settings → Integrations → Video Providers:** new "Save to Google Drive" section with the folder field. The help text shows the service-account email to share the folder with.
+  - The credentials are the existing Backups service account; no new secret is stored.
+- **Migration:** `database/migrations/2026_09_27_100000_add_google_drive_columns_to_generated_videos_table.php` (`drive_status`, `drive_file_id`, `drive_url`, `drive_saved_at`, `drive_error`). It has **not** been run on the demo DB.
+- `GeneratedVideo`: `DRIVE_*` constants, the new fillable fields and cast, `hasPlayableVideo()`, `isSavedToDrive()`, `isSavingToDrive()`.
+- Plan doc 12: Phase 4 marked ✅ with the Drive decision recorded. `lang/en.json` + `lang/bn.json`: 52 new keys.
+
+Owner check before using Drive:
+- On Settings → Integrations → Video Providers, paste a folder link from a **Shared Drive** and share it with the service-account email shown there.
+- Google has been refusing service-account uploads into normal My Drive folders with "Service Accounts do not have storage quota". If that happens, the row shows Google's message.
+- The same limit may also affect the existing backup upload to Drive, which was not changed here.
+
+Tests:
+- New `tests/Feature/VideoLibraryTest.php` (10) and `tests/Feature/SaveVideoToDriveTest.php` (6). Google's token exchange is stubbed; the Drive calls go through `Http::fake()`.
+- Affected files (Video Library, Drive, Video Generation page, Video Providers page, AI Tools menu, backups, translation parity): all passed.
+- Full `php artisan test`: 1502 passed (8943 assertions). `npm run build`: clean.
+
+Needs Bangla review:
+- "Context" → "উদ্দেশ্য" (the library column for "What is this for?")
+- "By" → "যিনি বানিয়েছেন"
+- "Reuse" → "আবার ব্যবহার করুন"
+- "Favourite" / "Favourited" → "প্রিয়" / "প্রিয়তে আছে"
+
+Commit status: committed and pushed to `main`.
+
+## 2026-09-27 - Video Generation Phase 3: attach videos to products and offers (plan 12)
+
+Reason — owner: "পরবর্তি কাজ কর" (do the next task) after Phase 2 was pushed. The next task in `12_AI_TOOL_MENU_VIDEO_GENERATION_PLAN.md` §12 is Phase 3, attach & handoff.
+
+What changed:
+- **Service:** `app/Services/VideoGeneration/GeneratedVideoAttacher.php` + `VideoAttachmentException.php`. It writes the clip path into `products.video_path` / `offers.video_path` and links the generation. It refuses: not finished, clip missing, awaiting or rejected review, another company's record.
+- **Video Generation page:** `attachToProduct` / `attachToOffer` actions (the user's own rows only), with **Product** / **Offer hero** buttons on each finished video and an "Attached to …" line. The buttons are hidden while a video is not attachable. `ai_video.attached` is audit-logged.
+- **Storefront:**
+  - Product page: a video under the photo gallery (controls, poster = first photo).
+  - Offer hero block: muted, looped, autoplaying video over the cover image. The cover image is the poster, the reduced-motion fallback, and still the share image.
+- **Admin removal (added beyond the plan):** new `app/Filament/Forms/Components/AttachedVideoPreview.php` + `resources/views/filament/forms/components/attached-video-preview.blade.php`, on `ProductForm` (Product Images section) and `OfferForm` (after the cover image). It is shown only when a video is set and has a **Remove video** hint action. It is not an upload control, per plan §6.4. CLAUDE.md requires storefront content to be manageable from the admin panel; without this, an attached video could not be taken off.
+- Plan doc 12: Phase 3 marked ✅ with the as-built notes; status line now "Phases 0–3 built".
+- `lang/en.json` + `lang/bn.json`: 30 new keys.
+
+Tests:
+- New `tests/Feature/GeneratedVideoAttacherTest.php` (8).
+- New `tests/Feature/StorefrontGeneratedVideoTest.php` (7): product video block, offer hero video + fallback, remove from product and offer, preview hidden without a video.
+- `tests/Feature/VideoGenerationPageTest.php` +4: attach to product (with audit log), attach to offer, blocked while awaiting review, cannot attach another user's video.
+- Affected files: 32 passed. Full `php artisan test`: 1486 passed (8657 assertions). `npm run build`: clean.
+
+Not done (later phases): Video Library + favourites (Phase 4), governance + review permission (Phase 5), Meta Ads video creatives (deferred, §13(e)).
+
+Needs Bangla review (new `lang/bn.json` values):
+- "Use as an offer hero video" → "অফারের হিরো ভিডিও হিসেবে ব্যবহার করুন"; "Offer hero" → "অফার হিরো"; "Hero video updated" → "হিরো ভিডিও আপডেট হয়েছে"; "Set hero video" → "হিরো ভিডিও সেট করুন" — "হিরো" is a transliteration of the web term; the owner may prefer "ব্যানার".
+- "Attached to" → "যুক্ত আছে"
+- ":product video" → ":product ভিডিও"
+
+Commit status: committed and pushed to `main`.
 
 ## 2026-10-15 - Customers: address in the Customer box + address column in the list
 
@@ -402,6 +3197,29 @@ Important changed/new files: `routes/api.php`, `bootstrap/app.php`, `app/Http/Mi
 Verification: `php artisan test --filter="WebsiteApi|WebsiteWebhookDispatchTest"` — 22 passed (49 assertions). `php artisan test --filter=IntegrationsPageTest` — 25 passed (167 assertions). `php artisan test --filter=MultiCompanyIsolationTest` — 7 passed (172 assertions). Full `php artisan test` (plain, no `--env`) — **1335 passed, 0 failed** (6763 assertions, ~813s), run after a small fix (excluding `stock` from `Product`'s own webhook-dispatch check, to keep `StockMovement` as the single dispatch point) and the added `IntegrationsPageTest` coverage. `npm run build` not run — no frontend asset changed (PHP/Blade only, no JS/CSS).
 
 Commit status: NOT committed. Awaiting owner approval.
+
+## 2026-09-18 - Image Generation: added an OpenRouter provider (Custom endpoint doesn't speak the OpenAI Images API)
+
+Reason — owner: "ইমেজ জেনারেশন টুলের জেনারেট ইমেজ এ ক্লিক করলে কিছুই আসেনা, ইমেজ জেনারেশন ফেইল্ড হচ্ছে, মডেল যুক্ত করেছি, সকল ফিল্ড ঠিকভাবে পূরণ করেছি কিন্তু ইমেজ জেনারেশন টুল ইমেজ তৈরি করতে পারছেনা। দুইবার চেষ্টা করেছি দুইবারই ফেইল করেছে।" (Clicking Generate produces nothing, generation fails, tried twice, both failed.) Two screenshots showed the provider profile "GPT Image 2.5 Sunburst (default)" and both failed generations with the same error: "Custom image provider rejected the request (HTTP 404): Not Found."
+
+Root cause: the provider's "Provider type" was set to "Custom" with Base URL `https://openrouter.ai/api/v1`. The "Custom" adapter (`CustomOpenAiCompatibleProvider`) is built specifically for endpoints that speak the real OpenAI Images API shape — it POSTs the Base URL verbatim for text-to-image, and derives an edits endpoint by swapping `/generations` → `/edits` (or appending `/edits`) for image-to-image. OpenRouter doesn't implement that API at all: confirmed via OpenRouter's own docs (https://openrouter.ai/blog/tutorials/image-generation-models/) that its actual "Unified Image API" is a single `POST https://openrouter.ai/api/v1/images` endpoint for *both* generation and image-to-image (an uploaded reference goes in as a base64 data URL under `input_references`, not a separate edits route or multipart upload), with request fields `aspect_ratio`/`resolution`/`n` instead of OpenAI's `size`. So every request from the "Custom" adapter — generate or image-to-image — hit a URL with no matching route on OpenRouter's server, hence the plain-text "Not Found" 404 body (a routing failure, not an API/auth error, which is why summarize() had no JSON error message to surface).
+
+What changed: added a proper first-class "OpenRouter" provider type, alongside the existing OpenAI/Google/Stability/Custom ones, instead of trying to force OpenRouter through "Custom":
+
+- `app/Services/ImageGeneration/Providers/OpenRouterImageProvider.php` (new) — posts to `https://openrouter.ai/api/v1/images` (default) with the correct OpenRouter request shape; for image-to-image, adds `input_references` with the uploaded photo as a base64 data URL on the same endpoint instead of a separate edits call; decodes the OpenAI-compatible `data[].b64_json` response (same envelope, so no parsing changes needed there). If the admin enters a Base URL override that's just the bare API root (no `/images` suffix — the common convention), `/images` is appended automatically rather than requiring the exact path.
+- `app/Services/ImageGeneration/ImageProviderResolver.php` — registered `'openrouter' => OpenRouterImageProvider::class`.
+- `app/Services/ImageGeneration/ImageProviderSettingsService.php` — added `'openrouter'` to `API_FORMATS` so it's selectable as a "Provider type".
+- `app/Filament/Pages/ImageProviderSettings.php` — added an OpenRouter model-name placeholder hint (`google/gemini-2.5-flash-image`).
+
+**What the owner needs to do:** on AI Tools → Image Providers, open the "GPT Image 2.5 Sunburst" profile and change **Provider type** from "Custom" to **"OpenRouter"**. The Base URL can be left as-is (`https://openrouter.ai/api/v1`) or cleared — either works now. No other field needs to change.
+
+Important changed/new files: `app/Services/ImageGeneration/Providers/OpenRouterImageProvider.php`, `app/Services/ImageGeneration/ImageProviderResolver.php`, `app/Services/ImageGeneration/ImageProviderSettingsService.php`, `app/Filament/Pages/ImageProviderSettings.php`, `tests/Feature/ImageGenerationProviderAdaptersTest.php`.
+
+2026-09-28 follow-up — owner reported generations spinning on "Queued" for hours on production. Cause: no queue worker was running on Coolify (jobs sat in Redis). Owner added a `zamzam-worker` Coolify app with Start Command `php artisan queue:work --sleep=1 --tries=3 --max-time=3600`; it needed **Force deploy (without cache)** because a plain Redeploy reused the old image (same commit SHA) with the web-server start command. Once the worker ran, the jobs failed with the 404 above — and the OpenRouter provider type was missing from production because this work had never been committed.
+
+Verification: `php artisan test --filter=ImageGenerationProviderAdaptersTest` — 20 passed (56 assertions). Full `php artisan test` (plain, no `--env`) — **1519 passed, 0 failed** (9153 assertions, ~740s). `npm run build` not run — PHP only.
+
+Commit status: Committed and pushed to `origin/main` (owner approved: "হ্যাঁ, commit করে push করো"). Committed alone — only the OpenRouter files plus this note and its CHANGELOG entry; other pending working-tree changes were left unstaged.
 
 ## 2026-09-17 - Orders: auto shipping fee ignored the real default courier when a company has more than one
 

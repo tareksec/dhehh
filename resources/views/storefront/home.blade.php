@@ -26,7 +26,7 @@
                         {{ $heroSubheading }}
                     </p>
                     <div class="mt-5 flex flex-wrap gap-3">
-                        <a class="inline-flex items-center rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90" href="{{ isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index') }}">
+                        <a class="inline-flex items-center rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">
                             {{ $heroCta }}
                         </a>
                         @if ($categories->isNotEmpty())
@@ -58,13 +58,13 @@
                         <h2 class="text-xl font-semibold tracking-tight sm:text-2xl">Shop by category</h2>
                         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Browse our full collection by category</p>
                     </div>
-                    <a class="inline-flex min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 dark:hover:text-white" href="{{ isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index') }}">See all</a>
+                    <a class="inline-flex min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 dark:hover:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">See all</a>
                 </div>
                 <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
                     @foreach ($categories as $category)
                         <a
                             class="group relative flex flex-col items-center gap-3 overflow-hidden rounded-xl border border-gray-200 bg-white p-4 transition hover:-translate-y-1 hover:shadow-lg hover:shadow-gray-200/60 dark:border-white/10 dark:bg-gray-900 dark:hover:shadow-none"
-                            href="{{ isset($previewSlug) ? route('storefront.preview.categories.show', [$previewSlug, $category->slug]) : route('storefront.categories.show', $category->slug) }}"
+                            href="{{ \App\Support\StorefrontUrl::route('categories.show', [$category->slug], $previewSlug ?? null) }}"
                         >
                             <div class="grid h-14 w-14 place-items-center overflow-hidden rounded-full bg-[var(--storefront-brand)]/10 text-[var(--storefront-brand)] transition group-hover:bg-[var(--storefront-brand)] group-hover:text-white">
                                 @if ($category->image)
@@ -167,7 +167,7 @@
     <section class="mx-auto w-full max-w-7xl px-4 py-7 sm:px-5 sm:py-8 lg:px-6" x-reveal>
         <div class="mb-5 flex items-end justify-between gap-5">
             <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">Featured products</h2>
-            <a class="inline-flex min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 dark:hover:text-white" href="{{ isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index') }}">View all</a>
+            <a class="inline-flex min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 dark:hover:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">View all</a>
         </div>
 
         <div class="storefront-catalog-grid grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
@@ -190,7 +190,7 @@
                         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ $carousel->subtitle }}</p>
                     @endif
                 </div>
-                <a class="hidden min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 sm:inline-flex dark:hover:text-white" href="{{ isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index') }}">View all</a>
+                <a class="hidden min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 sm:inline-flex dark:hover:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">View all</a>
             </div>
             <div class="-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
                 <div class="flex snap-x snap-mandatory gap-5">
@@ -208,7 +208,7 @@
         <section class="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-5 lg:px-6" x-reveal>
             <div class="mb-6 flex items-end justify-between gap-5">
                 <h2 class="text-xl font-semibold tracking-tight sm:text-3xl">Explore more products</h2>
-                <a class="inline-flex min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 dark:hover:text-white" href="{{ isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index') }}">View all</a>
+                <a class="inline-flex min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 dark:hover:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">View all</a>
             </div>
             <div class="storefront-catalog-grid grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-5">
                 @foreach ($products->skip(8) as $product)
@@ -344,7 +344,7 @@
         <div class="mx-auto flex w-full max-w-7xl flex-col items-center gap-3 px-4 py-8 text-center sm:px-5 lg:px-6">
             <h2 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Ready to order?</h2>
             <p class="max-w-md text-sm text-white/85">Browse the full catalog and get it delivered to your door.</p>
-            <a class="inline-flex items-center rounded-lg bg-white px-6 py-3 text-sm font-semibold text-gray-950 transition hover:bg-white/90" href="{{ isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index') }}">
+            <a class="inline-flex items-center rounded-lg bg-white px-6 py-3 text-sm font-semibold text-gray-950 transition hover:bg-white/90" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">
                 {{ $heroCta }}
             </a>
         </div>

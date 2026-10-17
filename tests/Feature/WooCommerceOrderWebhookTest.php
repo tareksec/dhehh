@@ -401,6 +401,26 @@ class WooCommerceOrderWebhookTest extends TestCase
         ];
     }
 
+    public function test_the_webhook_is_verified_with_the_next_js_sites_secret_once_the_company_has_one(): void
+    {
+        $company = $this->createCompanyWithWebhookSecret('woo-blade-secret');
+        $product = $this->createProduct($company, 'Primary Row Product', 'WOO-SKU-PRIMARY');
+        StorefrontSetting::query()->create([
+            'company_id' => $company->getKey(),
+            'site_type' => StorefrontSetting::SITE_NEXTJS,
+            'nextjs_site_enabled' => true,
+            'woocommerce_base_url' => 'https://example-store.test',
+            'woocommerce_credentials' => ['consumer_key' => 'ck_test', 'consumer_secret' => 'cs_test', 'webhook_secret' => 'woo-next-secret'],
+        ]);
+
+        $payload = $this->orderPayload(id: 590, sku: $product->sku);
+
+        // WooCommerce is configured on the Next.js site (the main storefront); the Blade row's old secret no longer counts.
+        $this->postWebhook($company, $payload, 'order.created', 'woo-blade-secret')->assertForbidden();
+        $this->postWebhook($company, $payload, 'order.created', 'woo-next-secret')->assertOk();
+        $this->assertTrue(Order::query()->where('external_reference', 'woo-590')->exists());
+    }
+
     private function createCompanyWithWebhookSecret(string $secret): Company
     {
         $company = Company::query()->create([

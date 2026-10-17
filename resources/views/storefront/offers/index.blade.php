@@ -4,9 +4,7 @@
     $tabUrl = fn (?string $type) => isset($previewSlug)
         ? route('storefront.preview.offers.index', [$previewSlug, ...($type ? ['type' => $type] : [])])
         : route('storefront.offers.index', $type ? ['type' => $type] : []);
-    $offerUrl = fn (string $slug) => isset($previewSlug)
-        ? route('storefront.preview.offers.show', [$previewSlug, $slug])
-        : route('storefront.offers.show', $slug);
+    $offerUrl = fn (string $slug) => \App\Support\StorefrontUrl::route('offers.show', [$slug], $previewSlug ?? null);
 @endphp
 
 @section('content')

@@ -1,54 +1,32 @@
 @extends(\App\Support\StorefrontThemeRegistry::layoutView($setting->storefrontTheme()))
 
-@push('meta-events')
-    @php
-        $metaTracking = app(\App\Services\StorefrontMetaTrackingService::class);
-    @endphp
-    @if (! isset($previewSlug) && $metaTracking->browserEventEnabled($setting, 'InitiateCheckout', request()))
-        <script>
-            fbq('track', 'InitiateCheckout', {{ Illuminate\Support\Js::from([
-                'content_ids' => collect($items)->map(fn ($item) => (string) $item['product']->getKey())->unique()->values()->all(),
-                'content_type' => 'product',
-                'currency' => 'BDT',
-                'value' => round((float) $subtotal, 2),
-                'num_items' => collect($items)->sum('quantity'),
-            ]) }}, {eventID: {{ Illuminate\Support\Js::from($metaTracking->eventId('initiate-checkout')) }}});
-        </script>
-    @endif
-@endpush
+@include('storefront.checkout.partials.checkout-meta-events')
 
 @section('content')
     @php
-        $insideCharge = (float) $insideQuote['fee'];
-        $outsideCharge = (float) $outsideQuote['fee'];
-        $actualWeight = (float) $insideQuote['weight'];
-        $billedWeight = (int) $insideQuote['billed_weight'];
+        $page = \App\Support\StorefrontCheckoutPage::make(
+            $setting,
+            $paymentMethods,
+            (float) ($advanceDue ?? 0),
+            (bool) ($onlinePaymentAvailable ?? false),
+            $insideQuote,
+            $outsideQuote,
+            $previewSlug ?? null,
+            old('payment_method'),
+        );
         // $paymentMethods is the dashboard-managed, company-scoped list from
         // CheckoutController::activePaymentMethods() — any number of manual
         // (send-money/bank-transfer) channels, plus at most one cod row and
         // one online_gateway row.
-        $paymentMethodValues = $paymentMethods->map->paymentValue()->all();
-        $oldPaymentMethod = old('payment_method');
-        $defaultPaymentMethod = in_array($oldPaymentMethod, $paymentMethodValues, true)
-            ? $oldPaymentMethod
-            : ($paymentMethodValues[0] ?? '');
-        $hasPaymentPath = $paymentMethods->isNotEmpty();
-        $manualPaymentMethods = $paymentMethods->where('type', \App\Models\StorefrontPaymentMethod::TYPE_MANUAL);
-        $onlineGatewayMethod = $paymentMethods->firstWhere('type', \App\Models\StorefrontPaymentMethod::TYPE_ONLINE_GATEWAY);
-        $preorderPaymentBlocked = ($advanceDue ?? 0) > 0 && ! ($onlinePaymentAvailable ?? false);
-        $checkoutBlocked = ! $hasPaymentPath || $preorderPaymentBlocked;
-        $checkoutBlockDescription = implode(' ', array_filter([
-            ! $hasPaymentPath ? 'checkout-payment-unavailable' : null,
-            $preorderPaymentBlocked ? 'checkout-preorder-payment-unavailable' : null,
-        ]));
-        // Computed here (not read from layout.blade.php) since child @section
-        // content executes before the parent layout's own @php block runs.
-        $loggedInCustomer = auth('customer')->user();
-        $checkoutAutosaveUrl = ($setting->checkout_autosave_enabled ?? false)
-            ? (isset($previewSlug)
-                ? route('storefront.preview.checkout.autosave', $previewSlug)
-                : route('storefront.checkout.autosave'))
-            : null;
+        $hasPaymentPath = $page->hasPaymentPath;
+        $manualPaymentMethods = $page->manualPaymentMethods;
+        $onlineGatewayMethod = $page->onlineGatewayMethod;
+        $defaultPaymentMethod = $page->defaultPaymentMethod;
+        $checkoutBlocked = $page->blocked;
+        $checkoutBlockDescription = $page->blockDescription;
+        $actualWeight = $page->actualWeight;
+        $billedWeight = $page->billedWeight;
+        $loggedInCustomer = $page->customer;
     @endphp
 
     <section class="border-b border-gray-200 dark:border-white/10">
@@ -62,29 +40,9 @@
 
     <section
         class="mx-auto grid w-full max-w-7xl gap-5 px-4 py-6 sm:px-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-6"
-        x-data="{
-            address: {{ Illuminate\Support\Js::from(old('address', $loggedInCustomer->address ?? '')) }},
-            insideDhakaKeywords: {{ Illuminate\Support\Js::from($insideDhakaKeywords) }},
-            outsideDhakaMarkers: {{ Illuminate\Support\Js::from($outsideDhakaMarkers) }},
-            method: {{ Illuminate\Support\Js::from($defaultPaymentMethod) }},
-            subtotal: {{ $subtotal }},
-            vat: {{ $vatAmount ?? 0 }},
-            insideDeliveryTime: {{ Illuminate\Support\Js::from($setting->deliveryTimeFor('inside')) }},
-            outsideDeliveryTime: {{ Illuminate\Support\Js::from($setting->deliveryTimeFor('outside')) }},
-            insideCharge: {{ $insideCharge }},
-            outsideCharge: {{ $outsideCharge }},
-            get area() {
-                const normalized = this.address.trim().toLocaleLowerCase();
-                if (! normalized) return null;
-                if (this.outsideDhakaMarkers.some((marker) => normalized.includes(String(marker).toLocaleLowerCase()))) return 'outside';
-                return this.insideDhakaKeywords.some((keyword) => normalized.includes(String(keyword).toLocaleLowerCase())) ? 'inside' : 'outside';
-            },
-            get deliveryCharge() { return this.area === null ? 0 : (this.area === 'inside' ? this.insideCharge : this.outsideCharge); },
-            get deliveryTime() { return this.area === null ? null : (this.area === 'inside' ? this.insideDeliveryTime : this.outsideDeliveryTime); },
-            get total() { return this.subtotal + this.vat + this.deliveryCharge; }
-        }"
+        x-data="@include('storefront.checkout.partials.checkout-alpine-state')"
     >
-        <form id="checkout-form" class="rounded-lg border border-gray-200 bg-white p-4 sm:p-5 dark:border-gray-800 dark:bg-gray-900" method="POST" action="{{ isset($previewSlug) ? route('storefront.preview.checkout.store', $previewSlug) : route('storefront.checkout.store') }}" @if ($errors->any()) aria-describedby="checkout-errors" @endif>
+        <form id="checkout-form" class="rounded-lg border border-gray-200 bg-white p-4 sm:p-5 dark:border-gray-800 dark:bg-gray-900" method="POST" action="{{ \App\Support\StorefrontUrl::route('checkout.store', [], $previewSlug ?? null) }}" @if ($errors->any()) aria-describedby="checkout-errors" @endif>
             @csrf
 
             @if ($errors->any())
@@ -308,71 +266,5 @@
         </aside>
     </section>
 
-    <script>
-        (function () {
-            var form = document.getElementById('checkout-form');
-            var submitButton = document.querySelector('[data-checkout-submit]');
-            if (! form) return;
-
-            var dirty = false;
-            var autosaveUrl = {{ Illuminate\Support\Js::from($checkoutAutosaveUrl) }};
-            var autosaveTimer = null;
-
-            function checkoutDetails() {
-                return ['name', 'phone', 'email', 'address'].reduce(function (details, field) {
-                    var input = form.elements.namedItem(field);
-                    details[field] = input ? input.value : '';
-                    return details;
-                }, {});
-            }
-
-            function autosave() {
-                if (! autosaveUrl) return;
-                var token = form.querySelector('input[name="_token"]');
-                fetch(autosaveUrl, {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    keepalive: true,
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': token ? token.value : ''
-                    },
-                    body: JSON.stringify(checkoutDetails())
-                }).catch(function () {});
-            }
-
-            form.addEventListener('input', function (event) {
-                dirty = true;
-                if (! autosaveUrl || ! ['name', 'phone', 'email', 'address'].includes(event.target.name)) return;
-                window.clearTimeout(autosaveTimer);
-                autosaveTimer = window.setTimeout(autosave, 1200);
-            });
-
-            var errorSummary = document.querySelector('[data-checkout-errors]');
-            if (errorSummary) {
-                window.requestAnimationFrame(function () { errorSummary.focus(); });
-            }
-
-            form.addEventListener('submit', function () {
-                dirty = false;
-                window.clearTimeout(autosaveTimer);
-                if (submitButton) {
-                    submitButton.disabled = true;
-                    submitButton.textContent = 'Processing…';
-                }
-            });
-
-            window.addEventListener('pagehide', function () {
-                window.clearTimeout(autosaveTimer);
-                if (dirty) autosave();
-            });
-
-            window.addEventListener('beforeunload', function (event) {
-                if (! dirty) return;
-                event.preventDefault();
-                event.returnValue = '';
-            });
-        })();
-    </script>
+    @include('storefront.checkout.partials.checkout-script')
 @endsection

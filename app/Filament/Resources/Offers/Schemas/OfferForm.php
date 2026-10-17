@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Offers\Schemas;
 
 use App\Filament\Concerns\OptimizesUploadedImages;
 use App\Filament\Concerns\SelectableFromMediaHub;
+use App\Filament\Forms\Components\AttachedVideoPreview;
 use App\Models\Offer;
 use App\Models\Product;
 use App\Models\ProductReview;
@@ -11,6 +12,8 @@ use App\Models\ProductVariant;
 use App\Services\CompanyContext;
 use App\Support\CompanyMedia;
 use App\Support\MoneyFormatter;
+use Closure;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
@@ -45,10 +48,11 @@ class OfferForm
                         ->preload()
                         ->live(),
                     Select::make('type')
-                        ->options(Offer::TYPES)
+                        ->options(fn (): array => array_map(fn (string $label): string => __($label), Offer::TYPES))
                         ->default(Offer::TYPE_SINGLE)
                         ->required()
-                        ->native(false),
+                        ->native(false)
+                        ->live(),
                     Select::make('status')
                         ->options(Offer::STATUSES)
                         ->default(Offer::STATUS_DRAFT)
@@ -65,7 +69,9 @@ class OfferForm
                         ->maxLength(120)
                         ->alphaDash()
                         ->unique(table: 'offers', column: 'slug', ignoreRecord: true, modifyRuleUsing: fn ($rule, Get $get) => $rule->where('company_id', $get('company_id')))
-                        ->helperText('Used in the public URL: /offers/your-slug'),
+                        ->helperText(fn (Get $get): string => $get('type') === Offer::TYPE_COLLECTION
+                            ? __('Only an identifier for this collection — it has no public page.')
+                            : 'Used in the public URL: /offers/your-slug'),
                     Textarea::make('short_description')
                         ->rows(2)
                         ->maxLength(500)
@@ -85,16 +91,49 @@ class OfferForm
                         ->saveUploadedFileUsing(static::optimizeImageUpload())
                         ->hintAction(static::selectFromMediaHubAction())
                         ->columnSpanFull(),
+                    AttachedVideoPreview::make('video_preview')
+                        ->columnSpanFull(),
                     Toggle::make('online_payment_required')
+                        ->visible(fn (Get $get): bool => $get('type') !== Offer::TYPE_COLLECTION)
                         ->label('Require full online payment')
                         ->helperText('When on, checkout for this offer requires the full amount paid online (no Cash on Delivery).')
                         ->inline(false),
                 ])
                 ->columns(2),
 
+            Section::make(__('Collection'))
+                ->columnSpanFull()
+                ->description(__('A curated product list for the Next.js storefront. It has no landing page or checkout of its own.'))
+                ->schema([
+                    Select::make('collection_kind')
+                        ->label(__('Collection kind'))
+                        ->options(fn (): array => array_map(fn (string $label): string => __($label), Offer::COLLECTION_KINDS))
+                        ->native(false)
+                        ->required()
+                        ->live(),
+                    DateTimePicker::make('starts_at')
+                        ->label(__('Starts at'))
+                        ->seconds(false)
+                        ->helperText(__('Leave empty to start immediately.')),
+                    DateTimePicker::make('ends_at')
+                        ->label(__('Ends at'))
+                        ->seconds(false)
+                        ->required(fn (Get $get): bool => $get('collection_kind') === Offer::KIND_FLASH_SALE)
+                        ->rule(fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+                            $starts = $get('starts_at');
+
+                            if (filled($value) && filled($starts) && strtotime((string) $value) <= strtotime((string) $starts)) {
+                                $fail(__('The end time must be after the start time.'));
+                            }
+                        })
+                        ->helperText(__('A Flash Sale needs an end time — it drives the countdown. The collection disappears automatically after this time.')),
+                ])
+                ->columns(3)
+                ->visible(fn (Get $get): bool => $get('type') === Offer::TYPE_COLLECTION),
+
             Section::make('Components')
                 ->columnSpanFull()
-                ->description('Combo offers: add every component product. Single offers: usually one row.')
+                ->description('Combo offers: add every component product. Single offers: usually one row. Collections: add the products in display order.')
                 ->schema([
                     Repeater::make('items')
                         ->relationship()
@@ -120,14 +159,23 @@ class OfferForm
                                         ->mapWithKeys(fn (ProductVariant $variant): array => [$variant->getKey() => $variant->label()])
                                         ->all();
                                 })
-                                ->visible(fn (Get $get): bool => (bool) Product::query()->whereKey($get('product_id'))->value('has_variants'))
+                                ->visible(fn (Get $get): bool => $get('../../type') !== Offer::TYPE_COLLECTION
+                                    && (bool) Product::query()->whereKey($get('product_id'))->value('has_variants'))
                                 ->live(),
                             TextInput::make('quantity')
                                 ->integer()
                                 ->minValue(1)
                                 ->default(1)
                                 ->required()
+                                ->visible(fn (Get $get): bool => $get('../../type') !== Offer::TYPE_COLLECTION)
                                 ->live(onBlur: true),
+                            TextInput::make('deal_price')
+                                ->label(__('Deal price'))
+                                ->numeric()
+                                ->prefix('৳')
+                                ->minValue(0)
+                                ->visible(fn (Get $get): bool => $get('../../type') === Offer::TYPE_COLLECTION)
+                                ->helperText(__('Optional. Shown instead of the normal price while this collection is live.')),
                         ])
                         ->columns(3)
                         ->defaultItems(1)
@@ -140,6 +188,7 @@ class OfferForm
 
             Section::make('Pricing')
                 ->columnSpanFull()
+                ->visible(fn (Get $get): bool => $get('type') !== Offer::TYPE_COLLECTION)
                 ->schema([
                     Select::make('price_mode')
                         ->options(Offer::PRICE_MODES)
@@ -175,6 +224,7 @@ class OfferForm
 
             Section::make('Landing Page')
                 ->columnSpanFull()
+                ->visible(fn (Get $get): bool => $get('type') !== Offer::TYPE_COLLECTION)
                 ->description('Sections shown top to bottom on the public landing page. The checkout form always appears fixed at the bottom, regardless of these sections. Use the "Generate with AI" button (after saving) to draft this automatically.')
                 ->schema([
                     Repeater::make('blocks')
@@ -270,6 +320,7 @@ class OfferForm
 
             Section::make('SEO')
                 ->columnSpanFull()
+                ->visible(fn (Get $get): bool => $get('type') !== Offer::TYPE_COLLECTION)
                 ->schema([
                     TextInput::make('meta_title')
                         ->maxLength(70),

@@ -24,7 +24,10 @@ class EditInvestorDraft extends EditRecord
 
     protected function getHeaderActions(): array
     {
-        return [DeleteAction::make()->label(__('Discard'))];
+        return [
+            InvestorDraftResource::rejectApplicationAction()->after(fn () => $this->redirect(InvestorDraftResource::getUrl())),
+            DeleteAction::make()->label(__('Discard'))->visible(fn (InvestorDraft $record): bool => $record->source !== InvestorDraft::SOURCE_PORTAL),
+        ];
     }
 
     protected function getFormActions(): array
@@ -55,6 +58,7 @@ class EditInvestorDraft extends EditRecord
 
         /** @var InvestorDraft $draft */
         $draft = $this->getRecord()->refresh();
+        $message = InvestorDraftResource::confirmedMessage($draft);
 
         try {
             $investor = $imports->confirm($draft);
@@ -64,7 +68,7 @@ class EditInvestorDraft extends EditRecord
             );
         }
 
-        Notification::make()->title(__('Investor :name added to the investor list', ['name' => $investor->name]))->success()->send();
+        Notification::make()->title($message)->success()->send();
 
         $this->redirect(InvestorResource::getUrl('view', ['record' => $investor]));
     }

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
@@ -18,7 +19,7 @@ use Illuminate\Validation\ValidationException;
  */
 class OrderPayment extends Model
 {
-    use BelongsToCompany;
+    use BelongsToCompany, SoftDeletes;
 
     public const TYPE_ADVANCE = 'advance';
 
@@ -62,7 +63,9 @@ class OrderPayment extends Model
             $payment->type ??= self::TYPE_ADVANCE;
             $payment->method ??= 'cash';
             $payment->paid_at ??= now()->toDateString();
-            $payment->received_by ??= Auth::id();
+            // Only a staff user receives money (a reseller signed in to the
+            // portal is a Customer on another guard).
+            $payment->received_by ??= Auth::user() instanceof User ? Auth::id() : null;
         });
 
         // The account the money was received into decides the method, so

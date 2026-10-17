@@ -7,15 +7,20 @@ use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\GeneratesSequentialNumber;
 use App\Services\CustomerRiskService;
 use App\Services\OrderWorkflowService;
+use App\Services\ResellerCommissionService;
+use App\Services\ResellerOwnCourierService;
 use App\Services\ShippingFeeService;
 use App\Services\WebsiteWebhookDispatcher;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class Order extends Model
 {
@@ -77,6 +82,13 @@ class Order extends Model
         self::STAGE_CANCELLED => 'Cancelled',
         self::STAGE_RETURNED => 'Returned',
         self::STAGE_REFUNDED => 'Refunded',
+    ];
+
+    /** Courier states that put an open order in the Shipping stage (see workflowStage()). */
+    public const SHIPPING_DELIVERY_STATUSES = [
+        CourierBooking::STATUS_PICKED_UP,
+        CourierBooking::STATUS_IN_TRANSIT,
+        CourierBooking::STATUS_PARTIAL_DELIVERED,
     ];
 
     public const REASON_REQUIRED_STAGES = [
@@ -148,6 +160,16 @@ class Order extends Model
 
     public const SOURCE_API = 'website_api';
 
+    public const SOURCE_RESELLER_PORTAL = 'reseller_portal';
+
+    /**
+     * Orders copied in from Nuport's CSV export (NuportOrderImportService).
+     * They are history: the stock they moved was already counted in the
+     * physical stock the owner entered, so they never create stock movements,
+     * notifications or fraud checks (see isHistoricalImport()).
+     */
+    public const SOURCE_NUPORT_IMPORT = 'nuport_import';
+
     public const SOURCES = [
         self::SOURCE_ADMIN => 'Admin',
         self::SOURCE_STOREFRONT => 'Storefront',
@@ -156,13 +178,20 @@ class Order extends Model
         self::SOURCE_OFFER => 'Offer',
         self::SOURCE_WOOCOMMERCE => 'WooCommerce',
         self::SOURCE_API => 'Website (API)',
+        self::SOURCE_RESELLER_PORTAL => 'Reseller portal',
+        self::SOURCE_NUPORT_IMPORT => 'Nuport (imported)',
     ];
 
     protected $fillable = [
         'company_id',
+        'storefront_setting_id',
         'order_number',
         'customer_id',
         'reseller_customer_id',
+        'reseller_own_courier',
+        'reseller_courier_name',
+        'reseller_parcel_id',
+        'reseller_parcel_packed_at',
         'customer_name',
         'order_date',
         'subtotal',
@@ -170,6 +199,7 @@ class Order extends Model
         'vat',
         'shipping_zone',
         'shipping_fee',
+        'packaging_fee',
         'total_amount',
         'paid_amount',
         'due_amount',
@@ -183,10 +213,13 @@ class Order extends Model
 
     protected $casts = [
         'order_date' => 'date',
+        'reseller_own_courier' => 'boolean',
+        'reseller_parcel_packed_at' => 'datetime',
         'subtotal' => 'decimal:2',
         'discount' => 'decimal:2',
         'vat' => 'decimal:2',
         'shipping_fee' => 'decimal:2',
+        'packaging_fee' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'paid_amount' => 'decimal:2',
         'due_amount' => 'decimal:2',
@@ -209,7 +242,9 @@ class Order extends Model
             // both. Purely a preference for whoever books the courier
             // later; it doesn't book anything by itself, and can still be
             // changed on the order's Delivery Status section before booking.
-            if ($order->courier_provider_id === null) {
+            // A reseller's own-courier order is never booked with the
+            // company's courier, so it gets no default provider.
+            if ($order->courier_provider_id === null && ! $order->reseller_own_courier) {
                 $order->courier_provider_id = CourierProvider::defaultForCompany($order->company_id)?->getKey();
             }
 
@@ -292,8 +327,17 @@ class Order extends Model
 
         static::saved(function (Order $order): void {
             $order->syncTotalsStockAndCustomerBalance();
+            app(ResellerCommissionService::class)->sync($order);
+            // A cancelled own-courier order gives back what it took from the reseller's deposit.
+            if ($order->reseller_own_courier && $order->wasChanged('status') && $order->status === self::STATUS_CANCELLED) {
+                app(ResellerOwnCourierService::class)->refundDeposit($order);
+            }
+            // A returned reseller order takes the return charge from the reseller's deposit (once).
+            if ($order->reseller_customer_id && $order->wasChanged('status') && $order->status === self::STATUS_RETURNED) {
+                app(ResellerOwnCourierService::class)->chargeReturn($order);
+            }
             app(OrderWorkflowService::class)->syncPreviousCustomerBalance($order);
-            if ($order->wasChanged('status') && $order->isAccounted() && Schema::hasTable('fraud_checks')) {
+            if ($order->wasChanged('status') && $order->isAccounted() && ! $order->isHistoricalImport() && Schema::hasTable('fraud_checks')) {
                 app(CustomerRiskService::class)->evaluateOrder($order);
             }
         });
@@ -303,11 +347,23 @@ class Order extends Model
             app(OrderWorkflowService::class)->syncCustomerBalance($order);
         });
 
+        static::deleting(function (Order $order): void {
+            // Owner decision 2026-10-15: a returned (or refunded) order is never
+            // trashed, or its returned-goods and damage record would be lost.
+            if (! $order->isForceDeleting() && ! $order->canBeMovedToTrash()) {
+                throw ValidationException::withMessages([
+                    'status' => __('A returned or refunded order cannot be moved to trash, because its returned goods and damage are counted from it.'),
+                ]);
+            }
+        });
+
         static::restored(function (Order $order): void {
             // Moving an accounted order to trash releases its stock and due
             // contribution in the deleted hook above. Restoring must rebuild
-            // those business effects, not only clear the deleted_at column.
-            $order->syncTotalsStockAndCustomerBalance();
+            // those business effects, not only clear the deleted_at column
+            // (owner decision 2026-10-15: that includes the sale of an order
+            // that was returned).
+            app(OrderWorkflowService::class)->restoreFromTrash($order);
         });
 
         static::forceDeleting(function (Order $order): void {
@@ -350,6 +406,23 @@ class Order extends Model
     public function storefrontPayments(): HasMany
     {
         return $this->hasMany(StorefrontPayment::class);
+    }
+
+    /** The Next.js site's settings row this order was placed on; null for the Blade storefront. */
+    public function storefrontSetting(): BelongsTo
+    {
+        return $this->belongsTo(StorefrontSetting::class)->withoutGlobalScopes();
+    }
+
+    /**
+     * The storefront settings of the site this order came from: its own
+     * Next.js row, otherwise the company's Blade storefront. Payment, pixel
+     * and notification credentials are read from here, never from "the
+     * company's" row, so an order is always handled with its own site's keys.
+     */
+    public function siteSetting(): ?StorefrontSetting
+    {
+        return $this->storefrontSetting ?? StorefrontSetting::bladeFor((int) $this->company_id);
     }
 
     public function courierBookings(): HasMany
@@ -401,6 +474,65 @@ class Order extends Model
     public function riskReviews(): HasMany
     {
         return $this->hasMany(CustomerRiskReview::class);
+    }
+
+    public function resellerCommission(): HasOne
+    {
+        return $this->hasOne(ResellerCommission::class);
+    }
+
+    /**
+     * Owner rule: a reseller's customer never sees the store's price. On an
+     * own-courier order the amounts on the order are what the reseller pays
+     * the store, so anything shown to the buyer (invoice, courier slip,
+     * order tracking, the buyer's account, the summary card) uses these.
+     */
+    public function showsResellerPricesToBuyer(): bool
+    {
+        return (bool) $this->reseller_own_courier;
+    }
+
+    /**
+     * Owner rules (2026-10-07): every reseller order is invoiced in the
+     * reseller's own store name and logo, never the company's -- orders the
+     * reseller placed from the portal (store-delivered or own courier) and
+     * orders their customers placed on the reseller's store. Prices follow
+     * showsResellerPricesToBuyer() separately: apart from own-courier
+     * orders, the amounts on the order already are the reseller's prices.
+     */
+    public function showsResellerBranding(): bool
+    {
+        return $this->reseller_customer_id !== null;
+    }
+
+    /** The order total in the buyer's prices (the reseller's retail prices on an own-courier order). */
+    public function buyerTotal(): float
+    {
+        if (! $this->showsResellerPricesToBuyer()) {
+            return (float) $this->total_amount;
+        }
+
+        return round($this->items->sum(fn (OrderItem $item): float => $item->buyerSubtotal()), 2);
+    }
+
+    /** The reseller's latest advance payment for an own-courier order (a rejected one can be sent again). */
+    public function resellerAdvancePayment(): HasOne
+    {
+        return $this->hasOne(StorefrontPayment::class)
+            ->where('purpose', StorefrontPayment::PURPOSE_RESELLER_ADVANCE)
+            ->latestOfMany();
+    }
+
+    /**
+     * Every advance payment of an own-courier order: the first one for the
+     * whole order, then one for the extra each time the reseller's edit
+     * raised the total (ResellerOwnCourierService).
+     */
+    public function resellerAdvancePayments(): HasMany
+    {
+        return $this->hasMany(StorefrontPayment::class)
+            ->where('purpose', StorefrontPayment::PURPOSE_RESELLER_ADVANCE)
+            ->orderBy('id');
     }
 
     public function statusTransitions(): HasMany
@@ -522,6 +654,52 @@ class Order extends Model
         return in_array($this->status, self::ACCOUNTED_STATUSES, true);
     }
 
+    /** An order copied in from Nuport's export: history that must not touch stock, alerts or risk checks. */
+    public function isHistoricalImport(): bool
+    {
+        return $this->source === self::SOURCE_NUPORT_IMPORT;
+    }
+
+    /**
+     * Owner decision 2026-10-15: a returned (or refunded) order's goods do not
+     * go back on the shelf by themselves. The sale stays in the stock ledger
+     * until staff have looked at what came back and record it (the order's
+     * "Put returned goods back in stock" action adds a Return movement for
+     * the pieces that are fine; damaged ones simply are not added). A
+     * cancelled order, which never left, still releases its stock at once.
+     */
+    public function keepsStockOutUntilGoodsAreChecked(): bool
+    {
+        return in_array($this->status, [self::STATUS_RETURNED, self::STATUS_REFUNDED], true);
+    }
+
+    /**
+     * Owner decision 2026-10-15: a returned (or refunded) order never goes to
+     * trash — the returned goods and the damage counted from it would be lost.
+     */
+    public function canBeMovedToTrash(): bool
+    {
+        return ! $this->keepsStockOutUntilGoodsAreChecked();
+    }
+
+    /**
+     * Pieces staff already put back in stock for this order, keyed
+     * "productId:variantId" (variant 0 = none).
+     *
+     * @return array<string, int>
+     */
+    public function returnedQuantities(): array
+    {
+        return StockMovement::query()
+            ->where('type', 'return')
+            ->where('reference_type', self::class)
+            ->where('reference_id', $this->getKey())
+            ->get(['product_id', 'product_variant_id', 'quantity'])
+            ->groupBy(fn (StockMovement $movement): string => $movement->product_id.':'.($movement->product_variant_id ?? 0))
+            ->map(fn ($group): int => (int) $group->sum(fn (StockMovement $movement): int => abs((int) $movement->quantity)))
+            ->all();
+    }
+
     /**
      * What a courier should collect on delivery: the full invoice total
      * (products − discount + VAT + shipping), never reduced by an advance
@@ -543,21 +721,81 @@ class Order extends Model
         return round(max($total, 0), 2);
     }
 
+    /**
+     * Why this order cannot be booked with a courier, or null when it can.
+     *
+     * "Already booked" means a courier booking that is still live — not the
+     * Delivery status field, which can say Booked / In transit without any
+     * booking (set on the Create order form, or by moving the order to
+     * Shipping through Change status). Such an order used to be reported as
+     * already booked and could never be booked. When the latest booking was
+     * cancelled or failed, a new one can be made.
+     */
+    public function courierBookingBlocker(): ?string
+    {
+        if ($this->reseller_own_courier) {
+            return __('The reseller ships this order with their own courier.');
+        }
+
+        if (in_array($this->status, [self::STATUS_CANCELLED, self::STATUS_RETURNED, self::STATUS_REFUNDED], true)) {
+            return __('The order is :status.', ['status' => __(self::STATUSES[$this->status] ?? $this->status)]);
+        }
+
+        if (in_array($this->delivery_status, [
+            CourierBooking::STATUS_DELIVERED,
+            CourierBooking::STATUS_PARTIAL_DELIVERED,
+            CourierBooking::STATUS_RETURNED,
+        ], true)) {
+            return __('The order is :status.', ['status' => __(self::DELIVERY_STATUSES[$this->delivery_status])]);
+        }
+
+        // The orders list eager-loads latestCourierBooking.
+        $liveBooking = $this->latestCourierBooking;
+
+        if ($liveBooking && ! in_array($liveBooking->status, [CourierBooking::STATUS_CANCELLED, CourierBooking::STATUS_FAILED], true)) {
+            return __('Already booked (tracking ID :tracking).', ['tracking' => $liveBooking->tracking_id ?: '—']);
+        }
+
+        return null;
+    }
+
     public function workflowStage(): string
     {
         if (in_array($this->status, [self::STATUS_CANCELLED, self::STATUS_RETURNED, self::STATUS_REFUNDED], true)) {
             return $this->status;
         }
 
-        if (in_array($this->delivery_status, [
-            CourierBooking::STATUS_PICKED_UP,
-            CourierBooking::STATUS_IN_TRANSIT,
-            CourierBooking::STATUS_PARTIAL_DELIVERED,
-        ], true)) {
+        if (in_array($this->delivery_status, self::SHIPPING_DELIVERY_STATUSES, true)) {
             return self::STAGE_SHIPPING;
         }
 
         return $this->status;
+    }
+
+    /**
+     * Orders whose workflowStage() is $stage, as SQL. Mirrors workflowStage():
+     * a closed order keeps its status, an open one with a live courier parcel
+     * is Shipping, anything else is its status.
+     *
+     * @param  Builder<Order>  $query
+     * @return Builder<Order>
+     */
+    public function scopeInWorkflowStage(Builder $query, string $stage): Builder
+    {
+        $closed = [self::STATUS_CANCELLED, self::STATUS_RETURNED, self::STATUS_REFUNDED];
+
+        if (in_array($stage, $closed, true)) {
+            return $query->where('status', $stage);
+        }
+
+        if ($stage === self::STAGE_SHIPPING) {
+            return $query->whereNotIn('status', $closed)
+                ->whereIn('delivery_status', self::SHIPPING_DELIVERY_STATUSES);
+        }
+
+        return $query->where('status', $stage)
+            ->where(fn (Builder $q): Builder => $q->whereNull('delivery_status')
+                ->orWhereNotIn('delivery_status', self::SHIPPING_DELIVERY_STATUSES));
     }
 
     /** @return list<string> */

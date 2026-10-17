@@ -1,8 +1,11 @@
 # Project Rules
 
-- Do not create Git commits without the user's explicit permission.
-- Before pushing changes to the GitHub repository, ask the user whether there are any additional changes to include.
-- Do not push changes to GitHub without the user's explicit permission.
+- **Commit and push finished work to a feature branch without waiting to be asked (owner decision 2026-10-14).** When a piece of work is done — code, tests, `lang/en.json` + `lang/bn.json` keys, `CHANGELOG.md` and `UPDATE_NOTES.md` updated, checks passing — commit it and push it to a feature branch.
+  - Name the branch after the session's topic: `feature/<topic>`, lower-case English words joined with hyphens (for example `feature/nextjs-footer-starter`). When one task also touches the website repository (`bhd4232/zamzamint-new-website-theme`, which has no rules file of its own), use the same branch name there and follow these same rules.
+  - One topic per branch: follow-up work on the same topic goes to the same branch; an unrelated topic gets a new branch started from `main`. If the session's instructions already designate a branch, use that one instead of inventing another.
+  - **Never push or merge to `main` without the user's explicit permission in the conversation.** Coolify deploys `main` on push, so the user decides when it moves, and the branch's checks must be green first. Before pushing to `main`, ask whether there are any additional changes to include. A feature branch is not live.
+  - Never force-push or rewrite history on a branch that has already been pushed. Never commit secrets, `.env` files or throwaway databases.
+  - The full set of rules is in `CLAUDE.md`; read it too.
 - If the user asks to keep an update ready for commit, document the update in `UPDATE_NOTES.md` with the date, reason, important changed files, and verification results so the user can identify what belongs in that commit.
 - After every implementation, configuration, UI, or behavior change, update `CHANGELOG.md` in the same task with a concise entry under the appropriate `Unreleased` section (`Added`, `Changed`, `Fixed`, `Security`, or `Technical Notes`). Do not defer the release-note update to a later request. Documentation-only edits whose sole purpose is maintaining `CHANGELOG.md`, `UPDATE_NOTES.md`, `PROJECT_GUIDE.md`, or agent instructions do not require a recursive changelog entry.
 - When adding or changing a module, update `PROJECT_GUIDE.md` with what changed, the important files/routes, and how to verify it. Do not leave major implementation details only in chat.

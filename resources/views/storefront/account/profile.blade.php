@@ -5,7 +5,9 @@
     $accountRoute = static fn (string $name) => isset($previewSlug)
         ? route('storefront.preview.account.'.$name, $previewSlug)
         : route('storefront.account.'.$name);
-    $resellerUrl = isset($previewSlug) ? route('storefront.preview.reseller.show', $previewSlug) : route('storefront.reseller.show');
+    $resellerJoinUrl = isset($previewSlug) ? null : $company->resellerJoinUrl();
+    $resellerUrl = $resellerJoinUrl
+        ?: \App\Support\StorefrontUrl::route('reseller.show', [], $previewSlug ?? null);
 @endphp
 
 @section('account-content')

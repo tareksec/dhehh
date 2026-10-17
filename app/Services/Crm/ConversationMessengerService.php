@@ -36,6 +36,14 @@ class ConversationMessengerService
         ?string $mediaUrl = null,
         array $automation = [],
     ): ConversationMessage {
+        // WhatsApp Web (QR) channels are a read-only archive: the bridge
+        // never sends, so the linked number is not put at extra ban risk.
+        if ($conversation->channel()->withoutGlobalScopes()->first()?->isWeb()) {
+            throw ValidationException::withMessages([
+                'body' => __('WhatsApp Web archive chats are read-only. Reply from the WhatsApp Business app on your phone, or add an internal note.'),
+            ]);
+        }
+
         $message = ConversationMessage::query()->create([
             'conversation_id' => $conversation->getKey(),
             'direction' => 'outgoing',
@@ -118,6 +126,11 @@ class ConversationMessengerService
         $channel = $conversation->channel;
 
         if ($channel && (int) $channel->company_id !== (int) $conversation->company_id) {
+            return false;
+        }
+
+        // No Cloud API read receipts for the WhatsApp Web archive.
+        if ($channel?->isWeb()) {
             return false;
         }
 
@@ -252,9 +265,7 @@ class ConversationMessengerService
         }
 
         try {
-            $setting = StorefrontSetting::withoutGlobalScopes()
-                ->where('company_id', $conversation->company_id)
-                ->first();
+            $setting = StorefrontSetting::primaryFor((int) $conversation->company_id);
 
             if (! $setting || ! $this->notifications->smsConfigured($setting)) {
                 return;

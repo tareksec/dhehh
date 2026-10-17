@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Accounts\Widgets;
 
+use App\Filament\Concerns\GuardsWidgetRendering;
 use App\Filament\Concerns\HasDrilldownStatCards;
 use App\Filament\Resources\Accounts\AccountResource;
 use App\Models\Account;
@@ -27,6 +28,7 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  */
 class AccountSummaryWidget extends StatsOverviewWidget implements HasActions
 {
+    use GuardsWidgetRendering;
     use HasDrilldownStatCards;
     use InteractsWithActions;
 

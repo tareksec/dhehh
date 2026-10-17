@@ -3,11 +3,19 @@
 namespace App\Filament\Resources\InvestorDrafts;
 
 use App\Filament\Clusters\Investments;
+use App\Filament\Concerns\HasGuardedNavigationBadge;
 use App\Filament\Resources\InvestorDrafts\Pages\EditInvestorDraft;
 use App\Filament\Resources\InvestorDrafts\Pages\ListInvestorDrafts;
+use App\Models\ChannelPartner;
+use App\Models\Investment;
+use App\Models\InvestmentDocument;
+use App\Models\InvestmentProject;
 use App\Models\Investor;
 use App\Models\InvestorDraft;
+use App\Models\InvestorGroup;
 use App\Services\Investment\InvestorImportService;
+use App\Services\InvestorOnboardingService;
+use App\Support\InvestorIdentity;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -16,14 +24,16 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -40,6 +50,8 @@ use Illuminate\Validation\ValidationException;
  */
 class InvestorDraftResource extends Resource
 {
+    use HasGuardedNavigationBadge;
+
     protected static ?string $model = InvestorDraft::class;
 
     protected static ?string $cluster = Investments::class;
@@ -65,7 +77,7 @@ class InvestorDraftResource extends Resource
         return __('investor drafts');
     }
 
-    public static function getNavigationBadge(): ?string
+    protected static function navigationBadge(): ?string
     {
         if (! static::canViewAny()) {
             return null;
@@ -95,8 +107,36 @@ class InvestorDraftResource extends Resource
                     TextEntry::make('source')
                         ->label(__('Imported from'))
                         ->state(fn (?InvestorDraft $record): string => $record ? static::sourceDescription($record) : '-'),
+                    TextEntry::make('portal_documents')
+                        ->label(__('Documents uploaded with the application'))
+                        ->visible(fn (?InvestorDraft $record): bool => $record?->source === InvestorDraft::SOURCE_PORTAL)
+                        ->state(fn (?InvestorDraft $record): array => $record?->documents()->get()
+                            ->map(fn (InvestmentDocument $document): string => '<a class="text-primary-600 underline" target="_blank" href="'.e(route('investment-documents.download', $document)).'">'.e(InvestmentDocument::categoryLabel($document->category)).'</a>')
+                            ->all() ?? [])
+                        ->html()
+                        ->listWithLineBreaks()
+                        ->placeholder(__('None')),
+                    Select::make('existing_investor_id')
+                        ->label(__('Add to an existing investor'))
+                        ->relationship('existingInvestor', 'name')
+                        ->searchable(['name', 'phone'])
+                        ->getSearchResultsUsing(fn (string $search): array => Investor::query()
+                            ->where(fn ($query) => $query
+                                ->where('name', 'like', "%{$search}%")
+                                ->orWhere('phone', 'like', "%{$search}%")
+                                ->orWhere('nid_hash', InvestorIdentity::hash($search) ?? '-'))
+                            ->limit(50)->get()
+                            ->mapWithKeys(fn (Investor $investor): array => [$investor->getKey() => "{$investor->name} ({$investor->phone})"])
+                            ->all())
+                        ->getOptionLabelFromRecordUsing(fn (Investor $record): string => "{$record->name} ({$record->phone})")
+                        ->live()
+                        ->helperText(__('Pick an investor who already exists to add only the investment below to them. Their details are not changed. Leave empty to create a new investor.')),
                 ]),
-            Section::make(__('Investor Identity'))->schema([
+            Section::make(__('Investment'))
+                ->description(__('Filled in when a project and amount are set. Confirming then records the investment, with the stamp and cheque numbers as its security instrument.'))
+                ->schema(static::investmentFields(withAmount: true))
+                ->columns(2),
+            Section::make(__('Investor Identity'))->visible(fn (Get $get): bool => blank($get('existing_investor_id')))->schema([
                 TextInput::make('name')->label(__('Name'))->maxLength(255),
                 TextInput::make('display_name')->label(__('Display / Pseudonym'))->maxLength(255),
                 TextInput::make('guardian_name')->label(__('Father / Spouse Name'))->maxLength(255),
@@ -108,12 +148,9 @@ class InvestorDraftResource extends Resource
                     ->label(__('Channel Partner'))
                     ->relationship('channelPartner', 'name')
                     ->searchable()->preload(),
-                Toggle::make('is_channel_partner')
-                    ->label(__('This investor is also a Channel Partner'))
-                    ->columnSpanFull(),
                 Textarea::make('address')->label(__('Address'))->columnSpanFull(),
             ])->columns(2),
-            Section::make(__('Nominee'))->schema([
+            Section::make(__('Nominee'))->visible(fn (Get $get): bool => blank($get('existing_investor_id')))->schema([
                 TextInput::make('nominee_name')->label(__('Nominee Name'))->maxLength(255),
                 TextInput::make('nominee_nid_or_passport')->label(__('Nominee NID / Passport')),
                 TextInput::make('nominee_phone')->label(__('Nominee Phone'))->tel()->maxLength(255),
@@ -133,8 +170,28 @@ class InvestorDraftResource extends Resource
             ->columns([
                 TextColumn::make('name')->label(__('Name'))->placeholder(__('Missing'))->searchable()->sortable(),
                 TextColumn::make('phone')->label(__('Phone'))->placeholder(__('Missing'))->searchable(),
+                TextColumn::make('nid_number')
+                    ->label(__('NID / Passport'))
+                    ->formatStateUsing(fn (?string $state): ?string => InvestorIdentity::normalize($state))
+                    ->placeholder(__('Missing'))
+                    ->toggleable(),
+                TextColumn::make('address')->label(__('Address'))->placeholder('-')->toggleable(isToggledHiddenByDefault: true)->wrap(),
                 TextColumn::make('guardian_name')->label(__('Father / Spouse Name'))->placeholder('-')->toggleable(),
                 TextColumn::make('nominee_name')->label(__('Nominee Name'))->placeholder('-')->toggleable(),
+                TextColumn::make('nominee_nid_or_passport')
+                    ->label(__('Nominee NID / Passport'))
+                    ->formatStateUsing(fn (?string $state): ?string => InvestorIdentity::normalize($state))
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('nominee_phone')->label(__('Nominee Phone'))->placeholder('-')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('stamp_number')->label(__('Stamp No.'))->placeholder('-')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('cheque_number')->label(__('Cheque No.'))->placeholder('-')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('existingInvestor.name')
+                    ->label(__('Existing investor'))
+                    ->badge()->color('info')
+                    ->placeholder(__('New investor')),
+                TextColumn::make('project.project_code')->label(__('Project'))->placeholder('-'),
+                TextColumn::make('investment_amount')->label(__('Investment'))->moneyWithoutTrailingZeroes('BDT')->placeholder('-'),
                 TextColumn::make('review_status')
                     ->label(__('Review'))
                     ->badge()
@@ -152,6 +209,7 @@ class InvestorDraftResource extends Resource
                     InvestorDraft::SOURCE_EXCEL => InvestorDraft::sourceLabel(InvestorDraft::SOURCE_EXCEL),
                     InvestorDraft::SOURCE_CSV => InvestorDraft::sourceLabel(InvestorDraft::SOURCE_CSV),
                     InvestorDraft::SOURCE_TEXT => InvestorDraft::sourceLabel(InvestorDraft::SOURCE_TEXT),
+                    InvestorDraft::SOURCE_PORTAL => InvestorDraft::sourceLabel(InvestorDraft::SOURCE_PORTAL),
                 ]),
             ])
             ->recordActions([
@@ -163,17 +221,20 @@ class InvestorDraftResource extends Resource
                     ->requiresConfirmation()
                     ->modalHeading(__('Add this investor to the investor list?'))
                     ->action(function (InvestorDraft $record, InvestorImportService $imports): void {
+                        $message = static::confirmedMessage($record);
+
                         try {
-                            $investor = $imports->confirm($record);
+                            $imports->confirm($record);
                         } catch (ValidationException $exception) {
                             Notification::make()->title(__('Could not confirm this draft'))->body(implode("\n", $exception->validator->errors()->all()))->danger()->send();
 
                             return;
                         }
 
-                        Notification::make()->title(__('Investor :name added to the investor list', ['name' => $investor->name]))->success()->send();
+                        Notification::make()->title($message)->success()->send();
                     }),
-                DeleteAction::make()->label(__('Discard')),
+                static::rejectApplicationAction(),
+                DeleteAction::make()->label(__('Discard'))->visible(fn (InvestorDraft $record): bool => $record->source !== InvestorDraft::SOURCE_PORTAL),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -187,10 +248,68 @@ class InvestorDraftResource extends Resource
                             static::confirmMany($records, $imports);
                         })
                         ->deselectRecordsAfterCompletion(),
+                    BulkAction::make('setInvestment')
+                        ->label(__('Set project / payment / channel partner'))
+                        ->icon(Heroicon::OutlinedBanknotes)
+                        ->schema([...static::investmentFields(withAmount: false), static::channelPartnerField()])
+                        ->action(function (Collection $records, array $data): void {
+                            $changes = array_filter($data, fn ($value): bool => filled($value));
+
+                            foreach ($records as $draft) {
+                                $draft->update($changes);
+                            }
+
+                            Notification::make()->title(__(':count drafts updated', ['count' => $records->count()]))->success()->send();
+                        })
+                        ->deselectRecordsAfterCompletion(),
                     DeleteBulkAction::make()->label(__('Discard selected')),
                 ]),
             ])
             ->defaultSort('id');
+    }
+
+    /**
+     * Project / amount / payment method / date fields, shared by the review
+     * form, the import dialogs and the "Set project / payment" bulk action.
+     *
+     * @return list<Component|Field>
+     */
+    public static function investmentFields(bool $withAmount): array
+    {
+        return array_values(array_filter([
+            Select::make('group_id')
+                ->label(__('Group'))
+                ->options(fn (): array => InvestorGroup::query()->open()->orderBy('id')->get()
+                    ->mapWithKeys(fn (InvestorGroup $group): array => [$group->getKey() => trim($group->group_code.' — '.$group->name)])
+                    ->all())
+                ->searchable()
+                ->helperText(__('New money joins a group that is still open.')),
+            Select::make('project_id')
+                ->label(__('Project (not in a group)'))
+                ->options(fn (): array => InvestmentProject::query()
+                    ->ungrouped()
+                    ->whereIn('status', InvestorDraft::OPEN_PROJECT_STATUSES)
+                    ->orderByDesc('id')
+                    ->get()
+                    ->mapWithKeys(fn (InvestmentProject $project): array => [$project->getKey() => trim(($project->project_code ? $project->project_code.' — ' : '').$project->name)])
+                    ->all())
+                ->searchable(),
+            $withAmount ? TextInput::make('investment_amount')->label(__('Investment amount'))->numeric()->minValue(0.01)->prefix('৳') : null,
+            Select::make('payment_method')
+                ->label(__('Payment Method'))
+                ->options(collect(Investment::PAYMENT_METHODS)->map(fn (string $label): string => __($label))->all()),
+            DatePicker::make('invested_at')->label(__('Investment date'))->maxDate(now()),
+        ]));
+    }
+
+    /** Channel partner picker shared by the import dialogs and the bulk action. */
+    public static function channelPartnerField(): Select
+    {
+        return Select::make('channel_partner_id')
+            ->label(__('Channel Partner'))
+            ->options(fn (): array => ChannelPartner::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
+            ->searchable()
+            ->helperText(__('Applied to the new investors in this import. A row with its own channel partner column keeps that one; investors who already exist are not changed.'));
     }
 
     /**
@@ -211,11 +330,51 @@ class InvestorDraftResource extends Resource
         }
 
         Notification::make()
-            ->title(__(':count investors added to the investor list', ['count' => $confirmed]))
+            ->title(__(':count drafts confirmed', ['count' => $confirmed]))
             ->body($failed === [] ? null : __('Still in drafts:')."\n".implode("\n", $failed))
             ->status($failed === [] ? 'success' : 'warning')
             ->persistent($failed !== [])
             ->send();
+    }
+
+    /** Success message for a draft, worked out before confirming deletes it. */
+    public static function confirmedMessage(InvestorDraft $draft): string
+    {
+        $name = $draft->existingInvestor?->name ?? (string) $draft->name;
+
+        if (! $draft->willCreateInvestment()) {
+            return __('Investor :name added to the investor list', ['name' => $name]);
+        }
+
+        $amount = number_format((float) $draft->investment_amount);
+
+        return $draft->existing_investor_id
+            ? __('New investment of :amount added for :name', ['amount' => $amount, 'name' => $name])
+            : __('Investor :name added with an investment of :amount', ['name' => $name, 'amount' => $amount]);
+    }
+
+    /** Turns a portal sign-up down with a reason the applicant sees when they sign in. */
+    public static function rejectApplicationAction(): Action
+    {
+        return Action::make('rejectApplication')
+            ->label(__('Reject application'))
+            ->icon(Heroicon::OutlinedXCircle)
+            ->color('danger')
+            ->visible(fn (InvestorDraft $record): bool => $record->source === InvestorDraft::SOURCE_PORTAL)
+            ->schema([
+                Textarea::make('reason')
+                    ->label(__('Reason (the applicant sees this)'))
+                    ->required()
+                    ->maxLength(1000),
+            ])
+            ->action(function (InvestorDraft $record, array $data): void {
+                abort_unless(auth()->user()?->hasPermission('investments.manage'), 403);
+
+                app(InvestorOnboardingService::class)->reject($record, (string) $data['reason']);
+                $record->delete();
+
+                Notification::make()->title(__('Application rejected'))->success()->send();
+            });
     }
 
     public static function sourceDescription(InvestorDraft $record): string

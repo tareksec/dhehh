@@ -39,7 +39,12 @@ class SalesReplyRenderer
         'identity' => 'Ami ei dokaner AI assistant.',
     ];
 
-    public function render(Conversation $conversation, array $input, array $trace): string
+    /**
+     * $allowFollowUpPrompt opts into combining a verified answer with one
+     * follow-up clarification prompt (proactive sales mode); off by default,
+     * a prompt_key only renders when it is the sole thing being said.
+     */
+    public function render(Conversation $conversation, array $input, array $trace, bool $allowFollowUpPrompt = false): string
     {
         $language = $input['language'] ?? $this->detectLanguage($conversation);
         if (! in_array($language, ['bn', 'banglish', 'en'], true)) {
@@ -82,10 +87,14 @@ class SalesReplyRenderer
                 foreach ($fees as $zone => $fee) {
                     $parts[] = $zone.': '.($bn ? 'ডেলিভারি ' : 'delivery ').$this->money((float) $fee, $bn, $banglish);
                 }
+            } elseif ($type === 'related') {
+                $product = Product::query()->where('company_id', $conversation->company_id)->where('is_active', true)->findOrFail($id);
+                $framing = $bn ? 'সাথে এটাও দেখতে পারেন: ' : ($banglish ? 'Sathe eta o dekhte paren: ' : 'You might also like: ');
+                $parts[] = $framing.$this->productLine($product->name, (float) $product->selling_price, $product->status === 'available' ? (int) $product->stock : 0, $language, $detail);
             }
         }
         $prompt = $input['prompt_key'] ?? null;
-        if ($parts === [] && $prompt !== null && isset(self::PROMPTS[$prompt])) {
+        if ($prompt !== null && isset(self::PROMPTS[$prompt]) && ($parts === [] || $allowFollowUpPrompt)) {
             $parts[] = $banglish ? self::BANGLISH[$prompt] : self::PROMPTS[$prompt][$bn ? 0 : 1];
         }
         if ($parts === []) {

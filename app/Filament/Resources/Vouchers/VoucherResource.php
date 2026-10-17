@@ -6,6 +6,7 @@ use App\Filament\Clusters\Finance;
 use App\Filament\Resources\Vouchers\Pages\CreateVoucher;
 use App\Filament\Resources\Vouchers\Pages\EditVoucher;
 use App\Filament\Resources\Vouchers\Pages\ListVouchers;
+use App\Filament\Resources\Vouchers\Pages\TrashedVouchers;
 use App\Filament\Resources\Vouchers\Pages\ViewVoucher;
 use App\Models\Account;
 use App\Models\Order;
@@ -15,6 +16,7 @@ use App\Models\VoucherAttachment;
 use App\Services\CompanyContext;
 use App\Services\CompanyStorageService;
 use App\Services\VoucherService;
+use App\Services\VoucherTrashService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
@@ -296,6 +298,7 @@ class VoucherResource extends Resource
                         app(VoucherService::class)->cancel($record);
                         Notification::make()->title('Voucher cancelled.')->send();
                     }),
+                static::moveToTrashAction(),
                 Action::make('receipt')
                     ->label('Print Receipt')
                     ->icon(Heroicon::OutlinedPrinter)
@@ -303,6 +306,30 @@ class VoucherResource extends Resource
                     ->url(fn (Voucher $record): string => URL::signedRoute('vouchers.receipt', ['voucher' => $record->voucher_number]))
                     ->openUrlInNewTab(),
             ]);
+    }
+
+    /**
+     * Owner's rule (2026-09-28): vouchers go to Trash first; only a user with
+     * `voucher.delete` may do it, and an approved voucher cannot go at all.
+     */
+    public static function moveToTrashAction(): Action
+    {
+        return Action::make('moveToTrash')
+            ->label(__('Move to trash'))
+            ->icon(Heroicon::OutlinedTrash)
+            ->color('danger')
+            ->visible(fn (Voucher $record): bool => $record->status !== Voucher::STATUS_APPROVED && (Auth::user()?->canDeleteVoucher() ?? false))
+            ->requiresConfirmation()
+            ->modalHeading(__('Move this voucher to trash?'))
+            ->modalDescription(__('It leaves the voucher list and stays in Trash until someone with the delete permission restores it or deletes it permanently. Until it is restored, a payout marked paid with this voucher is unpaid again, and an investment withdrawn with it is active again.'))
+            ->action(function (Voucher $record): void {
+                try {
+                    app(VoucherTrashService::class)->trash($record, Auth::user());
+                    Notification::make()->title(__('Voucher moved to trash.'))->success()->send();
+                } catch (ValidationException $exception) {
+                    Notification::make()->title(__('Could not move the voucher to trash'))->body(collect($exception->errors())->flatten()->implode(' '))->danger()->send();
+                }
+            });
     }
 
     public static function canCreate(): bool
@@ -559,6 +586,7 @@ class VoucherResource extends Resource
         return [
             'index' => ListVouchers::route('/'),
             'create' => CreateVoucher::route('/create'),
+            'trash' => TrashedVouchers::route('/trash'),
             'view' => ViewVoucher::route('/{record}'),
             'edit' => EditVoucher::route('/{record}/edit'),
         ];

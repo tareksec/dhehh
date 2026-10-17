@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Support\StorefrontErrorPages;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Tests\TestCase;
@@ -23,16 +22,67 @@ class SecurityHardeningTest extends TestCase
             ->assertHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
     }
 
-    public function test_robots_txt_disallows_admin_and_livewire(): void
+    public function test_responses_carry_a_script_safe_content_security_policy(): void
     {
-        // public/robots.txt is served directly by the web server in
-        // production, not routed through Laravel — read it as a static
-        // asset rather than an HTTP round trip (same pattern as other tests
-        // that assert on a published view/asset file's raw content).
-        $robots = File::get(public_path('robots.txt'));
+        Route::get('/_test/csp', fn () => 'ok')->middleware('web');
 
-        $this->assertStringContainsString('Disallow: /admin', $robots);
-        $this->assertStringContainsString('Disallow: /livewire', $robots);
+        $this->get('/_test/csp')
+            ->assertOk()
+            ->assertHeader('Content-Security-Policy', "frame-ancestors 'self'; base-uri 'self'; object-src 'none'");
+    }
+
+    public function test_a_response_that_sets_its_own_content_security_policy_keeps_it(): void
+    {
+        Route::get('/_test/own-csp', fn () => response('ok')->header('Content-Security-Policy', "default-src 'none'; sandbox"))
+            ->middleware('web');
+
+        $this->get('/_test/own-csp')
+            ->assertHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    }
+
+    public function test_hsts_is_sent_only_over_https(): void
+    {
+        Route::get('/_test/hsts', fn () => 'ok')->middleware('web');
+
+        $this->get('https://localhost/_test/hsts')
+            ->assertHeader('Strict-Transport-Security', 'max-age=31536000');
+
+        $this->get('http://localhost/_test/hsts')
+            ->assertHeaderMissing('Strict-Transport-Security');
+    }
+
+    public function test_sensitive_storefront_and_webhook_routes_are_throttled(): void
+    {
+        foreach ([
+            'storefront.preview.account.login.store',
+            'storefront.preview.account.register.store',
+            'storefront.preview.account.forgot-password.store',
+            'storefront.preview.account.reset-password.store',
+            'storefront.preview.account.password.update',
+            'storefront.account.password.update',
+            'webhooks.meta.handle',
+        ] as $name) {
+            $middleware = Route::getRoutes()->getByName($name)?->gatherMiddleware() ?? [];
+
+            $this->assertNotEmpty(
+                array_filter($middleware, fn ($entry): bool => is_string($entry) && str_starts_with($entry, 'throttle:')),
+                "Route [{$name}] has no throttle middleware.",
+            );
+        }
+    }
+
+    public function test_robots_txt_is_served_by_the_app_not_as_a_static_file(): void
+    {
+        // /robots.txt answers per domain (SeoFilesController): the app's own
+        // domain keeps "Disallow: /admin" and "/livewire", a storefront domain
+        // adds its sitemap (StorefrontSeoTest). A static public/robots.txt
+        // must not come back -- the web server would serve it instead of the route.
+        $this->assertFileDoesNotExist(public_path('robots.txt'));
+
+        // Nor may nginx answer it: a "location = /robots.txt" block without a fallback
+        // turns the missing file into a 404 that crawlers read as "no rules",
+        // even though Laravel (via error_page 404 /index.php) produced the body.
+        $this->assertStringNotContainsString('location = /robots.txt {', (string) file_get_contents(base_path('nginx.template.conf')));
     }
 
     public function test_an_unhandled_storefront_exception_in_production_shows_a_generic_page_not_a_stack_trace(): void

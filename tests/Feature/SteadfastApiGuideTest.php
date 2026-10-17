@@ -41,7 +41,7 @@ class SteadfastApiGuideTest extends TestCase
 
         $this->webhook($provider, $payload, [
             'HTTP_X_SIGNATURE' => hash_hmac('sha256', $payload, self::TOKEN),
-        ])->assertAccepted();
+        ])->assertOk()->assertJsonPath('status', 'success');
 
         Queue::assertPushed(ProcessCourierWebhook::class, 1);
     }
@@ -53,8 +53,8 @@ class SteadfastApiGuideTest extends TestCase
         $first = json_encode(['notification_type' => 'delivery_status', 'consignment_id' => 1, 'status' => 'pending', 'updated_at' => '2026-09-27 10:00:00']);
         $retry = json_encode(['notification_type' => 'delivery_status', 'consignment_id' => 1, 'status' => 'pending', 'updated_at' => '2026-09-27 10:00:30']);
 
-        $this->webhook($provider, $first, ['HTTP_IDEMPOTENCY_KEY' => 'evt-42'])->assertAccepted();
-        $this->webhook($provider, $retry, ['HTTP_IDEMPOTENCY_KEY' => 'evt-42'])->assertAccepted();
+        $this->webhook($provider, $first, ['HTTP_IDEMPOTENCY_KEY' => 'evt-42'])->assertOk()->assertJsonPath('status', 'success');
+        $this->webhook($provider, $retry, ['HTTP_IDEMPOTENCY_KEY' => 'evt-42'])->assertOk()->assertJsonPath('status', 'success');
 
         $this->assertSame(1, CourierWebhookLog::withoutGlobalScopes()->count());
         $this->assertSame('delivery_status', CourierWebhookLog::withoutGlobalScopes()->value('event'));

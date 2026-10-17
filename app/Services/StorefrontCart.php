@@ -166,6 +166,19 @@ class StorefrontCart
         return $this->cartRecord($company)?->reseller_customer_id;
     }
 
+    /**
+     * The reseller an order placed from $items belongs to: whoever priced
+     * its reseller lines (so the commission goes to the reseller whose
+     * price the customer paid), else the cart's stamped attribution.
+     */
+    public function orderResellerId(Company $company, iterable $items): ?int
+    {
+        $pricedByReseller = collect($items)->contains(fn (array $item): bool => ($item['reseller_base_price'] ?? null) !== null);
+        $reseller = app(ResellerPricing::class)->reseller();
+
+        return $pricedByReseller && $reseller ? (int) $reseller->getKey() : $this->resellerCustomerId($company);
+    }
+
     public function restore(Company $company, StorefrontCartRecord $record): void
     {
         abort_unless($record->company_id === $company->getKey() && $record->status !== StorefrontCartRecord::STATUS_CONVERTED, 404);
@@ -292,7 +305,9 @@ class StorefrontCart
                 if (! empty($item['variant_id'])) {
                     $variant = $product->activeVariants->firstWhere('id', (int) $item['variant_id']);
 
-                    if (! $variant) {
+                    // A variation with no selling price in the reseller's store
+                    // is not for sale (never at the wholesale rate).
+                    if (! $variant || app(ResellerPricing::class)->variantBlocked($variant)) {
                         $changed = true;
 
                         return null;
@@ -324,6 +339,12 @@ class StorefrontCart
                     'quantity' => $quantity,
                     'unit_price' => $unitPrice,
                     'subtotal' => $unitPrice * $quantity,
+                    // Set only on reseller-priced lines; frozen onto the
+                    // order item so the reseller's commission can't drift
+                    // if tier prices change after checkout.
+                    'reseller_base_price' => $variant
+                        ? app(ResellerPricing::class)->variantBasePriceFor($variant)
+                        : app(ResellerPricing::class)->basePriceFor($product),
                 ];
             })
             ->filter()

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\Integrations;
+use App\Filament\Resources\StorefrontSettings\Pages\EditStorefrontSetting;
 use App\Jobs\DispatchWebsiteWebhookJob;
 use App\Jobs\RetryStorefrontMetaEventJob;
 use App\Livewire\MetaEventLogTable;
@@ -733,6 +734,105 @@ class IntegrationsPageTest extends TestCase
     protected function assertBlank(mixed $value): void
     {
         $this->assertTrue(blank($value), 'Expected value to be blank but got: '.var_export($value, true));
+    }
+
+    public function test_a_company_with_two_sites_edits_each_sites_integration_settings_separately(): void
+    {
+        $company = $this->makeCompany();
+        $blade = StorefrontSetting::query()->create([
+            'company_id' => $company->getKey(),
+            'is_published' => true,
+            'woocommerce_base_url' => 'https://woo.example.com',
+            'online_payment_enabled' => true,
+            'online_payment_gateway' => 'zinipay',
+            'payment_credentials' => ['zinipay_api_key' => 'blade-key'],
+        ]);
+        $nextjs = StorefrontSetting::query()->create([
+            'company_id' => $company->getKey(),
+            'site_type' => StorefrontSetting::SITE_NEXTJS,
+            'nextjs_site_enabled' => true,
+            'nextjs_site_domain' => 'main.example.test',
+            'online_payment_enabled' => true,
+            'online_payment_gateway' => 'paystation',
+            'payment_credentials' => ['paystation_merchant_id' => 'next-mid', 'paystation_password' => 'next-pass'],
+        ]);
+
+        $this->actingAs($this->makeSuperAdmin($company))
+            ->withSession(['current_company_id' => $company->getKey(), 'current_company_selection_explicit' => true]);
+
+        Livewire::test(Integrations::class)
+            ->assertFormFieldExists('site_setting_id')
+            // Opens on the company's primary row: the Next.js site once it has one.
+            ->assertSet('data.site_setting_id', $nextjs->getKey())
+            ->assertSet('data.online_payment_gateway', 'paystation')
+            // WooCommerce is read from that primary row.
+            ->assertFormFieldIsVisible('woocommerce_base_url')
+            ->set('data.site_setting_id', $blade->getKey())
+            ->assertSet('data.online_payment_gateway', 'zinipay')
+            ->assertFormFieldIsHidden('woocommerce_base_url')
+            ->set('data.site_setting_id', $nextjs->getKey())
+            ->assertSet('data.online_payment_gateway', 'paystation')
+            ->set('data.woocommerce_base_url', 'https://woo-next.example.com')
+            ->set('data.meta_pixel_id', '5544332211009988')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('5544332211009988', $nextjs->fresh()->meta_pixel_id);
+        $this->assertSame('https://woo-next.example.com', $nextjs->fresh()->woocommerce_base_url);
+        $this->assertNull($blade->fresh()->meta_pixel_id, 'Saving the Next.js site must not write to the Blade row.');
+        $this->assertSame('https://woo.example.com', $blade->fresh()->woocommerce_base_url);
+        $this->assertSame(['zinipay_api_key' => 'blade-key'], $blade->fresh()->payment_credentials);
+        $this->assertSame('paystation', $nextjs->fresh()->online_payment_gateway);
+        $this->assertSame(2, StorefrontSetting::withoutGlobalScopes()->where('company_id', $company->getKey())->count());
+    }
+
+    public function test_sms_gateway_tab_saves_sms_keys_and_keeps_the_other_notification_credentials(): void
+    {
+        $company = $this->makeCompany();
+        $setting = StorefrontSetting::withoutGlobalScopes()->create([
+            'company_id' => $company->getKey(),
+            'site_type' => StorefrontSetting::SITE_BLADE,
+            'notification_credentials' => ['mail_host' => 'smtp.example.test', 'whatsapp_template_name' => 'cart_reminder'],
+        ]);
+        $this->actingAs($this->makeSuperAdmin($company))
+            ->withSession(['current_company_id' => $company->getKey(), 'current_company_selection_explicit' => true]);
+
+        Livewire::test(Integrations::class)
+            ->assertSee(__('SMS Gateway'))
+            ->set('data.notification_credentials.sms_api_url', 'http://sms.example.test/send?key={api_key}&to={phone}&msg={message}&from={sender_id}')
+            ->set('data.notification_credentials.sms_api_key', 'sms-secret')
+            ->set('data.notification_credentials.sms_sender_id', 'ZamZam')
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertSet('data.notification_credentials.sms_api_key', 'sms-secret');
+
+        $credentials = $setting->fresh()->notification_credentials;
+        $this->assertSame('sms-secret', $credentials['sms_api_key']);
+        $this->assertSame('ZamZam', $credentials['sms_sender_id']);
+        $this->assertSame('smtp.example.test', $credentials['mail_host']);
+        $this->assertSame('cart_reminder', $credentials['whatsapp_template_name']);
+    }
+
+    public function test_saving_storefront_settings_keeps_the_sms_gateway_set_on_integrations(): void
+    {
+        $company = $this->makeCompany();
+        $setting = StorefrontSetting::withoutGlobalScopes()->create([
+            'company_id' => $company->getKey(),
+            'site_type' => StorefrontSetting::SITE_BLADE,
+            'notification_credentials' => ['sms_api_url' => 'http://sms.example.test/send?to={phone}', 'sms_api_key' => 'keep-me', 'sms_sender_id' => 'ZamZam'],
+        ]);
+        $this->actingAs($this->makeSuperAdmin($company))
+            ->withSession(['current_company_id' => $company->getKey(), 'current_company_selection_explicit' => true]);
+
+        Livewire::test(EditStorefrontSetting::class, ['record' => $setting->getKey()])
+            ->set('data.notification_credentials.mail_host', 'smtp.example.test')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $credentials = $setting->fresh()->notification_credentials;
+        $this->assertSame('smtp.example.test', $credentials['mail_host']);
+        $this->assertSame('keep-me', $credentials['sms_api_key']);
+        $this->assertSame('http://sms.example.test/send?to={phone}', $credentials['sms_api_url']);
     }
 
     protected function makeCompany(): Company

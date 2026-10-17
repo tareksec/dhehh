@@ -192,6 +192,7 @@ class PhaseFourAdminPagesTest extends TestCase
                 'integrations',
                 'notifications',
                 'navigation_seo',
+                // Reseller settings moved to Resellers → Reseller Settings (2026-10-06).
             ],
             array_column($component->instance()->sectionNavigation(), 'key'),
         );
@@ -203,6 +204,8 @@ class PhaseFourAdminPagesTest extends TestCase
             ->call('selectSection', 'navigation_seo')
             ->assertSet('activeSection', 'navigation_seo')
             ->assertSee('Links shown in the storefront header navigation')
+            ->assertSee('meta_title')
+            ->assertDontSee(__('Reseller cost per unit'))
             ->assertDontSee('Connect a company to its public storefront and control whether it is visible.');
     }
 

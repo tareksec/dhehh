@@ -7,20 +7,39 @@
     $cornerRadii = $setting->appearanceCornerRadii();
     $logoUrl = \App\Support\CompanyMedia::publicUrl($setting->logo, $company);
     $logoDarkUrl = \App\Support\CompanyMedia::publicUrl($setting->logo_dark, $company);
-    $title = $setting->meta_title ?: $company->name;
-    $description = $setting->meta_description ?: 'Shop products from '.$company->name;
+    // The controller fills StorefrontSeo with the page's own title, description,
+    // image, indexing and structured data; the site-wide values are the fallback.
+    $seo = \App\Support\StorefrontSeo::current();
+    $siteTitle = $setting->meta_title ?: $company->name;
+    $title = $seo->documentTitle($siteTitle);
+    $description = $seo->description($setting->meta_description ?: __('Shop products from :name', ['name' => $company->name]));
     $bannerImage = \App\Models\StorefrontSlide::forCompany($company->getKey())->first()?->image;
-    $shareImageUrl = \App\Support\CompanyMedia::publicUrl($bannerImage, $company) ?: ($logoUrl ?: null);
-    $homeUrl = isset($previewSlug) ? route('storefront.preview.show', $previewSlug) : route('marketing.home');
-    $productsUrl = isset($previewSlug) ? route('storefront.preview.products.index', $previewSlug) : route('storefront.products.index');
-    $cartUrl = isset($previewSlug) ? route('storefront.preview.cart.show', $previewSlug) : route('storefront.cart.show');
-    $trackUrl = isset($previewSlug) ? route('storefront.preview.track.index', $previewSlug) : route('storefront.track.index');
-    $accountOrdersUrl = isset($previewSlug) ? route('storefront.preview.account.orders', $previewSlug) : route('storefront.account.orders');
-    $offersUrl = isset($previewSlug) ? route('storefront.preview.offers.index', $previewSlug) : route('storefront.offers.index');
+    $shareImageUrl = $seo->image(\App\Support\CompanyMedia::publicUrl($bannerImage, $company) ?: ($logoUrl ?: null));
+    // Staff preview URLs must never compete with the live domain in search results.
+    $robots = isset($previewSlug) ? 'noindex, nofollow' : $seo->robots();
+    $previewSlug = $previewSlug ?? null; // isset() stays false when null
+    $resellerStoreSlug = \App\Support\StorefrontUrl::currentResellerSlug();
+    // Inside a reseller's own store the header carries only that reseller's
+    // name/brand -- never the company's name or logo (owner's answer,
+    // 13_RESELLER_PORTAL_PLAN.md §2.1 Q3). The reseller's own logos (light
+    // and dark) come from the portal's My Store page; none uploaded = name only.
+    $storeReseller = request()->attributes->get('storefront_reseller');
+    $brandName = $storeReseller ? $storeReseller->resellerStoreName() : $company->name;
+    $brandLogoUrl = $storeReseller ? $storeReseller->resellerLogoUrl() : $logoUrl;
+    $brandLogoDarkUrl = $storeReseller ? $storeReseller->resellerLogoDarkUrl() : $logoDarkUrl;
+    $homeUrl = $resellerStoreSlug
+        ? \App\Support\StorefrontUrl::route('show', [], $previewSlug)
+        : (isset($previewSlug) ? route('storefront.preview.show', $previewSlug) : route('marketing.home'));
+    $productsUrl = \App\Support\StorefrontUrl::route('products.index', [], $previewSlug);
+    $cartUrl = \App\Support\StorefrontUrl::route('cart.show', [], $previewSlug);
+    $trackUrl = \App\Support\StorefrontUrl::route('track.index', [], $previewSlug ?? null);
+    $accountOrdersUrl = \App\Support\StorefrontUrl::route('account.orders', [], $previewSlug ?? null);
+    $offersUrl = \App\Support\StorefrontUrl::route('offers.index', [], $previewSlug ?? null);
     $cartCount = app(\App\Services\StorefrontCart::class)->count($company);
     $footerPages = \Illuminate\Support\Facades\Schema::hasTable('storefront_pages')
         ? \App\Models\StorefrontPage::query()
             ->where('company_id', $company->getKey())
+            ->forSite($setting)
             ->published()
             ->orderBy('sort_order')
             ->orderBy('title')
@@ -34,14 +53,17 @@
         ->orderBy('name')
         ->limit(10)
         ->get();
-    $categoryUrl = fn (\App\Models\Category $category) => isset($previewSlug)
-        ? route('storefront.preview.categories.show', [$previewSlug, $category->slug])
-        : route('storefront.categories.show', $category->slug);
-    $previewSlug = $previewSlug ?? null; // isset() stays false when null
-    $resellerUrl = isset($previewSlug) ? route('storefront.preview.reseller.show', $previewSlug) : route('storefront.reseller.show');
-    $pageUrl = fn (string $slug) => isset($previewSlug)
-        ? route('storefront.preview.pages.show', [$previewSlug, $slug])
-        : route('storefront.pages.show', $slug);
+    $categoryUrl = fn (\App\Models\Category $category) => \App\Support\StorefrontUrl::route('categories.show', [$category->slug], $previewSlug);
+    // Owner's answer (13_RESELLER_PORTAL_PLAN.md §2.1 Q4): applications now
+    // go through the reseller portal, not the old in-storefront /reseller
+    // page. Preview has no portal host to link to, so it keeps the old page.
+    $resellerJoinUrl = isset($previewSlug) ? null : $company->resellerJoinUrl();
+    $resellerUrl = $resellerJoinUrl
+        ?: \App\Support\StorefrontUrl::route('reseller.show', [], $previewSlug ?? null);
+    // Someone who already applied goes to the portal (their status), not the guide.
+    $resellerPortalHost = isset($previewSlug) ? null : $company->resellerPortalHost();
+    $resellerStatusUrl = $resellerPortalHost ? request()->getScheme().'://'.$resellerPortalHost.'/portal' : $resellerUrl;
+    $pageUrl = fn (string $slug) => \App\Support\StorefrontUrl::route('pages.show', [$slug], $previewSlug ?? null);
 
     $accountsEnabled = (bool) ($setting->customer_accounts_enabled ?? true);
     $authCustomer = $accountsEnabled ? \Illuminate\Support\Facades\Auth::guard('customer')->user() : null;
@@ -70,28 +92,34 @@
 
         return rtrim($candidatePath, '/') === rtrim($currentPath, '/');
     };
-    $isHomeCurrent = request()->routeIs('marketing.home', 'storefront.preview.show');
+    $isHomeCurrent = request()->routeIs('marketing.home', 'storefront.preview.show', 'storefront.reseller_store.show');
     $isCatalogCurrent = request()->routeIs(
         'storefront.products.*',
         'storefront.categories.*',
         'storefront.preview.products.*',
         'storefront.preview.categories.*',
+        'storefront.reseller_store.products.*',
+        'storefront.reseller_store.categories.*',
     );
     $isCartCurrent = request()->routeIs(
         'storefront.cart.*',
         'storefront.checkout.*',
         'storefront.preview.cart.*',
         'storefront.preview.checkout.*',
+        'storefront.reseller_store.cart.*',
+        'storefront.reseller_store.checkout.*',
     );
     $isAccountCurrent = $accountsEnabled
         ? request()->routeIs('storefront.account.*')
         : request()->routeIs('storefront.track.*', 'storefront.preview.track.*');
 
     // Admin-managed navigation menus (Storefront Settings → Navigation Menus).
-    $menuCategoryIds = collect([$setting->header_menu, $setting->footer_menu])->flatten(1)->filter()->where('type', 'category')->pluck('category_id')->filter()->unique();
-    $menuPageSlugs = collect([$setting->header_menu, $setting->footer_menu])->flatten(1)->filter()->where('type', 'page')->pluck('page_id')->filter()->unique();
+    // Footer Builder "Custom links" columns hold menu-style links too.
+    $customFooterLinks = collect($setting->footerBlocks())->where('type', 'custom_links')->flatMap(fn ($block) => $block['data']['links'] ?? [])->all();
+    $menuCategoryIds = collect([$setting->header_menu, $setting->footer_menu, $customFooterLinks])->flatten(1)->filter()->where('type', 'category')->pluck('category_id')->filter()->unique();
+    $menuPageSlugs = collect([$setting->header_menu, $setting->footer_menu, $customFooterLinks])->flatten(1)->filter()->where('type', 'page')->pluck('page_id')->filter()->unique();
     $menuCategoryData = $menuCategoryIds->isEmpty() ? collect() : \App\Models\Category::withoutGlobalScopes()->where('company_id', $company->getKey())->whereIn('id', $menuCategoryIds)->where('is_active', true)->get(['id', 'slug', 'icon'])->keyBy('id');
-    $menuPageSlugs = $menuPageSlugs->isEmpty() ? collect() : \App\Models\StorefrontPage::withoutGlobalScopes()->where('company_id', $company->getKey())->whereIn('id', $menuPageSlugs)->where('is_published', true)->pluck('slug', 'id');
+    $menuPageSlugs = $menuPageSlugs->isEmpty() ? collect() : \App\Models\StorefrontPage::withoutGlobalScopes()->where('company_id', $company->getKey())->forSite($setting)->whereIn('id', $menuPageSlugs)->where('is_published', true)->pluck('slug', 'id');
     $resolveMenu = function (?array $items) use ($productsUrl, $trackUrl, $accountOrdersUrl, $resellerUrl, $offersUrl, $previewSlug, $menuCategoryData, $menuPageSlugs, $pageUrl) {
         return collect($items ?? [])->map(function ($item) use ($productsUrl, $trackUrl, $accountOrdersUrl, $resellerUrl, $offersUrl, $previewSlug, $menuCategoryData, $menuPageSlugs, $pageUrl) {
             $label = trim((string) ($item['label'] ?? ''));
@@ -103,7 +131,7 @@
                 'reseller' => $resellerUrl,
                 'offers' => $offersUrl,
                 'category' => $menuCategory
-                    ? (isset($previewSlug) ? route('storefront.preview.categories.show', [$previewSlug, $menuCategory->slug]) : route('storefront.categories.show', $menuCategory->slug))
+                    ? \App\Support\StorefrontUrl::route('categories.show', [$menuCategory->slug], $previewSlug)
                     : null,
                 'page' => ($slug = $menuPageSlugs->get($item['page_id'] ?? null)) ? $pageUrl($slug) : null,
                 'custom' => filled($item['url'] ?? null) ? $item['url'] : null,
@@ -130,13 +158,18 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="{{ $description }}">
-    @if (isset($previewSlug))
-        {{-- Preview URLs (/storefront/{slug}/...) must never compete with the live domain in search results. --}}
-        <meta name="robots" content="noindex, nofollow">
+    @if ($robots !== null)
+        <meta name="robots" content="{{ $robots }}">
+    @else
+        <link rel="canonical" href="{{ $seo->canonicalUrl() }}">
+        <meta property="og:url" content="{{ $seo->canonicalUrl() }}">
     @endif
+    @stack('head')
+    <meta property="og:site_name" content="{{ $siteTitle }}">
+    <meta property="og:locale" content="{{ app()->getLocale() === 'bn' ? 'bn_BD' : 'en_US' }}">
     <meta property="og:title" content="{{ $title }}">
     <meta property="og:description" content="{{ $description }}">
-    <meta property="og:type" content="website">
+    <meta property="og:type" content="{{ $seo->ogType() }}">
     @if ($shareImageUrl)
         <meta property="og:image" content="{{ $shareImageUrl }}">
     @endif
@@ -166,6 +199,11 @@
             document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
         })();
     </script>
+    @if ($robots === null)
+        @foreach ($seo->structuredData() as $block)
+            <script type="application/ld+json">{!! json_encode($block, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
+        @endforeach
+    @endif
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @include('storefront.partials.meta-pixel')
     @stack('meta-events')

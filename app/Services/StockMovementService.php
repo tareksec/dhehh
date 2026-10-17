@@ -60,6 +60,15 @@ class StockMovementService
     {
         $movement->quantity = $this->normalizeQuantity($movement->type, (int) $movement->quantity);
 
+        // Only damage carries a source; a value left over from a changed type is dropped.
+        if ($movement->type !== 'damage') {
+            $movement->damage_source = null;
+        } elseif (filled($movement->damage_source) && ! array_key_exists($movement->damage_source, StockMovement::damageSources())) {
+            throw ValidationException::withMessages([
+                'damage_source' => 'Please select where the damage came from.',
+            ]);
+        }
+
         $this->validate($movement);
     }
 
@@ -248,6 +257,31 @@ class StockMovementService
             - $oldSigned;
     }
 
+    /**
+     * Whether saving this movement lowers stock compared to what it booked
+     * before. Only then can it be blamed for negative stock: re-saving an
+     * order's unchanged sale line (every item save re-syncs all of them)
+     * or adding stock must still work when the product is already below
+     * zero, e.g. after a WooCommerce sale went through without stock.
+     */
+    protected function takesStock(StockMovement $movement): bool
+    {
+        $before = 0;
+
+        if (
+            $movement->exists
+            && (int) $movement->getOriginal('product_id') === (int) $movement->product_id
+            && (int) $movement->getOriginal('product_variant_id') === (int) $movement->product_variant_id
+        ) {
+            $before = $this->signedQuantityFor(
+                (string) $movement->getOriginal('type', $movement->type),
+                (int) $movement->getOriginal('quantity', 0),
+            );
+        }
+
+        return $this->signedQuantityFor($movement->type, (int) $movement->quantity) < $before;
+    }
+
     public function validate(StockMovement $movement): void
     {
         if (! array_key_exists($movement->type, StockMovement::TYPES)) {
@@ -287,7 +321,7 @@ class StockMovementService
                 $movement->exists ? (int) $movement->getKey() : null,
             );
 
-        if ($projectedStock < 0 && ! $movement->allowNegativeStock) {
+        if ($projectedStock < 0 && ! $movement->allowNegativeStock && $this->takesStock($movement)) {
             $message = match ($movement->type) {
                 'sale' => 'Insufficient stock for this sale quantity.',
                 'damage' => 'Insufficient stock to record this much damage.',

@@ -4,9 +4,12 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\VideoGeneration;
 use App\Jobs\GenerateVideoJob;
+use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\GeneratedImage;
 use App\Models\GeneratedVideo;
+use App\Models\Offer;
+use App\Models\Product;
 use App\Models\User;
 use App\Services\CompanyContext;
 use App\Services\PromptEnhancement\PromptEnhancerConfigService;
@@ -307,5 +310,107 @@ class VideoGenerationPageTest extends TestCase
         Livewire::actingAs($user)
             ->test(VideoGeneration::class)
             ->assertFormFieldVisible('video_reference_pick');
+    }
+
+    private function completedVideo(Company $company, User $user, array $overrides = []): GeneratedVideo
+    {
+        return GeneratedVideo::query()->create(array_merge([
+            'user_id' => $user->getKey(),
+            'tool' => GeneratedVideo::TOOL_VIDEO_GENERATION,
+            'context' => 'product_demo',
+            'prompt' => 'slow push in on the mug',
+            'source_image_path' => 'companies/'.$company->storage_key.'/public/ai-video-source-images/mug.webp',
+            'provider_profile_id' => 'p1',
+            'provider_label' => 'Stability',
+            'api_format' => 'stability',
+            'aspect_ratio' => '16:9',
+            'video_path' => 'companies/'.$company->storage_key.'/public/ai-generated-videos/mug.mp4',
+            'video_mime_type' => 'video/mp4',
+            'status' => GeneratedVideo::STATUS_COMPLETED,
+            'generated_at' => now(),
+        ], $overrides));
+    }
+
+    public function test_attach_to_product_action_sets_the_product_video(): void
+    {
+        $company = $this->company();
+        $this->configureProvider($company);
+        $user = $this->user($company, 'manager');
+        $video = $this->completedVideo($company, $user);
+
+        $product = Product::query()->create([
+            'name' => 'Ceramic Mug', 'sku' => 'CM-1', 'price' => 400, 'sale_price' => 400, 'stock' => 0,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(VideoGeneration::class)
+            ->assertSee('Not attached to a record yet.')
+            ->callAction('attachToProduct', ['product_id' => $product->getKey()], ['generation' => $video->getKey()])
+            ->assertHasNoActionErrors()
+            ->assertNotified('Added to Ceramic Mug')
+            ->assertSee('Attached to');
+
+        $this->assertSame('companies/'.$company->storage_key.'/public/ai-generated-videos/mug.mp4', $product->fresh()->video_path);
+        $this->assertSame($product->getKey(), $video->fresh()->linked_id);
+        $this->assertTrue(AuditLog::query()->where('action', 'ai_video.attached')->exists());
+    }
+
+    public function test_attach_to_offer_action_sets_the_hero_video(): void
+    {
+        $company = $this->company();
+        $this->configureProvider($company);
+        $user = $this->user($company, 'manager');
+        $video = $this->completedVideo($company, $user, ['context' => 'landing_hero']);
+
+        $offer = Offer::query()->create(['type' => Offer::TYPE_SINGLE, 'title' => 'Mug Bundle']);
+
+        Livewire::actingAs($user)
+            ->test(VideoGeneration::class)
+            ->callAction('attachToOffer', ['offer_id' => $offer->getKey()], ['generation' => $video->getKey()])
+            ->assertHasNoActionErrors()
+            ->assertNotified('Hero video updated');
+
+        $this->assertSame('companies/'.$company->storage_key.'/public/ai-generated-videos/mug.mp4', $offer->fresh()->video_path);
+    }
+
+    public function test_attach_shows_the_reason_when_the_video_is_awaiting_review(): void
+    {
+        $company = $this->company();
+        $this->configureProvider($company);
+        $user = $this->user($company, 'manager');
+        $video = $this->completedVideo($company, $user, ['review_status' => GeneratedVideo::REVIEW_PENDING]);
+
+        $product = Product::query()->create([
+            'name' => 'Held Mug', 'sku' => 'HM-1', 'price' => 400, 'sale_price' => 400, 'stock' => 0,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(VideoGeneration::class)
+            ->assertDontSee('Offer hero')
+            ->callAction('attachToProduct', ['product_id' => $product->getKey()], ['generation' => $video->getKey()])
+            ->assertNotified('Could not attach the video');
+
+        $this->assertNull($product->fresh()->video_path);
+    }
+
+    public function test_a_user_cannot_attach_another_users_video(): void
+    {
+        $company = $this->company();
+        $this->configureProvider($company);
+        $owner = $this->user($company, 'manager');
+        $video = $this->completedVideo($company, $owner);
+        $otherManager = $this->user($company, 'manager');
+
+        $product = Product::query()->create([
+            'name' => 'Other Mug', 'sku' => 'OM-1', 'price' => 400, 'sale_price' => 400, 'stock' => 0,
+        ]);
+
+        Livewire::actingAs($otherManager)
+            ->test(VideoGeneration::class)
+            ->callAction('attachToProduct', ['product_id' => $product->getKey()], ['generation' => $video->getKey()])
+            ->assertNotified('Could not attach the video');
+
+        $this->assertNull($product->fresh()->video_path);
+        $this->assertNull($video->fresh()->linked_id);
     }
 }

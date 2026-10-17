@@ -6,7 +6,7 @@
         : route('storefront.account.'.$name);
     $forgotStoreUrl = $accountRoute('forgot-password.store');
     $loginUrl = $accountRoute('login');
-    $contactUrl = isset($previewSlug) ? route('storefront.preview.contact', $previewSlug) : route('storefront.contact');
+    $contactUrl = \App\Support\StorefrontUrl::route('contact', [], $previewSlug ?? null);
 @endphp
 
 @section('content')

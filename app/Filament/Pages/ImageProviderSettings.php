@@ -129,6 +129,7 @@ class ImageProviderSettings extends Page
                 ->placeholder(fn (Get $get): string => match ($get('api_format')) {
                     'google' => 'imagen-4.0-generate-001',
                     'stability' => 'core',
+                    'openrouter' => 'google/gemini-2.5-flash-image',
                     default => 'gpt-image-1',
                 }),
             TextInput::make('default_size')

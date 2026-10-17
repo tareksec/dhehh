@@ -48,6 +48,13 @@ class GeneratedVideo extends Model
         self::OPERATION_IMAGE_TO_VIDEO => 'Image-to-video',
     ];
 
+    /** "Save to Google Drive" (Phase 4) — the Drive copy's lifecycle. Null = never sent. */
+    public const DRIVE_SAVING = 'saving';
+
+    public const DRIVE_SAVED = 'saved';
+
+    public const DRIVE_FAILED = 'failed';
+
     public const REVIEW_NOT_REQUIRED = 'not_required';
 
     public const REVIEW_PENDING = 'pending';
@@ -127,6 +134,11 @@ class GeneratedVideo extends Model
         'linked_type',
         'linked_id',
         'is_favorite',
+        'drive_status',
+        'drive_file_id',
+        'drive_url',
+        'drive_saved_at',
+        'drive_error',
         'estimated_cost',
         'review_status',
         'reviewed_by',
@@ -153,6 +165,7 @@ class GeneratedVideo extends Model
         'poll_deadline_at' => 'datetime',
         'provider_response' => 'array',
         'is_favorite' => 'boolean',
+        'drive_saved_at' => 'datetime',
         'estimated_cost' => 'decimal:4',
         'reviewed_at' => 'datetime',
         'generated_at' => 'datetime',
@@ -250,6 +263,22 @@ class GeneratedVideo extends Model
         $path = $this->thumbnail_path ?: $this->source_image_path;
 
         return app(CompanyStorageService::class)->publicUrl($path, $this->company);
+    }
+
+    /** A finished clip that is on disk — playable, downloadable, and sendable to Drive. */
+    public function hasPlayableVideo(): bool
+    {
+        return $this->status === self::STATUS_COMPLETED && filled($this->video_path);
+    }
+
+    public function isSavedToDrive(): bool
+    {
+        return $this->drive_status === self::DRIVE_SAVED && filled($this->drive_url);
+    }
+
+    public function isSavingToDrive(): bool
+    {
+        return $this->drive_status === self::DRIVE_SAVING;
     }
 
     public function isTerminal(): bool

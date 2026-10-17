@@ -16,10 +16,12 @@ class OfferItem extends Model
         'product_id',
         'product_variant_id',
         'quantity',
+        'deal_price',
         'sort_order',
     ];
 
     protected $casts = [
+        'deal_price' => 'decimal:2',
         'quantity' => 'integer',
         'sort_order' => 'integer',
     ];

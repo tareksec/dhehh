@@ -33,6 +33,16 @@ class InvestmentsRelationManager extends RelationManager
         return in_array($this->getOwnerRecord()->status, ['closed', 'settled'], true) || parent::isReadOnly();
     }
 
+    /**
+     * A group project's rows are snapshots of the group's members
+     * (16_INVESTOR_GROUPS_PLAN.md): money is added to the group, and the
+     * amounts here are not edited by hand.
+     */
+    private function isGroupProject(): bool
+    {
+        return $this->getOwnerRecord()->isGrouped();
+    }
+
     public function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -42,7 +52,7 @@ class InvestmentsRelationManager extends RelationManager
                 ->createOptionForm([
                     TextInput::make('name')->required(),
                     TextInput::make('phone')->required(),
-                    TextInput::make('nid_number')->label('NID Number'),
+                    TextInput::make('nid_number')->label(__('NID / Passport (Investor ID)'))->required(),
                 ])->createOptionUsing(fn (array $data): int => Investor::query()->create($data)->getKey())->required(),
             TextInput::make('amount')->numeric()->prefix('৳')->minValue(0.01)->required(),
             Select::make('payment_method')->options(Investment::PAYMENT_METHODS)->required(),
@@ -73,6 +83,11 @@ class InvestmentsRelationManager extends RelationManager
             TextColumn::make('amount')->moneyWithoutTrailingZeroes('BDT')->summarize(Sum::make()->moneyWithoutTrailingZeroes('BDT')),
             TextColumn::make('payment_method')->badge(),
             TextColumn::make('invested_at')->date(),
+            TextColumn::make('status')
+                ->label(__('Status'))
+                ->badge()
+                ->formatStateUsing(fn (?string $state): string => InvestmentRecordResource::statusLabel($state))
+                ->color(fn (?string $state): string => InvestmentRecordResource::statusColor($state)),
             // Inline cheque number straight off the investment row (v3 P3) --
             // previously only visible by opening the separate
             // SecurityInstrumentsRelationManager on the investment's own view.
@@ -89,13 +104,15 @@ class InvestmentsRelationManager extends RelationManager
                 ->url(fn (Investment $record): ?string => $record->voucher_id ? VoucherResource::getUrl('view', ['record' => $record->voucher_id]) : null),
         ])->headerActions([
             CreateAction::make()
+                ->hidden(fn (): bool => $this->isGroupProject())
                 ->mutateDataUsing(fn (array $data): array => [...$data, 'company_id' => $this->getOwnerRecord()->company_id, 'received_by' => auth()->id()])
                 ->after(fn (Investment $record) => app(InvestmentLedgerService::class)->recordInvestmentReceived($record)),
         ])
             ->recordActions([
                 ViewAction::make()->url(fn (Investment $record): string => InvestmentRecordResource::getUrl('view', ['record' => $record])),
-                EditAction::make(),
-                DeleteAction::make(),
+                InvestmentRecordResource::withdrawAction(),
+                EditAction::make()->hidden(fn (Investment $record): bool => $record->isWithdrawn() || filled($record->group_member_id)),
+                DeleteAction::make()->hidden(fn (Investment $record): bool => $record->isWithdrawn() || filled($record->group_member_id)),
             ]);
     }
 }

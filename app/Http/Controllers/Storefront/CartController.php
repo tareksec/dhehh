@@ -11,9 +11,11 @@ use App\Models\ResellerProduct;
 use App\Models\StorefrontCartRecord;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
+use App\Services\ResellerPricing;
 use App\Services\StorefrontCart;
 use App\Services\StorefrontMetaTrackingService;
 use App\Support\StorefrontThemeRegistry;
+use App\Support\StorefrontUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -105,7 +107,8 @@ class CartController extends Controller
         foreach ($quantities as $variantId => $quantity) {
             $variant = $variants->get((int) $variantId);
 
-            if (! $variant || (int) $variant->stock < 1) {
+            // A variation the reseller has no selling price for is not for sale.
+            if (! $variant || (int) $variant->stock < 1 || app(ResellerPricing::class)->variantBlocked($variant)) {
                 continue;
             }
 
@@ -136,7 +139,18 @@ class CartController extends Controller
         $reseller = $request->attributes->get('storefront_reseller');
 
         if (! $reseller instanceof Customer) {
-            return null;
+            // Not under /store/{slug}: a visitor who came through a
+            // reseller's store (remembered in their session) is still
+            // attributed to that reseller for products in their catalog.
+            $sessionReseller = app(ResellerPricing::class)->reseller();
+
+            return $sessionReseller && ResellerProduct::query()
+                ->where('customer_id', $sessionReseller->getKey())
+                ->where('product_id', $product->getKey())
+                ->where('is_active', true)
+                ->exists()
+                ? $sessionReseller
+                : null;
         }
 
         $inCatalog = ResellerProduct::query()
@@ -154,9 +168,7 @@ class CartController extends Controller
     {
         $previewSlug = $request->route('company')?->slug;
 
-        return redirect()->to($previewSlug
-            ? route('storefront.preview.checkout.show', $previewSlug)
-            : route('storefront.checkout.show'));
+        return redirect()->to(StorefrontUrl::route('checkout.show', [], $previewSlug));
     }
 
     protected function flashAddToCartEvent(Product $product, int $quantity, float $value): void
@@ -286,6 +298,13 @@ class CartController extends Controller
     protected function previewStorefront(Company $company): StorefrontSetting
     {
         abort_unless(app()->environment(['local', 'testing']) || auth()->check(), 404);
+
+        // Same gate as PreviewController::previewCompany(): a signed-in staff
+        // member may only preview their own company/companies, never another
+        // company's by slug (set() below would otherwise switch the scope).
+        if (auth()->check()) {
+            abort_unless(auth()->user()->canAccessCompany($company->getKey()), 404);
+        }
 
         $this->context->set($company);
 

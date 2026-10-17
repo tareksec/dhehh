@@ -15,13 +15,18 @@ use App\Services\BusinessNotificationService;
  */
 class OrderNotificationObserver
 {
+    // The link goes to the admin panel's order page. The panel is named
+    // explicitly because an order can be created or changed while another
+    // panel (the reseller portal) is the current one, and that panel has no
+    // order resource route.
     public function __construct(
         protected BusinessNotificationService $notifications,
     ) {}
 
     public function created(Order $order): void
     {
-        if (! $order->company) {
+        // An import of past orders must not alert the owner once per order.
+        if ($order->isHistoricalImport() || ! $order->company) {
             return;
         }
 
@@ -31,7 +36,7 @@ class OrderNotificationObserver
             'notifications.orders',
             'New order received',
             $this->orderSummary($order),
-            actionUrl: OrderResource::getUrl('view', ['record' => $order]),
+            actionUrl: OrderResource::getUrl('view', ['record' => $order], panel: 'admin'),
             actionLabel: 'View order',
         );
     }
@@ -42,7 +47,7 @@ class OrderNotificationObserver
             return;
         }
 
-        if (! $order->company) {
+        if ($order->isHistoricalImport() || ! $order->company) {
             return;
         }
 
@@ -53,7 +58,7 @@ class OrderNotificationObserver
             'Order status updated',
             $this->orderSummary($order).' is now '.str_replace('_', ' ', (string) $order->status)
                 .($order->delivery_status ? ' ('.str_replace('_', ' ', (string) $order->delivery_status).')' : ''),
-            actionUrl: OrderResource::getUrl('view', ['record' => $order]),
+            actionUrl: OrderResource::getUrl('view', ['record' => $order], panel: 'admin'),
             actionLabel: 'View order',
         );
     }

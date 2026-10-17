@@ -34,6 +34,7 @@ class ImageProviderSettingsService
         'openai' => 'OpenAI Images (gpt-image-1 / DALL·E)',
         'google' => 'Google Gemini / Imagen',
         'stability' => 'Stability AI (text-to-image)',
+        'openrouter' => 'OpenRouter (unified image API)',
         'custom' => 'Custom (OpenAI-images-compatible endpoint)',
     ];
 

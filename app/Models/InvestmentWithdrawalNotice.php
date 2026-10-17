@@ -19,7 +19,7 @@ class InvestmentWithdrawalNotice extends Model
 
     public const STATUSES = ['pending' => 'Pending', 'honored' => 'Honored', 'cancelled' => 'Cancelled'];
 
-    protected $fillable = ['company_id', 'investor_id', 'project_id', 'notice_given_at', 'effective_at', 'reason', 'status'];
+    protected $fillable = ['company_id', 'investor_id', 'project_id', 'group_id', 'notice_given_at', 'effective_at', 'reason', 'status'];
 
     protected $casts = ['notice_given_at' => 'date', 'effective_at' => 'date'];
 
@@ -35,6 +35,11 @@ class InvestmentWithdrawalNotice extends Model
     public function investor()
     {
         return $this->belongsTo(Investor::class);
+    }
+
+    public function group()
+    {
+        return $this->belongsTo(InvestorGroup::class, 'group_id');
     }
 
     public function project()
