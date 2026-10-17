@@ -2,6 +2,43 @@
 
 This file is a working update log for changes that may become commits. Use it to decide what a pending commit contains before approving any `git commit` or push.
 
+## 2026-10-17 - Import Nuport orders (customer purchases, payment, status)
+
+Owner request: the wholesale team sells through Nuport (app.nuport.io); only customers had been brought over. They asked how to bring in what each customer bought, the payment and the status. I downloaded the real export from Nuport (owner said yes: 1,340 invoices, 2,311 lines, SO-0001 21 Aug 2025 to SO-1309 15 Oct 2026) and built the import from it.
+
+Why a CSV import and not a live sync first: Nuport's webhook (23 events, none switched on) sends status changes only for new events, with no paid amount (only "Payment Due" / "Payment Collected"), and its REST API has one-order-by-invoice lookup but no list-all-orders call. Docs: nuport.readme.io. The webhook receiver is the planned second step (see Not done).
+
+Owner decisions applied (2026-10-17, "go with the assumptions above"):
+
+- Cancelled orders with reason "Test Order" or "Fake Order" are skipped (65 in the export); the other cancelled orders come in as Cancelled with no payment (5 of them had a payment in Nuport; it is not copied).
+- Status map: Delivered = Completed (Payment Due keeps its due), Approved = Confirmed, In-Transit and Processing = Processing, Flagged (returned and pending return) = Returned, Cancelled = Cancelled. Any other status is skipped and listed, never guessed.
+- Payments are history only: `account_id` NULL, so no account ledger row and no account balance moves.
+- The 66 orders still open in Nuport (Approved, In-Transit, Processing) also do not touch stock: the PDF stock entered on 2026-10-16 is the physical stock.
+
+What changed:
+
+- New `app/Services/NuportOrderImportService.php`; `Order::SOURCE_NUPORT_IMPORT` + `isHistoricalImport()`; `OrderWorkflowService::sync()`, `OrderNotificationObserver` and the `saved` fraud-check hook skip imported orders; header action **Import Nuport orders** on the Orders list (`ListOrders`, preview first, "Preview only" on by default); command `php artisan orders:import-nuport {file} {company-slug} [--apply]`; 29 new keys in `lang/en.json` + `lang/bn.json`; `tests/Feature/NuportOrderImportTest.php` (17 tests).
+- Rules: invoice = `order_number` = `external_reference`; customers matched by phone in any spelling, a new phone creates a customer (`regular`); lines at list price, discount = line total minus Sales Amount, shipping fee = Delivery Fee, so ERP total = Sales Amount + Delivery Fee; one account-less payment per order mirroring the paid amount; order skipped whole if a product is not found by SKU (variant SKU, then product SKU, then exact name for a line with no SKU).
+- Re-running a file (or a newer export) finds orders by invoice and refreshes only status, delivery status, delivery fee, discount and payment; lines, notes and customer are left alone.
+
+Checked on the real file (in-memory test database, never the live or demo DB, with a throwaway product per SKU): preview 0.4 s; import 20 s; 1,272 orders created (Completed 1,029, Confirmed 53, Processing 13, Returned 80, Cancelled 97), 893 payments, 711 customers; skipped 65 test/fake cancelled + 3 return invoices with quantity 0 (SO-0443-R, SO-0444-R, SO-0445-R); 0 errors; second run created 0 and changed 0. Sales, paid and per-status counts match the CSV; customer balances add up to the imported due of the accounted orders (6,609,815); stock movements, ledger rows and fraud checks created: 0.
+
+Open points for the owner:
+
+- **Before the real import:** the live ERP's product SKUs were not checked (the dashboard login in the browser pane had expired and passwords are not entered by the agent). Run the preview on the live Orders page first; any product it lists as "not found" (the export has retired SKUs such as `ZMGRRLPWB-OLD`, `ZMGRRLPW-DUP-…-DELETED`, and lines named Courier Poly / Bubble Poly with no SKU) must exist before those orders can come in.
+- **Opening balance:** if the customers brought over earlier already carry their Nuport due as an opening balance, importing the orders counts that due twice. The preview shows how many matched customers have an opening balance; check those before saving.
+- Nuport's screen shows 1,346 orders but the export has 1,340 (I exported with the default filters and no date range); the 6 missing were not looked for. Compare the live order count after the import.
+- 32 invoices have totals that disagree with their own lines in Nuport (edited by hand there); the file's Sales Amount, Delivery Fee and Paid are used and these invoices are listed in the preview.
+- Customer Tag (NEW / REGULAR / VIP), order source (WhatsApp, Website…), Steadfast status text and the Nuport "Entry By" are not imported as fields; the consignment ID and cancel reason are in the order note.
+
+Not done: the webhook receiver for new orders and status changes (needs a signed endpoint, `whsec_` secret as an admin setting; payment amount would need the per-invoice API call); the six variant products' per-colour stock from the 2026-10-16 PDF is still waiting for the owner's colour split.
+
+Needs Bangla review: all 29 new keys, in particular ":count customers already have an opening balance. Check it so their dues are not counted twice.", ":status: :orders orders, sales :sales, paid :paid, due :due", "Totals do not match the lines on :count orders (the file totals are used): :list".
+
+Verification: `php artisan test --filter=NuportOrderImportTest` 17 passed (138 assertions); Pint clean. Full plain `php artisan test`: 2,114 passed, 1 skipped, **8 failed**. All 8 are online-payment tests (`StorefrontApiCheckoutTest` x7, `StorefrontPaystationPaymentTest` x1: "The secure payment page could not be opened", status 422 or 502, before any order exists). They come from the earlier uncommitted PayStation / `StorefrontPaymentService` / `ZiniPayClient` changes already in the working tree (files dated 2026-10-09), not from this import; this change touches no payment gateway file. `TranslationParityTest` passes.
+
+Commit status: committed locally on branch feature/ai-inbox-control-plane (only the Nuport import files and hunks; other sessions' pending changes left out). Not pushed. Push needs explicit owner approval.
+
 ## 2026-10-09 - AI inbox control plane, phase 1: AI or team, return to AI, activity log, neat replies
 
 Built from `16_AI_INBOX_CONTROL_PLANE_PLAN.md` after a read-only walk through AiPraktor's dashboard, home page and help page (119 answers). Owner instruction: "aipraktor এর মত করে বিল্ড কর" — so the AiPraktor behaviour is the rule: takeover time 6 hours by default (owner can change it), timer choices 30 min / 1 hour / 6 hours / no limit, return to the AI on its own when the time is up, "." from the page inbox switches the chat, AI hands over with a reason from a fixed list.

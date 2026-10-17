@@ -29,7 +29,10 @@ class OrderWorkflowService
             ])->saveQuietly();
         }
 
-        if ($order->isAccounted()) {
+        if ($order->isHistoricalImport()) {
+            // A Nuport import is history: the current physical stock was
+            // entered after these sales, so replaying them would deduct twice.
+        } elseif ($order->isAccounted()) {
             $this->syncStockMovements($order, $items);
         } else {
             $this->deleteStockMovements($order);
