@@ -2,6 +2,21 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-17 (evening) - Imported orders of zero-stock products: no stock popup, product name shown
+
+Owner question (Bangla): how will the orders of products whose stock is 0 show? Answer: the Orders list and the order page show them normally (the imported line keeps the product name and the Nuport price; stock stays 0 and never goes below, because an import takes no stock). Checking it found two problems on the Edit order page, fixed here:
+
+- Saving an imported Completed/Confirmed/Processing order whose product has stock 0 showed the "Not enough stock" popup and offered "Add stock and save order" (stock that never existed). `HandlesStockShortages::haltWhenStockIsShort()` now skips saved orders that are `isHistoricalImport()`, like WooCommerce orders.
+- The product box on the Edit page lists active products only, so a line whose product is inactive (what "Create missing products" creates) showed an empty name. `OrderForm` now also lists the product the line already has.
+
+Checked: the new test fails without either fix and passes with both; saving an imported order and moving it Confirmed to Completed creates no stock movement and stock stays 0. No new strings, no live data touched.
+
+Not changed (reachable only by hand): an imported order cannot move from a non-stock status to a stock status (the workflow table has no such step), so `OrderStatusWorkflowService::ensureStockFor()` needed no change.
+
+Verification: `php artisan test --filter=NuportOrderImportTest` 23 passed; full plain `php artisan test`: 2,549 passed, 1 skipped, 0 failed; Pint clean.
+
+Commit status: committed on branch `feature/nuport-sku-map` and pushed to main with the owner's approval (2026-10-17).
+
 ## 2026-10-17 (later) - Nuport import: SKU mapping and "Create missing products"
 
 Owner request (Bangla): match the Nuport order products' SKUs to the ERP products' SKUs so no order is missed.

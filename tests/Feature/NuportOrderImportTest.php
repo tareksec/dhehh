@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\Orders\Pages\EditOrder;
 use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Models\AppSetting;
 use App\Models\Company;
@@ -19,6 +20,7 @@ use App\Observers\OrderNotificationObserver;
 use App\Services\BusinessNotificationService;
 use App\Services\CompanyContext;
 use App\Services\NuportOrderImportService;
+use App\Services\OrderStatusWorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -618,6 +620,45 @@ class NuportOrderImportTest extends TestCase
         Livewire::test(ListOrders::class)
             ->mountAction('importNuportOrders')
             ->assertActionDataSet(['sku_map' => 'OLD-KEYCHAIN = ZMKMQ']);
+    }
+
+    public function test_an_imported_order_of_a_zero_stock_product_shows_normally_and_never_asks_for_stock(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($admin)->withSession(['current_company_id' => $this->company->id]);
+
+        $report = app(NuportOrderImportService::class)->run($this->csv(array_merge(
+            $this->order('SO-5001', [
+                'Sales Amount' => '300.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '300.00',
+            ], [['sku' => 'ZMGIFT', 'name' => 'Gift Wrapping Imported', 'qty' => 3, 'unit' => 100]]),
+            $this->order('SO-5002', [
+                'Sales Amount' => '100.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '0.00',
+                'Status' => 'APPROVED', 'Sub-Status' => '',
+            ], [['sku' => 'ZMGIFT', 'name' => 'Gift Wrapping Imported', 'qty' => 1, 'unit' => 100]]),
+        )), dryRun: false, createMissing: true);
+
+        $this->assertSame(2, $report['created']);
+
+        $gift = Product::query()->where('sku', 'ZMGIFT')->firstOrFail();
+        $order = Order::query()->where('order_number', 'SO-5001')->firstOrFail();
+
+        // The list and the order page show the line with the inactive product's name.
+        $this->assertSame('Gift Wrapping Imported', $order->items()->firstOrFail()->product->name);
+        Livewire::test(ListOrders::class)->assertSee('SO-5001');
+        Livewire::test(EditOrder::class, ['record' => $order->getRouteKey()])
+            ->assertSee('Gift Wrapping Imported')
+            ->call('save')
+            ->assertActionNotMounted('stockShortage')
+            ->assertHasNoFormErrors();
+
+        // Moving a confirmed import on is not blocked by the zero stock either, and takes no stock.
+        $confirmed = Order::query()->where('order_number', 'SO-5002')->firstOrFail();
+        $this->assertSame(Order::STATUS_CONFIRMED, $confirmed->status);
+        app(OrderStatusWorkflowService::class)->transition($confirmed, Order::STAGE_COMPLETED);
+        $this->assertSame(Order::STATUS_COMPLETED, $confirmed->refresh()->status);
+
+        $this->assertSame(0, (int) $gift->refresh()->stock);
+        $this->assertSame(0, StockMovement::query()->where('product_id', $gift->id)->count());
     }
 
     public function test_the_orders_list_offers_the_import_and_previews_an_uploaded_file(): void
