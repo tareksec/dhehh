@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.86.1] - 2026-10-18
+
 **Release type:** Patch/Fix Update
 
 ### Changed
@@ -18,7 +20,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - New `App\Support\BulkSmsBdPolicy` (OTP format check, single-quote rule, GSM-7 / Unicode part counting, masking sender check). `SmsTemplateService::problem()` applies it on save, `render()` applies `clean()` to every message and falls back to the built-in text for a code template that is not in the OTP format. `render()` no longer takes a locale; the investor and customer code messages are not translated (their `:portal ... OTP is :code. It expires in 1 minute.` language keys and `:company Investment Portal` were removed). Tests: `BulkSmsBdPolicyTest` (7), and new cases in `SmsTemplatesTest` and `InvestorPortalTest`.
-
 ## [2.86.0] - 2026-10-18
 
 **Release type:** Minor Feature Update
