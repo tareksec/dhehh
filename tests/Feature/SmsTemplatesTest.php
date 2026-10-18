@@ -13,6 +13,7 @@ use App\Models\Investor;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\SmsTemplate;
 use App\Models\StockMovement;
 use App\Models\StorefrontSetting;
 use App\Models\User;
@@ -21,6 +22,7 @@ use App\Services\CustomerAccountService;
 use App\Services\Investment\SettlementService;
 use App\Services\OrderStatusWorkflowService;
 use App\Services\SmsTemplateService;
+use App\Support\BulkSmsBdPolicy;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -129,28 +131,50 @@ class SmsTemplatesTest extends TestCase
         $accounts = app(CustomerAccountService::class);
 
         $this->assertTrue($accounts->sendRegistrationCode($this->company, $setting, '01755555555'));
-        $this->assertMatchesRegularExpression('/^Your Template Co OTP is \d{6}\. Use it to verify your account\. It expires in 10 minutes\.$/', $this->sent()[0]['msg']);
+        $this->assertMatchesRegularExpression('/^Your Template Co OTP is \d{6}\.$/', $this->sent()[0]['msg']);
 
-        $this->write([SmsTemplateService::OTP_CUSTOMER_SIGNUP => ':company code :code (:minutes min)']);
+        $this->write([SmsTemplateService::OTP_CUSTOMER_SIGNUP => 'Your Template Shop OTP is :code']);
         $this->travel(2)->minutes();
 
         $this->assertTrue($accounts->sendRegistrationCode($this->company, $setting, '01755555555'));
-        $this->assertMatchesRegularExpression('/^Template Co code \d{6} \(10 min\)$/', $this->sent()[1]['msg']);
+        $this->assertMatchesRegularExpression('/^Your Template Shop OTP is \d{6}$/', $this->sent()[1]['msg']);
 
         $customer = Customer::query()->create(['name' => 'Resetter', 'phone' => '01766666666']);
         $this->assertTrue($accounts->sendPasswordResetCode($this->company, $setting, $customer));
-        $this->assertMatchesRegularExpression('/^Your Template Co OTP is \d{6}\. Use it to reset your password\. It expires in 15 minutes\.$/', $this->sent()[2]['msg']);
+        $this->assertMatchesRegularExpression('/^Your Template Co OTP is \d{6}\.$/', $this->sent()[2]['msg']);
 
-        $this->write([SmsTemplateService::RESET_CUSTOMER_PASSWORD => 'Reset :code']);
+        $this->write([SmsTemplateService::RESET_CUSTOMER_PASSWORD => 'Your :company Shop OTP is :code.']);
         $this->assertTrue($accounts->sendPasswordResetCode($this->company, $setting, $customer));
-        $this->assertMatchesRegularExpression('/^Reset \d{6}$/', $this->sent()[3]['msg']);
+        $this->assertMatchesRegularExpression('/^Your Template Co Shop OTP is \d{6}\.$/', $this->sent()[3]['msg']);
+    }
+
+    public function test_a_saved_code_wording_that_is_not_the_otp_format_is_never_sent(): void
+    {
+        $setting = StorefrontSetting::bladeFor($this->company->id);
+        // Written straight into the table, as an old or hand-edited row would be: the page would refuse it.
+        SmsTemplate::withoutGlobalScopes()->create(['company_id' => $this->company->id, 'key' => SmsTemplateService::OTP_CUSTOMER_LOGIN, 'body' => 'Welcome back! Code: :code. Valid 10 min.']);
+        $customer = Customer::query()->create(['name' => 'Login Customer', 'phone' => '01788888888', 'email' => null]);
+
+        $this->assertTrue(app(CustomerAccountService::class)->sendLoginOtp($this->company, $setting, $customer, '01788888888'));
+
+        $this->assertMatchesRegularExpression('/^Your Template Co OTP is \d{6}\.$/', $this->sent()[0]['msg']);
+    }
+
+    public function test_a_single_quotation_mark_never_reaches_the_gateway(): void
+    {
+        $this->write([SmsTemplateService::orderKey(Order::STAGE_CONFIRMED) => 'Dear :name, order :order is confirmed. - :company']);
+        $order = Order::query()->create(['customer_id' => Customer::query()->create(['name' => "Ma'ruf O'Neil", 'phone' => '01744444444'])->id, 'status' => Order::STATUS_DRAFT]);
+
+        $order->update(['status' => Order::STATUS_CONFIRMED]);
+
+        $this->assertSame("Dear Maruf ONeil, order {$order->order_number} is confirmed. - Template Co", $this->sent()[0]['msg']);
     }
 
     public function test_the_sent_code_is_the_code_that_works(): void
     {
         $setting = StorefrontSetting::bladeFor($this->company->id);
         $accounts = app(CustomerAccountService::class);
-        $this->write([SmsTemplateService::OTP_CUSTOMER_SIGNUP => 'Your code: :code']);
+        $this->write([SmsTemplateService::OTP_CUSTOMER_SIGNUP => 'Your Template Shop OTP is :code']);
 
         $accounts->sendRegistrationCode($this->company, $setting, '01755555555');
         preg_match('/(\d{6})/', $this->sent()[0]['msg'], $match);
@@ -253,6 +277,61 @@ class SmsTemplatesTest extends TestCase
         $this->assertNull(app(SmsTemplateService::class)->body($this->company->id, SmsTemplateService::OTP_INVESTOR_LOGIN));
     }
 
+    public function test_the_page_refuses_wording_that_breaks_a_bulksmsbd_rule(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $quote = "Dear :name, it's confirmed";
+
+        Livewire::test(SmsTemplates::class)
+            ->set('data.sms_otp_customer_login', 'Your code is :code, valid 10 minutes')
+            ->set('data.sms_order_confirmed', $quote)
+            ->set('data.sms_order_shipping', str_repeat('a', 470))
+            ->call('save')
+            ->assertHasErrors(['data.sms_otp_customer_login', 'data.sms_order_confirmed', 'data.sms_order_shipping']);
+
+        $this->assertSame([], app(SmsTemplateService::class)->bodies($this->company->id));
+
+        Livewire::test(SmsTemplates::class)
+            ->set('data.sms_otp_customer_login', 'Your Template Shop OTP is :code.')
+            ->set('data.sms_order_confirmed', 'Dear :name, your order is confirmed.')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertCount(2, app(SmsTemplateService::class)->bodies($this->company->id));
+    }
+
+    public function test_the_suggested_wording_follows_the_rules_and_fills_the_box(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $service = app(SmsTemplateService::class);
+
+        foreach ($service->definitions() as $key => $definition) {
+            if ($definition['suggested'] !== null) {
+                $this->assertNull($service->problem($key, $definition['suggested']), "the suggested wording of {$key} breaks a rule");
+                $this->assertSame(1, BulkSmsBdPolicy::length($definition['suggested'])['parts'], "the suggested wording of {$key} is more than one SMS");
+            } else {
+                $this->assertNull($service->problem($key, $definition['default']), "the built-in wording of {$key} breaks a rule");
+            }
+        }
+
+        Livewire::test(SmsTemplates::class)
+            ->callFormComponentAction('sms_order_shipping', 'suggest_sms_order_shipping')
+            ->assertSet('data.sms_order_shipping', SmsTemplateService::SUGGESTED_ORDER[Order::STAGE_SHIPPING]);
+    }
+
+    public function test_a_masking_sender_id_is_flagged_on_the_page(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::test(SmsTemplates::class)->assertDontSee('masking name');
+
+        $setting = StorefrontSetting::bladeFor($this->company->id);
+        $setting->notification_credentials = [...$setting->notification_credentials, 'sms_sender_id' => 'TEMPLATECO'];
+        $setting->save();
+
+        Livewire::test(SmsTemplates::class)->assertSee('masking name');
+    }
+
     public function test_every_company_has_its_own_templates(): void
     {
         $other = $this->makeCompany('Other Co', 'other-co');
@@ -287,7 +366,7 @@ class SmsTemplatesTest extends TestCase
             'notification_credentials' => [
                 'sms_api_url' => 'http://sms.example.test/send?key={api_key}&to={phone}&msg={message}&from={sender_id}',
                 'sms_api_key' => 'key',
-                'sms_sender_id' => 'TPL',
+                'sms_sender_id' => '8809617643387',
             ],
         ]);
 

@@ -4,6 +4,21 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **Every SMS wording now follows the BulkSMSBD rules** (Settings → SMS Templates). The rules come from BulkSMSBD's own Developers page and API notes:
+  - **Code messages (OTP, password reset)** read exactly **"Your {brand or company name} OTP is XXXX"**, the OTP format BulkSMSBD asks for. The built-in wording is now just that, for shop customers, resellers and investors alike (for example "Your Tasneem Knitting Investment Portal OTP is 123456."), always in English, whatever the person's language. The longer wording ("Use it to log in. It expires in 10 minutes.", and the investors' "login" / "password reset" reason) is gone because the format has nothing after the code. The page only lets the owner change the brand part, and a code message that is not in this format is refused on save (and ignored at send time, the built-in text goes out instead).
+  - **No single quotation mark (')** in any SMS: BulkSMSBD refuses it. The page refuses wording with one, and a customer's or investor's name with one has it dropped when the SMS is sent.
+  - **At most 3 SMS parts** per message (160 characters a part in English, 70 with Bangla letters). Each box shows the characters and parts used while typing.
+  - A notice appears when the SMS sender ID is a masking name (letters): BulkSMSBD sends masking SMS only in Bangla (error 1012), so English messages would be refused. A numeric sender ID has no such limit.
+- **Suggested wording** for every order status and investor project message: a **Use suggested wording** button on each box fills in a short English message that follows the rules, ready to edit and save. Nothing is sent until the owner saves a message.
+
+### Technical Notes
+
+- New `App\Support\BulkSmsBdPolicy` (OTP format check, single-quote rule, GSM-7 / Unicode part counting, masking sender check). `SmsTemplateService::problem()` applies it on save, `render()` applies `clean()` to every message and falls back to the built-in text for a code template that is not in the OTP format. `render()` no longer takes a locale; the investor and customer code messages are not translated (their `:portal ... OTP is :code. It expires in 1 minute.` language keys and `:company Investment Portal` were removed). Tests: `BulkSmsBdPolicyTest` (7), and new cases in `SmsTemplatesTest` and `InvestorPortalTest`.
+
 ## [2.86.0] - 2026-10-18
 
 **Release type:** Minor Feature Update

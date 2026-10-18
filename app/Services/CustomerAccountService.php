@@ -175,7 +175,6 @@ class CustomerAccountService
             (string) $this->templates->render((int) $company->getKey(), SmsTemplateService::OTP_CUSTOMER_SIGNUP, [
                 'company' => $company->name,
                 'code' => $code,
-                'minutes' => self::REGISTRATION_CODE_MINUTES,
             ]),
         );
 
@@ -339,7 +338,6 @@ class CustomerAccountService
                 (string) $this->templates->render((int) $company->getKey(), SmsTemplateService::OTP_CUSTOMER_LOGIN, [
                     'company' => $company->name,
                     'code' => $code,
-                    'minutes' => 10,
                 ]),
             );
 
@@ -399,7 +397,6 @@ class CustomerAccountService
             (string) $this->templates->render((int) $company->getKey(), SmsTemplateService::RESET_CUSTOMER_PASSWORD, [
                 'company' => $company->name,
                 'code' => $code,
-                'minutes' => 15,
             ]),
         );
     }

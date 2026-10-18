@@ -2,6 +2,30 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-18 (later) - SMS templates follow the BulkSMSBD rules
+
+Owner feedback (Bangla): the SMS templates for the different jobs must follow BulkSMSBD's rules, and the first version did not.
+
+What the rules are (from the BulkSMSBD dashboard "Developers" page the owner shared, plus bulksmsbd.com's API and FAQ pages; BulkSMSBD publishes no other template policy and has no template-approval menu for a numeric sender ID):
+
+- OTP format: "Your {Brand/Company Name} OTP is XXXX" (dashboard: "OTP পাঠানোর জন্য এই ফরম্যাট টি ফলো করুন").
+- No single quotation mark in a message (API example code: "do not use single quotation (') in the message to avoid forbidden result").
+- Masking SMS must be Bangla (error 1012). The owner's sender ID `8809617643387` is numeric, so English is allowed.
+- Length: 160 / 153 per part in GSM-7, 70 / 67 per part with Bangla letters.
+
+What changed:
+
+- `BulkSmsBdPolicy` checks all of it. Code templates (customer sign-up / login / password reset, investor login / reset) must be exactly "Your {brand} OTP is :code" and the built-in text is that; any other saved wording is refused on save and ignored at send time. Order and project templates may not contain `'` or need more than 3 SMS parts. `'` is also dropped from names when the SMS goes out.
+- The investors' code SMS lost the reason ("login" / "password reset") and the "expires in 1 minute" sentence that the owner asked for on 2026-10-16: the BulkSMSBD OTP format has nothing after the code. The code still expires after 1 minute; the investor login page says so. Customers' codes lost "Use it to log in..." and the expiry sentence for the same reason. If BulkSMSBD confirms that text after the code is accepted, loosening `BulkSmsBdPolicy::isCodeFormat()` is a one-line change.
+- Investor code SMS is English only (the format is English), so the `:company Investment Portal` and the two `:portal ... OTP is :code` language keys are gone.
+- Page: a rules box, a masking-sender notice, a character / SMS-part counter on every box, and a "Use suggested wording" button for the order and project messages (suggestions are short English texts without a link or quote; the owner still has to save them, so nothing is sent by itself).
+
+Checked: `BulkSmsBdPolicyTest` (7), `SmsTemplatesTest` (16), `InvestorPortalTest`, customer and reseller OTP tests; Pint clean. No live data touched, no real SMS sent.
+
+Needs Bangla review: the 9 new keys in `lang/bn.json` (BulkSMSBD rules box, masking notice, the three policy messages, "Use suggested wording", the counter).
+
+Commit status: not committed yet; branch `feature/sms-bulksmsbd-policy`, waiting for the owner's approval.
+
 ## 2026-10-18 - Supplier Report (Reports module)
 
 Owner request: the Reports module had no supplier-wise report. Wanted per supplier: supplier info; the dates the goods arrived; total cost after the goods reached the house; sales and average sale amount; damaged and short quantity; gross profit after all costs; the costs paid per product after arrival (ad, packaging, other); net profit = gross profit − those costs; for one product or all products of the supplier; PDF in one click.
