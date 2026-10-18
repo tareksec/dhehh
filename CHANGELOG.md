@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.85.0] - 2026-10-18
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -22,7 +24,6 @@ All notable production changes to Business Dashboard are documented here.
 - New table `sms_templates` (`company_id`, `key`, `body`, unique per company and key) with the `SmsTemplate` model (`BelongsToCompany`, added to `MultiCompanyIsolationTest`). The migration copies a non-empty `companies.investor_project_completed_message` into the `investor_project.closed` row; the old column is left in place and no longer read.
 - `SmsTemplateService` holds the list of messages, their placeholders and built-in wording, and renders a template. `OrderStatusSmsService` reacts to `OrderStatusTransition::created` (the same stage mapping as the Meta status events) and queues `SendOrderStatusSmsJob`; `InvestorProjectMessageService` sends the project messages (`SendInvestorProjectStatusSmsJob` for a project outside a group changing to running or closed, and for a confirmed settlement; the group cycle listener `SendProjectCompletedMessages` for a group). Both use the company's SMS gateway row that has a gateway (the order's own site first, then the main site) and send each investor once per project and status.
 - `CustomerAccountService` and `InvestorPortalAccountService::sendCode()` now build their code SMS through `SmsTemplateService::render()`. Tests: `SmsTemplatesTest` (11), plus new cases in `ProjectCompletedMessageTest` and `InvestorPortalTest`.
-
 ## [2.84.0] - 2026-10-17
 
 **Release type:** Minor Feature Update
