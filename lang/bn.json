@@ -2261,5 +2261,15 @@
     ":host does not resolve to this server. Add a DNS record for *.:domain that points at the server (DNS only, not proxied), then test again; DNS changes can take a few minutes.": ":host এই সার্ভারে পৌঁছায় না। সার্ভারের দিকে নির্দেশ করা *.:domain-এর একটি DNS রেকর্ড যোগ করুন (শুধু DNS, প্রক্সি ছাড়া), তারপর আবার পরীক্ষা করুন; DNS বদল কার্যকর হতে কয়েক মিনিট লাগতে পারে।",
     "Subdomains resolve but HTTPS does not work": "সাবডোমেইন পৌঁছাচ্ছে কিন্তু HTTPS কাজ করছে না",
     ":host resolves to this server, but opening it over HTTPS failed (:detail). A wildcard SSL certificate for *.:domain is needed.": ":host এই সার্ভারে পৌঁছায়, কিন্তু HTTPS-এ খুলতে ব্যর্থ হয়েছে (:detail)। *.:domain-এর জন্য ওয়াইল্ডকার্ড SSL সার্টিফিকেট দরকার।",
-    ":count piece": ":count পিস"
+    ":count piece": ":count পিস",
+    "The profit to pay out cannot be negative. Settle a loss from the sales revenue.": "পেআউটের জন্য লাভের অঙ্ক ঋণাত্মক হতে পারে না। লোকসান হলে সেলস রাজস্ব দিয়ে সেটেল করুন।",
+    "How is the amount decided?": "অঙ্ক কীভাবে ঠিক হবে?",
+    "From the sales revenue": "সেলস রাজস্ব থেকে",
+    "Profit entered by hand (no sales needed)": "হাতে বসানো লাভ (সেলস লাগবে না)",
+    "Investors are paid their profit share every cycle, sales or not. Choose \"Profit entered by hand\" to pay the cycle without waiting for sales.": "সেলস হোক বা না হোক, প্রতি সাইকেলে ইনভেস্টররা লাভের অংশ পান। সেলসের জন্য অপেক্ষা না করে সাইকেলের পেআউট দিতে \"হাতে বসানো লাভ\" বেছে নিন।",
+    "Net profit to distribute": "বণ্টনের নিট লাভ",
+    "The profit before the split. Investors get :percent% of it, shared by capital: :pool.": "ভাগ করার আগের লাভ। এর :percent% ইনভেস্টররা পাবেন, মূলধন অনুপাতে ভাগ হয়ে: :pool।",
+    "Amount decided": "অঙ্ক ঠিক হয়েছে",
+    "Profit entered by hand": "হাতে বসানো লাভ",
+    "Profit for this cycle (declared by the company, not worked out from sales)": "এই সাইকেলের লাভ (কোম্পানি ঘোষিত, সেলস থেকে হিসাব করা নয়)"
 }

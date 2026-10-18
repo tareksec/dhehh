@@ -37,7 +37,14 @@ class ProjectSettlementResource extends Resource
             Section::make('Settlement Summary')->schema([
                 TextEntry::make('project.project_code')->label('Project Code'),
                 TextEntry::make('project.name')->label('Project'),
-                TextEntry::make('total_revenue')->moneyWithoutTrailingZeroes('BDT'),
+                TextEntry::make('basis')
+                    ->label(__('Amount decided'))
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => $state === ProjectSettlement::BASIS_MANUAL ? __('Profit entered by hand') : __('From the sales revenue'))
+                    ->color(fn (?string $state): string => $state === ProjectSettlement::BASIS_MANUAL ? 'warning' : 'gray'),
+                // A hand-entered profit has no real selling amount, so none is shown.
+                TextEntry::make('total_revenue')->moneyWithoutTrailingZeroes('BDT')
+                    ->visible(fn (ProjectSettlement $record): bool => ! $record->isManualBasis()),
                 TextEntry::make('landed_cost')
                     ->label('Total Landed Cost')
                     ->state(fn (ProjectSettlement $record): float => $record->project->totalLandedCost())
@@ -48,6 +55,7 @@ class ProjectSettlementResource extends Resource
                 TextEntry::make('gross_profit')
                     ->label('Gross Profit (Selling − Landed Cost)')
                     ->state(fn (ProjectSettlement $record): float => round((float) $record->total_revenue - $record->project->totalLandedCost(), 2))
+                    ->visible(fn (ProjectSettlement $record): bool => ! $record->isManualBasis())
                     ->moneyWithoutTrailingZeroes('BDT'),
                 TextEntry::make('local_expense')
                     ->label('Total Local Expense')

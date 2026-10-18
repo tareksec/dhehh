@@ -2261,5 +2261,15 @@
     ":host does not resolve to this server. Add a DNS record for *.:domain that points at the server (DNS only, not proxied), then test again; DNS changes can take a few minutes.": ":host does not resolve to this server. Add a DNS record for *.:domain that points at the server (DNS only, not proxied), then test again; DNS changes can take a few minutes.",
     "Subdomains resolve but HTTPS does not work": "Subdomains resolve but HTTPS does not work",
     ":host resolves to this server, but opening it over HTTPS failed (:detail). A wildcard SSL certificate for *.:domain is needed.": ":host resolves to this server, but opening it over HTTPS failed (:detail). A wildcard SSL certificate for *.:domain is needed.",
-    ":count piece": ":count piece"
+    ":count piece": ":count piece",
+    "The profit to pay out cannot be negative. Settle a loss from the sales revenue.": "The profit to pay out cannot be negative. Settle a loss from the sales revenue.",
+    "How is the amount decided?": "How is the amount decided?",
+    "From the sales revenue": "From the sales revenue",
+    "Profit entered by hand (no sales needed)": "Profit entered by hand (no sales needed)",
+    "Investors are paid their profit share every cycle, sales or not. Choose \"Profit entered by hand\" to pay the cycle without waiting for sales.": "Investors are paid their profit share every cycle, sales or not. Choose \"Profit entered by hand\" to pay the cycle without waiting for sales.",
+    "Net profit to distribute": "Net profit to distribute",
+    "The profit before the split. Investors get :percent% of it, shared by capital: :pool.": "The profit before the split. Investors get :percent% of it, shared by capital: :pool.",
+    "Amount decided": "Amount decided",
+    "Profit entered by hand": "Profit entered by hand",
+    "Profit for this cycle (declared by the company, not worked out from sales)": "Profit for this cycle (declared by the company, not worked out from sales)"
 }

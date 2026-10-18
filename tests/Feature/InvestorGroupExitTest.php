@@ -177,6 +177,27 @@ class InvestorGroupExitTest extends TestCase
         $this->assertTrue($closed->isClosed());
     }
 
+    // ------------------------------------- profit paid every cycle, sales or not
+
+    public function test_a_group_cycle_can_be_paid_from_a_profit_entered_by_hand_without_sales(): void
+    {
+        // Owner (2026-10-18): the group is paid its profit share every cycle, sales or not.
+        [$group, $a, $b] = $this->group([200000, 300000]);
+        $this->advanceOn($group, '2026-03-01');
+        $first = $group->projects()->where('sequence_in_group', 1)->firstOrFail();
+        $this->assertSame('closed', $first->status);
+
+        $settlement = app(SettlementService::class)->calculateAndSettle($first->fresh(), 0, $this->admin->id, manualNetProfit: 100000);
+
+        $this->assertSame('manual', $settlement->basis);
+        $this->assertEquals(40000, $settlement->investor_pool_amount); // 40% of ৳1,00,000
+        // Nobody leaves, so only the profit is paid and the principal stays in the group: 2 : 3 of the pool.
+        $this->assertEquals(16000, (float) $settlement->payouts()->where('investor_id', $a->id)->value('total_payout'));
+        $this->assertEquals(24000, (float) $settlement->payouts()->where('investor_id', $b->id)->value('total_payout'));
+        $this->assertEquals(0, (float) $settlement->payouts()->sum('principal_returned_amount'));
+        $this->assertSame('settled', $first->fresh()->status);
+    }
+
     // ----------------------------------------------------- what the payout holds
 
     public function test_a_leaver_is_paid_principal_and_profit_while_everyone_else_is_paid_only_profit(): void
