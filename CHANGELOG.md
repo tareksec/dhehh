@@ -4,6 +4,10 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.86.0] - 2026-10-18
+
+**Release type:** Minor Feature Update
+
 ### Added
 
 - **Reports → Supplier Report**: one supplier's whole story from buying to selling, for **one product or all of the supplier's products**, with a **Download PDF** button on the same page (owner request 2026-10-18).
@@ -24,7 +28,6 @@ All notable production changes to Business Dashboard are documented here.
 
 - Supplier Report: migration `2026_10_18_000100_add_loss_quantities_and_product_costs_to_purchases` adds `purchase_items.short_quantity` / `damaged_quantity` (unsigned int, default 0) and `purchases.product_costs` (JSON `[{product_id, label, amount}]`); additive and safe to run on live data, no new company-owned model. `PurchaseItem` rejects negative values and short + damaged above the billed quantity; `sellableQuantity()` feeds `PurchaseWorkflowService::syncStockMovements()` (a product whose every unit was lost gets no stock movement). Landed cost is unchanged (`allocated_cost` / `landed_unit_cost` stay on the billed quantity).
 - `App\Services\SupplierReportService` holds the rules (documented in its class comment): only received purchases, date range on the purchase date, sales (accounted statuses, all time) handed to a product's units first-in-first-out (opening stock, then purchases by date, across all suppliers), costs after arrival and Meta ad spend (`meta_ads.spend` by `product_id`) counted in proportion to units sold. Page `App\Filament\Pages\SupplierReport` (Reports cluster, `reports.view`); PDF route `reports.supplier.pdf` (`reports.export`, audit log `report_exported` with `type = supplier`). The PDF is always English because dompdf cannot shape Bangla. Tests: `SupplierReportTest` (9).
-
 ## [2.85.1] - 2026-10-18
 
 **Release type:** Security Update
