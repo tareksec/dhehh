@@ -2331,5 +2331,21 @@
     "SMS templates saved": "SMS templates saved",
     "Choose a company first: SMS templates belong to one company.": "Choose a company first: SMS templates belong to one company.",
     "The SMS investors get (sign-in and password-reset codes, project started, completed and profit settled) are written on Settings → SMS Templates. The SMS gateway is set on Settings → Integrations.": "The SMS investors get (sign-in and password-reset codes, project started, completed and profit settled) are written on Settings → SMS Templates. The SMS gateway is set on Settings → Integrations.",
-    "Too many login attempts. Please try again in :seconds seconds.": "Too many login attempts. Please try again in :seconds seconds."
+    "Too many login attempts. Please try again in :seconds seconds.": "Too many login attempts. Please try again in :seconds seconds.",
+    "Please complete the security check below to sign in.": "Please complete the security check below to sign in.",
+    "Login Security": "Login Security",
+    "Enter the Turnstile site key to switch the security check on.": "Enter the Turnstile site key to switch the security check on.",
+    "Enter the Turnstile secret key to switch the security check on.": "Enter the Turnstile secret key to switch the security check on.",
+    "Login security settings saved": "Login security settings saved",
+    "Security check (CAPTCHA)": "Security check (CAPTCHA)",
+    "Normal sign-ins never see it. It is shown only to a device the account has not signed in from before, while that account or the whole site is being attacked with password guesses. Without it, such a device simply has to wait.": "Normal sign-ins never see it. It is shown only to a device the account has not signed in from before, while that account or the whole site is being attacked with password guesses. Without it, such a device simply has to wait.",
+    "Switch the security check on": "Switch the security check on",
+    "Turn this on once both keys below are saved.": "Turn this on once both keys below are saved.",
+    "Cloudflare Turnstile keys": "Cloudflare Turnstile keys",
+    "Free at dash.cloudflare.com → Turnstile → Add widget. Add every domain people sign in on (the admin app, the shops, the reseller and investor portals), choose the Managed widget mode, then paste the two keys it gives you.": "Free at dash.cloudflare.com → Turnstile → Add widget. Add every domain people sign in on (the admin app, the shops, the reseller and investor portals), choose the Managed widget mode, then paste the two keys it gives you.",
+    "Site key": "Site key",
+    "Public: it is part of the sign-in page.": "Public: it is part of the sign-in page.",
+    "Secret key": "Secret key",
+    "(already saved — leave blank to keep it)": "(already saved — leave blank to keep it)",
+    "Secret: stored encrypted and never shown again after saving.": "Secret: stored encrypted and never shown again after saving."
 }

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Investor\Pages\Auth;
 
+use App\Filament\Concerns\HasLoginCaptcha;
 use App\Models\InvestorPortalAccount;
 use App\Services\CompanyContext;
 use App\Services\InvestorPortalAccountService;
@@ -32,6 +33,8 @@ use SensitiveParameter;
  */
 class Login extends BaseLogin
 {
+    use HasLoginCaptcha;
+
     /** "password" or "code". */
     public string $mode = 'password';
 
@@ -70,6 +73,7 @@ class Login extends BaseLogin
                 ->visible(fn (): bool => $codeMode() && $this->codePhone !== null),
             Checkbox::make('remember')
                 ->label(__('filament-panels::auth/pages/login.form.remember.label')),
+            $this->captchaFormComponent(),
         ]);
     }
 
@@ -101,14 +105,16 @@ class Login extends BaseLogin
             }
         } else {
             try {
-                $account = $accounts->attemptPasswordLogin((string) $data['phone'], (string) $data['password']);
+                $account = $accounts->attemptPasswordLogin((string) $data['phone'], (string) $data['password'], $this->loginClient(LoginGate::SURFACE_INVESTOR));
             } catch (LoginThrottled $exception) {
-                Notification::make()->title($exception->getMessage())->danger()->send();
+                $this->showLoginChallenge($exception);
 
                 return null;
             }
 
             if (! $account || ! $this->isUserAllowedToAccessPanel($account)) {
+                $this->resetCaptcha();
+
                 throw ValidationException::withMessages(['data.phone' => __('filament-panels::auth/pages/login.messages.failed')]);
             }
         }

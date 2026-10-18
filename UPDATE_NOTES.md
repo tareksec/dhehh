@@ -2,6 +2,32 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-18 (later) - Login protection phase C: CAPTCHA (Cloudflare Turnstile) for a challenged sign-in
+
+Owner request ("CAPTCHA এর কাজটা শুরু কর"): the follow-up the login-protection plan left open. The plan's open question (provider) was not answered; Cloudflare Turnstile was the recommendation and is what is built. Same topic and branch as the earlier login-protection work (`ccr-4505e72d-hwaq92`), which is already on `main`.
+
+What changed:
+- `LoginCaptchaSettings` (global `AppSetting`, site key + secret key encrypted, on/off switch) and the super-admin page **Settings → Login Security** (`LoginSecuritySettings`). The secret is never sent back to the browser; a blank field keeps the saved key; switching on needs both keys.
+- `TurnstileVerifier`: Cloudflare `siteverify`; anything but a clean `success: true` (error answer, timeout, unreachable, over-long or empty token, not configured) means "not solved", so the challenge stays a plain wait.
+- `LoginGate`: at its two `CHALLENGE` conditions a solved token clears the challenge (checked at most once per attempt); `THROTTLE` (device wait, hash budget) and `DENY` (bot) are never lifted by a CAPTCHA. `LoginClient` carries the token (`cf-turnstile-response` / `captcha_token`).
+- UI: storefront login form (widget only after a challenge, via a flashed `captcha_required`), the admin / reseller / investor Filament sign-in pages (shared `HasLoginCaptcha` trait + `login-captcha` view), and the Next.js API (`429 captcha_required` + `captcha.site_key`; unchanged `too_many_attempts` when no CAPTCHA is set up).
+- Docs: `docs/login-protection.md` (setup steps, limits), `docs/api/storefront-api.md` §6.
+- Tests: `LoginCaptchaTest` (20), mutation-checked (a never-solving gate, an always-accepting verifier and an always-asking challenge each fail 3-8 tests). Also run end to end in headless Chromium against a scratch SQLite database (not the demo database) and Cloudflare's always-pass test keys: normal admin and storefront login pages have no widget; after a challenge the widget renders, its token reaches the Livewire component / form, and the sign-in succeeds; no console errors.
+
+Decisions made on the owner's behalf: Turnstile as the provider; the CAPTCHA never overrides `DENY` (a person denied as a "bot" waits out the 10-minute window or uses a one-time code where the sign-in has one); one global key pair for every sign-in page (the widget's allowed hostnames are set in Cloudflare).
+
+What the owner must do before it does anything: create a Turnstile widget at dash.cloudflare.com → Turnstile (add every sign-in domain, Managed mode), then paste the keys in Settings → Login Security and switch it on. Until then nothing changes (a challenge is a wait). Not tested against a real (non-test) Turnstile widget or a real attack.
+
+For the website repo (`zamzamint-new-website-theme`, not touched): on `429 captcha_required` show the Turnstile widget with `captcha.site_key`, then resend the sign-in with the response token as `captcha_token`. Until it does, those visitors see its generic error during an attack.
+
+Environment note: the headless browser needed the agent proxy for Cloudflare (`--proxy-server`) and a mapped hostname that bypasses it for the local app; scratch files lived only in the session scratchpad and `storage/framework` (gitignored), not in the commit.
+
+Needs Bangla review (16 keys, written by the agent): "Please complete the security check below to sign in." (সাইন ইন করতে নিচের নিরাপত্তা যাচাইটি সম্পূর্ণ করুন।), "Login Security", "Security check (CAPTCHA)", "Switch the security check on", "Cloudflare Turnstile keys", "Site key", "Secret key", the two "Enter the Turnstile … key to switch the security check on." messages, "Login security settings saved", and the longer help texts on the page.
+
+Verified: plain `php artisan test` (no `--env`) on PHP 8.4: 2600 passed, 2 skipped, 0 failed (25205 assertions); `LoginCaptchaTest` 20 passed; `LoginGateTest`, `StorefrontCustomerAuthTest`, `StorefrontApiAccountTest`, `ResellerPortalAccountTest`, `InvestorPortalTest` pass unchanged; `TranslationParityTest` passes; Pint clean on the changed files. No demo data touched (the browser check used a scratch SQLite file in the session scratchpad).
+
+Commit status: committed and pushed to `ccr-4505e72d-hwaq92`. NOT merged to `main`: that needs the owner's explicit approval (Coolify deploys `main` on push).
+
 ## 2026-10-18 - Login protection: sign-ins are judged before the password hash (bcrypt)
 
 Trigger: the owner shared a post about distributed credential-stuffing (50,000 guesses a minute from 30,000 IPs: no per-IP limit and no per-account lockout fires, but every guess costs a full bcrypt) and asked whether our login checks the request before bcrypt. The answer was "partly" (a per-identifier lockout and a per-IP throttle only); this is the fix, agreed as a plan (phases A and B) in the conversation. Phase C (CAPTCHA) is not done.

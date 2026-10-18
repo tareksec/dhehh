@@ -31,8 +31,8 @@ Every request is answered `ALLOW`, `THROTTLE`, `CHALLENGE` or `DENY`, checked in
    behind one address) is never denied.
 4. **Unknown device while under attack (`CHALLENGE`)** — the account got `LOGIN_ACCOUNT_FAILURES` (20) wrong
    passwords from anywhere inside `LOGIN_ACCOUNT_WINDOW_MINUTES` (15), or the whole surface got
-   `LOGIN_GLOBAL_FAILURES_PER_MINUTE` (300) in a minute. Until the CAPTCHA step exists this is a wait with a
-   `Retry-After`; the API marks it with `challenge: true`.
+   `LOGIN_GLOBAL_FAILURES_PER_MINUTE` (300) in a minute. With the CAPTCHA set up (see below) the visitor solves
+   it and goes on; without one this is a wait with a `Retry-After`, and the API marks it with `challenge: true`.
 5. **Hash budget (`THROTTLE`)** — more than `LOGIN_BCRYPT_PER_MINUTE` (600) password hashes for untrusted
    devices on this surface in a minute. Trusted devices are never counted.
 
@@ -69,10 +69,35 @@ lasts `LOGIN_TRUSTED_DEVICE_DAYS` (90). Nothing is stored in the database.
   the browser string plus the network block; a Cloudflare or WAF rule in front of Coolify is the place for
   the TLS one.
 
+## The CAPTCHA step (Cloudflare Turnstile)
+
+A normal sign-in never sees it. It appears only when the gate answers `CHALLENGE`: an unknown device while the
+account or the whole site is under attack.
+
+1. In Cloudflare: **dash.cloudflare.com → Turnstile → Add widget.** Add every domain people sign in on (the
+   admin app, the shops, the reseller and investor portals), pick the **Managed** mode, and copy the two keys.
+2. In the admin app (super admin): **Settings → Login Security.** Paste the site key and the secret key and
+   switch the check on. The secret key is stored encrypted and never shown again; leaving it blank on a later
+   save keeps it.
+3. From then on a challenged sign-in shows the widget (storefront login form, admin / reseller / investor
+   sign-in pages) or answers `429 captcha_required` with the public site key (Next.js API, see
+   `docs/api/storefront-api.md` §6). The visitor solves it and signs in again; the token is checked with
+   Cloudflare once, server-side.
+
+What it does **not** do:
+
+- It never lifts a **device wait** (`THROTTLE`: a device guessing at one account, or the hash budget) or a
+  **bot denial** (`DENY`): a solved CAPTCHA only answers a `CHALLENGE`. A person wrongly denied can wait out
+  the 10-minute window or, where the sign-in offers one, use a one-time code.
+- It does not skip the password: a solved CAPTCHA only lets the normal password check run.
+- Cloudflare being unreachable, a rejected token, an off or half-filled setting: the challenge stays a plain wait.
+  The CAPTCHA can only ever *add* a way through for a person, never open the gate for a bot.
+
 ## Not done yet
 
-- **CAPTCHA** for the `CHALLENGE` answer (Cloudflare Turnstile; the keys will be admin-configurable and
-  encrypted, like every external credential). Until then `CHALLENGE` is a wait.
 - **The Next.js website** must keep `data.device_token` in an httpOnly cookie and send it back as
-  `device_token` (website repository; the ERP side works without it).
+  `device_token`, and show the Turnstile widget on `429 captcha_required` (website repository; the ERP side
+  works without both).
 - Device trust is issued after password sign-ins only, not after a one-time-code sign-in.
+- The CAPTCHA is only used for `CHALLENGE`; registration, one-time-code and password-reset forms keep their own
+  attempt limits.

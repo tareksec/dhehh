@@ -2331,5 +2331,21 @@
     "SMS templates saved": "SMS টেমপ্লেট সংরক্ষিত হয়েছে",
     "Choose a company first: SMS templates belong to one company.": "আগে একটি কোম্পানি বেছে নিন: SMS টেমপ্লেট একটি কোম্পানির।",
     "The SMS investors get (sign-in and password-reset codes, project started, completed and profit settled) are written on Settings → SMS Templates. The SMS gateway is set on Settings → Integrations.": "ইনভেস্টররা যে SMS পান (সাইন-ইন ও পাসওয়ার্ড রিসেট কোড, প্রজেক্ট শুরু, সম্পন্ন ও মুনাফা নিষ্পত্তি) তা লেখা হয় সেটিংস → SMS টেমপ্লেটে। SMS গেটওয়ে ঠিক করা হয় সেটিংস → ইন্টিগ্রেশনে।",
-    "Too many login attempts. Please try again in :seconds seconds.": "অনেকবার লগইনের চেষ্টা করা হয়েছে। অনুগ্রহ করে :seconds সেকেন্ড পরে আবার চেষ্টা করুন।"
+    "Too many login attempts. Please try again in :seconds seconds.": "অনেকবার লগইনের চেষ্টা করা হয়েছে। অনুগ্রহ করে :seconds সেকেন্ড পরে আবার চেষ্টা করুন।",
+    "Please complete the security check below to sign in.": "সাইন ইন করতে নিচের নিরাপত্তা যাচাইটি সম্পূর্ণ করুন।",
+    "Login Security": "লগইন নিরাপত্তা",
+    "Enter the Turnstile site key to switch the security check on.": "নিরাপত্তা যাচাই চালু করতে Turnstile সাইট কী দিন।",
+    "Enter the Turnstile secret key to switch the security check on.": "নিরাপত্তা যাচাই চালু করতে Turnstile সিক্রেট কী দিন।",
+    "Login security settings saved": "লগইন নিরাপত্তা সেটিংস সংরক্ষিত হয়েছে",
+    "Security check (CAPTCHA)": "নিরাপত্তা যাচাই (ক্যাপচা)",
+    "Normal sign-ins never see it. It is shown only to a device the account has not signed in from before, while that account or the whole site is being attacked with password guesses. Without it, such a device simply has to wait.": "স্বাভাবিক সাইন ইনে এটি কেউ দেখে না। যে ডিভাইস থেকে অ্যাকাউন্টে আগে কখনও সাইন ইন করা হয়নি, শুধু সেই ডিভাইসকে এটি দেখানো হয় — যখন সেই অ্যাকাউন্টে বা পুরো সাইটে পাসওয়ার্ড অনুমানের আক্রমণ চলছে। এটি ছাড়া ওই ডিভাইসকে শুধু অপেক্ষা করতে হয়।",
+    "Switch the security check on": "নিরাপত্তা যাচাই চালু করুন",
+    "Turn this on once both keys below are saved.": "নিচের দুটি কী সংরক্ষণ করার পর এটি চালু করুন।",
+    "Cloudflare Turnstile keys": "Cloudflare Turnstile কী",
+    "Free at dash.cloudflare.com → Turnstile → Add widget. Add every domain people sign in on (the admin app, the shops, the reseller and investor portals), choose the Managed widget mode, then paste the two keys it gives you.": "বিনামূল্যে: dash.cloudflare.com → Turnstile → Add widget। যে প্রতিটি ডোমেইনে মানুষ সাইন ইন করে (অ্যাডমিন অ্যাপ, শপ, রিসেলার ও ইনভেস্টর পোর্টাল) সেগুলো যোগ করুন, Managed মোড বেছে নিন, তারপর যে দুটি কী পাবেন তা এখানে বসান।",
+    "Site key": "সাইট কী",
+    "Public: it is part of the sign-in page.": "প্রকাশ্য: এটি সাইন ইন পেজেরই অংশ।",
+    "Secret key": "সিক্রেট কী",
+    "(already saved — leave blank to keep it)": "(আগেই সংরক্ষিত — রাখতে চাইলে ফাঁকা রাখুন)",
+    "Secret: stored encrypted and never shown again after saving.": "গোপন: এনক্রিপ্ট করে সংরক্ষিত, সংরক্ষণের পর আর দেখানো হয় না।"
 }

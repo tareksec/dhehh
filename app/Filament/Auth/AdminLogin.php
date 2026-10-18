@@ -2,14 +2,14 @@
 
 namespace App\Filament\Auth;
 
+use App\Filament\Concerns\HasLoginCaptcha;
 use App\Models\User;
 use App\Services\LoginGate;
-use App\Support\LoginClient;
 use App\Support\LoginThrottled;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Auth\Pages\Login as BaseLogin;
 use Filament\Facades\Filament;
-use Filament\Notifications\Notification;
+use Filament\Schemas\Schema;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -24,6 +24,18 @@ use Illuminate\Validation\ValidationException;
  */
 class AdminLogin extends BaseLogin
 {
+    use HasLoginCaptcha;
+
+    public function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            $this->getEmailFormComponent(),
+            $this->getPasswordFormComponent(),
+            $this->getRememberFormComponent(),
+            $this->captchaFormComponent(),
+        ]);
+    }
+
     public function authenticate(): ?LoginResponse
     {
         $gate = app(LoginGate::class);
@@ -35,17 +47,18 @@ class AdminLogin extends BaseLogin
             null,
             $email,
             $user,
-            LoginClient::fromRequest(request(), LoginGate::SURFACE_ADMIN),
+            $this->loginClient(LoginGate::SURFACE_ADMIN),
         );
 
         if ($attempt->isDenied()) {
             $gate->failed($attempt);
+            $this->resetCaptcha();
 
             $this->throwFailureValidationException();
         }
 
         if ($attempt->isBlocked()) {
-            Notification::make()->title(LoginThrottled::for($attempt)->getMessage())->danger()->send();
+            $this->showLoginChallenge(LoginThrottled::for($attempt));
 
             return null;
         }
@@ -54,6 +67,7 @@ class AdminLogin extends BaseLogin
             $response = parent::authenticate();
         } catch (ValidationException $exception) {
             $gate->failed($attempt);
+            $this->resetCaptcha();
 
             throw $exception;
         }

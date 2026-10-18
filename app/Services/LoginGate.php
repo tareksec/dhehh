@@ -22,8 +22,8 @@ use Illuminate\Support\Str;
  *  - ALLOW      the normal password check runs;
  *  - THROTTLE   wait (Retry-After), nothing is computed;
  *  - CHALLENGE  an unknown device while the account or the whole site is under
- *               attack: it waits (a CAPTCHA step is planned, see
- *               docs/login-protection.md);
+ *               attack: it solves the CAPTCHA (Cloudflare Turnstile, set up in
+ *               Settings → Login Security) or, with none set up, waits;
  *  - DENY       a client that only ever fails: told "login failed", nothing is
  *               computed.
  *
@@ -57,6 +57,8 @@ class LoginGate
 
     private static ?string $dummyHash = null;
 
+    public function __construct(protected TurnstileVerifier $captcha) {}
+
     public static function cookieName(string $surface): string
     {
         return 'lg_td_'.$surface;
@@ -89,8 +91,8 @@ class LoginGate
     {
         $trusted = $this->enabled() && $account !== null && $this->tokenIsValid($client->deviceToken, $surface, $companyId, $account);
 
-        $decide = function (string $outcome, int $retryAfter = 0) use ($surface, $companyId, $subject, $client, $trusted): LoginAttempt {
-            return new LoginAttempt($surface, $companyId, $subject, $client, $trusted, $outcome, $retryAfter);
+        $decide = function (string $outcome, int $retryAfter = 0, bool $captchaAvailable = false) use ($surface, $companyId, $subject, $client, $trusted): LoginAttempt {
+            return new LoginAttempt($surface, $companyId, $subject, $client, $trusted, $outcome, $retryAfter, $captchaAvailable);
         };
 
         if (! $this->enabled()) {
@@ -120,18 +122,24 @@ class LoginGate
             return $decide(self::DENY);
         }
 
-        // Many wrong passwords against this account from many places.
+        // Many wrong passwords against this account from many places, or the
+        // whole site being hammered: an unknown device must prove it is a
+        // person. With a CAPTCHA set up, solving it clears the challenge (the
+        // token is checked once, here); without one the device simply waits.
         $accountKey = $this->accountKey($surface, $companyId, $subject);
+        $globalFailKey = "login-gate:{$surface}:global:fail";
+        $challengeWait = null;
 
         if (RateLimiter::tooManyAttempts($accountKey, $this->limit('account_failures'))) {
-            return $decide(self::CHALLENGE, RateLimiter::availableIn($accountKey));
+            $challengeWait = RateLimiter::availableIn($accountKey);
         }
 
-        // The whole site is being hammered.
-        $globalFailKey = "login-gate:{$surface}:global:fail";
-
         if (RateLimiter::tooManyAttempts($globalFailKey, $this->limit('global_failures_per_minute'))) {
-            return $decide(self::CHALLENGE, RateLimiter::availableIn($globalFailKey));
+            $challengeWait = max((int) $challengeWait, RateLimiter::availableIn($globalFailKey));
+        }
+
+        if ($challengeWait !== null && ! $this->challengeSolved($client)) {
+            return $decide(self::CHALLENGE, $challengeWait, $this->captcha->configured());
         }
 
         // The server's password-hash budget for devices nobody vouches for.
@@ -144,6 +152,14 @@ class LoginGate
         RateLimiter::hit($budgetKey, 60);
 
         return $decide(self::ALLOW);
+    }
+
+    /** The visitor sent a CAPTCHA answer Cloudflare accepts (only asked while a CAPTCHA is set up). */
+    private function challengeSolved(LoginClient $client): bool
+    {
+        return $client->captchaToken !== null
+            && $this->captcha->configured()
+            && $this->captcha->verify($client->captchaToken, $client->ip);
     }
 
     /** A wrong password (or an unknown account) — also counted when nothing was computed. */

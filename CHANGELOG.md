@@ -4,6 +4,21 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Security Update
+
+### Security
+
+- **A CAPTCHA now answers a *challenged* sign-in, so a real person on a new device can still get in while an account or the whole site is being attacked.** Until now a challenge was only a wait (so the owner of an account under attack had to wait on a new device). With **Cloudflare Turnstile** set up, the sign-in page shows the check and the visitor signs in once it is solved. A normal sign-in never sees it.
+  - **Settings → Login Security** (super admin): switch it on and paste the Turnstile **site key** and **secret key**. The secret key is stored encrypted and is never shown again; a blank field keeps the saved key. Get the keys free at dash.cloudflare.com → Turnstile → Add widget (add every domain people sign in on, "Managed" mode).
+  - Shown on the **storefront login form**, the **admin, reseller and investor sign-in pages**, and answered by the **Next.js API** as `429 captcha_required` with the public site key (the website sends the solved token back as `captcha_token`; until it does, its visitors see the same error as before and nothing breaks).
+  - It only ever **adds** a way through for a person: it does not lift a device that keeps guessing or the "client that only ever fails" denial, it does not skip the password, and a rejected token, Cloudflare being unreachable or a half-filled setting leave the plain wait in place.
+
+### Technical Notes
+
+- New: `App\Support\LoginCaptchaSettings` (global `AppSetting` keys `login_captcha.enabled`, `login_captcha.turnstile.site_key` / `secret_key`, both encrypted, same pattern as `FirebaseSettings`), `App\Services\TurnstileVerifier` (POST to Cloudflare's `siteverify` with the secret, the token and the visitor's IP; any failure counts as "not solved"), `App\Filament\Pages\LoginSecuritySettings` (Settings cluster, super admin) with its view, `App\Filament\Concerns\HasLoginCaptcha` (the Livewire part shared by `AdminLogin` and the reseller and investor `Login` pages) and `resources/views/filament/components/login-captcha.blade.php` (loads Turnstile's script on demand, writes the token to `$wire.captchaToken`, resets after each attempt). No migration.
+- `LoginGate` takes a `TurnstileVerifier`: at the two `CHALLENGE` conditions (account failures, site-wide failures) a solved token clears the challenge and the token is verified at most once per attempt. `LoginClient` carries `captchaToken` (form field `cf-turnstile-response`, API field `captcha_token`); `LoginAttempt::requiresCaptcha()` and `LoginThrottled::$captcha` tell the callers whether to show the widget. The Blade controller flashes `captcha_required`; the login view renders the widget only then.
+- 16 new interface strings in `lang/en.json` and `lang/bn.json`. Tests: `LoginCaptchaTest` (20: settings and encryption, the verifier against Cloudflare answers and failures, the gate, Blade, API and the three Filament pages). Also checked end to end in a real browser against Cloudflare's always-pass test keys (admin sign-in and the storefront form). `docs/login-protection.md` and `docs/api/storefront-api.md` §6 describe the setup and the API.
+
 ## [2.85.1] - 2026-10-18
 
 **Release type:** Security Update

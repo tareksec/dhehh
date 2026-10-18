@@ -60,6 +60,14 @@
                         <input class="rounded border-gray-300 text-[var(--storefront-brand)] focus:ring-[var(--storefront-brand)]" type="checkbox" name="remember" value="1">
                         Keep me logged in
                     </label>
+                    {{-- Only after the server asked for it (an unknown device while the account or site is under attack). --}}
+                    @if (session('captcha_required') && ($loginCaptchaKey = \App\Support\LoginCaptchaSettings::siteKey()))
+                        <div>
+                            <p class="mb-2 text-xs text-gray-500">{{ __('Please complete the security check below to sign in.') }}</p>
+                            <div class="cf-turnstile" data-sitekey="{{ $loginCaptchaKey }}"></div>
+                            <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+                        </div>
+                    @endif
                     <button class="w-full rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90 [touch-action:manipulation]" type="submit">
                         Log in
                     </button>
