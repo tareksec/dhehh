@@ -70,6 +70,12 @@ return Application::configure(basePath: dirname(__DIR__))
             at: env('TRUSTED_PROXIES', '*'),
             headers: SymfonyRequest::HEADER_X_FORWARDED_TRAEFIK,
         );
+        // Every plain `auth` route (order print, report exports, the legacy
+        // /admin/* redirects) is an admin page. Laravel's default sends a guest
+        // to route('login'), a name this app never defines -- Filament names it
+        // filament.admin.auth.login -- so a logged-out visit to a bookmarked
+        // /admin/users threw "Route [login] not defined" instead of showing sign-in.
+        $middleware->redirectGuestsTo(fn () => route('filament.admin.auth.login'));
         $middleware->validateCsrfTokens(except: ['webhooks/couriers/*', 'webhooks/zinipay/*', 'webhooks/woocommerce/*', 'webhooks/meta', 'webhooks/whatsapp-web/*', 'webhooks/mobile-crash-reports']);
         // Must run before anything else in the group: on a reseller-portal
         // host it redirects every non-portal path to the portal, and on any

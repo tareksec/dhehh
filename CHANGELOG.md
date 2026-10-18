@@ -20,8 +20,13 @@ All notable production changes to Business Dashboard are documented here.
 
 - **A received purchase now adds only the sellable units to stock** (billed − short − damaged). Purchases with no short or damaged units behave exactly as before.
 
+### Fixed
+
+- **Opening an old admin link while signed out (for example a bookmarked `/admin/users`) showed the "this page has a problem" error instead of the sign-in page.** The old admin addresses, the order print pages and the report downloads are protected by a plain sign-in check that tried to send a signed-out visitor to a page named `login`, which this app does not have. The visitor is now sent to the admin sign-in page and, after signing in, returns to the page they asked for. It also stops filling Deploy Error Logs with `module:page:admin.clusters.legacy` ("Route [login] not defined").
+
 ### Technical Notes
 
+- Guest redirect: `bootstrap/app.php` sets `$middleware->redirectGuestsTo(fn () => route('filament.admin.auth.login'))`, replacing Laravel's default `route('login')`. Every plain `auth` route in `routes/web.php` is under `/admin`, so the admin login is the right target; Filament's own panels (`/admin`, `/portal`, `/investor`) use their own authenticate middleware and are unchanged. No migration, no new string. Tests: `AdminGuestRedirectTest` (5).
 - Supplier Report: migration `2026_10_18_000100_add_loss_quantities_and_product_costs_to_purchases` adds `purchase_items.short_quantity` / `damaged_quantity` (unsigned int, default 0) and `purchases.product_costs` (JSON `[{product_id, label, amount}]`); additive and safe to run on live data, no new company-owned model. `PurchaseItem` rejects negative values and short + damaged above the billed quantity; `sellableQuantity()` feeds `PurchaseWorkflowService::syncStockMovements()` (a product whose every unit was lost gets no stock movement). Landed cost is unchanged (`allocated_cost` / `landed_unit_cost` stay on the billed quantity).
 - `App\Services\SupplierReportService` holds the rules (documented in its class comment): only received purchases, date range on the purchase date, sales (accounted statuses, all time) handed to a product's units first-in-first-out (opening stock, then purchases by date, across all suppliers), costs after arrival and Meta ad spend (`meta_ads.spend` by `product_id`) counted in proportion to units sold. Page `App\Filament\Pages\SupplierReport` (Reports cluster, `reports.view`); PDF route `reports.supplier.pdf` (`reports.export`, audit log `report_exported` with `type = supplier`). The PDF is always English because dompdf cannot shape Bangla. Tests: `SupplierReportTest` (9).
 

@@ -2,6 +2,22 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-18 - Fix: signed-out visit to an old admin link threw "Route [login] not defined"
+
+Trigger: Deploy Error Logs showed `module:page:admin.clusters.legacy` — `RouteNotFoundException: Route [login] not defined` at `UrlGenerator.php:542`, request `https://app.zamzamint.com/admin/users`, raised from `Authenticate::redirectTo()` via the default `redirectGuestsTo(fn () => route('login'))` that `ApplicationBuilder` installs.
+
+Cause: `/admin/users` (and every other old top-level admin path in `LegacyAdminClusterRedirectController::legacySegments()`) is served by a plain route inside `Route::middleware('auth')` in `routes/web.php`, not by the Filament panel, so a guest hits Laravel's `auth` middleware. The app defines no route named `login` (Filament's is `filament.admin.auth.login`), so the redirect itself crashed; `ModuleGuard` then reported it and showed the module error page instead of the sign-in page. The same crash applied to the other plain `auth` routes: order print, bulk print, report exports (CSV/PDF), supplier PDF, push-devices and app-upgrade endpoints.
+
+What changed: `bootstrap/app.php` — `$middleware->redirectGuestsTo(fn () => route('filament.admin.auth.login'))`. All plain `auth` routes are `/admin/*`, so one target is correct; the intended URL is kept so sign-in returns to the page. Nothing else touched. `tests/Feature/AdminGuestRedirectTest.php` (5 tests) covers four guest paths and the remembered intended URL.
+
+Not done / worth knowing: the 500 + Deploy Error Log rows already recorded stay there until a Super Admin clears them. A guest who opens `/admin/...` on a reseller/investor portal host is redirected to that portal by `RestrictPortalHosts` before the `auth` middleware runs, so the admin login target does not leak across portals.
+
+Environment note: the container had PHP 8.3; PHP 8.4 + imagick were installed from the ondrej/php PPA for this session only (not part of the commit).
+
+Verification: `php artisan test --filter=AdminGuestRedirectTest` 5 passed; with the `bootstrap/app.php` line removed the same tests fail with the exact production error (`Route [login] not defined`, `UrlGenerator.php:542`). Full plain `php artisan test` (after `npm run build`): 2,594 passed, 2 skipped, 0 failed. Pint reports only older style issues in `bootstrap/app.php` (`\Throwable`, `!` spacing), none on the new lines. Not tried in a real browser.
+
+Commit status: committed and pushed to the session's designated branch `claude/inspiring-mendel-llkhz0`; not pushed to `main` (the owner decides when `main` moves).
+
 ## 2026-10-18 - Supplier Report (Reports module)
 
 Owner request: the Reports module had no supplier-wise report. Wanted per supplier: supplier info; the dates the goods arrived; total cost after the goods reached the house; sales and average sale amount; damaged and short quantity; gross profit after all costs; the costs paid per product after arrival (ad, packaging, other); net profit = gross profit − those costs; for one product or all products of the supplier; PDF in one click.
