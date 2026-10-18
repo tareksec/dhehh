@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.85.1] - 2026-10-18
+
 **Release type:** Security Update
 
 ### Security
@@ -30,7 +32,6 @@ All notable production changes to Business Dashboard are documented here.
 - The gate fails open: if it throws (the cache is down) the error goes to Deploy Error Logs as `module:login-gate` through `ModuleGuard::run()` and the sign-in goes on to the normal password check.
 - Next.js API (`docs/api/storefront-api.md` §6): `POST /account/login` accepts `device_token` (or the header `X-Device-Token`) and answers `data.device_token` on success; a `429 too_many_attempts` now also carries `challenge`. The visitor's `client_ip` and `client_user_agent` decide the device. The website works unchanged without the token; keeping it in an httpOnly cookie is the website's part.
 - Not done yet: a CAPTCHA for the *challenge* answer (until then it is a wait), and device trust after a one-time-code sign-in. One new interface string in both language files. Tests: `LoginGateTest` (19).
-
 ## [2.85.0] - 2026-10-18
 
 **Release type:** Minor Feature Update
