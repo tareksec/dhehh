@@ -3,10 +3,12 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Services\OrderStatusSmsService;
 use App\Services\StorefrontMetaDispatchService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 class OrderStatusTransition extends Model
 {
@@ -28,6 +30,15 @@ class OrderStatusTransition extends Model
     protected static function booted(): void
     {
         static::created(function (OrderStatusTransition $transition): void {
+            // The customer's status SMS (SMS Templates); a failure here must never undo the status change.
+            try {
+                if (Schema::hasTable('sms_templates')) {
+                    app(OrderStatusSmsService::class)->dispatchForTransition($transition);
+                }
+            } catch (Throwable $exception) {
+                report($exception);
+            }
+
             if (! Schema::hasColumn('storefront_settings', 'meta_status_events_enabled')) {
                 return;
             }

@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Events\InvestorGroupProjectCompleted;
-use App\Filament\Pages\InvestorPortalSettings;
+use App\Filament\Pages\SmsTemplates;
 use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\Customer;
@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Services\CompanyContext;
 use App\Services\Investment\InvestorGroupCycleService;
 use App\Services\Investment\InvestorGroupService;
+use App\Services\SmsTemplateService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory;
@@ -78,7 +79,7 @@ class ProjectCompletedMessageTest extends TestCase
 
     public function test_every_investor_of_the_project_gets_the_owners_message_with_their_details(): void
     {
-        $this->company->update(['investor_project_completed_message' => 'Congratulations :name! Project :project of :group is complete.']);
+        $this->writeMessage('Congratulations :name! Project :project of :group is complete.');
         [$group, $a, $b] = $this->group([200000, 300000]);
 
         $this->advanceOn($group, '2026-03-01');
@@ -98,9 +99,27 @@ class ProjectCompletedMessageTest extends TestCase
         $this->assertSame(2, $log->new_values['sms_sent']);
     }
 
+    public function test_the_investors_of_the_next_project_hear_that_it_started(): void
+    {
+        app(SmsTemplateService::class)->save($this->company->id, [
+            SmsTemplateService::PROJECT_CLOSED => 'Project :project done, :name',
+            SmsTemplateService::PROJECT_RUNNING => 'Project :project started, :name, you have :amount in it',
+        ]);
+        [$group, $a] = $this->group([200000]);
+
+        $result = $this->advanceOn($group, '2026-03-01');
+
+        $this->assertSame('G1-P02', $result['created']->project_code);
+        $this->assertEqualsCanonicalizing([
+            "Project 1 done, {$a->name}",
+            "Project 2 started, {$a->name}, you have 200000 in it",
+        ], collect($this->sentMessages())->map(fn (Request $request): string => $this->messageOf($request))->all());
+        $this->assertSame(1, AuditLog::query()->where('action', 'investor_group.project_completed')->sole()->new_values['started_sms_sent']);
+    }
+
     public function test_a_second_run_of_the_cycle_never_messages_again(): void
     {
-        $this->company->update(['investor_project_completed_message' => 'Project :project done, :name']);
+        $this->writeMessage('Project :project done, :name');
         [$group] = $this->group([200000]);
 
         $this->advanceOn($group, '2026-03-01');
@@ -112,7 +131,7 @@ class ProjectCompletedMessageTest extends TestCase
 
     public function test_the_same_event_cannot_message_an_investor_twice(): void
     {
-        $this->company->update(['investor_project_completed_message' => 'Done :name']);
+        $this->writeMessage('Done :name');
         [$group] = $this->group([200000]);
         $result = $this->advanceOn($group, '2026-03-01');
 
@@ -123,7 +142,7 @@ class ProjectCompletedMessageTest extends TestCase
 
     public function test_a_member_who_left_earlier_is_not_messaged_but_one_leaving_now_is(): void
     {
-        $this->company->update(['investor_project_completed_message' => 'Done :name']);
+        $this->writeMessage('Done :name');
         [$group, $stays, $leaves, $gone] = $this->group([200000, 300000, 100000], notices: [1 => '2025-12-01']);
         // $gone left through the old project-level withdrawal before the end of the project.
         $row = $group->projects()->firstOrFail()->investments()->where('investor_id', $gone->id)->firstOrFail();
@@ -138,7 +157,7 @@ class ProjectCompletedMessageTest extends TestCase
 
     public function test_an_opted_out_number_is_skipped_and_the_rest_still_get_theirs(): void
     {
-        $this->company->update(['investor_project_completed_message' => 'Done :name']);
+        $this->writeMessage('Done :name');
         [$group, $a, $b] = $this->group([200000, 300000]);
         Customer::query()->create(['company_id' => $this->company->id, 'name' => 'Opted out', 'phone' => $a->phone, 'opted_out_at' => now()]);
 
@@ -153,7 +172,7 @@ class ProjectCompletedMessageTest extends TestCase
         $setting = StorefrontSetting::query()->withoutGlobalScopes()->where('company_id', $this->company->id)->firstOrFail();
         $setting->notification_credentials = [];
         $setting->save();
-        $this->company->update(['investor_project_completed_message' => 'Done :name']);
+        $this->writeMessage('Done :name');
         [$group] = $this->group([200000]);
 
         $result = $this->advanceOn($group, '2026-03-01');
@@ -166,7 +185,7 @@ class ProjectCompletedMessageTest extends TestCase
     public function test_a_failing_gateway_never_stops_the_cycle(): void
     {
         $this->fakeSms(500);
-        $this->company->update(['investor_project_completed_message' => 'Done :name']);
+        $this->writeMessage('Done :name');
         [$group] = $this->group([200000, 300000]);
 
         $result = $this->advanceOn($group, '2026-03-01');
@@ -177,27 +196,32 @@ class ProjectCompletedMessageTest extends TestCase
         $this->assertSame(2, AuditLog::query()->where('action', 'investor_group.project_completed')->sole()->new_values['sms_not_sent']);
     }
 
-    public function test_staff_write_the_message_on_the_portal_settings_page(): void
+    public function test_staff_write_the_message_on_the_sms_templates_page(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        Livewire::test(InvestorPortalSettings::class)
-            ->assertSet('data.investor_project_completed_message', null)
-            ->set('data.investor_project_completed_message', '  Congratulations :name!  ')
+        Livewire::test(SmsTemplates::class)
+            ->assertSet('data.sms_investor_project_closed', null)
+            ->set('data.sms_investor_project_closed', '  Congratulations :name!  ')
             ->call('save')
             ->assertHasNoErrors();
 
-        $this->assertSame('Congratulations :name!', $this->company->fresh()->investor_project_completed_message);
+        $this->assertSame('Congratulations :name!', app(SmsTemplateService::class)->body($this->company->id, SmsTemplateService::PROJECT_CLOSED));
 
-        Livewire::test(InvestorPortalSettings::class)
-            ->set('data.investor_project_completed_message', '')
+        Livewire::test(SmsTemplates::class)
+            ->set('data.sms_investor_project_closed', '')
             ->call('save')
             ->assertHasNoErrors();
 
-        $this->assertNull($this->company->fresh()->investor_project_completed_message, 'an empty message turns the SMS off');
+        $this->assertNull(app(SmsTemplateService::class)->body($this->company->id, SmsTemplateService::PROJECT_CLOSED), 'an empty message turns the SMS off');
     }
 
     // ---------------------------------------------------------------- helpers
+
+    private function writeMessage(string $body): void
+    {
+        app(SmsTemplateService::class)->save($this->company->id, [SmsTemplateService::PROJECT_CLOSED => $body]);
+    }
 
     /** The SMS gateway answering with this status (the latest call wins). */
     private function fakeSms(int $status): void

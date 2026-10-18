@@ -22,6 +22,7 @@ use App\Services\CompanyStorageService;
 use App\Services\Investment\SettlementService;
 use App\Services\InvestorPortalAccountService;
 use App\Services\InvestorPortalService;
+use App\Services\SmsTemplateService;
 use App\Support\StorefrontApi\Phone;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -291,6 +292,40 @@ class InvestorPortalTest extends TestCase
         preg_match('/(\d{6})/', $texts[1], $matches);
         $this->travel(61)->seconds();
         $this->assertFalse($service->verifyCode($account->fresh(), $matches[1]));
+    }
+
+    public function test_the_company_can_word_the_investor_code_sms_itself(): void
+    {
+        $company = $this->company('own-words.example.test', withSms: true);
+        $account = $this->activeAccount($company, $this->investor($company, 'Own Words', '01711000012'));
+        $service = app(InvestorPortalAccountService::class);
+        $templates = app(SmsTemplateService::class);
+        $texts = [];
+
+        Http::fake(['sms.example.test/*' => function ($request) use (&$texts) {
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+            $texts[] = $query['msg'];
+
+            return Http::response('OK', 200);
+        }]);
+
+        $templates->save($company->id, [
+            SmsTemplateService::OTP_INVESTOR_LOGIN => ':portal - login code :code (valid :minutes min)',
+            SmsTemplateService::RESET_INVESTOR_PASSWORD => 'Reset code :code',
+        ]);
+
+        $this->assertTrue($service->sendCode($account->fresh(), 'login'));
+        $this->assertMatchesRegularExpression('/^'.preg_quote($company->name, '/').' Investment Portal - login code \d{6} \(valid 1 min\)$/', $texts[0]);
+
+        $this->travel(2)->minutes();
+        $this->assertTrue($service->sendCode($account->fresh(), 'reset'));
+        $this->assertMatchesRegularExpression('/^Reset code \d{6}$/', $texts[1]);
+
+        // Blank wording goes back to the built-in text.
+        $templates->save($company->id, [SmsTemplateService::OTP_INVESTOR_LOGIN => '']);
+        $this->travel(2)->minutes();
+        $this->assertTrue($service->sendCode($account->fresh(), 'login'));
+        $this->assertMatchesRegularExpression('/ Investment Portal login OTP is \d{6}\. It expires in 1 minute\.$/', $texts[2]);
     }
 
     public function test_sms_code_sign_in_is_not_offered_without_an_sms_gateway(): void

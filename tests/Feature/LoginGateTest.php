@@ -16,7 +16,6 @@ use App\Models\User;
 use App\Services\CompanyContext;
 use App\Services\CustomerAccountService;
 use App\Services\LoginGate;
-use App\Services\StorefrontNotificationService;
 use App\Support\LoginClient;
 use App\Support\LoginThrottled;
 use App\Support\StorefrontApi\Phone;
@@ -170,7 +169,7 @@ class LoginGateTest extends TestCase
     public function test_an_unknown_account_costs_a_password_hash_and_counts_like_a_wrong_password(): void
     {
         $gate = $this->partialMock(LoginGate::class, fn ($mock) => $mock->shouldReceive('spendHashTime')->once());
-        $accounts = new CustomerAccountService(app(StorefrontNotificationService::class), $gate);
+        $accounts = app()->make(CustomerAccountService::class, ['loginGate' => $gate]);
 
         $this->assertNull($accounts->attemptLogin('01999999999', 'whatever-pass', $this->client('203.0.113.5')));
         $this->assertSame(1, RateLimiter::attempts($this->accountKey('01999999999')));
@@ -271,7 +270,7 @@ class LoginGateTest extends TestCase
         config(['app.isolate_module_errors' => true]);
         $this->customer('01712345678');
         $gate = $this->partialMock(LoginGate::class, fn ($mock) => $mock->shouldReceive('tokenIsValid')->andThrow(new \RuntimeException('the cache is down')));
-        $accounts = new CustomerAccountService(app(StorefrontNotificationService::class), $gate);
+        $accounts = app()->make(CustomerAccountService::class, ['loginGate' => $gate]);
 
         // The sign-in goes on to the normal password check, right or wrong ...
         $this->assertNotNull($accounts->attemptLogin('01712345678', 'correct-password', $this->client('203.0.113.5')));

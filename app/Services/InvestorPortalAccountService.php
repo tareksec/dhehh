@@ -37,6 +37,7 @@ class InvestorPortalAccountService
     public function __construct(
         protected StorefrontNotificationService $notifications,
         protected AuditLogService $audit,
+        protected SmsTemplateService $templates,
         protected LoginGate $loginGate,
     ) {}
 
@@ -285,12 +286,24 @@ class InvestorPortalAccountService
             'otp_attempts' => 0,
         ])->save();
 
-        $portal = __(':company Investment Portal', ['company' => (string) $company?->name], $account->locale);
-        $message = $purpose === 'reset'
-            ? __(':portal password reset OTP is :code. It expires in 1 minute.', ['portal' => $portal, 'code' => $code], $account->locale)
-            : __(':portal login OTP is :code. It expires in 1 minute.', ['portal' => $portal, 'code' => $code], $account->locale);
+        $sent = false;
 
-        $sent = $company !== null && $this->sendSms($company, $account, $message);
+        if ($company !== null) {
+            // The wording is the company's own when it wrote one (SMS Templates), else the built-in text.
+            $message = (string) $this->templates->render(
+                (int) $company->getKey(),
+                $purpose === 'reset' ? SmsTemplateService::RESET_INVESTOR_PASSWORD : SmsTemplateService::OTP_INVESTOR_LOGIN,
+                [
+                    'company' => (string) $company->name,
+                    'portal' => __(':company Investment Portal', ['company' => (string) $company->name], $account->locale),
+                    'code' => $code,
+                    'minutes' => self::CODE_VALID_MINUTES,
+                ],
+                $account->locale,
+            );
+
+            $sent = $this->sendSms($company, $account, $message);
+        }
 
         if (! $sent) {
             $this->clearCode($account);

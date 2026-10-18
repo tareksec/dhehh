@@ -2,7 +2,7 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-17 - Login protection: sign-ins are judged before the password hash (bcrypt)
+## 2026-10-18 - Login protection: sign-ins are judged before the password hash (bcrypt)
 
 Trigger: the owner shared a post about distributed credential-stuffing (50,000 guesses a minute from 30,000 IPs: no per-IP limit and no per-account lockout fires, but every guess costs a full bcrypt) and asked whether our login checks the request before bcrypt. The answer was "partly" (a per-identifier lockout and a per-IP throttle only); this is the fix, agreed as a plan (phases A and B) in the conversation. Phase C (CAPTCHA) is not done.
 
@@ -25,7 +25,30 @@ Environment note for whoever reads this later: the container had PHP 8.3 and the
 
 Verified: plain `php artisan test` (no `--env`) on PHP 8.4: 2567 passed, 2 skipped, 0 failed (24856 assertions); `LoginGateTest` 19 passed; the existing sign-in tests (`StorefrontCustomerAuthTest`, `StorefrontApiAccountTest`, `ResellerPortalAccountTest`, `InvestorPortalTest`) pass unchanged; `TranslationParityTest` passes; Pint clean. No real SMS or CAPTCHA involved; no demo data touched.
 
-Commit status: committed and pushed to `ccr-4505e72d-hwaq92` (the branch this session designates; not `main`, which moves only on the owner's approval).
+Merge with `main` (v2.85.0): `main` had moved on with the SMS Templates work, which also adds a constructor argument (`SmsTemplateService`) to `CustomerAccountService` and `InvestorPortalAccountService`. Both arguments are kept (`LoginGate` after it), so tests that build the service by hand must use `app()->make(..., ['loginGate' => $gate])`, not positional arguments. The two language-file additions and the changelog sections were merged by hand (main had already cut its `[Unreleased]` into 2.84.0 / 2.85.0; this entry stays under `[Unreleased]`). Re-verified on the merged tree: see the status line.
+
+Commit status: committed on `ccr-4505e72d-hwaq92`, then merged into `main` on the owner's explicit approval (2026-10-18, "main এ merge করে দাও") after the full suite was green on the merged tree.
+
+## 2026-10-17 (night) - SMS Templates: order status, OTP, password reset and investor project messages
+
+Owner request (Bangla): add an SMS order-status template, an OTP template and a password-reset template, and make the space to write the investors' project-status message templates.
+
+What changed:
+
+- New admin page **Settings → SMS Templates** (`SmsTemplates`, three tabs: Order status / OTP & password reset / Investor projects). Table `sms_templates` (company, key, body); `SmsTemplateService` lists every message with its placeholders and built-in wording. A template is plain text with `:placeholders`, the same style as the older "Project completed message".
+- **Order status** (new sending): `OrderStatusTransition::created` calls `OrderStatusSmsService`, which queues `SendOrderStatusSmsJob` only when the company has written a message for that stage. Stage names are the order workflow stages, mapped with `StorefrontMetaTrackingService::statusEventStage()`. Not sent for imported past orders, reseller store orders, customers with no phone, or opted-out numbers. One SMS per status change (cache guard against a retried job).
+- **OTP / password reset**: customer sign-up, login and reset codes (`CustomerAccountService`) and investor login and reset codes (`InvestorPortalAccountService::sendCode()`) now use the company's wording when written, else the same built-in text as before. A message without `:code` cannot be saved.
+- **Investor project status**: messages for Project started, Project completed and Profit settled. Completed (group): the existing event listener, now through `InvestorProjectMessageService`; it also announces the next project as started. Projects outside a group: `InvestmentProject::updated` (status to running or closed). Profit settled: `SettlementService::confirmSettlement()`, with `:profit` and `:payout` from the investor's settlement payout row.
+- The old "Project completed message" box on Investor Portal Settings is gone; the migration copies any saved text into the new table (`investor_project.closed`). The column `companies.investor_project_completed_message` stays unused.
+- Everything is off until the owner writes it: order and project messages send nothing while empty, code messages keep their old wording while empty. Deploying this changes no SMS by itself.
+
+Decisions made without asking (tell me if wrong): reseller store orders are not texted (the buyer is the reseller's customer); opted-out numbers are skipped for order and project messages (not for codes); a template is one text per message, in the language the owner writes it (no separate Bangla copy yet); "Profit settled" goes out when the settlement is **confirmed**, not when it is first calculated (draft) or when the payout is paid.
+
+Checked: new `SmsTemplatesTest` (11), `ProjectCompletedMessageTest` (10), new case in `InvestorPortalTest`, `TranslationParityTest`, `MultiCompanyIsolationTest`, customer and reseller OTP tests; Pint clean. No live data touched, no real SMS sent. Full plain `php artisan test`: 2,562 passed, 1 skipped, 0 failed.
+
+Needs Bangla review: all 32 new keys in `lang/bn.json` (the template names, placeholder descriptions and the three tab descriptions).
+
+Commit status: not committed yet; branch `feature/sms-message-templates`, waiting for the owner's approval.
 
 ## 2026-10-17 (evening) - Imported orders of zero-stock products: no stock popup, product name shown
 
@@ -2821,6 +2844,16 @@ Needs Bangla review (new `lang/bn.json` values):
 - ":product video" → ":product ভিডিও"
 
 Commit status: committed and pushed to `main`.
+
+## 2026-10-15 - Customers: address in the Customer box + address column in the list
+
+Reason — after importing the customer list, the owner asked: "কাস্টমার এড্রেস কে কাস্টমার বক্সে বসাও এবং কাস্টমার লিস্টেও কাস্টমার এড্রেস কলাম থাকবে wrapped হবে" (put the address in the Customer box, and add a wrapped Customer Address column to the list).
+
+What changed: `CustomerInfolist` shows the address inside the Customer section (full width, label "Customer Address"). `CustomersTable` has a new searchable Customer Address column that wraps (max 3 lines). New key "Customer Address" in `lang/en.json` and `lang/bn.json`.
+
+Needs Bangla review: "Customer Address" → "কাস্টমারের ঠিকানা".
+
+Commit status: Committed and pushed to `claude/order-management-features-nafks7` and `main` (owner approved: "কমিট করে পুশ কর").
 
 ## 2026-09-27 - CI: GitHub Actions on Node.js 24
 

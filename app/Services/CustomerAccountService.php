@@ -24,6 +24,7 @@ class CustomerAccountService
 {
     public function __construct(
         protected StorefrontNotificationService $notifications,
+        protected SmsTemplateService $templates,
         protected LoginGate $loginGate,
     ) {}
 
@@ -171,7 +172,11 @@ class CustomerAccountService
         $sent = $this->notifications->sendSms(
             $setting,
             $phone,
-            "Your {$company->name} OTP is {$code}. Use it to verify your account. It expires in ".self::REGISTRATION_CODE_MINUTES.' minutes.',
+            (string) $this->templates->render((int) $company->getKey(), SmsTemplateService::OTP_CUSTOMER_SIGNUP, [
+                'company' => $company->name,
+                'code' => $code,
+                'minutes' => self::REGISTRATION_CODE_MINUTES,
+            ]),
         );
 
         if (! $sent) {
@@ -331,7 +336,11 @@ class CustomerAccountService
             : $this->notifications->sendSms(
                 $setting,
                 $customer->phone,
-                "Your {$company->name} OTP is {$code}. Use it to log in. It expires in 10 minutes.",
+                (string) $this->templates->render((int) $company->getKey(), SmsTemplateService::OTP_CUSTOMER_LOGIN, [
+                    'company' => $company->name,
+                    'code' => $code,
+                    'minutes' => 10,
+                ]),
             );
 
         if (! $sent) {
@@ -387,7 +396,11 @@ class CustomerAccountService
         return $this->notifications->sendSms(
             $setting,
             $customer->phone,
-            "Your {$company->name} OTP is {$code}. Use it to reset your password. It expires in 15 minutes.",
+            (string) $this->templates->render((int) $company->getKey(), SmsTemplateService::RESET_CUSTOMER_PASSWORD, [
+                'company' => $company->name,
+                'code' => $code,
+                'minutes' => 15,
+            ]),
         );
     }
 

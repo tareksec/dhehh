@@ -31,6 +31,35 @@ All notable production changes to Business Dashboard are documented here.
 - Next.js API (`docs/api/storefront-api.md` §6): `POST /account/login` accepts `device_token` (or the header `X-Device-Token`) and answers `data.device_token` on success; a `429 too_many_attempts` now also carries `challenge`. The visitor's `client_ip` and `client_user_agent` decide the device. The website works unchanged without the token; keeping it in an httpOnly cookie is the website's part.
 - Not done yet: a CAPTCHA for the *challenge* answer (until then it is a wait), and device trust after a one-time-code sign-in. One new interface string in both language files. Tests: `LoginGateTest` (19).
 
+## [2.85.0] - 2026-10-18
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Settings → SMS Templates**: one page where the owner writes the wording of the SMS the system sends. Each message is plain text with placeholders such as `:name`, `:order` or `:code`, and the page lists the placeholders under every box.
+  - **Order status**: a message for each order stage (Confirmed, Processing, Shipping, Delivered, Completed, Cancelled, Returned, Refunded). The customer is texted when their order reaches that stage, using `:name`, `:order`, `:status`, `:total`, `:due`, `:tracking` and `:company`. A stage left empty sends nothing, so no customer is texted until the owner has written a message. Imported past orders, reseller store orders, customers without a phone and numbers on the opt-out list are never texted.
+  - **OTP and password reset**: the sign-up, login and password-reset codes of shop customers and resellers, and the login and password-reset codes of investors. Left empty, the built-in wording is sent exactly as before; a message must contain `:code`, or the page refuses it.
+  - **Investor projects**: three messages to every investor of a project: **Project started**, **Project completed** and **Profit settled** (when the settlement is confirmed, with `:profit` and `:payout`). A group's next project is announced right after the previous one is completed. Empty means nothing is sent.
+
+### Changed
+
+- The **Project completed message** moved from Investor Portal Settings to Settings → SMS Templates. The message already written there is moved over by the update, so nothing needs to be typed again.
+
+### Technical Notes
+
+- New table `sms_templates` (`company_id`, `key`, `body`, unique per company and key) with the `SmsTemplate` model (`BelongsToCompany`, added to `MultiCompanyIsolationTest`). The migration copies a non-empty `companies.investor_project_completed_message` into the `investor_project.closed` row; the old column is left in place and no longer read.
+- `SmsTemplateService` holds the list of messages, their placeholders and built-in wording, and renders a template. `OrderStatusSmsService` reacts to `OrderStatusTransition::created` (the same stage mapping as the Meta status events) and queues `SendOrderStatusSmsJob`; `InvestorProjectMessageService` sends the project messages (`SendInvestorProjectStatusSmsJob` for a project outside a group changing to running or closed, and for a confirmed settlement; the group cycle listener `SendProjectCompletedMessages` for a group). Both use the company's SMS gateway row that has a gateway (the order's own site first, then the main site) and send each investor once per project and status.
+- `CustomerAccountService` and `InvestorPortalAccountService::sendCode()` now build their code SMS through `SmsTemplateService::render()`. Tests: `SmsTemplatesTest` (11), plus new cases in `ProjectCompletedMessageTest` and `InvestorPortalTest`.
+## [2.84.0] - 2026-10-17
+
+**Release type:** Minor Feature Update
+
+### Changed
+
+- **Customer address moved into the Customer box** on the customer view page, and the **customer list now has a Customer Address column** that wraps long addresses (up to 3 lines) and can be searched.
+
+**Technical Notes:** `CustomerInfolist` moves the `address` entry into the Customer section; `CustomersTable` adds a wrapped, searchable `address` column. New string "Customer Address" is in `lang/en.json` and `lang/bn.json`. No migrations.
 ## [2.83.1] - 2026-10-17
 
 **Release type:** Patch/Fix Update
