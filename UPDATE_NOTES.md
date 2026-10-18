@@ -2,6 +2,27 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-17 (night) - SMS Templates: order status, OTP, password reset and investor project messages
+
+Owner request (Bangla): add an SMS order-status template, an OTP template and a password-reset template, and make the space to write the investors' project-status message templates.
+
+What changed:
+
+- New admin page **Settings → SMS Templates** (`SmsTemplates`, three tabs: Order status / OTP & password reset / Investor projects). Table `sms_templates` (company, key, body); `SmsTemplateService` lists every message with its placeholders and built-in wording. A template is plain text with `:placeholders`, the same style as the older "Project completed message".
+- **Order status** (new sending): `OrderStatusTransition::created` calls `OrderStatusSmsService`, which queues `SendOrderStatusSmsJob` only when the company has written a message for that stage. Stage names are the order workflow stages, mapped with `StorefrontMetaTrackingService::statusEventStage()`. Not sent for imported past orders, reseller store orders, customers with no phone, or opted-out numbers. One SMS per status change (cache guard against a retried job).
+- **OTP / password reset**: customer sign-up, login and reset codes (`CustomerAccountService`) and investor login and reset codes (`InvestorPortalAccountService::sendCode()`) now use the company's wording when written, else the same built-in text as before. A message without `:code` cannot be saved.
+- **Investor project status**: messages for Project started, Project completed and Profit settled. Completed (group): the existing event listener, now through `InvestorProjectMessageService`; it also announces the next project as started. Projects outside a group: `InvestmentProject::updated` (status to running or closed). Profit settled: `SettlementService::confirmSettlement()`, with `:profit` and `:payout` from the investor's settlement payout row.
+- The old "Project completed message" box on Investor Portal Settings is gone; the migration copies any saved text into the new table (`investor_project.closed`). The column `companies.investor_project_completed_message` stays unused.
+- Everything is off until the owner writes it: order and project messages send nothing while empty, code messages keep their old wording while empty. Deploying this changes no SMS by itself.
+
+Decisions made without asking (tell me if wrong): reseller store orders are not texted (the buyer is the reseller's customer); opted-out numbers are skipped for order and project messages (not for codes); a template is one text per message, in the language the owner writes it (no separate Bangla copy yet); "Profit settled" goes out when the settlement is **confirmed**, not when it is first calculated (draft) or when the payout is paid.
+
+Checked: new `SmsTemplatesTest` (11), `ProjectCompletedMessageTest` (10), new case in `InvestorPortalTest`, `TranslationParityTest`, `MultiCompanyIsolationTest`, customer and reseller OTP tests; Pint clean. No live data touched, no real SMS sent. Full plain `php artisan test`: 2,562 passed, 1 skipped, 0 failed.
+
+Needs Bangla review: all 32 new keys in `lang/bn.json` (the template names, placeholder descriptions and the three tab descriptions).
+
+Commit status: not committed yet; branch `feature/sms-message-templates`, waiting for the owner's approval.
+
 ## 2026-10-17 (evening) - Imported orders of zero-stock products: no stock popup, product name shown
 
 Owner question (Bangla): how will the orders of products whose stock is 0 show? Answer: the Orders list and the order page show them normally (the imported line keeps the product name and the Nuport price; stock stays 0 and never goes below, because an import takes no stock). Checking it found two problems on the Edit order page, fixed here:

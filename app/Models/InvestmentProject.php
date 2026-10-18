@@ -2,10 +2,15 @@
 
 namespace App\Models;
 
+use App\Jobs\SendInvestorProjectStatusSmsJob;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\GeneratesSequentialNumber;
+use App\Services\InvestorProjectMessageService;
+use App\Services\SmsTemplateService;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class InvestmentProject extends Model
 {
@@ -47,6 +52,29 @@ class InvestmentProject extends Model
 
         static::creating(function (self $project): void {
             $project->project_code ??= static::groupProjectCode($project) ?? static::nextProjectCode((int) $project->company_id);
+        });
+
+        // The investors' status SMS (SMS Templates) for a project outside a group; a group's projects
+        // are texted by the group cycle, and "settled" by the settlement's confirmation.
+        static::updated(function (self $project): void {
+            $key = match ($project->status) {
+                'running' => SmsTemplateService::PROJECT_RUNNING,
+                'closed' => SmsTemplateService::PROJECT_CLOSED,
+                default => null,
+            };
+
+            if ($key === null || filled($project->group_id) || ! $project->wasChanged('status') || ! Schema::hasTable('sms_templates')) {
+                return;
+            }
+
+            try {
+                if (app(InvestorProjectMessageService::class)->configured($project, $key)) {
+                    SendInvestorProjectStatusSmsJob::dispatch($project->getKey(), $key)->afterCommit();
+                }
+            } catch (Throwable $exception) {
+                // A problem with the SMS set-up never blocks a status change.
+                report($exception);
+            }
         });
     }
 

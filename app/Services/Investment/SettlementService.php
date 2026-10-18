@@ -2,11 +2,14 @@
 
 namespace App\Services\Investment;
 
+use App\Jobs\SendInvestorProjectStatusSmsJob;
 use App\Models\ChannelPartnerPayout;
 use App\Models\InvestmentProject;
 use App\Models\ProjectSettlement;
 use App\Models\SettlementPayout;
 use App\Services\AuditLogService;
+use App\Services\InvestorProjectMessageService;
+use App\Services\SmsTemplateService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -195,6 +198,13 @@ class SettlementService
         $settlement->forceFill(['status' => 'confirmed'])->save();
 
         app(AuditLogService::class)->record('settlement_confirmed', $settlement, ['status' => 'draft'], ['status' => 'confirmed', 'confirmed_by' => $userId]);
+
+        // "Profit settled" SMS to the project's investors, when the owner has written one (SMS Templates).
+        $project = $settlement->project;
+
+        if ($project !== null && app(InvestorProjectMessageService::class)->configured($project, SmsTemplateService::PROJECT_SETTLED)) {
+            SendInvestorProjectStatusSmsJob::dispatch($project->getKey(), SmsTemplateService::PROJECT_SETTLED, $settlement->getKey())->afterCommit();
+        }
 
         return $settlement->refresh();
     }

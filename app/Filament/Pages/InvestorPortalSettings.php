@@ -8,7 +8,6 @@ use App\Models\InvestorPortalAccount;
 use App\Services\AuditLogService;
 use App\Services\CompanyContext;
 use BackedEnum;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
@@ -72,7 +71,6 @@ class InvestorPortalSettings extends Page
         $this->form->fill([
             'investor_portal_enabled' => (bool) $company->investor_portal_enabled,
             'investor_portal_domain' => $company->investor_portal_domain,
-            'investor_project_completed_message' => $company->investor_project_completed_message,
         ]);
     }
 
@@ -99,13 +97,8 @@ class InvestorPortalSettings extends Page
                         Text::make(fn (): HtmlString|string => $this->portalAddress()),
                     ]),
                 Section::make(__('Messages'))
-                    ->description(__('Sent by SMS to every investor of a group project when its two months are over. It starts empty: nothing is sent until you write the message. The SMS gateway is set in the storefront notification settings.'))
                     ->schema([
-                        Textarea::make('investor_project_completed_message')
-                            ->label(__('Project completed message'))
-                            ->rows(3)
-                            ->maxLength(480)
-                            ->helperText(__('Use :name for the investor, :group for the group name and :project for the project number. Leave empty to send nothing. Example: Congratulations :name! Project :project of :group is complete. Your profit will be announced soon.')),
+                        Text::make(__('The SMS investors get (sign-in and password-reset codes, project started, completed and profit settled) are written on Settings → SMS Templates. The SMS gateway is set on Settings → Integrations.')),
                     ]),
                 Section::make(__('Accounts'))
                     ->schema([
@@ -147,10 +140,9 @@ class InvestorPortalSettings extends Page
         abort_unless($company !== null && static::canAccess(), 404);
 
         $data = $this->form->getState();
-        $before = $company->only(['investor_portal_enabled', 'investor_portal_domain', 'investor_project_completed_message']);
+        $before = $company->only(['investor_portal_enabled', 'investor_portal_domain']);
 
         $company->investor_portal_enabled = (bool) $data['investor_portal_enabled'];
-        $company->investor_project_completed_message = filled($data['investor_project_completed_message'] ?? null) ? trim((string) $data['investor_project_completed_message']) : null;
 
         if (static::isSuperAdmin()) {
             $domain = Company::normalizeDomain($data['investor_portal_domain'] ?? null);
@@ -167,7 +159,7 @@ class InvestorPortalSettings extends Page
 
         $company->save();
 
-        app(AuditLogService::class)->record('investor_portal.settings_saved', $company, $before, $company->only(['investor_portal_enabled', 'investor_portal_domain', 'investor_project_completed_message']));
+        app(AuditLogService::class)->record('investor_portal.settings_saved', $company, $before, $company->only(['investor_portal_enabled', 'investor_portal_domain']));
 
         Notification::make()->title(__('Investor portal settings saved'))->success()->send();
     }
