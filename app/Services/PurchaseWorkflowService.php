@@ -97,9 +97,13 @@ class PurchaseWorkflowService
 
     protected function syncStockMovements(Purchase $purchase, Collection $items): void
     {
+        // Only units that arrived in sellable shape reach stock: short and
+        // damaged units stay on the supplier report as a loss. A product whose
+        // every unit was lost has no movement (a movement must be > 0).
         $quantitiesByProduct = $items
             ->groupBy('product_id')
-            ->map(fn ($productItems): int => $productItems->sum('quantity'));
+            ->map(fn ($productItems): int => $productItems->sum(fn (PurchaseItem $item): int => $item->sellableQuantity()))
+            ->filter(fn (int $quantity): bool => $quantity > 0);
 
         foreach ($quantitiesByProduct as $productId => $quantity) {
             StockMovement::query()->updateOrCreate(

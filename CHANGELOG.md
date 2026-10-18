@@ -4,6 +4,27 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Reports → Supplier Report**: one supplier's whole story from buying to selling, for **one product or all of the supplier's products**, with a **Download PDF** button on the same page (owner request 2026-10-18).
+  - Supplier info (name, company, phone, email, address, what is still payable to the supplier).
+  - The dates the goods came in, one row per purchase, with a date filter on the purchase date.
+  - Total landed cost (purchase price plus the China-to-BD costs), sales, average sale price per unit, units billed / short / damaged / sold / still in stock.
+  - **Gross profit** = sales − landed cost of the units sold − the loss on short and damaged units.
+  - **Net profit** = gross profit − the costs paid after the goods reached the house (packaging, ad, other) − Meta ad spend linked to the product.
+  - A purchase-by-purchase table and a product-by-product table, with a total row in the PDF.
+- **Purchases now record short and damaged units.** Each purchase line has **Short Qty** (billed, never delivered) and **Damaged Qty** (delivered, not sellable). The billed quantity and the amount owed to the supplier do not change.
+- **Purchases → Costs After Arrival**: packaging, ad and other costs paid per product after the goods reached the house, one line each (product, cost name, amount). They feed the Supplier Report only; the purchase total and supplier balance are unchanged.
+
+### Changed
+
+- **A received purchase now adds only the sellable units to stock** (billed − short − damaged). Purchases with no short or damaged units behave exactly as before.
+
+### Technical Notes
+
+- Supplier Report: migration `2026_10_18_000100_add_loss_quantities_and_product_costs_to_purchases` adds `purchase_items.short_quantity` / `damaged_quantity` (unsigned int, default 0) and `purchases.product_costs` (JSON `[{product_id, label, amount}]`); additive and safe to run on live data, no new company-owned model. `PurchaseItem` rejects negative values and short + damaged above the billed quantity; `sellableQuantity()` feeds `PurchaseWorkflowService::syncStockMovements()` (a product whose every unit was lost gets no stock movement). Landed cost is unchanged (`allocated_cost` / `landed_unit_cost` stay on the billed quantity).
+- `App\Services\SupplierReportService` holds the rules (documented in its class comment): only received purchases, date range on the purchase date, sales (accounted statuses, all time) handed to a product's units first-in-first-out (opening stock, then purchases by date, across all suppliers), costs after arrival and Meta ad spend (`meta_ads.spend` by `product_id`) counted in proportion to units sold. Page `App\Filament\Pages\SupplierReport` (Reports cluster, `reports.view`); PDF route `reports.supplier.pdf` (`reports.export`, audit log `report_exported` with `type = supplier`). The PDF is always English because dompdf cannot shape Bangla. Tests: `SupplierReportTest` (9).
+
 ## [2.85.1] - 2026-10-18
 
 **Release type:** Security Update

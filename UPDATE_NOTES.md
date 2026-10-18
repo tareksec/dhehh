@@ -2,6 +2,41 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-18 - Supplier Report (Reports module)
+
+Owner request: the Reports module had no supplier-wise report. Wanted per supplier: supplier info; the dates the goods arrived; total cost after the goods reached the house; sales and average sale amount; damaged and short quantity; gross profit after all costs; the costs paid per product after arrival (ad, packaging, other); net profit = gross profit − those costs; for one product or all products of the supplier; PDF in one click.
+
+Owner decisions (asked 2026-10-18):
+
+- Damaged and short units are recorded on the purchase line (new **Short Qty** / **Damaged Qty**), not guessed from stock movements (those carry no supplier).
+- Costs after arrival are manual lines on the purchase (product, cost name, amount), plus Meta ad spend already linked to the product.
+- A product bought from several suppliers has its sales handed to the oldest units first (FIFO by purchase date).
+
+What changed:
+
+- Migration `2026_10_18_000100_add_loss_quantities_and_product_costs_to_purchases` (additive): `purchase_items.short_quantity`, `damaged_quantity`, `purchases.product_costs` (JSON).
+- `PurchaseItem`: validation (no negatives, short + damaged ≤ billed) and `sellableQuantity()`. `PurchaseWorkflowService` now books only sellable units into stock (identical result when short and damaged are 0). `PurchaseForm`: two columns on the items table and a **Costs After Arrival** section.
+- New `SupplierReportService` (rules in its class comment), page `SupplierReport` (Reports → Supplier Report, `reports.view`), `SupplierReportPdfController` + `reports.supplier.pdf` (`reports.export`, audit log), `resources/views/reports/supplier-pdf.blade.php`, 58 new keys in `lang/en.json` + `lang/bn.json`, `tests/Feature/SupplierReportTest.php` (9 tests).
+
+Figures follow these rules, which are my reading of the request and worth the owner's check against one real supplier:
+
+- Gross profit = sales − landed cost of units sold − landed cost of short and damaged units (the supplier's loss is deducted in gross profit).
+- Net profit = gross profit − costs after arrival − Meta ad spend. Both are counted in proportion to the units sold, the same way the cost of goods is, so a half-sold batch carries half of its packaging cost. Owner confirmed this on 2026-10-18.
+- Landed cost = item subtotal + the purchase's China-to-BD costs (the existing allocated cost). Purchase discount and VAT are not in it.
+- Date filter = purchase date; sales are counted up to today.
+- Meta ad spend is the ad's lifetime spend, only for ads created through this app (they carry the product); it is split between suppliers by units sold. Do not also enter ad cost as a manual line for the same spend.
+- The PDF is always English: dompdf cannot shape Bangla, so Bangla product or supplier names may not print correctly in it. The on-screen report follows the user's language.
+
+Not done / limits: no CSV export of this report; no separate page-level "print" view for Bangla; stock "damage" movements recorded in the warehouse are not tied to a supplier and are not in this report; sales returns are not netted out of the FIFO.
+
+Needs Bangla review: all 58 new keys, in particular "Total landed cost" (ল্যান্ডেড কস্ট), "Loss on short and damaged units", "Short Qty" / "Damaged Qty" and the long description of **Costs After Arrival**.
+
+Not visually checked in the browser (page and PDF render and download are covered by tests).
+
+Verification: `php artisan test --filter=SupplierReportTest` 9 passed; `TranslationParityTest` passes. Full plain `php artisan test`: 2,123 passed, 1 skipped, **8 failed** — the same 8 online-payment tests already listed under 2026-10-17 (`StorefrontApiCheckoutTest`, `StorefrontPaystationPaymentTest`: "The secure payment page could not be opened"); this change touches no payment file. Pint reports only older style issues in `PurchaseForm.php` and `routes/web.php`, none on the new lines.
+
+Commit status: committed on `feature/supplier-report` and pushed to `main` on the owner's explicit approval (2026-10-18), after the branch checks.
+
 ## 2026-10-18 - Login protection: sign-ins are judged before the password hash (bcrypt)
 
 Trigger: the owner shared a post about distributed credential-stuffing (50,000 guesses a minute from 30,000 IPs: no per-IP limit and no per-account lockout fires, but every guess costs a full bcrypt) and asked whether our login checks the request before bcrypt. The answer was "partly" (a per-identifier lockout and a per-IP throttle only); this is the fix, agreed as a plan (phases A and B) in the conversation. Phase C (CAPTCHA) is not done.

@@ -30,6 +30,13 @@ class Purchase extends Model
         'cylinder' => 'Cylinder',
     ];
 
+    /** Suggested names for the costs paid after the goods reached the house (free text is allowed too). */
+    public const PRODUCT_COST_SUGGESTIONS = [
+        'Packaging cost',
+        'Ad cost',
+        'Other cost',
+    ];
+
     public const STATUSES = [
         'draft' => 'Draft',
         'received' => 'Received',
@@ -63,6 +70,7 @@ class Purchase extends Model
         'positive_feeder',
         'cylinder',
         'custom_costs',
+        'product_costs',
         'funding_sources',
         'total_amount',
         'paid_amount',
@@ -93,6 +101,7 @@ class Purchase extends Model
         'positive_feeder' => 'decimal:2',
         'cylinder' => 'decimal:2',
         'custom_costs' => 'array',
+        'product_costs' => 'array',
         'funding_sources' => 'array',
         'total_amount' => 'decimal:2',
         'paid_amount' => 'decimal:2',
