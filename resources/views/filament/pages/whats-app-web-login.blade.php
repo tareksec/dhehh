@@ -88,6 +88,9 @@
                         @if ($channel->web_connected_at)
                             <div style="color: rgb(113 113 122);">{{ __('Last connected') }}: {{ $channel->web_connected_at->diffForHumans() }}</div>
                         @endif
+                        @if ($status !== 'connected' && filled($state['last_error'] ?? null))
+                            <div style="color: rgb(161 98 7);">{{ __('Last error') }}: <strong>{{ $state['last_error'] }}</strong>@if (filled($state['last_error_code'] ?? null)) ({{ $state['last_error_code'] }})@endif</div>
+                        @endif
                         @if (in_array($status, ['logged_out', 'banned', 'replaced', 'error', 'qr_expired'], true))
                             <p style="color: rgb(161 98 7);">{{ __('Not syncing right now. Everything already saved stays in the ERP. Scan a new QR code to resume.') }}</p>
                         @endif

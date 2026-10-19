@@ -4,6 +4,19 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Added
+
+- **WhatsApp Web Login now shows why a connection failed.** Under the status, the page shows the bridge's last error and its code (for example "Connection Terminated (428)"), so a stuck "Reconnecting" or a QR scan that ends with "Couldn't link device" is no longer a guessing game.
+- **The device identity the bridge shows in WhatsApp's Linked devices list can be changed from Coolify** (setting `BRIDGE_BROWSER`, default `ubuntu:Desktop`), without a code change. WhatsApp may refuse some identities, so this makes it quick to try another one.
+
+### Technical Notes
+
+- `whatsapp-bridge`: new optional env var `BRIDGE_BROWSER` as `<system>:<browser>` (systems `ubuntu`, `macos`, `windows`, `baileys`), read by the new `src/browser.js`. A wrong value stops the bridge at start with a clear message. It applies the next time a QR code is scanned. `GET /health` now also returns `browser`.
+- `whatsapp-bridge`: every closed WhatsApp connection is logged as `connection closed` with `code` and `reason`; `GET /sessions/{id}` now returns `last_error_code` next to `last_error`. The ERP page shows both while the device is not connected.
+- Redeploy the `whatsapp-bridge` app in Coolify to get this. New lang key "Last error" (en + bn). Tests: bridge `test/browser.test.js` (5), two new page tests in `WhatsAppWebArchiveTest`.
+
 ## [2.86.2] - 2026-10-19
 
 **Release type:** Patch/Fix Update

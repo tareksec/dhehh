@@ -259,6 +259,46 @@ class WhatsAppWebArchiveTest extends TestCase
             ->assertOk();
     }
 
+    public function test_the_page_shows_why_the_bridge_connection_keeps_failing(): void
+    {
+        $this->openPageAsAdminWithBridgeSaved();
+        $this->channel->forceFill(['web_status' => 'reconnecting'])->saveQuietly();
+
+        Http::fake([
+            'bridge.test/sessions/*' => Http::response(['id' => 'web-test-session', 'status' => 'reconnecting', 'qr' => null, 'phone' => null, 'history_progress' => null, 'last_error' => 'Connection Terminated', 'last_error_code' => 428], 200),
+        ]);
+
+        Livewire::test(WhatsAppWebLogin::class)
+            ->assertSee('Last error')
+            ->assertSee('Connection Terminated')
+            ->assertSee('(428)');
+    }
+
+    public function test_the_page_hides_the_last_error_once_the_device_is_connected(): void
+    {
+        $this->openPageAsAdminWithBridgeSaved();
+
+        Http::fake([
+            'bridge.test/sessions/*' => Http::response(['id' => 'web-test-session', 'status' => 'connected', 'qr' => null, 'phone' => '8801711000000', 'history_progress' => 100, 'last_error' => 'Connection Terminated', 'last_error_code' => 428], 200),
+        ]);
+
+        Livewire::test(WhatsAppWebLogin::class)
+            ->assertDontSee('Last error')
+            ->assertDontSee('Connection Terminated');
+    }
+
+    protected function openPageAsAdminWithBridgeSaved(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($admin)->withSession(['current_company_id' => $this->company->id]);
+        app(CompanyContext::class)->set($this->company);
+
+        app(WhatsAppWebSettingsService::class)->save($this->company, [
+            'bridge_url' => 'https://bridge.test',
+            'api_key' => 'bridge-api-key-0123456789abcdef',
+        ]);
+    }
+
     public function test_linking_a_device_creates_a_web_channel_and_shows_the_bridge_qr(): void
     {
         $admin = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);

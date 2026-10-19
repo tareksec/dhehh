@@ -1,5 +1,4 @@
 import makeWASocket, {
-  Browsers,
   BufferJSON,
   DisconnectReason,
   downloadMediaMessage,
@@ -25,8 +24,9 @@ const REPORTED_STATUSES = ['qr', 'qr_expired', 'connected', 'logged_out', 'banne
  * messages, which keeps the linked number's ban risk as low as possible.
  */
 export class Session {
-  constructor ({ id, dataDir, logger, maxMediaBytes }) {
+  constructor ({ id, dataDir, logger, maxMediaBytes, browser }) {
     this.id = id
+    this.browser = browser
     this.dir = path.join(dataDir, id)
     this.logger = logger.child({ session: id })
     this.maxMediaBytes = maxMediaBytes
@@ -37,6 +37,7 @@ export class Session {
     this.phone = null
     this.name = null
     this.lastError = null
+    this.lastErrorCode = null
     this.historyProgress = null
     this.lidToPhone = new Map()
     this.stopping = false
@@ -84,6 +85,7 @@ export class Session {
       name: this.name,
       history_progress: this.historyProgress,
       last_error: this.lastError,
+      last_error_code: this.lastErrorCode,
     }
   }
 
@@ -110,12 +112,10 @@ export class Session {
       auth: state,
       version,
       logger: this.logger.child({ module: 'baileys' }, { level: 'warn' }),
-      // A "Desktop" browser identity plus accepting every history sync type
-      // is what makes WhatsApp send the FULL chat history, not just ~3 months.
-      // The OS name must not be Mac OS or Windows: WhatsApp closes those
-      // "Desktop" logins right after the handshake (428 "Connection
-      // Terminated", no QR code - checked 2026-10-19).
-      browser: Browsers.ubuntu('Desktop'),
+      // A "Desktop" identity plus accepting every history sync type is what
+      // makes WhatsApp send the FULL chat history, not just ~3 months. The
+      // identity comes from BRIDGE_BROWSER (see browser.js).
+      browser: this.browser,
       syncFullHistory: true,
       shouldSyncHistoryMessage: () => true,
       markOnlineOnConnect: false,
@@ -162,6 +162,7 @@ export class Session {
     if (update.connection === 'open') {
       this.qr = null
       this.lastError = null
+      this.lastErrorCode = null
       this.phone = phoneFromJid(sock.user?.id?.replace(/:\d+@/, '@')) ?? this.phone
       this.name = sock.user?.name ?? sock.user?.verifiedName ?? this.name
       this.setStatus('connected')
@@ -170,6 +171,8 @@ export class Session {
     if (update.connection === 'close') {
       const code = update.lastDisconnect?.error?.output?.statusCode
       this.lastError = update.lastDisconnect?.error?.message ?? null
+      this.lastErrorCode = code ?? null
+      this.logger.warn({ code, reason: this.lastError, status: this.status }, 'connection closed')
       this.closeSocket()
 
       if (this.stopping) {

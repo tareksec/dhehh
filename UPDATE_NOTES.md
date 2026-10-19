@@ -2,6 +2,27 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-19 (later) - WhatsApp Web bridge: show why a connection fails, and a switchable device identity
+
+Reason - after the QR fix the QR appears, but scanning it ends on the phone with "Couldn't link device. Try again later." (owner's screenshot). The cause is not known: the bridge logged nothing about why a connection closes and the page only said "Reconnecting". Owner: "উন্নতি দুটো করে দাও" (do both improvements).
+
+What changed:
+- `whatsapp-bridge/src/browser.js` (new): `BRIDGE_BROWSER` (`<system>:<browser>`, default `ubuntu:Desktop`) picks the identity announced to WhatsApp; validated at start. `server.js` passes it to every `Session`; `GET /health` shows it. `session.js` no longer hardcodes the identity.
+- `session.js`: every closed connection is logged (`connection closed`, `code`, `reason`) and `last_error_code` is returned by `GET /sessions/{id}`.
+- `whats-app-web-login.blade.php`: "Last error: <message> (<code>)" under the status while the device is not connected.
+- `whatsapp-bridge/README.md`: `BRIDGE_BROWSER`, which identities WhatsApp refuses (Mac OS / Windows + Desktop), and what the close codes mean.
+- 1 lang key (en/bn).
+
+Verified from the cloud session: the real bridge reaches a QR with the default identity; with `windows:Desktop` it reports `last_error: Connection Terminated`, code 428 and logs it; a wrong `BRIDGE_BROWSER` stops it at start. The new page test fails on the old page and passes on the new one.
+
+Not verified: why the phone refuses the link. That needs the owner's phone. Next step for the owner after redeploying the bridge: scan again, read "Last error" on the page (or Coolify Runtime Logs), and if linking is refused try `BRIDGE_BROWSER=ubuntu:Chrome` or `baileys:Desktop` in Coolify and restart. A non-Desktop identity may give only recent chats, not the whole history.
+
+Needs Bangla review: "Last error" -> "সর্বশেষ এরর".
+
+Tests: bridge `npm test` (15 passing, 5 new); `WhatsAppWebArchiveTest` (14) and `TranslationParityTest` pass; Pint passes on the changed PHP file.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
+
 ## 2026-10-19 - WhatsApp Web bridge: QR code never appeared
 
 Reason - owner deployed the bridge on Coolify; the ERP page showed "Reconnecting" and no QR code. The bridge reported `last_error: "Connection Terminated"`.
