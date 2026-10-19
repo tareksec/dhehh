@@ -4,6 +4,10 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.86.3] - 2026-10-19
+
+**Release type:** Patch/Fix Update
+
 ### Fixed
 
 - **Report PDF and CSV buttons showed the file as raw text instead of downloading it** (Reports and Reports → Supplier Report). The admin panel opens links without reloading the page; for a file link that painted the PDF bytes into the page. These links now open as normal downloads.
@@ -11,7 +15,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `AdminPanelProvider::spaUrlExceptions()` lists `*/admin/reports/export/*` and `*/admin/reports/supplier/*`, so Filament no longer adds `wire:navigate` to those links. Another file link that Filament renders in the panel needs the same exception. Tests: `ReportDownloadLinksTest` (3).
-
 ## [2.86.2] - 2026-10-19
 
 **Release type:** Patch/Fix Update
