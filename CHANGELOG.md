@@ -10,6 +10,14 @@ All notable production changes to Business Dashboard are documented here.
 
 - **Pay a cycle's profit without waiting for sales.** Owner decision 2026-10-18: investors in a group are paid their profit share every two months whether or not the goods have sold, so the payout must not depend on sales. **Calculate & Settle** on a project now asks **How is the amount decided?**: *From the sales revenue* (as before) or *Profit entered by hand (no sales needed)*. With a hand-entered profit staff type the **net profit to distribute** (the form shows the investors' share of it as they type); the investors' 40% (the project's own split), the partners' and the company's shares, the rate per lac and each investor's payout are worked out exactly as for a sale, and a group project still pays the profit only while the principal stays in the group. The cost-proof tick-box is not asked, because the costs are not used. The amount stays with staff: nothing is read from sales, and nothing is paid until the settlement is confirmed and each payout is marked paid as usual. A hand-entered settlement is labelled **Profit entered by hand** on the settlement page, and the investor's printable report shows the profit as *declared by the company* instead of a selling amount, gross profit and cost tables that were never real. A loss is still settled from the sales revenue; a hand-entered profit cannot be negative. Settlements made before are unchanged (they read as *From the sales revenue*).
 
+### Technical Notes
+
+- Manual-profit settlement: migration `2026_10_18_100000_add_basis_to_project_settlements` adds `project_settlements.basis` (`sales` default / `manual`, guarded by `hasColumn`); `ProjectSettlement::BASIS_SALES` / `BASIS_MANUAL`, `isManualBasis()`, `basis` is immutable like the other settlement figures. `SettlementService::calculateAndSettle()` takes a last optional `?float $manualNetProfit`: when set it ignores `$totalRevenue` and the cost-proof check, stores `total_revenue = total_cost + profit` so the stored figures still add up, and records `basis = manual` (also in the audit entry). Existing callers and the sales path are unchanged. Settle modal in `ViewInvestmentProject`, summary in `ProjectSettlementResource` (selling amount and gross profit hidden when manual) and `investments/reports/investor-payout.blade.php`. Tests: 8 new in `InvestmentSettlementTest` and 1 in `InvestorGroupExitTest`, mutation-checked (cost check kept for manual, basis not recorded). **Deploy: run `php artisan migrate --force`.** 10 new interface strings in `lang/en.json` / `lang/bn.json` (Bangla to review).
+
+## [2.86.5] - 2026-10-19
+
+**Release type:** Patch/Fix Update
+
 ### Fixed
 
 - **WhatsApp Web chats showed "নাম পাওয়া যায়নি" instead of the customer's name.** WhatsApp shares customer names under a hidden ID (LID) while the chat is saved under the phone number, so the names never found their chats. The bridge now learns which number belongs to which hidden ID before it sends the names, and the ERP matches a name by number or by that hidden ID, whether the name or the chat arrives first.
@@ -28,8 +36,6 @@ All notable production changes to Business Dashboard are documented here.
 - Near real time: `WhatsAppWebWebhookController::importMessages()` runs live batches of up to 25 messages with `dispatch_sync` (history stays queued; a failure returns 500 so the bridge's outbox retries). `Inbox::checkForChanges()` (`wire:poll.visible.3s`) compares a cheap signature (`max(last_message_at)`, `max(id)`, and for the open chat `max(id)` / `max(updated_at)` of its messages) and calls `skipRender()` when nothing changed; a full refresh runs on a change and at least every 30 seconds. Bridge: `splitLiveMessages()` treats `append` upserts from the last 24 hours as live. This is polling, not push - true push needs a websocket service (Laravel Reverb) on Coolify.
 - `Conversation::inboxDisplayName()` (WhatsApp provider only) is used by the Inbox; `profileDisplayName()` is unchanged because the Messenger profile lookups compare against its "name not found" result. The avatar of a number-only name shows `#`.
 - Inbox: `<video controls>` / `<audio controls>` for archived media; media is still served by `ConversationMediaController` (no byte-range support yet, so seeking inside long videos and Safari video playback may not work). 4 new lang keys (en + bn). New tests in `WhatsAppWebArchiveTest` (names in both orders, refresh, no overwrite, history trigger, page button, inbox media, media route) and 2 in the bridge's `normalize.test.js`.
-- Manual-profit settlement: migration `2026_10_18_100000_add_basis_to_project_settlements` adds `project_settlements.basis` (`sales` default / `manual`, guarded by `hasColumn`); `ProjectSettlement::BASIS_SALES` / `BASIS_MANUAL`, `isManualBasis()`, `basis` is immutable like the other settlement figures. `SettlementService::calculateAndSettle()` takes a last optional `?float $manualNetProfit`: when set it ignores `$totalRevenue` and the cost-proof check, stores `total_revenue = total_cost + profit` so the stored figures still add up, and records `basis = manual` (also in the audit entry). Existing callers and the sales path are unchanged. Settle modal in `ViewInvestmentProject`, summary in `ProjectSettlementResource` (selling amount and gross profit hidden when manual) and `investments/reports/investor-payout.blade.php`. Tests: 8 new in `InvestmentSettlementTest` and 1 in `InvestorGroupExitTest`, mutation-checked (cost check kept for manual, basis not recorded). **Deploy: run `php artisan migrate --force`.** 10 new interface strings in `lang/en.json` / `lang/bn.json` (Bangla to review).
-
 ## [2.86.4] - 2026-10-19
 
 **Release type:** Patch/Fix Update
@@ -234,7 +240,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `CompanyApiKey::SCOPE_INVESTOR_SYNC`, `ResolveCompanyFromApiKey` hint per scope, `InvestorSyncFeed` (extends `ImsSyncFeed`), `InvestorSyncController`, `Investor::groupMemberships()`. Two interface strings added or reworded in both language files (the key-type name and the key helper text). Tests: `InvestorSyncApiTest` (10).
-
 ## [2.80.0] - 2026-10-15
 
 **Release type:** Minor Feature Update
