@@ -141,6 +141,33 @@ export function revokedMessageId (message) {
 }
 
 /**
+ * Splits a live upsert into messages the ERP should treat as new (unread
+ * count, lead, reopened chat) and old ones that are only archived. WhatsApp
+ * marks messages that arrived while the bridge was offline (a restart or
+ * redeploy) as 'append'; the ones from the last day are still news to staff.
+ */
+export function splitLiveMessages (messages, type, nowSeconds = Math.floor(Date.now() / 1000), windowSeconds = 86_400) {
+  if (type === 'notify') {
+    return { live: messages, old: [] }
+  }
+
+  const live = []
+  const old = []
+
+  for (const msg of messages ?? []) {
+    const sentAt = toInteger(msg?.messageTimestamp)
+
+    if (sentAt !== null && nowSeconds - sentAt <= windowSeconds) {
+      live.push(msg)
+    } else {
+      old.push(msg)
+    }
+  }
+
+  return { live, old }
+}
+
+/**
  * [lid, jid-with-phone] pairs WhatsApp puts on message keys (remoteJid plus
  * remoteJidAlt). The address-book/push-name entries of the same history are
  * keyed by the LID, so these pairs let their names reach the right chat.

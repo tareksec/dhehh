@@ -8,7 +8,7 @@ import makeWASocket, {
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import QRCode from 'qrcode'
-import { chunk, isPersonalChat, lidPairsFromMessages, normalizeContact, normalizeMessage, phoneFromJid } from './normalize.js'
+import { chunk, isPersonalChat, lidPairsFromMessages, normalizeContact, normalizeMessage, phoneFromJid, splitLiveMessages } from './normalize.js'
 import { Outbox, classifyResponse, sign } from './outbox.js'
 
 const MESSAGE_BATCH = 200
@@ -128,7 +128,17 @@ export class Session {
     sock.ev.on('connection.update', (update) => this.onConnectionUpdate(sock, update))
     sock.ev.on('lid-mapping.update', (mapping) => this.rememberLid(mapping?.lid, mapping?.pn))
     sock.ev.on('messaging-history.set', (data) => this.guard(() => this.onHistory(data)))
-    sock.ev.on('messages.upsert', ({ messages, type }) => this.guard(() => this.archiveMessages(messages, type !== 'notify')))
+    sock.ev.on('messages.upsert', ({ messages, type }) => this.guard(async () => {
+      const { live, old } = splitLiveMessages(messages, type)
+
+      if (live.length > 0) {
+        await this.archiveMessages(live, false)
+      }
+
+      if (old.length > 0) {
+        await this.archiveMessages(old, true)
+      }
+    }))
     sock.ev.on('contacts.upsert', (contacts) => this.guard(() => this.archiveContacts(contacts)))
     sock.ev.on('contacts.update', (contacts) => this.guard(() => this.archiveContacts(contacts)))
   }

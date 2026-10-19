@@ -22,6 +22,9 @@ use Illuminate\Support\Facades\Log;
  */
 class WhatsAppWebWebhookController extends Controller
 {
+    /** Live batches up to this size are saved immediately instead of through the queue. */
+    protected const INLINE_LIVE_BATCH = 25;
+
     public function handle(Request $request, int $channel): Response
     {
         $channel = $this->channel($channel);
@@ -37,11 +40,7 @@ class WhatsAppWebWebhookController extends Controller
 
         match ((string) ($payload['type'] ?? '')) {
             'connection' => $this->applyConnection($channel, $data),
-            'messages' => ImportWhatsAppWebMessagesJob::dispatch(
-                $channel->getKey(),
-                array_values(array_filter((array) ($data['messages'] ?? []), 'is_array')),
-                (bool) ($data['history'] ?? false),
-            ),
+            'messages' => $this->importMessages($channel, $data),
             'contacts' => SyncWhatsAppWebContactsJob::dispatch(
                 $channel->getKey(),
                 array_values(array_filter((array) ($data['contacts'] ?? []), 'is_array')),
@@ -86,6 +85,26 @@ class WhatsAppWebWebhookController extends Controller
 
         // 409 tells the bridge the message batch is still queued here; it retries later.
         return $stored ? response('OK', 200) : response('MESSAGE_NOT_ARCHIVED_YET', 409);
+    }
+
+    /**
+     * New messages are saved while the bridge waits, so they show in the Inbox
+     * without any queue delay. If saving fails the bridge gets an error and
+     * retries from its own outbox. History batches are large and stay queued.
+     */
+    protected function importMessages(ConversationChannel $channel, array $data): void
+    {
+        $messages = array_values(array_filter((array) ($data['messages'] ?? []), 'is_array'));
+        $history = (bool) ($data['history'] ?? false);
+        $job = new ImportWhatsAppWebMessagesJob($channel->getKey(), $messages, $history);
+
+        if (! $history && count($messages) <= self::INLINE_LIVE_BATCH) {
+            dispatch_sync($job);
+
+            return;
+        }
+
+        dispatch($job);
     }
 
     protected function channel(int $id): ConversationChannel

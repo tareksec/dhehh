@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\Inbox;
 use App\Filament\Pages\WhatsAppWebLogin;
+use App\Jobs\ImportWhatsAppWebMessagesJob;
 use App\Jobs\RefreshWhatsAppWebNamesJob;
 use App\Models\Company;
 use App\Models\Conversation;
@@ -382,6 +383,57 @@ class WhatsAppWebArchiveTest extends TestCase
         Livewire::test(Inbox::class)
             ->assertSee('+8801859963681')
             ->assertDontSee('নাম পাওয়া যায়নি');
+    }
+
+    public function test_a_live_message_is_saved_while_the_bridge_waits_but_history_is_queued(): void
+    {
+        // With the queue faked, a job sent through the "sync" connection is the one that runs inline.
+        Queue::fake();
+
+        $this->postEvent('messages', ['history' => false, 'messages' => [$this->message('RT1')]])->assertOk();
+        $this->postEvent('messages', ['history' => true, 'messages' => [$this->message('H1')]])->assertOk();
+
+        Queue::assertPushed(ImportWhatsAppWebMessagesJob::class, fn (ImportWhatsAppWebMessagesJob $job): bool => $job->connection === 'sync' && ! $job->history);
+        Queue::assertPushed(ImportWhatsAppWebMessagesJob::class, fn (ImportWhatsAppWebMessagesJob $job): bool => $job->connection !== 'sync' && $job->history);
+    }
+
+    public function test_a_live_message_is_in_the_inbox_as_soon_as_the_bridge_gets_its_answer(): void
+    {
+        $this->postEvent('messages', ['history' => false, 'messages' => [$this->message('RT3')]])->assertOk();
+
+        $this->assertSame(1, ConversationMessage::query()->count());
+    }
+
+    public function test_a_live_message_that_cannot_be_saved_is_reported_so_the_bridge_retries(): void
+    {
+        $this->mock(WhatsAppWebArchiveService::class, function ($mock): void {
+            $mock->shouldReceive('storeMessage')->andThrow(new \RuntimeException('database unavailable'));
+        });
+
+        $this->postEvent('messages', ['history' => false, 'messages' => [$this->message('RT2')]])->assertStatus(500);
+    }
+
+    public function test_the_inbox_notices_a_new_message_without_a_full_refresh_in_between(): void
+    {
+        $this->postEvent('messages', ['history' => true, 'messages' => [$this->message('P1', ['body' => 'পুরনো মেসেজ'])]])->assertOk();
+
+        $admin = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($admin)->withSession(['current_company_id' => $this->company->id]);
+        app(CompanyContext::class)->set($this->company);
+
+        $component = Livewire::test(Inbox::class)
+            ->call('selectConversation', Conversation::withoutGlobalScopes()->sole()->id)
+            ->call('checkForChanges');
+        $before = $component->get('inboxSignature');
+
+        // Nothing new: same signature, and no full refresh happens yet.
+        $component->call('checkForChanges')->assertSet('inboxSignature', $before);
+
+        $this->postEvent('messages', ['history' => false, 'messages' => [$this->message('P2', ['body' => 'এইমাত্র এল', 'timestamp' => now()->timestamp])]])->assertOk();
+
+        $component->call('checkForChanges')
+            ->assertNotSet('inboxSignature', $before)
+            ->assertSee('এইমাত্র এল');
     }
 
     public function test_ban_and_channel_deletion_never_delete_archived_customer_data(): void

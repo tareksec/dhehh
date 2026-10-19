@@ -3,7 +3,7 @@ import { mkdtemp, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
-import { isPersonalChat, lidPairsFromMessages, normalizeContact, normalizeMessage, phoneFromJid } from '../src/normalize.js'
+import { isPersonalChat, lidPairsFromMessages, normalizeContact, normalizeMessage, phoneFromJid, splitLiveMessages } from '../src/normalize.js'
 import { Outbox, classifyResponse, sign } from '../src/outbox.js'
 
 const silent = { error () {}, warn () {}, info () {} }
@@ -125,6 +125,17 @@ test('a push name keyed by lid reaches the phone once the pair is learned', () =
   assert.equal(contact.phone, '8801711000001')
   assert.equal(contact.jid, '8801711000001@s.whatsapp.net')
   assert.equal(contact.push_name, 'Karim Uddin')
+})
+
+test('live upserts are live; offline ones are live only when recent', () => {
+  const now = 1_700_000_000
+  const fresh = { key: { id: 'A' }, messageTimestamp: now - 3600 }
+  const stale = { key: { id: 'B' }, messageTimestamp: now - 3 * 86_400 }
+  const undated = { key: { id: 'C' } }
+
+  assert.deepEqual(splitLiveMessages([fresh, stale], 'notify', now), { live: [fresh, stale], old: [] })
+  assert.deepEqual(splitLiveMessages([fresh, stale, undated], 'append', now), { live: [fresh], old: [stale, undated] })
+  assert.deepEqual(splitLiveMessages(undefined, 'append', now), { live: [], old: [] })
 })
 
 test('only permanent failures drop queued events', () => {

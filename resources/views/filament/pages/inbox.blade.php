@@ -69,7 +69,7 @@
 <x-filament-panels::page class="zz-inbox-page">
     <div
         data-zz-no-reload
-        wire:poll.visible.8s="refreshInbox"
+        wire:poll.visible.3s="checkForChanges"
         class="zz-inbox"
         x-data="{
             observer: null,
