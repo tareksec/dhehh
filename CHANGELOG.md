@@ -4,6 +4,16 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **WhatsApp Web: a picture or voice note whose file was lost from the server is saved again** when the bridge sends it again (for example after the number is linked again and the history is re-sent). Before, the ERP skipped it because the message still pointed to a file that no longer existed.
+
+### Technical Notes
+
+- `WhatsAppWebArchiveService::attachMedia()` returns early only when the stored file is still found (`CompanyStorageService::locatePrivate()`); otherwise it stores the bytes again under the same name. `docs/deployment.md` now says how to check that `/app/storage` is a persistent volume (`df -h /app/storage` must not show `overlay`). 2 new tests.
+
 ## [2.88.1] - 2026-10-19
 
 **Release type:** Patch/Fix Update

@@ -252,6 +252,28 @@ class WhatsAppWebArchiveTest extends TestCase
         return ConversationMessage::query()->where('external_message_id', 'like', '%'.$id)->sole();
     }
 
+    public function test_a_file_lost_from_the_server_is_saved_again_when_the_bridge_sends_it_again(): void
+    {
+        $image = $this->storedMedia('LOST1', 'image', 'image/jpeg', 'first-copy');
+        $disk = Storage::disk(app(CompanyStorageService::class)->privateDiskName());
+        $disk->delete($image->media_path);
+        $this->assertFalse($disk->exists($image->media_path));
+
+        $this->postMedia('LOST1', 'second-copy')->assertOk();
+
+        $this->assertSame('second-copy', $disk->get($image->fresh()->media_path));
+        $this->get(route('conversation-messages.media', ['message' => $image->getKey()]))->assertOk();
+    }
+
+    public function test_a_file_that_is_still_on_the_server_is_not_replaced_by_a_repeat_upload(): void
+    {
+        $image = $this->storedMedia('KEEP1', 'image', 'image/jpeg', 'first-copy');
+
+        $this->postMedia('KEEP1', 'second-copy')->assertOk();
+
+        $this->assertSame('first-copy', Storage::disk(app(CompanyStorageService::class)->privateDiskName())->get($image->fresh()->media_path));
+    }
+
     public function test_a_real_picture_and_voice_note_are_served_with_playable_types(): void
     {
         $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');

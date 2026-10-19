@@ -118,6 +118,19 @@ and the 10 MB voucher attachment field. The persistent volume must cover all of
 `/app/storage` (not only `storage/app/public`), and both `storage/` and
 `bootstrap/cache/` must be writable by the running PHP user.
 
+**Check that `/app/storage` really is persistent (found 2026-10-19).** In the
+app's Coolify terminal run `df -h /app/storage | tail -1`. If the first column
+says `overlay`, the folder is part of the container and every redeploy deletes
+what is in it: WhatsApp Web pictures/voice notes/videos, voucher attachments,
+expense scans, backups and anything on the local public disk. The messages
+keep pointing to the files, so the Inbox shows "The file is not in the server
+storage". Fix: Coolify -> the app -> **Persistent Storage** -> **Add** ->
+**Volume Mount** (a named volume, not a host directory: a named volume starts
+with the image's `storage/` folders, an empty host directory does not), name
+`erp-storage`, destination path `/app/storage`; mount the same volume in the
+queue-worker app if there is one; redeploy. Afterwards `df` must show a
+device other than `overlay`.
+
 A successful **Test public bucket** result validates a server-side R2
 write/read/public-domain probe, but deliberately does not enable R2. In Cloud
 Storage, then turn on **Enable R2 for new uploads** and click **Save settings**.

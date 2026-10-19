@@ -2,6 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-19 (media storage) - WhatsApp Web files lost on every redeploy
+
+Reason - after v2.87.2 the Inbox bubble itself explained the broken picture: "Server answer: 404 (application/json). The file is not in the server storage". Owner ran my read-only check in the ERP terminal.
+
+Cause (confirmed with the owner's output): `disk: local`, 1,037 messages with a saved file, of the latest 300 only 7 files exist (the ones saved since the last deploy), and `df -h /app/storage` shows `overlay` - `/app/storage` is part of the container, not a persistent volume, so every redeploy deletes the private files while the database keeps the paths. This also affects anything else on the local disks (voucher attachments, expense scans, backups, local public uploads) unless R2 is used for them - not checked.
+
+What changed in the repo:
+- `attachMedia()` stores the bytes again when the saved file is gone (it used to return early whenever `media_path` was filled), so a re-sent history (relink) can restore files that WhatsApp still serves. 2 tests.
+- `docs/deployment.md`: how to verify and fix persistence.
+
+The real fix is in Coolify (not in the repo): Persistent Storage -> Volume Mount `/app/storage` on the ERP app (and the same volume on the queue-worker app). Lost files can only come back through a relink + history re-sync, and only those WhatsApp still serves (old media expires); the ERP keeps no media keys.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
+
 ## 2026-10-19 (mp-footer) - Marketplace Pro: unreadable footer and top bar
 
 Reason - owner's screenshot ("blade থিমের ui বাজে হয়েছে"): grey footer with near-invisible text, grey top bar, white header over a dark page. Cause: the top bar and footer used the admin secondary colour (mixed 72% with black) as background with fixed light text, so a light secondary gave low contrast.
@@ -31,7 +45,7 @@ Needs Bangla review: the 5 new keys ("The browser could not show this file...", 
 
 Tests: bridge `npm test` (20 passing, 2 new for the independent outbox); `WhatsAppWebArchiveTest` (32; 5 new: real PNG/Ogg types, audio type, byte ranges, missing-file reason, Inbox failure notice), `PrivateAttachmentStorageTest`, `InboxPageTest`, `TranslationParityTest`, Pint pass.
 
-Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
+Commit status: on `main` (v2.87.2, owner approved the push on 2026-10-19).
 
 ## 2026-10-18 - Pay a cycle's profit without waiting for sales (manual-profit settlement)
 
