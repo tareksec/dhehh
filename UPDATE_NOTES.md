@@ -64,7 +64,37 @@ Built from `16_AI_INBOX_CONTROL_PLANE_PLAN.md` after a read-only walk through Ai
   - Needs Bangla review: 55 new keys in `lang/bn.json`.
   - Commit status: committed and pushed to `feature/ai-inbox-control-plane` (owner approved: "ওকে কমিট এবং পুশ কর"). Not merged to `main`. The migration has not been run on the demo DB.
 
-Not done yet (next phases of the plan): knowledge base (5), Meta "Seen"/typing indicator, customer product cards/carousel (Messenger templates).
+- Phase 5 (owner: "পরের ধাপের কাজ শুরু কর"): CRM → Knowledge base (`KnowledgeDocumentResource`, `KnowledgeBaseService`, `KnowledgeDocument`) and the AI tool `lookup_knowledge`.
+  - Documents are plain text or Markdown. Headings split them into passages of up to 700 characters. The agent looks passages up and selects `knowledge:<id>`; the server sends the stored passage as written (same rule as FAQ answers). Amounts written in a looked-up passage count as grounded. The tool is offered only when the company has an active document.
+  - **Plan changed on purpose:** search runs in PHP over the cached passages instead of MySQL FULLTEXT, because InnoDB's tokenizer breaks Bangla words at vowel signs. Matching drops a trailing "s" and, for words of 5+ characters, the last two characters (the Bangla ending ের), and needs at least half of the question's words to match. Embeddings are not built (the plan said only if quality proves insufficient).
+  - Who can edit: `crm.manage` (same as Broadcasts), because the text is sent to customers as written. Not asked of the owner.
+  - **Known limit (resolved 2026-10-19, see phase 6):** a customer message with a hand-over word used to go to the team before the FAQ or the knowledge base was checked.
+  - Test box: **Test a question** on the Knowledge base list runs the same search (no AI call). Unanswered questions has a new **Add to knowledge base** action. File import accepts .md/.txt up to 200 KB.
+  - Migration `2026_10_11_000100_create_knowledge_documents_table`. Not run on the demo DB.
+  - Needs Bangla review: 17 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+- Phase 8, checklist part (owner: "ওকে এখন পরবর্তি কাজ কর"): CRM → Setup checklist (`AiSetupChecklist`, `AiSetupChecklistService`). Phases 6 and 7 and the go-live switch need owner answers (O4, O5, O7, O8, O9), so only the part that needs no decision was built.
+  - Eight steps, all worked out from data, nothing stored (no "dismissed" state either): channel, AI key + switch on, business description (`business_about`), every active product has a photo, default courier has delivery charges, at least one FAQ or knowledge document, the signed-in user has a push device, a test chat run exists.
+  - Not built: the practice mode / go-live switch (`ai_live`, O7), so there is no "go live" step yet. The "alerts" step is per user, not per company.
+  - Needs Bangla review: 23 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+
+- Owner answers (2026-10-19, asked with `AskUserQuestion`): O2 = 30 minutes, all hours; O3 = add payment proof, website lead, call and booking requests, complaint words; O4 = reminders at 1, 6, 24, 48 hours then weekly for 4 weeks, nothing 22:00–08:00, only for customers who got a link or quotation and have not ordered, counted from the customer's last message; O4a = Messenger steps after 24 hours go to the Needs attention list; O5 = Messenger broadcast allowed, test to own chat first, CRM manage people send; O6 = same permission as Integrations; **O7 = no practice mode** (AI on = live); O8 = parcel count + total COD, per-parcel list, consignment/tracking number, no rider block; O9 = all four sources (days not answered); returns words look in saved answers first. Full table: plan §3.1.
+- Phase 6 (owner: "প্রশ্ন করে জেনে নাও" — then built from the answers above): the hand-over rules, follow-up schedule and Messenger broadcast.
+  - **Hand-over rules** (`AiReplyService::keywordHandover()`): returns/refund words look in FAQ and knowledge first; payment, call, booking and wider complaint wording go to the team with their own reason. An image-only payment screenshot is recognised only when the separate image model describes photos (Auto Messaging → image model); with the main model reading the photo directly, only the customer's caption is checked. New Needs attention kinds and reasons; website leads open an item (`attention_items.lead_id`).
+  - **Follow-ups:** my reading of "weekly" is 7 days after the previous reminder, i.e. hours 216, 384, 552, 720 from the base message. The schedule restarts from the customer's newest message (the first reminder still ahead, not an old one), a person's reply cancels it, a newer offer replaces it. Links expire after 7 days but reminders go on for 30: the weekly WhatsApp template does not carry the link; Messenger text with `{link}` only goes inside the 24-hour window, when the link is still valid. Companies with Messenger need to enter the reminder text on Integrations; until then those reminders go to the team.
+  - **Broadcast:** window is 23 hours (one hour margin). The test goes to a chat the sender picks; it must be a chat with the Page inside the window, so the sender writes to the Page from their phone first. "Who may send" = `crm.manage`, the permission the Broadcasts resource already needs; no new permission.
+  - **Not run on the demo DB:** migrations `2026_10_19_000100`, `000200`, `000300` (phase 6) and `000400` (phase 7).
+  - Needs Bangla review: 35 new keys in `lang/bn.json` (O3 5, O4 11, O5 19).
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+- Phase 7 (same day): Courier → Scan parcels, Courier → Handover sheet, CRM → To chase.
+  - **Not built, on purpose:** the invoice QR (the invoice already prints a scannable Code 128 barcode of the order number) and the **Offer tapped** source of To chase (nothing records who tapped an offer, so there is nobody to contact). **Checkout attempt** is read as "checkout stopped at the advance payment", because `StorefrontCheckoutAttempt` keeps only masked contacts.
+  - **Owner decision still needed:** look-back days for To chase were not answered; it offers 7 / 14 / 30, default 7. Scan parcels moves to a stage the user picks (default Shipping); stages that need a reason (cancelled, returned, refunded) are not offered.
+  - Camera scanning uses the browser's `BarcodeDetector` (Chrome/Edge on Android and desktop); it was not tried on a real device. The USB-scanner path (type + Enter) is covered by tests.
+  - Needs Bangla review: 44 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+
+Not done yet (next phases of the plan): Meta "Seen"/typing indicator, customer product cards/carousel (Messenger templates).
 
 Needs Bangla review: the new Inbox/Activity/settings strings in `lang/bn.json` (51 keys) the Needs attention strings (19 keys) and the AI Inbox Report strings (26 keys) were written by the agent.
 

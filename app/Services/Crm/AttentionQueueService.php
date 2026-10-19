@@ -3,7 +3,9 @@
 namespace App\Services\Crm;
 
 use App\Models\AttentionItem;
+use App\Models\Company;
 use App\Models\Conversation;
+use App\Models\Lead;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -21,9 +23,11 @@ class AttentionQueueService
     /** The AI handed the chat over: open an item, or note the new reason on the open one. */
     public function opened(Conversation $conversation, string $kind, ?string $reason = null, ?string $note = null): AttentionItem
     {
+        $kind = AttentionItem::KIND_BY_REASON[$reason] ?? $kind;
         $open = $this->openItem($conversation);
         if ($open) {
             $open->forceFill(array_filter([
+                'kind' => isset(AttentionItem::KIND_BY_REASON[$reason]) ? $kind : null,
                 'reason' => $reason,
                 'note' => $note !== null ? Str::limit($note, 250, '') : null,
             ], fn ($value): bool => $value !== null))->save();
@@ -31,7 +35,7 @@ class AttentionQueueService
             return $open;
         }
 
-        $target = $this->responseTargetMinutes($conversation);
+        $target = $this->responseTargetMinutes($conversation->company);
 
         return AttentionItem::query()->create([
             'company_id' => $conversation->company_id,
@@ -42,6 +46,39 @@ class AttentionQueueService
             'opened_at' => now(),
             'due_at' => $target > 0 ? now()->addMinutes($target) : null,
         ]);
+    }
+
+    /** A lead came in from the website (no chat behind it): one item per lead. */
+    public function openedForLead(Lead $lead): AttentionItem
+    {
+        $existing = AttentionItem::query()->where('lead_id', $lead->getKey())->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $target = $this->responseTargetMinutes($lead->company);
+
+        return AttentionItem::query()->create([
+            'company_id' => $lead->company_id,
+            'kind' => 'website_lead',
+            'lead_id' => $lead->getKey(),
+            'reason' => 'website_lead',
+            'note' => Str::limit(trim(($lead->interest ?: $lead->note) ?? ''), 250, '') ?: null,
+            'opened_at' => now(),
+            'due_at' => $target > 0 ? now()->addMinutes($target) : null,
+        ]);
+    }
+
+    /** Someone moved the lead past "new": that is the first reply, and the item is done. */
+    public function leadWorked(Lead $lead, ?User $user = null): void
+    {
+        $item = AttentionItem::query()->where('lead_id', $lead->getKey())->whereNull('resolved_at')->first();
+        if (! $item) {
+            return;
+        }
+
+        $item->forceFill(['first_response_at' => now(), 'first_response_by' => $user?->getKey()])->save();
+        $this->close($item, 'answered', $user);
     }
 
     /** A person answered the chat: the first answer stops the response timer. */
@@ -81,10 +118,8 @@ class AttentionQueueService
         }
     }
 
-    public function responseTargetMinutes(Conversation $conversation): int
+    public function responseTargetMinutes(?Company $company): int
     {
-        $company = $conversation->company;
-
         return $company
             ? (int) $this->settings->all($company, AiSettingsService::TOOL_MESSAGING)['response_target_minutes']
             : (int) AiSettingsService::DEFAULTS['response_target_minutes'];

@@ -15,6 +15,7 @@ class BroadcastRecipient extends Model
     public const TYPES = [
         'lead' => 'Lead',
         'customer' => 'Customer',
+        'conversation' => 'Chat',
     ];
 
     public const STATUSES = [

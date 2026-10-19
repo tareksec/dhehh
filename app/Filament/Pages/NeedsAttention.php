@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Clusters\Crm;
+use App\Filament\Resources\Leads\LeadResource;
 use App\Models\AttentionItem;
 use App\Models\Conversation;
 use App\Services\Crm\AttentionQueueService;
@@ -78,14 +79,16 @@ class NeedsAttention extends Page implements HasTable
     public function table(Table $table): Table
     {
         return $table
-            ->query(AttentionItem::query()->with(['conversation.assignedUser', 'firstResponder', 'resolver']))
+            ->query(AttentionItem::query()->with(['conversation.assignedUser', 'lead', 'firstResponder', 'resolver']))
             ->defaultSort('opened_at', 'desc')
             ->poll('15s')
             ->columns([
                 TextColumn::make('opened_at')->label(__('Opened'))->dateTime()->sortable(),
-                TextColumn::make('conversation.contact_name')->label(__('Customer'))
-                    ->formatStateUsing(fn ($state, AttentionItem $record): string => $record->conversation?->profileDisplayName() ?? '—')
-                    ->searchable(),
+                TextColumn::make('customer')->label(__('Customer'))
+                    ->state(fn (AttentionItem $record): string => $record->conversation?->profileDisplayName() ?? $record->lead?->name ?? '—')
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->where(fn (Builder $any): Builder => $any
+                        ->whereHas('conversation', fn (Builder $q): Builder => $q->where('contact_name', 'like', "%{$search}%"))
+                        ->orWhereHas('lead', fn (Builder $q): Builder => $q->where('name', 'like', "%{$search}%")))),
                 TextColumn::make('reason')->label(__('Reason'))
                     ->formatStateUsing(fn (?string $state): string => $state ? __(Conversation::HANDOVER_REASONS[$state] ?? $state) : '')
                     ->description(fn (AttentionItem $record): ?string => $record->note),
@@ -128,13 +131,19 @@ class NeedsAttention extends Page implements HasTable
                         ->where(fn (Builder $q): Builder => $q->whereColumn('due_at', '<', 'resolved_at')
                             ->orWhere(fn (Builder $open): Builder => $open->whereNull('resolved_at')->where('due_at', '<', now())))),
                 Filter::make('mine')->label(__('Given to me'))->toggle()
-                    ->query(fn (Builder $query): Builder => $query->whereHas('conversation', fn (Builder $q): Builder => $q->where('assigned_to', auth()->id()))),
+                    ->query(fn (Builder $query): Builder => $query->where(fn (Builder $any): Builder => $any
+                        ->whereHas('conversation', fn (Builder $q): Builder => $q->where('assigned_to', auth()->id()))
+                        ->orWhereHas('lead', fn (Builder $q): Builder => $q->where('assigned_to', auth()->id())))),
             ])
             ->recordActions([
                 Action::make('inbox')->label(__('Open inbox'))->icon(Heroicon::OutlinedChatBubbleLeftRight)
+                    ->visible(fn (AttentionItem $record): bool => $record->conversation_id !== null)
                     ->url(fn (AttentionItem $record): ?string => $record->conversation_id
                         ? Inbox::getUrl(['conversation' => $record->conversation_id, 'status' => 'all'])
                         : null),
+                Action::make('lead')->label(__('Open lead'))->icon(Heroicon::OutlinedUser)
+                    ->visible(fn (AttentionItem $record): bool => $record->lead_id !== null && LeadResource::canViewAny())
+                    ->url(fn (AttentionItem $record): ?string => $record->lead_id ? LeadResource::getUrl('view', ['record' => $record->lead_id]) : null),
                 Action::make('claim')->label(__('Claim'))->icon(Heroicon::OutlinedHandRaised)
                     ->visible(fn (AttentionItem $record): bool => $this->canManage() && $record->resolved_at === null
                         && $record->conversation !== null && (int) $record->conversation->assigned_to !== (int) auth()->id())

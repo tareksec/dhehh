@@ -6,6 +6,7 @@ use App\Filament\Clusters\Crm;
 use App\Models\CompanyFaq;
 use App\Models\Conversation;
 use App\Models\ConversationModeEvent;
+use App\Models\KnowledgeDocument;
 use App\Services\CompanyContext;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -104,6 +105,25 @@ class UnansweredQuestions extends Page implements HasTable
                         ]);
                         Cache::forget("crm:faq:{$companyId}");
                         Notification::make()->title(__('FAQ answer saved'))->success()->send();
+                    }),
+                Action::make('addKnowledge')->label(__('Add to knowledge base'))->icon(Heroicon::OutlinedBookOpen)
+                    ->visible(fn (): bool => $this->canManage())
+                    ->modalHeading(__('Add to knowledge base'))
+                    ->modalDescription(__('The AI can find this text when a customer asks something similar. It is sent to the customer exactly as written, so use full sentences with the real numbers.'))
+                    ->fillForm(fn (ConversationModeEvent $record): array => ['title' => mb_substr((string) $this->questionFor($record), 0, 255)])
+                    ->schema([
+                        TextInput::make('title')->label(__('Title'))->required()->maxLength(255),
+                        Textarea::make('content')->label(__('Content'))->required()->rows(6)->maxLength(KnowledgeDocument::MAX_CONTENT),
+                    ])
+                    ->action(function (array $data): void {
+                        abort_unless($this->canManage(), 403);
+                        KnowledgeDocument::query()->create([
+                            'company_id' => (int) app(CompanyContext::class)->id(),
+                            'title' => $data['title'],
+                            'content' => $data['content'],
+                            'is_active' => true,
+                        ]);
+                        Notification::make()->title(__('Knowledge document saved'))->success()->send();
                     }),
                 Action::make('inbox')->label(__('Open inbox'))->icon(Heroicon::OutlinedChatBubbleLeftRight)
                     ->url(fn (ConversationModeEvent $record): string => Inbox::getUrl(['conversation' => $record->conversation_id, 'status' => 'all'])),

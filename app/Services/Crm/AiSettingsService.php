@@ -84,7 +84,16 @@ class AiSettingsService
         'input_cost_per_million' => 0,
         'output_cost_per_million' => 0,
         'sales_follow_ups_enabled' => false,
-        'follow_up_delay_hours' => 4,
+        // Reminders after the customer's last message, in hours, then one a
+        // week for follow_up_weekly_count weeks (owner answer O4, 2026-10-19).
+        'follow_up_schedule_hours' => '1, 6, 24, 48',
+        'follow_up_weekly_count' => 4,
+        // No reminder goes out from start hour until end hour (company time).
+        'follow_up_quiet_start_hour' => 22,
+        'follow_up_quiet_end_hour' => 8,
+        // Text for Messenger and Instagram reminders (they have no templates).
+        // {link} becomes the order link. Empty: the team does those reminders.
+        'follow_up_message' => '',
         'follow_up_template' => '',
         'follow_up_template_language' => 'bn',
         // Off by default: the agent answers only what was asked, with no
@@ -124,9 +133,10 @@ class AiSettingsService
         // in Bangla replies.
         'address_style' => 'none',
         // Minutes a chat the AI handed over may wait for a person's first
-        // reply before the Needs attention page marks it late. 0 = no
-        // target (nothing is marked late) until the owner sets one.
-        'response_target_minutes' => 0,
+        // reply before the Needs attention page marks it late. 30 is the
+        // owner's answer (O2, 2026-10-19), around the clock; 0 = no target
+        // (nothing is marked late).
+        'response_target_minutes' => 30,
         // What the business is, for the agent's background only (Agent Desk).
         'business_about' => '',
     ];
@@ -193,7 +203,11 @@ class AiSettingsService
             'input_cost_per_million' => max(0, (float) ($data['input_cost_per_million'] ?? $existing['input_cost_per_million'] ?? 0)),
             'output_cost_per_million' => max(0, (float) ($data['output_cost_per_million'] ?? $existing['output_cost_per_million'] ?? 0)),
             'sales_follow_ups_enabled' => (bool) ($data['sales_follow_ups_enabled'] ?? $existing['sales_follow_ups_enabled'] ?? false),
-            'follow_up_delay_hours' => max(1, min(168, (int) ($data['follow_up_delay_hours'] ?? $existing['follow_up_delay_hours'] ?? 4))),
+            'follow_up_schedule_hours' => implode(', ', self::followUpHours((string) ($data['follow_up_schedule_hours'] ?? $existing['follow_up_schedule_hours'] ?? self::DEFAULTS['follow_up_schedule_hours']))),
+            'follow_up_weekly_count' => max(0, min(12, (int) ($data['follow_up_weekly_count'] ?? $existing['follow_up_weekly_count'] ?? 4))),
+            'follow_up_quiet_start_hour' => max(0, min(23, (int) ($data['follow_up_quiet_start_hour'] ?? $existing['follow_up_quiet_start_hour'] ?? 22))),
+            'follow_up_quiet_end_hour' => max(0, min(23, (int) ($data['follow_up_quiet_end_hour'] ?? $existing['follow_up_quiet_end_hour'] ?? 8))),
+            'follow_up_message' => trim(mb_substr((string) ($data['follow_up_message'] ?? $existing['follow_up_message'] ?? ''), 0, 900)),
             'follow_up_template' => trim((string) ($data['follow_up_template'] ?? $existing['follow_up_template'] ?? '')),
             'follow_up_template_language' => trim((string) ($data['follow_up_template_language'] ?? $existing['follow_up_template_language'] ?? 'bn')),
             'proactive_mode_enabled' => (bool) ($data['proactive_mode_enabled'] ?? $existing['proactive_mode_enabled'] ?? false),
@@ -308,5 +322,22 @@ class AiSettingsService
         } catch (DecryptException) {
             return null;
         }
+    }
+
+    /**
+     * "1, 6, 24, 48" as whole hours, rising, 1 to 720. Falls back to the
+     * default when nothing usable is left, so a typo cannot switch the
+     * reminders off by accident.
+     *
+     * @return list<int>
+     */
+    public static function followUpHours(string $value): array
+    {
+        $hours = collect(preg_split('/[\s,;]+/', $value, -1, PREG_SPLIT_NO_EMPTY) ?: [])
+            ->map(fn (string $hour): int => (int) $hour)
+            ->filter(fn (int $hour): bool => $hour >= 1 && $hour <= 720)
+            ->unique()->sort()->values()->all();
+
+        return $hours !== [] ? $hours : array_map('intval', explode(',', self::DEFAULTS['follow_up_schedule_hours']));
     }
 }

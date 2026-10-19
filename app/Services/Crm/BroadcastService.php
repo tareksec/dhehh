@@ -5,13 +5,16 @@ namespace App\Services\Crm;
 use App\Jobs\SendBroadcastJob;
 use App\Models\Broadcast;
 use App\Models\BroadcastRecipient;
+use App\Models\Conversation;
 use App\Models\ConversationChannel;
 use App\Models\Customer;
 use App\Models\Lead;
 use App\Models\StorefrontSetting;
 use App\Services\Meta\MetaGraphService;
 use App\Services\StorefrontNotificationService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
@@ -31,6 +34,15 @@ class BroadcastService
     /** Rebuilds the recipient list from the broadcast's stored filters. */
     public function buildRecipients(Broadcast $broadcast): int
     {
+        if ($broadcast->isMessenger()) {
+            return $this->storeRecipients($broadcast, $this->messengerAudience($broadcast)->get(['id', 'contact_name'])->map(fn (Conversation $conversation): array => [
+                'recipient_type' => 'conversation',
+                'recipient_id' => $conversation->getKey(),
+                'name' => $conversation->contact_name,
+                'phone' => null,
+            ]));
+        }
+
         $rows = collect();
 
         if (in_array($broadcast->audience_type, ['leads', 'both'], true)) {
@@ -80,6 +92,12 @@ class BroadcastService
         $rows = $rows->unique(fn (array $row): string => preg_replace('/\D+/', '', $row['phone']) ?: $row['phone'])
             ->values();
 
+        return $this->storeRecipients($broadcast, $rows);
+    }
+
+    /** Replaces the broadcast's recipient list with these rows. */
+    protected function storeRecipients(Broadcast $broadcast, Collection $rows): int
+    {
         BroadcastRecipient::query()->where('broadcast_id', $broadcast->getKey())->delete();
 
         $now = now();
@@ -106,6 +124,14 @@ class BroadcastService
     {
         if (! $broadcast->isEditable()) {
             return;
+        }
+
+        // Owner answer O5: a Messenger broadcast waits for a successful test
+        // of its current text, sent to the sender's own chat.
+        if ($broadcast->needsTest()) {
+            throw ValidationException::withMessages([
+                'broadcast' => __('Send a test to your own chat first. The test must match the text you are about to send.'),
+            ]);
         }
 
         if ($broadcast->recipients_count === 0) {
@@ -171,6 +197,12 @@ class BroadcastService
             return;
         }
 
+        if ($broadcast->isMessenger()) {
+            $this->sendToConversation($broadcast, $recipient);
+
+            return;
+        }
+
         if (app(ContactSuppressionService::class)->suppressed((int) $broadcast->company_id, $recipient->phone)) {
             $recipient->update(['status' => 'failed', 'error' => 'Contact opted out before delivery.']);
             $broadcast->increment('failed_count');
@@ -200,6 +232,103 @@ class BroadcastService
             'error' => 'Delivery failed on every channel configured for this broadcast.',
         ])->save();
         $broadcast->increment('failed_count');
+    }
+
+    /**
+     * The Page's chats that wrote inside the window. Checked again for each
+     * recipient at send time: the window keeps closing while a list is sent.
+     */
+    public function messengerAudience(Broadcast $broadcast): Builder
+    {
+        $cutoff = now()->subHours(Broadcast::MESSENGER_WINDOW_HOURS);
+
+        return Conversation::query()->withoutGlobalScopes()
+            ->where('company_id', $broadcast->company_id)
+            ->where('provider', 'messenger')
+            ->where('channel_id', $broadcast->messenger_channel_id)
+            ->whereExists(fn ($query) => $query->selectRaw('1')->from('conversation_messages')
+                ->whereColumn('conversation_messages.conversation_id', 'conversations.id')
+                ->where('conversation_messages.direction', 'incoming')
+                ->where('conversation_messages.sent_at', '>=', $cutoff));
+    }
+
+    /**
+     * Test send to one chat (the sender's own). Only a delivered test
+     * unlocks the broadcast, and only for the text it carried.
+     *
+     * @throws ValidationException
+     */
+    public function sendTest(Broadcast $broadcast, Conversation $conversation): void
+    {
+        if (! $broadcast->isMessenger()) {
+            throw ValidationException::withMessages(['conversation' => __('Only a Messenger broadcast needs a test.')]);
+        }
+
+        if ($blocker = $this->messengerBlocker($broadcast, $conversation)) {
+            throw ValidationException::withMessages(['conversation' => $blocker]);
+        }
+
+        if (! $this->deliverToConversation($broadcast, $conversation)) {
+            throw ValidationException::withMessages(['conversation' => __('Meta did not accept the test message. Check the Page connection and try again.')]);
+        }
+
+        $broadcast->forceFill(['tested_hash' => $broadcast->contentHash(), 'tested_at' => now()])->save();
+    }
+
+    protected function sendToConversation(Broadcast $broadcast, BroadcastRecipient $recipient): void
+    {
+        $conversation = Conversation::query()->withoutGlobalScopes()
+            ->where('company_id', $broadcast->company_id)
+            ->find($recipient->recipient_id);
+
+        $blocker = $this->messengerBlocker($broadcast, $conversation);
+        if ($blocker === null && $this->deliverToConversation($broadcast, $conversation)) {
+            $recipient->forceFill(['status' => 'sent', 'channel_used' => 'messenger', 'sent_at' => now(), 'error' => null])->save();
+            $broadcast->increment('sent_count');
+
+            return;
+        }
+
+        $recipient->forceFill(['status' => 'failed', 'error' => $blocker ?? __('Meta did not accept the message.')])->save();
+        $broadcast->increment('failed_count');
+    }
+
+    /** Why this chat may not get the broadcast now, or null when it may. */
+    protected function messengerBlocker(Broadcast $broadcast, ?Conversation $conversation): ?string
+    {
+        if (! $conversation || (int) $conversation->company_id !== (int) $broadcast->company_id
+            || $conversation->provider !== 'messenger' || (int) $conversation->channel_id !== (int) $broadcast->messenger_channel_id) {
+            return __('This chat is not on the Page chosen for the broadcast.');
+        }
+
+        $channel = ConversationChannel::withoutGlobalScopes()->find($broadcast->messenger_channel_id);
+        if (! $channel || (int) $channel->company_id !== (int) $broadcast->company_id || ! $channel->is_active || blank($channel->access_token)) {
+            return __('The Messenger channel is not active.');
+        }
+
+        $inWindow = $conversation->messages()->withoutGlobalScopes()
+            ->where('direction', 'incoming')
+            ->where('sent_at', '>=', now()->subHours(Broadcast::MESSENGER_WINDOW_HOURS))
+            ->exists();
+
+        return $inWindow ? null : __('This chat has not written in the last :hours hours, so Messenger does not allow the message.', ['hours' => Broadcast::MESSENGER_WINDOW_HOURS]);
+    }
+
+    protected function deliverToConversation(Broadcast $broadcast, Conversation $conversation): bool
+    {
+        $text = trim(strtr((string) $broadcast->messenger_text, ['{{name}}' => (string) ($conversation->contact_name ?: '')]));
+        if ($text === '') {
+            return false;
+        }
+
+        $message = app(ConversationMessengerService::class)->send($conversation, $text, null, 'text', null, [
+            'confidence' => 1.0,
+            'meta' => ['source' => 'broadcast', 'broadcast_id' => $broadcast->getKey()],
+        ]);
+        // Written by the business on purpose, not by the AI.
+        $message->forceFill(['generated_by' => 'automation'])->save();
+
+        return $message->delivery_status === 'sent';
     }
 
     protected function sendWhatsApp(Broadcast $broadcast, BroadcastRecipient $recipient, ?ConversationChannel $channel): bool

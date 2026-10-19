@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\SupplierCsvController;
 use App\Http\Controllers\Admin\VoucherAttachmentDownloadController;
 use App\Http\Controllers\Admin\VoucherReceiptController;
 use App\Http\Controllers\ChatOrderController;
+use App\Http\Controllers\CourierHandoverSheetController;
 use App\Http\Controllers\CourierWebhookController;
 use App\Http\Controllers\DocumentationGuideController;
 use App\Http\Controllers\FirebaseServiceWorkerController;
@@ -607,6 +608,12 @@ Route::middleware('auth')->get('/admin/orders/print-bulk', function (Request $re
 Route::middleware('auth')
     ->get('/admin/orders/{order}/pdf', OrderPdfController::class)
     ->name('orders.pdf');
+
+// Printable courier handover sheet (parcels booked through one courier on one
+// day). CourierProvider is company-scoped, so another company's id is a 404.
+Route::middleware('auth')
+    ->get('/admin/courier-handover-sheet', CourierHandoverSheetController::class)
+    ->name('courier.handover-sheet');
 
 Route::middleware('auth')
     ->get('/admin/reports/export/{type}', ReportExportController::class)

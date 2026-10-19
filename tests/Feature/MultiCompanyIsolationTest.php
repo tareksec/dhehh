@@ -12,6 +12,7 @@ use App\Models\Broadcast;
 use App\Models\Category;
 use App\Models\ChannelPartner;
 use App\Models\ChannelPartnerPayout;
+use App\Models\ChaseMark;
 use App\Models\ChatOrderLink;
 use App\Models\Company;
 use App\Models\CompanyApiKey;
@@ -52,6 +53,7 @@ use App\Models\InvestorDraft;
 use App\Models\InvestorPortalAccount;
 use App\Models\InvestorRequest;
 use App\Models\InvestorSecurityInstrument;
+use App\Models\KnowledgeDocument;
 use App\Models\Lead;
 use App\Models\Media;
 use App\Models\MetaAd;
@@ -131,7 +133,7 @@ class MultiCompanyIsolationTest extends TestCase
             StorefrontSlide::class,
             Lead::class, Quotation::class, QuotationItem::class,
             AiInstructionVersion::class, AttentionItem::class, Conversation::class, ConversationChannel::class, ConversationModeEvent::class,
-            ChatOrderLink::class, CompanyFaq::class, QuickReply::class,
+            ChaseMark::class, ChatOrderLink::class, CompanyFaq::class, KnowledgeDocument::class, QuickReply::class,
             CompanyApiKey::class, StorefrontCustomerToken::class,
             InvestmentProject::class, Investor::class, InvestorDraft::class, InvestorPortalAccount::class, InvestorBankAccount::class, AgreementTemplate::class, AgreementAcceptance::class, InvestorRequest::class, PayoutBatch::class, PayoutBatchItem::class,
             Investment::class, ProjectCostItem::class,

@@ -86,6 +86,12 @@ class SalesReplyRenderer
                 $parts[] = $this->line($rich, $variant->product->name.' / '.$variant->label(), $variant->effectiveSalePrice(), $variant->product->status === 'available' ? (int) $variant->stock : 0, $language, $detail);
             } elseif ($type === 'faq') {
                 $parts[] = CompanyFaq::query()->where('company_id', $conversation->company_id)->where('is_active', true)->findOrFail($id)->answer;
+            } elseif ($type === 'knowledge') {
+                $text = app(KnowledgeBaseService::class)->passageText((int) $conversation->company_id, (string) $id);
+                if ($text === null) {
+                    throw ValidationException::withMessages(['reply_keys' => 'That knowledge entry is no longer available.']);
+                }
+                $parts[] = $text;
             } elseif ($type === 'link') {
                 $link = ChatOrderLink::query()->where('company_id', $conversation->company_id)->where('conversation_id', $conversation->getKey())->findOrFail($id);
                 abort_unless($link->isUsable(), 422);

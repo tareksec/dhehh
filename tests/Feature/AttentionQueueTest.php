@@ -70,6 +70,7 @@ class AttentionQueueTest extends TestCase
 
     public function test_staff_takeover_from_the_dashboard_opens_nothing_and_no_target_means_never_late(): void
     {
+        $this->settings(['response_target_minutes' => 0]);
         app(ConversationModeService::class)->toHuman($this->conversation, 'dashboard');
         $this->assertSame(0, AttentionItem::query()->count());
 

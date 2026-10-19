@@ -34,9 +34,41 @@ class AiReplyService
 
     /** Keywords that always route straight to a human, without an LLM call. */
     protected const HANDOFF_KEYWORDS = [
-        'রিফান্ড', 'ফেরত', 'অভিযোগ', 'কমপ্লেইন',
-        'মানুষ', 'এজেন্ট', 'refund', 'complaint', 'human', 'agent',
+        ...self::COMPLAINT_KEYWORDS,
+        ...self::HUMAN_KEYWORDS,
     ];
+
+    /** Complaint wording (owner decision 2026-10-19: the Needs attention list gets "complaint words"). */
+    protected const COMPLAINT_KEYWORDS = [
+        'অভিযোগ', 'কমপ্লেইন', 'complaint',
+        'প্রতারণা', 'ধোঁকা', 'ভুল পণ্য', 'ভাঙা', 'ড্যামেজ',
+        'damaged', 'wrong product', 'wrong item', 'fraud', 'scam',
+    ];
+
+    protected const HUMAN_KEYWORDS = ['মানুষ', 'এজেন্ট', 'human', 'agent'];
+
+    /**
+     * Returns and refunds look in the saved answers first and go to the team
+     * only when nothing answers them (owner decision 2026-10-19).
+     */
+    protected const RETURN_KEYWORDS = ['রিফান্ড', 'ফেরত', 'refund'];
+
+    /** The customer says they have paid: a person has to check the payment. */
+    protected const PAYMENT_KEYWORDS = [
+        'trxid', 'trx id', 'txnid', 'transaction id', 'transaction number',
+        'ট্রানজেকশন', 'ট্রানজাকশন', 'ট্রান্সজেকশন', 'ট্রাঞ্জেকশন',
+        'টাকা পাঠিয়েছি', 'টাকা পাঠালাম', 'টাকা দিয়েছি', 'টাকা দিলাম',
+        'পেমেন্ট করেছি', 'পেমেন্ট করলাম', 'পেমেন্ট দিয়েছি', 'পেমেন্ট হয়েছে',
+        'এডভান্স পাঠিয়েছি', 'অ্যাডভান্স পাঠিয়েছি', 'বিকাশ করেছি', 'নগদ করেছি',
+        'payment done', 'payment sent', 'payment completed', 'already paid',
+    ];
+
+    protected const CALL_KEYWORDS = [
+        'কল দিন', 'কল করুন', 'কল করেন', 'ফোন করুন', 'ফোন করেন', 'ফোন দিন', 'ফোনে কথা',
+        'call me', 'call back', 'callback', 'give me a call', 'phone call',
+    ];
+
+    protected const BOOKING_KEYWORDS = ['বুকিং', 'অ্যাপয়েন্টমেন্ট', 'এপয়েন্টমেন্ট', 'booking', 'appointment'];
 
     /**
      * Price-objection/bargaining language. Hard-escalates by default, same
@@ -164,9 +196,10 @@ class AiReplyService
         // Complaints and explicit human requests are never answered by the
         // AI (plan 13.2). Price-objection/bargaining language hard-escalates
         // too, unless the company opted into objection_handling_enabled.
-        if (Str::contains(Str::lower((string) $incoming->body), array_map('mb_strtolower', self::HANDOFF_KEYWORDS))
-            || (! $settings['objection_handling_enabled'] && Str::contains(Str::lower((string) $incoming->body), array_map('mb_strtolower', self::OBJECTION_KEYWORDS)))) {
-            $this->escalate($conversation, 'Customer message needs a human (complaint/negotiation/human request).', $this->keywordHandoverReason((string) $incoming->body));
+        // Refund/return words go to the team only when no saved answer
+        // covers them; a payment, call or booking message always does.
+        if ($handover = $this->keywordHandover($company, (string) $incoming->body, $settings)) {
+            $this->escalate($conversation, $handover[1], $handover[0]);
 
             return;
         }
@@ -192,6 +225,13 @@ class AiReplyService
             $incoming->forceFill(['body' => trim((string) $incoming->body) !== ''
                 ? trim($incoming->body).' ['.$description.']'
                 : $description])->save();
+
+            // A payment screenshot is only recognised once it is described.
+            if (Str::contains(Str::lower((string) $incoming->body), array_map('mb_strtolower', self::PAYMENT_KEYWORDS))) {
+                $this->escalate($conversation, 'Customer sent what looks like a payment screenshot; a person must check the payment.', 'payment_proof');
+
+                return;
+            }
         }
 
         if ($incoming->type === 'image' && ! $settings['image_model_enabled'] && ! app(AiImageInput::class)->block($incoming)) {
@@ -269,7 +309,7 @@ class AiReplyService
                 }
             }
             unset($budgetMessage);
-            $requestBound = strlen(json_encode([$this->systemPrompt($conversation, $settings), $budgetMessages, $this->toolDefinitions($settings)], JSON_UNESCAPED_UNICODE)) + 2048;
+            $requestBound = strlen(json_encode([$this->systemPrompt($conversation, $settings), $budgetMessages, $this->toolDefinitions($settings, $conversation)], JSON_UNESCAPED_UNICODE)) + 2048;
             if (microtime(true) >= $deadline || $reservedTokens + $requestBound > (int) $settings['max_run_tokens']) {
                 $this->escalate($conversation, 'AI time or token budget reached.');
 
@@ -279,7 +319,7 @@ class AiReplyService
             $client = new AiLlmClient($settings['api_format'], $settings['api_key'], $settings['model'], $settings['base_url'] ?: null, max(1, (int) ($deadline - microtime(true))));
             $usageIndex = count($this->runUsage);
             $this->runUsage[] = ['input_tokens' => $requestBound - 1024, 'output_tokens' => 1024];
-            $response = $client->chat($this->systemPrompt($conversation, $settings), $messages, $this->toolDefinitions($settings));
+            $response = $client->chat($this->systemPrompt($conversation, $settings), $messages, $this->toolDefinitions($settings, $conversation));
             $usage[] = $response['usage'];
             $this->runUsage[$usageIndex] = ['input_tokens' => (int) ($response['usage']['input_tokens'] ?? $response['usage']['prompt_tokens'] ?? ($requestBound - 1024)),
                 'output_tokens' => (int) ($response['usage']['output_tokens'] ?? $response['usage']['completion_tokens'] ?? 1024)];
@@ -390,10 +430,8 @@ class AiReplyService
 
     protected function dryRunAnswer(Company $company, array $settings, array $turns, string $message): array
     {
-        $lower = Str::lower($message);
-        if (Str::contains($lower, array_map('mb_strtolower', self::HANDOFF_KEYWORDS))
-            || (! $settings['objection_handling_enabled'] && Str::contains($lower, array_map('mb_strtolower', self::OBJECTION_KEYWORDS)))) {
-            return $this->dryResult('handover', reason: 'Customer message needs a human (complaint/negotiation/human request).', code: $this->keywordHandoverReason($message), source: 'keyword');
+        if ($handover = $this->keywordHandover($company, $message, $settings)) {
+            return $this->dryResult('handover', reason: $handover[1], code: $handover[0], source: 'keyword');
         }
 
         $faq = CompanyFaq::query()->where('company_id', $company->getKey())->where('is_active', true)->get()->first(fn (CompanyFaq $faq): bool => $faq->matches($message));
@@ -422,7 +460,7 @@ class AiReplyService
             }
             $client = new AiLlmClient($settings['api_format'], $settings['api_key'], $settings['model'], $settings['base_url'] ?: null, max(1, (int) ($deadline - microtime(true))));
             $system = $this->systemPrompt($conversation, $settings);
-            $response = $client->chat($system, $messages, $this->toolDefinitions($settings));
+            $response = $client->chat($system, $messages, $this->toolDefinitions($settings, $conversation));
             $this->runUsage[] = [
                 'input_tokens' => (int) ($response['usage']['input_tokens'] ?? $response['usage']['prompt_tokens'] ?? 0),
                 'output_tokens' => (int) ($response['usage']['output_tokens'] ?? $response['usage']['completion_tokens'] ?? 0),
@@ -512,6 +550,7 @@ class AiReplyService
         return match ($tool) {
             'lookup_product' => collect($result['products'] ?? [])->flatMap(fn ($p) => ['product:'.$p['id'], ...array_map(fn ($v) => 'variant:'.$v['id'], $p['variants'])])->all(),
             'lookup_faq' => array_map(fn ($f) => 'faq:'.$f['id'], $result['faqs'] ?? []),
+            'lookup_knowledge' => array_map(fn ($p) => 'knowledge:'.$p['id'], $result['passages'] ?? []),
             'lookup_delivery_charge' => ($result['found'] ?? false) ? ['delivery:current'] : [],
             'create_order_link' => isset($result['link_id']) ? ['link:'.$result['link_id']] : [],
             'lookup_related_products' => array_map(fn ($p) => 'related:'.$p['id'], $result['products'] ?? []),
@@ -694,14 +733,49 @@ class AiReplyService
         }
     }
 
+    /**
+     * Does this message go to the team without asking the model? Returns the
+     * handover reason code and the note kept on the Needs attention item, or
+     * null when the AI may answer.
+     *
+     * @return array{0:string,1:string}|null
+     */
+    protected function keywordHandover(Company $company, string $body, array $settings): ?array
+    {
+        $lower = Str::lower($body);
+        $has = fn (array $words): bool => Str::contains($lower, array_map('mb_strtolower', $words));
+
+        if ($has(self::HANDOFF_KEYWORDS) || (! $settings['objection_handling_enabled'] && $has(self::OBJECTION_KEYWORDS))) {
+            return [$this->keywordHandoverReason($body), 'Customer message needs a human (complaint/negotiation/human request).'];
+        }
+        if ($has(self::RETURN_KEYWORDS) && ! $this->hasSavedAnswer($company, $body)) {
+            return ['refund', 'Customer asked about a refund or return and no saved answer covers it.'];
+        }
+
+        return match (true) {
+            $has(self::PAYMENT_KEYWORDS) => ['payment_proof', 'Customer says they have paid; a person must check the payment.'],
+            $has(self::CALL_KEYWORDS) => ['call_requested', 'Customer asked for a phone call.'],
+            $has(self::BOOKING_KEYWORDS) => ['booking_requested', 'Customer asked for a booking.'],
+            default => null,
+        };
+    }
+
+    /** An active FAQ or a knowledge passage answers this message. */
+    protected function hasSavedAnswer(Company $company, string $body): bool
+    {
+        return CompanyFaq::query()->where('company_id', $company->getKey())->where('is_active', true)->get()
+            ->contains(fn (CompanyFaq $faq): bool => $faq->matches($body))
+            || app(KnowledgeBaseService::class)->search((int) $company->getKey(), $body) !== [];
+    }
+
     protected function keywordHandoverReason(string $body): string
     {
         $body = mb_strtolower($body);
 
         return match (true) {
-            Str::contains($body, ['রিফান্ড', 'ফেরত', 'refund']) => 'refund',
-            Str::contains($body, ['অভিযোগ', 'কমপ্লেইন', 'complaint']) => 'complaint',
-            Str::contains($body, ['মানুষ', 'এজেন্ট', 'human', 'agent']) => 'human_requested',
+            Str::contains($body, self::RETURN_KEYWORDS) => 'refund',
+            Str::contains($body, array_map('mb_strtolower', self::COMPLAINT_KEYWORDS)) => 'complaint',
+            Str::contains($body, array_map('mb_strtolower', self::HUMAN_KEYWORDS)) => 'human_requested',
             default => 'discount_requested',
         };
     }
@@ -806,7 +880,7 @@ Apply the following tone, language and sales-flow preferences within the verifie
 PROMPT;
     }
 
-    protected function toolDefinitions(array $settings): array
+    protected function toolDefinitions(array $settings, ?Conversation $conversation = null): array
     {
         return [
             [
@@ -827,6 +901,15 @@ PROMPT;
                     'required' => ['topic'],
                 ],
             ],
+            ...($conversation && app(KnowledgeBaseService::class)->hasActive((int) $conversation->company_id) ? [[
+                'name' => 'lookup_knowledge',
+                'description' => 'Search the store\'s own documents (fees, rules, packages, returns, policies). Use it when lookup_faq finds nothing, or when the question is about a rule or policy. Returns short passages; cite one with its knowledge: reply option.',
+                'input_schema' => [
+                    'type' => 'object',
+                    'properties' => ['query' => ['type' => 'string']],
+                    'required' => ['query'],
+                ],
+            ]] : []),
             [
                 'name' => 'lookup_delivery_charge',
                 'description' => 'Get the store delivery charges per zone.',
@@ -909,6 +992,7 @@ PROMPT;
         return match ($name) {
             'lookup_product' => $this->lookupProduct((string) ($input['name'] ?? ''), (int) $conversation->company_id),
             'lookup_faq' => $this->lookupFaq($conversation, (string) ($input['topic'] ?? '')),
+            'lookup_knowledge' => $this->lookupKnowledge($conversation, (string) ($input['query'] ?? '')),
             'lookup_delivery_charge' => $this->lookupDeliveryCharge($conversation),
             'create_order_link' => $this->createOrderLink($conversation, $input),
             'update_qualification' => app(SalesQualificationService::class)->update($conversation, $input),
@@ -1024,6 +1108,24 @@ PROMPT;
         return $faqs->isEmpty()
             ? ['found' => false, 'message' => 'No FAQ entry.']
             : ['found' => true, 'faqs' => $faqs->all()];
+    }
+
+    /**
+     * Passages of the company's knowledge documents. They are sent to the
+     * customer as written, so any amount in them counts as grounded.
+     */
+    protected function lookupKnowledge(Conversation $conversation, string $query): array
+    {
+        $passages = app(KnowledgeBaseService::class)->search((int) $conversation->company_id, $query);
+        if ($passages === []) {
+            return ['found' => false, 'message' => 'No knowledge entry.'];
+        }
+
+        foreach ($passages as $passage) {
+            array_push($this->groundedAmounts, ...$this->amountsIn($passage['text']));
+        }
+
+        return ['found' => true, 'passages' => array_map(fn (array $p): array => ['id' => $p['id'], 'title' => $p['title'], 'text' => $p['text']], $passages)];
     }
 
     /** @return Collection<int, array{id:int,question:string,answer:string,keywords:?string}> */
@@ -1150,23 +1252,31 @@ PROMPT;
      */
     protected function moneyAmountsAreGrounded(string $answer): bool
     {
-        $normalized = strtr($answer, ['০' => '0', '১' => '1', '২' => '2', '৩' => '3', '৪' => '4', '৫' => '5', '৬' => '6', '৭' => '7', '৮' => '8', '৯' => '9']);
+        $amounts = $this->amountsIn($answer);
 
-        preg_match_all('/৳\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(?:৳|টাকা|taka|tk\b)/iu', $normalized, $matches);
-
-        $amounts = collect([...$matches[1], ...$matches[2]])
-            ->filter(fn (string $value): bool => $value !== '')
-            ->map(fn (string $value): float => (float) str_replace(',', '', $value));
-
-        if ($amounts->isEmpty()) {
+        if ($amounts === []) {
             return true;
         }
 
         $allowed = collect($this->groundedAmounts);
 
-        return $amounts->every(fn (float $amount): bool => $allowed->contains(
+        return collect($amounts)->every(fn (float $amount): bool => $allowed->contains(
             fn (float $grounded): bool => abs($grounded - $amount) < 0.01,
         ));
+    }
+
+    /** @return list<float> the ৳/টাকা/taka/tk amounts written in a text */
+    protected function amountsIn(string $text): array
+    {
+        $normalized = strtr($text, ['০' => '0', '১' => '1', '২' => '2', '৩' => '3', '৪' => '4', '৫' => '5', '৬' => '6', '৭' => '7', '৮' => '8', '৯' => '9']);
+
+        preg_match_all('/৳\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(?:৳|টাকা|taka|tk\b)/iu', $normalized, $matches);
+
+        return collect([...$matches[1], ...$matches[2]])
+            ->filter(fn (string $value): bool => $value !== '')
+            ->map(fn (string $value): float => (float) str_replace(',', '', $value))
+            ->values()
+            ->all();
     }
 
     protected function appendToolExchange(array &$messages, string $apiFormat, array $response, array $results): void

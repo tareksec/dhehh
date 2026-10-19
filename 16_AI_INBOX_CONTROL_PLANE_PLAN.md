@@ -2,7 +2,7 @@
 
 > **বাংলা সারসংক্ষেপ:** AiPraktor (aipraktor.com) ড্যাশবোর্ডের প্রতিটা পেজ ২০২৬-১০-০৯ তারিখে পড়ে দেখা হয়েছে, এবং `origin/main` (v2.64.1)-এর কোডের সাথে মেলানো হয়েছে। আমাদের ERP-তে AI চ্যাটের ভিত্তি আগে থেকেই আছে: Inbox, Messenger/WhatsApp, AI auto-reply (প্রোডাক্ট/FAQ/ডেলিভারি টুল), ছবি ও ভয়েস বোঝা, Leads, Follow-ups, Broadcasts, Orders, কুরিয়ার। যা নেই তা হলো একটা পরিষ্কার "কন্ট্রোল প্লেন"। এর মানে: চ্যাট AI-এর হাতে না মানুষের হাতে, সেটা টেকসইভাবে রাখা ও লগ করা; কোনো হ্যান্ডওভার যেন হারিয়ে না যায়; AI কতটা কাজ করছে তা মাপা; আর মালিক নিজেই AI-এর নির্দেশনা বদলে, পরীক্ষা করে, প্রকাশ করতে পারেন। কাজ ৮টা ধাপে ভাগ করা। প্রথম ধাপে AI/Human মোড ও Activity লগ আসবে। এই ধাপ `docs/CRM_AI_SALES_AUDIT_2026-09-09.md`-এর High সমস্যাগুলোও ঠিক করে। AiPraktor-এর সংখ্যাগুলো (৩ ঘণ্টা, ২৩ ঘণ্টা ইত্যাদি) শুধু রেফারেন্স। আমাদের নিয়ম মালিক §৩-এ ঠিক করবেন।
 
-Status: **Phases 1–3 built (2026-10-09) and committed on branch `feature/ai-inbox-control-plane` (not merged). Phase 4 built 2026-10-10 (not committed).** Owner instruction for O1 and the reply style: "aipraktor এর মত করে বিল্ড কর" — follow AiPraktor. Other phases still wait for the owner answers in §3.
+Status: **Phases 1–3 built (2026-10-09) and committed on branch `feature/ai-inbox-control-plane` (not merged). Phase 4 built 2026-10-10 and committed on the same branch. Phase 5 built 2026-10-16 and the checklist part of phase 8 built the same day. Phases 6 and 7 built 2026-10-19 after the owner answered O2–O9. Phases 5–7 and the checklist were committed on the same branch on 2026-10-19 (still not merged to main). Practice mode (O7) was declined, so the plan is complete.** Owner instruction for O1 and the reply style: "aipraktor এর মত করে বিল্ড কর" — follow AiPraktor. Other phases still wait for the owner answers in §3.
 
 Source: a read-only walk through every AiPraktor dashboard page (owner's practice account "Bright Hive Digital", 2026-10-09; no page connected, so every list was empty — behaviour is taken from each page's own text and controls, not from exercising them). Code facts are from `origin/main` at `9c54cfe8` (v2.64.1).
 
@@ -76,6 +76,21 @@ Per `CLAUDE.md`, none of these may be invented. AiPraktor's values are listed on
 | O7 | Practice mode: should a new company's AI answer only staff test chats until someone presses "Go live"? | yes |
 | O8 | Courier handover sheet: which fields must the rider sign for (parcel count, COD total, per-parcel list)? Printed per courier per day? | per courier per day |
 | O9 | "To chase" sources: carts, checkout attempts, leads without order, offer clicks — which count, and for how many days? | Buy tapped, lead, offer tapped; 7/14/30 d |
+
+### 3.1 Owner answers — 2026-10-19 (asked in chat; O1 was answered earlier)
+
+| # | Answer | What it means for the build |
+|---|---|---|
+| O2 | 30 minutes, all hours (no business hours). | `response_target_minutes` = 30. No business-hours logic. |
+| O3 | Add payment proof, website lead, call and booking requests, complaint words (on top of AI handovers). | New attention kinds; each needs a detector (see §9). |
+| O4 | Reminders at 1 h, 6 h, 24 h and 48 h, then one per week, at most 4 weeks. Counted from the customer's last message. Same schedule for everyone (no hot/warm). Nothing is sent 22:00–08:00. Only customers who were sent a checkout link or quotation and have not ordered. | Replaces the single delay. Hot/warm `temperature` is dropped. Weekly steps are read as 7 days after the previous reminder (my reading — the owner did not say). |
+| O4a | On Messenger the 24 h, 48 h and weekly steps cannot be sent (Meta 24 h window) — they go to the staff Needs attention list. | WhatsApp keeps using the approved template at every step. |
+| O5 | Messenger broadcast allowed. A successful test to your own channel is mandatory first. People with the CRM manage permission send. | As designed in §4.7. |
+| O6 | Same permission as Integrations (`canManageSettings()`). | Already the default; no change. |
+| O7 | **No practice mode.** Turning the AI on makes it live. | `ai_live` is dropped; the setup checklist stays at 8 steps. |
+| O8 | Handover sheet: parcel count and total COD, per-parcel list, consignment/tracking number. No rider name block. One sheet per courier per day. | As designed in §4.8, without signature fields. |
+| O9 | All four sources: abandoned cart, checkout attempt, lead without order, offer tap. Days not answered — 7 / 14 / 30 filter, default 7 (my choice, easy to change). | As designed in §4.8. |
+| Returns | Words "ফেরত", "রিফান্ড", "refund" look in FAQ and knowledge first; only if nothing is found the chat goes to the team. "complaint", "human", "agent" still go to the team at once. | Changes `AiReplyService` hand-over order. |
 
 ---
 
@@ -235,7 +250,7 @@ Files: migration `2026_10_09_000200_create_attention_items_table`, `AttentionIte
 
 Files: `AiInboxReportService`, `AiInboxReport` page, `ai-inbox-report.blade.php`. Tests: `AiInboxReportTest`.
 
-### Phase 4 — 2026-10-10 (not committed)
+### Phase 4 — 2026-10-10 (committed)
 
 - **Three blocks, not five.** The agent never writes free text: `submit_reply` only selects reply keys and the server renders every fact from the catalog, FAQ and delivery tools. A "delivery" or "exact words" box could not reach a customer, so it was dropped. Blocks: `about` (new, `business_about`; background only, the prompt says it is not a source of facts), `voice` (`brand_voice`), `guidelines` (`sales_guidelines`).
 - **The live text stays in the settings.** Versions are history, draft and rollback on top: publish and restore write the settings, and saving the same fields on Integrations records a version, so the prompt source is unchanged and nothing can drift.
@@ -244,3 +259,41 @@ Files: `AiInboxReportService`, `AiInboxReport` page, `ai-inbox-report.blade.php`
 - **Unanswered questions** = `out_of_scope` hand-overs of the last 30 days with the customer's last message; **Add FAQ answer** creates a `CompanyFaq` and clears its cache. Knowledge documents come in phase 5.
 
 Files: migration `2026_10_10_000100_create_ai_instruction_versions_table`, `AiInstructionVersion`, `AiInstructionService`, `AgentDesk`, `UnansweredQuestions`, `agent-desk.blade.php`; changes in `AiReplyService`, `AiSettingsService`, `AiRunService`, `SalesReplyRenderer::languageOf()`, `ConversationMessengerService`, `CrmSalesMetrics`, `SalesAutomation`. Tests: `AgentDeskTest`.
+
+### Phase 5 — 2026-10-16 (committed 2026-10-19)
+
+- **Same rule as FAQ answers.** The agent never writes free text, so `lookup_knowledge` returns passages with ids and the agent selects `knowledge:<document id>.<position>`; the server sends the stored passage as written. A passage the agent did not look up in this run is rejected by the renderer. Amounts in a looked-up passage are added to the grounded amounts, so a fee written in a document is not blocked as "ungrounded".
+- **Search in PHP, not FULLTEXT** (changed from §4.6): InnoDB FULLTEXT splits Bangla words at vowel signs, so Bangla questions would mostly miss. Passages are cached per company for 5 minutes and the cache is cleared when a document is saved or deleted. Matching: the word, the word without a trailing "s", or (5+ characters) without its last two characters; title/heading hits count three times; at least half of the question's words must match; the best 3 passages go to the agent.
+- **Passages:** a heading starts a new topic; text is packed into passages of at most 700 characters; Markdown marks are removed (`**`, backticks, bullets become •, links become `text (url)`).
+- **The tool is offered only while the company has an active document**, so companies without documents pay no extra prompt tokens.
+- **Admin:** CRM → Knowledge base (create/edit/list, Import file for .md/.txt up to 200 KB, **Test a question**). Permission `crm.manage`. Unanswered questions gets **Add to knowledge base**.
+- **Known limit:** hand-over keywords (ফেরত, রিফান্ড, refund, complaint, human, agent) are checked before the FAQ and the knowledge base, so a returns question in Bangla still goes to the team. Needs an owner decision before it is changed.
+
+Files: migration `2026_10_11_000100_create_knowledge_documents_table`, `KnowledgeDocument`, `KnowledgeBaseService`, `KnowledgeDocumentResource` (+ 3 pages); changes in `AiReplyService`, `SalesReplyRenderer`, `UnansweredQuestions`, `lang/*.json`. Tests: `KnowledgeBaseTest` (10).
+
+### Phase 8, checklist part — 2026-10-16 (committed 2026-10-19)
+
+- Built because it needs no owner decision. Phases 6 (O4, O5), 7 (O8, O9) and the go-live switch (O7) still wait for answers.
+- A page, **CRM → Setup checklist**, not a dashboard widget: a widget on the main dashboard would show CRM setup to people who never use the CRM. Eight steps, each with a link (shown only when the user may open the target): channel, AI key + switch, business description, products with photos, delivery charges, answers or documents, phone alerts (per user), test chat run.
+- Nothing is stored. A step is done when its data exists, so it cannot go stale. Missing: the "go live" step, which needs `ai_live` (O7).
+
+Files: `AiSetupChecklistService`, `AiSetupChecklist` page, `ai-setup-checklist.blade.php`. Tests: `AiSetupChecklistTest` (6).
+
+### Phase 6 — 2026-10-19 (committed 2026-10-19)
+
+- **One decision point for hand-overs:** `AiReplyService::keywordHandover()` (also used by the Agent Desk test chat). Complaint and human words and the discount words go to the team at once; returns/refund words only when no FAQ or knowledge passage covers them; payment, call and booking words always. New reasons and attention kinds: payment proof, asked for a call, asked for a booking, website lead, follow-up due.
+- **Website leads** have no chat, so `attention_items` gained `lead_id`; the item closes when the lead leaves status `new`.
+- **Follow-ups** (O4): one `crm_sales_follow_ups` row carries the whole schedule (`step`, `base_at`). Offsets = `follow_up_schedule_hours` then `follow_up_weekly_count` weeks of 168 h after the last daily step (hot/warm from §4.7 is dropped — the owner gave one schedule). Quiet hours 22:00–08:00 in the company's time zone push a due reminder to 08:00. Stops on order, opt-out, a person's reply, a newer offer. WhatsApp: approved template every step. Messenger/Instagram: reminder text only inside the 24 h window, otherwise a Needs attention line (`follow_up_due`) and a push alert.
+- **Messenger broadcast** (O5): channel `messenger`; audience = the Page's chats with an incoming message in the last 23 h; re-checked per recipient at send time; `Send test` to a chat the sender picks; `tested_hash` ties the test to the Page and the exact text.
+
+Files: migrations `2026_10_19_000100`–`000300`; changes in `AiReplyService`, `AttentionQueueService`, `AttentionItem`, `Conversation`, `Lead`, `LeadController`, `NeedsAttention`, `SalesFollowUpService` (rewritten), `AiSettingsService`, `Integrations`, `SalesFollowUps`, `Broadcast`, `BroadcastRecipient`, `BroadcastService`, the broadcast form and table. Tests: `AiHandoverRulesTest` (11), `SalesFollowUpScheduleTest` (11), `MessengerBroadcastTest` (9); `CrmSalesAutomationTest` and `AttentionQueueTest` adjusted.
+
+### Phase 7 — 2026-10-19 (committed 2026-10-19)
+
+- **Scan parcels** (Courier): input for a USB scanner (Enter) plus camera (`BarcodeDetector`, Code 128 and QR); one `OrderStatusWorkflowService::transition()` per order with source `scan`.
+- **Invoice QR dropped:** the invoice already prints a Code 128 barcode of the order number (`Code128::svg`), which both scan paths read.
+- **Handover sheet** (Courier): `CourierHandoverSheetService` — bookings of one courier whose `booked_at` is inside the company's day; excludes not booked, pending, cancelled and failed. Fields per O8; no rider block. Print view at `/admin/courier-handover-sheet`.
+- **To chase** (CRM): `ToChaseService` over carts, unpaid checkouts (pending `StorefrontPayment` with `checkout_data`) and leads; `chase_marks` stores contacted people. Offer taps are not a source (nothing records them); `StorefrontCheckoutAttempt` is not used (masked contacts only).
+- **§4.9 dropped:** no `ai_live`; the setup checklist stays at eight steps.
+
+Files: migration `2026_10_19_000400_create_chase_marks_table`, `ChaseMark`, `ToChaseService`, `CourierHandoverSheetService`, `ScanParcels`, `CourierHandoverSheet`, `ToChase` (+ 3 views), `courier/handover-sheet.blade.php`, `CourierHandoverSheetController`, route in `routes/web.php`. Tests: `ScanParcelsTest` (6), `CourierHandoverSheetTest` (4), `ToChaseListTest` (7).

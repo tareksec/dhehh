@@ -52,6 +52,11 @@ class Conversation extends Model
         'angry' => 'Angry customer',
         'ready_to_buy' => 'Ready to buy',
         'ai_error' => 'AI could not reply',
+        'payment_proof' => 'Payment proof sent',
+        'call_requested' => 'Asked for a call',
+        'booking_requested' => 'Asked for a booking',
+        'website_lead' => 'New website lead',
+        'follow_up_due' => 'Follow-up due',
         'other' => 'Other',
     ];
 

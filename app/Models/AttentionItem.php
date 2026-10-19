@@ -18,6 +18,18 @@ class AttentionItem extends Model
 
     public const KINDS = [
         'handover' => 'AI handed over',
+        'payment_proof' => 'Payment proof sent',
+        'call_request' => 'Asked for a call',
+        'booking_request' => 'Asked for a booking',
+        'website_lead' => 'New website lead',
+    ];
+
+    /** The kind an item gets for a handover reason; any other reason is a plain handover. */
+    public const KIND_BY_REASON = [
+        'payment_proof' => 'payment_proof',
+        'call_requested' => 'call_request',
+        'booking_requested' => 'booking_request',
+        'website_lead' => 'website_lead',
     ];
 
     public const OUTCOMES = [
@@ -39,6 +51,11 @@ class AttentionItem extends Model
     public function conversation(): BelongsTo
     {
         return $this->belongsTo(Conversation::class);
+    }
+
+    public function lead(): BelongsTo
+    {
+        return $this->belongsTo(Lead::class);
     }
 
     public function firstResponder(): BelongsTo
