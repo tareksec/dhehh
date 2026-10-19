@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Clusters\Crm;
+use App\Filament\Concerns\HasGuardedNavigationBadge;
 use App\Filament\Resources\Leads\LeadResource;
 use App\Models\AttentionItem;
 use App\Models\Conversation;
@@ -27,6 +28,7 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class NeedsAttention extends Page implements HasTable
 {
+    use HasGuardedNavigationBadge;
     use InteractsWithTable;
 
     protected static ?string $cluster = Crm::class;
@@ -52,7 +54,7 @@ class NeedsAttention extends Page implements HasTable
         return auth()->user()?->hasPermission('crm.view') ?? false;
     }
 
-    public static function getNavigationBadge(): ?string
+    protected static function navigationBadge(): ?string
     {
         $open = AttentionItem::query()->open()->count();
 
