@@ -12,6 +12,7 @@ use App\Models\CrmAiRun;
 use App\Models\Product;
 use App\Models\QuickReply;
 use App\Services\CompanyContext;
+use App\Services\Crm\AiSettingsService;
 use App\Services\Crm\ConversationMessengerService;
 use App\Services\Crm\ConversationModeService;
 use App\Support\CompanyMedia;
@@ -159,6 +160,23 @@ class Inbox extends Page
                     $this->composerMode = 'reply';
                     $run->update(['status' => 'reviewed']);
                 }),
+            // Practice mode: the AI answers only chats marked as test chats until it goes live.
+            Action::make('markTestChat')
+                ->label(fn (): string => $this->selectedChatIsTest() ? __('Remove test mark') : __('Use as test chat'))
+                ->icon(Heroicon::OutlinedBeaker)
+                ->color('gray')
+                ->tooltip(__('Practice mode: the AI answers only test chats until you go live. Mark the chat you use to try the AI.'))
+                ->visible(fn () => $this->canManageConversations && $this->selectedConversationId !== null && ($this->selectedChatIsTest() || ! $this->aiIsLive()))
+                ->action(function (): void {
+                    $this->authorizeInboxManagement();
+                    $conversation = Conversation::query()->find($this->selectedConversationId);
+                    if (! $conversation) {
+                        return;
+                    }
+                    $conversation->forceFill(['is_staff_test' => ! $conversation->is_staff_test])->save();
+                    $this->forgetInboxComputedProperties();
+                    Notification::make()->title($conversation->is_staff_test ? __('This chat is a test chat. The AI will answer it.') : __('The test mark is removed.'))->success()->send();
+                }),
             ActionGroup::make($channelActions)
                 ->label(function () use ($channels): string {
                     if ($this->channelId === null) {
@@ -185,6 +203,19 @@ class Inbox extends Page
                     'class' => 'zz-inbox-channel-selector',
                 ]),
         ];
+    }
+
+    protected function selectedChatIsTest(): bool
+    {
+        return $this->selectedConversationId !== null
+            && (bool) Conversation::query()->whereKey($this->selectedConversationId)->value('is_staff_test');
+    }
+
+    protected function aiIsLive(): bool
+    {
+        $company = app(CompanyContext::class)->company();
+
+        return $company === null || app(AiSettingsService::class)->isLive($company);
     }
 
     public function getCanManageConversationsProperty(): bool

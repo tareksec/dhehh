@@ -23,6 +23,9 @@ use Throwable;
  */
 class ConversationMessengerService
 {
+    /** ai_meta['kind'] of the message that records a sent carousel. It is not an AI answer of its own. */
+    public const CARDS_KIND = 'product_cards';
+
     public function __construct(
         protected MetaGraphService $meta,
         protected StorefrontNotificationService $notifications,
@@ -66,6 +69,56 @@ class ConversationMessengerService
         }
 
         return $delivered;
+    }
+
+    /**
+     * A Messenger carousel of product cards, sent right after the written
+     * answer. Best effort: the answer already told the customer everything, so
+     * a failed carousel is only logged -- it leaves no failed bubble behind
+     * (a retry would have nothing to resend) and no channel fault.
+     *
+     * @param  array<int, array<string, mixed>>  $elements
+     */
+    public function sendCards(Conversation $conversation, array $elements, string $summary, array $meta = []): ?ConversationMessage
+    {
+        if (! $conversation->exists || $conversation->provider !== 'messenger' || $elements === []) {
+            return null;
+        }
+
+        try {
+            $conversation->loadMissing('channel');
+            $channel = $conversation->channel;
+            $this->validateDelivery($conversation, $channel);
+
+            $message = ConversationMessage::query()->create([
+                'conversation_id' => $conversation->getKey(),
+                'direction' => 'outgoing',
+                'type' => 'text',
+                'body' => $summary,
+                'delivery_status' => 'sending',
+                'generated_by' => 'ai',
+                'ai_meta' => [...$meta, 'kind' => self::CARDS_KIND],
+                'sent_at' => now(),
+            ]);
+
+            try {
+                $externalId = $this->meta->sendMessengerCards($channel, trim((string) $conversation->external_contact_id), $elements, 'crm-message:'.$message->getKey());
+            } catch (Throwable $exception) {
+                $message->delete();
+
+                throw $exception;
+            }
+
+            $message->forceFill(['external_message_id' => $externalId, 'delivery_status' => 'sent'])->save();
+            $conversation->forceFill(['last_message_at' => now()])->saveQuietly();
+            $channel->markOutboundSent();
+
+            return $message->refresh();
+        } catch (Throwable $exception) {
+            Log::info('Product cards were not sent.', ['conversation_id' => $conversation->getKey(), 'error' => $this->safeMessage($exception)]);
+
+            return null;
+        }
     }
 
     public function retry(ConversationMessage $message, ?User $sender = null): ConversationMessage

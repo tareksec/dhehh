@@ -93,8 +93,15 @@ Built from `16_AI_INBOX_CONTROL_PLANE_PLAN.md` after a read-only walk through Ai
   - Camera scanning uses the browser's `BarcodeDetector` (Chrome/Edge on Android and desktop); it was not tried on a real device. The USB-scanner path (type + Enter) is covered by tests.
   - Needs Bangla review: 44 new keys in `lang/bn.json`.
   - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+- Phase 9 (2026-10-20, owner: "Meta Seen আর টাইপিং ইন্ডিকেটর, প্রোডাক্ট কার্ড / carousel, Practice mode সহ কর। এই কাজ গুলো শেষ কর।"): the three things left in the plan.
+  - **Practice mode reverses the 2026-10-19 answer O7 ("no practice mode") on the owner's new instruction.** `ai_live` is a per-company setting with no default on purpose: when nothing was saved it equals `enabled`, so every company already running stays live and the existing tests did not change. Only the Integrations form saves it explicitly (its switch starts off for a company that never turned the AI on). While not live, `AiReplyService::maybeReply()` writes a `skipped` run and answers only chats with `conversations.is_staff_test`; `SalesFollowUpService::process()` leaves reminders `pending`. Staff mark a chat from the Inbox header (**Use as test chat**); **Go live** / **Back to practice mode** are on the Setup checklist (ninth step **Go live**) and the switch is on Integrations → Auto Messaging.
+  - **Seen and typing** (`ConversationPresenceService`, setting `typing_indicator_enabled`, default on): sent just before each model round, never for an instant FAQ answer or a keyword handover. Messenger: `mark_seen` once per message, `typing_on` renewed at most every 12 s, `typing_off` when the AI hands over. WhatsApp: one call that marks the message read and shows typing. Failures are swallowed on purpose and are not recorded as a channel fault.
+  - **Product cards** (`ProductCardService`, setting `product_cards_enabled`, default off): only Messenger; up to 10 cards from the products behind the reply keys; price and stock come from the records; button = the order link in the answer, else the product page on the company's `domain`; no card for a product without a photo. A failed row is only logged and leaves no failed bubble. Not shown in the Agent Desk test chat.
+  - Not done / limits: the Messenger "Seen" is not sent when a person opens a chat in the Inbox (only when the AI works on a message). Meta's typing sign lasts about 20 s on Messenger and 25 s on WhatsApp, so a very slow model answer can show a gap. Practice mode and cards were tested with faked Meta calls only; nothing was tried against a real Page or number. Migration `2026_10_20_000100` was not run on the demo DB.
+  - Needs Bangla review: 18 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane, then merged into main (owner approved commit, push and merge to main on 2026-10-20).
 
-Not done yet (next phases of the plan): Meta "Seen"/typing indicator, customer product cards/carousel (Messenger templates).
+Not done yet (next phases of the plan): nothing. Plan 16 is built.
 
 Needs Bangla review: the new Inbox/Activity/settings strings in `lang/bn.json` (51 keys) the Needs attention strings (19 keys) and the AI Inbox Report strings (26 keys) were written by the agent.
 

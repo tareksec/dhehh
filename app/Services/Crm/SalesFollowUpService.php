@@ -90,6 +90,10 @@ class SalesFollowUpService
 
                 return;
             }
+            // Practice mode: no reminder goes to a real customer until the AI is live.
+            if (! $settings['ai_live'] && ! $conversation->is_staff_test) {
+                return;
+            }
 
             // The customer wrote again: the hours are counted from that message.
             $latest = $conversation->messages()->where('direction', 'incoming')->latest('id')->first();

@@ -255,7 +255,7 @@ class Integrations extends Page
                 'review_mode', 'daily_run_limit', 'max_run_tokens', 'daily_budget_usd', 'input_cost_per_million', 'output_cost_per_million', 'sales_follow_ups_enabled', 'follow_up_schedule_hours', 'follow_up_weekly_count', 'follow_up_quiet_start_hour', 'follow_up_quiet_end_hour', 'follow_up_message', 'follow_up_template', 'follow_up_template_language',
                 'proactive_mode_enabled', 'objection_handling_enabled', 'cross_sell_enabled', 'personalization_enabled',
                 'takeover_minutes', 'reply_delay_seconds', 'handover_notice_enabled', 'rich_replies_enabled', 'address_style',
-                'response_target_minutes',
+                'response_target_minutes', 'ai_live', 'typing_indicator_enabled', 'product_cards_enabled',
             ] as $key) {
                 $fill[$prefix.$key] = $ai[$key];
             }
@@ -426,6 +426,8 @@ class Integrations extends Page
                     ->label('ডিফল্ট লেখা ফিরিয়ে আনুন')
                     ->action(fn (Set $set) => $set("{$prefix}sales_guidelines", app(AiSettingsService::class)->defaultSalesGuidelines())))
                 ->columnSpanFull();
+            $fields[] = Toggle::make("{$prefix}ai_live")->label(__('AI answers real customers (live)'))
+                ->helperText(__('Off is practice mode: the AI answers only chats marked as test chats in the Inbox. Turn this on when you are happy with the test chat. You can also go live from the Setup checklist.'));
             $fields[] = Toggle::make("{$prefix}vision_enabled")
                 ->label('Read customer images (vision)')
                 ->live()
@@ -498,6 +500,10 @@ class Integrations extends Page
                 ->options(['none' => __('No title, only "apni"'), 'sir_maam' => __('Sir / Madam'), 'bhaiya_apu' => __('Bhaiya / Apu')])
                 ->required()->native(false)
                 ->helperText(__('The AI picks the title from what the customer wrote or their name. If it cannot tell, it uses no title.'));
+            $fields[] = Toggle::make("{$prefix}typing_indicator_enabled")->label(__('Show "Seen" and "typing..." while the AI answers'))
+                ->helperText(__('The customer sees the message marked as seen and a typing sign until the answer arrives (Messenger and WhatsApp).'));
+            $fields[] = Toggle::make("{$prefix}product_cards_enabled")->label(__('Send product cards on Messenger'))
+                ->helperText(__('After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only.'));
             $fields[] = Toggle::make("{$prefix}personalization_enabled")->label('Personalize by purchase history')->helperText('Lets the agent greet a returning customer and reference their past orders. Off by default: no purchase-history signal is shown to the agent.');
             foreach (['daily_run_limit' => 'Daily run limit', 'max_run_tokens' => 'Token budget per run', 'daily_budget_usd' => 'Daily estimated budget (USD)', 'input_cost_per_million' => 'Input price per million tokens (USD)', 'output_cost_per_million' => 'Output price per million tokens (USD)'] as $key => $label) {
                 $fields[] = TextInput::make($prefix.$key)->label($label)->numeric()->minValue(0)->required();
@@ -1429,7 +1435,7 @@ class Integrations extends Page
                         'review_mode', 'daily_run_limit', 'max_run_tokens', 'daily_budget_usd', 'input_cost_per_million', 'output_cost_per_million', 'sales_follow_ups_enabled', 'follow_up_schedule_hours', 'follow_up_weekly_count', 'follow_up_quiet_start_hour', 'follow_up_quiet_end_hour', 'follow_up_message', 'follow_up_template', 'follow_up_template_language',
                         'proactive_mode_enabled', 'objection_handling_enabled', 'cross_sell_enabled', 'personalization_enabled',
                         'takeover_minutes', 'reply_delay_seconds', 'handover_notice_enabled', 'rich_replies_enabled', 'address_style',
-                        'response_target_minutes',
+                        'response_target_minutes', 'ai_live', 'typing_indicator_enabled', 'product_cards_enabled',
                     ])->mapWithKeys(fn ($key) => [$key => $state[$prefix.$key] ?? null])->all(),
                     'api_key' => $state["{$prefix}api_key"] ?? null,
                     'image_api_key' => $state["{$prefix}image_api_key"] ?? null,

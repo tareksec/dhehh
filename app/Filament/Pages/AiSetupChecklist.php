@@ -8,8 +8,11 @@ use App\Filament\Resources\CourierProviders\CourierProviderResource;
 use App\Filament\Resources\KnowledgeDocuments\KnowledgeDocumentResource;
 use App\Filament\Resources\Products\ProductResource;
 use App\Services\CompanyContext;
+use App\Services\Crm\AiSettingsService;
 use App\Services\Crm\AiSetupChecklistService;
 use BackedEnum;
+use Filament\Actions\Action;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 
@@ -48,6 +51,48 @@ class AiSetupChecklist extends Page
         abort_unless(static::canAccess(), 403);
     }
 
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('goLive')->label(__('Go live'))->icon(Heroicon::OutlinedRocketLaunch)
+                ->visible(fn (): bool => $this->canChangeMode() && ! $this->isLive())
+                ->requiresConfirmation()
+                ->modalHeading(__('Go live'))
+                ->modalDescription(__('From now on the AI answers every customer, not only your test chats. Have you tried it in the test chat?'))
+                ->action(fn () => $this->setLive(true)),
+            Action::make('practiceMode')->label(__('Back to practice mode'))->icon(Heroicon::OutlinedBeaker)->color('gray')
+                ->visible(fn (): bool => $this->canChangeMode() && $this->isLive())
+                ->requiresConfirmation()
+                ->modalHeading(__('Back to practice mode'))
+                ->modalDescription(__('The AI will answer only the chats you mark as test chats. Real customers get no AI reply until you go live again.'))
+                ->action(fn () => $this->setLive(false)),
+        ];
+    }
+
+    /** Practice mode: true once the AI is allowed to answer real customers. */
+    public function isLive(): bool
+    {
+        $company = app(CompanyContext::class)->company();
+
+        return $company !== null && app(AiSettingsService::class)->isLive($company);
+    }
+
+    protected function canChangeMode(): bool
+    {
+        $company = app(CompanyContext::class)->company();
+
+        return $company !== null
+            && app(AiSettingsService::class)->enabled($company, AiSettingsService::TOOL_MESSAGING)
+            && (auth()->user()?->canManageSettings() ?? false);
+    }
+
+    protected function setLive(bool $live): void
+    {
+        abort_unless($this->canChangeMode(), 403);
+        app(AiSettingsService::class)->setLive(app(CompanyContext::class)->company(), $live);
+        Notification::make()->title($live ? __('The AI is live. It answers real customers now.') : __('Practice mode is on. The AI answers only test chats.'))->success()->send();
+    }
+
     /** @return list<array{key:string,title:string,hint:string,done:bool,detail:?string,url:?string}> */
     public function steps(): array
     {
@@ -65,6 +110,7 @@ class AiSetupChecklist extends Page
             'answers' => [__('Add answers to common questions'), __('Save FAQ answers or knowledge documents for things like warranty, returns policy and opening hours.'), KnowledgeDocumentResource::class],
             'alerts' => [__('Get alerts on your phone'), __('Install the app on your phone and allow notifications, so you know when the AI hands a chat to you.'), PushNotificationSettings::class],
             'test' => [__('Try the AI in the test chat'), __('Ask it a few real customer questions before customers do.'), AgentDesk::class],
+            'live' => [__('Go live'), __('In practice mode the AI answers only the chats you mark as test chats in the Inbox. Real customers get no AI reply until you go live.'), Integrations::class],
         ];
 
         return collect(app(AiSetupChecklistService::class)->steps($company, auth()->user()))

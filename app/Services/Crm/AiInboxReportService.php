@@ -52,7 +52,8 @@ class AiInboxReportService
             'chats' => $chats,
             'ai_only' => $aiOnly,
             'ai_only_percent' => $chats > 0 ? (int) round($aiOnly * 100 / $chats) : null,
-            'ai_replies' => $this->messages($from, $to)->where('direction', 'outgoing')->where('generated_by', 'ai')->count(),
+            'ai_replies' => $this->messages($from, $to)->where('direction', 'outgoing')->where('generated_by', 'ai')
+                ->where(fn ($query) => $query->whereNull('ai_meta->kind')->orWhere('ai_meta->kind', '!=', ConversationMessengerService::CARDS_KIND))->count(),
             'staff_replies' => $this->messages($from, $to)->where('direction', 'outgoing')->where('generated_by', 'human')->count(),
             'handoffs' => $count(fn ($row): bool => $row->source === 'ai'),
             'takeovers' => $count(fn ($row): bool => $row->source !== 'ai' && $row->to_mode === Conversation::MODE_HUMAN),

@@ -116,6 +116,13 @@ class AiReplyService
 
             return;
         }
+        // Practice mode: until the AI is live it answers only staff test chats.
+        if (! $settings['ai_live'] && ! $conversation->is_staff_test) {
+            CrmAiRun::query()->create(['company_id' => $conversation->company_id, 'conversation_id' => $conversation->getKey(),
+                'source_message_id' => $sourceMessage?->getKey(), 'status' => 'skipped', 'reason' => 'Practice mode: the AI is not live yet, so it answers only test chats.', 'estimated_cost_usd' => 0]);
+
+            return;
+        }
         $this->run = app(AiRunService::class)->start($conversation, $sourceMessage, $settings);
         if ($this->run->status === 'budget_blocked') {
             $this->escalate($conversation, $this->run->reason);
@@ -316,6 +323,12 @@ class AiReplyService
                 return;
             }
             $reservedTokens += $requestBound;
+            if (! $this->dryRun) {
+                // The AI is about to think: the customer sees "Seen", then "typing...".
+                $presence = app(ConversationPresenceService::class);
+                $presence->seen($conversation, $sourceMessage, $settings);
+                $presence->typing($conversation, $sourceMessage, $settings);
+            }
             $client = new AiLlmClient($settings['api_format'], $settings['api_key'], $settings['model'], $settings['base_url'] ?: null, max(1, (int) ($deadline - microtime(true))));
             $usageIndex = count($this->runUsage);
             $this->runUsage[] = ['input_tokens' => $requestBound - 1024, 'output_tokens' => 1024];
@@ -602,6 +615,16 @@ class AiReplyService
             'address_style' => (string) ($settings['address_style'] ?? 'none'),
         ]);
 
+        // Messenger customers can also get a carousel of the products the answer names.
+        $cards = [];
+        if (($settings['product_cards_enabled'] ?? false) && $conversation->provider === 'messenger') {
+            try {
+                $cards = app(ProductCardService::class)->elements($conversation, $input);
+            } catch (\Throwable $exception) {
+                Log::info('Product cards could not be prepared.', ['conversation_id' => $conversation->getKey(), 'error' => $exception->getMessage()]);
+            }
+        }
+
         $this->sendAiReply(
             $conversation,
             $sourceMessage,
@@ -612,6 +635,7 @@ class AiReplyService
                 'tool_trace' => $this->toolTrace,
                 'usage' => $usage,
             ],
+            $cards,
         );
     }
 
@@ -621,6 +645,7 @@ class AiReplyService
         string $answer,
         float $confidence,
         array $meta,
+        array $cards = [],
     ): void {
         if ($this->dryRun) {
             return;
@@ -656,6 +681,9 @@ class AiReplyService
         }
         $this->run?->update(['status' => $message->delivery_status === 'failed' ? 'failed' : 'sent',
             'response_seconds' => max(0, (int) $sourceMessage->sent_at?->diffInSeconds(now()))]);
+        if ($message->delivery_status === 'sent' && $cards !== []) {
+            $this->messenger->sendCards($conversation, $cards, app(ProductCardService::class)->summary($cards), ['source_message_id' => $sourceMessage->getKey()]);
+        }
         if ($message->delivery_status === 'sent') {
             foreach ($this->toolTrace as $tool) {
                 if (isset($tool['result']['link_id'])) {
@@ -690,6 +718,7 @@ class AiReplyService
             $this->run->update(['status' => 'handed_off', 'reason' => Str::limit($reason, 250)]);
         }
         $conversation->refresh();
+        app(ConversationPresenceService::class)->stopped($conversation, $this->settings->all($conversation->company, AiSettingsService::TOOL_MESSAGING));
         if ($notifyCustomer && ! $conversation->isHumanMode()) {
             $this->sendHandoverNotice($conversation);
         }
@@ -789,6 +818,10 @@ class AiReplyService
             ->latest('sent_at')->latest('id')->limit(100)->get() as $message) {
             if ($message->direction === 'incoming') {
                 continue;
+            }
+
+            if (data_get($message->ai_meta, 'kind') === ConversationMessengerService::CARDS_KIND) {
+                continue; // the carousel that follows an answer is not another answer
             }
 
             if ($message->generated_by !== 'ai') {

@@ -139,6 +139,18 @@ class AiSettingsService
         'response_target_minutes' => 30,
         // What the business is, for the agent's background only (Agent Desk).
         'business_about' => '',
+        // Practice mode (owner request 2026-10-19, replacing the earlier "no
+        // practice mode" answer O7) has no default on purpose: while `ai_live`
+        // is false the AI answers only chats that staff marked as test chats.
+        // all() works the value out: a company that never saved it is live
+        // exactly when the AI is on, so nothing changes for companies already
+        // running, and only the Integrations form saves it explicitly.
+        // On: the customer sees "Seen" and "typing..." while the AI works on
+        // an answer (Messenger, WhatsApp).
+        'typing_indicator_enabled' => true,
+        // Off by default: Messenger customers also get a carousel of product
+        // cards (photo, price, a button) after an answer that names products.
+        'product_cards_enabled' => false,
     ];
 
     public const ADDRESS_STYLES = ['none', 'sir_maam', 'bhaiya_apu'];
@@ -156,6 +168,7 @@ class AiSettingsService
         $settings['api_key'] = $this->decrypt($stored['api_key'] ?? null);
         $settings['image_api_key'] = $this->decrypt($stored['image_api_key'] ?? null);
         $settings['voice_api_key'] = $this->decrypt($stored['voice_api_key'] ?? null);
+        $settings['ai_live'] = array_key_exists('ai_live', $stored) ? (bool) $stored['ai_live'] : (bool) $settings['enabled'];
 
         return $settings;
     }
@@ -223,6 +236,9 @@ class AiSettingsService
                 : 'none',
             'response_target_minutes' => max(0, min(1440, (int) ($data['response_target_minutes'] ?? $existing['response_target_minutes'] ?? self::DEFAULTS['response_target_minutes']))),
             'business_about' => mb_substr(trim((string) ($data['business_about'] ?? $existing['business_about'] ?? '')), 0, 4000),
+            'ai_live' => (bool) ($data['ai_live'] ?? $existing['ai_live'] ?? $existing['enabled'] ?? $data['enabled'] ?? false),
+            'typing_indicator_enabled' => (bool) ($data['typing_indicator_enabled'] ?? $existing['typing_indicator_enabled'] ?? self::DEFAULTS['typing_indicator_enabled']),
+            'product_cards_enabled' => (bool) ($data['product_cards_enabled'] ?? $existing['product_cards_enabled'] ?? self::DEFAULTS['product_cards_enabled']),
             'api_key' => filled($data['api_key'] ?? null)
                 ? Crypt::encryptString(trim((string) $data['api_key']))
                 : ($existing['api_key'] ?? null), // keep existing when left blank
@@ -260,6 +276,22 @@ class AiSettingsService
             });
         }
         $company->forceFill(['settings' => $settings])->save();
+    }
+
+    /** Go live (or back to practice mode) without touching the other settings. */
+    public function setLive(Company $company, bool $live): void
+    {
+        $settings = (array) $company->settings;
+        $stored = (array) data_get($settings, 'ai_tools.'.self::TOOL_MESSAGING, []);
+        // Nothing saved for this tool yet: keep reading the old shared settings.
+        $settings['ai_tools'][self::TOOL_MESSAGING] = [...($stored !== [] ? $stored : ($this->legacyGlobalSettings($company) ?? [])), 'ai_live' => $live];
+        $company->forceFill(['settings' => $settings])->save();
+    }
+
+    /** True when the AI may answer real customers (not only staff test chats). */
+    public function isLive(Company $company): bool
+    {
+        return (bool) $this->all($company, self::TOOL_MESSAGING)['ai_live'];
     }
 
     public function enabled(Company $company, string $tool): bool

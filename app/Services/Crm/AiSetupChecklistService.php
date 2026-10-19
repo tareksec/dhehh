@@ -77,6 +77,11 @@ class AiSetupChecklistService
                 'done' => CrmAiRun::query()->where('company_id', $company->getKey())->where('is_test', true)->exists(),
                 'detail' => null,
             ],
+            [
+                'key' => 'live',
+                'done' => $settings->enabled($company, AiSettingsService::TOOL_MESSAGING) && (bool) $messaging['ai_live'],
+                'detail' => null,
+            ],
         ];
     }
 }

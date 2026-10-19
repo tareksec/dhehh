@@ -63,7 +63,7 @@ class Conversation extends Model
     protected $fillable = [
         'company_id', 'channel_id', 'provider', 'entry_point', 'ad_referral_id',
         'external_contact_id', 'contact_name', 'contact_phone', 'lead_id', 'customer_id',
-        'status', 'ai_enabled', 'automation_mode', 'handover_reason', 'human_handled_until',
+        'status', 'ai_enabled', 'is_staff_test', 'automation_mode', 'handover_reason', 'human_handled_until',
         'mode_changed_at', 'mode_changed_by', 'assigned_to',
         'last_message_at', 'unread_count',
     ];
@@ -74,6 +74,7 @@ class Conversation extends Model
         'last_message_at' => 'datetime',
         'unread_count' => 'integer',
         'ai_enabled' => 'boolean',
+        'is_staff_test' => 'boolean',
         'human_handled_until' => 'datetime',
         'mode_changed_at' => 'datetime',
     ];

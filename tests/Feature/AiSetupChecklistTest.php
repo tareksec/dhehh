@@ -47,7 +47,7 @@ class AiSetupChecklistTest extends TestCase
     {
         $steps = $this->steps();
 
-        $this->assertSame(['channel', 'ai', 'about', 'products', 'delivery', 'answers', 'alerts', 'test'], array_keys($steps));
+        $this->assertSame(['channel', 'ai', 'about', 'products', 'delivery', 'answers', 'alerts', 'test', 'live'], array_keys($steps));
         $this->assertSame([], array_filter($steps, fn (array $step): bool => $step['done']));
     }
 
@@ -113,7 +113,7 @@ class AiSetupChecklistTest extends TestCase
         $this->product('V-1', 'products/v.jpg');
 
         Livewire::test(AiSetupChecklist::class)->assertOk()
-            ->assertSee(__(':done of :total steps done', ['done' => 1, 'total' => 8]))
+            ->assertSee(__(':done of :total steps done', ['done' => 1, 'total' => 9]))
             ->assertSee(__('Connect a chat channel'));
 
         $this->actingAs(User::factory()->create(['role' => 'inventory_staff', 'is_active' => true]));

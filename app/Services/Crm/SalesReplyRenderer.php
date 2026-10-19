@@ -204,6 +204,12 @@ class SalesReplyRenderer
         };
     }
 
+    /** A price as the customer reads it: "BDT 420", "৪২০ টাকা" or "420 taka". */
+    public function formatMoney(float $price, string $language): string
+    {
+        return $this->money($price, $language === 'bn', $language === 'banglish');
+    }
+
     private function money(float $price, bool $bn, bool $banglish = false): string
     {
         $amount = rtrim(rtrim(number_format($price, 2, '.', ''), '0'), '.');
