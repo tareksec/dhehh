@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.86.5] - 2026-10-19
+
 **Release type:** Patch/Fix Update
 
 ### Fixed
@@ -24,7 +26,6 @@ All notable production changes to Business Dashboard are documented here.
 - Near real time: `WhatsAppWebWebhookController::importMessages()` runs live batches of up to 25 messages with `dispatch_sync` (history stays queued; a failure returns 500 so the bridge's outbox retries). `Inbox::checkForChanges()` (`wire:poll.visible.3s`) compares a cheap signature (`max(last_message_at)`, `max(id)`, and for the open chat `max(id)` / `max(updated_at)` of its messages) and calls `skipRender()` when nothing changed; a full refresh runs on a change and at least every 30 seconds. Bridge: `splitLiveMessages()` treats `append` upserts from the last 24 hours as live. This is polling, not push - true push needs a websocket service (Laravel Reverb) on Coolify.
 - `Conversation::inboxDisplayName()` (WhatsApp provider only) is used by the Inbox; `profileDisplayName()` is unchanged because the Messenger profile lookups compare against its "name not found" result. The avatar of a number-only name shows `#`.
 - Inbox: `<video controls>` / `<audio controls>` for archived media; media is still served by `ConversationMediaController` (no byte-range support yet, so seeking inside long videos and Safari video playback may not work). 4 new lang keys (en + bn). New tests in `WhatsAppWebArchiveTest` (names in both orders, refresh, no overwrite, history trigger, page button, inbox media, media route) and 2 in the bridge's `normalize.test.js`.
-
 ## [2.86.4] - 2026-10-19
 
 **Release type:** Patch/Fix Update
