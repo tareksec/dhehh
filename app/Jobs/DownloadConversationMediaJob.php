@@ -111,7 +111,7 @@ class DownloadConversationMediaJob implements ShouldBeUnique, ShouldQueue
             ])->save();
 
             if ($message->direction === 'incoming' && in_array($message->type, ['image', 'audio'], true)) {
-                AiAutoReplyJob::dispatch($message->conversation_id, $message->id)->delay(now()->addSeconds(3));
+                AiAutoReplyJob::dispatchAfterWait($message->conversation_id, $message->id);
             }
 
             $channel->refresh();

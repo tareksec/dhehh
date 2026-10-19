@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Lead;
+use App\Services\Crm\AttentionQueueService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Website inquiry submission -> ERP CRM "query list". Lands on the existing
@@ -47,6 +49,14 @@ class LeadController extends Controller
             'interest' => $data['interest'] ?? null,
             'note' => $data['note'] ?? null,
         ]);
+
+        // Owner answer O3: a website lead is a person to answer, so it goes
+        // on the Needs attention list. A failure here never loses the lead.
+        try {
+            app(AttentionQueueService::class)->openedForLead($lead);
+        } catch (\Throwable $exception) {
+            Log::warning('Website lead could not be added to Needs attention.', ['lead_id' => $lead->getKey(), 'error' => $exception->getMessage()]);
+        }
 
         return response()->json(['data' => $this->transform($lead)], 201);
     }

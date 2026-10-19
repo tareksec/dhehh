@@ -6,6 +6,7 @@ use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Services\CompanyContext;
 use App\Services\Crm\AiReplyService;
+use App\Services\Crm\AiSettingsService;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -27,6 +28,21 @@ class AiAutoReplyJob implements ShouldBeUnique, ShouldQueue
         public int $conversationId,
         public ?int $sourceMessageId = null,
     ) {}
+
+    /**
+     * Queue the reply after the company's "wait before answering" time, so a
+     * customer who sends two quick messages gets one combined answer (a
+     * newer message makes the older job step aside).
+     */
+    public static function dispatchAfterWait(int $conversationId, int $sourceMessageId): void
+    {
+        $company = Conversation::withoutGlobalScopes()->with('company')->find($conversationId)?->company;
+        $seconds = $company
+            ? (int) app(AiSettingsService::class)->all($company, AiSettingsService::TOOL_MESSAGING)['reply_delay_seconds']
+            : (int) AiSettingsService::DEFAULTS['reply_delay_seconds'];
+
+        static::dispatch($conversationId, $sourceMessageId)->delay(now()->addSeconds(max(0, min(15, $seconds))));
+    }
 
     public function uniqueId(): string
     {

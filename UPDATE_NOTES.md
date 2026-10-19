@@ -1298,6 +1298,74 @@ Verification:
 
 Commit status: committed and pushed to `ccr-59b8ca5b-4zc27z`, then to `main` once the branch's MySQL migrations check passed (owner approved 2026-10-09: "হ্যাঁ, কমিট করে পুশ করো এবং মেইন এ পুশ কর").
 
+## 2026-10-09 - AI inbox control plane, phase 1: AI or team, return to AI, activity log, neat replies
+
+Built from `16_AI_INBOX_CONTROL_PLANE_PLAN.md` after a read-only walk through AiPraktor's dashboard, home page and help page (119 answers). Owner instruction: "aipraktor এর মত করে বিল্ড কর" — so the AiPraktor behaviour is the rule: takeover time 6 hours by default (owner can change it), timer choices 30 min / 1 hour / 6 hours / no limit, return to the AI on its own when the time is up, "." from the page inbox switches the chat, AI hands over with a reason from a fixed list.
+
+- Inbox: "AI or team" panel replaces the AI on/off switch (Take over, timer, Back to AI, Claim; shows return time and handover reason).
+- AI handover records a reason and goes through `ConversationModeService`; optional customer notice ("বিষয়টা আমাদের একজন প্রতিনিধি এখনই দেখছেন, একটু অপেক্ষা করুন।"), off by default because the existing tests and earlier design said a handover sends nothing.
+- Staff reply / page-inbox reply: team keeps the chat for the takeover time (was a fixed 24 hours).
+- `crm:revert-conversations` every minute; CRM → AI / Team Activity page with CSV.
+- Settings: takeover minutes, wait before answering, handover notice, neat replies, address style.
+- Neat replies (opt-in) follow AiPraktor's reply layout: labelled lines for price, options in stock, stock, delivery, order link; optional "জ্বি স্যার," opening.
+- Phase 2 (same day, owner: "ওকে পরের কাজ কর"): CRM → Needs attention page (`attention_items`, `AttentionQueueService`, `NeedsAttention`) — one record per AI handover with first-reply time and outcome (answered / given back to the AI / never answered / closed without a reply); setting "Reply target for handed-over chats", default 0 = no target. Only AI handovers go in the queue for now (O3); payment proof, website leads and follow-up events are not added — they need the owner's list. The reply target number (O2) is the owner's to set; business hours are not applied.
+
+- Phase 3 (owner: "পরবর্তি কাজ কর"): CRM → AI Inbox Report (`AiInboxReportService`, `AiInboxReport` page).
+  - It shows the share of chats the AI handled alone, AI and team replies, handovers, takeovers and auto-returns.
+  - It shows average and median first reply, late share, never answered, waiting now, handover reasons, and a by-channel table.
+  - Nothing is stored; the numbers are worked out when the page opens. "Handled by the AI alone" means a chat with customer messages in the period and no switch to the team in the period.
+
+- Phase 4 (owner: "ধাপ ৪ শুরু কর"): CRM → Agent Desk (`AgentDesk`, `AiInstructionService`, `AiInstructionVersion`) and CRM → Unanswered questions (`UnansweredQuestions`).
+  - **Decision O6 not asked yet:** editing, publishing and testing need `canManageSettings()`, the same people who can already change these texts on Integrations. No new permission was added.
+  - **Plan changed on purpose:** the plan listed five blocks (about, delivery, voice, exact words, other). The agent never writes free text. The server renders every customer-visible fact from the catalog, FAQ and delivery tools, so a "delivery" or "exact words" box would have no effect. The Agent Desk has three boxes instead: about (new), voice and guidelines (the two existing settings). Facts like delivery time or warranty belong in FAQ answers, and the Unanswered questions page makes that quick.
+  - Migration `2026_10_10_000100_create_ai_instruction_versions_table` also adds `crm_ai_runs.is_test` and makes `crm_ai_runs.conversation_id` nullable (test runs have no conversation). Not yet run on the demo database.
+  - Plain-language change requests ("make the fee 25,000") are not built, as the plan said.
+  - Needs Bangla review: 55 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to `feature/ai-inbox-control-plane` (owner approved: "ওকে কমিট এবং পুশ কর"). Not merged to `main`. The migration has not been run on the demo DB.
+
+- Phase 5 (owner: "পরের ধাপের কাজ শুরু কর"): CRM → Knowledge base (`KnowledgeDocumentResource`, `KnowledgeBaseService`, `KnowledgeDocument`) and the AI tool `lookup_knowledge`.
+  - Documents are plain text or Markdown. Headings split them into passages of up to 700 characters. The agent looks passages up and selects `knowledge:<id>`; the server sends the stored passage as written (same rule as FAQ answers). Amounts written in a looked-up passage count as grounded. The tool is offered only when the company has an active document.
+  - **Plan changed on purpose:** search runs in PHP over the cached passages instead of MySQL FULLTEXT, because InnoDB's tokenizer breaks Bangla words at vowel signs. Matching drops a trailing "s" and, for words of 5+ characters, the last two characters (the Bangla ending ের), and needs at least half of the question's words to match. Embeddings are not built (the plan said only if quality proves insufficient).
+  - Who can edit: `crm.manage` (same as Broadcasts), because the text is sent to customers as written. Not asked of the owner.
+  - **Known limit (resolved 2026-10-19, see phase 6):** a customer message with a hand-over word used to go to the team before the FAQ or the knowledge base was checked.
+  - Test box: **Test a question** on the Knowledge base list runs the same search (no AI call). Unanswered questions has a new **Add to knowledge base** action. File import accepts .md/.txt up to 200 KB.
+  - Migration `2026_10_11_000100_create_knowledge_documents_table`. Not run on the demo DB.
+  - Needs Bangla review: 17 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+- Phase 8, checklist part (owner: "ওকে এখন পরবর্তি কাজ কর"): CRM → Setup checklist (`AiSetupChecklist`, `AiSetupChecklistService`). Phases 6 and 7 and the go-live switch need owner answers (O4, O5, O7, O8, O9), so only the part that needs no decision was built.
+  - Eight steps, all worked out from data, nothing stored (no "dismissed" state either): channel, AI key + switch on, business description (`business_about`), every active product has a photo, default courier has delivery charges, at least one FAQ or knowledge document, the signed-in user has a push device, a test chat run exists.
+  - Not built: the practice mode / go-live switch (`ai_live`, O7), so there is no "go live" step yet. The "alerts" step is per user, not per company.
+  - Needs Bangla review: 23 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+
+- Owner answers (2026-10-19, asked with `AskUserQuestion`): O2 = 30 minutes, all hours; O3 = add payment proof, website lead, call and booking requests, complaint words; O4 = reminders at 1, 6, 24, 48 hours then weekly for 4 weeks, nothing 22:00–08:00, only for customers who got a link or quotation and have not ordered, counted from the customer's last message; O4a = Messenger steps after 24 hours go to the Needs attention list; O5 = Messenger broadcast allowed, test to own chat first, CRM manage people send; O6 = same permission as Integrations; **O7 = no practice mode** (AI on = live); O8 = parcel count + total COD, per-parcel list, consignment/tracking number, no rider block; O9 = all four sources (days not answered); returns words look in saved answers first. Full table: plan §3.1.
+- Phase 6 (owner: "প্রশ্ন করে জেনে নাও" — then built from the answers above): the hand-over rules, follow-up schedule and Messenger broadcast.
+  - **Hand-over rules** (`AiReplyService::keywordHandover()`): returns/refund words look in FAQ and knowledge first; payment, call, booking and wider complaint wording go to the team with their own reason. An image-only payment screenshot is recognised only when the separate image model describes photos (Auto Messaging → image model); with the main model reading the photo directly, only the customer's caption is checked. New Needs attention kinds and reasons; website leads open an item (`attention_items.lead_id`).
+  - **Follow-ups:** my reading of "weekly" is 7 days after the previous reminder, i.e. hours 216, 384, 552, 720 from the base message. The schedule restarts from the customer's newest message (the first reminder still ahead, not an old one), a person's reply cancels it, a newer offer replaces it. Links expire after 7 days but reminders go on for 30: the weekly WhatsApp template does not carry the link; Messenger text with `{link}` only goes inside the 24-hour window, when the link is still valid. Companies with Messenger need to enter the reminder text on Integrations; until then those reminders go to the team.
+  - **Broadcast:** window is 23 hours (one hour margin). The test goes to a chat the sender picks; it must be a chat with the Page inside the window, so the sender writes to the Page from their phone first. "Who may send" = `crm.manage`, the permission the Broadcasts resource already needs; no new permission.
+  - **Not run on the demo DB:** migrations `2026_10_19_000100`, `000200`, `000300` (phase 6) and `000400` (phase 7).
+  - Needs Bangla review: 35 new keys in `lang/bn.json` (O3 5, O4 11, O5 19).
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+- Phase 7 (same day): Courier → Scan parcels, Courier → Handover sheet, CRM → To chase.
+  - **Not built, on purpose:** the invoice QR (the invoice already prints a scannable Code 128 barcode of the order number) and the **Offer tapped** source of To chase (nothing records who tapped an offer, so there is nobody to contact). **Checkout attempt** is read as "checkout stopped at the advance payment", because `StorefrontCheckoutAttempt` keeps only masked contacts.
+  - **Owner decision still needed:** look-back days for To chase were not answered; it offers 7 / 14 / 30, default 7. Scan parcels moves to a stage the user picks (default Shipping); stages that need a reason (cancelled, returned, refunded) are not offered.
+  - Camera scanning uses the browser's `BarcodeDetector` (Chrome/Edge on Android and desktop); it was not tried on a real device. The USB-scanner path (type + Enter) is covered by tests.
+  - Needs Bangla review: 44 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+- Phase 9 (2026-10-20, owner: "Meta Seen আর টাইপিং ইন্ডিকেটর, প্রোডাক্ট কার্ড / carousel, Practice mode সহ কর। এই কাজ গুলো শেষ কর।"): the three things left in the plan.
+  - **Practice mode reverses the 2026-10-19 answer O7 ("no practice mode") on the owner's new instruction.** `ai_live` is a per-company setting with no default on purpose: when nothing was saved it equals `enabled`, so every company already running stays live and the existing tests did not change. Only the Integrations form saves it explicitly (its switch starts off for a company that never turned the AI on). While not live, `AiReplyService::maybeReply()` writes a `skipped` run and answers only chats with `conversations.is_staff_test`; `SalesFollowUpService::process()` leaves reminders `pending`. Staff mark a chat from the Inbox header (**Use as test chat**); **Go live** / **Back to practice mode** are on the Setup checklist (ninth step **Go live**) and the switch is on Integrations → Auto Messaging.
+  - **Seen and typing** (`ConversationPresenceService`, setting `typing_indicator_enabled`, default on): sent just before each model round, never for an instant FAQ answer or a keyword handover. Messenger: `mark_seen` once per message, `typing_on` renewed at most every 12 s, `typing_off` when the AI hands over. WhatsApp: one call that marks the message read and shows typing. Failures are swallowed on purpose and are not recorded as a channel fault.
+  - **Product cards** (`ProductCardService`, setting `product_cards_enabled`, default off): only Messenger; up to 10 cards from the products behind the reply keys; price and stock come from the records; button = the order link in the answer, else the product page on the company's `domain`; no card for a product without a photo. A failed row is only logged and leaves no failed bubble. Not shown in the Agent Desk test chat.
+  - Not done / limits: the Messenger "Seen" is not sent when a person opens a chat in the Inbox (only when the AI works on a message). Meta's typing sign lasts about 20 s on Messenger and 25 s on WhatsApp, so a very slow model answer can show a gap. Practice mode and cards were tested with faked Meta calls only; nothing was tried against a real Page or number. Migration `2026_10_20_000100` was not run on the demo DB.
+  - Needs Bangla review: 18 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane, then merged into main (owner approved commit, push and merge to main on 2026-10-20).
+
+Not done yet (next phases of the plan): nothing. Plan 16 is built.
+
+Needs Bangla review: the new Inbox/Activity/settings strings in `lang/bn.json` (51 keys) the Needs attention strings (19 keys) and the AI Inbox Report strings (26 keys) were written by the agent.
+
+Commit status: committed and pushed on branch `feature/ai-inbox-control-plane` (owner approved 2026-10-10: "কমিট এবং পুশ কর ফিচার ব্রাঞ্ছে"). Phases 1-3 are in this one commit. Not merged to `main`; the 8 PayStation/Storefront checkout tests that fail on this working tree belong to other uncommitted work, not to this branch.
+
 ## 2026-10-09 - Lead CRM sales agent: 5 opt-in intelligence upgrades (proactive mode, objection handling, multi-product cart, cross-sell, personalization)
 
 Owner request, across several turns: make the CRM sales agent behave more like an intelligent human sales agent rather than a generic chatbot. I proposed a list of areas to work on; the owner asked for each one in turn ("do the next task on your list"): proactive mode, objection handling, multi-product cart, cross-sell, personalization. All five were implemented, then lost when this session's container was recycled before they were committed (per CLAUDE.md, nothing is committed without explicit approval, and the uncommitted working tree does not survive a container restart). The owner asked to redo them, and the branch was restarted from the then-current `main` (the branch's own earlier PR #7 was closed, not merged, and `main` had advanced ~50 releases past the branch's old base — see Technical Notes).

@@ -12,7 +12,7 @@ class CrmAiRun extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['meta' => 'array', 'estimated_cost_usd' => 'decimal:6', 'resolved_at' => 'datetime'];
+    protected $casts = ['is_test' => 'boolean', 'meta' => 'array', 'estimated_cost_usd' => 'decimal:6', 'resolved_at' => 'datetime'];
 
     public function conversation(): BelongsTo
     {
