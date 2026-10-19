@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.87.1] - 2026-10-19
+
 **Release type:** Patch/Fix Update
 
 ### Fixed
@@ -13,7 +15,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - Guest redirect: `bootstrap/app.php` sets `$middleware->redirectGuestsTo(fn () => route('filament.admin.auth.login'))`, replacing Laravel's default `route('login')`. Every plain `auth` route in `routes/web.php` is under `/admin`, so the admin login is the right target; Filament's own panels (`/admin`, `/portal`, `/investor`) use their own authenticate middleware and are unchanged. No migration, no new string. Tests: `AdminGuestRedirectTest` (5).
-
 ## [2.87.0] - 2026-10-19
 
 **Release type:** Minor Feature Update
