@@ -35,33 +35,41 @@
             @if ($project->deal_reference) &mdash; {{ $project->deal_reference }} @endif
         </div>
 
-        <table>
-            <thead><tr><th>Purchase / Landed Cost</th><th class="num">Amount (৳)</th></tr></thead>
-            <tbody>
-                @foreach ($landedCosts as $item)
-                    <tr><td>{{ $item->label }}</td><td class="num">{{ $money($item->amount) }}</td></tr>
-                @endforeach
-                <tr class="total"><td>Total Landed Cost</td><td class="num">{{ $money($project->totalLandedCost()) }}</td></tr>
-            </tbody>
-        </table>
-
-        <div class="kv"><span class="k">Selling Amount</span><span class="v">{{ $money($settlement->total_revenue) }}</span></div>
-        <div class="kv"><span class="k">Gross Profit (Selling &minus; Landed Cost)</span><span class="v">{{ $money($grossProfit) }}</span></div>
-
-        @if ($localExpenses->isNotEmpty())
+        @if ($settlement->isManualBasis())
+            {{-- Profit declared for the cycle by hand (owner 2026-10-18): there is no selling amount to show. --}}
+            <div class="kv"><span class="k">{{ __('Profit for this cycle (declared by the company, not worked out from sales)') }}</span><span class="v">{{ $money($settlement->net_profit) }}</span></div>
+        @else
             <table>
-                <thead><tr><th>Local Expenses</th><th class="num">Amount (৳)</th></tr></thead>
+                <thead><tr><th>Purchase / Landed Cost</th><th class="num">Amount (৳)</th></tr></thead>
                 <tbody>
-                    @foreach ($localExpenses as $item)
+                    @foreach ($landedCosts as $item)
                         <tr><td>{{ $item->label }}</td><td class="num">{{ $money($item->amount) }}</td></tr>
                     @endforeach
-                    <tr class="total"><td>Total Local Expenses</td><td class="num">{{ $money($project->totalLocalExpense()) }}</td></tr>
+                    <tr class="total"><td>Total Landed Cost</td><td class="num">{{ $money($project->totalLandedCost()) }}</td></tr>
                 </tbody>
             </table>
+
+            <div class="kv"><span class="k">Selling Amount</span><span class="v">{{ $money($settlement->total_revenue) }}</span></div>
+            <div class="kv"><span class="k">Gross Profit (Selling &minus; Landed Cost)</span><span class="v">{{ $money($grossProfit) }}</span></div>
+
+            @if ($localExpenses->isNotEmpty())
+                <table>
+                    <thead><tr><th>Local Expenses</th><th class="num">Amount (৳)</th></tr></thead>
+                    <tbody>
+                        @foreach ($localExpenses as $item)
+                            <tr><td>{{ $item->label }}</td><td class="num">{{ $money($item->amount) }}</td></tr>
+                        @endforeach
+                        <tr class="total"><td>Total Local Expenses</td><td class="num">{{ $money($project->totalLocalExpense()) }}</td></tr>
+                    </tbody>
+                </table>
+            @endif
+
+            <div class="kv"><span class="k">Total Direct Cost</span><span class="v">{{ $money($settlement->total_cost) }}</span></div>
         @endif
 
-        <div class="kv"><span class="k">Total Direct Cost</span><span class="v">{{ $money($settlement->total_cost) }}</span></div>
-        <div class="kv"><span class="k">Net Profit</span><span class="v">{{ $money($settlement->net_profit) }}</span></div>
+        @unless ($settlement->isManualBasis())
+            <div class="kv"><span class="k">Net Profit</span><span class="v">{{ $money($settlement->net_profit) }}</span></div>
+        @endunless
 
         <div class="callout">
             <div class="kv">

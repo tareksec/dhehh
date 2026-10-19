@@ -18,6 +18,30 @@ All notable production changes to Business Dashboard are documented here.
 - Inbox: messages with a saved file get a small Alpine `error.capture` handler that fetches the same URL with `Range: bytes=0-0` and prints the HTTP status, content type and reason. 5 new lang keys (en + bn).
 - `whatsapp-bridge`: `Outbox` option `independent` (used by the media queue only) defers a failed entry in memory with its own backoff and continues with the next one; the event queue is unchanged. Redeploy the ERP and the `whatsapp-bridge` app to get this. Tests: 2 new bridge tests, 5 new `WhatsAppWebArchiveTest` tests.
 
+## [2.87.1] - 2026-10-19
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Opening an old admin link while signed out (for example a bookmarked `/admin/users`) showed the "this page has a problem" error instead of the sign-in page.** The old admin addresses, the order print pages and the report downloads are protected by a plain sign-in check that tried to send a signed-out visitor to a page named `login`, which this app does not have. The visitor is now sent to the admin sign-in page and, after signing in, returns to the page they asked for. It also stops filling Deploy Error Logs with `module:page:admin.clusters.legacy` ("Route [login] not defined").
+
+### Technical Notes
+
+- Guest redirect: `bootstrap/app.php` sets `$middleware->redirectGuestsTo(fn () => route('filament.admin.auth.login'))`, replacing Laravel's default `route('login')`. Every plain `auth` route in `routes/web.php` is under `/admin`, so the admin login is the right target; Filament's own panels (`/admin`, `/portal`, `/investor`) use their own authenticate middleware and are unchanged. No migration, no new string. Tests: `AdminGuestRedirectTest` (5).
+
+## [2.87.0] - 2026-10-19
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Pay a cycle's profit without waiting for sales.** Owner decision 2026-10-18: investors in a group are paid their profit share every two months whether or not the goods have sold, so the payout must not depend on sales. **Calculate & Settle** on a project now asks **How is the amount decided?**: *From the sales revenue* (as before) or *Profit entered by hand (no sales needed)*. With a hand-entered profit staff type the **net profit to distribute** (the form shows the investors' share of it as they type); the investors' 40% (the project's own split), the partners' and the company's shares, the rate per lac and each investor's payout are worked out exactly as for a sale, and a group project still pays the profit only while the principal stays in the group. The cost-proof tick-box is not asked, because the costs are not used. The amount stays with staff: nothing is read from sales, and nothing is paid until the settlement is confirmed and each payout is marked paid as usual. A hand-entered settlement is labelled **Profit entered by hand** on the settlement page, and the investor's printable report shows the profit as *declared by the company* instead of a selling amount, gross profit and cost tables that were never real. A loss is still settled from the sales revenue; a hand-entered profit cannot be negative. Settlements made before are unchanged (they read as *From the sales revenue*).
+
+### Technical Notes
+
+- Manual-profit settlement: migration `2026_10_18_100000_add_basis_to_project_settlements` adds `project_settlements.basis` (`sales` default / `manual`, guarded by `hasColumn`); `ProjectSettlement::BASIS_SALES` / `BASIS_MANUAL`, `isManualBasis()`, `basis` is immutable like the other settlement figures. `SettlementService::calculateAndSettle()` takes a last optional `?float $manualNetProfit`: when set it ignores `$totalRevenue` and the cost-proof check, stores `total_revenue = total_cost + profit` so the stored figures still add up, and records `basis = manual` (also in the audit entry). Existing callers and the sales path are unchanged. Settle modal in `ViewInvestmentProject`, summary in `ProjectSettlementResource` (selling amount and gross profit hidden when manual) and `investments/reports/investor-payout.blade.php`. Tests: 8 new in `InvestmentSettlementTest` and 1 in `InvestorGroupExitTest`, mutation-checked (cost check kept for manual, basis not recorded). **Deploy: run `php artisan migrate --force`.** 10 new interface strings in `lang/en.json` / `lang/bn.json` (Bangla to review).
+
 ## [2.86.5] - 2026-10-19
 
 **Release type:** Patch/Fix Update

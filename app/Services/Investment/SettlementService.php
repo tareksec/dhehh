@@ -21,6 +21,14 @@ class SettlementService
      *                           (v3 P1.3 — deed clause 4 / channel-partner
      *                           agreement clause 4). Ignored when net profit is
      *                           positive.
+     * @param  float|null  $manualNetProfit  Owner (2026-10-18): investors are paid their
+     *                                       profit share every cycle, sales or not. When
+     *                                       set, staff have entered the net profit by hand:
+     *                                       `$totalRevenue` and the cost-proof check are
+     *                                       ignored, the settlement is marked `manual`, and
+     *                                       the split is worked out exactly as for sales.
+     *                                       It cannot be negative; a loss is settled from
+     *                                       the sales revenue.
      */
     public function calculateAndSettle(
         InvestmentProject $project,
@@ -29,16 +37,23 @@ class SettlementService
         bool $acknowledgeUnprovenCosts = false,
         string $outcome = 'profit',
         ?string $lossReason = null,
+        ?float $manualNetProfit = null,
     ): ProjectSettlement {
         if ($project->status !== 'closed') {
             throw new RuntimeException('Only a closed project can be settled.');
         }
 
-        if ($totalRevenue < 0) {
+        $isManual = $manualNetProfit !== null;
+
+        if ($isManual && $manualNetProfit < 0) {
+            throw new RuntimeException(__('The profit to pay out cannot be negative. Settle a loss from the sales revenue.'));
+        }
+
+        if (! $isManual && $totalRevenue < 0) {
             throw new RuntimeException('Total revenue cannot be negative.');
         }
 
-        return DB::transaction(function () use ($project, $totalRevenue, $settledByUserId, $acknowledgeUnprovenCosts, $outcome, $lossReason): ProjectSettlement {
+        return DB::transaction(function () use ($project, $totalRevenue, $settledByUserId, $acknowledgeUnprovenCosts, $outcome, $lossReason, $manualNetProfit, $isManual): ProjectSettlement {
             $lockedProject = InvestmentProject::query()->whereKey($project)->lockForUpdate()->firstOrFail();
 
             if ($lockedProject->settlement()->exists()) {
@@ -47,8 +62,9 @@ class SettlementService
 
             // Transparency rule (deed clause 3 / channel-partner agreement
             // clause 2): every direct cost must be traceable. Not a hard block —
-            // the settler can acknowledge and proceed — but never silent.
-            if (! $acknowledgeUnprovenCosts) {
+            // the settler can acknowledge and proceed — but never silent. A
+            // profit entered by hand does not use the costs, so they are not checked.
+            if (! $isManual && ! $acknowledgeUnprovenCosts) {
                 $unproven = $lockedProject->costItems()
                     ->whereNull('purchase_id')
                     ->withCount('documents')
@@ -80,6 +96,14 @@ class SettlementService
             $capitalBase = round($externalInvested + $companyContribution, 2);
 
             $totalCost = round($lockedProject->totalCostItems(), 2);
+
+            // A manual settlement keeps the recorded costs and stores the revenue
+            // they imply, so the stored figures still add up; the `basis` column
+            // and the reports say it was not a real selling amount.
+            if ($isManual) {
+                $totalRevenue = round($totalCost + (float) $manualNetProfit, 2);
+            }
+
             $netProfit = round($totalRevenue - $totalCost, 2);
 
             $grouped = $investments->groupBy('investor_id');
@@ -119,6 +143,7 @@ class SettlementService
                 'annualized_return_percent' => $figures['annualized'],
                 'rate_per_lac' => $figures['rate_per_lac'],
                 'outcome' => $outcome,
+                'basis' => $isManual ? ProjectSettlement::BASIS_MANUAL : ProjectSettlement::BASIS_SALES,
                 'loss_reason' => $lossReason,
                 'status' => 'draft',
                 'settled_by' => $settledByUserId,
@@ -165,6 +190,7 @@ class SettlementService
                 'total_cost' => $totalCost,
                 'net_profit' => $netProfit,
                 'outcome' => $outcome,
+                'basis' => $isManual ? ProjectSettlement::BASIS_MANUAL : ProjectSettlement::BASIS_SALES,
                 'company_contribution_amount' => $companyContribution,
             ]);
 
