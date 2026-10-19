@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.87.2] - 2026-10-19
+
 **Release type:** Patch/Fix Update
 
 ### Fixed
@@ -17,7 +19,6 @@ All notable production changes to Business Dashboard are documented here.
 - `ConversationMediaController` returns `206` / `416` for `Range`, sends `Accept-Ranges`, `Content-Length` and an exact `Content-Type` (declared audio/video type wins over byte sniffing; generic sniffed types fall back to the declared type). For an authorized user a missing or unreadable file answers JSON `{message}` with status 404 / 500; unauthorized requests stay a plain 404.
 - Inbox: messages with a saved file get a small Alpine `error.capture` handler that fetches the same URL with `Range: bytes=0-0` and prints the HTTP status, content type and reason. 5 new lang keys (en + bn).
 - `whatsapp-bridge`: `Outbox` option `independent` (used by the media queue only) defers a failed entry in memory with its own backoff and continues with the next one; the event queue is unchanged. Redeploy the ERP and the `whatsapp-bridge` app to get this. Tests: 2 new bridge tests, 5 new `WhatsAppWebArchiveTest` tests.
-
 ## [2.87.1] - 2026-10-19
 
 **Release type:** Patch/Fix Update
