@@ -2397,5 +2397,10 @@
     "Your SMS sender ID (:sender) is a masking name. BulkSMSBD sends masking SMS only in Bangla (error 1012), so an English message, including the OTP format, is refused by the gateway. A numeric sender ID sends English messages.": "আপনার SMS সেন্ডার আইডি (:sender) একটি মাস্কিং নাম। BulkSMSBD মাস্কিং SMS শুধু বাংলায় পাঠায় (এরর ১০১২), তাই OTP ফরম্যাটসহ কোনো ইংরেজি বার্তা গেটওয়ে প্রত্যাখ্যান করবে। সংখ্যার সেন্ডার আইডিতে ইংরেজি বার্তা যায়।",
     "The one-time codes. BulkSMSBD accepts only its OTP format, so you can change only the brand name: Your {brand or company name} OTP is :code. Leave a message empty to send the built-in wording shown in grey.": "ওয়ান-টাইম কোডের বার্তা। BulkSMSBD শুধু তাদের OTP ফরম্যাট নেয়, তাই শুধু ব্র্যান্ডের নাম বদলানো যায়: Your {brand or company name} OTP is :code। খালি রাখলে ধূসর রঙে দেখানো ডিফল্ট লেখা যাবে।",
     "Use suggested wording": "প্রস্তাবিত লেখা বসান",
-    ":units characters, :parts SMS (:encoding)": ":units অক্ষর, :parts SMS (:encoding)"
+    ":units characters, :parts SMS (:encoding)": ":units অক্ষর, :parts SMS (:encoding)",
+    "The browser could not show this file. Server answer: :status (:type). :reason": "ব্রাউজার এই ফাইলটি দেখাতে পারেনি। সার্ভারের উত্তর: :status (:type)। :reason",
+    "The browser could not show this file, and the server did not answer.": "ব্রাউজার এই ফাইলটি দেখাতে পারেনি, আর সার্ভার কোনো উত্তর দেয়নি।",
+    "The stored file path is not valid for this company.": "সংরক্ষিত ফাইলের পথটি এই কোম্পানির জন্য বৈধ নয়।",
+    "The file is not in the server storage (the message points to a file that is missing).": "ফাইলটি সার্ভারের স্টোরেজে নেই (বার্তাটি এমন একটি ফাইল দেখাচ্ছে যা পাওয়া যাচ্ছে না)।",
+    "The server could not read the file: :error.": "সার্ভার ফাইলটি পড়তে পারেনি: :error।"
 }

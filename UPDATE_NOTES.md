@@ -2,6 +2,29 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-19 (media) - WhatsApp Web: pictures and voice notes that do not open in the Inbox
+
+Reason - owner's new screenshots after the redeploy: the audio player shows but pressing play does nothing, and the image is still a broken picture ("অডিও প্লেয়ার আসছে কিন্তু অডিও প্লে করলে কাজ করে না। আর ইমেজ এখনো দেখাচ্ছে না।").
+
+What I found:
+- A message only gets a player or picture when `media_path` is set, so the file was saved; the failure happens when the browser fetches `conversation-messages.media`. I ran the real route locally with a real PNG and a real Ogg/Opus header: it answers 200 with `image/png` / `audio/ogg`, correct length. So the ERP route is fine on a normal setup and the cause on the owner's server is not visible from here (possible: the file is missing from the server's storage after a redeploy, or the server answers something else). I do not know which; the Inbox now tells.
+- Real defect found in the bridge: the media queue was strictly ordered, so one picture/voice note that WhatsApp can no longer serve (very old history media) blocked every file behind it for about 4 minutes (8 attempts with growing waits) - with thousands of history media this starves new media too.
+- `ConversationMediaController` had no byte-range support (Safari/iPhone, seeking), and the Content-Type came only from sniffing the bytes.
+
+What changed:
+- Inbox: when a picture / audio / video cannot be shown, the bubble now says why in plain words ("The browser could not show this file. Server answer: 404 (application/json). ..."): it asks the same URL with `Range: bytes=0-0` and prints the HTTP status, content type and the server's reason. Only on messages that have a saved file; nothing extra for text messages.
+- `ConversationMediaController`: answers `206`/`416` for byte ranges, sends `Accept-Ranges`, `Content-Length` and an exact `Content-Type` (the type WhatsApp declared wins for audio/video when sniffing says something else, e.g. `application/ogg`); for an authorized user a missing/unreadable file returns JSON with the reason (still 404/500). Unauthorized requests are still a plain 404.
+- Bridge `Outbox` has `independent: true` for the media queue: a failing file is retried later on its own schedule (2 s doubling, max 5 min, 8 attempts as before) and the next file is tried right away. The event queue stays strictly ordered.
+- 5 lang keys (en/bn).
+
+Not verified: that this fixes the owner's broken images; it needs the redeploy (ERP and Wa Bridge). After it, a broken file shows its reason in the bubble - send me that line (or a screenshot) if it still does not open.
+
+Needs Bangla review: the 5 new keys ("The browser could not show this file...", "...and the server did not answer.", "The stored file path is not valid...", "The file is not in the server storage...", "The server could not read the file: :error.").
+
+Tests: bridge `npm test` (20 passing, 2 new for the independent outbox); `WhatsAppWebArchiveTest` (32; 5 new: real PNG/Ogg types, audio type, byte ranges, missing-file reason, Inbox failure notice), `PrivateAttachmentStorageTest`, `InboxPageTest`, `TranslationParityTest`, Pint pass.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
+
 ## 2026-10-19 (names and media) - WhatsApp Web chats: names, video/audio, refresh
 
 Reason - owner's screenshots of the Inbox after linking (4,057 chats already in): most chats read "নাম পাওয়া যায়নি", and image/video/audio do not show. Owner: "নামগুলো ঠিক করে দেও এবং ইমেজ/ভিডিও আর অডিও কিন্তু শো করে না। এটাও ঠিক করে দিবে।"
@@ -33,7 +56,7 @@ Follow-up (owner: "যাদের নাম নেই তাদের ফোন
 
 Follow-up (owner: "আর রিয়েল টাইম সিংক লাগবে"): what already was real time: the bridge sends each live message to the ERP the moment WhatsApp delivers it. The delays were (1) the queue worker before the message was saved, (2) the Inbox only re-drew every 8 seconds, and (3) messages that arrived while the bridge was offline were filed as old history (no unread, no lead). Changed: live batches (<= 25) are saved inline, the Inbox polls a cheap change signature every 3 seconds (`Inbox::checkForChanges()`, `skipRender()` when unchanged, full refresh on change and every 30 seconds), and recent `append` upserts count as live (`splitLiveMessages`). New tests: inline vs queued, failure returns 500, Inbox notices a new message, bridge `splitLiveMessages`. Not done, needs an owner decision: true push (no polling) needs a websocket server (Laravel Reverb) as another Coolify service plus Echo in the frontend; polling every 3 seconds is the no-new-infrastructure version. Not verified: behaviour under many open Inbox tabs at once.
 
-Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
+Commit status: on `main` (v2.86.5, owner approved the push on 2026-10-19).
 
 ## 2026-10-19 (later) - WhatsApp Web bridge: show why a connection fails, and a switchable device identity
 

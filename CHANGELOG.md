@@ -4,6 +4,20 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **WhatsApp Web: a picture or voice note that does not open in the Inbox now says why.** Instead of a silently broken picture or a player that does nothing, the message shows the server's answer (status, file type and reason, for example "the file is not in the server storage"), so the real cause can be fixed quickly.
+- **One WhatsApp file that can no longer be downloaded no longer holds up all the others.** The bridge used to wait about 4 minutes on every expired picture or voice note before trying the next, which starved new media; each file is now retried on its own schedule while the rest go through.
+- **Audio and video can be played and wound forward from any point** (and play on Safari / iPhone): the Inbox file route now supports byte ranges and sends the exact file type WhatsApp declared.
+
+### Technical Notes
+
+- `ConversationMediaController` returns `206` / `416` for `Range`, sends `Accept-Ranges`, `Content-Length` and an exact `Content-Type` (declared audio/video type wins over byte sniffing; generic sniffed types fall back to the declared type). For an authorized user a missing or unreadable file answers JSON `{message}` with status 404 / 500; unauthorized requests stay a plain 404.
+- Inbox: messages with a saved file get a small Alpine `error.capture` handler that fetches the same URL with `Range: bytes=0-0` and prints the HTTP status, content type and reason. 5 new lang keys (en + bn).
+- `whatsapp-bridge`: `Outbox` option `independent` (used by the media queue only) defers a failed entry in memory with its own backoff and continues with the next one; the event queue is unchanged. Redeploy the ERP and the `whatsapp-bridge` app to get this. Tests: 2 new bridge tests, 5 new `WhatsAppWebArchiveTest` tests.
+
 ## [2.86.5] - 2026-10-19
 
 **Release type:** Patch/Fix Update

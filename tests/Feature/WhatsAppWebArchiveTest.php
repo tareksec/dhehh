@@ -237,6 +237,96 @@ class WhatsAppWebArchiveTest extends TestCase
         $this->assertStringStartsWith('image/jpeg', (string) $response->headers->get('Content-Type'));
     }
 
+    protected function storedMedia(string $id, string $type, string $declaredMime, string $bytes): ConversationMessage
+    {
+        Storage::fake(app(CompanyStorageService::class)->privateDiskName());
+
+        $this->postEvent('messages', ['history' => false, 'messages' => [
+            $this->message($id, ['type' => $type, 'body' => null, 'media' => ['mime' => $declaredMime, 'file_name' => null, 'size' => 10]]),
+        ]])->assertOk();
+        $this->postMedia($id, $bytes, mime: $declaredMime)->assertOk();
+
+        $admin = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($admin)->withSession(['current_company_id' => $this->company->id]);
+
+        return ConversationMessage::query()->where('external_message_id', 'like', '%'.$id)->sole();
+    }
+
+    public function test_a_real_picture_and_voice_note_are_served_with_playable_types(): void
+    {
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+        $image = $this->storedMedia('REALPNG', 'image', 'image/jpeg', $png);
+
+        $response = $this->get(route('conversation-messages.media', ['message' => $image->getKey()]));
+        $response->assertOk();
+        $this->assertSame($png, $response->streamedContent());
+        $this->assertSame('image/png', $response->headers->get('Content-Type'));
+        $this->assertSame((string) strlen($png), $response->headers->get('Content-Length'));
+        $this->assertSame('bytes', $response->headers->get('Accept-Ranges'));
+    }
+
+    public function test_a_voice_note_keeps_the_audio_type_whatsapp_declared(): void
+    {
+        $ogg = "OggS\x00\x02".str_repeat("\x00", 8)."\x01\x02\x03\x04".str_repeat("\x00", 8)."\x01\x13OpusHead\x01\x01\x38\x01\x80\xbb".str_repeat("\x00", 40);
+        $audio = $this->storedMedia('REALOGG', 'audio', 'audio/ogg; codecs=opus', $ogg);
+
+        $response = $this->get(route('conversation-messages.media', ['message' => $audio->getKey()]));
+
+        $response->assertOk();
+        $this->assertStringStartsWith('audio/', (string) $response->headers->get('Content-Type'));
+    }
+
+    public function test_media_supports_byte_ranges_so_audio_and_video_can_seek(): void
+    {
+        $audio = $this->storedMedia('RANGE1', 'audio', 'audio/ogg; codecs=opus', '0123456789');
+        $url = route('conversation-messages.media', ['message' => $audio->getKey()]);
+
+        $partial = $this->get($url, ['Range' => 'bytes=2-5']);
+        $partial->assertStatus(206);
+        $this->assertSame('2345', $partial->streamedContent());
+        $this->assertSame('bytes 2-5/10', $partial->headers->get('Content-Range'));
+        $this->assertSame('4', $partial->headers->get('Content-Length'));
+
+        $tail = $this->get($url, ['Range' => 'bytes=-3']);
+        $tail->assertStatus(206);
+        $this->assertSame('789', $tail->streamedContent());
+
+        $open = $this->get($url, ['Range' => 'bytes=8-']);
+        $open->assertStatus(206);
+        $this->assertSame('89', $open->streamedContent());
+
+        $probe = $this->get($url, ['Range' => 'bytes=0-0']);
+        $probe->assertStatus(206);
+        $this->assertSame('0', $probe->streamedContent());
+
+        $this->get($url, ['Range' => 'bytes=50-60'])->assertStatus(416);
+        $this->assertSame('0123456789', $this->get($url, ['Range' => 'nonsense'])->streamedContent());
+    }
+
+    public function test_a_missing_file_tells_staff_why_instead_of_a_blank_404(): void
+    {
+        $image = $this->storedMedia('GONE1', 'image', 'image/jpeg', 'jpeg-bytes');
+        Storage::disk(app(CompanyStorageService::class)->privateDiskName())->delete($image->media_path);
+
+        $response = $this->getJson(route('conversation-messages.media', ['message' => $image->getKey()]));
+
+        $response->assertNotFound();
+        $this->assertStringContainsString('missing', (string) $response->json('message'));
+    }
+
+    public function test_the_inbox_reports_why_a_stored_file_cannot_be_shown(): void
+    {
+        $image = $this->storedMedia('SHOW1', 'image', 'image/jpeg', 'jpeg-bytes');
+        app(CompanyContext::class)->set($this->company);
+
+        $html = Livewire::test(Inbox::class)
+            ->call('selectConversation', Conversation::withoutGlobalScopes()->sole()->id)
+            ->html();
+
+        $this->assertStringContainsString('x-on:error.capture', $html);
+        $this->assertStringContainsString('The browser could not show this file', $html);
+    }
+
     protected function lidContact(string $lid, string $pushName): array
     {
         return ['jid' => $lid, 'lid' => $lid, 'phone' => null, 'name' => null, 'push_name' => $pushName, 'verified_name' => null];

@@ -761,7 +761,31 @@
                                             </p>
                                         @endif
 
-                                        <div class="min-w-0 space-y-2 overflow-hidden">
+                                        <div
+                                            class="min-w-0 space-y-2 overflow-hidden"
+                                            @if (filled($message->media_path))
+                                                x-data="{ failure: null }"
+                                                x-on:error.capture="
+                                                    if (! failure && $event.target.matches('img, audio, video')) {
+                                                        const media = $event.target;
+                                                        fetch(media.currentSrc || media.src, { credentials: 'same-origin', headers: { Range: 'bytes=0-0' } })
+                                                            .then(async (response) => {
+                                                                const reason = response.ok ? '' : ((await response.json().catch(() => ({}))).message || '');
+                                                                failure = @js(__('The browser could not show this file. Server answer: :status (:type). :reason'))
+                                                                    .replace(':status', response.status)
+                                                                    .replace(':type', response.headers.get('content-type') || '-')
+                                                                    .replace(':reason', reason)
+                                                                    .trim();
+                                                            })
+                                                            .catch(() => failure = @js(__('The browser could not show this file, and the server did not answer.')));
+                                                    }
+                                                "
+                                            @endif
+                                        >
+                                            @if (filled($message->media_path))
+                                                <p x-show="failure" x-cloak x-text="failure" class="text-xs italic text-danger-600 dark:text-danger-400"></p>
+                                            @endif
+
                                             @if ($imageUrl = $message->mediaImageUrl())
                                                 <a
                                                     href="{{ $imageUrl }}"
