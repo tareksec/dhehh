@@ -4,6 +4,20 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Marketplace Pro: footer and top bar unreadable when the secondary colour is light.** The top bar and footer carry light text but took their background from the admin's secondary colour, so a white or pale secondary turned them light grey and the text vanished. They now keep a dark surface (the secondary colour when it is dark, otherwise the default navy). The header still follows the secondary colour, with text colour chosen for contrast.
+
+- **Marketplace Pro: hero banner no longer cut off on desktop.** The banner was locked to a 4:1 frame and cropped any slide that was not exactly 4:1. It now takes the height of the uploaded image (up to 30 rem) and shows the whole picture. Mobile is unchanged.
+
+### Technical Notes
+
+- New palette key `secondary_deep` (`StorefrontSetting::themePalette()`), printed as `--storefront-secondary-deep`; no migration. Test: `StorefrontThemeTest::test_light_secondary_colour_keeps_the_footer_surface_dark`.
+
+## [2.88.0] - 2026-10-19
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -62,12 +76,6 @@ All notable production changes to Business Dashboard are documented here.
 - **The Setup checklist has nine steps:** the new last step is **Go live** (done when the AI is on and live).
 - **A staff reply now keeps the chat with the team for the company's takeover time (default 6 hours) instead of a fixed 24 hours**, and a reply typed in the page's own inbox does the same. A chat the AI handed over now returns to the AI after that time instead of staying off until someone switches it back.
 
-### Fixed
-
-- **Marketplace Pro: footer and top bar unreadable when the secondary colour is light.** The top bar and footer carry light text but took their background from the admin's secondary colour, so a white or pale secondary turned them light grey and the text vanished. They now keep a dark surface (the secondary colour when it is dark, otherwise the default navy). The header still follows the secondary colour, with text colour chosen for contrast.
-
-- **Marketplace Pro: hero banner no longer cut off on desktop.** The banner was locked to a 4:1 frame and cropped any slide that was not exactly 4:1. It now takes the height of the uploaded image (up to 30 rem) and shows the whole picture. Mobile is unchanged.
-
 ### Technical Notes
 
 - New `conversations` columns `automation_mode` (`ai` | `human`), `handover_reason`, `mode_changed_at`, `mode_changed_by`; `human_handled_until` keeps its meaning and is the return-to-AI time (NULL = no time limit). Migration backfills `human` for every chat with AI switched off or held until a future time. New company-owned table `conversation_mode_events` (`ConversationModeEvent`, in `MultiCompanyIsolationTest`).
@@ -98,8 +106,6 @@ All notable production changes to Business Dashboard are documented here.
 - Tests: `PracticeModeTest` (12) and `AiPresenceAndCardsTest` (13); `AiSetupChecklistTest` now expects nine steps.
 - `NeedsAttention` writes its sidebar badge as `navigationBadge()` with `HasGuardedNavigationBadge`, the rule `ModuleGuardTest` enforces for every badge.
 - New pages `ScanParcels` (Courier cluster, `sales.update`), `CourierHandoverSheet` (Courier cluster, `sales.view`) and `ToChase` (CRM cluster, `crm.view`; marking needs `crm.manage`); route `courier.handover-sheet` (`CourierHandoverSheetController`) for the print view; `CourierHandoverSheetService` takes bookings of one courier whose `booked_at` falls in the company's day and drops not-booked, pending, cancelled and failed ones. The invoice already prints a Code 128 barcode of the order number (`App\Support\Code128`), which a USB scanner and the camera page both read, so no QR code was added. Tests: `ScanParcelsTest` (6), `CourierHandoverSheetTest` (4).
-- New palette key `secondary_deep` (`StorefrontSetting::themePalette()`), printed as `--storefront-secondary-deep`; no migration. Test: `StorefrontThemeTest::test_light_secondary_colour_keeps_the_footer_surface_dark`.
-
 ## [2.87.2] - 2026-10-19
 
 **Release type:** Patch/Fix Update
