@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.87.0] - 2026-10-19
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -13,7 +15,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - Manual-profit settlement: migration `2026_10_18_100000_add_basis_to_project_settlements` adds `project_settlements.basis` (`sales` default / `manual`, guarded by `hasColumn`); `ProjectSettlement::BASIS_SALES` / `BASIS_MANUAL`, `isManualBasis()`, `basis` is immutable like the other settlement figures. `SettlementService::calculateAndSettle()` takes a last optional `?float $manualNetProfit`: when set it ignores `$totalRevenue` and the cost-proof check, stores `total_revenue = total_cost + profit` so the stored figures still add up, and records `basis = manual` (also in the audit entry). Existing callers and the sales path are unchanged. Settle modal in `ViewInvestmentProject`, summary in `ProjectSettlementResource` (selling amount and gross profit hidden when manual) and `investments/reports/investor-payout.blade.php`. Tests: 8 new in `InvestmentSettlementTest` and 1 in `InvestorGroupExitTest`, mutation-checked (cost check kept for manual, basis not recorded). **Deploy: run `php artisan migrate --force`.** 10 new interface strings in `lang/en.json` / `lang/bn.json` (Bangla to review).
-
 ## [2.86.5] - 2026-10-19
 
 **Release type:** Patch/Fix Update
