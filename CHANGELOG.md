@@ -17,6 +17,18 @@ All notable production changes to Business Dashboard are documented here.
 - `whatsapp-bridge`: every closed WhatsApp connection is logged as `connection closed` with `code` and `reason`; `GET /sessions/{id}` now returns `last_error_code` next to `last_error`. The ERP page shows both while the device is not connected.
 - Redeploy the `whatsapp-bridge` app in Coolify to get this. New lang key "Last error" (en + bn). Tests: bridge `test/browser.test.js` (5), two new page tests in `WhatsAppWebArchiveTest`.
 
+## [2.86.3] - 2026-10-19
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Report PDF and CSV buttons showed the file as raw text instead of downloading it** (Reports and Reports → Supplier Report). The admin panel opens links without reloading the page; for a file link that painted the PDF bytes into the page. These links now open as normal downloads.
+
+### Technical Notes
+
+- `AdminPanelProvider::spaUrlExceptions()` lists `*/admin/reports/export/*` and `*/admin/reports/supplier/*`, so Filament no longer adds `wire:navigate` to those links. Another file link that Filament renders in the panel needs the same exception. Tests: `ReportDownloadLinksTest` (3).
+
 ## [2.86.2] - 2026-10-19
 
 **Release type:** Patch/Fix Update
@@ -28,6 +40,7 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `whatsapp-bridge/src/session.js`: `Browsers.macOS('Desktop')` → `Browsers.ubuntu('Desktop')`. Checked 2026-10-19 against WhatsApp's servers with Baileys `7.0.0-rc14`: Mac OS + Desktop and Windows + Desktop were closed with 428 "Connection Terminated" after the handshake; Ubuntu + Desktop, Baileys + Desktop, and Chrome/Safari identities received a QR code in under a second. The platform type stays "Desktop" and full-history sync stays on.
+
 ## [2.86.1] - 2026-10-18
 
 **Release type:** Patch/Fix Update

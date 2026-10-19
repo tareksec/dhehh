@@ -21,7 +21,20 @@ Needs Bangla review: "Last error" -> "সর্বশেষ এরর".
 
 Tests: bridge `npm test` (15 passing, 5 new); `WhatsAppWebArchiveTest` (14) and `TranslationParityTest` pass; Pint passes on the changed PHP file.
 
-Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`, then merged with main (v2.86.3) and pushed to `main` on owner approval ("main এ পুশ কর", 2026-10-19).
+
+## 2026-10-19 - Report PDF / CSV buttons opened the file as text
+
+Owner report (screenshot of `app.zamzamint.com/admin/reports/supplier/4/pdf`): the Supplier Report PDF showed as raw text (`%PDF-1.7 1 0 obj ...`) in the browser, and the owner thought the template was missing.
+
+Cause: not the template (the PDF is built correctly: `reports.supplier-pdf`, dompdf headers `Content-Type: application/pdf` and `attachment`, checked locally on the existing report PDF route too). The admin panel is `->spa()`; Filament adds `wire:navigate` to a link button, Livewire fetches the URL and paints the response into the page, so the PDF bytes appeared as text. The older Reports page **CSV** and **PDF** buttons (`Reports::table()` header actions) have the same fault, so they show the file as text too.
+
+Fix: `AdminPanelProvider` `->spaUrlExceptions(["*/admin/reports/export/*", "*/admin/reports/supplier/*"])`. New `tests/Feature/ReportDownloadLinksTest.php` (3 tests); the two link tests fail without the fix and pass with it.
+
+Not checked: other file links in the panel (order PDF, product / customer / supplier CSV, backups, voucher and investment downloads) may behave the same where they are Filament link buttons; not changed because it was not reported and not verified. Not tried on the live site (the browser pane is not signed in).
+
+Commit status: committed on `feature/report-download-links` and pushed to `main` on the owner's explicit approval (2026-10-19).
+
 
 ## 2026-10-19 - WhatsApp Web bridge: QR code never appeared
 
@@ -41,7 +54,8 @@ Still open (not built, owner has not asked): the page shows only "Reconnecting" 
 
 Tests: `npm test` in `whatsapp-bridge/` (10 passing). No PHP, Blade or lang change, so the PHP suite is not affected.
 
-Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7` only; not on `main` (needs the owner's approval).
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`, then pushed to `main` on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-19); released as v2.86.2.
+
 
 ## 2026-10-18 (later) - SMS templates follow the BulkSMSBD rules
 
