@@ -52,10 +52,39 @@ class Conversation extends Model
 
     public function profileDisplayName(): string
     {
+        return $this->hasRealName() ? trim((string) $this->contact_name) : 'নাম পাওয়া যায়নি';
+    }
+
+    /**
+     * Name shown in the Inbox: the contact's name, else the phone number of a
+     * WhatsApp chat (so it is still recognisable), else the "name not found" text. profileDisplayName() stays as is - the Messenger profile
+     * lookups compare against its "name not found" result.
+     */
+    public function inboxDisplayName(): string
+    {
+        if ($this->hasRealName()) {
+            return trim((string) $this->contact_name);
+        }
+
+        // WhatsApp chats are identified by their number. Messenger keeps the
+        // "name not found" text: a missing profile name never falls back to a phone or id.
+        if ($this->provider === 'whatsapp') {
+            $digits = (string) preg_replace('/\D+/', '', (string) $this->contact_phone);
+
+            if (strlen($digits) >= 7) {
+                return str_starts_with($digits, '0') ? $digits : '+'.$digits;
+            }
+        }
+
+        return $this->profileDisplayName();
+    }
+
+    /** A real name: not blank and not just a number such as "Contact 88017...". */
+    protected function hasRealName(): bool
+    {
         $name = trim((string) $this->contact_name);
 
-        return $name !== '' && ! preg_match('/^(?:(?:chat\s+)?contact\s+)?[\d+\s-]+$/i', $name)
-            ? $name : 'নাম পাওয়া যায়নি';
+        return $name !== '' && ! preg_match('/^(?:(?:chat\s+)?contact\s+)?[\d+\s-]+$/i', $name);
     }
 
     public function channel(): BelongsTo

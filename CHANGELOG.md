@@ -12,10 +12,15 @@ All notable production changes to Business Dashboard are documented here.
 - **Chats that were already saved without a name get one.** New **Fill missing names** button on CRM → WhatsApp Web Login (it also runs by itself a couple of minutes after the first full history sync finishes). A name entered by staff is never replaced.
 - **Videos and voice messages now play in the Inbox** (video and audio player instead of nothing). A media message whose file could not be saved shows a short note instead of an empty bubble.
 
+### Changed
+
+- **Inbox: a WhatsApp chat without a name now shows the contact's phone number** (for example +8801859963681) instead of "নাম পাওয়া যায়নি", in the conversation list and at the top of the chat. Chats with neither name nor number, and Messenger chats, keep the old text.
+
 ### Technical Notes
 
 - `whatsapp-bridge`: `lidPairsFromMessages()` reads LID ↔ phone pairs from message keys (`remoteJid` / `remoteJidAlt`); `Session.learnLids()` runs before contacts are normalized, and `archiveContacts()` asks WhatsApp's LID mapping for any LID still unknown. Redeploy the `whatsapp-bridge` app to get this.
 - `WhatsAppWebArchiveService::upsertContact()` resolves a LID-only name through `whatsapp_contacts.lid`, merges a LID-keyed row's names into the number's row and names chats keyed by number or LID; `storeMessage()` now records the chat's LID on the contact. New `refreshNames()` (re-applies saved names, learns LID ↔ phone from `conversation_messages.raw_payload`) runs in the new `RefreshWhatsAppWebNamesJob`, so a queue worker must run. No migration.
+- `Conversation::inboxDisplayName()` (WhatsApp provider only) is used by the Inbox; `profileDisplayName()` is unchanged because the Messenger profile lookups compare against its "name not found" result. The avatar of a number-only name shows `#`.
 - Inbox: `<video controls>` / `<audio controls>` for archived media; media is still served by `ConversationMediaController` (no byte-range support yet, so seeking inside long videos and Safari video playback may not work). 4 new lang keys (en + bn). New tests in `WhatsAppWebArchiveTest` (names in both orders, refresh, no overwrite, history trigger, page button, inbox media, media route) and 2 in the bridge's `normalize.test.js`.
 
 ## [2.86.4] - 2026-10-19

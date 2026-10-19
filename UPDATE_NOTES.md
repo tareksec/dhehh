@@ -29,6 +29,8 @@ Needs Bangla review: "Fill missing names" -> "নামহীন চ্যাট
 
 Tests: bridge `npm test` (17 passing); `WhatsAppWebArchiveTest` (22) and `TranslationParityTest` pass; the new name and media tests fail on the old code and pass on the new.
 
+Follow-up (owner: "যাদের নাম নেই তাদের ফোন নাম্বার দেখাবে এমন টা করে দেও"): the Inbox list and chat header now show the phone number for a WhatsApp chat without a name (`Conversation::inboxDisplayName()`, `+` plus the digits, or the local number as saved; avatar shows `#`). `profileDisplayName()` is deliberately unchanged: the Messenger profile lookups and the existing test "missing profile name never falls back to phone or id" depend on it, so Messenger keeps "নাম পাওয়া যায়নি". New `ConversationInboxNameTest` (6) and an Inbox test for an archived chat. Lesson: the "নাম পাওয়া যায়নি" literal in `Conversation.php` is stored with the precomposed য় (U+09DF); text typed afresh uses a different code sequence and does not compare equal, so copy it from the file, never retype it.
+
 Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
 
 ## 2026-10-19 (later) - WhatsApp Web bridge: show why a connection fails, and a switchable device identity

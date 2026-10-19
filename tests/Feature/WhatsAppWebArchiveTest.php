@@ -369,6 +369,21 @@ class WhatsAppWebArchiveTest extends TestCase
             ->assertSee('The file is not saved (yet).');
     }
 
+    public function test_the_inbox_shows_the_phone_number_for_a_chat_without_a_name(): void
+    {
+        $this->postEvent('messages', ['history' => true, 'messages' => [
+            $this->message('NN1', ['chat_phone' => '8801859963681', 'chat_jid' => '8801859963681@s.whatsapp.net', 'push_name' => null]),
+        ]])->assertOk();
+
+        $admin = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($admin)->withSession(['current_company_id' => $this->company->id]);
+        app(CompanyContext::class)->set($this->company);
+
+        Livewire::test(Inbox::class)
+            ->assertSee('+8801859963681')
+            ->assertDontSee('নাম পাওয়া যায়নি');
+    }
+
     public function test_ban_and_channel_deletion_never_delete_archived_customer_data(): void
     {
         $this->postEvent('messages', ['history' => true, 'messages' => [$this->message('K1'), $this->message('K2', ['from_me' => true])]])->assertOk();

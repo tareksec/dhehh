@@ -21,7 +21,7 @@
         'internal' => 'Internal note',
     ];
     $displayName = $conversation
-        ? $conversation->profileDisplayName()
+        ? $conversation->inboxDisplayName()
         : null;
     $canManage = $this->canManageConversations;
     $isSuperAdmin = auth()->user()?->isSuperAdmin() ?? false;
@@ -48,6 +48,9 @@
         $name = trim((string) $name);
         if ($name === '') {
             return '?';
+        }
+        if (preg_match('/^\+?[\d\s-]+$/', $name)) {
+            return '#'; // a phone number has no initials
         }
         $parts = preg_split('/\s+/', $name) ?: [];
         $letters = mb_substr($parts[0], 0, 1).(isset($parts[1]) ? mb_substr($parts[1], 0, 1) : '');
@@ -387,7 +390,7 @@
                             <ul class="space-y-[5px]" aria-label="Conversation list">
                                 @forelse ($conversations as $item)
                                     @php
-                                        $itemName = $item->profileDisplayName();
+                                        $itemName = $item->inboxDisplayName();
                                         $preview = $item->latestMessage
                                             ? \Illuminate\Support\Str::limit((string) ($item->latestMessage->body ?: ucfirst($item->latestMessage->type)), 72)
                                             : 'No messages yet';
