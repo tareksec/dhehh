@@ -21,7 +21,7 @@
         'internal' => 'Internal note',
     ];
     $displayName = $conversation
-        ? $conversation->profileDisplayName()
+        ? $conversation->inboxDisplayName()
         : null;
     $canManage = $this->canManageConversations;
     $isSuperAdmin = auth()->user()?->isSuperAdmin() ?? false;
@@ -49,6 +49,9 @@
         if ($name === '') {
             return '?';
         }
+        if (preg_match('/^\+?[\d\s-]+$/', $name)) {
+            return '#'; // a phone number has no initials
+        }
         $parts = preg_split('/\s+/', $name) ?: [];
         $letters = mb_substr($parts[0], 0, 1).(isset($parts[1]) ? mb_substr($parts[1], 0, 1) : '');
 
@@ -66,7 +69,7 @@
 <x-filament-panels::page class="zz-inbox-page">
     <div
         data-zz-no-reload
-        wire:poll.visible.8s="refreshInbox"
+        wire:poll.visible.3s="checkForChanges"
         class="zz-inbox"
         x-data="{
             observer: null,
@@ -387,7 +390,7 @@
                             <ul class="space-y-[5px]" aria-label="Conversation list">
                                 @forelse ($conversations as $item)
                                     @php
-                                        $itemName = $item->profileDisplayName();
+                                        $itemName = $item->inboxDisplayName();
                                         $preview = $item->latestMessage
                                             ? \Illuminate\Support\Str::limit((string) ($item->latestMessage->body ?: ucfirst($item->latestMessage->type)), 72)
                                             : 'No messages yet';
@@ -786,14 +789,35 @@
                                                     >
                                                 </a>
                                             @elseif ($mediaUrl = $message->mediaDownloadUrl())
-                                                <x-filament::link
-                                                    :href="$mediaUrl"
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    icon="heroicon-o-paper-clip"
-                                                >
-                                                    Open attachment
-                                                </x-filament::link>
+                                                @if ($message->type === 'video' || str_starts_with((string) $message->media_mime, 'video/'))
+                                                    <video
+                                                        controls
+                                                        playsinline
+                                                        preload="metadata"
+                                                        src="{{ $mediaUrl }}"
+                                                        class="h-auto max-h-72 w-full max-w-full rounded-lg"
+                                                        aria-label="Video attached to this message"
+                                                    ></video>
+                                                @elseif ($message->type === 'audio' || str_starts_with((string) $message->media_mime, 'audio/'))
+                                                    <audio
+                                                        controls
+                                                        preload="none"
+                                                        src="{{ $mediaUrl }}"
+                                                        class="w-64 max-w-full"
+                                                        aria-label="Audio attached to this message"
+                                                    ></audio>
+                                                @else
+                                                    <x-filament::link
+                                                        :href="$mediaUrl"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        icon="heroicon-o-paper-clip"
+                                                    >
+                                                        Open attachment
+                                                    </x-filament::link>
+                                                @endif
+                                            @elseif (in_array($message->type, ['image', 'video', 'audio', 'document', 'sticker'], true) && data_get($message->raw_payload, 'source') === 'whatsapp_web')
+                                                <p class="text-xs italic opacity-70">{{ __('The file is not saved (yet). WhatsApp may no longer share very old media.') }}</p>
                                             @endif
 
                                             @if (filled($message->body))

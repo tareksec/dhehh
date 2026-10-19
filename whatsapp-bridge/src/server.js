@@ -4,6 +4,7 @@ import { mkdir, readdir } from 'node:fs/promises'
 import http from 'node:http'
 import path from 'node:path'
 import pino from 'pino'
+import { describeBrowser, resolveBrowser } from './browser.js'
 import { Session } from './session.js'
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' })
@@ -18,11 +19,20 @@ if (apiKey.length < 24) {
   process.exit(1)
 }
 
+let browser
+
+try {
+  browser = resolveBrowser(process.env.BRIDGE_BROWSER)
+} catch (error) {
+  logger.fatal(error.message)
+  process.exit(1)
+}
+
 const sessions = new Map()
 
 function sessionFor (id) {
   if (!sessions.has(id)) {
-    sessions.set(id, new Session({ id, dataDir, logger, maxMediaBytes }))
+    sessions.set(id, new Session({ id, dataDir, logger, maxMediaBytes, browser }))
   }
 
   return sessions.get(id)
@@ -69,7 +79,7 @@ const server = http.createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://bridge.local')
 
     if (url.pathname === '/health') {
-      return send(response, 200, { ok: true, sessions: sessions.size })
+      return send(response, 200, { ok: true, sessions: sessions.size, browser: describeBrowser(browser) })
     }
 
     if (!authorized(request)) {
@@ -165,4 +175,4 @@ process.on('SIGTERM', shutdown)
 process.on('SIGINT', shutdown)
 
 await restoreSessions()
-server.listen(port, () => logger.info({ port, dataDir }, 'WhatsApp bridge listening'))
+server.listen(port, () => logger.info({ port, dataDir, browser: describeBrowser(browser) }, 'WhatsApp bridge listening'))

@@ -2,6 +2,118 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-19 (names and media) - WhatsApp Web chats: names, video/audio, refresh
+
+Reason - owner's screenshots of the Inbox after linking (4,057 chats already in): most chats read "নাম পাওয়া যায়নি", and image/video/audio do not show. Owner: "নামগুলো ঠিক করে দেও এবং ইমেজ/ভিডিও আর অডিও কিন্তু শো করে না। এটাও ঠিক করে দিবে।"
+
+What I found:
+- "নাম পাওয়া যায়নি" is `Conversation::profileDisplayName()` (hardcoded) for a chat with a blank or number-only `contact_name`; the phone number itself was fine (`8801859963681` shown).
+- Names reach the ERP through the bridge's `contacts` events, keyed by LID (WhatsApp's hidden id), while chats are saved under the phone number that comes from each message's `remoteJidAlt`. The bridge never learned LID -> phone from those message keys and normalized contacts BEFORE messages, so a LID-keyed name stayed LID-only and the ERP (which named chats by phone) never matched it.
+- The Inbox only renders images inline; video and audio were just an "Open attachment" link, and a media message without a saved file rendered an empty bubble.
+- ERP serving of a stored image works (new test fetches `conversation-messages.media` and gets the bytes back as image/jpeg), so the broken image in the screenshot is not the ERP's media route on the test disk.
+
+What changed:
+- Bridge: `lidPairsFromMessages`, `Session.learnLids()` (called in `onHistory` and `archiveMessages`, before contacts), `archiveContacts()` resolves unknown LIDs through `signalRepository.lidMapping`.
+- ERP: LID-aware `upsertContact()`, `nameConversations()`, `refreshNames()`, `RefreshWhatsAppWebNamesJob` (queued on the first complete history sync, with a 2-minute delay, and by the new **Fill missing names** button on the WhatsApp Web Login page).
+- Inbox: `<video controls>` and `<audio controls>`; a note for media that was not saved.
+- 4 lang keys (en/bn).
+
+Not verified (needs the owner's data): whether the owner's names were lost this way. I could not read the production database, so I gave the owner a read-only count command (contacts / names / chats without name or phone). After the deploy the owner should open WhatsApp Web Login and press **Fill missing names**; names only exist for chats where WhatsApp shared one (customers who are not saved and have no profile name stay nameless).
+
+Still open:
+- Broken image in the Inbox: cause not found. Asked the owner to right-click the broken image -> Open image in new tab and report what page or error it shows (404, 500, other). Possible causes: bytes that are not a valid image, a storage-disk or domain problem on production.
+- `ConversationMediaController` has no byte-range support, so seeking in long videos and Safari video playback may not work.
+- The `InvestorPortalStaffEntryTest` preview test fails when the random staff name contains an apostrophe (seen once on CI, passed on re-run); not touched.
+
+Needs Bangla review: "Fill missing names" -> "নামহীন চ্যাটে নাম বসান", "Looking up missing names" -> "নাম খোঁজা শুরু হয়েছে", the refresh explanation and "The file is not saved (yet)..." (4 keys), plus "Last error" -> "সর্বশেষ এরর" from the earlier entry.
+
+Tests: bridge `npm test` (17 passing); `WhatsAppWebArchiveTest` (22) and `TranslationParityTest` pass; the new name and media tests fail on the old code and pass on the new.
+
+Follow-up (owner: "যাদের নাম নেই তাদের ফোন নাম্বার দেখাবে এমন টা করে দেও"): the Inbox list and chat header now show the phone number for a WhatsApp chat without a name (`Conversation::inboxDisplayName()`, `+` plus the digits, or the local number as saved; avatar shows `#`). `profileDisplayName()` is deliberately unchanged: the Messenger profile lookups and the existing test "missing profile name never falls back to phone or id" depend on it, so Messenger keeps "নাম পাওয়া যায়নি". New `ConversationInboxNameTest` (6) and an Inbox test for an archived chat. Lesson: the "নাম পাওয়া যায়নি" literal in `Conversation.php` is stored with the precomposed য় (U+09DF); text typed afresh uses a different code sequence and does not compare equal, so copy it from the file, never retype it.
+
+Follow-up (owner: "আর রিয়েল টাইম সিংক লাগবে"): what already was real time: the bridge sends each live message to the ERP the moment WhatsApp delivers it. The delays were (1) the queue worker before the message was saved, (2) the Inbox only re-drew every 8 seconds, and (3) messages that arrived while the bridge was offline were filed as old history (no unread, no lead). Changed: live batches (<= 25) are saved inline, the Inbox polls a cheap change signature every 3 seconds (`Inbox::checkForChanges()`, `skipRender()` when unchanged, full refresh on change and every 30 seconds), and recent `append` upserts count as live (`splitLiveMessages`). New tests: inline vs queued, failure returns 500, Inbox notices a new message, bridge `splitLiveMessages`. Not done, needs an owner decision: true push (no polling) needs a websocket server (Laravel Reverb) as another Coolify service plus Echo in the frontend; polling every 3 seconds is the no-new-infrastructure version. Not verified: behaviour under many open Inbox tabs at once.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
+
+## 2026-10-19 (later) - WhatsApp Web bridge: show why a connection fails, and a switchable device identity
+
+Reason - after the QR fix the QR appears, but scanning it ends on the phone with "Couldn't link device. Try again later." (owner's screenshot). The cause is not known: the bridge logged nothing about why a connection closes and the page only said "Reconnecting". Owner: "উন্নতি দুটো করে দাও" (do both improvements).
+
+What changed:
+- `whatsapp-bridge/src/browser.js` (new): `BRIDGE_BROWSER` (`<system>:<browser>`, default `ubuntu:Desktop`) picks the identity announced to WhatsApp; validated at start. `server.js` passes it to every `Session`; `GET /health` shows it. `session.js` no longer hardcodes the identity.
+- `session.js`: every closed connection is logged (`connection closed`, `code`, `reason`) and `last_error_code` is returned by `GET /sessions/{id}`.
+- `whats-app-web-login.blade.php`: "Last error: <message> (<code>)" under the status while the device is not connected.
+- `whatsapp-bridge/README.md`: `BRIDGE_BROWSER`, which identities WhatsApp refuses (Mac OS / Windows + Desktop), and what the close codes mean.
+- 1 lang key (en/bn).
+
+Verified from the cloud session: the real bridge reaches a QR with the default identity; with `windows:Desktop` it reports `last_error: Connection Terminated`, code 428 and logs it; a wrong `BRIDGE_BROWSER` stops it at start. The new page test fails on the old page and passes on the new one.
+
+Not verified: why the phone refuses the link. That needs the owner's phone. Next step for the owner after redeploying the bridge: scan again, read "Last error" on the page (or Coolify Runtime Logs), and if linking is refused try `BRIDGE_BROWSER=ubuntu:Chrome` or `baileys:Desktop` in Coolify and restart. A non-Desktop identity may give only recent chats, not the whole history.
+
+Needs Bangla review: "Last error" -> "সর্বশেষ এরর".
+
+Tests: bridge `npm test` (15 passing, 5 new); `WhatsAppWebArchiveTest` (14) and `TranslationParityTest` pass; Pint passes on the changed PHP file.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`, then merged with main (v2.86.3) and pushed to `main` on owner approval ("main এ পুশ কর", 2026-10-19).
+
+## 2026-10-19 - Report PDF / CSV buttons opened the file as text
+
+Owner report (screenshot of `app.zamzamint.com/admin/reports/supplier/4/pdf`): the Supplier Report PDF showed as raw text (`%PDF-1.7 1 0 obj ...`) in the browser, and the owner thought the template was missing.
+
+Cause: not the template (the PDF is built correctly: `reports.supplier-pdf`, dompdf headers `Content-Type: application/pdf` and `attachment`, checked locally on the existing report PDF route too). The admin panel is `->spa()`; Filament adds `wire:navigate` to a link button, Livewire fetches the URL and paints the response into the page, so the PDF bytes appeared as text. The older Reports page **CSV** and **PDF** buttons (`Reports::table()` header actions) have the same fault, so they show the file as text too.
+
+Fix: `AdminPanelProvider` `->spaUrlExceptions(["*/admin/reports/export/*", "*/admin/reports/supplier/*"])`. New `tests/Feature/ReportDownloadLinksTest.php` (3 tests); the two link tests fail without the fix and pass with it.
+
+Not checked: other file links in the panel (order PDF, product / customer / supplier CSV, backups, voucher and investment downloads) may behave the same where they are Filament link buttons; not changed because it was not reported and not verified. Not tried on the live site (the browser pane is not signed in).
+
+Commit status: committed on `feature/report-download-links` and pushed to `main` on the owner's explicit approval (2026-10-19).
+
+
+## 2026-10-19 - WhatsApp Web bridge: QR code never appeared
+
+Reason - owner deployed the bridge on Coolify; the ERP page showed "Reconnecting" and no QR code. The bridge reported `last_error: "Connection Terminated"`.
+
+What I found:
+- From the Coolify container a WebSocket to `wss://web.whatsapp.com/ws/chat` opened and stayed open, so the network is fine.
+- Baileys trace: the Noise handshake completes, then WhatsApp closes the socket about 2 seconds later (428 "Connection Terminated") before any QR is sent.
+- Reproduced from the cloud session with `7.0.0-rc14` and `6.7.24`, with the pinned and the live WhatsApp Web version. Only the browser identity mattered: Mac OS + Desktop and Windows + Desktop are closed; Ubuntu + Desktop, Baileys + Desktop, and Chrome/Safari identities get a QR in under a second.
+
+What changed:
+- `whatsapp-bridge/src/session.js`: `Browsers.macOS('Desktop')` -> `Browsers.ubuntu('Desktop')` (platform type stays Desktop, `syncFullHistory` and `shouldSyncHistoryMessage` unchanged).
+
+Not verified: a real phone was not linked from the cloud session. Whether the phone still sends the FULL history with the Ubuntu + Desktop identity can only be seen after the owner scans the QR: the "History sync" percentage and the chat/message counts on the WhatsApp Web Login page. If much less than the whole history arrives, tell me and I will try another identity (e.g. Baileys + Desktop).
+
+Still open (not built, owner has not asked): the page shows only "Reconnecting" and the bridge does not log why a connection closed. Logging the close code and showing `last_error` on the page would have made this visible without the Coolify terminal.
+
+Tests: `npm test` in `whatsapp-bridge/` (10 passing). No PHP, Blade or lang change, so the PHP suite is not affected.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`, then pushed to `main` on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-19); released as v2.86.2.
+
+
+## 2026-10-18 (later) - SMS templates follow the BulkSMSBD rules
+
+Owner feedback (Bangla): the SMS templates for the different jobs must follow BulkSMSBD's rules, and the first version did not.
+
+What the rules are (from the BulkSMSBD dashboard "Developers" page the owner shared, plus bulksmsbd.com's API and FAQ pages; BulkSMSBD publishes no other template policy and has no template-approval menu for a numeric sender ID):
+
+- OTP format: "Your {Brand/Company Name} OTP is XXXX" (dashboard: "OTP পাঠানোর জন্য এই ফরম্যাট টি ফলো করুন").
+- No single quotation mark in a message (API example code: "do not use single quotation (') in the message to avoid forbidden result").
+- Masking SMS must be Bangla (error 1012). The owner's sender ID `8809617643387` is numeric, so English is allowed.
+- Length: 160 / 153 per part in GSM-7, 70 / 67 per part with Bangla letters.
+
+What changed:
+
+- `BulkSmsBdPolicy` checks all of it. Code templates (customer sign-up / login / password reset, investor login / reset) must be exactly "Your {brand} OTP is :code" and the built-in text is that; any other saved wording is refused on save and ignored at send time. Order and project templates may not contain `'` or need more than 3 SMS parts. `'` is also dropped from names when the SMS goes out.
+- The investors' code SMS lost the reason ("login" / "password reset") and the "expires in 1 minute" sentence that the owner asked for on 2026-10-16: the BulkSMSBD OTP format has nothing after the code. The code still expires after 1 minute; the investor login page says so. Customers' codes lost "Use it to log in..." and the expiry sentence for the same reason. If BulkSMSBD confirms that text after the code is accepted, loosening `BulkSmsBdPolicy::isCodeFormat()` is a one-line change.
+- Investor code SMS is English only (the format is English), so the `:company Investment Portal` and the two `:portal ... OTP is :code` language keys are gone.
+- Page: a rules box, a masking-sender notice, a character / SMS-part counter on every box, and a "Use suggested wording" button for the order and project messages (suggestions are short English texts without a link or quote; the owner still has to save them, so nothing is sent by itself).
+
+Checked: `BulkSmsBdPolicyTest` (7), `SmsTemplatesTest` (16), `InvestorPortalTest`, customer and reseller OTP tests; Pint clean. No live data touched, no real SMS sent.
+
+Needs Bangla review: the 9 new keys in `lang/bn.json` (BulkSMSBD rules box, masking notice, the three policy messages, "Use suggested wording", the counter).
+
+Commit status: not committed yet; branch `feature/sms-bulksmsbd-policy`, waiting for the owner's approval.
+
 ## 2026-10-18 - Fix: signed-out visit to an old admin link threw "Route [login] not defined"
 
 Trigger: Deploy Error Logs showed `module:page:admin.clusters.legacy` — `RouteNotFoundException: Route [login] not defined` at `UrlGenerator.php:542`, request `https://app.zamzamint.com/admin/users`, raised from `Authenticate::redirectTo()` via the default `redirectGuestsTo(fn () => route('login'))` that `ApplicationBuilder` installs.
@@ -16,7 +128,7 @@ Environment note: the container had PHP 8.3; PHP 8.4 + imagick were installed fr
 
 Verification: `php artisan test --filter=AdminGuestRedirectTest` 5 passed; with the `bootstrap/app.php` line removed the same tests fail with the exact production error (`Route [login] not defined`, `UrlGenerator.php:542`). Full plain `php artisan test` (after `npm run build`): 2,594 passed, 2 skipped, 0 failed. Pint reports only older style issues in `bootstrap/app.php` (`\Throwable`, `!` spacing), none on the new lines. Not tried in a real browser.
 
-Commit status: committed and pushed to the session's designated branch `claude/inspiring-mendel-llkhz0`; not pushed to `main` (the owner decides when `main` moves).
+Commit status: committed on `claude/inspiring-mendel-llkhz0`; `main` (v2.86.5) was merged in, the full suite re-run, and the branch pushed to `main` on the owner's explicit approval (2026-10-19).
 
 ## 2026-10-18 - Supplier Report (Reports module)
 

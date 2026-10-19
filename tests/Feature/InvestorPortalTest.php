@@ -276,7 +276,7 @@ class InvestorPortalTest extends TestCase
 
         $this->assertTrue($service->sendCode($account->fresh(), 'login'));
         $this->assertMatchesRegularExpression(
-            '/^'.preg_quote($company->name, '/').' Investment Portal login OTP is \d{6}\. It expires in 1 minute\.$/',
+            '/^Your '.preg_quote($company->name, '/').' Investment Portal OTP is \d{6}\.$/',
             $texts[0],
         );
         $this->assertEqualsWithDelta(60, now()->diffInSeconds($account->fresh()->otp_expires_at, false), 2);
@@ -284,7 +284,7 @@ class InvestorPortalTest extends TestCase
         $this->travel(2)->minutes();
         $this->assertTrue($service->sendCode($account->fresh(), 'reset'));
         $this->assertMatchesRegularExpression(
-            '/^'.preg_quote($company->name, '/').' Investment Portal password reset OTP is \d{6}\. It expires in 1 minute\.$/',
+            '/^Your '.preg_quote($company->name, '/').' Investment Portal OTP is \d{6}\.$/',
             $texts[1],
         );
 
@@ -310,22 +310,22 @@ class InvestorPortalTest extends TestCase
         }]);
 
         $templates->save($company->id, [
-            SmsTemplateService::OTP_INVESTOR_LOGIN => ':portal - login code :code (valid :minutes min)',
-            SmsTemplateService::RESET_INVESTOR_PASSWORD => 'Reset code :code',
+            SmsTemplateService::OTP_INVESTOR_LOGIN => 'Your :company Investors OTP is :code',
+            SmsTemplateService::RESET_INVESTOR_PASSWORD => 'Your Tasneem Reset OTP is :code.',
         ]);
 
         $this->assertTrue($service->sendCode($account->fresh(), 'login'));
-        $this->assertMatchesRegularExpression('/^'.preg_quote($company->name, '/').' Investment Portal - login code \d{6} \(valid 1 min\)$/', $texts[0]);
+        $this->assertMatchesRegularExpression('/^Your '.preg_quote($company->name, '/').' Investors OTP is \d{6}$/', $texts[0]);
 
         $this->travel(2)->minutes();
         $this->assertTrue($service->sendCode($account->fresh(), 'reset'));
-        $this->assertMatchesRegularExpression('/^Reset code \d{6}$/', $texts[1]);
+        $this->assertMatchesRegularExpression('/^Your Tasneem Reset OTP is \d{6}\.$/', $texts[1]);
 
         // Blank wording goes back to the built-in text.
         $templates->save($company->id, [SmsTemplateService::OTP_INVESTOR_LOGIN => '']);
         $this->travel(2)->minutes();
         $this->assertTrue($service->sendCode($account->fresh(), 'login'));
-        $this->assertMatchesRegularExpression('/ Investment Portal login OTP is \d{6}\. It expires in 1 minute\.$/', $texts[2]);
+        $this->assertMatchesRegularExpression('/^Your '.preg_quote($company->name, '/').' Investment Portal OTP is \d{6}\.$/', $texts[2]);
     }
 
     public function test_sms_code_sign_in_is_not_offered_without_an_sms_gateway(): void

@@ -4,6 +4,94 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Opening an old admin link while signed out (for example a bookmarked `/admin/users`) showed the "this page has a problem" error instead of the sign-in page.** The old admin addresses, the order print pages and the report downloads are protected by a plain sign-in check that tried to send a signed-out visitor to a page named `login`, which this app does not have. The visitor is now sent to the admin sign-in page and, after signing in, returns to the page they asked for. It also stops filling Deploy Error Logs with `module:page:admin.clusters.legacy` ("Route [login] not defined").
+
+### Technical Notes
+
+- Guest redirect: `bootstrap/app.php` sets `$middleware->redirectGuestsTo(fn () => route('filament.admin.auth.login'))`, replacing Laravel's default `route('login')`. Every plain `auth` route in `routes/web.php` is under `/admin`, so the admin login is the right target; Filament's own panels (`/admin`, `/portal`, `/investor`) use their own authenticate middleware and are unchanged. No migration, no new string. Tests: `AdminGuestRedirectTest` (5).
+
+## [2.86.5] - 2026-10-19
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **WhatsApp Web chats showed "নাম পাওয়া যায়নি" instead of the customer's name.** WhatsApp shares customer names under a hidden ID (LID) while the chat is saved under the phone number, so the names never found their chats. The bridge now learns which number belongs to which hidden ID before it sends the names, and the ERP matches a name by number or by that hidden ID, whether the name or the chat arrives first.
+- **Chats that were already saved without a name get one.** New **Fill missing names** button on CRM → WhatsApp Web Login (it also runs by itself a couple of minutes after the first full history sync finishes). A name entered by staff is never replaced.
+- **Videos and voice messages now play in the Inbox** (video and audio player instead of nothing). A media message whose file could not be saved shows a short note instead of an empty bubble.
+
+### Changed
+
+- **Inbox: a WhatsApp chat without a name now shows the contact's phone number** (for example +8801859963681) instead of "নাম পাওয়া যায়নি", in the conversation list and at the top of the chat. Chats with neither name nor number, and Messenger chats, keep the old text.
+- **New WhatsApp messages reach the Inbox within seconds.** A message sent or received on the phone is saved the moment the bridge delivers it (no queue wait), and the Inbox checks for news every 3 seconds instead of re-drawing itself every 8 seconds, so a new message shows up in about 3 seconds while the server does less work. Messages that arrived while the bridge was offline (a restart or redeploy) in the last 24 hours now count as new (unread badge, reopened chat, new lead) instead of being filed as old history.
+
+### Technical Notes
+
+- `whatsapp-bridge`: `lidPairsFromMessages()` reads LID ↔ phone pairs from message keys (`remoteJid` / `remoteJidAlt`); `Session.learnLids()` runs before contacts are normalized, and `archiveContacts()` asks WhatsApp's LID mapping for any LID still unknown. Redeploy the `whatsapp-bridge` app to get this.
+- `WhatsAppWebArchiveService::upsertContact()` resolves a LID-only name through `whatsapp_contacts.lid`, merges a LID-keyed row's names into the number's row and names chats keyed by number or LID; `storeMessage()` now records the chat's LID on the contact. New `refreshNames()` (re-applies saved names, learns LID ↔ phone from `conversation_messages.raw_payload`) runs in the new `RefreshWhatsAppWebNamesJob`, so a queue worker must run. No migration.
+- Near real time: `WhatsAppWebWebhookController::importMessages()` runs live batches of up to 25 messages with `dispatch_sync` (history stays queued; a failure returns 500 so the bridge's outbox retries). `Inbox::checkForChanges()` (`wire:poll.visible.3s`) compares a cheap signature (`max(last_message_at)`, `max(id)`, and for the open chat `max(id)` / `max(updated_at)` of its messages) and calls `skipRender()` when nothing changed; a full refresh runs on a change and at least every 30 seconds. Bridge: `splitLiveMessages()` treats `append` upserts from the last 24 hours as live. This is polling, not push - true push needs a websocket service (Laravel Reverb) on Coolify.
+- `Conversation::inboxDisplayName()` (WhatsApp provider only) is used by the Inbox; `profileDisplayName()` is unchanged because the Messenger profile lookups compare against its "name not found" result. The avatar of a number-only name shows `#`.
+- Inbox: `<video controls>` / `<audio controls>` for archived media; media is still served by `ConversationMediaController` (no byte-range support yet, so seeking inside long videos and Safari video playback may not work). 4 new lang keys (en + bn). New tests in `WhatsAppWebArchiveTest` (names in both orders, refresh, no overwrite, history trigger, page button, inbox media, media route) and 2 in the bridge's `normalize.test.js`.
+## [2.86.4] - 2026-10-19
+
+**Release type:** Patch/Fix Update
+
+### Added
+
+- **WhatsApp Web Login now shows why a connection failed.** Under the status, the page shows the bridge's last error and its code (for example "Connection Terminated (428)"), so a stuck "Reconnecting" or a QR scan that ends with "Couldn't link device" is no longer a guessing game.
+- **The device identity the bridge shows in WhatsApp's Linked devices list can be changed from Coolify** (setting `BRIDGE_BROWSER`, default `ubuntu:Desktop`), without a code change. WhatsApp may refuse some identities, so this makes it quick to try another one.
+
+### Technical Notes
+
+- `whatsapp-bridge`: new optional env var `BRIDGE_BROWSER` as `<system>:<browser>` (systems `ubuntu`, `macos`, `windows`, `baileys`), read by the new `src/browser.js`. A wrong value stops the bridge at start with a clear message. It applies the next time a QR code is scanned. `GET /health` now also returns `browser`.
+- `whatsapp-bridge`: every closed WhatsApp connection is logged as `connection closed` with `code` and `reason`; `GET /sessions/{id}` now returns `last_error_code` next to `last_error`. The ERP page shows both while the device is not connected.
+- Redeploy the `whatsapp-bridge` app in Coolify to get this. New lang key "Last error" (en + bn). Tests: bridge `test/browser.test.js` (5), two new page tests in `WhatsAppWebArchiveTest`.
+## [2.86.3] - 2026-10-19
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Report PDF and CSV buttons showed the file as raw text instead of downloading it** (Reports and Reports → Supplier Report). The admin panel opens links without reloading the page; for a file link that painted the PDF bytes into the page. These links now open as normal downloads.
+
+### Technical Notes
+
+- `AdminPanelProvider::spaUrlExceptions()` lists `*/admin/reports/export/*` and `*/admin/reports/supplier/*`, so Filament no longer adds `wire:navigate` to those links. Another file link that Filament renders in the panel needs the same exception. Tests: `ReportDownloadLinksTest` (3).
+
+## [2.86.2] - 2026-10-19
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **WhatsApp Web Login (QR) never showed a QR code.** The status stayed on "Reconnecting" because WhatsApp now closes a login that announces itself as the Mac OS or Windows desktop app. The bridge now announces itself as a Linux desktop device (it still asks the phone for the full chat history), and the QR code appears within a second. Redeploy the `whatsapp-bridge` app in Coolify to get the fix.
+
+### Technical Notes
+
+- `whatsapp-bridge/src/session.js`: `Browsers.macOS('Desktop')` → `Browsers.ubuntu('Desktop')`. Checked 2026-10-19 against WhatsApp's servers with Baileys `7.0.0-rc14`: Mac OS + Desktop and Windows + Desktop were closed with 428 "Connection Terminated" after the handshake; Ubuntu + Desktop, Baileys + Desktop, and Chrome/Safari identities received a QR code in under a second. The platform type stays "Desktop" and full-history sync stays on.
+
+## [2.86.1] - 2026-10-18
+
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **Every SMS wording now follows the BulkSMSBD rules** (Settings → SMS Templates). The rules come from BulkSMSBD's own Developers page and API notes:
+  - **Code messages (OTP, password reset)** read exactly **"Your {brand or company name} OTP is XXXX"**, the OTP format BulkSMSBD asks for. The built-in wording is now just that, for shop customers, resellers and investors alike (for example "Your Tasneem Knitting Investment Portal OTP is 123456."), always in English, whatever the person's language. The longer wording ("Use it to log in. It expires in 10 minutes.", and the investors' "login" / "password reset" reason) is gone because the format has nothing after the code. The page only lets the owner change the brand part, and a code message that is not in this format is refused on save (and ignored at send time, the built-in text goes out instead).
+  - **No single quotation mark (')** in any SMS: BulkSMSBD refuses it. The page refuses wording with one, and a customer's or investor's name with one has it dropped when the SMS is sent.
+  - **At most 3 SMS parts** per message (160 characters a part in English, 70 with Bangla letters). Each box shows the characters and parts used while typing.
+  - A notice appears when the SMS sender ID is a masking name (letters): BulkSMSBD sends masking SMS only in Bangla (error 1012), so English messages would be refused. A numeric sender ID has no such limit.
+- **Suggested wording** for every order status and investor project message: a **Use suggested wording** button on each box fills in a short English message that follows the rules, ready to edit and save. Nothing is sent until the owner saves a message.
+
+### Technical Notes
+
+- New `App\Support\BulkSmsBdPolicy` (OTP format check, single-quote rule, GSM-7 / Unicode part counting, masking sender check). `SmsTemplateService::problem()` applies it on save, `render()` applies `clean()` to every message and falls back to the built-in text for a code template that is not in the OTP format. `render()` no longer takes a locale; the investor and customer code messages are not translated (their `:portal ... OTP is :code. It expires in 1 minute.` language keys and `:company Investment Portal` were removed). Tests: `BulkSmsBdPolicyTest` (7), and new cases in `SmsTemplatesTest` and `InvestorPortalTest`.
+## [2.86.0] - 2026-10-18
+
+**Release type:** Minor Feature Update
+
 ### Added
 
 - **Reports → Supplier Report**: one supplier's whole story from buying to selling, for **one product or all of the supplier's products**, with a **Download PDF** button on the same page (owner request 2026-10-18).
@@ -20,16 +108,10 @@ All notable production changes to Business Dashboard are documented here.
 
 - **A received purchase now adds only the sellable units to stock** (billed − short − damaged). Purchases with no short or damaged units behave exactly as before.
 
-### Fixed
-
-- **Opening an old admin link while signed out (for example a bookmarked `/admin/users`) showed the "this page has a problem" error instead of the sign-in page.** The old admin addresses, the order print pages and the report downloads are protected by a plain sign-in check that tried to send a signed-out visitor to a page named `login`, which this app does not have. The visitor is now sent to the admin sign-in page and, after signing in, returns to the page they asked for. It also stops filling Deploy Error Logs with `module:page:admin.clusters.legacy` ("Route [login] not defined").
-
 ### Technical Notes
 
-- Guest redirect: `bootstrap/app.php` sets `$middleware->redirectGuestsTo(fn () => route('filament.admin.auth.login'))`, replacing Laravel's default `route('login')`. Every plain `auth` route in `routes/web.php` is under `/admin`, so the admin login is the right target; Filament's own panels (`/admin`, `/portal`, `/investor`) use their own authenticate middleware and are unchanged. No migration, no new string. Tests: `AdminGuestRedirectTest` (5).
 - Supplier Report: migration `2026_10_18_000100_add_loss_quantities_and_product_costs_to_purchases` adds `purchase_items.short_quantity` / `damaged_quantity` (unsigned int, default 0) and `purchases.product_costs` (JSON `[{product_id, label, amount}]`); additive and safe to run on live data, no new company-owned model. `PurchaseItem` rejects negative values and short + damaged above the billed quantity; `sellableQuantity()` feeds `PurchaseWorkflowService::syncStockMovements()` (a product whose every unit was lost gets no stock movement). Landed cost is unchanged (`allocated_cost` / `landed_unit_cost` stay on the billed quantity).
 - `App\Services\SupplierReportService` holds the rules (documented in its class comment): only received purchases, date range on the purchase date, sales (accounted statuses, all time) handed to a product's units first-in-first-out (opening stock, then purchases by date, across all suppliers), costs after arrival and Meta ad spend (`meta_ads.spend` by `product_id`) counted in proportion to units sold. Page `App\Filament\Pages\SupplierReport` (Reports cluster, `reports.view`); PDF route `reports.supplier.pdf` (`reports.export`, audit log `report_exported` with `type = supplier`). The PDF is always English because dompdf cannot shape Bangla. Tests: `SupplierReportTest` (9).
-
 ## [2.85.1] - 2026-10-18
 
 **Release type:** Security Update

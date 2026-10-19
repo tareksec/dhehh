@@ -7,13 +7,18 @@ use App\Models\Company;
 use App\Services\AuditLogService;
 use App\Services\CompanyContext;
 use App\Services\SmsTemplateService;
+use App\Support\BulkSmsBdPolicy;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Text;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Auth;
@@ -24,7 +29,9 @@ use Illuminate\Validation\ValidationException;
  * order status messages, sign-in / password-reset codes and the investors'
  * project status messages. The sending itself is in SmsTemplateService,
  * OrderStatusSmsService and InvestorProjectMessageService; the SMS gateway is
- * set on Integrations → SMS Gateway.
+ * set on Integrations → SMS Gateway. Every message follows the BulkSMSBD rules
+ * (BulkSmsBdPolicy): a code message can only change its brand, and a message that
+ * breaks a rule is not saved.
  */
 class SmsTemplates extends Page
 {
@@ -106,6 +113,12 @@ class SmsTemplates extends Page
         return $schema
             ->statePath('data')
             ->components([
+                Section::make(__('BulkSMSBD SMS rules'))
+                    ->description(__('Every message follows the BulkSMSBD rules: a code message reads exactly "Your {brand or company name} OTP is :code"; no single quotation mark (\'); at most 3 SMS parts (160 characters a part in English, 70 with Bangla letters). A message that breaks a rule is not saved.'))
+                    ->schema([
+                        Text::make(fn (): string => __('Your SMS sender ID (:sender) is a masking name. BulkSMSBD sends masking SMS only in Bangla (error 1012), so an English message, including the OTP format, is refused by the gateway. A numeric sender ID sends English messages.', ['sender' => (string) $this->senderId()]))
+                            ->visible(fn (): bool => BulkSmsBdPolicy::isMaskingSender($this->senderId())),
+                    ]),
                 Tabs::make('sms_templates')
                     ->columnSpanFull()
                     ->tabs([
@@ -118,7 +131,7 @@ class SmsTemplates extends Page
                         Tab::make(__('OTP & password reset'))
                             ->icon(Heroicon::OutlinedKey)
                             ->schema([
-                                Text::make(__('The one-time codes. Leave a message empty to send the built-in wording shown in grey. A message must contain :code, or the person receives no code.')),
+                                Text::make(__('The one-time codes. BulkSMSBD accepts only its OTP format, so you can change only the brand name: Your {brand or company name} OTP is :code. Leave a message empty to send the built-in wording shown in grey.')),
                                 ...$this->fieldsFor($templates, SmsTemplateService::GROUP_CODE),
                             ]),
                         Tab::make(__('Investor projects'))
@@ -137,16 +150,48 @@ class SmsTemplates extends Page
         $fields = [];
 
         foreach ($templates->definitionsInGroup($group) as $key => $definition) {
-            $fields[] = Textarea::make(self::field($key))
+            $field = self::field($key);
+            $input = Textarea::make($field)
                 ->label($definition['label'])
                 ->rows(3)
                 ->maxLength(SmsTemplateService::MAX_LENGTH)
                 ->placeholder($definition['default'])
+                ->live(debounce: 500)
+                ->hint(fn (Get $get): string => $this->lengthNote((string) ($get($field) ?: $definition['default'])))
                 ->helperText($this->placeholderHelp($definition['placeholders'], $definition['default'] !== null))
                 ->columnSpanFull();
+
+            if ($definition['suggested'] !== null) {
+                $input->hintAction(Action::make('suggest_'.$field)
+                    ->label(__('Use suggested wording'))
+                    ->action(fn (Set $set) => $set($field, $definition['suggested'])));
+            }
+
+            $fields[] = $input;
         }
 
         return $fields;
+    }
+
+    /** The company's SMS sender ID (from the gateway row that sends its SMS), or null. */
+    protected function senderId(): ?string
+    {
+        $company = $this->company();
+        $setting = $company ? app(SmsTemplateService::class)->gatewayFor((int) $company->getKey()) : null;
+
+        return $setting ? data_get($setting->notification_credentials, 'sms_sender_id') : null;
+    }
+
+    /** "112 characters, 1 SMS (GSM-7)": the placeholders count as written, so the real SMS differs a little. */
+    protected function lengthNote(string $text): string
+    {
+        if ($text === '') {
+            return '';
+        }
+
+        $length = BulkSmsBdPolicy::length($text);
+
+        return __(':units characters, :parts SMS (:encoding)', ['units' => $length['units'], 'parts' => $length['parts'], 'encoding' => $length['encoding']]);
     }
 
     /** @param array<string, string> $placeholders */

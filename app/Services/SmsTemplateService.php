@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\SmsTemplate;
 use App\Models\StorefrontSetting;
+use App\Support\BulkSmsBdPolicy;
 
 /**
  * The wording of every SMS the owner can set (SMS Templates page, owner request
@@ -13,12 +14,17 @@ use App\Models\StorefrontSetting;
  * A template is plain text with :placeholders (the same style as the older
  * "Project completed message"). Two kinds:
  * - Code messages (sign-in / password-reset codes) have built-in wording, so
- *   a blank template still sends the code; a template must contain :code.
+ *   a blank template still sends the code. BulkSMSBD's OTP format is
+ *   "Your {Brand/Company Name} OTP is XXXX", so the owner can only choose the
+ *   brand (BulkSmsBdPolicy::isCodeFormat); anything else is refused on save and
+ *   ignored at send time.
  * - Order and project messages have no built-in wording: while a template is
  *   blank nothing is sent, so nobody is texted before the owner has written it.
+ *   Each has a suggested wording the page can fill in.
  *
- * Customer-facing wording is one text per message: the owner writes it in the
- * language the customers should get.
+ * Every message follows BulkSmsBdPolicy (no single quotation mark, at most 3
+ * SMS parts). Customer-facing wording is one text per message: the owner writes
+ * it in the language the customers should get.
  */
 class SmsTemplateService
 {
@@ -59,6 +65,28 @@ class SmsTemplateService
         Order::STAGE_REFUNDED,
     ];
 
+    /**
+     * Wording the page can fill in for an order stage: short, plain English (one SMS), no link and no
+     * single quotation mark, so it follows BulkSMSBD's rules. The owner reads it and saves it, or edits it first.
+     */
+    public const SUGGESTED_ORDER = [
+        Order::STAGE_CONFIRMED => 'Dear :name, your order :order is confirmed. Total Tk :total. - :company',
+        Order::STAGE_PROCESSING => 'Dear :name, your order :order is being prepared. - :company',
+        Order::STAGE_SHIPPING => 'Dear :name, your order :order is on its way. Tracking: :tracking. - :company',
+        Order::STAGE_DELIVERED => 'Dear :name, your order :order has been delivered. Thank you for shopping with :company.',
+        Order::STAGE_COMPLETED => 'Dear :name, your order :order is complete. Thank you for shopping with :company.',
+        Order::STAGE_CANCELLED => 'Dear :name, your order :order has been cancelled. - :company',
+        Order::STAGE_RETURNED => 'Dear :name, your order :order has been marked as returned. - :company',
+        Order::STAGE_REFUNDED => 'Dear :name, the refund for your order :order has been processed. - :company',
+    ];
+
+    /** Suggested wording for an investor project status (same rules as above). */
+    public const SUGGESTED_PROJECT = [
+        self::PROJECT_RUNNING => 'Dear :name, Project :project has started with your investment of Tk :amount. - :company',
+        self::PROJECT_CLOSED => 'Dear :name, Project :project is complete. Your profit will be announced soon. - :company',
+        self::PROJECT_SETTLED => 'Dear :name, the profit of Project :project is settled. Your profit: Tk :profit, total payout: Tk :payout. - :company',
+    ];
+
     public function __construct(protected StorefrontNotificationService $notifications) {}
 
     public static function orderKey(string $stage): string
@@ -69,7 +97,7 @@ class SmsTemplateService
     /**
      * Every message, in the order the page shows them.
      *
-     * @return array<string, array{group: string, label: string, placeholders: array<string, string>, required: list<string>, default: ?string, translate: bool}>
+     * @return array<string, array{group: string, label: string, placeholders: array<string, string>, required: list<string>, default: ?string, suggested: ?string}>
      */
     public function definitions(): array
     {
@@ -85,7 +113,6 @@ class SmsTemplateService
         $customerCode = [
             'company' => __('Company name'),
             'code' => __('The one-time code'),
-            'minutes' => __('Minutes the code stays valid'),
         ];
         $investorCode = ['portal' => __('Portal name (company name + Investment Portal)')] + $customerCode;
         $project = [
@@ -105,15 +132,15 @@ class SmsTemplateService
                 'placeholders' => $order,
                 'required' => [],
                 'default' => null,
-                'translate' => false,
+                'suggested' => self::SUGGESTED_ORDER[$stage],
             ];
         }
 
-        $definitions[self::OTP_CUSTOMER_SIGNUP] = $this->codeDefinition(__('Sign-up code (shop customers and resellers)'), $customerCode, 'Your :company OTP is :code. Use it to verify your account. It expires in :minutes minutes.', false);
-        $definitions[self::OTP_CUSTOMER_LOGIN] = $this->codeDefinition(__('Login code (shop customers and resellers)'), $customerCode, 'Your :company OTP is :code. Use it to log in. It expires in :minutes minutes.', false);
-        $definitions[self::RESET_CUSTOMER_PASSWORD] = $this->codeDefinition(__('Password reset code (shop customers and resellers)'), $customerCode, 'Your :company OTP is :code. Use it to reset your password. It expires in :minutes minutes.', false);
-        $definitions[self::OTP_INVESTOR_LOGIN] = $this->codeDefinition(__('Investor login code'), $investorCode, ':portal login OTP is :code. It expires in 1 minute.', true);
-        $definitions[self::RESET_INVESTOR_PASSWORD] = $this->codeDefinition(__('Investor password reset code'), $investorCode, ':portal password reset OTP is :code. It expires in 1 minute.', true);
+        $definitions[self::OTP_CUSTOMER_SIGNUP] = $this->codeDefinition(__('Sign-up code (shop customers and resellers)'), $customerCode, 'Your :company OTP is :code.');
+        $definitions[self::OTP_CUSTOMER_LOGIN] = $this->codeDefinition(__('Login code (shop customers and resellers)'), $customerCode, 'Your :company OTP is :code.');
+        $definitions[self::RESET_CUSTOMER_PASSWORD] = $this->codeDefinition(__('Password reset code (shop customers and resellers)'), $customerCode, 'Your :company OTP is :code.');
+        $definitions[self::OTP_INVESTOR_LOGIN] = $this->codeDefinition(__('Investor login code'), $investorCode, 'Your :portal OTP is :code.');
+        $definitions[self::RESET_INVESTOR_PASSWORD] = $this->codeDefinition(__('Investor password reset code'), $investorCode, 'Your :portal OTP is :code.');
 
         $definitions[self::PROJECT_RUNNING] = [
             'group' => self::GROUP_PROJECT,
@@ -121,7 +148,7 @@ class SmsTemplateService
             'placeholders' => $project,
             'required' => [],
             'default' => null,
-            'translate' => false,
+            'suggested' => self::SUGGESTED_PROJECT[self::PROJECT_RUNNING],
         ];
         $definitions[self::PROJECT_CLOSED] = [
             'group' => self::GROUP_PROJECT,
@@ -129,7 +156,7 @@ class SmsTemplateService
             'placeholders' => $project,
             'required' => [],
             'default' => null,
-            'translate' => false,
+            'suggested' => self::SUGGESTED_PROJECT[self::PROJECT_CLOSED],
         ];
         $definitions[self::PROJECT_SETTLED] = [
             'group' => self::GROUP_PROJECT,
@@ -140,14 +167,14 @@ class SmsTemplateService
             ],
             'required' => [],
             'default' => null,
-            'translate' => false,
+            'suggested' => self::SUGGESTED_PROJECT[self::PROJECT_SETTLED],
         ];
 
         return $definitions;
     }
 
     /** @param array<string, string> $placeholders */
-    protected function codeDefinition(string $label, array $placeholders, string $default, bool $translate): array
+    protected function codeDefinition(string $label, array $placeholders, string $default): array
     {
         return [
             'group' => self::GROUP_CODE,
@@ -155,7 +182,7 @@ class SmsTemplateService
             'placeholders' => $placeholders,
             'required' => ['code'],
             'default' => $default,
-            'translate' => $translate,
+            'suggested' => null,
         ];
     }
 
@@ -189,11 +216,14 @@ class SmsTemplateService
 
     /**
      * The text to send: the company's wording, else the built-in wording of a
-     * code message, else null (nothing to send).
+     * code message, else null (nothing to send). The text is cleaned for
+     * BulkSMSBD (BulkSmsBdPolicy::clean); a code message whose saved wording
+     * is not the OTP format is replaced by the built-in text, so a code always
+     * goes out in the format the gateway accepts.
      *
      * @param  array<string, scalar|null>  $values  placeholder name (without the colon) => value
      */
-    public function render(int $companyId, string $key, array $values, ?string $locale = null): ?string
+    public function render(int $companyId, string $key, array $values): ?string
     {
         $definition = $this->definitions()[$key] ?? null;
 
@@ -203,17 +233,13 @@ class SmsTemplateService
 
         $custom = $this->body($companyId, $key);
 
-        if ($custom !== null) {
-            return $this->fill($custom, $values);
+        if ($custom !== null && $definition['group'] === self::GROUP_CODE && ! BulkSmsBdPolicy::isCodeFormat($custom)) {
+            $custom = null;
         }
 
-        if ($definition['default'] === null) {
-            return null;
-        }
+        $template = $custom ?? $definition['default'];
 
-        return $definition['translate']
-            ? __($definition['default'], array_map('strval', $values), $locale)
-            : $this->fill($definition['default'], $values);
+        return $template === null ? null : BulkSmsBdPolicy::clean($this->fill($template, $values));
     }
 
     /** @param array<string, scalar|null> $values */
@@ -228,7 +254,7 @@ class SmsTemplateService
         return strtr($template, $replace);
     }
 
-    /** Why a template cannot be saved, or null when it is fine. */
+    /** Why a template cannot be saved (a missing placeholder or a BulkSMSBD rule), or null when it is fine. */
     public function problem(string $key, ?string $body): ?string
     {
         $definition = $this->definitions()[$key] ?? null;
@@ -237,13 +263,17 @@ class SmsTemplateService
             return null;
         }
 
+        $problems = [];
+
         foreach ($definition['required'] as $name) {
             if (! str_contains((string) $body, ':'.$name)) {
-                return __('This message must contain :placeholder, or the person receives no code.', ['placeholder' => ':'.$name]);
+                $problems[] = __('This message must contain :placeholder, or the person receives no code.', ['placeholder' => ':'.$name]);
             }
         }
 
-        return null;
+        $problems = [...$problems, ...BulkSmsBdPolicy::problems((string) $body, $definition['group'] === self::GROUP_CODE)];
+
+        return $problems === [] ? null : implode(' ', $problems);
     }
 
     /**
