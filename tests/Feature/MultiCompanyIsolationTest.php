@@ -28,6 +28,7 @@ use App\Models\CustomerPayment;
 use App\Models\CustomerRiskEvent;
 use App\Models\CustomerRiskProfile;
 use App\Models\CustomerRiskReview;
+use App\Models\ExchangeRate;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\ExpenseScan;
@@ -135,7 +136,7 @@ class MultiCompanyIsolationTest extends TestCase
             ChatOrderLink::class, CompanyFaq::class, QuickReply::class,
             CompanyApiKey::class, StorefrontCustomerToken::class,
             InvestmentProject::class, Investor::class, InvestorDraft::class, InvestorPortalAccount::class, InvestorBankAccount::class, AgreementTemplate::class, AgreementAcceptance::class, InvestorRequest::class, PayoutBatch::class, PayoutBatchItem::class, InvestorGroup::class, InvestorGroupMember::class,
-            Investment::class, ProjectCostItem::class,
+            Investment::class, ProjectCostItem::class, ExchangeRate::class,
             InvestorSecurityInstrument::class, InvestmentWitness::class, InvestmentDocument::class,
             InvestorCycleElection::class, InvestmentWithdrawalNotice::class, ProjectSettlement::class,
             SettlementPayout::class, ChannelPartner::class, ChannelPartnerPayout::class,

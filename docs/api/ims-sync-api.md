@@ -1,5 +1,7 @@
 # IMS data feed (read-only sync API)
 
+> **Not in use (owner decision 2026-10-19).** IMS is no longer a separate application: the built-in investor portal becomes the IMS (`17_IMS_IN_PORTAL_PLAN.md`). This feed and the investor feed are kept in the code but **no "Data sync" or "Investor sync" key is to be created** (the investor key opens NID and bank account numbers). Do not hand this page to anyone as a live contract.
+
 This is the contract for **IMS** (`tareksec/ims`, Investment & Inventory Management System), which pulls its business data from this ERP. It answers IMS's questionnaire `ERP-INTEGRATION-REQUIREMENTS.md`; the answers are in the last section.
 
 The feed is **read-only**: `GET` only, so IMS can read a company's data and change nothing. Everything stays inside the company the key belongs to.

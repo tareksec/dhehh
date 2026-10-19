@@ -2,6 +2,27 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-19 - IMS becomes the investor portal; phase R: exchange rates and foreign-currency costs
+
+Owner (in Bangla): IMS will not be a separate stack; the built-in investor portal is converted into the IMS, and everything set up for IMS must be integrated into the portal. Asked which IMS parts the portal lacks, the owner chose all three — one login across businesses, profit worked out from ERP data, USD/RMB rates and foreign-currency costs — and chose "keep the feed code, never create the keys".
+
+What changed:
+- **Plan:** new `17_IMS_IN_PORTAL_PLAN.md` — what each IMS setup becomes, the design of the three pieces, six owner questions. The "IMS reports a payout" intake (task 13) is cancelled: the portal and the ERP are one system.
+- **Phase R (built):** **Investments → Exchange Rates** (USD, RMB; BDT for one unit; one per currency per day; typed by staff, nothing fetched). Project cost items can be entered in BDT, USD or RMB with cost date, original amount and rate; the rate is filled from the newest one on or before the date and can be changed; the BDT amount is `round(original × rate, 2)`, set by the model, so the settlement and all reports are unchanged. Old costs are BDT and untouched.
+- `docs/api/ims-sync-api.md` carries a "not in use" banner. The private handover page (artifact) is out of date; do not share it.
+
+Not built (waiting for the owner): phase M (one login, many businesses — Q1–Q3) and phase P (profit helper from ERP data — Q4–Q6); see §7 of the plan.
+
+Verified: `ExchangeRateTest` 13 passed, two mutations each made it fail; full suite 2647 passed, 2 skipped, 0 failed.
+
+Deploy: `php artisan migrate --force` (new table `exchange_rates`; new columns on `project_cost_items`).
+
+Decisions I made that you may want to change: (1) the currencies are USD and RMB (shown as CNY) only; adding one is a line in `ExchangeRate::CURRENCIES` plus its label; (2) rates are typed by staff, per company; (3) only project cost items take a foreign currency — purchases and shipment costs are still BDT.
+
+Needs Bangla review: the 19 new strings in `lang/bn.json` — "এক্সচেঞ্জ রেট", "রেট (১ ইউনিটের জন্য টাকা)", "টাকায় অঙ্ক (হিসাব করা)", "মূল অঙ্ক", "খরচের তারিখ", "রেটের তারিখ", the currency names and the rate-on-file messages.
+
+Commit status: committed and pushed to `claude/nifty-carson-r2vpby` (not `main`).
+
 ## 2026-10-18 - Pay a cycle's profit without waiting for sales (manual-profit settlement)
 
 Owner (in Bangla), after I read the group code: some projects are outside any group and some groups are project-based, so keep that flexible; and do not tie a project's payout to sales, because a cycle is two months but sales can take longer. Answers to my three questions: group structure "stays as before" (nothing to change there); "the payout must also be possible without sales — our investment rule is that every two months investors are handed their profit, sales or not, so keep a manual option"; the amount is entered by staff.
