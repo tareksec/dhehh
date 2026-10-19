@@ -2,6 +2,14 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-19 (mp-footer) - Marketplace Pro: unreadable footer and top bar
+
+Reason - owner's screenshot ("blade থিমের ui বাজে হয়েছে"): grey footer with near-invisible text, grey top bar, white header over a dark page. Cause: the top bar and footer used the admin secondary colour (mixed 72% with black) as background with fixed light text, so a light secondary gave low contrast.
+
+What changed: new `secondary_deep` palette colour (secondary if dark, else `#0F172A`) used for the top bar and footer. Hero banner (owner asked, same day): Marketplace Pro desktop no longer forces a 4:1 frame with `cover`; it takes the image's height (max 30rem) with `contain`, so no slide is cropped (CSS only, Marketplace Pro only). Not changed: the white header (follows the admin secondary colour on purpose). Verified: StorefrontThemeTest, SEO and Marketplace tests, `npm run build`.
+
+Commit status: committed and pushed to `claude/erpf-marketplace-pro-customization-5m95cn` with the owner's approval (2026-10-19); not on `main`.
+
 ## 2026-10-19 (media) - WhatsApp Web: pictures and voice notes that do not open in the Inbox
 
 Reason - owner's new screenshots after the redeploy: the audio player shows but pressing play does nothing, and the image is still a broken picture ("অডিও প্লেয়ার আসছে কিন্তু অডিও প্লে করলে কাজ করে না। আর ইমেজ এখনো দেখাচ্ছে না।").

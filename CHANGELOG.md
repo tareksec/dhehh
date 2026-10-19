@@ -4,6 +4,18 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Marketplace Pro: footer and top bar unreadable when the secondary colour is light.** The top bar and footer carry light text but took their background from the admin's secondary colour, so a white or pale secondary turned them light grey and the text vanished. They now keep a dark surface (the secondary colour when it is dark, otherwise the default navy). The header still follows the secondary colour, with text colour chosen for contrast.
+
+- **Marketplace Pro: hero banner no longer cut off on desktop.** The banner was locked to a 4:1 frame and cropped any slide that was not exactly 4:1. It now takes the height of the uploaded image (up to 30 rem) and shows the whole picture. Mobile is unchanged.
+
+### Technical Notes
+
+- New palette key `secondary_deep` (`StorefrontSetting::themePalette()`), printed as `--storefront-secondary-deep`; no migration. Test: `StorefrontThemeTest::test_light_secondary_colour_keeps_the_footer_surface_dark`.
+
 ## [2.87.2] - 2026-10-19
 
 **Release type:** Patch/Fix Update
