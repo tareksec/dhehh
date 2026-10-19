@@ -2,6 +2,18 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-19 - Report PDF / CSV buttons opened the file as text
+
+Owner report (screenshot of `app.zamzamint.com/admin/reports/supplier/4/pdf`): the Supplier Report PDF showed as raw text (`%PDF-1.7 1 0 obj ...`) in the browser, and the owner thought the template was missing.
+
+Cause: not the template (the PDF is built correctly: `reports.supplier-pdf`, dompdf headers `Content-Type: application/pdf` and `attachment`, checked locally on the existing report PDF route too). The admin panel is `->spa()`; Filament adds `wire:navigate` to a link button, Livewire fetches the URL and paints the response into the page, so the PDF bytes appeared as text. The older Reports page **CSV** and **PDF** buttons (`Reports::table()` header actions) have the same fault, so they show the file as text too.
+
+Fix: `AdminPanelProvider` `->spaUrlExceptions(["*/admin/reports/export/*", "*/admin/reports/supplier/*"])`. New `tests/Feature/ReportDownloadLinksTest.php` (3 tests); the two link tests fail without the fix and pass with it.
+
+Not checked: other file links in the panel (order PDF, product / customer / supplier CSV, backups, voucher and investment downloads) may behave the same where they are Filament link buttons; not changed because it was not reported and not verified. Not tried on the live site (the browser pane is not signed in).
+
+Commit status: committed on `feature/report-download-links`; `main` moves only on the owner's explicit approval.
+
 ## 2026-10-18 (later) - SMS templates follow the BulkSMSBD rules
 
 Owner feedback (Bangla): the SMS templates for the different jobs must follow BulkSMSBD's rules, and the first version did not.
