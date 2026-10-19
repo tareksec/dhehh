@@ -5,11 +5,14 @@ namespace Tests\Feature;
 use App\Models\Account;
 use App\Models\AgreementAcceptance;
 use App\Models\AgreementTemplate;
+use App\Models\AiInstructionVersion;
+use App\Models\AttentionItem;
 use App\Models\AuditLog;
 use App\Models\Broadcast;
 use App\Models\Category;
 use App\Models\ChannelPartner;
 use App\Models\ChannelPartnerPayout;
+use App\Models\ChaseMark;
 use App\Models\ChatOrderLink;
 use App\Models\Company;
 use App\Models\CompanyApiKey;
@@ -18,6 +21,7 @@ use App\Models\Concerns\BelongsToCompany;
 use App\Models\Container;
 use App\Models\Conversation;
 use App\Models\ConversationChannel;
+use App\Models\ConversationModeEvent;
 use App\Models\CourierBooking;
 use App\Models\CourierProvider;
 use App\Models\CourierReturn;
@@ -51,6 +55,7 @@ use App\Models\InvestorGroupMember;
 use App\Models\InvestorPortalAccount;
 use App\Models\InvestorRequest;
 use App\Models\InvestorSecurityInstrument;
+use App\Models\KnowledgeDocument;
 use App\Models\Lead;
 use App\Models\Media;
 use App\Models\MetaAd;
@@ -131,8 +136,8 @@ class MultiCompanyIsolationTest extends TestCase
             VoucherAttachment::class, FundTransfer::class,
             StorefrontSlide::class, SmsTemplate::class,
             Lead::class, Quotation::class, QuotationItem::class,
-            Conversation::class, ConversationChannel::class,
-            ChatOrderLink::class, CompanyFaq::class, QuickReply::class,
+            AiInstructionVersion::class, AttentionItem::class, Conversation::class, ConversationChannel::class, ConversationModeEvent::class,
+            ChaseMark::class, ChatOrderLink::class, CompanyFaq::class, KnowledgeDocument::class, QuickReply::class,
             CompanyApiKey::class, StorefrontCustomerToken::class,
             InvestmentProject::class, Investor::class, InvestorDraft::class, InvestorPortalAccount::class, InvestorBankAccount::class, AgreementTemplate::class, AgreementAcceptance::class, InvestorRequest::class, PayoutBatch::class, PayoutBatchItem::class, InvestorGroup::class, InvestorGroupMember::class,
             Investment::class, ProjectCostItem::class,

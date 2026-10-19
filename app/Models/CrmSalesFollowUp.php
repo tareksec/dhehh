@@ -12,7 +12,7 @@ class CrmSalesFollowUp extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['due_at' => 'datetime', 'sent_at' => 'datetime'];
+    protected $casts = ['due_at' => 'datetime', 'sent_at' => 'datetime', 'base_at' => 'datetime', 'step' => 'integer'];
 
     public function conversation(): BelongsTo
     {

@@ -40,6 +40,7 @@ return Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping()
             ->onOneServer();
         $schedule->command('crm:process-sales-follow-ups')->everyFiveMinutes()->withoutOverlapping()->onOneServer();
+        $schedule->command('crm:revert-conversations')->everyMinute()->withoutOverlapping()->onOneServer();
         $schedule->command('storefront:retry-meta-events')
             ->everyTenMinutes()
             ->withoutOverlapping()

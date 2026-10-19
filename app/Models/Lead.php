@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Services\Crm\AttentionQueueService;
 use App\Services\WebsiteWebhookDispatcher;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -66,6 +67,12 @@ class Lead extends Model
         static::updated(function (Lead $lead): void {
             if ($lead->wasChanged('status') && filled($lead->external_reference)) {
                 app(WebsiteWebhookDispatcher::class)->dispatchLeadStatusUpdated($lead);
+            }
+
+            // A website lead waiting on the Needs attention list is answered
+            // as soon as someone moves it past "new".
+            if ($lead->wasChanged('status') && $lead->getOriginal('status') === 'new') {
+                app(AttentionQueueService::class)->leadWorked($lead, auth()->user());
             }
         });
     }

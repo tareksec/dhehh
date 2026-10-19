@@ -36,7 +36,8 @@ class BroadcastForm
                         Select::make('audience_type')
                             ->label('Audience')
                             ->options(Broadcast::AUDIENCE_TYPES)
-                            ->required()
+                            ->required(fn (Get $get): bool => $get('channel') !== 'messenger')
+                            ->visible(fn (Get $get): bool => $get('channel') !== 'messenger')
                             ->live()
                             ->native(false)
                             ->disabled($locked),
@@ -116,6 +117,34 @@ class BroadcastForm
                             ->maxLength(10)
                             ->default('bn')
                             ->visible(fn (Get $get): bool => in_array($get('channel'), ['whatsapp', 'both'], true))
+                            ->disabled($locked),
+                        Select::make('messenger_channel_id')
+                            ->label(__('Facebook Page'))
+                            ->options(function (): array {
+                                $companyId = app(CompanyContext::class)->company()?->getKey();
+
+                                return $companyId ? ConversationChannel::withoutGlobalScopes()
+                                    ->where('company_id', $companyId)
+                                    ->where('provider', 'messenger')
+                                    ->where('is_active', true)
+                                    ->orderBy('display_name')
+                                    ->pluck('display_name', 'id')
+                                    ->all() : [];
+                            })
+                            ->native(false)
+                            ->visible(fn (Get $get): bool => $get('channel') === 'messenger')
+                            ->required(fn (Get $get): bool => $get('channel') === 'messenger')
+                            ->helperText(__('The audience is this Page\'s chats that wrote to it in the last :hours hours. Messenger allows nothing else.', ['hours' => Broadcast::MESSENGER_WINDOW_HOURS]))
+                            ->disabled($locked),
+                        Textarea::make('messenger_text')
+                            ->label(__('Messenger message'))
+                            ->rows(4)
+                            ->maxLength(1000)
+                            ->placeholder('Hi {{name}}, ...')
+                            ->helperText(__('Use {{name}} for the customer\'s name. Before sending, use "Send test" on the list to send this exact text to your own chat. Changing the text asks for a new test.'))
+                            ->visible(fn (Get $get): bool => $get('channel') === 'messenger')
+                            ->required(fn (Get $get): bool => $get('channel') === 'messenger')
+                            ->columnSpanFull()
                             ->disabled($locked),
                         Textarea::make('sms_body')
                             ->label('SMS message')
