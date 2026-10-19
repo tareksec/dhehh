@@ -73,6 +73,12 @@ class Inbox extends Page
     /** Conversations shown before the "Load more conversations" action expands the list. */
     public int $conversationsPerPage = 30;
 
+    /** What the last poll saw (newest message time, newest message in the open chat); a different value means something new arrived. */
+    public ?string $inboxSignature = null;
+
+    /** microtime of the last full refresh; the list is also refreshed at least every 30 seconds for changes made by other staff. */
+    public ?float $lastFullRefreshAt = null;
+
     /** microtime of the last markHumanPresent() write — the poll renews the window at most once every 10 seconds. */
     public ?float $humanPresentMarkedAt = null;
 
@@ -495,6 +501,47 @@ class Inbox extends Page
         $this->resetManualDraftState();
         $this->forgetInboxComputedProperties();
         $this->dispatch('inbox-list-focused');
+    }
+
+    /**
+     * Polled every few seconds while the page is visible. It only asks the
+     * database whether anything new arrived; the page is re-rendered when it
+     * did (and at least every 30 seconds), so a new WhatsApp message appears
+     * within seconds without loading the server on every tick.
+     */
+    public function checkForChanges(): void
+    {
+        $this->markHumanPresentThrottled();
+
+        $signature = $this->inboxChangeSignature();
+        $fullRefreshDue = $this->lastFullRefreshAt === null || (microtime(true) - $this->lastFullRefreshAt) >= 30;
+
+        if ($signature === $this->inboxSignature && ! $fullRefreshDue) {
+            $this->skipRender();
+
+            return;
+        }
+
+        $this->inboxSignature = $signature;
+        $this->lastFullRefreshAt = microtime(true);
+        $this->refreshInbox();
+    }
+
+    protected function inboxChangeSignature(): string
+    {
+        $parts = [
+            (string) Conversation::query()->max('last_message_at'),
+            (string) Conversation::query()->max('id'),
+        ];
+
+        if ($this->selectedConversationId) {
+            $thread = ConversationMessage::query()->where('conversation_id', $this->selectedConversationId);
+
+            $parts[] = (string) (clone $thread)->max('id');
+            $parts[] = (string) (clone $thread)->max('updated_at');
+        }
+
+        return implode('|', $parts);
     }
 
     public function refreshInbox(): void

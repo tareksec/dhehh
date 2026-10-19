@@ -32,6 +32,9 @@ class CustomerInfolist
                             ->formatStateUsing(fn (?string $state): ?string => Customer::sourceLabel($state))
                             ->placeholder('Not set'),
                         IconEntry::make('is_active')->boolean(),
+                        TextEntry::make('address')
+                            ->label('Customer Address')
+                            ->columnSpanFull(),
                     ])
                     ->columns(2),
 
@@ -55,8 +58,6 @@ class CustomerInfolist
                         TextEntry::make('riskProfile.evaluated_at')->label('Last Evaluated')->dateTime()->placeholder('Never'),
                     ])
                     ->columns(3),
-
-                TextEntry::make('address')->columnSpanFull(),
             ]);
     }
 }

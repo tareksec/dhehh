@@ -22,6 +22,7 @@ use App\Services\CompanyStorageService;
 use App\Services\Investment\SettlementService;
 use App\Services\InvestorPortalAccountService;
 use App\Services\InvestorPortalService;
+use App\Services\SmsTemplateService;
 use App\Support\StorefrontApi\Phone;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -257,6 +258,74 @@ class InvestorPortalTest extends TestCase
         }
 
         $this->assertFalse($service->verifyCode($account->fresh(), (string) $realCode));
+    }
+
+    public function test_the_investor_code_sms_names_the_portal_and_the_reason_and_lives_one_minute(): void
+    {
+        $company = $this->company('wording.example.test', withSms: true);
+        $account = $this->activeAccount($company, $this->investor($company, 'Wording', '01711000009'));
+        $service = app(InvestorPortalAccountService::class);
+        $texts = [];
+
+        Http::fake(['sms.example.test/*' => function ($request) use (&$texts) {
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+            $texts[] = $query['msg'];
+
+            return Http::response('OK', 200);
+        }]);
+
+        $this->assertTrue($service->sendCode($account->fresh(), 'login'));
+        $this->assertMatchesRegularExpression(
+            '/^Your '.preg_quote($company->name, '/').' Investment Portal OTP is \d{6}\.$/',
+            $texts[0],
+        );
+        $this->assertEqualsWithDelta(60, now()->diffInSeconds($account->fresh()->otp_expires_at, false), 2);
+
+        $this->travel(2)->minutes();
+        $this->assertTrue($service->sendCode($account->fresh(), 'reset'));
+        $this->assertMatchesRegularExpression(
+            '/^Your '.preg_quote($company->name, '/').' Investment Portal OTP is \d{6}\.$/',
+            $texts[1],
+        );
+
+        // Past the minute the code no longer works.
+        preg_match('/(\d{6})/', $texts[1], $matches);
+        $this->travel(61)->seconds();
+        $this->assertFalse($service->verifyCode($account->fresh(), $matches[1]));
+    }
+
+    public function test_the_company_can_word_the_investor_code_sms_itself(): void
+    {
+        $company = $this->company('own-words.example.test', withSms: true);
+        $account = $this->activeAccount($company, $this->investor($company, 'Own Words', '01711000012'));
+        $service = app(InvestorPortalAccountService::class);
+        $templates = app(SmsTemplateService::class);
+        $texts = [];
+
+        Http::fake(['sms.example.test/*' => function ($request) use (&$texts) {
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+            $texts[] = $query['msg'];
+
+            return Http::response('OK', 200);
+        }]);
+
+        $templates->save($company->id, [
+            SmsTemplateService::OTP_INVESTOR_LOGIN => 'Your :company Investors OTP is :code',
+            SmsTemplateService::RESET_INVESTOR_PASSWORD => 'Your Tasneem Reset OTP is :code.',
+        ]);
+
+        $this->assertTrue($service->sendCode($account->fresh(), 'login'));
+        $this->assertMatchesRegularExpression('/^Your '.preg_quote($company->name, '/').' Investors OTP is \d{6}$/', $texts[0]);
+
+        $this->travel(2)->minutes();
+        $this->assertTrue($service->sendCode($account->fresh(), 'reset'));
+        $this->assertMatchesRegularExpression('/^Your Tasneem Reset OTP is \d{6}\.$/', $texts[1]);
+
+        // Blank wording goes back to the built-in text.
+        $templates->save($company->id, [SmsTemplateService::OTP_INVESTOR_LOGIN => '']);
+        $this->travel(2)->minutes();
+        $this->assertTrue($service->sendCode($account->fresh(), 'login'));
+        $this->assertMatchesRegularExpression('/^Your '.preg_quote($company->name, '/').' Investment Portal OTP is \d{6}\.$/', $texts[2]);
     }
 
     public function test_sms_code_sign_in_is_not_offered_without_an_sms_gateway(): void

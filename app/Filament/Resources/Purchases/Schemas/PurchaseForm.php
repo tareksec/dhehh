@@ -144,6 +144,8 @@ class PurchaseForm
                             ->table([
                                 TableColumn::make('Product'),
                                 TableColumn::make('Quantity'),
+                                TableColumn::make(__('Short Qty')),
+                                TableColumn::make(__('Damaged Qty')),
                                 TableColumn::make('Unit Cost'),
                                 TableColumn::make('Subtotal'),
                                 TableColumn::make('Allocated Cost'),
@@ -295,6 +297,20 @@ class PurchaseForm
                                         self::setPurchaseTotalsFromRepeater($get, $set);
                                     }),
 
+                                TextInput::make('short_quantity')
+                                    ->label(__('Short Qty'))
+                                    ->integer()
+                                    ->minValue(0)
+                                    ->default(0)
+                                    ->helperText(__('Billed but not delivered.')),
+
+                                TextInput::make('damaged_quantity')
+                                    ->label(__('Damaged Qty'))
+                                    ->integer()
+                                    ->minValue(0)
+                                    ->default(0)
+                                    ->helperText(__('Delivered but not sellable.')),
+
                                 TextInput::make('unit_cost')
                                     ->numeric()
                                     ->prefix('৳')
@@ -325,7 +341,7 @@ class PurchaseForm
                                     ->readOnly()
                                     ->dehydrated(false),
                             ])
-                            ->columns(6)
+                            ->columns(8)
                             ->defaultItems(1)
                             ->addActionLabel('Add item')
                             ->reorderable(false)
@@ -375,6 +391,58 @@ class PurchaseForm
                             ->columnSpanFull(),
                     ])
                     ->columns(3)
+                    ->collapsible(),
+
+                Section::make(__('Costs After Arrival'))
+                    ->description(__('Packaging, ad and other costs paid per product after the goods reached the house. They feed the Supplier Report and do not change the purchase total.'))
+                    ->columnSpanFull()
+                    ->schema([
+                        Repeater::make('product_costs')
+                            ->label(__('Product cost lines'))
+                            ->table([
+                                TableColumn::make(__('Product')),
+                                TableColumn::make(__('Cost name')),
+                                TableColumn::make(__('Amount')),
+                            ])
+                            ->schema([
+                                Select::make('product_id')
+                                    ->label(__('Product'))
+                                    ->options(function (Get $get): array {
+                                        $productIds = collect($get('../../items') ?? [])
+                                            ->pluck('product_id')
+                                            ->filter()
+                                            ->unique()
+                                            ->all();
+
+                                        return Product::query()
+                                            ->whereIn('id', $productIds)
+                                            ->orderBy('name')
+                                            ->pluck('name', 'id')
+                                            ->all();
+                                    })
+                                    ->searchable()
+                                    ->required(),
+
+                                TextInput::make('label')
+                                    ->label(__('Cost name'))
+                                    ->datalist(array_map(fn (string $label): string => __($label), Purchase::PRODUCT_COST_SUGGESTIONS))
+                                    ->required()
+                                    ->maxLength(255),
+
+                                TextInput::make('amount')
+                                    ->label(__('Amount'))
+                                    ->numeric()
+                                    ->prefix('৳')
+                                    ->minValue(0)
+                                    ->default(0)
+                                    ->required(),
+                            ])
+                            ->columns(3)
+                            ->defaultItems(0)
+                            ->addActionLabel(__('Add cost line'))
+                            ->reorderable(false)
+                            ->columnSpanFull(),
+                    ])
                     ->collapsible(),
 
                 Section::make('Totals')

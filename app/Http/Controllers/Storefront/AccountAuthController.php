@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\StorefrontCustomerActivity;
 use App\Services\CompanyContext;
 use App\Services\CustomerAccountService;
+use App\Services\LoginGate;
 use App\Services\StorefrontCustomerActivityService;
 use App\Services\StorefrontMetaTrackingService;
 use App\Services\StorefrontNotificationService;
@@ -178,6 +179,9 @@ class AccountAuthController extends Controller
 
         Auth::guard('customer')->login($customer, $request->boolean('remember'));
         $request->session()->regenerate();
+
+        // This browser is now a device the account has signed in from.
+        app(LoginGate::class)->rememberDevice(LoginGate::SURFACE_CUSTOMER, app(CompanyContext::class)->id(), $customer);
 
         $this->activities->record(
             $customer,

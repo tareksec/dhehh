@@ -9,13 +9,15 @@ use App\Models\StorefrontCustomerToken;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
 use App\Services\CustomerAccountService;
+use App\Services\LoginGate;
 use App\Services\StorefrontCustomerActivityService;
 use App\Services\StorefrontNotificationService;
+use App\Support\LoginClient;
+use App\Support\LoginThrottled;
 use App\Support\StorefrontApi\AccountPayload;
 use App\Support\StorefrontApi\Phone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -105,14 +107,15 @@ class StorefrontAccountAuthController extends Controller
             'identifier' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string', 'max:200'],
             'remember' => ['nullable', 'boolean'],
+            'device_token' => ['nullable', 'string', 'max:300'],
         ]);
 
         $identifier = Phone::identifier($data['identifier']);
 
         try {
-            $customer = $this->accounts->attemptLogin($identifier, $data['password']);
-        } catch (ValidationException) {
-            return $this->fail('too_many_attempts', 429, ['retry_after' => $this->retryAfter('storefront-login:'.strtolower($identifier))]);
+            $customer = $this->accounts->attemptLogin($identifier, $data['password'], LoginClient::fromApiRequest($request));
+        } catch (LoginThrottled $exception) {
+            return $this->fail('too_many_attempts', 429, ['retry_after' => $exception->retryAfter, 'challenge' => $exception->challenge]);
         }
 
         if (! $customer) {
@@ -125,7 +128,7 @@ class StorefrontAccountAuthController extends Controller
 
         $this->activities->record($customer, StorefrontCustomerActivity::TYPE_LOGIN, 'Signed in to your account', 'A successful sign-in was recorded.');
 
-        return $this->signedIn($request, $customer, (bool) ($data['remember'] ?? false));
+        return $this->signedIn($request, $customer, (bool) ($data['remember'] ?? false), 200, withDeviceToken: true);
     }
 
     /** Sends a 6-digit login code by SMS (phone) or email. Same answer whether or not the account exists. */
@@ -241,7 +244,12 @@ class StorefrontAccountAuthController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    protected function signedIn(Request $request, Customer $customer, bool $remember, int $status = 200): JsonResponse
+    /**
+     * @param  bool  $withDeviceToken  a password sign-in also hands the website a device-trust token
+     *                                 for its httpOnly cookie (sent back as "device_token"), so this
+     *                                 visitor's later sign-ins are not judged by an attack on the account
+     */
+    protected function signedIn(Request $request, Customer $customer, bool $remember, int $status = 200, bool $withDeviceToken = false): JsonResponse
     {
         [$row, $plain] = StorefrontCustomerToken::issue(
             $customer,
@@ -249,7 +257,13 @@ class StorefrontAccountAuthController extends Controller
             is_string($request->input('client_user_agent')) ? $request->input('client_user_agent') : null,
         );
 
-        return response()->json(['data' => AccountPayload::session($customer, $row, $plain)], $status);
+        $payload = AccountPayload::session($customer, $row, $plain);
+
+        if ($withDeviceToken && app(LoginGate::class)->enabled()) {
+            $payload['device_token'] = app(LoginGate::class)->issueDeviceToken(LoginGate::SURFACE_CUSTOMER, $this->context->id(), $customer);
+        }
+
+        return response()->json(['data' => $payload], $status);
     }
 
     protected function fail(string $error, int $status, array $extra = []): JsonResponse
@@ -274,11 +288,6 @@ class StorefrontAccountAuthController extends Controller
     protected function digits(string $value): int
     {
         return strlen(preg_replace('/\D+/', '', $value) ?: '');
-    }
-
-    protected function retryAfter(string $key): int
-    {
-        return RateLimiter::availableIn($key);
     }
 
     protected function mask(string $identifier): string

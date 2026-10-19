@@ -235,7 +235,15 @@ class OrderForm
                             ->schema([
                                 Select::make('product_id')
                                     ->label('Product')
-                                    ->relationship('product', 'name', fn ($query) => $query->where('is_active', true))
+                                    // Active products only, except the one this line already
+                                    // has: an old order's product may have been switched off
+                                    // (a Nuport import creates its missing products inactive),
+                                    // and its name must still show on the edit page.
+                                    ->relationship('product', 'name', fn ($query, ?OrderItem $record) => $query->where(
+                                        fn ($products) => $products
+                                            ->where('is_active', true)
+                                            ->when($record?->product_id, fn ($products, $productId) => $products->orWhere($products->getModel()->getQualifiedKeyName(), $productId)),
+                                    ))
                                     ->searchable()
                                     ->live()
                                     ->required()

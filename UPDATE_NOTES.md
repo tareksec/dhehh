@@ -22,7 +22,297 @@ Decisions I made that you may want to change: (1) staff enter the **net profit b
 
 Needs Bangla review: the 10 new strings in `lang/bn.json` — "অঙ্ক কীভাবে ঠিক হবে?", "সেলস রাজস্ব থেকে", "হাতে বসানো লাভ (সেলস লাগবে না)", "বণ্টনের নিট লাভ", "অঙ্ক ঠিক হয়েছে", "হাতে বসানো লাভ", the helper texts, and the report line "এই সাইকেলের লাভ (কোম্পানি ঘোষিত, সেলস থেকে হিসাব করা নয়)".
 
-Commit status: committed and pushed to `claude/nifty-carson-r2vpby` (not `main`).
+Commit status: committed on `claude/nifty-carson-r2vpby`, merged with `main` (v2.86.4) and pushed to `main` with owner approval (2026-10-19).
+
+## 2026-10-19 (names and media) - WhatsApp Web chats: names, video/audio, refresh
+
+Reason - owner's screenshots of the Inbox after linking (4,057 chats already in): most chats read "নাম পাওয়া যায়নি", and image/video/audio do not show. Owner: "নামগুলো ঠিক করে দেও এবং ইমেজ/ভিডিও আর অডিও কিন্তু শো করে না। এটাও ঠিক করে দিবে।"
+
+What I found:
+- "নাম পাওয়া যায়নি" is `Conversation::profileDisplayName()` (hardcoded) for a chat with a blank or number-only `contact_name`; the phone number itself was fine (`8801859963681` shown).
+- Names reach the ERP through the bridge's `contacts` events, keyed by LID (WhatsApp's hidden id), while chats are saved under the phone number that comes from each message's `remoteJidAlt`. The bridge never learned LID -> phone from those message keys and normalized contacts BEFORE messages, so a LID-keyed name stayed LID-only and the ERP (which named chats by phone) never matched it.
+- The Inbox only renders images inline; video and audio were just an "Open attachment" link, and a media message without a saved file rendered an empty bubble.
+- ERP serving of a stored image works (new test fetches `conversation-messages.media` and gets the bytes back as image/jpeg), so the broken image in the screenshot is not the ERP's media route on the test disk.
+
+What changed:
+- Bridge: `lidPairsFromMessages`, `Session.learnLids()` (called in `onHistory` and `archiveMessages`, before contacts), `archiveContacts()` resolves unknown LIDs through `signalRepository.lidMapping`.
+- ERP: LID-aware `upsertContact()`, `nameConversations()`, `refreshNames()`, `RefreshWhatsAppWebNamesJob` (queued on the first complete history sync, with a 2-minute delay, and by the new **Fill missing names** button on the WhatsApp Web Login page).
+- Inbox: `<video controls>` and `<audio controls>`; a note for media that was not saved.
+- 4 lang keys (en/bn).
+
+Not verified (needs the owner's data): whether the owner's names were lost this way. I could not read the production database, so I gave the owner a read-only count command (contacts / names / chats without name or phone). After the deploy the owner should open WhatsApp Web Login and press **Fill missing names**; names only exist for chats where WhatsApp shared one (customers who are not saved and have no profile name stay nameless).
+
+Still open:
+- Broken image in the Inbox: cause not found. Asked the owner to right-click the broken image -> Open image in new tab and report what page or error it shows (404, 500, other). Possible causes: bytes that are not a valid image, a storage-disk or domain problem on production.
+- `ConversationMediaController` has no byte-range support, so seeking in long videos and Safari video playback may not work.
+- The `InvestorPortalStaffEntryTest` preview test fails when the random staff name contains an apostrophe (seen once on CI, passed on re-run); not touched.
+
+Needs Bangla review: "Fill missing names" -> "নামহীন চ্যাটে নাম বসান", "Looking up missing names" -> "নাম খোঁজা শুরু হয়েছে", the refresh explanation and "The file is not saved (yet)..." (4 keys), plus "Last error" -> "সর্বশেষ এরর" from the earlier entry.
+
+Tests: bridge `npm test` (17 passing); `WhatsAppWebArchiveTest` (22) and `TranslationParityTest` pass; the new name and media tests fail on the old code and pass on the new.
+
+Follow-up (owner: "যাদের নাম নেই তাদের ফোন নাম্বার দেখাবে এমন টা করে দেও"): the Inbox list and chat header now show the phone number for a WhatsApp chat without a name (`Conversation::inboxDisplayName()`, `+` plus the digits, or the local number as saved; avatar shows `#`). `profileDisplayName()` is deliberately unchanged: the Messenger profile lookups and the existing test "missing profile name never falls back to phone or id" depend on it, so Messenger keeps "নাম পাওয়া যায়নি". New `ConversationInboxNameTest` (6) and an Inbox test for an archived chat. Lesson: the "নাম পাওয়া যায়নি" literal in `Conversation.php` is stored with the precomposed য় (U+09DF); text typed afresh uses a different code sequence and does not compare equal, so copy it from the file, never retype it.
+
+Follow-up (owner: "আর রিয়েল টাইম সিংক লাগবে"): what already was real time: the bridge sends each live message to the ERP the moment WhatsApp delivers it. The delays were (1) the queue worker before the message was saved, (2) the Inbox only re-drew every 8 seconds, and (3) messages that arrived while the bridge was offline were filed as old history (no unread, no lead). Changed: live batches (<= 25) are saved inline, the Inbox polls a cheap change signature every 3 seconds (`Inbox::checkForChanges()`, `skipRender()` when unchanged, full refresh on change and every 30 seconds), and recent `append` upserts count as live (`splitLiveMessages`). New tests: inline vs queued, failure returns 500, Inbox notices a new message, bridge `splitLiveMessages`. Not done, needs an owner decision: true push (no polling) needs a websocket server (Laravel Reverb) as another Coolify service plus Echo in the frontend; polling every 3 seconds is the no-new-infrastructure version. Not verified: behaviour under many open Inbox tabs at once.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
+
+## 2026-10-19 (later) - WhatsApp Web bridge: show why a connection fails, and a switchable device identity
+
+Reason - after the QR fix the QR appears, but scanning it ends on the phone with "Couldn't link device. Try again later." (owner's screenshot). The cause is not known: the bridge logged nothing about why a connection closes and the page only said "Reconnecting". Owner: "উন্নতি দুটো করে দাও" (do both improvements).
+
+What changed:
+- `whatsapp-bridge/src/browser.js` (new): `BRIDGE_BROWSER` (`<system>:<browser>`, default `ubuntu:Desktop`) picks the identity announced to WhatsApp; validated at start. `server.js` passes it to every `Session`; `GET /health` shows it. `session.js` no longer hardcodes the identity.
+- `session.js`: every closed connection is logged (`connection closed`, `code`, `reason`) and `last_error_code` is returned by `GET /sessions/{id}`.
+- `whats-app-web-login.blade.php`: "Last error: <message> (<code>)" under the status while the device is not connected.
+- `whatsapp-bridge/README.md`: `BRIDGE_BROWSER`, which identities WhatsApp refuses (Mac OS / Windows + Desktop), and what the close codes mean.
+- 1 lang key (en/bn).
+
+Verified from the cloud session: the real bridge reaches a QR with the default identity; with `windows:Desktop` it reports `last_error: Connection Terminated`, code 428 and logs it; a wrong `BRIDGE_BROWSER` stops it at start. The new page test fails on the old page and passes on the new one.
+
+Not verified: why the phone refuses the link. That needs the owner's phone. Next step for the owner after redeploying the bridge: scan again, read "Last error" on the page (or Coolify Runtime Logs), and if linking is refused try `BRIDGE_BROWSER=ubuntu:Chrome` or `baileys:Desktop` in Coolify and restart. A non-Desktop identity may give only recent chats, not the whole history.
+
+Needs Bangla review: "Last error" -> "সর্বশেষ এরর".
+
+Tests: bridge `npm test` (15 passing, 5 new); `WhatsAppWebArchiveTest` (14) and `TranslationParityTest` pass; Pint passes on the changed PHP file.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`, then merged with main (v2.86.3) and pushed to `main` on owner approval ("main এ পুশ কর", 2026-10-19).
+
+## 2026-10-19 - Report PDF / CSV buttons opened the file as text
+
+Owner report (screenshot of `app.zamzamint.com/admin/reports/supplier/4/pdf`): the Supplier Report PDF showed as raw text (`%PDF-1.7 1 0 obj ...`) in the browser, and the owner thought the template was missing.
+
+Cause: not the template (the PDF is built correctly: `reports.supplier-pdf`, dompdf headers `Content-Type: application/pdf` and `attachment`, checked locally on the existing report PDF route too). The admin panel is `->spa()`; Filament adds `wire:navigate` to a link button, Livewire fetches the URL and paints the response into the page, so the PDF bytes appeared as text. The older Reports page **CSV** and **PDF** buttons (`Reports::table()` header actions) have the same fault, so they show the file as text too.
+
+Fix: `AdminPanelProvider` `->spaUrlExceptions(["*/admin/reports/export/*", "*/admin/reports/supplier/*"])`. New `tests/Feature/ReportDownloadLinksTest.php` (3 tests); the two link tests fail without the fix and pass with it.
+
+Not checked: other file links in the panel (order PDF, product / customer / supplier CSV, backups, voucher and investment downloads) may behave the same where they are Filament link buttons; not changed because it was not reported and not verified. Not tried on the live site (the browser pane is not signed in).
+
+Commit status: committed on `feature/report-download-links` and pushed to `main` on the owner's explicit approval (2026-10-19).
+
+
+## 2026-10-19 - WhatsApp Web bridge: QR code never appeared
+
+Reason - owner deployed the bridge on Coolify; the ERP page showed "Reconnecting" and no QR code. The bridge reported `last_error: "Connection Terminated"`.
+
+What I found:
+- From the Coolify container a WebSocket to `wss://web.whatsapp.com/ws/chat` opened and stayed open, so the network is fine.
+- Baileys trace: the Noise handshake completes, then WhatsApp closes the socket about 2 seconds later (428 "Connection Terminated") before any QR is sent.
+- Reproduced from the cloud session with `7.0.0-rc14` and `6.7.24`, with the pinned and the live WhatsApp Web version. Only the browser identity mattered: Mac OS + Desktop and Windows + Desktop are closed; Ubuntu + Desktop, Baileys + Desktop, and Chrome/Safari identities get a QR in under a second.
+
+What changed:
+- `whatsapp-bridge/src/session.js`: `Browsers.macOS('Desktop')` -> `Browsers.ubuntu('Desktop')` (platform type stays Desktop, `syncFullHistory` and `shouldSyncHistoryMessage` unchanged).
+
+Not verified: a real phone was not linked from the cloud session. Whether the phone still sends the FULL history with the Ubuntu + Desktop identity can only be seen after the owner scans the QR: the "History sync" percentage and the chat/message counts on the WhatsApp Web Login page. If much less than the whole history arrives, tell me and I will try another identity (e.g. Baileys + Desktop).
+
+Still open (not built, owner has not asked): the page shows only "Reconnecting" and the bridge does not log why a connection closed. Logging the close code and showing `last_error` on the page would have made this visible without the Coolify terminal.
+
+Tests: `npm test` in `whatsapp-bridge/` (10 passing). No PHP, Blade or lang change, so the PHP suite is not affected.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`, then pushed to `main` on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-19); released as v2.86.2.
+
+
+## 2026-10-18 (later) - SMS templates follow the BulkSMSBD rules
+
+Owner feedback (Bangla): the SMS templates for the different jobs must follow BulkSMSBD's rules, and the first version did not.
+
+What the rules are (from the BulkSMSBD dashboard "Developers" page the owner shared, plus bulksmsbd.com's API and FAQ pages; BulkSMSBD publishes no other template policy and has no template-approval menu for a numeric sender ID):
+
+- OTP format: "Your {Brand/Company Name} OTP is XXXX" (dashboard: "OTP পাঠানোর জন্য এই ফরম্যাট টি ফলো করুন").
+- No single quotation mark in a message (API example code: "do not use single quotation (') in the message to avoid forbidden result").
+- Masking SMS must be Bangla (error 1012). The owner's sender ID `8809617643387` is numeric, so English is allowed.
+- Length: 160 / 153 per part in GSM-7, 70 / 67 per part with Bangla letters.
+
+What changed:
+
+- `BulkSmsBdPolicy` checks all of it. Code templates (customer sign-up / login / password reset, investor login / reset) must be exactly "Your {brand} OTP is :code" and the built-in text is that; any other saved wording is refused on save and ignored at send time. Order and project templates may not contain `'` or need more than 3 SMS parts. `'` is also dropped from names when the SMS goes out.
+- The investors' code SMS lost the reason ("login" / "password reset") and the "expires in 1 minute" sentence that the owner asked for on 2026-10-16: the BulkSMSBD OTP format has nothing after the code. The code still expires after 1 minute; the investor login page says so. Customers' codes lost "Use it to log in..." and the expiry sentence for the same reason. If BulkSMSBD confirms that text after the code is accepted, loosening `BulkSmsBdPolicy::isCodeFormat()` is a one-line change.
+- Investor code SMS is English only (the format is English), so the `:company Investment Portal` and the two `:portal ... OTP is :code` language keys are gone.
+- Page: a rules box, a masking-sender notice, a character / SMS-part counter on every box, and a "Use suggested wording" button for the order and project messages (suggestions are short English texts without a link or quote; the owner still has to save them, so nothing is sent by itself).
+
+Checked: `BulkSmsBdPolicyTest` (7), `SmsTemplatesTest` (16), `InvestorPortalTest`, customer and reseller OTP tests; Pint clean. No live data touched, no real SMS sent.
+
+Needs Bangla review: the 9 new keys in `lang/bn.json` (BulkSMSBD rules box, masking notice, the three policy messages, "Use suggested wording", the counter).
+
+Commit status: not committed yet; branch `feature/sms-bulksmsbd-policy`, waiting for the owner's approval.
+
+## 2026-10-18 - Supplier Report (Reports module)
+
+Owner request: the Reports module had no supplier-wise report. Wanted per supplier: supplier info; the dates the goods arrived; total cost after the goods reached the house; sales and average sale amount; damaged and short quantity; gross profit after all costs; the costs paid per product after arrival (ad, packaging, other); net profit = gross profit − those costs; for one product or all products of the supplier; PDF in one click.
+
+Owner decisions (asked 2026-10-18):
+
+- Damaged and short units are recorded on the purchase line (new **Short Qty** / **Damaged Qty**), not guessed from stock movements (those carry no supplier).
+- Costs after arrival are manual lines on the purchase (product, cost name, amount), plus Meta ad spend already linked to the product.
+- A product bought from several suppliers has its sales handed to the oldest units first (FIFO by purchase date).
+
+What changed:
+
+- Migration `2026_10_18_000100_add_loss_quantities_and_product_costs_to_purchases` (additive): `purchase_items.short_quantity`, `damaged_quantity`, `purchases.product_costs` (JSON).
+- `PurchaseItem`: validation (no negatives, short + damaged ≤ billed) and `sellableQuantity()`. `PurchaseWorkflowService` now books only sellable units into stock (identical result when short and damaged are 0). `PurchaseForm`: two columns on the items table and a **Costs After Arrival** section.
+- New `SupplierReportService` (rules in its class comment), page `SupplierReport` (Reports → Supplier Report, `reports.view`), `SupplierReportPdfController` + `reports.supplier.pdf` (`reports.export`, audit log), `resources/views/reports/supplier-pdf.blade.php`, 58 new keys in `lang/en.json` + `lang/bn.json`, `tests/Feature/SupplierReportTest.php` (9 tests).
+
+Figures follow these rules, which are my reading of the request and worth the owner's check against one real supplier:
+
+- Gross profit = sales − landed cost of units sold − landed cost of short and damaged units (the supplier's loss is deducted in gross profit).
+- Net profit = gross profit − costs after arrival − Meta ad spend. Both are counted in proportion to the units sold, the same way the cost of goods is, so a half-sold batch carries half of its packaging cost. Owner confirmed this on 2026-10-18.
+- Landed cost = item subtotal + the purchase's China-to-BD costs (the existing allocated cost). Purchase discount and VAT are not in it.
+- Date filter = purchase date; sales are counted up to today.
+- Meta ad spend is the ad's lifetime spend, only for ads created through this app (they carry the product); it is split between suppliers by units sold. Do not also enter ad cost as a manual line for the same spend.
+- The PDF is always English: dompdf cannot shape Bangla, so Bangla product or supplier names may not print correctly in it. The on-screen report follows the user's language.
+
+Not done / limits: no CSV export of this report; no separate page-level "print" view for Bangla; stock "damage" movements recorded in the warehouse are not tied to a supplier and are not in this report; sales returns are not netted out of the FIFO.
+
+Needs Bangla review: all 58 new keys, in particular "Total landed cost" (ল্যান্ডেড কস্ট), "Loss on short and damaged units", "Short Qty" / "Damaged Qty" and the long description of **Costs After Arrival**.
+
+Not visually checked in the browser (page and PDF render and download are covered by tests).
+
+Verification: `php artisan test --filter=SupplierReportTest` 9 passed; `TranslationParityTest` passes. Full plain `php artisan test`: 2,123 passed, 1 skipped, **8 failed** — the same 8 online-payment tests already listed under 2026-10-17 (`StorefrontApiCheckoutTest`, `StorefrontPaystationPaymentTest`: "The secure payment page could not be opened"); this change touches no payment file. Pint reports only older style issues in `PurchaseForm.php` and `routes/web.php`, none on the new lines.
+
+Commit status: committed on `feature/supplier-report` and pushed to `main` on the owner's explicit approval (2026-10-18), after the branch checks.
+
+## 2026-10-18 - Login protection: sign-ins are judged before the password hash (bcrypt)
+
+Trigger: the owner shared a post about distributed credential-stuffing (50,000 guesses a minute from 30,000 IPs: no per-IP limit and no per-account lockout fires, but every guess costs a full bcrypt) and asked whether our login checks the request before bcrypt. The answer was "partly" (a per-identifier lockout and a per-IP throttle only); this is the fix, agreed as a plan (phases A and B) in the conversation. Phase C (CAPTCHA) is not done.
+
+What changed:
+- `App\Services\LoginGate` + `LoginClient`, `LoginAttempt`, `LoginThrottled`, `config/login_protection.php`: per device, per account, per client fingerprint and whole-surface counters (cache), a device-trust token (signed cookie / API `device_token`, bound to the password hash), a global budget of password hashes for unknown devices, fail-open through `ModuleGuard` (`module:login-gate`).
+- Wired into `CustomerAccountService::attemptLogin()` (Blade storefront, reseller portal, Next.js API), `InvestorPortalAccountService::attemptPasswordLogin()` and a new `App\Filament\Auth\AdminLogin` (admin panel `->login()`).
+- Fixed on the way: phone spellings (`+880…` / `880…` / `01…`) shared no lockout counter on the Blade and reseller paths; the counter was not per company; an unknown account skipped the hash (timing leak); the reseller login showed no usable message when locked; the investor login wrote one audit row per refused guess.
+- Docs: `docs/login-protection.md` (new), `docs/api/storefront-api.md` §6 (`device_token`, `challenge`, send `client_ip` + `client_user_agent`).
+- Tests: `LoginGateTest` (19: spellings, per-company counters, owner not locked out by a stranger, no hash for a refused attempt, bot denial and its office-network exception, trusted device, password change ends trust, token binding, hash budget, site-wide attack, fail-open, gate off, Blade cookie, Next.js API, investor, reseller, admin). Mutation-checked: breaking the phone normalisation, the dummy hash or the trusted-device bypass makes the matching tests fail.
+
+Decisions made on the owner's behalf (defaults, all changeable by environment variable): device 5 wrong/minute; account 20 wrong in 15 minutes; fingerprint 30 wrong and no success in 10 minutes; site 300 wrong/minute; 600 hashes/minute for unknown devices; trust 90 days. The plan's three open questions (thresholds, CAPTCHA provider, whether to do the CAPTCHA now) were not answered before work started: thresholds use the proposed defaults, and the CAPTCHA was left for a separate step.
+
+Known limits (also in the doc): until the CAPTCHA exists a *challenge* is a wait, so while an account is under attack its owner on a NEW device waits (owner on a trusted device is unaffected; this is still better than the old rule, where five wrong tries a minute from anyone locked everybody out). Counters need `CACHE_STORE=redis` to be shared between workers. TLS (JA3/JA4) fingerprints can only come from the proxy in front of PHP; the gate uses browser string + language + network block. Device trust is issued after password sign-ins only. Filament's own `rateLimit(5)` per IP on the staff login stays on top.
+
+For the website repo (`zamzamint-new-website-theme`, not touched): keep `data.device_token` from `POST /account/login` in an httpOnly cookie and send it back as `device_token`; always forward `client_ip` and `client_user_agent` on sign-in. It works unchanged without this.
+
+Needs Bangla review: "অনেকবার লগইনের চেষ্টা করা হয়েছে। অনুগ্রহ করে :seconds সেকেন্ড পরে আবার চেষ্টা করুন।" (key "Too many login attempts. Please try again in :seconds seconds.", written by the agent).
+
+Environment note for whoever reads this later: the container had PHP 8.3 and the project needs 8.4, so PHP 8.4 was installed from the ondrej/php PPA for this session only; `npm run build` was run so the page tests can render (`public/build` is gitignored). Neither is part of the commit.
+
+Verified: plain `php artisan test` (no `--env`) on PHP 8.4: 2567 passed, 2 skipped, 0 failed (24856 assertions); `LoginGateTest` 19 passed; the existing sign-in tests (`StorefrontCustomerAuthTest`, `StorefrontApiAccountTest`, `ResellerPortalAccountTest`, `InvestorPortalTest`) pass unchanged; `TranslationParityTest` passes; Pint clean. No real SMS or CAPTCHA involved; no demo data touched.
+
+Merge with `main` (v2.85.0): `main` had moved on with the SMS Templates work, which also adds a constructor argument (`SmsTemplateService`) to `CustomerAccountService` and `InvestorPortalAccountService`. Both arguments are kept (`LoginGate` after it), so tests that build the service by hand must use `app()->make(..., ['loginGate' => $gate])`, not positional arguments. The two language-file additions and the changelog sections were merged by hand (main had already cut its `[Unreleased]` into 2.84.0 / 2.85.0; this entry stays under `[Unreleased]`). Re-verified on the merged tree: see the status line.
+
+Commit status: committed on `ccr-4505e72d-hwaq92`, then merged into `main` on the owner's explicit approval (2026-10-18, "main এ merge করে দাও") after the full suite was green on the merged tree.
+
+## 2026-10-17 (night) - SMS Templates: order status, OTP, password reset and investor project messages
+
+Owner request (Bangla): add an SMS order-status template, an OTP template and a password-reset template, and make the space to write the investors' project-status message templates.
+
+What changed:
+
+- New admin page **Settings → SMS Templates** (`SmsTemplates`, three tabs: Order status / OTP & password reset / Investor projects). Table `sms_templates` (company, key, body); `SmsTemplateService` lists every message with its placeholders and built-in wording. A template is plain text with `:placeholders`, the same style as the older "Project completed message".
+- **Order status** (new sending): `OrderStatusTransition::created` calls `OrderStatusSmsService`, which queues `SendOrderStatusSmsJob` only when the company has written a message for that stage. Stage names are the order workflow stages, mapped with `StorefrontMetaTrackingService::statusEventStage()`. Not sent for imported past orders, reseller store orders, customers with no phone, or opted-out numbers. One SMS per status change (cache guard against a retried job).
+- **OTP / password reset**: customer sign-up, login and reset codes (`CustomerAccountService`) and investor login and reset codes (`InvestorPortalAccountService::sendCode()`) now use the company's wording when written, else the same built-in text as before. A message without `:code` cannot be saved.
+- **Investor project status**: messages for Project started, Project completed and Profit settled. Completed (group): the existing event listener, now through `InvestorProjectMessageService`; it also announces the next project as started. Projects outside a group: `InvestmentProject::updated` (status to running or closed). Profit settled: `SettlementService::confirmSettlement()`, with `:profit` and `:payout` from the investor's settlement payout row.
+- The old "Project completed message" box on Investor Portal Settings is gone; the migration copies any saved text into the new table (`investor_project.closed`). The column `companies.investor_project_completed_message` stays unused.
+- Everything is off until the owner writes it: order and project messages send nothing while empty, code messages keep their old wording while empty. Deploying this changes no SMS by itself.
+
+Decisions made without asking (tell me if wrong): reseller store orders are not texted (the buyer is the reseller's customer); opted-out numbers are skipped for order and project messages (not for codes); a template is one text per message, in the language the owner writes it (no separate Bangla copy yet); "Profit settled" goes out when the settlement is **confirmed**, not when it is first calculated (draft) or when the payout is paid.
+
+Checked: new `SmsTemplatesTest` (11), `ProjectCompletedMessageTest` (10), new case in `InvestorPortalTest`, `TranslationParityTest`, `MultiCompanyIsolationTest`, customer and reseller OTP tests; Pint clean. No live data touched, no real SMS sent. Full plain `php artisan test`: 2,562 passed, 1 skipped, 0 failed.
+
+Needs Bangla review: all 32 new keys in `lang/bn.json` (the template names, placeholder descriptions and the three tab descriptions).
+
+Commit status: not committed yet; branch `feature/sms-message-templates`, waiting for the owner's approval.
+
+## 2026-10-17 (evening) - Imported orders of zero-stock products: no stock popup, product name shown
+
+Owner question (Bangla): how will the orders of products whose stock is 0 show? Answer: the Orders list and the order page show them normally (the imported line keeps the product name and the Nuport price; stock stays 0 and never goes below, because an import takes no stock). Checking it found two problems on the Edit order page, fixed here:
+
+- Saving an imported Completed/Confirmed/Processing order whose product has stock 0 showed the "Not enough stock" popup and offered "Add stock and save order" (stock that never existed). `HandlesStockShortages::haltWhenStockIsShort()` now skips saved orders that are `isHistoricalImport()`, like WooCommerce orders.
+- The product box on the Edit page lists active products only, so a line whose product is inactive (what "Create missing products" creates) showed an empty name. `OrderForm` now also lists the product the line already has.
+
+Checked: the new test fails without either fix and passes with both; saving an imported order and moving it Confirmed to Completed creates no stock movement and stock stays 0. No new strings, no live data touched.
+
+Not changed (reachable only by hand): an imported order cannot move from a non-stock status to a stock status (the workflow table has no such step), so `OrderStatusWorkflowService::ensureStockFor()` needed no change.
+
+Verification: `php artisan test --filter=NuportOrderImportTest` 23 passed; full plain `php artisan test`: 2,549 passed, 1 skipped, 0 failed; Pint clean.
+
+Commit status: committed on branch `feature/nuport-sku-map` and pushed to main with the owner's approval (2026-10-17).
+
+## 2026-10-17 (later) - Nuport import: SKU mapping and "Create missing products"
+
+Owner request (Bangla): match the Nuport order products' SKUs to the ERP products' SKUs so no order is missed.
+
+Finding: the live ERP (read from the logged-in browser pane, nothing changed) has 35 products and 84 variant SKUs. Of the 91 distinct SKUs in the Nuport export, 79 match exactly; 12 do not. Without any fix 343 of 1,275 importable orders are skipped (ZMGLPN 188, ZMGRRLPWB-OLD 86, ZMGRRLP 49, ZMGWRP 26, ZMGLRLP 15, ZMGLPNK 5, ZMGSMS 2, ZMGLPS-1 1, Courier Poly, Bubble Poly). The 3 "-R" return invoices (SO-0443-R, SO-0444-R, SO-0445-R: quantity 0, sales 0) carry no sale and stay skipped.
+
+What changed (`NuportOrderImportService`, `ListOrders`, `ImportNuportOrders`, lang, tests):
+
+- **SKU mapping**: textarea in the import dialog (and `--map=<file>`), one `NUPORT-SKU = ERP-SKU` per line; wins over a direct match; ERP SKU must exist as a variant or product SKU, else the line is ignored and listed. Remembered per company in `app_settings` (`nuport_import_sku_map_<company id>`).
+- **Create missing products** toggle (and `--create-missing`), off by default: creates the product inactive, stock 0, cost price 0, selling price = last non-zero unit price in the file; SKU-less lines get `NUPORT-<NAME>`. Preview lists them. A second run creates nothing twice.
+- 9 new keys in `lang/en.json` + `lang/bn.json`.
+
+Checked on the real file against the live SKU list (in-memory test DB with a throwaway product per live SKU, nothing on live): no fix 929 new orders; mapping `ZMGRRLPWB-OLD = ZMGRRLPWB` and `ZMGLPN = ZMGLPNW` 1,178; mapping + create missing 1,272 (8 products to create, 0 errors, only the 65 test/fake and 3 return invoices skipped); create missing only 1,272 (10 products).
+
+Open points for the owner:
+
+- The two mappings above were my reading; the owner confirmed both (2026-10-17): `ZMGRRLPWB-OLD` is the Black box at 420 (the ERP's `ZMGRRLPWB` variant of `ZMGRRLPW`); `ZMGLPN` has the same Nuport name "Love Pearl Necklace" as the ERP's `ZMGLPNW` but sold at 950/450/380 against 200-240. (The line keeps its own Nuport unit price either way.)
+- Created products have cost price 0, so the imported lines show no cost and profit looks too high for them. Give each product its real cost; old lines keep 0.
+- Created products do not touch stock or the website (inactive, stock 0).
+
+Needs Bangla review: all 9 new keys.
+
+Verification: `php artisan test --filter=NuportOrderImportTest` 22 passed; full plain `php artisan test`: 2,548 passed, 1 skipped, 0 failed; Pint clean. No live data was written.
+
+Commit status: committed on branch `feature/nuport-sku-map` (cut from origin/main v2.82.0) and pushed to main with the owner's approval (2026-10-17).
+
+## 2026-10-17 - Import Nuport orders (customer purchases, payment, status)
+
+Owner request: the wholesale team sells through Nuport (app.nuport.io); only customers had been brought over. They asked how to bring in what each customer bought, the payment and the status. I downloaded the real export from Nuport (owner said yes: 1,340 invoices, 2,311 lines, SO-0001 21 Aug 2025 to SO-1309 15 Oct 2026) and built the import from it.
+
+Why a CSV import and not a live sync first: Nuport's webhook (23 events, none switched on) sends status changes only for new events, with no paid amount (only "Payment Due" / "Payment Collected"), and its REST API has one-order-by-invoice lookup but no list-all-orders call. Docs: nuport.readme.io. The webhook receiver is the planned second step (see Not done).
+
+Owner decisions applied (2026-10-17, "go with the assumptions above"):
+
+- Cancelled orders with reason "Test Order" or "Fake Order" are skipped (65 in the export); the other cancelled orders come in as Cancelled with no payment (5 of them had a payment in Nuport; it is not copied).
+- Status map: Delivered = Completed (Payment Due keeps its due), Approved = Confirmed, In-Transit and Processing = Processing, Flagged (returned and pending return) = Returned, Cancelled = Cancelled. Any other status is skipped and listed, never guessed.
+- Payments are history only: `account_id` NULL, so no account ledger row and no account balance moves.
+- The 66 orders still open in Nuport (Approved, In-Transit, Processing) also do not touch stock: the PDF stock entered on 2026-10-16 is the physical stock.
+
+What changed:
+
+- New `app/Services/NuportOrderImportService.php`; `Order::SOURCE_NUPORT_IMPORT` + `isHistoricalImport()`; `OrderWorkflowService::sync()`, `OrderNotificationObserver` and the `saved` fraud-check hook skip imported orders; header action **Import Nuport orders** on the Orders list (`ListOrders`, preview first, "Preview only" on by default); command `php artisan orders:import-nuport {file} {company-slug} [--apply]`; 29 new keys in `lang/en.json` + `lang/bn.json`; `tests/Feature/NuportOrderImportTest.php` (17 tests).
+- Rules: invoice = `order_number` = `external_reference`; customers matched by phone in any spelling, a new phone creates a customer (`regular`); lines at list price, discount = line total minus Sales Amount, shipping fee = Delivery Fee, so ERP total = Sales Amount + Delivery Fee; one account-less payment per order mirroring the paid amount; order skipped whole if a product is not found by SKU (variant SKU, then product SKU, then exact name for a line with no SKU).
+- Re-running a file (or a newer export) finds orders by invoice and refreshes only status, delivery status, delivery fee, discount and payment; lines, notes and customer are left alone.
+
+Checked on the real file (in-memory test database, never the live or demo DB, with a throwaway product per SKU): preview 0.4 s; import 20 s; 1,272 orders created (Completed 1,029, Confirmed 53, Processing 13, Returned 80, Cancelled 97), 893 payments, 711 customers; skipped 65 test/fake cancelled + 3 return invoices with quantity 0 (SO-0443-R, SO-0444-R, SO-0445-R); 0 errors; second run created 0 and changed 0. Sales, paid and per-status counts match the CSV; customer balances add up to the imported due of the accounted orders (6,609,815); stock movements, ledger rows and fraud checks created: 0.
+
+Open points for the owner:
+
+- **Before the real import:** the live ERP's product SKUs were not checked (the dashboard login in the browser pane had expired and passwords are not entered by the agent). Run the preview on the live Orders page first; any product it lists as "not found" (the export has retired SKUs such as `ZMGRRLPWB-OLD`, `ZMGRRLPW-DUP-…-DELETED`, and lines named Courier Poly / Bubble Poly with no SKU) must exist before those orders can come in.
+- **Opening balance:** if the customers brought over earlier already carry their Nuport due as an opening balance, importing the orders counts that due twice. The preview shows how many matched customers have an opening balance; check those before saving.
+- Nuport's screen shows 1,346 orders but the export has 1,340 (I exported with the default filters and no date range); the 6 missing were not looked for. Compare the live order count after the import.
+- 32 invoices have totals that disagree with their own lines in Nuport (edited by hand there); the file's Sales Amount, Delivery Fee and Paid are used and these invoices are listed in the preview.
+- Customer Tag (NEW / REGULAR / VIP), order source (WhatsApp, Website…), Steadfast status text and the Nuport "Entry By" are not imported as fields; the consignment ID and cancel reason are in the order note.
+
+Not done: the webhook receiver for new orders and status changes (needs a signed endpoint, `whsec_` secret as an admin setting; payment amount would need the per-invoice API call); the six variant products' per-colour stock from the 2026-10-16 PDF is still waiting for the owner's colour split.
+
+Needs Bangla review: all 29 new keys, in particular ":count customers already have an opening balance. Check it so their dues are not counted twice.", ":status: :orders orders, sales :sales, paid :paid, due :due", "Totals do not match the lines on :count orders (the file totals are used): :list".
+
+Verification: `php artisan test --filter=NuportOrderImportTest` 17 passed (138 assertions); Pint clean. The full suite on the working tree (before moving to main) had 8 online-payment failures from unrelated uncommitted PayStation work; the main-based copy was re-checked, see the result in the commit report.
+
+Commit status: committed on main (cherry-picked from d6a09df7 onto v2.81.1, without the AI inbox branch). Pushed with the owner's approval.
+
+## 2026-10-16 - Investor portal SMS code: wording and 1-minute expiry
+
+Owner instruction (in Bangla): investor OTP SMS should read "Tasneem investment portal + [reason] + OTP code" and expire in 1 minute; later "commit, push, and push to main".
+
+- `InvestorPortalAccountService::sendCode()`: message is now `{company} Investment Portal login OTP is 123456. It expires in 1 minute.` (reason `login`) or `... password reset OTP is ...` (reason `reset`); `CODE_VALID_MINUTES` 10 -> 1. Investors only; customer and reseller codes are unchanged.
+- The portal name is the company name + " Investment Portal" (the same name the portal's header shows). If the company is named "Tasneem Knitting" the SMS says "Tasneem Knitting Investment Portal"; rename the company, or ask for a separate portal-name setting, if the shorter "Tasneem Investment Portal" is wanted.
+- Login and Forgot-password pages: helper text now says "It expires in 1 minute."
+- Known edge: a second request inside the first minute keeps the code already sent (the existing double-tap guard), so asking again at about 50 seconds gives no fresh code until the old one expires.
+- Files: `InvestorPortalAccountService.php`, `Filament/Investor/Pages/Auth/Login.php`, `ForgotPassword.php`, `lang/en.json` + `lang/bn.json` (2 keys replaced by 3, 1 changed), `tests/Feature/InvestorPortalTest.php` (+1 test).
+- Not done: no real SMS sent. Branched from `main` (v2.81.0) on purpose: the BulkSMSBD gateway work (reply code, 880 numbers, customer OTP wording) is already on `main` from `1565d5eb`, so a parallel copy of it in a long-running local tree was left out.
+
+Needs Bangla review: ":company ইনভেস্টমেন্ট পোর্টাল", ":portal লগইন OTP হলো :code। এটি ১ মিনিট পর মেয়াদোত্তীর্ণ হবে।", ":portal পাসওয়ার্ড রিসেট OTP হলো :code। এটি ১ মিনিট পর মেয়াদোত্তীর্ণ হবে।" and the 1-minute helper text in `lang/bn.json` (written by the agent).
+
+Verified: plain `php artisan test` in a clean worktree of `main` (v2.81.0) plus this change: 2526 passed, 1 skipped, 0 failed (24351 assertions). Also `--filter` over `InvestorPortalTest`, `InvestorPortalStaffEntryTest`, `TranslationParityTest`, `StorefrontSmsGatewayTest`, `ResellerPortalPasswordResetTest`: 60 passed. No real SMS sent.
+
+Commit status: committed on `feature/investor-otp-wording` and pushed to `main` on the owner's explicit approval (2026-10-16).
 
 ## 2026-10-14 (later still) - Agent rule: commit and push new work to a topic-named feature branch
 
@@ -2723,6 +3013,16 @@ Needs Bangla review (new `lang/bn.json` values):
 - ":product video" → ":product ভিডিও"
 
 Commit status: committed and pushed to `main`.
+
+## 2026-10-15 - Customers: address in the Customer box + address column in the list
+
+Reason — after importing the customer list, the owner asked: "কাস্টমার এড্রেস কে কাস্টমার বক্সে বসাও এবং কাস্টমার লিস্টেও কাস্টমার এড্রেস কলাম থাকবে wrapped হবে" (put the address in the Customer box, and add a wrapped Customer Address column to the list).
+
+What changed: `CustomerInfolist` shows the address inside the Customer section (full width, label "Customer Address"). `CustomersTable` has a new searchable Customer Address column that wraps (max 3 lines). New key "Customer Address" in `lang/en.json` and `lang/bn.json`.
+
+Needs Bangla review: "Customer Address" → "কাস্টমারের ঠিকানা".
+
+Commit status: Committed and pushed to `claude/order-management-features-nafks7` and `main` (owner approved: "কমিট করে পুশ কর").
 
 ## 2026-09-27 - CI: GitHub Actions on Node.js 24
 

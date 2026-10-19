@@ -8,6 +8,8 @@ use App\Models\Investor;
 use App\Models\InvestorPortalAccount;
 use App\Models\StorefrontSetting;
 use App\Models\User;
+use App\Support\LoginClient;
+use App\Support\LoginThrottled;
 use App\Support\StorefrontApi\Phone;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -19,20 +21,24 @@ use Illuminate\Validation\ValidationException;
  * staff invite an investor or channel partner, the person sets a password
  * from the SMS link, and later signs in with phone + password or phone + an
  * SMS code. The one-time-code rules are the storefront's
- * (CustomerAccountService): hashed, 6 digits, 10 minutes, 5 tries, one send
- * per minute. Phones are stored as 01XXXXXXXXX (StorefrontApi\Phone).
+ * (CustomerAccountService): hashed, 6 digits, 5 tries, one send per minute;
+ * the code is valid for 1 minute (CODE_VALID_MINUTES). Phones are stored as
+ * 01XXXXXXXXX (StorefrontApi\Phone).
  */
 class InvestorPortalAccountService
 {
     public const INVITE_VALID_DAYS = 7;
 
-    public const CODE_VALID_MINUTES = 10;
+    /** Owner decision 2026-10-16: an investor's SMS code lives for one minute. */
+    public const CODE_VALID_MINUTES = 1;
 
     public const CODE_MAX_ATTEMPTS = 5;
 
     public function __construct(
         protected StorefrontNotificationService $notifications,
         protected AuditLogService $audit,
+        protected SmsTemplateService $templates,
+        protected LoginGate $loginGate,
     ) {}
 
     /** The account of an investor or partner, if one was created. */
@@ -214,15 +220,40 @@ class InvestorPortalAccountService
         return $phone === '' ? null : InvestorPortalAccount::query()->where('phone', $phone)->first();
     }
 
-    public function attemptPasswordLogin(string $phone, string $password): ?InvestorPortalAccount
+    /**
+     * @throws LoginThrottled when LoginGate stops the attempt before the password is checked
+     */
+    public function attemptPasswordLogin(string $phone, string $password, ?LoginClient $client = null): ?InvestorPortalAccount
     {
         $account = $this->findByPhone($phone);
+        $client ??= LoginClient::fromRequest(request(), LoginGate::SURFACE_INVESTOR);
+
+        $attempt = $this->loginGate->begin(LoginGate::SURFACE_INVESTOR, app(CompanyContext::class)->id(), Phone::normalize($phone), $account, $client);
+
+        if ($attempt->isDenied()) {
+            // Not audited: a flood of refused guesses must not become a flood of rows.
+            $this->loginGate->failed($attempt);
+
+            return null;
+        }
+
+        if ($attempt->isBlocked()) {
+            throw LoginThrottled::for($attempt, 'data.phone');
+        }
+
+        if ($account === null || blank($account->password)) {
+            // Costs the same time as a wrong password, so timing can't show who invests.
+            $this->loginGate->spendHashTime($password);
+        }
 
         if (! $account || blank($account->password) || ! Hash::check($password, $account->password)) {
+            $this->loginGate->failed($attempt);
             $this->audit->record('investor_portal.login_failed', $account ?? InvestorPortalAccount::class, null, ['method' => 'password']);
 
             return null;
         }
+
+        $this->loginGate->succeeded($attempt);
 
         return $account;
     }
@@ -255,11 +286,23 @@ class InvestorPortalAccountService
             'otp_attempts' => 0,
         ])->save();
 
-        $message = $purpose === 'reset'
-            ? __('Your :company OTP is :code. Use it to reset your investor portal password. It expires in :minutes minutes.', ['company' => $company?->name, 'code' => $code, 'minutes' => self::CODE_VALID_MINUTES], $account->locale)
-            : __('Your :company OTP is :code. Use it to sign in to the investor portal. It expires in :minutes minutes.', ['company' => $company?->name, 'code' => $code, 'minutes' => self::CODE_VALID_MINUTES], $account->locale);
+        $sent = false;
 
-        $sent = $company !== null && $this->sendSms($company, $account, $message);
+        if ($company !== null) {
+            // BulkSMSBD's OTP format: "Your {Brand/Company Name} OTP is XXXX". The owner can only choose the
+            // brand (SMS Templates); the text is English whatever the investor's language, as the format is.
+            $message = (string) $this->templates->render(
+                (int) $company->getKey(),
+                $purpose === 'reset' ? SmsTemplateService::RESET_INVESTOR_PASSWORD : SmsTemplateService::OTP_INVESTOR_LOGIN,
+                [
+                    'company' => (string) $company->name,
+                    'portal' => $company->name.' Investment Portal',
+                    'code' => $code,
+                ],
+            );
+
+            $sent = $this->sendSms($company, $account, $message);
+        }
 
         if (! $sent) {
             $this->clearCode($account);

@@ -3,13 +3,17 @@
 namespace App\Filament\Reseller\Pages\Auth;
 
 use App\Models\Customer;
+use App\Services\CompanyContext;
 use App\Services\CustomerAccountService;
+use App\Services\LoginGate;
+use App\Support\LoginThrottled;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use Filament\Actions\Action;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Auth\Pages\Login as BaseLogin;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Component;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Validation\ValidationException;
@@ -52,7 +56,13 @@ class Login extends BaseLogin
 
         $data = $this->form->getState();
 
-        $customer = app(CustomerAccountService::class)->attemptLogin($data['email'], $data['password']);
+        try {
+            $customer = app(CustomerAccountService::class)->attemptLogin($data['email'], $data['password']);
+        } catch (LoginThrottled $exception) {
+            Notification::make()->title($exception->getMessage())->danger()->send();
+
+            return null;
+        }
 
         if (! $customer || ! $this->isUserAllowedToAccessPanel($customer)) {
             throw ValidationException::withMessages([
@@ -63,6 +73,8 @@ class Login extends BaseLogin
         Filament::auth()->login($customer, $data['remember'] ?? false);
 
         session()->regenerate();
+
+        app(LoginGate::class)->rememberDevice(LoginGate::SURFACE_CUSTOMER, app(CompanyContext::class)->id(), $customer);
 
         return app(LoginResponse::class);
     }

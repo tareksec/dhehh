@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Auth\AdminLogin;
 use App\Filament\Resources\Investors\InvestorResource;
 use App\Filament\Resources\Investors\Pages\ListInvestors;
 use App\Filament\Widgets\BusinessOverview;
@@ -52,9 +53,17 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login()
+            ->login(AdminLogin::class)
             ->profile(isSimple: false)
             ->spa()
+            // A link to a file (report PDF / CSV) must be a normal browser
+            // request. In SPA mode Filament adds `wire:navigate`, Livewire
+            // fetches the URL and paints the response into the page, so the
+            // owner saw the raw bytes of the PDF as text instead of a download.
+            ->spaUrlExceptions([
+                '*/admin/reports/export/*',
+                '*/admin/reports/supplier/*',
+            ])
             ->sidebarCollapsibleOnDesktop()
             ->sidebarWidth('18rem')
             ->collapsedSidebarWidth('4.5rem')

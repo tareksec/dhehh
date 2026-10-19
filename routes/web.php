@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\PushDeviceController;
 use App\Http\Controllers\Admin\ReportExportController;
 use App\Http\Controllers\Admin\ReportPdfController;
 use App\Http\Controllers\Admin\SupplierCsvController;
+use App\Http\Controllers\Admin\SupplierReportPdfController;
 use App\Http\Controllers\Admin\VoucherAttachmentDownloadController;
 use App\Http\Controllers\Admin\VoucherReceiptController;
 use App\Http\Controllers\ChatOrderController;
@@ -643,6 +644,10 @@ Route::middleware('auth')
 Route::middleware('auth')
     ->get('/admin/reports/export/{type}/pdf', ReportPdfController::class)
     ->name('reports.export.pdf');
+
+Route::middleware('auth')
+    ->get('/admin/reports/supplier/{supplier}/pdf', SupplierReportPdfController::class)
+    ->name('reports.supplier.pdf');
 
 Route::middleware('auth')->group(function (): void {
     Route::post('/admin/push-devices', [PushDeviceController::class, 'store'])
