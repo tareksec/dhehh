@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.86.4] - 2026-10-19
+
 **Release type:** Patch/Fix Update
 
 ### Added
@@ -16,7 +18,6 @@ All notable production changes to Business Dashboard are documented here.
 - `whatsapp-bridge`: new optional env var `BRIDGE_BROWSER` as `<system>:<browser>` (systems `ubuntu`, `macos`, `windows`, `baileys`), read by the new `src/browser.js`. A wrong value stops the bridge at start with a clear message. It applies the next time a QR code is scanned. `GET /health` now also returns `browser`.
 - `whatsapp-bridge`: every closed WhatsApp connection is logged as `connection closed` with `code` and `reason`; `GET /sessions/{id}` now returns `last_error_code` next to `last_error`. The ERP page shows both while the device is not connected.
 - Redeploy the `whatsapp-bridge` app in Coolify to get this. New lang key "Last error" (en + bn). Tests: bridge `test/browser.test.js` (5), two new page tests in `WhatsAppWebArchiveTest`.
-
 ## [2.86.3] - 2026-10-19
 
 **Release type:** Patch/Fix Update
