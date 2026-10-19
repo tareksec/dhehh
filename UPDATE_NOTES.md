@@ -2,6 +2,28 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-18 - Pay a cycle's profit without waiting for sales (manual-profit settlement)
+
+Owner (in Bangla), after I read the group code: some projects are outside any group and some groups are project-based, so keep that flexible; and do not tie a project's payout to sales, because a cycle is two months but sales can take longer. Answers to my three questions: group structure "stays as before" (nothing to change there); "the payout must also be possible without sales — our investment rule is that every two months investors are handed their profit, sales or not, so keep a manual option"; the amount is entered by staff.
+
+What I found first: grouped and ungrouped projects already coexist (a project with no group is a normal project; groups can run automatically or not), and the settlement never read sales, only a revenue figure staff type. What was missing was a way to say "pay this cycle's profit" without inventing a selling amount that would then print on the investor's report.
+
+What changed:
+- **Calculate & Settle** has a new first choice, *How is the amount decided?* — *From the sales revenue* (the old way, default) or *Profit entered by hand (no sales needed)*. By hand: staff type the net profit; the helper shows the investors' share of it. Same split, rate per lac and payouts as for a sale; a group project still pays profit only.
+- Hand-entered settlements skip the cost-proof tick-box (costs are not used), cannot be negative (a loss is settled from sales), and are labelled **Profit entered by hand** on the settlement page. The investor's printable report shows "Profit for this cycle (declared by the company, not worked out from sales)" and no selling amount, gross profit or cost tables.
+- Stored figures still add up: `total_revenue = total_cost + profit` for a hand-entered settlement; the new `basis` column says it is not a real selling amount.
+- Nothing about the investor groups, the cycle dates or auto-cycle changed.
+
+Verified: 9 new tests (`InvestmentSettlementTest` 8, `InvestorGroupExitTest` 1) pass; two mutations (cost check kept for manual; basis not recorded) each made them fail. The three settlement/group test files pass together (102). Full suite: 2533 passed, 2 skipped, 0 failed.
+
+Deploy: `php artisan migrate --force` (new column `project_settlements.basis`).
+
+Decisions I made that you may want to change: (1) staff enter the **net profit before the split** (the project's own investor/partner/company percentages are then applied), not the investors' pool or a rate per lac — say if you would rather type the rate per lac; (2) the hand-entered profit has no cost-proof check; (3) a project is still settled only after its cycle has closed (for a group with automatic cycles that happens by itself at the end date; with automatic cycles off, set the project to Closed first).
+
+Needs Bangla review: the 10 new strings in `lang/bn.json` — "অঙ্ক কীভাবে ঠিক হবে?", "সেলস রাজস্ব থেকে", "হাতে বসানো লাভ (সেলস লাগবে না)", "বণ্টনের নিট লাভ", "অঙ্ক ঠিক হয়েছে", "হাতে বসানো লাভ", the helper texts, and the report line "এই সাইকেলের লাভ (কোম্পানি ঘোষিত, সেলস থেকে হিসাব করা নয়)".
+
+Commit status: committed on `claude/nifty-carson-r2vpby`, merged with `main` (v2.86.4) and pushed to `main` with owner approval (2026-10-19).
+
 ## 2026-10-19 (names and media) - WhatsApp Web chats: names, video/audio, refresh
 
 Reason - owner's screenshots of the Inbox after linking (4,057 chats already in): most chats read "নাম পাওয়া যায়নি", and image/video/audio do not show. Owner: "নামগুলো ঠিক করে দেও এবং ইমেজ/ভিডিও আর অডিও কিন্তু শো করে না। এটাও ঠিক করে দিবে।"
