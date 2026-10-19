@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.88.1] - 2026-10-19
+
 **Release type:** Patch/Fix Update
 
 ### Fixed
@@ -15,7 +17,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - New palette key `secondary_deep` (`StorefrontSetting::themePalette()`), printed as `--storefront-secondary-deep`; no migration. Test: `StorefrontThemeTest::test_light_secondary_colour_keeps_the_footer_surface_dark`.
-
 ## [2.88.0] - 2026-10-19
 
 **Release type:** Minor Feature Update
