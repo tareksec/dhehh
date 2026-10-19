@@ -2,6 +2,26 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-19 - WhatsApp Web bridge: QR code never appeared
+
+Reason - owner deployed the bridge on Coolify; the ERP page showed "Reconnecting" and no QR code. The bridge reported `last_error: "Connection Terminated"`.
+
+What I found:
+- From the Coolify container a WebSocket to `wss://web.whatsapp.com/ws/chat` opened and stayed open, so the network is fine.
+- Baileys trace: the Noise handshake completes, then WhatsApp closes the socket about 2 seconds later (428 "Connection Terminated") before any QR is sent.
+- Reproduced from the cloud session with `7.0.0-rc14` and `6.7.24`, with the pinned and the live WhatsApp Web version. Only the browser identity mattered: Mac OS + Desktop and Windows + Desktop are closed; Ubuntu + Desktop, Baileys + Desktop, and Chrome/Safari identities get a QR in under a second.
+
+What changed:
+- `whatsapp-bridge/src/session.js`: `Browsers.macOS('Desktop')` -> `Browsers.ubuntu('Desktop')` (platform type stays Desktop, `syncFullHistory` and `shouldSyncHistoryMessage` unchanged).
+
+Not verified: a real phone was not linked from the cloud session. Whether the phone still sends the FULL history with the Ubuntu + Desktop identity can only be seen after the owner scans the QR: the "History sync" percentage and the chat/message counts on the WhatsApp Web Login page. If much less than the whole history arrives, tell me and I will try another identity (e.g. Baileys + Desktop).
+
+Still open (not built, owner has not asked): the page shows only "Reconnecting" and the bridge does not log why a connection closed. Logging the close code and showing `last_error` on the page would have made this visible without the Coolify terminal.
+
+Tests: `npm test` in `whatsapp-bridge/` (10 passing). No PHP, Blade or lang change, so the PHP suite is not affected.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7` only; not on `main` (needs the owner's approval).
+
 ## 2026-10-18 (later) - SMS templates follow the BulkSMSBD rules
 
 Owner feedback (Bangla): the SMS templates for the different jobs must follow BulkSMSBD's rules, and the first version did not.

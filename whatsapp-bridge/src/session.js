@@ -112,7 +112,10 @@ export class Session {
       logger: this.logger.child({ module: 'baileys' }, { level: 'warn' }),
       // A "Desktop" browser identity plus accepting every history sync type
       // is what makes WhatsApp send the FULL chat history, not just ~3 months.
-      browser: Browsers.macOS('Desktop'),
+      // The OS name must not be Mac OS or Windows: WhatsApp closes those
+      // "Desktop" logins right after the handshake (428 "Connection
+      // Terminated", no QR code - checked 2026-10-19).
+      browser: Browsers.ubuntu('Desktop'),
       syncFullHistory: true,
       shouldSyncHistoryMessage: () => true,
       markOnlineOnConnect: false,
