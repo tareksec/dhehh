@@ -4,6 +4,10 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.88.0] - 2026-10-19
+
+**Release type:** Minor Feature Update
+
 ### Added
 
 - **AI or team: every chat now shows who answers it, and goes back to the AI on its own** (16_AI_INBOX_CONTROL_PLANE_PLAN.md, phase 1, modelled on AiPraktor). The Inbox's "AI assistant" switch is replaced by an **AI or team** panel: **Take over** (for the company's takeover time), **Keep with the team for** 30 min / 1 hour / 6 hours / No time limit, **Back to AI**, and **Claim** (assign to me). It shows when the chat returns to the AI and, when the AI handed it over, why.
@@ -90,7 +94,6 @@ All notable production changes to Business Dashboard are documented here.
 - Tests: `PracticeModeTest` (12) and `AiPresenceAndCardsTest` (13); `AiSetupChecklistTest` now expects nine steps.
 - `NeedsAttention` writes its sidebar badge as `navigationBadge()` with `HasGuardedNavigationBadge`, the rule `ModuleGuardTest` enforces for every badge.
 - New pages `ScanParcels` (Courier cluster, `sales.update`), `CourierHandoverSheet` (Courier cluster, `sales.view`) and `ToChase` (CRM cluster, `crm.view`; marking needs `crm.manage`); route `courier.handover-sheet` (`CourierHandoverSheetController`) for the print view; `CourierHandoverSheetService` takes bookings of one courier whose `booked_at` falls in the company's day and drops not-booked, pending, cancelled and failed ones. The invoice already prints a Code 128 barcode of the order number (`App\Support\Code128`), which a USB scanner and the camera page both read, so no QR code was added. Tests: `ScanParcelsTest` (6), `CourierHandoverSheetTest` (4).
-
 ## [2.87.2] - 2026-10-19
 
 **Release type:** Patch/Fix Update
