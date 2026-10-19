@@ -12,6 +12,18 @@ All notable production changes to Business Dashboard are documented here.
 
 - `AdminPanelProvider::spaUrlExceptions()` lists `*/admin/reports/export/*` and `*/admin/reports/supplier/*`, so Filament no longer adds `wire:navigate` to those links. Another file link that Filament renders in the panel needs the same exception. Tests: `ReportDownloadLinksTest` (3).
 
+## [2.86.2] - 2026-10-19
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **WhatsApp Web Login (QR) never showed a QR code.** The status stayed on "Reconnecting" because WhatsApp now closes a login that announces itself as the Mac OS or Windows desktop app. The bridge now announces itself as a Linux desktop device (it still asks the phone for the full chat history), and the QR code appears within a second. Redeploy the `whatsapp-bridge` app in Coolify to get the fix.
+
+### Technical Notes
+
+- `whatsapp-bridge/src/session.js`: `Browsers.macOS('Desktop')` → `Browsers.ubuntu('Desktop')`. Checked 2026-10-19 against WhatsApp's servers with Baileys `7.0.0-rc14`: Mac OS + Desktop and Windows + Desktop were closed with 428 "Connection Terminated" after the handshake; Ubuntu + Desktop, Baileys + Desktop, and Chrome/Safari identities received a QR code in under a second. The platform type stays "Desktop" and full-history sync stays on.
+
 ## [2.86.1] - 2026-10-18
 
 **Release type:** Patch/Fix Update
