@@ -99,6 +99,7 @@
                             @if ($status !== 'connected')
                                 <x-filament::button size="sm" wire:click="connect({{ $channel->getKey() }})" icon="heroicon-m-qr-code">{{ __('Show QR code') }}</x-filament::button>
                             @endif
+                            <x-filament::button size="sm" color="gray" wire:click="refreshNames({{ $channel->getKey() }})" icon="heroicon-m-identification">{{ __('Fill missing names') }}</x-filament::button>
                             @if (in_array($status, ['connected', 'qr', 'connecting', 'reconnecting'], true))
                                 <x-filament::button size="sm" color="danger" outlined
                                     wire:click="logout({{ $channel->getKey() }})"

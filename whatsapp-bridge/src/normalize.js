@@ -140,6 +140,28 @@ export function revokedMessageId (message) {
   return null
 }
 
+/**
+ * [lid, jid-with-phone] pairs WhatsApp puts on message keys (remoteJid plus
+ * remoteJidAlt). The address-book/push-name entries of the same history are
+ * keyed by the LID, so these pairs let their names reach the right chat.
+ */
+export function lidPairsFromMessages (messages) {
+  const pairs = []
+
+  for (const msg of messages ?? []) {
+    const jid = msg?.key?.remoteJid
+    const alt = msg?.key?.remoteJidAlt
+
+    if (typeof jid === 'string' && jid.endsWith('@lid') && phoneFromJid(alt)) {
+      pairs.push([jid, alt])
+    } else if (typeof alt === 'string' && alt.endsWith('@lid') && phoneFromJid(jid)) {
+      pairs.push([alt, jid])
+    }
+  }
+
+  return pairs
+}
+
 /** @returns {object|null} null when the message is not archivable. */
 export function normalizeMessage (msg, lidToPhone = new Map()) {
   const key = msg?.key ?? {}

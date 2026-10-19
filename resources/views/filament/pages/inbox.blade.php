@@ -786,14 +786,35 @@
                                                     >
                                                 </a>
                                             @elseif ($mediaUrl = $message->mediaDownloadUrl())
-                                                <x-filament::link
-                                                    :href="$mediaUrl"
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    icon="heroicon-o-paper-clip"
-                                                >
-                                                    Open attachment
-                                                </x-filament::link>
+                                                @if ($message->type === 'video' || str_starts_with((string) $message->media_mime, 'video/'))
+                                                    <video
+                                                        controls
+                                                        playsinline
+                                                        preload="metadata"
+                                                        src="{{ $mediaUrl }}"
+                                                        class="h-auto max-h-72 w-full max-w-full rounded-lg"
+                                                        aria-label="Video attached to this message"
+                                                    ></video>
+                                                @elseif ($message->type === 'audio' || str_starts_with((string) $message->media_mime, 'audio/'))
+                                                    <audio
+                                                        controls
+                                                        preload="none"
+                                                        src="{{ $mediaUrl }}"
+                                                        class="w-64 max-w-full"
+                                                        aria-label="Audio attached to this message"
+                                                    ></audio>
+                                                @else
+                                                    <x-filament::link
+                                                        :href="$mediaUrl"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        icon="heroicon-o-paper-clip"
+                                                    >
+                                                        Open attachment
+                                                    </x-filament::link>
+                                                @endif
+                                            @elseif (in_array($message->type, ['image', 'video', 'audio', 'document', 'sticker'], true) && data_get($message->raw_payload, 'source') === 'whatsapp_web')
+                                                <p class="text-xs italic opacity-70">{{ __('The file is not saved (yet). WhatsApp may no longer share very old media.') }}</p>
                                             @endif
 
                                             @if (filled($message->body))

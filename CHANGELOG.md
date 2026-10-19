@@ -4,6 +4,20 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **WhatsApp Web chats showed "নাম পাওয়া যায়নি" instead of the customer's name.** WhatsApp shares customer names under a hidden ID (LID) while the chat is saved under the phone number, so the names never found their chats. The bridge now learns which number belongs to which hidden ID before it sends the names, and the ERP matches a name by number or by that hidden ID, whether the name or the chat arrives first.
+- **Chats that were already saved without a name get one.** New **Fill missing names** button on CRM → WhatsApp Web Login (it also runs by itself a couple of minutes after the first full history sync finishes). A name entered by staff is never replaced.
+- **Videos and voice messages now play in the Inbox** (video and audio player instead of nothing). A media message whose file could not be saved shows a short note instead of an empty bubble.
+
+### Technical Notes
+
+- `whatsapp-bridge`: `lidPairsFromMessages()` reads LID ↔ phone pairs from message keys (`remoteJid` / `remoteJidAlt`); `Session.learnLids()` runs before contacts are normalized, and `archiveContacts()` asks WhatsApp's LID mapping for any LID still unknown. Redeploy the `whatsapp-bridge` app to get this.
+- `WhatsAppWebArchiveService::upsertContact()` resolves a LID-only name through `whatsapp_contacts.lid`, merges a LID-keyed row's names into the number's row and names chats keyed by number or LID; `storeMessage()` now records the chat's LID on the contact. New `refreshNames()` (re-applies saved names, learns LID ↔ phone from `conversation_messages.raw_payload`) runs in the new `RefreshWhatsAppWebNamesJob`, so a queue worker must run. No migration.
+- Inbox: `<video controls>` / `<audio controls>` for archived media; media is still served by `ConversationMediaController` (no byte-range support yet, so seeking inside long videos and Safari video playback may not work). 4 new lang keys (en + bn). New tests in `WhatsAppWebArchiveTest` (names in both orders, refresh, no overwrite, history trigger, page button, inbox media, media route) and 2 in the bridge's `normalize.test.js`.
+
 ## [2.86.4] - 2026-10-19
 
 **Release type:** Patch/Fix Update

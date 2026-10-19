@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\ImportWhatsAppWebMessagesJob;
+use App\Jobs\RefreshWhatsAppWebNamesJob;
 use App\Jobs\SyncWhatsAppWebContactsJob;
 use App\Models\ConversationChannel;
 use App\Services\CompanyContext;
@@ -137,7 +138,14 @@ class WhatsAppWebWebhookController extends Controller
         $progress = $data['progress'] ?? null;
 
         if (is_numeric($progress) && (float) $progress >= 100) {
+            $firstCompletion = $channel->web_history_synced_at === null;
+
             $channel->forceFill(['web_history_synced_at' => now()])->saveQuietly();
+
+            // Names and chats arrive in separate batches; match them up once the queue has caught up.
+            if ($firstCompletion) {
+                RefreshWhatsAppWebNamesJob::dispatch($channel->getKey())->delay(now()->addMinutes(2));
+            }
         }
     }
 }

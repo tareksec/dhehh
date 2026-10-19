@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\Inbox;
 use App\Filament\Pages\WhatsAppWebLogin;
+use App\Jobs\RefreshWhatsAppWebNamesJob;
 use App\Models\Company;
 use App\Models\Conversation;
 use App\Models\ConversationChannel;
@@ -14,10 +16,12 @@ use App\Models\WhatsAppContact;
 use App\Services\CompanyContext;
 use App\Services\CompanyStorageService;
 use App\Services\Crm\ConversationMessengerService;
+use App\Services\WhatsAppWeb\WhatsAppWebArchiveService;
 use App\Services\WhatsAppWeb\WhatsAppWebSettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -67,12 +71,12 @@ class WhatsAppWebArchiveTest extends TestCase
         ], $body);
     }
 
-    protected function postMedia(string $messageId, string $bytes, ?string $secret = self::SECRET)
+    protected function postMedia(string $messageId, string $bytes, ?string $secret = self::SECRET, string $mime = 'image/jpeg')
     {
         return $this->call('POST', "/webhooks/whatsapp-web/{$this->channel->id}/media", [], [], [], [
             'CONTENT_TYPE' => 'application/octet-stream',
             'HTTP_X_MESSAGE_ID' => $messageId,
-            'HTTP_X_MEDIA_MIME' => 'image/jpeg',
+            'HTTP_X_MEDIA_MIME' => $mime,
             'HTTP_X_FILE_NAME' => '',
             'HTTP_X_BRIDGE_SIGNATURE' => 'sha256='.hash_hmac('sha256', $messageId."\n".$bytes, (string) $secret),
         ], $bytes);
@@ -208,6 +212,161 @@ class WhatsAppWebArchiveTest extends TestCase
         $this->assertSame('image', $message->type);
         $this->assertStringStartsWith($this->company->storageRoot().'/private/', $message->media_path);
         $this->assertSame('jpeg-bytes', app(CompanyStorageService::class)->readPrivate($message->media_path, $this->company));
+    }
+
+    public function test_stored_media_is_served_to_staff_through_the_inbox_media_route(): void
+    {
+        Storage::fake(app(CompanyStorageService::class)->privateDiskName());
+
+        $this->postEvent('messages', ['history' => true, 'messages' => [
+            $this->message('IMG2', ['type' => 'image', 'body' => 'photo', 'media' => ['mime' => 'image/jpeg', 'file_name' => null, 'size' => 10]]),
+        ]])->assertOk();
+        $this->postMedia('IMG2', 'jpeg-bytes')->assertOk();
+
+        $message = ConversationMessage::query()->sole();
+        $this->assertNotNull($message->mediaImageUrl());
+
+        $admin = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($admin)->withSession(['current_company_id' => $this->company->id]);
+
+        $response = $this->get(route('conversation-messages.media', ['message' => $message->getKey()]));
+
+        $response->assertOk();
+        $this->assertSame('jpeg-bytes', $response->streamedContent());
+        $this->assertStringStartsWith('image/jpeg', (string) $response->headers->get('Content-Type'));
+    }
+
+    protected function lidContact(string $lid, string $pushName): array
+    {
+        return ['jid' => $lid, 'lid' => $lid, 'phone' => null, 'name' => null, 'push_name' => $pushName, 'verified_name' => null];
+    }
+
+    public function test_a_name_that_arrives_under_a_lid_reaches_the_chat_when_its_message_arrives_later(): void
+    {
+        $this->postEvent('contacts', ['contacts' => [$this->lidContact('111@lid', 'Karim Uddin')]])->assertOk();
+        $this->postEvent('messages', ['history' => true, 'messages' => [
+            $this->message('L1', ['chat_jid' => '111@lid', 'chat_phone' => '8801711000001', 'push_name' => null]),
+        ]])->assertOk();
+
+        $conversation = Conversation::withoutGlobalScopes()->where('external_contact_id', '8801711000001')->sole();
+        $this->assertSame('Karim Uddin', $conversation->contact_name);
+        $this->assertSame('111@lid', WhatsAppContact::withoutGlobalScopes()->where('phone', '8801711000001')->sole()->lid);
+    }
+
+    public function test_a_name_that_arrives_under_a_lid_reaches_a_chat_archived_before_it(): void
+    {
+        $this->postEvent('messages', ['history' => true, 'messages' => [
+            $this->message('L2', ['chat_jid' => '222@lid', 'chat_phone' => '8801711000002', 'push_name' => null]),
+        ]])->assertOk();
+
+        $conversation = Conversation::withoutGlobalScopes()->where('external_contact_id', '8801711000002')->sole();
+        $this->assertNull($conversation->contact_name);
+
+        $this->postEvent('contacts', ['contacts' => [$this->lidContact('222@lid', 'Nasima Begum')]])->assertOk();
+
+        $this->assertSame('Nasima Begum', $conversation->fresh()->contact_name);
+    }
+
+    public function test_refreshing_names_fills_chats_archived_before_their_names_were_known(): void
+    {
+        $conversation = Conversation::withoutGlobalScopes()->create([
+            'company_id' => $this->company->id,
+            'channel_id' => $this->channel->id,
+            'provider' => 'whatsapp',
+            'external_contact_id' => '8801711000009',
+            'contact_phone' => '8801711000009',
+            'contact_name' => null,
+            'status' => 'open',
+            'ai_enabled' => false,
+        ]);
+        ConversationMessage::query()->create([
+            'conversation_id' => $conversation->id,
+            'direction' => 'incoming',
+            'type' => 'text',
+            'body' => 'দাম কত?',
+            'external_message_id' => 'waweb:'.$this->channel->id.':OLD1',
+            'delivery_status' => 'received',
+            'generated_by' => 'human',
+            'raw_payload' => ['source' => 'whatsapp_web', 'chat_jid' => '777@lid', 'chat_phone' => '8801711000009'],
+            'sent_at' => now(),
+        ]);
+        // What an older bridge saved: a name keyed by the LID alone.
+        WhatsAppContact::withoutGlobalScopes()->create([
+            'company_id' => $this->company->id, 'channel_id' => $this->channel->id, 'jid' => '777@lid', 'lid' => '777@lid', 'push_name' => 'Salma Akter',
+        ]);
+
+        app(CompanyContext::class)->set($this->company);
+        $result = app(WhatsAppWebArchiveService::class)->refreshNames($this->channel);
+
+        $this->assertSame(['linked' => 1, 'named' => 0], $result);
+        $this->assertSame('Salma Akter', $conversation->fresh()->contact_name);
+        $this->assertSame('777@lid', WhatsAppContact::withoutGlobalScopes()->where('phone', '8801711000009')->sole()->lid);
+
+        // A second run changes nothing.
+        $this->assertSame(['linked' => 0, 'named' => 0], app(WhatsAppWebArchiveService::class)->refreshNames($this->channel));
+    }
+
+    public function test_a_real_chat_name_is_never_overwritten_by_a_refresh(): void
+    {
+        $conversation = Conversation::withoutGlobalScopes()->create([
+            'company_id' => $this->company->id, 'channel_id' => $this->channel->id, 'provider' => 'whatsapp',
+            'external_contact_id' => '8801711000010', 'contact_phone' => '8801711000010', 'contact_name' => 'Named by staff', 'status' => 'open', 'ai_enabled' => false,
+        ]);
+        WhatsAppContact::withoutGlobalScopes()->create([
+            'company_id' => $this->company->id, 'channel_id' => $this->channel->id, 'jid' => '8801711000010@s.whatsapp.net', 'phone' => '8801711000010', 'push_name' => 'Someone Else',
+        ]);
+
+        app(CompanyContext::class)->set($this->company);
+        app(WhatsAppWebArchiveService::class)->refreshNames($this->channel);
+
+        $this->assertSame('Named by staff', $conversation->fresh()->contact_name);
+    }
+
+    public function test_the_first_complete_history_sync_queues_one_name_refresh(): void
+    {
+        Queue::fake();
+
+        $this->postEvent('history', ['progress' => 100, 'is_latest' => true, 'messages' => 0])->assertOk();
+        $this->postEvent('history', ['progress' => 100, 'is_latest' => true, 'messages' => 0])->assertOk();
+
+        Queue::assertPushed(RefreshWhatsAppWebNamesJob::class, 1);
+    }
+
+    public function test_the_page_can_start_a_name_refresh(): void
+    {
+        Queue::fake();
+        $this->openPageAsAdminWithBridgeSaved();
+
+        Http::fake(['bridge.test/sessions/*' => Http::response(['id' => 'web-test-session', 'status' => 'connected', 'qr' => null, 'phone' => '8801711000000', 'history_progress' => 100], 200)]);
+
+        Livewire::test(WhatsAppWebLogin::class)
+            ->assertSee('Fill missing names')
+            ->call('refreshNames', $this->channel->id);
+
+        Queue::assertPushed(RefreshWhatsAppWebNamesJob::class, fn (RefreshWhatsAppWebNamesJob $job): bool => $job->channelId === $this->channel->id);
+    }
+
+    public function test_the_inbox_plays_video_and_audio_and_explains_a_file_that_was_not_saved(): void
+    {
+        Storage::fake(app(CompanyStorageService::class)->privateDiskName());
+
+        $this->postEvent('messages', ['history' => true, 'messages' => [
+            $this->message('VID1', ['type' => 'video', 'body' => null, 'media' => ['mime' => 'video/mp4', 'file_name' => null, 'size' => 10]]),
+            $this->message('AUD1', ['type' => 'audio', 'body' => null, 'media' => ['mime' => 'audio/ogg; codecs=opus', 'file_name' => null, 'size' => 10]]),
+            $this->message('DOC1', ['type' => 'document', 'body' => null, 'media' => ['mime' => 'application/pdf', 'file_name' => 'price.pdf', 'size' => 10]]),
+        ]])->assertOk();
+        $this->postMedia('VID1', 'video-bytes', self::SECRET, 'video/mp4')->assertOk();
+        $this->postMedia('AUD1', 'audio-bytes', self::SECRET, 'audio/ogg; codecs=opus')->assertOk();
+
+        $admin = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($admin)->withSession(['current_company_id' => $this->company->id]);
+        app(CompanyContext::class)->set($this->company);
+
+        Livewire::test(Inbox::class)
+            ->call('selectConversation', Conversation::withoutGlobalScopes()->sole()->id)
+            ->assertSeeHtml('<video')
+            ->assertSeeHtml('<audio')
+            ->assertSee('The file is not saved (yet).');
     }
 
     public function test_ban_and_channel_deletion_never_delete_archived_customer_data(): void

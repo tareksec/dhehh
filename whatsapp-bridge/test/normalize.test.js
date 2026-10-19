@@ -3,7 +3,7 @@ import { mkdtemp, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
-import { isPersonalChat, normalizeContact, normalizeMessage, phoneFromJid } from '../src/normalize.js'
+import { isPersonalChat, lidPairsFromMessages, normalizeContact, normalizeMessage, phoneFromJid } from '../src/normalize.js'
 import { Outbox, classifyResponse, sign } from '../src/outbox.js'
 
 const silent = { error () {}, warn () {}, info () {} }
@@ -96,6 +96,35 @@ test('contacts are normalized with phone and names', () => {
     verified_name: null,
   })
   assert.equal(normalizeContact({ id: '1@g.us' }), null)
+})
+
+test('lid and phone pairs are read from message keys in both directions', () => {
+  const pairs = lidPairsFromMessages([
+    { key: { remoteJid: '111@lid', remoteJidAlt: '8801711000001@s.whatsapp.net' } },
+    { key: { remoteJid: '8801711000002@s.whatsapp.net', remoteJidAlt: '222@lid' } },
+    { key: { remoteJid: '333@lid' } },
+    { key: { remoteJid: '120363@g.us', remoteJidAlt: '444@lid' } },
+    null,
+  ])
+
+  assert.deepEqual(pairs, [
+    ['111@lid', '8801711000001@s.whatsapp.net'],
+    ['222@lid', '8801711000002@s.whatsapp.net'],
+  ])
+  assert.deepEqual(lidPairsFromMessages(undefined), [])
+})
+
+test('a push name keyed by lid reaches the phone once the pair is learned', () => {
+  const entry = { id: '111@lid', notify: 'Karim Uddin' }
+
+  assert.equal(normalizeContact(entry, new Map()).phone, null)
+
+  const lidToPhone = new Map(lidPairsFromMessages([{ key: { remoteJid: '111@lid', remoteJidAlt: '8801711000001@s.whatsapp.net' } }]).map(([lid, jid]) => [lid, phoneFromJid(jid)]))
+  const contact = normalizeContact(entry, lidToPhone)
+
+  assert.equal(contact.phone, '8801711000001')
+  assert.equal(contact.jid, '8801711000001@s.whatsapp.net')
+  assert.equal(contact.push_name, 'Karim Uddin')
 })
 
 test('only permanent failures drop queued events', () => {

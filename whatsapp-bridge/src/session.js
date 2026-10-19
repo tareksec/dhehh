@@ -8,7 +8,7 @@ import makeWASocket, {
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import QRCode from 'qrcode'
-import { chunk, isPersonalChat, normalizeContact, normalizeMessage, phoneFromJid } from './normalize.js'
+import { chunk, isPersonalChat, lidPairsFromMessages, normalizeContact, normalizeMessage, phoneFromJid } from './normalize.js'
 import { Outbox, classifyResponse, sign } from './outbox.js'
 
 const MESSAGE_BATCH = 200
@@ -272,9 +272,15 @@ export class Session {
     }
   }
 
+  /** Learns LID -> phone pairs from message keys, before any contact is normalized. */
+  learnLids (messages) {
+    lidPairsFromMessages(messages).forEach(([lid, pn]) => this.rememberLid(lid, pn))
+  }
+
   async onHistory ({ contacts = [], messages = [], lidPnMappings = [], progress, isLatest }) {
     lidPnMappings.forEach((mapping) => this.rememberLid(mapping?.lid, mapping?.pn))
     contacts.forEach((contact) => this.rememberLid(contact.lid ?? (contact.id?.endsWith('@lid') ? contact.id : null), contact.phoneNumber))
+    this.learnLids(messages)
 
     await this.archiveContacts(contacts)
     await this.archiveMessages(messages, true)
@@ -285,6 +291,10 @@ export class Session {
   }
 
   async archiveContacts (contacts) {
+    // Push names and address-book names are keyed by LID; ask WhatsApp for the
+    // phone behind every LID we still do not know, so the name finds its chat.
+    await this.resolveLids([...new Set(contacts.flatMap((contact) => [contact?.id, contact?.lid]).filter((jid) => typeof jid === 'string' && jid.endsWith('@lid')))])
+
     const normalized = contacts.map((contact) => normalizeContact(contact, this.lidToPhone)).filter(Boolean)
 
     for (const batch of chunk(normalized, CONTACT_BATCH)) {
@@ -293,6 +303,7 @@ export class Session {
   }
 
   async archiveMessages (messages, history) {
+    this.learnLids(messages)
     await this.resolveLids([...new Set(messages.map((msg) => msg?.key?.remoteJid).filter((jid) => isPersonalChat(jid) && !msgAlt(messages, jid)))])
 
     const normalized = []

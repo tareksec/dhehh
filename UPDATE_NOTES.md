@@ -2,6 +2,35 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-19 (names and media) - WhatsApp Web chats: names, video/audio, refresh
+
+Reason - owner's screenshots of the Inbox after linking (4,057 chats already in): most chats read "নাম পাওয়া যায়নি", and image/video/audio do not show. Owner: "নামগুলো ঠিক করে দেও এবং ইমেজ/ভিডিও আর অডিও কিন্তু শো করে না। এটাও ঠিক করে দিবে।"
+
+What I found:
+- "নাম পাওয়া যায়নি" is `Conversation::profileDisplayName()` (hardcoded) for a chat with a blank or number-only `contact_name`; the phone number itself was fine (`8801859963681` shown).
+- Names reach the ERP through the bridge's `contacts` events, keyed by LID (WhatsApp's hidden id), while chats are saved under the phone number that comes from each message's `remoteJidAlt`. The bridge never learned LID -> phone from those message keys and normalized contacts BEFORE messages, so a LID-keyed name stayed LID-only and the ERP (which named chats by phone) never matched it.
+- The Inbox only renders images inline; video and audio were just an "Open attachment" link, and a media message without a saved file rendered an empty bubble.
+- ERP serving of a stored image works (new test fetches `conversation-messages.media` and gets the bytes back as image/jpeg), so the broken image in the screenshot is not the ERP's media route on the test disk.
+
+What changed:
+- Bridge: `lidPairsFromMessages`, `Session.learnLids()` (called in `onHistory` and `archiveMessages`, before contacts), `archiveContacts()` resolves unknown LIDs through `signalRepository.lidMapping`.
+- ERP: LID-aware `upsertContact()`, `nameConversations()`, `refreshNames()`, `RefreshWhatsAppWebNamesJob` (queued on the first complete history sync, with a 2-minute delay, and by the new **Fill missing names** button on the WhatsApp Web Login page).
+- Inbox: `<video controls>` and `<audio controls>`; a note for media that was not saved.
+- 4 lang keys (en/bn).
+
+Not verified (needs the owner's data): whether the owner's names were lost this way. I could not read the production database, so I gave the owner a read-only count command (contacts / names / chats without name or phone). After the deploy the owner should open WhatsApp Web Login and press **Fill missing names**; names only exist for chats where WhatsApp shared one (customers who are not saved and have no profile name stay nameless).
+
+Still open:
+- Broken image in the Inbox: cause not found. Asked the owner to right-click the broken image -> Open image in new tab and report what page or error it shows (404, 500, other). Possible causes: bytes that are not a valid image, a storage-disk or domain problem on production.
+- `ConversationMediaController` has no byte-range support, so seeking in long videos and Safari video playback may not work.
+- The `InvestorPortalStaffEntryTest` preview test fails when the random staff name contains an apostrophe (seen once on CI, passed on re-run); not touched.
+
+Needs Bangla review: "Fill missing names" -> "নামহীন চ্যাটে নাম বসান", "Looking up missing names" -> "নাম খোঁজা শুরু হয়েছে", the refresh explanation and "The file is not saved (yet)..." (4 keys), plus "Last error" -> "সর্বশেষ এরর" from the earlier entry.
+
+Tests: bridge `npm test` (17 passing); `WhatsAppWebArchiveTest` (22) and `TranslationParityTest` pass; the new name and media tests fail on the old code and pass on the new.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
+
 ## 2026-10-19 (later) - WhatsApp Web bridge: show why a connection fails, and a switchable device identity
 
 Reason - after the QR fix the QR appears, but scanning it ends on the phone with "Couldn't link device. Try again later." (owner's screenshot). The cause is not known: the bridge logged nothing about why a connection closes and the page only said "Reconnecting". Owner: "উন্নতি দুটো করে দাও" (do both improvements).
