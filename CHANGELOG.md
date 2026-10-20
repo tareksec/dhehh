@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.94.0] - 2026-10-20
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -17,7 +19,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - IMS domain sign-in for every business: `InvestorBusinessSwitchService::imsHostCompany()`, `switchesInSession()`, `hasAccountsElsewhere()`; `attemptCentralLogin()` takes a preferred company. The investor `Login` uses the multi-business path on an IMS domain only in password mode and only when the phone has an active account in another business. `ResolveCompanyFromCentralInvestorSession` opens the chosen business on an IMS domain only when the session's `investor` guard account belongs to it. No migration, no new strings, no settings change. Tests: `InvestorBusinessSwitchTest` (+5, 21).
-
 ## [2.93.0] - 2026-10-20
 
 **Release type:** Minor Feature Update
