@@ -4,9 +4,29 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Maintenance Update (documentation for AI agents; no change to the app)
+**Release type:** Minor Feature Update
+
+### Added
+
+- **One login for all businesses on the investor portal** (`17_IMS_IN_PORTAL_PLAN.md` §5, phase M). Someone with an active investor portal account under the **same phone number** in more than one business is treated as one person:
+  - **Central sign-in address.** A Super Admin sets one address for every business in **Investments → Investor Portal Settings → One sign-in for all businesses** (for example `ims.yourdomain.com`; leave it blank to keep it off). There, investors sign in once with phone and password. Each business's own address keeps working as before. Password reset, SMS code sign-in, partner sign-up and invites stay on each business's own address.
+  - **Switch business** button in the portal's top bar, listing the person's other businesses. On the central address, choosing one opens it in the same session. On a business's own address, it moves the person to the other business's address, already signed in.
+  - **My businesses** page (under *More*, and in the switch menu). It has one card per business, showing capital at work, total invested, profit received, profit still to be paid and commission due, plus the totals. Businesses with different currencies are not added together.
+  - Each business keeps its own account and figures, and a page never shows two businesses at once. A staff preview cannot switch. An account that is disabled, or has no password yet, is never offered.
+
+### Security
+
+- Between two business addresses the switch uses a one-time token. It works for 60 seconds, only once, and only on the portal of the business it was made for. It is refused if either account was disabled after it was made.
+- On the central address, a page opens only for the business chosen in that session, and only with that business's own account. When no business is chosen, nothing company-owned can be read.
+- Every switch is recorded in the audit log (`investor_portal.business_switch_issued`, `investor_portal.business_switched`) and counts as a sign-in. Changing the central address is recorded too (`ims.central_domain_saved`).
 
 ### Technical Notes
+
+- New `InvestorBusinessSwitchService`, `InvestorBusinessSwitchController`, middleware `ResolveCompanyFromCentralInvestorSession` (after `StartSession`, also persistent for Livewire), page `App\Filament\Investor\Pages\MyBusinesses`, `Company::imsCentralHost()` / `isImsCentralHost()` (`app_settings.ims_central_domain`). `RestrictPortalHosts`, `ResolveCompanyFromInvestorPortalDomain`, `Company::hostIsTakenByThePlatform()` and the investor `Login` page know the central host.
+- Routes: `POST investor/switch-business/{company}` (signed in, throttled) and `GET investor/business-entry/{token}` (throttled). Top-bar view `filament/investor/business-switch` (inside `ModuleGuard::run`).
+- The central address may be a new name under a company's own domain (for example `ims.<company domain>`); `Company::centralHostIsTaken()` refuses only a host that already answers (company domain, any portal host, IMS or Next.js domain, a reseller's own domain or store subdomain). Once set, its label is reserved for that company's reseller store subdomains (`Company::reservedResellerSubdomains()`), and it never resolves as a reseller store.
+- No migration. 14 new interface strings in `lang/en.json` / `lang/bn.json`. Tests: `InvestorBusinessSwitchTest` (16).
+- **Deploy:** point the central domain to the server (Cloudflare + Coolify), then fill it in on the settings page.
 
 - **Code map for AI agents** (owner request 2026-10-20): new `CODEBASE_MAP.md` (index) and one file per module in `docs/codebase-map/` (core platform, catalog/inventory, sales/orders/couriers, accounts/finance, Blade storefront, API/integrations, reseller, CRM/messaging, investments/IMS, AI/marketing tools, other apps) with where-to-start files, file tables, routes, main tables and rules. Agents read the index and one module file instead of scanning the repository. Drafted by another agent, then checked against the code: every path exists, every route matches `route:list`, every column appears in a migration; invented migration names, routes and behaviour were removed or corrected. `CLAUDE.md` and `AGENTS.md` now say to read the map first and to update it in the same commit as a structural change.
 

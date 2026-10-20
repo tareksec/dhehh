@@ -14,6 +14,7 @@ use App\Filament\Investor\Pages\Commissions;
 use App\Filament\Investor\Pages\Dashboard;
 use App\Filament\Investor\Pages\Documents;
 use App\Filament\Investor\Pages\Invite;
+use App\Filament\Investor\Pages\MyBusinesses;
 use App\Filament\Investor\Pages\MyInvestments;
 use App\Filament\Investor\Pages\MyInvestors;
 use App\Filament\Investor\Pages\Payouts;
@@ -45,6 +46,7 @@ class PortalNavigation
                 [Feed::class, null, 'heroicon-o-newspaper'],
             ]],
             ['group' => 'More', 'icon' => 'heroicon-o-squares-plus', 'items' => [
+                [MyBusinesses::class, null, 'heroicon-o-building-office-2'],
                 [Projects::class, null, 'heroicon-o-rectangle-stack'],
                 [Notifications::class, null, 'heroicon-o-bell'],
                 [Requests::class, null, 'heroicon-o-inbox-arrow-down'],

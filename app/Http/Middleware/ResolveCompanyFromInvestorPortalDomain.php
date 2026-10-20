@@ -14,6 +14,11 @@ use Symfony\Component\HttpFoundation\Response;
  * (Company::forInvestorPortalHost()) and puts it in CompanyContext, so
  * CompanyScope keeps every query on that company and
  * InvestorPortalAccount::canAccessPanel() refuses another company's login.
+ *
+ * On the central sign-in host (17_IMS_IN_PORTAL_PLAN.md §5) no company is
+ * known yet: the context is closed (every company-owned query returns
+ * nothing) until ResolveCompanyFromCentralInvestorSession, after the session
+ * has started, opens the business the person chose.
  */
 class ResolveCompanyFromInvestorPortalDomain
 {
@@ -22,6 +27,13 @@ class ResolveCompanyFromInvestorPortalDomain
     public function handle(Request $request, Closure $next): Response
     {
         $company = Company::forInvestorPortalHost($request->getHost());
+
+        if (! $company && Company::isImsCentralHost($request->getHost())) {
+            $this->context->none();
+            $request->attributes->set('investor_portal_central', true);
+
+            return $next($request);
+        }
 
         if (! $company) {
             abort(404);

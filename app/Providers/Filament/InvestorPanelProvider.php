@@ -21,6 +21,7 @@ use App\Filament\Investor\Pages\Commissions;
 use App\Filament\Investor\Pages\Dashboard;
 use App\Filament\Investor\Pages\Documents;
 use App\Filament\Investor\Pages\Invite;
+use App\Filament\Investor\Pages\MyBusinesses;
 use App\Filament\Investor\Pages\MyInvestments;
 use App\Filament\Investor\Pages\MyInvestors;
 use App\Filament\Investor\Pages\Payouts;
@@ -29,10 +30,12 @@ use App\Filament\Investor\Pages\Requests;
 use App\Filament\Investor\Pages\Statement;
 use App\Http\Controllers\Ims\ImsPortalFileController;
 use App\Http\Controllers\Ims\ImsPortalStatementController;
+use App\Http\Controllers\InvestorPortal\InvestorBusinessSwitchController;
 use App\Http\Controllers\InvestorPortal\InvestorPortalDocumentController;
 use App\Http\Controllers\InvestorPortal\InvestorPortalLocaleController;
 use App\Http\Controllers\InvestorPortal\InvestorPortalReportController;
 use App\Http\Controllers\InvestorPortal\InvestorPortalStaffEntryController;
+use App\Http\Middleware\ResolveCompanyFromCentralInvestorSession;
 use App\Http\Middleware\ResolveCompanyFromInvestorPortalDomain;
 use App\Http\Middleware\RestrictPortalHosts;
 use App\Http\Middleware\SetInvestorPortalLocale;
@@ -111,6 +114,7 @@ class InvestorPanelProvider extends PanelProvider
             ->darkModeBrandLogo(fn (): ?string => app(CompanySettingsService::class)->darkLogoUrl(fallbackToLight: false, company: $this->portalCompany()))
             ->pages([
                 Dashboard::class,
+                MyBusinesses::class,
                 MyInvestments::class,
                 Statement::class,
                 Payouts::class,
@@ -152,11 +156,14 @@ class InvestorPanelProvider extends PanelProvider
                 Route::get('language/{locale}', InvestorPortalLocaleController::class)->whereIn('locale', SetInvestorPortalLocale::LOCALES)->name('language');
                 // One-time link from the dashboard's "Open investor portal" button.
                 Route::get('staff-entry/{token}', InvestorPortalStaffEntryController::class)->middleware('throttle:20,1')->name('staff-entry');
+                // One person, many businesses (17_IMS_IN_PORTAL_PLAN.md §5): the other business's end of the switcher.
+                Route::get('business-entry/{token}', [InvestorBusinessSwitchController::class, 'enter'])->middleware('throttle:20,1')->name('business-entry');
             })
             ->authenticatedRoutes(function (): void {
                 Route::get('documents/{document}/download', InvestorPortalDocumentController::class)->name('documents.download');
                 Route::get('payouts/{payout}/report', [InvestorPortalReportController::class, 'payout'])->name('reports.payout');
                 Route::get('statement/print', [InvestorPortalReportController::class, 'statement'])->name('reports.statement');
+                Route::post('switch-business/{company}', [InvestorBusinessSwitchController::class, 'switch'])->whereNumber('company')->middleware('throttle:20,1')->name('switch-business');
                 // IMS v2 files, checked against what this investor may see.
                 Route::name('ims.')->prefix('ims')->group(function (): void {
                     Route::get('kyc/{document}', [ImsPortalFileController::class, 'kyc'])->whereNumber('document')->name('kyc');
@@ -168,6 +175,7 @@ class InvestorPanelProvider extends PanelProvider
             })
             ->renderHook(PanelsRenderHook::CONTENT_BEFORE, fn (): View => view('filament.investor.staff-preview-banner'))
             ->renderHook(PanelsRenderHook::BODY_START, fn (): View => view('filament.ims.icon-rail', ['rail' => PortalNavigation::rail()]))
+            ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn (): View => view('filament.investor.business-switch'))
             ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn (): View => view('filament.investor.language-switch'))
             ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_AFTER, fn (): View => view('filament.ims.portal.bell'))
             ->renderHook(PanelsRenderHook::SIMPLE_LAYOUT_START, fn (): View => view('filament.ims.auth-hero', ['panel' => 'investor']))
@@ -182,6 +190,8 @@ class InvestorPanelProvider extends PanelProvider
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
+                // The central sign-in host has no company until the session says which one (17_IMS_IN_PORTAL_PLAN.md §5).
+                ResolveCompanyFromCentralInvestorSession::class,
                 AuthenticateSession::class,
                 SetInvestorPortalLocale::class,
                 ShareErrorsFromSession::class,
@@ -195,6 +205,7 @@ class InvestorPanelProvider extends PanelProvider
             // company would not be resolved there (the reseller portal's bug).
             ->persistentMiddleware([
                 ResolveCompanyFromInvestorPortalDomain::class,
+                ResolveCompanyFromCentralInvestorSession::class,
                 SetInvestorPortalLocale::class,
             ])
             ->authMiddleware([
