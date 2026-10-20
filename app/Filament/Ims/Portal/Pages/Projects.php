@@ -3,17 +3,20 @@
 namespace App\Filament\Ims\Portal\Pages;
 
 use App\Filament\Investor\Concerns\InvestorPortalPage;
-use App\Models\Investment;
+use App\Filament\Investor\Pages\Requests;
 use App\Models\InvestmentProject;
 use App\Models\InvestorGroup;
+use App\Services\InvestorPortfolio;
 use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Support\Collection;
 
 /**
  * The investor's projects and the ones raising money now
- * (IMS-V2/PRD.md FR-35 level 1: a plan raising money is seen by everyone).
+ * (IMS-V2/PRD.md FR-35 level 1: a plan raising money is seen by everyone),
+ * from every company the person invests in, with the company's name
+ * (18_IMS_ALL_COMPANIES_PLAN.md §4). A card of another company opens that
+ * company's page (?business=, OpenLinkedInvestorBusiness).
  */
 class Projects extends Page
 {
@@ -42,23 +45,26 @@ class Projects extends Page
         return __('Projects');
     }
 
-    /** @return Collection<int, InvestmentProject> */
-    public function mine(): Collection
+    /**
+     * Every project the person put money in, from every company they invest
+     * in (18_IMS_ALL_COMPANIES_PLAN.md §4), each with its company's name.
+     *
+     * @return list<array{company: \App\Models\Company, company_name: string, project: InvestmentProject, currency: string, url: string}>
+     */
+    public function mine(): array
     {
-        $ids = Investment::query()->where('investor_id', $this->account()->investor_id)->pluck('project_id')->unique();
-
-        return InvestmentProject::query()->whereIn('id', $ids)->with('group')->orderByDesc('start_date')->orderByDesc('id')->get();
+        return app(InvestorPortfolio::class)->projects($this->account());
     }
 
-    /** @return Collection<int, InvestorGroup> */
-    public function openGroups(): Collection
+    /** @return array{groups: list<array{company: \App\Models\Company, company_name: string, group: InvestorGroup, url: string|null}>, projects: list<array{company: \App\Models\Company, company_name: string, project: InvestmentProject, currency: string, url: string}>} */
+    public function raising(): array
     {
-        return InvestorGroup::query()->where('status', InvestorGroup::STATUS_OPEN)->orderByDesc('id')->get();
+        return app(InvestorPortfolio::class)->raising($this->account(), Requests::canAccess() ? Requests::getUrl() : null);
     }
 
-    /** @return Collection<int, InvestmentProject> */
-    public function openProjects(): Collection
+    /** Whether to name the company on each card: only when the person invests in more than one. */
+    public function showsCompanies(): bool
     {
-        return InvestmentProject::query()->ungrouped()->where('status', 'open')->orderByDesc('id')->get();
+        return app(InvestorPortfolio::class)->spansCompanies($this->account());
     }
 }

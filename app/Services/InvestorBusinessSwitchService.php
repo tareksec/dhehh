@@ -114,6 +114,51 @@ class InvestorBusinessSwitchService
         return $company;
     }
 
+    /**
+     * Finds the person's account for a sign-in step that works by one company
+     * (an SMS code, a password reset): in the open company first, then - on a
+     * shared IMS domain (18_IMS_ALL_COMPANIES_PLAN.md §2) - in every other
+     * company that runs on this domain, lowest id first. $finder runs under
+     * each company's own context; only an account that may enter the portal
+     * of its company is returned.
+     *
+     * @param  callable(): ?InvestorPortalAccount  $finder
+     */
+    public function locateOnImsDomain(callable $finder, ?Request $request = null): ?InvestorPortalAccount
+    {
+        $context = app(CompanyContext::class);
+        $panel = Filament::getPanel('investor');
+        $try = fn (Company $company): ?InvestorPortalAccount => $context->within($company, function () use ($finder, $panel): ?InvestorPortalAccount {
+            $account = $finder();
+
+            return $account instanceof InvestorPortalAccount && $account->canAccessPanel($panel) ? $account : null;
+        });
+
+        $current = $context->company();
+
+        if ($current && ($found = $try($current))) {
+            return $found;
+        }
+
+        $host = $this->imsHostCompany($request);
+
+        if ($host === null) {
+            return null;
+        }
+
+        foreach (Company::query()->where('is_active', true)->orderBy('id')->get() as $company) {
+            if ((int) $company->getKey() === (int) $current?->getKey() || $company->imsHost() !== $host->ims_domain) {
+                continue;
+            }
+
+            if ($found = $try($company)) {
+                return $found;
+            }
+        }
+
+        return null;
+    }
+
     /** Whether this host keeps the chosen business in the session: the central host or an IMS domain. */
     public function switchesInSession(?Request $request = null): bool
     {

@@ -3342,5 +3342,7 @@
     "Open and running projects of every company": "সব কোম্পানির খোলা ও চলমান প্রজেক্ট",
     "No project is open or running": "কোনো প্রজেক্ট খোলা বা চলমান নেই",
     "New investors this month": "এই মাসের নতুন ইনভেস্টর",
-    ":count new investor in all companies|:count new investors in all companies": "সব কোম্পানিতে :count জন নতুন ইনভেস্টর|সব কোম্পানিতে :count জন নতুন ইনভেস্টর"
+    ":count new investor in all companies|:count new investors in all companies": "সব কোম্পানিতে :count জন নতুন ইনভেস্টর|সব কোম্পানিতে :count জন নতুন ইনভেস্টর",
+    "All your companies together": "আপনার সব কোম্পানি মিলিয়ে",
+    "Also at work in :currency: :amount": ":currency-তেও খাটছে: :amount"
 }

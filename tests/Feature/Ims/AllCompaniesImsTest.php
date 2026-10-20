@@ -14,10 +14,11 @@ use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
- * 18_IMS_ALL_COMPANIES_PLAN.md phases A and B: every active company runs on
- * the one IMS domain; links of a company that does not own the domain say
- * which company they are for; the office opens the company the signed-in
- * person chose, and only one they may open.
+ * 18_IMS_ALL_COMPANIES_PLAN.md phases A-D: every active company runs on the
+ * one IMS domain; links of a company that does not own the domain say which
+ * company they are for; the office opens the company the signed-in person
+ * chose, and only one they may open; the All companies page; an investor's
+ * projects and totals from every company.
  */
 class AllCompaniesImsTest extends TestCase
 {
@@ -258,7 +259,124 @@ class AllCompaniesImsTest extends TestCase
         return $investor;
     }
 
-    private function project(Company $company, string $name, Investor $investor, float $amount): void
+    // ---- Phase D: an investor's projects from every company -----------------
+
+    /**
+     * One person (one phone) investing in Owner Co and Other Co, with a running
+     * project in each.
+     *
+     * @return array{owner: InvestorPortalAccount, other: InvestorPortalAccount, ownerProject: \App\Models\InvestmentProject, otherProject: \App\Models\InvestmentProject}
+     */
+    private function personInBothCompanies(): array
+    {
+        $phone = '01711000600';
+        $inOwner = $this->verified($this->investor($this->owner, 'Rahim Both', $phone));
+        $inOther = $this->verified($this->investor($this->other, 'Rahim Both', $phone));
+
+        return [
+            'owner' => $this->portalAccountFor($inOwner),
+            'other' => $this->portalAccountFor($inOther),
+            'ownerProject' => $this->project($this->owner, 'Owner Rice Import', $inOwner, 300000),
+            'otherProject' => $this->project($this->other, 'Other Solar Lot', $inOther, 50000),
+        ];
+    }
+
+    private function portalAccountFor(Investor $investor): InvestorPortalAccount
+    {
+        $account = InvestorPortalAccount::query()->withoutGlobalScopes()->create([
+            'company_id' => $investor->company_id,
+            'investor_id' => $investor->id,
+            'name' => $investor->name,
+            'phone' => $investor->phone,
+            'status' => InvestorPortalAccount::STATUS_ACTIVE,
+        ]);
+        $account->forceFill(['password' => 'a-strong-password-1'])->save();
+
+        return $account;
+    }
+
+    private function signedInAs(InvestorPortalAccount $account): void
+    {
+        $this->actingAs($account, 'investor')->withSession([auth('investor')->getName() => $account->id]);
+    }
+
+    public function test_my_projects_lists_every_company_with_its_name(): void
+    {
+        $person = $this->personInBothCompanies();
+        $this->signedInAs($person['owner']);
+
+        $this->get('http://group-ims.test/investor/projects')
+            ->assertOk()
+            ->assertSee('Owner Rice Import')
+            ->assertSee('Other Solar Lot')
+            ->assertSee('Other Co')
+            ->assertSee('/investor/projects/'.$person['otherProject']->id.'?business='.$this->other->id, false);
+    }
+
+    public function test_a_project_of_another_company_opens_after_checking_the_persons_account_there(): void
+    {
+        $person = $this->personInBothCompanies();
+        $this->signedInAs($person['owner']);
+        $url = 'http://group-ims.test/investor/projects/'.$person['otherProject']->id;
+
+        $this->get($url.'?business='.$this->other->id)->assertRedirect($url);
+        $this->assertSame($person['other']->id, auth('investor')->id(), 'signed in to the person\'s own account in that company');
+
+        $this->get($url)->assertOk()->assertSee('Other Solar Lot');
+        $this->assertSame($this->other->id, app(CompanyContext::class)->id());
+    }
+
+    public function test_a_link_to_a_company_the_person_does_not_invest_in_is_ignored(): void
+    {
+        $person = $this->personInBothCompanies();
+        $third = $this->company('Third Co');
+        $this->signedInAs($person['owner']);
+
+        $this->get('http://group-ims.test/investor/dashboard?business='.$third->id)->assertRedirect('http://group-ims.test/investor/dashboard');
+        $this->assertSame($person['owner']->id, auth('investor')->id());
+
+        // And a project of another company cannot be opened without an account there.
+        $this->get('http://group-ims.test/investor/projects/'.$person['otherProject']->id)->assertNotFound();
+    }
+
+    public function test_the_home_adds_up_every_company_per_currency(): void
+    {
+        $person = $this->personInBothCompanies();
+        $this->signedInAs($person['owner']);
+
+        $totals = app(\App\Services\InvestorPortfolio::class)->summary($person['owner']);
+        $this->assertSame(350000.0, $totals['BDT']['total_invested']);
+
+        $this->get('http://group-ims.test/investor/dashboard')
+            ->assertOk()
+            ->assertSee(__('All your companies together'));
+
+        Company::query()->whereKey($this->other->id)->update(['currency' => 'USD']);
+        $totals = app(\App\Services\InvestorPortfolio::class)->summary($person['owner']);
+        $this->assertSame(['BDT', 'USD'], array_keys($totals), 'never added across currencies');
+        $this->assertSame(300000.0, $totals['BDT']['total_invested']);
+    }
+
+    public function test_a_reset_or_sms_code_on_the_shared_domain_finds_an_account_in_another_company(): void
+    {
+        $inOther = $this->investor($this->other, 'Only Other', '01711000700');
+        $account = $this->portalAccountFor($inOther);
+        $switches = app(\App\Services\InvestorBusinessSwitchService::class);
+        $finder = fn () => app(\App\Services\InvestorPortalAccountService::class)->findByPhone('01711000700');
+
+        app(CompanyContext::class)->set($this->owner);
+        \Filament\Facades\Filament::setCurrentPanel(\Filament\Facades\Filament::getPanel('investor'));
+
+        $found = $switches->locateOnImsDomain($finder, \Illuminate\Http\Request::create('http://group-ims.test/investor/password-reset'));
+        $this->assertSame($account->id, $found?->id);
+        $this->assertSame($this->owner->id, app(CompanyContext::class)->id(), 'the open company is put back');
+
+        // A company with an IMS domain of its own is not searched from here.
+        Company::query()->whereKey($this->other->id)->update(['ims_enabled' => true, 'ims_domain' => 'other-ims.test']);
+        $this->assertNull($switches->locateOnImsDomain($finder, \Illuminate\Http\Request::create('http://group-ims.test/investor/password-reset')));
+    }
+
+    private function project(Company $company, string $name, Investor $investor, float $amount): \App\Models\InvestmentProject
     {
         $project = \App\Models\InvestmentProject::query()->withoutGlobalScopes()->create([
             'company_id' => $company->id,
@@ -281,6 +399,8 @@ class AllCompaniesImsTest extends TestCase
             'invested_at' => now()->toDateString(),
             'status' => \App\Models\Investment::STATUS_ACTIVE,
         ]);
+
+        return $project;
     }
 
     public function test_the_erp_investments_address_opens_the_same_company_in_the_office(): void

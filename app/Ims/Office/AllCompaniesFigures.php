@@ -38,7 +38,7 @@ class AllCompaniesFigures
         $rows = [];
 
         foreach ($companies as $company) {
-            $row = ModuleGuard::run('ims.all-companies.company-'.$company->getKey(), fn (): array => $this->within($company, fn (): array => $this->read($company, $now)));
+            $row = ModuleGuard::run('ims.all-companies.company-'.$company->getKey(), fn (): array => $this->context->within($company, fn (): array => $this->read($company, $now)));
 
             if (is_array($row)) {
                 $rows[] = $row;
@@ -99,33 +99,5 @@ class AllCompaniesFigures
                 ->map(fn (InvestmentProject $project): array => ['project' => $project, 'invested' => (float) $project->totalInvested()])
                 ->all(),
         ];
-    }
-
-    /**
-     * Runs $callback with $company open and puts the page's company back.
-     *
-     * @template T
-     *
-     * @param  callable(): T  $callback
-     * @return T
-     */
-    private function within(Company $company, callable $callback): mixed
-    {
-        $before = $this->context->company();
-        $all = $this->context->isAllCompanies();
-        $none = $this->context->deniesCompanyAccess();
-
-        $this->context->set($company);
-
-        try {
-            return $callback();
-        } finally {
-            match (true) {
-                $all => $this->context->all(),
-                $none => $this->context->none(),
-                $before !== null => $this->context->set($before),
-                default => $this->context->clear(),
-            };
-        }
     }
 }

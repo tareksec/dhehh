@@ -65,7 +65,7 @@
 
     @if ($account->isInvestor())
         @php
-            $summary = $this->portal()->investorSummary($account);
+            $summary = $this->homeSummary();
             $board = $this->board();
             $shares = $this->capitalShares();
             $next = $this->nextPayout();
@@ -81,7 +81,9 @@
                     <div class="ims-card-head">
                         <div class="min-w-0 flex-1">
                             <h2 id="investor-capital" class="ims-card-title">{{ __('Capital at work') }}</h2>
-                            @if ($board['groups']->isNotEmpty())
+                            @if ($this->spansCompanies())
+                                <p class="ims-label" data-ims-all-companies-total>{{ __('All your companies together') }}</p>
+                            @elseif ($board['groups']->isNotEmpty())
                                 <p class="ims-label">{{ __('Across :count groups', ['count' => ImsNumbers::count($board['groups']->count())]) }}</p>
                             @endif
                         </div>
@@ -109,6 +111,10 @@
                             <dd><x-ims.money :amount="$summary['paid_out']" :currency="$currency" /></dd>
                         </div>
                     </dl>
+
+                    @foreach ($this->otherCurrencies() as $otherCurrency => $otherAmount)
+                        <p class="ims-label">{{ __('Also at work in :currency: :amount', ['currency' => $otherCurrency, 'amount' => ImsNumbers::money($otherAmount, $otherCurrency)]) }}</p>
+                    @endforeach
                 </section>
 
                 @if ($quick !== [])

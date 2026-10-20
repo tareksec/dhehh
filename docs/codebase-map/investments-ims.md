@@ -1,5 +1,5 @@
 # Investments & IMS v2
-> Last checked: 2026-10-20, feature/ims-all-companies (plan 18 phases A-C: every company on the one IMS domain, office company picker, All companies page)
+> Last checked: 2026-10-20, feature/ims-all-companies (plan 18 phases A-D: every company on the one IMS domain, office company picker, All companies page, investor projects from every company)
 
 ## What it does
 The Investments & IMS v2 module manages Islamic Mudarabah investment partnerships, syndicated investor pools, commercial project funding, and comprehensive investor relations. Built natively into the application following the retirement of the legacy external IMS, it provides two dedicated Filament 5 panels: the IMS Office back-office panel (`/office`) for investment managers, and the Investor Portal (`/investor`) for self-service investor access. It automates investor onboarding with NID OCR verification, digital agreement acceptance, syndicated investor group lifecycles, and automated daily profit proposals. Additionally, it features an investor transparency feed, scheduled monthly statement generation, capital return queues, bank statement reconciliation, and channel partner commission settlements.
@@ -72,6 +72,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `app/Services/InvestorPortalService.php` | General portal business service resolving company contexts and dashboards. |
 | `app/Services/InvestorPortalAccountService.php` | Manages investor portal credentials, password updates, and phone changes. |
 | `app/Services/ImsOfficeCompanies.php` | Plan 18 §3.1–3.2: which companies a staff member may open in the office (Super Admin / `ims.all_companies` = every company, else their own), the chosen company (session `ims_office_company_id`, link `?office_company=`), `mayEnter()` for `User::canAccessPanel('office')`. |
+| `app/Services/InvestorPortfolio.php` | Plan 18 §4: one person's companies (same phone), projects and raising-money lists from every company, home totals per currency; each read under its own company. |
 | `app/Services/InvestorBusinessSwitchService.php` | One login, many businesses (plan 17 §5): the person's businesses by phone, central-host sign-in, switching (same session on the central host and on an IMS domain, one-time token between other business hosts). |
 | `app/Services/AgreementService.php` | Injects investor and project variables into contract templates and generates PDFs. |
 
@@ -115,6 +116,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `app/Http/Middleware/ResolveCompanyFromInvestorPortalDomain.php` | Binds tenant company context from custom investor portal hostnames; on the central sign-in host it closes the context (`none()`). |
 | `app/Http/Middleware/ResolveCompanyFromCentralInvestorSession.php` | On the central sign-in host, sets the company the person chose (kept in the session); sends business-only pages to sign-in. On an IMS domain, opens the chosen business only while the signed-in account belongs to it. |
 | `app/Http/Middleware/ResolveImsOfficeCompany.php` | After the session starts on `/office`: opens the signed-in staff member's chosen company (`ImsOfficeCompanies::choose()`), or closes the context when they may open none. |
+| `app/Http/Middleware/OpenLinkedInvestorBusiness.php` | Investor portal, after sign-in: `?business=<id>` switches to the person's own account in that company (`switchTo()`), then reopens the page without it. |
 | `app/Http/Middleware/RedirectInvestmentsToImsOffice.php` | Redirects staff visiting legacy investment URLs to the modern `/office` panel. |
 | `app/Http/Middleware/SetImsOfficeLocale.php` | Sets session locale (Bangla/English) for the IMS Office panel. |
 | `app/Http/Middleware/SetInvestorPortalLocale.php` | Sets session locale (Bangla/English) for the Investor Portal. |

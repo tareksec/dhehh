@@ -35,6 +35,7 @@ use App\Http\Controllers\InvestorPortal\InvestorPortalDocumentController;
 use App\Http\Controllers\InvestorPortal\InvestorPortalLocaleController;
 use App\Http\Controllers\InvestorPortal\InvestorPortalReportController;
 use App\Http\Controllers\InvestorPortal\InvestorPortalStaffEntryController;
+use App\Http\Middleware\OpenLinkedInvestorBusiness;
 use App\Http\Middleware\ResolveCompanyFromCentralInvestorSession;
 use App\Http\Middleware\ResolveCompanyFromInvestorPortalDomain;
 use App\Http\Middleware\RestrictPortalHosts;
@@ -214,6 +215,8 @@ class InvestorPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
+                // A combined list's link to another company's page (18_IMS_ALL_COMPANIES_PLAN.md §4).
+                OpenLinkedInvestorBusiness::class,
             ]);
     }
 

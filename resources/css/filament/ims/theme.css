@@ -2070,6 +2070,16 @@ a.ims-group-tile[href]:hover {
     color: var(--ims-ink);
 }
 
+/* Investor portal: the company a project belongs to, as plain text on its card (18_IMS_ALL_COMPANIES_PLAN.md §4). */
+.ims-portal-company {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ims-muted);
+}
+
 /* Small phones: the picker is a list in the menu drawer instead, so the top bar fits. */
 .fi-ims-company-drawer {
     display: none;

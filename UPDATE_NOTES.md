@@ -2,6 +2,22 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-20 - Plan 18 phase D: investor projects from every company
+
+Reason - owner: "ok" after phase C (go on with phase D of `18_IMS_ALL_COMPANIES_PLAN.md`).
+
+What changed:
+- Projects page: every project the person put money in, from every company where the same phone has an active account, one list, each card with the company name (shown only when the person invests in more than one company). "Raising money now" lists every company's open groups and projects.
+- A card of another company links with `?business=<id>`; `OpenLinkedInvestorBusiness` switches the session to the person's own account in that company (the existing checked switch) and opens the page, so the project's photos, reports and forms work under that company. A company without an active account of theirs is ignored.
+- Home balance card: every company added up per currency ("All your companies together"); other currencies on their own line.
+- The phase A gap is closed: "Forgot password?" and the SMS-code sign-in on the shared domain also find an account in another company that runs there.
+- Decided by the rules: a project page opens under its own company (switching the session) instead of reading another company's project from the current one, because its files and buttons are checked per company. The rest of the home (chart, cards, calendar) and Statement / Payouts / Documents / Requests stay per company until phase E, and so does the Switch business button (plan: it goes once phase E is live).
+- Needs Bangla review: "All your companies together", "Also at work in :currency: :amount".
+
+Verified: `AllCompaniesImsTest` 19 passed (5 new). Browser (preview copy, an investor phone with accounts in Main Company and Gadget Items Company): Projects lists both companies' projects with the company names; the Gadget Items project opens under Gadget Items; the home shows "All your companies together" ৳ 6,00,000. Full suite: 2869 passed, 1 skipped, 0 failed; `npm run build` passes.
+
+Commit status: committed and pushed to `feature/ims-all-companies`; not merged into `main`.
+
 ## 2026-10-20 - Plan 18 phase C: "All companies" page in the IMS office
 
 Reason - owner: "ok next phase start kro" (phase C of `18_IMS_ALL_COMPANIES_PLAN.md`).

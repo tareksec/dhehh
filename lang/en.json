@@ -3342,5 +3342,7 @@
     "Open and running projects of every company": "Open and running projects of every company",
     "No project is open or running": "No project is open or running",
     "New investors this month": "New investors this month",
-    ":count new investor in all companies|:count new investors in all companies": ":count new investor in all companies|:count new investors in all companies"
+    ":count new investor in all companies|:count new investors in all companies": ":count new investor in all companies|:count new investors in all companies",
+    "All your companies together": "All your companies together",
+    "Also at work in :currency: :amount": "Also at work in :currency: :amount"
 }
