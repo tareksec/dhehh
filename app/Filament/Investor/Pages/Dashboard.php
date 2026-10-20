@@ -4,10 +4,12 @@ namespace App\Filament\Investor\Pages;
 
 use App\Filament\Investor\Concerns\InvestorPortalPage;
 use App\Services\InvestorPortalCards;
+use App\Support\ImsNumbers;
 use BackedEnum;
 use Carbon\CarbonImmutable;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection as SupportCollection;
 
 /**
@@ -48,9 +50,62 @@ class Dashboard extends Page
         return __('Welcome, :name', ['name' => $this->account()->name]);
     }
 
-    public function getSubheading(): ?string
+    /** "Good morning" + "Welcome back, name", today's date (IMS-V2/DESIGN.md §8.1 home). */
+    public function getHeader(): ?View
     {
-        return CarbonImmutable::now()->translatedFormat('l, d F Y');
+        $hour = (int) CarbonImmutable::now()->format('G');
+
+        return view('filament.ims.welcome-header', [
+            'greeting' => match (true) {
+                $hour >= 5 && $hour < 12 => __('Good morning'),
+                $hour >= 12 && $hour < 17 => __('Good afternoon'),
+                default => __('Good evening'),
+            },
+            'name' => $this->account()->name,
+            'date' => ImsNumbers::date(CarbonImmutable::now()),
+            'action' => null,
+        ]);
+    }
+
+    /**
+     * The round quick buttons under the balance card (DESIGN.md §7
+     * QuickActions): the pages an investor opens most, if allowed.
+     *
+     * @return list<array{label: string, icon: string, url: string}>
+     */
+    public function quickActions(): array
+    {
+        $actions = [];
+
+        foreach ([
+            [Requests::class, __('Add money'), 'heroicon-o-plus'],
+            [Statement::class, __('Statement'), 'heroicon-o-document-text'],
+            [\App\Filament\Ims\Portal\Pages\Projects::class, __('Projects'), 'heroicon-o-rectangle-stack'],
+            [\App\Filament\Ims\Portal\Pages\Support::class, __('Support'), 'heroicon-o-chat-bubble-left-right'],
+        ] as [$page, $label, $icon]) {
+            if ($page::canAccess()) {
+                $actions[] = ['label' => $label, 'icon' => $icon, 'url' => $page::getUrl()];
+            }
+        }
+
+        return $actions;
+    }
+
+    /** @return list<array{label: string, long: string, value: float}> */
+    public function profitBars(): array
+    {
+        $bars = [];
+
+        foreach ($this->portal()->monthlyProfit($this->account()) as $month => $amount) {
+            $date = CarbonImmutable::createFromFormat('!Y-m', $month)->locale(app()->getLocale());
+            $bars[] = [
+                'label' => ImsNumbers::digits($date->translatedFormat('M')),
+                'long' => ImsNumbers::digits($date->translatedFormat('F Y')),
+                'value' => (float) $amount,
+            ];
+        }
+
+        return $bars;
     }
 
     /** @var array{groups: SupportCollection<int, array<string, mixed>>, legacy: SupportCollection<int, array<string, mixed>>}|null */

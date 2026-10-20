@@ -70,14 +70,15 @@ class WebsiteApiKeysTable extends Component implements HasActions, HasSchemas, H
                     ->maxLength(255),
                 Select::make('scope')
                     ->label(__('Key type'))
-                    ->options(fn (): array => array_map(fn (string $label): string => __($label), CompanyApiKey::SCOPES))
+                    ->options(fn (): array => array_map(fn (string $scope): string => __(CompanyApiKey::SCOPES[$scope]), array_combine(CompanyApiKey::CREATABLE_SCOPES, CompanyApiKey::CREATABLE_SCOPES)))
                     ->default(CompanyApiKey::SCOPE_WEBSITE)
+                    ->in(CompanyApiKey::CREATABLE_SCOPES)
                     ->required()
-                    ->native(false)
-                    ->helperText(__('A "Data sync" or "Investor sync" key only reads data (for IMS). A "Website" key is for the website API.')),
+                    ->native(false),
             ])
             ->action(function (array $data): void {
-                [, $token] = CompanyApiKey::generate($this->company(), $data['label'] ?? null, Auth::id(), $data['scope'] ?? CompanyApiKey::SCOPE_WEBSITE);
+                $scope = in_array($data['scope'] ?? null, CompanyApiKey::CREATABLE_SCOPES, true) ? $data['scope'] : CompanyApiKey::SCOPE_WEBSITE;
+                [, $token] = CompanyApiKey::generate($this->company(), $data['label'] ?? null, Auth::id(), $scope);
 
                 Notification::make()
                     ->title('API key generated — copy it now')

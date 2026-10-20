@@ -9,6 +9,7 @@ use App\Models\StorefrontSetting;
 use App\Services\Meta\MetaGraphService;
 use App\Support\PhoneLinks;
 use Illuminate\Contracts\Mail\Mailer;
+use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -171,6 +172,21 @@ class StorefrontNotificationService
     {
         return $this->mailConfigured($setting)
             || ! in_array(config('mail.default'), ['log', 'array', null, ''], true);
+    }
+
+    /** Any mail through the company's own SMTP when it has one (IMS v2 notifications). */
+    public function sendMailable(StorefrontSetting $setting, string $email, Mailable $mail): bool
+    {
+        try {
+            $mailer = $this->mailConfigured($setting) ? $this->companyMailer($setting) : Mail::mailer();
+            $mailer->to($email)->send($mail);
+
+            return true;
+        } catch (\Throwable $exception) {
+            Log::warning('Company email failed', ['error' => $exception->getMessage(), 'mail' => $mail::class]);
+
+            return false;
+        }
     }
 
     public function sendResellerPasswordResetEmail(StorefrontSetting $setting, string $email, string $companyName, string $url, int $minutes): bool

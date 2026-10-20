@@ -16,6 +16,151 @@ The real fix is in Coolify (not in the repo): Persistent Storage -> Volume Mount
 
 Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
 
+## 2026-10-20 - Code map for AI agents
+
+Reason - owner: new sessions and other agents should not re-scan the whole codebase every time (token cost); a map should say where everything is, and be kept up to date.
+
+What changed:
+- New `CODEBASE_MAP.md` (root index) and `docs/codebase-map/*.md` (11 module files). Written by Gemini from a brief, then checked here with scripts: all file paths exist; all routes match `php artisan route:list`; all table columns appear in migrations. Fixed in the check: 26 wrong route URIs and 15 wrong route names (first pass), many invented column names (first pass), 110 invented migration file names and 40 migration name patterns that matched nothing, wrong Android printing and WhatsApp outbox descriptions, cluster folders that are files, `file:///` links made relative.
+- `CLAUDE.md` (new "Code map" section) and `AGENTS.md`: read the map first; update it in the same commit as a structural change.
+- No code, migration or language change.
+
+Not checked line by line: the wording of every "Rules that matter" item (samples were correct). The code wins when the map disagrees.
+
+Commit status: committed and pushed to `feature/codebase-map`, merged into `main` on owner approval (2026-10-20).
+
+## 2026-10-19 - IMS becomes the investor portal; phase R: exchange rates and foreign-currency costs
+
+Owner (in Bangla): IMS will not be a separate stack; the built-in investor portal is converted into the IMS, and everything set up for IMS must be integrated into the portal. Asked which IMS parts the portal lacks, the owner chose all three — one login across businesses, profit worked out from ERP data, USD/RMB rates and foreign-currency costs — and chose "keep the feed code, never create the keys".
+
+What changed:
+- **Plan:** new `17_IMS_IN_PORTAL_PLAN.md` — what each IMS setup becomes, the design of the three pieces, six owner questions. The "IMS reports a payout" intake (task 13) is cancelled: the portal and the ERP are one system.
+- **Phase R (built):** **Investments → Exchange Rates** (USD, RMB; BDT for one unit; one per currency per day; typed by staff, nothing fetched). Project cost items can be entered in BDT, USD or RMB with cost date, original amount and rate; the rate is filled from the newest one on or before the date and can be changed; the BDT amount is `round(original × rate, 2)`, set by the model, so the settlement and all reports are unchanged. Old costs are BDT and untouched.
+- `docs/api/ims-sync-api.md` carries a "not in use" banner. The private handover page (artifact) is out of date; do not share it.
+
+Not built (waiting for the owner): phase M (one login, many businesses — Q1–Q3); see §7 of the plan. Phase P (profit helper) is covered by IMS v2's *Profit proposals* on `main`.
+
+**Merge with `main` (2026-10-20, IMS v2 / v2.89.0):** conflicts only in `UPDATE_NOTES.md`, `docs/api/ims-sync-api.md` (took `main`'s "turned off" version), `lang/en.json` and `lang/bn.json` (both sides kept, no duplicate key); no code conflict. `main` deleted the sync feeds, so the plan no longer says the feed code stays. After the merge the exchange-rate page was added to the IMS office panel and menu (Tools), because with IMS on the ERP's Investments pages redirect to the office. `npm run build` is needed for the IMS theme (28 IMS tests fail on a stale local build, not because of the merge).
+
+Verified: `ExchangeRateTest` 13 and `ExchangeRatesInOfficeTest` 2 passed; mutations (form amount kept; rate from the next day; office registration removed) each made them fail. Full suite on the merged state: 2817 passed, 2 skipped, 0 failed.
+
+Deploy: `php artisan migrate --force` (new table `exchange_rates`; new columns on `project_cost_items`).
+
+Decisions I made that you may want to change: (1) the currencies are USD and RMB (shown as CNY) only; adding one is a line in `ExchangeRate::CURRENCIES` plus its label; (2) rates are typed by staff, per company; (3) only project cost items take a foreign currency — purchases and shipment costs are still BDT.
+
+Needs Bangla review: the 19 new strings in `lang/bn.json` — "এক্সচেঞ্জ রেট", "রেট (১ ইউনিটের জন্য টাকা)", "টাকায় অঙ্ক (হিসাব করা)", "মূল অঙ্ক", "খরচের তারিখ", "রেটের তারিখ", the currency names and the rate-on-file messages.
+
+Commit status: committed and pushed to `claude/nifty-carson-r2vpby` (not `main`).
+
+## 2026-10-20 - IMS v2: `main` (v2.88.1) merged into `feature/ims-v2`
+
+Reason - GitHub showed the branch in conflict with `main` (CHANGELOG.md, UPDATE_NOTES.md, lang/en.json, lang/bn.json).
+
+What changed: both sides kept. CHANGELOG keeps IMS v2 under [Unreleased] above the released 2.87.1–2.88.1 entries; UPDATE_NOTES keeps both sets of entries; the language files keep both blocks of new keys, with the one key added on both sides ("Question", same wording) kept once. No code conflicts.
+
+Commit status: merge committed and pushed to `feature/ims-v2`; not on `main`.
+
+## 2026-10-20 - IMS v2: brief for the VPS AI agent, and the first push
+
+Reason - owner: push the IMS v2 work now, and before that explain to the owner's AI agent (which has the VPS access) everything it has to do to put IMS on its separate domain — the owner will not do the VPS work themselves.
+
+What changed:
+- New `IMS-V2/VPS-AGENT-BRIEF.md` (English, for the agent, with a one-line Bangla note for the owner); `IMS-V2/GO-LIVE.md` step 3 points to it.
+- All IMS v2 work of 2026-10-19 (entries below) is committed and pushed in this commit.
+
+Left out of the commit on purpose: `.claude/launch.json` (local preview path in a temp folder) and `setup-github-access.ps1` (local one-time git helper).
+
+Commit status: committed and pushed to `feature/ims-v2` (owner said "push", 2026-10-20); not on `main` — merging needs the owner's approval, after the database backup in the brief.
+
+## 2026-10-19 - IMS v2: old sync API off, e-mail password reset, go-live checklist
+
+Reason - owner, after asking what is left of the investment work: "আগে পুরনো sync API বন্ধ, ইমেইলে পাসওয়ার্ড রিসেট আর চালু করার চেকলিস্ট করে দাও।"
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+- `/api/v1/sync/*` and `/api/v1/sync/investor/*` removed (404); no new sync keys; old keys listed as "turned off".
+- Investor portal "Forgot password?": choose SMS or e-mail; the e-mail code lives 10 minutes.
+- `IMS-V2/GO-LIVE.md`: the step-by-step list for switching IMS v2 on.
+
+Decisions you may want to change:
+1. The sync code was **deleted**, not just hidden (old IMS is gone, Q10). It is in git history if ever needed.
+2. E-mail reset sends a **code**, not a link, so the page stays the same for SMS and e-mail. The old IMS used a 1-hour link; here the code lives 10 minutes.
+3. If two investors share one e-mail address, neither gets a code by e-mail (they can use SMS).
+4. Channel partners have no e-mail on their record, so they reset by SMS only.
+
+Needs Bangla review: the 11 new keys ("SMS-এ", "ইমেইলে", "কোডটা কীভাবে পাঠাব?", the reset e-mail lines, "ডেটা সিংক (পুরনো IMS, বন্ধ)").
+
+Commit status: committed and pushed to `feature/ims-v2` with the 2026-10-20 entry above; not on `main`.
+
+## 2026-10-19 - IMS v2: the look redone to match the reference pictures
+
+Reason - owner, after seeing the first IMS v2 build: the UI did not match the reference images; the office "still looks like the ERP" and the sign-in pages were plain. The first build had only recoloured Filament (and its top-bar rule targeted a Filament 3 class name, so the round header never appeared).
+
+What changed (details in `CHANGELOG.md` [Unreleased] → Changed, "New IMS look"):
+- Both IMS panels: round white top bar with the menu as pills (`topNavigation()`), round search / bell / avatar, icon rail on the left (`filament/ims/icon-rail.blade.php`, items from `OfficeNavigation::rail()` / `PortalNavigation::rail()`).
+- Office home rebuilt as the reference card dashboard (six guarded widgets in a CSS grid, new bar chart, latest money in, payouts + KYC avatars, groups as cards). `OfficeStats` removed.
+- Portal home rebuilt phone-first like the reference phone screens (greeting, green balance card, quick buttons, chart, next payout, projects, recent transactions). Portal menu: Home · Investments · Profit · Statement · Feed · More ▾ (+ Channel partner ▾). `ProfitTrend` widget removed.
+- Sign-in / invite / password pages: green welcome panel + form card (split on wide screens, stacked on phones).
+- Checked in the browser on a throwaway copy of the database (not the demo database): desktop 1280px and phones 360/375px, English and Bangla, no sideways scroll.
+
+Follow-up (owner: icons alone are not beginner-friendly): the rail now **opens with the page names when the mouse is over it**, and a button at its top (**Keep the menu open** / **Close the menu**) pins it open; the page moves aside and the home cards use two columns on laptops. The choice is remembered in the browser. Phones already show names (portal bottom tabs, office menu drawer). Also fixed: the theme did not scan `resources/views/components/ims`, so a hidden "Open settlements" label showed under the chart.
+Follow-up 2 (owner 2026-10-19: top navigation was washed out/unclear, left rail overlapped content):
+- Top navigation buttons restyled with prominent contrast, group icons (`heroicon-o-users`, `heroicon-o-briefcase`, `heroicon-o-banknotes`, `heroicon-o-chat-bubble-left-right`, `heroicon-o-wrench-screwdriver`), and an eye-catching Emerald Green active state (`#16834F`) with white text and glow shadow.
+- Left rail sidebar dynamically expands on mouseover (`mouseenter`) into a comprehensive menu showing full labels alongside icons, and automatically collapses back (`mouseleave`, with 180ms smooth debounce) to the compact icon rail. Both hover-expansion and pinned mode smoothly expand the page container padding (`padding-inline-start: 18.25rem`) alongside the menu with zero overlap on page content. Clicking the top button pins/unpins the menu permanently.
+
+Decisions you may want to change:
+1. The icon rail shows the most used pages only (office: Home, Investors, KYC, Money to confirm · Settlements, Payout Batches, Capital returns · Support, Feed · IMS settings; portal: Home, Investments, Profit, Statement · Feed, Support, Notifications · Profile). Every page is still in the top menu.
+2. On phones under 640px the language switch is on Profile (portal) / in the menu drawer (office), and the office search is hidden there, so the top bar fits.
+3. "Add money" on the portal home opens the Requests page (where "New request" → top-up is).
+4. Sign-in panel wording is interface text (Bangla + English), not admin-managed: "Your investment, clear and simple" / "Run investors, profit and payouts from one place".
+
+Needs Bangla review: the 46 new keys (incl. "মেনু খোলা রাখুন" / "মেনু বন্ধ করুন") at the end of `lang/bn.json` (e.g. "স্বাগতম,", "সর্বশেষ জমা টাকা", "পাঠানো বাকি লভ্যাংশ", "আপনার বিনিয়োগ, সহজ ও পরিষ্কার", "ইনভেস্টর, লাভ আর টাকা পাঠানো — সব এক জায়গা থেকে", the six to-do lines).
+
+Commit status: committed and pushed to `feature/ims-v2` with the 2026-10-20 entry above; not on `main`.
+
+## 2026-10-19 - IMS v2, phases 1–6 (investor system on its own domain)
+
+Reason - owner: "Business-Dashboard\IMS-V2 all implement now." The plan in `IMS-V2/` (PLAN, PRD, TRD, ARCHITECTURE, DESIGN, ROLES, AGENT) is built, phases 1–6. Phase 7 (bringing in the old IMS's data, switching the domain on) waits for the owner (Q10).
+
+What changed (details in `CHANGELOG.md` [Unreleased] and `PROJECT_GUIDE.md` → Investor / Mudarabah Module → IMS v2):
+- Phase 1 — IMS domain (`companies.ims_enabled` / `ims_domain`, set by a Super Admin on Investor Portal Settings), the new **IMS office** panel at `/office`, the green IMS theme for both panels, 14 `ims.*` permissions and the ROLES.md defaults, the office home (to-do list, four numbers, groups now), IMS settings, the ERP's investor menu moving to the office when IMS is on.
+- Phase 2 — invites + 6-digit codes, one to five nominees, KYC (pictures, OCR checklist, review), "waiting for the money" and its confirmation, KYC required for new money while IMS is on, portal password rule (10+, letters and numbers).
+- Phase 3 — project updates, milestones, linked ERP purchases, the investor-safe project summary (three visibility levels), shipments, published reports (frozen, PDF), portal Projects pages.
+- Phase 4 — loss × investor % from capital (also in groups, the next project carries the smaller capital), the capital calculator, optional tenor + maturity, capital returns, profit proposals, frozen cycles, void Super Admin only.
+- Phase 5 — notifier (portal bell always, SMS / e-mail per event), feed, support threads, monthly statement PDF, maturity reminders, morning to-do digest, late-shipment alerts.
+- Phase 6 — bKash / Nagad / Rocket / bank statement matching.
+
+Decisions I made that you may want to change:
+1. **Portal address:** opening the IMS domain goes to the portal at `<domain>/investor` (Filament cannot put a panel at `/` next to the storefront's `/` on the same app). The office is exactly `<domain>/office`. Existing `/investor/...` links keep working.
+2. **The office reuses the ERP's investor screens** (same code, so no double work); their addresses there are `/office/investments/...`. The menu is IMS's own, grouped in plain words.
+3. **IMS rules apply once IMS is switched on for a company** (KYC needed for new money, the KYC banner, the ERP menu moving). Before that, the ERP and the current portal behave as now — except the owner's new **loss rule**, **void = Super Admin only** and the **role defaults**, which apply everywhere at once.
+4. **Same product in two projects' purchases (TRD §4.4, still the owner's open question):** such sales are left out of the automatic figures and the office is told to enter that profit by hand. Nothing is guessed.
+5. **"Accept the figures"** on a profit proposal writes each linked purchase's landed cost as one cost line of the project (so the settlement's cost matches the proposal), then runs the normal Calculate & Settle with the worked-out sales.
+6. A deposit can be confirmed only while its group is Open, and a group cannot start while a deposit is still waiting for money.
+7. "Freeze" stops changes to the frozen project's own cost lines and linked purchases; ERP sales and purchases themselves are not locked (the settled figures never change anyway).
+8. The ERP's Investments menu shows two links when IMS is on: the IMS office, and IMS domain settings (that page stays in the ERP so IMS can be switched off again).
+
+Also fixed during verification: `Company::imsColumnsExist()` cached its answer for the whole process, so a request without the `companies` table crashed (seen in `SecurityHardeningTest` in the full run); it now checks the table every time. `InvestorPortalOnboardingTest` and `InvestorPortalStaffEntryTest` use an Accountant as the "no permission" user (a Manager now has `investments.settle` / `portal_manage`).
+
+Completed work from `IMS-V2/HANDOFF.md` (Antigravity, 2026-10-19):
+- **Task 1 (Screen check & responsive styling):**
+  - Updated `resources/css/filament/ims/theme.css`: language switcher buttons (`.fi-investor-language a`, `.fi-ims-language a`) increased from 2.5rem to 2.75rem (44px) to fulfill touch target requirements (≥ 44px).
+  - Added text wrapping rules (`overflow-wrap: anywhere; word-break: break-word;`) for cards, balance cards, todo items, timelines, definition lists, and article paragraphs to prevent layout breakages on 360px screens with long Bangla text.
+  - Added horizontal overflow prevention (`max-width: 100vw; overflow-x: clip;`) across layout containers.
+  - Added `break-all` to feed URLs in `resources/views/filament/ims/portal/feed.blade.php` and `break-words` in `resources/views/filament/ims/portal/support.blade.php`.
+  - Rebuilt assets via `npm run build` cleanly (17.45s).
+- **Task 2 (Bangla translation refinement):**
+  - Reviewed and naturalized translations in `lang/bn.json` following `DESIGN.md` §2 rules (plain, jargon-free Bangla).
+  - Changed awkward phrases: e.g., "টাকা তোলা চলছে" → "তহবিল সংগ্রহ চলছে / বিনিয়োগ সংগ্রহ চলছে"; "সেটেলমেন্ট" → "লাভ-ক্ষতির হিসাব / লভ্যাংশ বণ্টন"; "payout" → "লভ্যাংশ পরিশোধ"; "রিসিভ ভাউচার বুক" → "জমা ভাউচার তৈরি"; "খাটতে থাকা মূলধন" → "সক্রিয় মূলধন"; "টাকা আসা-যাওয়া হয়নি" → "কোনো লেনদেন হয়নি"; "আজ আপনার জন্য কোনো কাজ অপেক্ষায় নেই" → "আজ আপনার জন্য কোনো কাজ বাকি নেই"; "পোর্টালে ইনভাইট" → "আমন্ত্রণ লিংক পাঠানো"; "একটা সেলফি (আপনার মুখ পরিষ্কার)" → "একটি সেলফি (যাতে আপনার মুখ পরিষ্কার দেখা যায়)"; "একটা শিপমেন্ট দেরি করছে" → "একটি শিপমেন্ট আসতে দেরি হচ্ছে".
+  - Verified `php artisan test tests/Unit/TranslationParityTest.php`: 2 tests, 11698 assertions passed with 100% parity.
+- **Task 3 (Tesseract OCR build configuration):**
+  - Updated `nixpacks.toml`: added `[phases.setup]` with `aptPkgs = ["...", "tesseract-ocr", "tesseract-ocr-ben"]`, keeping auto-detected packages intact and `[start]` untouched.
+  - Updated `docs/deployment.md`: added section `## IMS v2: KYC OCR (Tesseract)` explaining the Nixpacks apt configuration, Coolify redeployment instructions, container verification via `tesseract --list-langs`, and fallback behavior.
+
+Deploy: `php artisan migrate --force`; a queue worker must run; Nixpacks build automatically installs `tesseract-ocr` and `tesseract-ocr-ben` on deployment. Then: Cloudflare A records for the domain and `www`, add both to the app's Domains in Coolify, and set the domain in Investor Portal Settings (Super Admin). Turn on "Investors may join with an office invite" in the office's IMS settings when ready, and write the IMS SMS texts in SMS Templates → IMS news.
+
+Still open (owner's questions in `IMS-V2/AGENT.md` §7): sales of one product across two projects; the old IMS's data (phase 7 waits for owner Q10 answer); 2FA for office admins.
+
+
 ## 2026-10-19 (mp-footer) - Marketplace Pro: unreadable footer and top bar
 
 Reason - owner's screenshot ("blade থিমের ui বাজে হয়েছে"): grey footer with near-invisible text, grey top bar, white header over a dark page. Cause: the top bar and footer used the admin secondary colour (mixed 72% with black) as background with fixed light text, so a light secondary gave low contrast.

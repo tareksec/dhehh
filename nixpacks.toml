@@ -3,6 +3,10 @@ NIXPACKS_NODE_VERSION = "22"
 NIXPACKS_PHP_ROOT_DIR = "/app/public"
 NIXPACKS_PHP_FALLBACK_PATH = "/index.php"
 
+[phases.setup]
+aptPkgs = ["...", "tesseract-ocr", "tesseract-ocr-ben"]
+
+
 # `php artisan deploy:migrate` (see App\Console\Commands\DeployMigrate) is
 # run automatically via Coolify's own "Post-deployment Command" setting for
 # this application (Configuration -> Advanced), NOT from a [start] override

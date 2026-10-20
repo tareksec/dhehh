@@ -9,6 +9,7 @@ use App\Services\AgreementService;
 use App\Services\CompanyContext;
 use App\Services\CompanyStorageService;
 use App\Services\InvestorOnboardingService;
+use App\Support\ImsPassword;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use Filament\Auth\Http\Responses\Contracts\RegistrationResponse;
 use Filament\Auth\Pages\Register as BaseRegister;
@@ -22,7 +23,6 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
-use Illuminate\Validation\Rules\Password;
 use Livewire\Attributes\Url;
 
 /**
@@ -96,7 +96,7 @@ class Register extends BaseRegister
                 $this->upload('nominee_nid_files', __('Nominee NID / passport copy'))->maxFiles(2),
             ]),
             Section::make(__('Password'))->schema([
-                TextInput::make('password')->label(__('Password'))->password()->revealable()->autocomplete('new-password')->required()->rule(Password::default())->same('passwordConfirmation'),
+                TextInput::make('password')->label(__('Password'))->password()->revealable()->autocomplete('new-password')->required()->rule(ImsPassword::rule())->same('passwordConfirmation'),
                 TextInput::make('passwordConfirmation')->label(__('Confirm password'))->password()->revealable()->autocomplete('new-password')->required()->dehydrated(false),
             ]),
             Checkbox::make('accept_agreement')

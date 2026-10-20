@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\SettlementPayout;
 use App\Services\CompanyStorageService;
 use App\Services\Investment\PayoutProofService;
+use App\Support\ImsPanelLinks;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
@@ -74,7 +75,7 @@ final class PayoutProofAction
             ->label(__('Screenshot'))
             ->boolean()
             ->state(fn ($record): bool => (bool) $resolve($record)?->hasPaymentProof())
-            ->url(fn ($record): ?string => ($document = $resolve($record)?->paymentProof()) ? route('investment-documents.download', $document) : null)
+            ->url(fn ($record): ?string => ($document = $resolve($record)?->paymentProof()) ? ImsPanelLinks::route('investment-documents.download', $document) : null)
             ->openUrlInNewTab();
     }
 

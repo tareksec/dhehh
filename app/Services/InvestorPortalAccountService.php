@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Mail\ImsMessage;
 use App\Models\ChannelPartner;
 use App\Models\Company;
 use App\Models\Investor;
@@ -33,6 +34,9 @@ class InvestorPortalAccountService
     public const CODE_VALID_MINUTES = 1;
 
     public const CODE_MAX_ATTEMPTS = 5;
+
+    /** A reset code sent by e-mail lives longer than the SMS one, as e-mail can be slow. */
+    public const EMAIL_CODE_VALID_MINUTES = 10;
 
     public function __construct(
         protected StorefrontNotificationService $notifications,
@@ -120,7 +124,7 @@ class InvestorPortalAccountService
 
     protected function assertPortalIsOn(Company $company): void
     {
-        if (! $company->investor_portal_enabled || $company->investorPortalHost() === null) {
+        if (! $company->investorPortalIsOn() || $company->investorPortalHost() === null) {
             throw ValidationException::withMessages(['portal' => __('Turn the investor portal on in Investor Portal Settings first.')]);
         }
     }
@@ -218,6 +222,82 @@ class InvestorPortalAccountService
         $phone = Phone::normalize($phone);
 
         return $phone === '' ? null : InvestorPortalAccount::query()->where('phone', $phone)->first();
+    }
+
+    /**
+     * A sign-in candidate by the e-mail address on the investor's record (case
+     * does not matter). Only when exactly one account in this company has it,
+     * so a shared address never resets the wrong person's password.
+     */
+    public function findByEmail(string $email): ?InvestorPortalAccount
+    {
+        $email = mb_strtolower(trim($email));
+
+        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return null;
+        }
+
+        $accounts = InvestorPortalAccount::query()
+            ->whereHas('investor', fn ($query) => $query->whereRaw('LOWER(email) = ?', [$email]))
+            ->limit(2)->get();
+
+        return $accounts->count() === 1 ? $accounts->first() : null;
+    }
+
+    /** Whether an e-mail for this company would really be sent (its SMTP, or the server's mailer). */
+    public function emailAvailable(?Company $company): bool
+    {
+        $setting = $company ? StorefrontSetting::primaryFor((int) $company->getKey()) : null;
+
+        return $setting !== null && $this->notifications->emailDeliveryAvailable($setting);
+    }
+
+    /**
+     * Sends a password-reset code by e-mail to the address on the investor's
+     * record (IMS-V2/PLAN.md §4ক "SMS + e-mail"). Same code store and rules as
+     * the SMS code, but it lives EMAIL_CODE_VALID_MINUTES because e-mail can
+     * take a while. Within a minute of the last send, the code already sent
+     * is kept, so a double tap never sends two e-mails.
+     */
+    public function sendResetCodeByEmail(InvestorPortalAccount $account): bool
+    {
+        if ($account->otp_sent_at?->isAfter(now()->subMinute()) && $account->otp_expires_at?->isFuture()) {
+            return true;
+        }
+
+        $company = Company::query()->find($account->company_id);
+        $email = trim((string) $account->investor?->email);
+        $setting = $company ? StorefrontSetting::primaryFor((int) $company->getKey()) : null;
+
+        if ($company === null || $setting === null || $email === '') {
+            return false;
+        }
+
+        $code = (string) random_int(100000, 999999);
+
+        $account->forceFill([
+            'otp_code_hash' => Hash::make($code),
+            'otp_expires_at' => now()->addMinutes(self::EMAIL_CODE_VALID_MINUTES),
+            'otp_sent_at' => now(),
+            'otp_attempts' => 0,
+        ])->save();
+
+        $sent = $this->notifications->sendMailable($setting, $email, new ImsMessage(
+            (string) $company->name,
+            __('Reset your password'),
+            [
+                __('Your password reset code is :code. It works for :minutes minutes and only once.', ['code' => $code, 'minutes' => self::EMAIL_CODE_VALID_MINUTES]),
+                __('If you did not ask for this, you can ignore this e-mail. Your password stays the same.'),
+            ],
+        ));
+
+        if (! $sent) {
+            $this->clearCode($account);
+        }
+
+        $this->audit->record('investor_portal.code_sent', $account, null, ['purpose' => 'reset', 'channel' => 'email', 'sent' => $sent]);
+
+        return $sent;
     }
 
     /**

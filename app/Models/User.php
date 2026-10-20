@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\ValidatesEmailAddress;
+use App\Services\CompanyContext;
 use App\Support\AppDeployment;
 use App\Support\AppRelease;
 use Database\Factories\UserFactory;
@@ -124,7 +125,21 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->is_active !== false;
+        if ($this->is_active === false) {
+            return false;
+        }
+
+        // The IMS office (IMS-V2/ROLES.md): staff with the office permission
+        // who work for the company whose IMS domain this is.
+        if ($panel->getId() === 'office') {
+            $company = app(CompanyContext::class)->company();
+
+            return $company !== null
+                && $this->hasPermission('ims.office.access')
+                && ($this->isSuperAdmin() || $this->companies()->where('companies.id', $company->getKey())->exists());
+        }
+
+        return true;
     }
 
     public const ROLES = [
@@ -168,6 +183,18 @@ class User extends Authenticatable implements FilamentUser
             'finance.dashboard',
             'investments.view',
             'investments.manage',
+            // IMS v2 defaults for a manager (IMS-V2/ROLES.md §3.3).
+            'investments.settle',
+            'investments.portal_manage',
+            'investments.payout_batch_approve',
+            'ims.office.access',
+            'ims.kyc.review',
+            'ims.investments.confirm',
+            'ims.proposals.approve',
+            'ims.updates.manage',
+            'ims.feed.write',
+            'ims.feed.moderate',
+            'ims.support.reply',
             'marketing.view',
             'marketing.create',
             'marketing.update',
@@ -225,6 +252,12 @@ class User extends Authenticatable implements FilamentUser
             'fund_transfer.create',
             'finance.dashboard',
             'investments.view',
+            // IMS v2 defaults for an accountant (IMS-V2/ROLES.md §3.3): money in
+            // and out, never confirming an investment or sharing out profit.
+            'investments.payout_batch_create',
+            'ims.office.access',
+            'ims.capital_returns.manage',
+            'ims.reconcile',
             'notifications.orders',
             'notifications.order_status',
         ],
@@ -276,6 +309,20 @@ class User extends Authenticatable implements FilamentUser
         'investments.portal_manage' => 'Investments: Manage Investor Portal Access',
         'investments.payout_batch_create' => 'Investments: Make Payout Batches',
         'investments.payout_batch_approve' => 'Investments: Approve Payout Batches',
+        'ims.office.access' => 'IMS: Open the IMS Office',
+        'ims.kyc.review' => 'IMS: Approve or Reject KYC',
+        'ims.investments.confirm' => 'IMS: Confirm Money Received (make an investment active)',
+        'ims.proposals.approve' => 'IMS: Approve or Dismiss Profit Proposals',
+        'ims.settlement.void' => 'IMS: Void a Settlement',
+        'ims.capital_returns.manage' => 'IMS: Return Capital and Void Returns',
+        'ims.updates.manage' => 'IMS: Project Updates, Milestones and Reports',
+        'ims.feed.write' => 'IMS: Post to the Feed',
+        'ims.feed.moderate' => 'IMS: Moderate the Feed (comments, who saw a post)',
+        'ims.support.reply' => 'IMS: Reply to Support Threads',
+        'ims.reconcile' => 'IMS: Import and Match Bank / bKash Statements',
+        'ims.settings.manage' => 'IMS: Settings (notifications, sign-up switch, reminders)',
+        'ims.money_rules.manage' => 'IMS: Change Investor and Partner Profit %',
+        'ims.domain.manage' => 'IMS: Set the IMS Domain',
         'marketing.view' => 'Marketing/Ads: View',
         'marketing.create' => 'Marketing/Ads: Create',
         'marketing.update' => 'Marketing/Ads: Update',

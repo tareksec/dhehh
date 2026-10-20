@@ -5,6 +5,7 @@ namespace App\Filament\Actions;
 use App\Models\ChannelPartner;
 use App\Models\Company;
 use App\Models\Investor;
+use App\Support\ImsPanelLinks;
 use Filament\Actions\Action;
 use Filament\Support\Icons\Heroicon;
 
@@ -24,7 +25,7 @@ class InvestorPortalOpenAction
             ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
             ->color('gray')
             ->tooltip(__('Opens the investor portal in a new tab, signed in as this person. You can look at everything but change nothing.'))
-            ->url(fn (Investor|ChannelPartner $record): string => route($record instanceof Investor ? 'investor-portal.open-investor' : 'investor-portal.open-partner', [$record->getKey()]))
+            ->url(fn (Investor|ChannelPartner $record): string => ImsPanelLinks::route($record instanceof Investor ? 'investor-portal.open-investor' : 'investor-portal.open-partner', [$record->getKey()]))
             ->openUrlInNewTab()
             ->visible(fn (Investor|ChannelPartner $record): bool => (auth()->user()?->hasPermission('investments.portal_manage') ?? false)
                 && Company::query()->find($record->company_id)?->investorPortalHost() !== null);

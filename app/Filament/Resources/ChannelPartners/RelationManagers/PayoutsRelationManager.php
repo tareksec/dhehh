@@ -3,8 +3,8 @@
 namespace App\Filament\Resources\ChannelPartners\RelationManagers;
 
 use App\Filament\Resources\ProjectSettlements\ProjectSettlementResource;
-use App\Filament\Resources\Vouchers\VoucherResource;
 use App\Models\ChannelPartnerPayout;
+use App\Support\ImsPanelLinks;
 use Filament\Actions\Action;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
@@ -48,7 +48,7 @@ class PayoutsRelationManager extends RelationManager
                 TextColumn::make('voucher.voucher_number')
                     ->label(__('Voucher'))
                     ->placeholder('-')
-                    ->url(fn (ChannelPartnerPayout $record): ?string => $record->voucher_id ? VoucherResource::getUrl('view', ['record' => $record->voucher_id]) : null),
+                    ->url(fn (ChannelPartnerPayout $record): ?string => $record->voucher_id ? ImsPanelLinks::voucher($record->voucher_id) : null),
             ])
             ->recordActions([
                 Action::make('settlement')

@@ -130,6 +130,56 @@ class InvestmentProject extends Model
         return $this->hasMany(Investment::class, 'project_id');
     }
 
+    /**
+     * ERP purchases whose goods this project paid for (IMS-V2/PRD.md FR-44 a):
+     * their sales and costs are worked out for the profit proposal. The
+     * older single `purchase_id` stays as it is.
+     */
+    public function linkedPurchases()
+    {
+        return $this->belongsToMany(Purchase::class, 'investment_project_purchases', 'project_id', 'purchase_id')
+            ->withPivot('company_id')
+            ->withTimestamps();
+    }
+
+    public function updates()
+    {
+        return $this->hasMany(ProjectUpdate::class, 'project_id');
+    }
+
+    public function milestones()
+    {
+        return $this->hasMany(ProjectMilestone::class, 'project_id')->orderBy('sort')->orderBy('id');
+    }
+
+    public function reports()
+    {
+        return $this->hasMany(ProjectReport::class, 'project_id');
+    }
+
+    public function profitProposals()
+    {
+        return $this->hasMany(ProfitProposal::class, 'project_id');
+    }
+
+    /** Every purchase tied to the project: the linked ones and the older single one. */
+    public function allPurchaseIds(): array
+    {
+        return collect($this->linkedPurchases()->pluck('purchases.id')->all())
+            ->push($this->purchase_id)
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /** True once the project's settlement is fully paid: its costs are frozen (PRD FR-47). */
+    public function isFrozen(): bool
+    {
+        return (bool) $this->settlement()->whereNotNull('locked_at')->exists();
+    }
+
     public function costItems()
     {
         return $this->hasMany(ProjectCostItem::class, 'project_id');
@@ -159,7 +209,8 @@ class InvestmentProject extends Model
 
     public function totalInvested(): float
     {
-        return (float) $this->investments()->sum('amount');
+        // Money still waiting to be confirmed (IMS v2 "pending") is not invested yet.
+        return (float) $this->investments()->where('status', '!=', Investment::STATUS_PENDING)->sum('amount');
     }
 
     /**

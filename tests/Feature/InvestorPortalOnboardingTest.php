@@ -279,7 +279,8 @@ class InvestorPortalOnboardingTest extends TestCase
 
         $request = $service->create($accountA, InvestorRequest::TYPE_REINVEST, ['settlement_payout_id' => $payoutA->id, 'election' => 'partial_reinvest', 'amount' => 10000, 'next_project_id' => $next->id]);
 
-        $manager = User::factory()->create(['role' => 'manager']);
+        // An accountant has no investments.settle (a manager now does, IMS-V2/ROLES.md §3.3).
+        $manager = User::factory()->create(['role' => 'accountant']);
         try {
             $service->approve($request, $manager);
             $this->fail('A user without investments.settle approved a payout choice.');

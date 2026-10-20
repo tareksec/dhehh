@@ -2,6 +2,11 @@
 
 These rules are mandatory for any AI agent working in this repository.
 
+## Code map (owner request 2026-10-20)
+
+- To find code, read `CODEBASE_MAP.md` first, then open only the module file in `docs/codebase-map/` for the area you work on, instead of scanning the repository. Skip the map when the task already names the files to change. The code wins when the map disagrees — fix the map.
+- A change that adds, moves or removes a model, service, panel page, route, job, command or table updates the matching `docs/codebase-map/*.md` file (and its "Last checked" line) in the same commit.
+
 ## Release notes are part of every commit
 
 - **Before any `git commit` / `git push`, write the release note first.** Add or update the entry in `CHANGELOG.md` describing the change (follow `docs/release-policy.md`: categorize as major, minor, patch, security, hotfix, or maintenance, with Added/Fixed/Security/Technical Notes sections). A commit without a matching CHANGELOG entry is not allowed.

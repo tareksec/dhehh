@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Ims\Settings\ImsSettings;
 use App\Models\Order;
 use App\Models\SmsTemplate;
 use App\Models\StorefrontSetting;
@@ -33,6 +34,28 @@ class SmsTemplateService
     public const GROUP_CODE = 'code';
 
     public const GROUP_PROJECT = 'investor_project';
+
+    /** IMS v2 news to investors (App\Ims\Notifications\ImsNotifier). */
+    public const GROUP_IMS = 'ims';
+
+    /** The one-time code that confirms an IMS invite (code format, built-in wording). */
+    public const OTP_IMS_INVITE = 'otp.ims_invite';
+
+    /** Suggested wording for the IMS news (plain English, one SMS, no link, no single quotation mark). */
+    public const SUGGESTED_IMS = [
+        'investment_confirmed' => 'Dear :name, we received your investment of Tk :amount. - :company',
+        'profit_shared' => 'Dear :name, your profit of Tk :amount from :project is ready. - :company',
+        'loss_shared' => 'Dear :name, :project closed with a loss. Your share: Tk :amount. Details are in the portal. - :company',
+        'payout_paid' => 'Dear :name, we paid you Tk :amount. - :company',
+        'capital_returned' => 'Dear :name, Tk :amount of your capital has been paid back. - :company',
+        'maturity_near' => 'Dear :name, your investment matures on :date. - :company',
+        'monthly_statement' => 'Dear :name, your statement for :date is ready in the portal. - :company',
+        'project_report' => 'Dear :name, a new report on :project is in the portal. - :company',
+        'project_update' => 'Dear :name, there is news about :project in the portal. - :company',
+        'kyc_decided' => 'Dear :name, your KYC check is done. Please see the portal. - :company',
+        'support_reply' => 'Dear :name, we answered your question in the portal. - :company',
+        'feed_post' => 'Dear :name, there is a new post in the portal. - :company',
+    ];
 
     /** The longest template (3 SMS parts of 160 characters). */
     public const MAX_LENGTH = 480;
@@ -94,6 +117,11 @@ class SmsTemplateService
         return 'order.'.$stage;
     }
 
+    public static function imsKey(string $event): string
+    {
+        return 'ims.'.$event;
+    }
+
     /**
      * Every message, in the order the page shows them.
      *
@@ -141,6 +169,7 @@ class SmsTemplateService
         $definitions[self::RESET_CUSTOMER_PASSWORD] = $this->codeDefinition(__('Password reset code (shop customers and resellers)'), $customerCode, 'Your :company OTP is :code.');
         $definitions[self::OTP_INVESTOR_LOGIN] = $this->codeDefinition(__('Investor login code'), $investorCode, 'Your :portal OTP is :code.');
         $definitions[self::RESET_INVESTOR_PASSWORD] = $this->codeDefinition(__('Investor password reset code'), $investorCode, 'Your :portal OTP is :code.');
+        $definitions[self::OTP_IMS_INVITE] = $this->codeDefinition(__('Code to join IMS with an invite'), $investorCode, 'Your :portal OTP is :code.');
 
         $definitions[self::PROJECT_RUNNING] = [
             'group' => self::GROUP_PROJECT,
@@ -169,6 +198,25 @@ class SmsTemplateService
             'default' => null,
             'suggested' => self::SUGGESTED_PROJECT[self::PROJECT_SETTLED],
         ];
+
+        $ims = [
+            'name' => __('Investor name'),
+            'amount' => __('The amount of this news'),
+            'project' => __('Project name or code'),
+            'date' => __('The date or month of this news'),
+            'company' => __('Company name'),
+        ];
+
+        foreach (ImsSettings::EVENTS as $event => $label) {
+            $definitions[self::imsKey($event)] = [
+                'group' => self::GROUP_IMS,
+                'label' => __($label),
+                'placeholders' => $ims,
+                'required' => [],
+                'default' => null,
+                'suggested' => self::SUGGESTED_IMS[$event] ?? null,
+            ];
+        }
 
         return $definitions;
     }

@@ -1,5 +1,7 @@
 # Project Rules
 
+- **Code map:** read `CODEBASE_MAP.md` first and open only the matching `docs/codebase-map/*.md` file instead of scanning the repository. When your change adds, moves or removes a model, service, page, route, job, command or table, update that map file in the same commit. The code wins when the map disagrees — fix the map.
+
 - **Commit and push finished work to a feature branch without waiting to be asked (owner decision 2026-10-14).** When a piece of work is done — code, tests, `lang/en.json` + `lang/bn.json` keys, `CHANGELOG.md` and `UPDATE_NOTES.md` updated, checks passing — commit it and push it to a feature branch.
   - Name the branch after the session's topic: `feature/<topic>`, lower-case English words joined with hyphens (for example `feature/nextjs-footer-starter`). When one task also touches the website repository (`bhd4232/zamzamint-new-website-theme`, which has no rules file of its own), use the same branch name there and follow these same rules.
   - One topic per branch: follow-up work on the same topic goes to the same branch; an unrelated topic gets a new branch started from `main`. If the session's instructions already designate a branch, use that one instead of inventing another.

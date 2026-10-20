@@ -8,6 +8,7 @@ use App\Models\InvestmentDocument;
 use App\Models\Investor;
 use App\Services\CompanyStorageService;
 use App\Support\CompanyMedia;
+use App\Support\ImsPanelLinks;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -106,7 +107,7 @@ class DocumentsRelationManager extends RelationManager
                 Action::make('download')
                     ->label(__('Download'))
                     ->icon('heroicon-o-arrow-down-tray')
-                    ->url(fn (InvestmentDocument $record): string => route('investment-documents.download', $record))
+                    ->url(fn (InvestmentDocument $record): string => ImsPanelLinks::route('investment-documents.download', $record))
                     ->openUrlInNewTab(),
                 EditAction::make(),
                 DeleteAction::make(),

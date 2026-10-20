@@ -25,7 +25,6 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Livewire;
-use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -294,33 +293,35 @@ class InvestorGroupExitTest extends TestCase
         $this->assertEquals(300000.00, $settlement->payouts()->where('investor_id', $b->id)->value('total_payout'), 'the leaver gets the whole principal back');
     }
 
-    public function test_a_loss_the_investors_bear_is_refused_on_a_group_project_until_the_owner_decides(): void
+    public function test_a_loss_the_investors_bear_on_a_group_project_lowers_the_capital_that_carries_on(): void
     {
-        [$group] = $this->group([200000, 300000]);
+        // Owner (2026-10-19, IMS-V2/PLAN.md Q1): investors bear loss × the investor %
+        // (40%), taken from capital, also in a group; the smaller capital goes on.
+        [$group, $a, $b] = $this->group([200000, 300000]);
         $this->advanceOn($group, '2026-03-01');
         $first = $group->projects()->where('sequence_in_group', 1)->firstOrFail();
+        $second = $group->projects()->where('sequence_in_group', 2)->firstOrFail();
         ProjectCostItem::query()->create(['project_id' => $first->id, 'category' => 'landed_cost', 'label' => 'Goods', 'amount' => 600000]);
 
-        try {
-            app(SettlementService::class)->calculateAndSettle($first->fresh(), 500000, $this->admin->id, acknowledgeUnprovenCosts: true, outcome: 'loss_investor_borne', lossReason: 'Disaster');
-            $this->fail('An investor-borne loss was settled on a group project.');
-        } catch (RuntimeException $exception) {
-            $this->assertStringContainsString('cannot be settled on a group project yet', $exception->getMessage());
-        }
-
-        $this->assertSame(0, ProjectSettlement::query()->count());
-        $this->assertSame('closed', $first->fresh()->status);
-
-        // The settle dialog does not even offer that outcome for a group project.
         Livewire::test(ViewInvestmentProject::class, ['record' => $first->getRouteKey()])
             ->callAction('settle', ['total_revenue' => 500000, 'outcome' => 'loss_investor_borne', 'loss_reason' => 'Disaster', 'acknowledge_unproven_costs' => true])
-            ->assertHasActionErrors(['outcome']);
-        $this->assertSame(0, ProjectSettlement::query()->count());
-
-        Livewire::test(ViewInvestmentProject::class, ['record' => $first->getRouteKey()])
-            ->callAction('settle', ['total_revenue' => 500000, 'outcome' => 'loss_manager_borne', 'loss_reason' => 'Negligence', 'acknowledge_unproven_costs' => true])
             ->assertHasNoActionErrors();
-        $this->assertSame(1, ProjectSettlement::query()->count());
+
+        $settlement = ProjectSettlement::query()->sole();
+        // Loss 1,00,000 × 40% = 40,000, by capital: a 16,000, b 24,000. Nobody leaves, so nothing is paid out.
+        $this->assertEquals(16000, $settlement->payouts()->where('investor_id', $a->id)->value('capital_loss_amount'));
+        $this->assertEquals(24000, $settlement->payouts()->where('investor_id', $b->id)->value('capital_loss_amount'));
+        $this->assertEquals(0, $settlement->payouts()->sum('total_payout'));
+        $this->assertEquals(-60000, $settlement->company_net_amount);
+
+        // Project 2 still carries the old capital until the loss is confirmed.
+        $this->assertSame(500000.0, $second->totalInvested());
+
+        app(SettlementService::class)->confirmSettlement($settlement, $this->admin->id);
+
+        $this->assertEquals(184000, $second->investments()->where('investor_id', $a->id)->value('amount'));
+        $this->assertEquals(276000, $second->investments()->where('investor_id', $b->id)->value('amount'));
+        $this->assertSame(460000.0, $second->fresh()->totalInvested());
     }
 
     // ----------------------------------------------------------- the catch-up
