@@ -2,6 +2,15 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-21 - Plan 18 (phases A-E) merged into main
+
+Owner approval in chat (2026-10-21): "হ্যাঁ, main-এ merge করো".
+
+- `origin/main` had moved by one commit (the v2.94.0 release cut). Merged it into `feature/ims-all-companies` first; the auto-merge put the plan-18 CHANGELOG lines inside `[2.94.0]`, so they were moved back under `[Unreleased]` (the `[2.94.0]` section is now identical to main's).
+- After the merge: release tests, translation parity and `AllCompaniesImsTest` pass (the release cut changed only version strings).
+
+Commit status: `feature/ims-all-companies` merged into `main` and pushed on owner approval (2026-10-21).
+
 ## 2026-10-21 - Plan 18 phase E: combined Statement, Payouts, Documents and Requests
 
 Reason - owner: "all phase done kro" (finish `18_IMS_ALL_COMPANIES_PLAN.md`).
