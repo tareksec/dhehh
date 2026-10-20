@@ -14,13 +14,15 @@ What changed:
 - A staff preview and an applicant cannot switch. Every switch is audited and counts as a sign-in.
 - Plan §3 / §8 and the code map are updated.
 
-Verified: `InvestorBusinessSwitchTest` 15 passed. Full suite: see commit status.
+Verified: `InvestorBusinessSwitchTest` 16 passed. Full suite: 2833 passed, 1 skipped, 0 failed. The commit was also tested alone (without other uncommitted work in the folder): 149 related tests passed.
+
+Not in this commit: another agent's uncommitted IMS dark-mode work in the same folder (`theme.css`, `theme-toggle`, `auth-tools`, `auth-hero`, `ImsOfficePanelProvider`, the dark-mode lines in `InvestorPanelProvider`, one line in the portal dashboard). It was left as it is.
 
 Deploy: point the central domain to the server (Cloudflare + Coolify), then enter it in the settings. No migration.
 
 Needs Bangla review: the 14 new strings — "ব্যবসা বদলান", "আমার সব ব্যবসা", "যে লাভ এখনো পাওয়া বাকি", "এখন খোলা", "এই ব্যবসাটি খুলুন", "সব ব্যবসার জন্য একটাই সাইন-ইন", "কেন্দ্রীয় সাইন-ইন ঠিকানা" and the settings help text and error messages.
 
-Commit status: pending.
+Commit status: committed and pushed to `feature/ims-multi-business` (not `main`; merging to `main` waits for the owner's approval).
 
 ## 2026-10-20 - Code map for AI agents
 
