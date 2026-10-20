@@ -2,6 +2,19 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-20 - Code map for AI agents
+
+Reason - owner: new sessions and other agents should not re-scan the whole codebase every time (token cost); a map should say where everything is, and be kept up to date.
+
+What changed:
+- New `CODEBASE_MAP.md` (root index) and `docs/codebase-map/*.md` (11 module files). Written by Gemini from a brief, then checked here with scripts: all file paths exist; all routes match `php artisan route:list`; all table columns appear in migrations. Fixed in the check: 26 wrong route URIs and 15 wrong route names (first pass), many invented column names (first pass), 110 invented migration file names and 40 migration name patterns that matched nothing, wrong Android printing and WhatsApp outbox descriptions, cluster folders that are files, `file:///` links made relative.
+- `CLAUDE.md` (new "Code map" section) and `AGENTS.md`: read the map first; update it in the same commit as a structural change.
+- No code, migration or language change.
+
+Not checked line by line: the wording of every "Rules that matter" item (samples were correct). The code wins when the map disagrees.
+
+Commit status: committed and pushed to `feature/codebase-map`; not on `main`.
+
 ## 2026-10-20 - IMS v2: `main` (v2.88.1) merged into `feature/ims-v2`
 
 Reason - GitHub showed the branch in conflict with `main` (CHANGELOG.md, UPDATE_NOTES.md, lang/en.json, lang/bn.json).
