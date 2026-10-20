@@ -2,6 +2,84 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-21 - Plan 18 (phases A-E) merged into main
+
+Owner approval in chat (2026-10-21): "হ্যাঁ, main-এ merge করো".
+
+- `origin/main` had moved by one commit (the v2.94.0 release cut). Merged it into `feature/ims-all-companies` first; the auto-merge put the plan-18 CHANGELOG lines inside `[2.94.0]`, so they were moved back under `[Unreleased]` (the `[2.94.0]` section is now identical to main's).
+- After the merge: release tests, translation parity and `AllCompaniesImsTest` pass (the release cut changed only version strings).
+
+Commit status: `feature/ims-all-companies` merged into `main` and pushed on owner approval (2026-10-21).
+
+## 2026-10-21 - Plan 18 phase E: combined Statement, Payouts, Documents and Requests
+
+Reason - owner: "all phase done kro" (finish `18_IMS_ALL_COMPANIES_PLAN.md`).
+
+What changed:
+- Statement, Payouts, Documents and Requests list every company the person invests in, newest first, each line with its company name (only when more than one company) and its own currency; one Project select (empty = all) on each.
+- Rows are read company by company (`InvestorPortfolio`) and shown as array tables; another company's download / report / screenshot links carry `?business=` and open after the account check.
+- New request: the group / project / payout choices come from every company, keyed "<company id>:<key>"; the request is created in that company as the person's own account there; a request mixing companies is refused. Cancel works in the request's own company.
+- Decided by the rules (not removed): the **Switch business** button and **My businesses** page stay. The plan says they go once the combined lists are live, but KYC, Profile, bank accounts, nominees, agreements, Support, the feed, the home chart/cards/calendar and the monthly PDFs are still one company's record each, and the switcher is the only way to reach another company's. They can go when those pages are combined.
+
+Verified: `AllCompaniesImsTest` 24 passed (5 new); portal-related tests pass after updating the portal-page lines of four test files to the new keys (rows "<company id>-<id>", choices "<company id>:g<id>"): InvestorPortalStaffEntryTest, InvestorPortalGroupViewTest, PayoutPaymentProofTest, InvestorGroupMoneyFlowsTest. The first full run found the last three (6 failures, all key changes); fixed. Browser (preview copy, Gadget Items open): Statement, Payouts list Main Company lines with the company name; the Project filter narrows the statement to one project (`?project=1:4`). A console message "Uncaught (in promise) {status: null...}" also appears on the unchanged Profile page, so it is not from this work. Full suite: 2874 passed, 1 skipped, 0 failed; `npm run build` passes.
+
+Commit status: committed and pushed to `feature/ims-all-companies`; not merged into `main`.
+
+## 2026-10-20 - Plan 18 phase D: investor projects from every company
+
+Reason - owner: "ok" after phase C (go on with phase D of `18_IMS_ALL_COMPANIES_PLAN.md`).
+
+What changed:
+- Projects page: every project the person put money in, from every company where the same phone has an active account, one list, each card with the company name (shown only when the person invests in more than one company). "Raising money now" lists every company's open groups and projects.
+- A card of another company links with `?business=<id>`; `OpenLinkedInvestorBusiness` switches the session to the person's own account in that company (the existing checked switch) and opens the page, so the project's photos, reports and forms work under that company. A company without an active account of theirs is ignored.
+- Home balance card: every company added up per currency ("All your companies together"); other currencies on their own line.
+- The phase A gap is closed: "Forgot password?" and the SMS-code sign-in on the shared domain also find an account in another company that runs there.
+- Decided by the rules: a project page opens under its own company (switching the session) instead of reading another company's project from the current one, because its files and buttons are checked per company. The rest of the home (chart, cards, calendar) and Statement / Payouts / Documents / Requests stay per company until phase E, and so does the Switch business button (plan: it goes once phase E is live).
+- Needs Bangla review: "All your companies together", "Also at work in :currency: :amount".
+
+Verified: `AllCompaniesImsTest` 19 passed (5 new). Browser (preview copy, an investor phone with accounts in Main Company and Gadget Items Company): Projects lists both companies' projects with the company names; the Gadget Items project opens under Gadget Items; the home shows "All your companies together" ৳ 6,00,000. Full suite: 2869 passed, 1 skipped, 0 failed; `npm run build` passes.
+
+Commit status: committed and pushed to `feature/ims-all-companies`; not merged into `main`.
+
+## 2026-10-20 - Plan 18 phase C: "All companies" page in the IMS office
+
+Reason - owner: "ok next phase start kro" (phase C of `18_IMS_ALL_COMPANIES_PLAN.md`).
+
+What changed:
+- New office page `/office/all-companies` ("All companies" at the top of the company button / phone menu; only for people who may open more than one company): total money invested and capital at work, profit to pay, waiting for a decision (the existing "What to do today" lines of every company, with the company name), one card per company, every open/running project, new investors this month.
+- Every figure is read company by company under its own context and added up per currency (`AllCompaniesFigures`); the page approves nothing - each line opens the company's own office page (`?office_company=`), where the existing buttons and permissions apply.
+- Decided by the rules: "Total money invested" = confirmed money (active + withdrawn deposits and ungrouped investments); "profit this cycle" on the company card is shown as "Profit paid this month" (no cycle-wide figure exists across groups and projects); the plan's short menu is a row of jump buttons on the page (Waiting, Companies, Projects, New investors), the full menu stays as it is.
+- Needs Bangla review: the 16 new strings (translations added).
+
+Verified: `AllCompaniesImsTest` 14 passed (3 new). Browser (preview copy of the demo data, 5 companies): every section shows real figures (৳ 25,00,000 invested, 6 investments waiting in Main Company, 2 running projects, 3 new investors); phone width one column, no sideways scroll; Bangla page checked. Full suite: 2864 passed, 1 skipped, 0 failed; `npm run build` passes.
+
+Commit status: committed and pushed to `feature/ims-all-companies`; not merged into `main`.
+
+## 2026-10-20 - Plan 18 phases A + B: every company on zamzaminv.app, office company picker
+
+Reason - owner: "start building - 18_IMS_ALL_COMPANIES_PLAN.md". Phases A (one domain for all) and B (office company picker + access rules) are built here; C (All companies home), D (investor projects) and E (combined lists) follow on this branch.
+
+What changed:
+- Phase A: `Company::imsHost()` - every active company uses the group IMS domain (the company with IMS on; lowest id). Invites, join, partner sign-up and staff links carry `?business=<id>`; the link page checks its token against that company. Old per-company investor-portal hosts redirect to the IMS domain. The daily IMS jobs run for every company. The KYC-before-new-money rule and the ERP's Investments redirect now apply to every company (plan §2 "effect to know").
+- Phase B: office company picker (top bar; menu drawer on phones), choice kept in the session and re-checked against the user on every request. Super Admins and roles with the new `ims.all_companies` permission ("office admin", decided: a permission, not a new role, per plan answer 2) open every company; others their own companies. ERP links open the office with that company (`?office_company=`).
+- Decided by the rules (no question): "office admin" is a permission a Super Admin gives a role, because roles are already managed in Settings → Roles; the picker hides itself when the person has one company only.
+
+Known gap (for phase D): on `zamzaminv.app`, "Forgot password?" and the SMS-code sign-in still look only at the domain's own company. An investor whose only account is in another company signs in with phone + password, which works.
+
+Deploy note: nothing to migrate. Once live, every company's investors use `zamzaminv.app`; the KYC rule then applies to new money in every company.
+
+Verified: `AllCompaniesImsTest` 11 passed; IMS + investor portal tests 148 passed. Browser (preview copy of the demo data, 5 companies): office picker lists all five, switching opens the chosen company with its own figures, the choice stays; on a phone the list sits in the menu drawer and the top bar fits (359 px). Full suite: 2861 passed, 1 skipped, 0 failed. `npm run build` passes.
+
+Commit status: committed and pushed to `feature/ims-all-companies`; not merged into `main`.
+
+## 2026-10-20 - Plan: every company in one IMS on zamzaminv.app
+
+Reason - owner (in Bangla): every ERP company comes into the IMS; all IMS work on `zamzaminv.app`, no subdomain; office admins and ERP Super Admins have full access and grant role-based access; very simple UI; investors see projects (with the company name) and a project filter. Plan only, no code.
+
+What changed: new `18_IMS_ALL_COMPANIES_PLAN.md` (phases A–E, answers in §6).
+
+Commit status: committed and pushed to `feature/ims-all-companies`; not merged into `main`.
+
 ## 2026-10-20 - The IMS domain signs in to every business
 
 Reason - owner brief: investors only know `zamzaminv.app` (the IMS domain); the multi-business sign-in worked only on the central address `ims.zamzaminv.app`. Settings could not fix it (the central address may not be the IMS domain, and the IMS domain may not be blank while IMS is on). Do not turn IMS off or change settings; `/office` must keep working.

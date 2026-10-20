@@ -23,13 +23,13 @@ abstract class ImsCompanyCommand extends Command
 
     public function handle(CompanyContext $context): int
     {
+        // Every company on the IMS domain, its own or the group's (18_IMS_ALL_COMPANIES_PLAN.md §2).
         $companies = Company::withoutGlobalScopes()
             ->where('is_active', true)
-            ->where('ims_enabled', true)
-            ->whereNotNull('ims_domain')
             ->when($this->option('company'), fn ($query, $id) => $query->whereKey($id))
             ->orderBy('id')
-            ->get();
+            ->get()
+            ->filter(fn (Company $company): bool => $company->imsIsLive());
 
         foreach ($companies as $company) {
             if (! ImsSettings::jobOn($company, $this->job())) {

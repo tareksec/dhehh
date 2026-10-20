@@ -2,10 +2,10 @@
 
 namespace App\Filament\Investor\Pages;
 
+use App\Filament\Investor\Concerns\CombinedPortalTable;
 use App\Filament\Investor\Concerns\InvestorPortalPage;
 use App\Models\InvestorCycleElection;
-use App\Models\SettlementPayout;
-use App\Services\InvestorPortalCards;
+use App\Services\InvestorPortfolio;
 use App\Support\MoneyFormatter;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -18,10 +18,13 @@ use Filament\Tables\Table;
 
 /**
  * Page 4 of §6.1: each settlement payout (principal + profit) with its
- * status, paid date and reference, and the printable payout report.
+ * status, paid date and reference, and the printable payout report - from
+ * every company the person invests in, with a Project filter
+ * (18_IMS_ALL_COMPANIES_PLAN.md §4).
  */
 class Payouts extends Page implements HasTable
 {
+    use CombinedPortalTable;
     use InteractsWithTable;
     use InvestorPortalPage;
 
@@ -50,25 +53,28 @@ class Payouts extends Page implements HasTable
 
     public function table(Table $table): Table
     {
-        $currency = $this->currency();
+        $money = fn (string $key): \Closure => fn (array $record): string => MoneyFormatter::currency($record[$key], $record['currency']);
 
+        // Every company's payouts in one list (18_IMS_ALL_COMPANIES_PLAN.md §4, phase E).
         return $table
-            ->query(fn () => $this->portal()->payouts($this->account())->with(['settlement.project', 'cycleElection']))
-            ->defaultSort('id', 'desc')
+            ->records(fn (?array $filters, int|string $page, int|string $recordsPerPage) => $this->pageOfRows(
+                app(InvestorPortfolio::class)->payouts($this->account(), $this->chosenProject($filters)),
+                $page,
+                $recordsPerPage,
+            ))
+            ->filters([$this->projectFilter()])
             ->columns([
                 TextColumn::make('project')
                     ->label(__('Project'))
-                    ->state(fn (SettlementPayout $record): string => app(InvestorPortalCards::class)->title($record->settlement?->project))
+                    ->description(fn (array $record): ?string => $this->showsCompanies() ? $record['company_name'] : null)
                     ->wrap(),
-                TextColumn::make('investment_amount')->label(__('Capital'))->formatStateUsing(fn ($state): string => MoneyFormatter::currency($state, $currency))->visibleFrom('md'),
-                TextColumn::make('principal_returned_amount')
+                TextColumn::make('investment_amount')->label(__('Capital'))->state($money('investment_amount'))->visibleFrom('md'),
+                TextColumn::make('principal_returned')
                     ->label(__('Capital returned'))
-                    ->state(fn (SettlementPayout $record): string => $record->principal_returned_amount !== null && (float) $record->principal_returned_amount <= 0
-                        ? __('Stays invested')
-                        : MoneyFormatter::currency($record->principalReturned(), $currency))
+                    ->state(fn (array $record): string => $record['stays_invested'] ? __('Stays invested') : MoneyFormatter::currency($record['principal_returned'], $record['currency']))
                     ->visibleFrom('lg'),
-                TextColumn::make('profit_share_amount')->label(__('Profit share'))->formatStateUsing(fn ($state): string => MoneyFormatter::currency($state, $currency))->visibleFrom('md'),
-                TextColumn::make('total_payout')->label(__('Total'))->formatStateUsing(fn ($state): string => MoneyFormatter::currency($state, $currency))->weight('bold'),
+                TextColumn::make('profit_share_amount')->label(__('Profit share'))->state($money('profit_share_amount'))->visibleFrom('md'),
+                TextColumn::make('total_payout')->label(__('Total'))->state($money('total_payout'))->weight('bold'),
                 TextColumn::make('payment_status')
                     ->label(__('Status'))
                     ->badge()
@@ -76,7 +82,7 @@ class Payouts extends Page implements HasTable
                     ->color(fn (string $state): string => $state === 'paid' ? 'success' : 'warning'),
                 TextColumn::make('paid_at')->label(__('Paid on'))->date('d M Y')->placeholder('-')->visibleFrom('md'),
                 TextColumn::make('payment_reference')->label(__('Reference'))->placeholder('-')->toggleable()->visibleFrom('md'),
-                TextColumn::make('cycleElection.election')
+                TextColumn::make('election')
                     ->label(__('Your choice'))
                     ->formatStateUsing(fn (?string $state): ?string => $state ? __(InvestorCycleElection::ELECTIONS[$state] ?? $state) : null)
                     ->placeholder('-')
@@ -86,12 +92,12 @@ class Payouts extends Page implements HasTable
                 Action::make('paymentProof')
                     ->label(__('Payment screenshot'))
                     ->icon(Heroicon::OutlinedCamera)
-                    ->visible(fn (SettlementPayout $record): bool => $record->payment_status === 'paid' && $record->hasPaymentProof())
-                    ->url(fn (SettlementPayout $record): string => route('filament.investor.documents.download', ['document' => $record->paymentProof()?->getKey()])),
+                    ->visible(fn (array $record): bool => $record['proof_url'] !== null)
+                    ->url(fn (array $record): ?string => $record['proof_url']),
                 Action::make('report')
                     ->label(__('Report'))
                     ->icon(Heroicon::OutlinedPrinter)
-                    ->url(fn (SettlementPayout $record): string => route('filament.investor.reports.payout', ['payout' => $record->getKey()]))
+                    ->url(fn (array $record): string => $record['report_url'])
                     ->openUrlInNewTab(),
             ])
             ->emptyStateHeading(__('No payouts yet.'))

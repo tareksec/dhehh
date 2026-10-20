@@ -442,7 +442,7 @@ class InvestorGroupMoneyFlowsTest extends TestCase
         $account = $this->ownSessionOf($investor);
 
         Livewire::test(Requests::class)
-            ->callAction('new', ['type' => InvestorRequest::TYPE_TOP_UP, 'target' => 'g'.$group->id, 'amount' => 75000, 'payment_method' => 'bank', 'sent_on' => '2026-03-09'])
+            ->callAction('new', ['type' => InvestorRequest::TYPE_TOP_UP, 'target' => $group->company_id.':g'.$group->id, 'amount' => 75000, 'payment_method' => 'bank', 'sent_on' => '2026-03-09'])
             ->assertHasNoActionErrors();
 
         $request = InvestorRequest::query()->where('portal_account_id', $account->id)->sole();
@@ -461,13 +461,13 @@ class InvestorGroupMoneyFlowsTest extends TestCase
         $this->ownSessionOf($investor);
 
         Livewire::test(Requests::class)
-            ->callAction('new', ['type' => InvestorRequest::TYPE_WITHDRAWAL, 'withdrawal_target' => 'g'.$mine->id])
+            ->callAction('new', ['type' => InvestorRequest::TYPE_WITHDRAWAL, 'withdrawal_target' => $mine->company_id.':g'.$mine->id])
             ->assertHasNoActionErrors();
 
         $this->assertSame($mine->id, InvestorRequest::query()->sole()->group_id);
 
         Livewire::test(Requests::class)
-            ->callAction('new', ['type' => InvestorRequest::TYPE_WITHDRAWAL, 'withdrawal_target' => 'g'.$notMine->id])
+            ->callAction('new', ['type' => InvestorRequest::TYPE_WITHDRAWAL, 'withdrawal_target' => $notMine->company_id.':g'.$notMine->id])
             ->assertHasErrors();
     }
 

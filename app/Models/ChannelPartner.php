@@ -74,7 +74,7 @@ class ChannelPartner extends Model
             return null;
         }
 
-        return Company::query()->find($this->company_id)?->investorPortalUrl('register?code='.$this->invite_code);
+        return Company::query()->find($this->company_id)?->investorLinkUrl('register?code='.$this->invite_code);
     }
 
     /** An active partner of the current company whose invite link is on. */

@@ -42,7 +42,7 @@ class Investments extends NavigationCluster
                 NavigationItem::make(__('Investments (IMS office)'))
                     ->icon(static::$navigationIcon)
                     ->sort(static::$navigationSort)
-                    ->url((string) $company->imsUrl('office'), shouldOpenInNewTab: true)
+                    ->url((string) $company->imsOfficeUrl(), shouldOpenInNewTab: true)
                     ->visible(static::canAccess()),
                 NavigationItem::make(__('IMS domain settings'))
                     ->icon('heroicon-o-globe-alt')

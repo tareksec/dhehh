@@ -80,12 +80,13 @@ class DomainRoutingTest extends TestCase
         $this->assertStringStartsWith('http://ims-root.test/investor', (string) $company->investorPortalUrl());
     }
 
-    public function test_staff_of_another_company_cannot_enter_the_office(): void
+    public function test_staff_of_an_inactive_company_cannot_enter_the_office(): void
     {
+        // 18_IMS_ALL_COMPANIES_PLAN.md: staff of any active company open their own company here (AllCompaniesImsTest).
         $this->company();
-        $other = Company::query()->create(['name' => 'Other', 'slug' => 'other-'.uniqid(), 'invoice_prefix' => 'OTH'.random_int(100, 999), 'is_active' => true]);
+        $other = Company::query()->create(['name' => 'Other', 'slug' => 'other-'.uniqid(), 'invoice_prefix' => 'OTH'.random_int(100, 999), 'is_active' => false]);
         $manager = User::factory()->create(['role' => 'manager', 'is_active' => true]);
-        $manager->companies()->attach($other->getKey(), ['role' => 'manager', 'is_default' => true]);
+        $manager->companies()->sync([$other->getKey() => ['role' => 'manager', 'is_default' => true]]);
 
         $this->actingAs($manager)->get('http://ims-root.test/office')->assertForbidden();
     }

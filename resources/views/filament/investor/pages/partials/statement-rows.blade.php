@@ -29,7 +29,7 @@
                 <span class="ims-tx-icon {{ $tone }}" aria-hidden="true"><x-filament::icon :icon="$icon" class="h-5 w-5" /></span>
                 <span class="ims-tx-text">
                     <span class="ims-tx-label">{{ $entry['label'] }}</span>
-                    <span class="ims-tx-meta">{{ $entry['project'] }}</span>
+                    <span class="ims-tx-meta">{{ $entry['project'] }}@if (($named ?? false) && filled($entry['company_name'] ?? null)) · {{ $entry['company_name'] }}@endif</span>
                 </span>
                 <span class="ims-tx-side">
                     <span @class([
@@ -38,9 +38,9 @@
                         'ims-tx-amount-loss' => $entry['type'] === 'loss',
                     ])>
                         @if ($entry['info_amount'] !== null)
-                            <x-ims.money :amount="$entry['info_amount']" :currency="$currency" />
+                            <x-ims.money :amount="$entry['info_amount']" :currency="$entry['currency'] ?? $currency" />
                         @else
-                            <x-ims.money :amount="$entry['amount']" :currency="$currency" :signed="true" />
+                            <x-ims.money :amount="$entry['amount']" :currency="$entry['currency'] ?? $currency" :signed="true" />
                         @endif
                     </span>
                     <span class="ims-tx-meta">{{ \App\Support\ImsNumbers::date($entry['date']) }}</span>

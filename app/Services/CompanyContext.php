@@ -48,6 +48,30 @@ class CompanyContext
         return $this;
     }
 
+    /**
+     * Runs $callback with $company open, then puts the context back exactly as
+     * it was (a company, all, none or cleared).
+     *
+     * @template T
+     *
+     * @param  callable(): T  $callback
+     * @return T
+     */
+    public function within(Company $company, callable $callback): mixed
+    {
+        [$before, $all, $none] = [$this->company, $this->allCompanies, $this->noCompanyAccess];
+
+        $this->set($company);
+
+        try {
+            return $callback();
+        } finally {
+            $this->company = $before;
+            $this->allCompanies = $all;
+            $this->noCompanyAccess = $none;
+        }
+    }
+
     public function company(): ?Company
     {
         return $this->company;

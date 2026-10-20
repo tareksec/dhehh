@@ -23,6 +23,7 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Locked;
 use SensitiveParameter;
 
 /**
@@ -39,6 +40,10 @@ class Login extends BaseLogin
 
     /** The phone a sign-in code was sent to; null until one is sent. */
     public ?string $codePhone = null;
+
+    /** The company of the account the code went to, when it is not the open one (the shared IMS domain). */
+    #[Locked]
+    public ?int $codeCompanyId = null;
 
     public function form(Schema $schema): Schema
     {
@@ -110,8 +115,12 @@ class Login extends BaseLogin
         }
 
         if ($this->mode === 'code') {
-            $account = $accounts->findByPhone((string) $this->codePhone);
-            $valid = $account && $this->isUserAllowedToAccessPanel($account) && $accounts->verifyCode($account, (string) $data['code']);
+            $account = null;
+            $valid = $this->inCodeCompany(function () use ($accounts, $data, &$account): bool {
+                $account = $accounts->findByPhone((string) $this->codePhone);
+
+                return $account && $this->isUserAllowedToAccessPanel($account) && $accounts->verifyCode($account, (string) $data['code']);
+            });
 
             if (! $valid) {
                 throw ValidationException::withMessages(['data.code' => __('That code is invalid or has expired. Please request a new one.')]);
@@ -133,7 +142,7 @@ class Login extends BaseLogin
         Filament::auth()->login($account, (bool) ($data['remember'] ?? false));
         session()->regenerate();
         $accounts->recordLogin($account, request()->ip(), $this->mode);
-        app(LoginGate::class)->rememberDevice(LoginGate::SURFACE_INVESTOR, app(CompanyContext::class)->id(), $account);
+        app(LoginGate::class)->rememberDevice(LoginGate::SURFACE_INVESTOR, (int) $account->company_id, $account);
 
         return app(LoginResponse::class);
     }
@@ -183,9 +192,12 @@ class Login extends BaseLogin
             return;
         }
 
-        $account = $accounts->findByPhone($phone);
+        // On the shared IMS domain the account may be in another company that runs here (18_IMS_ALL_COMPANIES_PLAN.md §2).
+        $account = app(InvestorBusinessSwitchService::class)->locateOnImsDomain(fn () => $accounts->findByPhone($phone));
+        $open = app(CompanyContext::class)->id();
+        $this->codeCompanyId = $account && (int) $account->company_id !== (int) $open ? (int) $account->company_id : null;
 
-        if ($account && $this->isUserAllowedToAccessPanel($account)) {
+        if ($account) {
             $accounts->sendCode($account, 'login');
         }
 
@@ -198,10 +210,19 @@ class Login extends BaseLogin
             ->send();
     }
 
+    /** Runs $callback in the company of the account the sign-in code went to. */
+    protected function inCodeCompany(callable $callback): mixed
+    {
+        $company = $this->codeCompanyId === null ? null : Company::query()->whereKey($this->codeCompanyId)->where('is_active', true)->first();
+
+        return $company === null ? $callback() : app(CompanyContext::class)->within($company, $callback);
+    }
+
     public function useCode(): void
     {
         $this->mode = 'code';
         $this->codePhone = null;
+        $this->codeCompanyId = null;
         $this->resetErrorBag();
     }
 
@@ -209,6 +230,7 @@ class Login extends BaseLogin
     {
         $this->mode = 'password';
         $this->codePhone = null;
+        $this->codeCompanyId = null;
         $this->resetErrorBag();
     }
 

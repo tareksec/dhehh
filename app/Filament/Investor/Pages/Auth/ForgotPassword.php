@@ -3,7 +3,9 @@
 namespace App\Filament\Investor\Pages\Auth;
 
 use App\Models\InvestorPortalAccount;
+use App\Models\Company;
 use App\Services\CompanyContext;
+use App\Services\InvestorBusinessSwitchService;
 use App\Services\InvestorPortalAccountService;
 use App\Support\ImsPassword;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
@@ -17,6 +19,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Locked;
 
 /**
  * "Forgot password?" on the investor portal: a 6-digit code by SMS or by
@@ -37,6 +40,10 @@ class ForgotPassword extends RequestPasswordReset
 
     /** The phone or e-mail the code was sent to; null while the first step is shown. */
     public ?string $sentTo = null;
+
+    /** The company of the account the code went to, when it is not the open one (the shared IMS domain). */
+    #[Locked]
+    public ?int $accountCompanyId = null;
 
     public function getTitle(): string|Htmlable
     {
@@ -154,18 +161,18 @@ class ForgotPassword extends RequestPasswordReset
 
         if ($channel === self::BY_EMAIL) {
             $contact = mb_strtolower(trim((string) ($data['email'] ?? '')));
-            $account = $accounts->findByEmail($contact);
+            $account = $this->locate(fn () => $accounts->findByEmail($contact));
 
-            if ($account && $account->canAccessPanel(Filament::getCurrentOrDefaultPanel())) {
+            if ($account) {
                 $accounts->sendResetCodeByEmail($account);
             }
 
             $message = __('If an investor portal account uses that e-mail address, a reset code has been sent by e-mail.');
         } else {
             $contact = trim((string) ($data['phone'] ?? ''));
-            $account = $accounts->findByPhone($contact);
+            $account = $this->locate(fn () => $accounts->findByPhone($contact));
 
-            if ($account && $account->canAccessPanel(Filament::getCurrentOrDefaultPanel())) {
+            if ($account) {
                 $accounts->sendCode($account, 'reset');
             }
 
@@ -192,13 +199,17 @@ class ForgotPassword extends RequestPasswordReset
 
         $data = $this->form->getState();
         $accounts = app(InvestorPortalAccountService::class);
-        $account = $this->sentBy === self::BY_EMAIL
-            ? $accounts->findByEmail((string) $this->sentTo)
-            : $accounts->findByPhone((string) $this->sentTo);
+        $account = null;
 
-        $reset = $account instanceof InvestorPortalAccount
-            && $account->canAccessPanel(Filament::getCurrentOrDefaultPanel())
-            && $accounts->resetPassword($account, (string) $data['code'], (string) $data['password']);
+        $reset = $this->inAccountCompany(function () use ($accounts, $data, &$account): bool {
+            $account = $this->sentBy === self::BY_EMAIL
+                ? $accounts->findByEmail((string) $this->sentTo)
+                : $accounts->findByPhone((string) $this->sentTo);
+
+            return $account instanceof InvestorPortalAccount
+                && $account->canAccessPanel(Filament::getCurrentOrDefaultPanel())
+                && $accounts->resetPassword($account, (string) $data['code'], (string) $data['password']);
+        });
 
         if (! $reset) {
             throw ValidationException::withMessages([
@@ -215,11 +226,34 @@ class ForgotPassword extends RequestPasswordReset
         $this->redirect(Filament::getUrl());
     }
 
+    /**
+     * The account the code goes to: in the open company, or on the shared IMS
+     * domain in another company that runs there (18_IMS_ALL_COMPANIES_PLAN.md §2),
+     * which is then remembered for the second step.
+     */
+    protected function locate(callable $finder): ?InvestorPortalAccount
+    {
+        $account = app(InvestorBusinessSwitchService::class)->locateOnImsDomain($finder);
+        $open = app(CompanyContext::class)->id();
+        $this->accountCompanyId = $account && (int) $account->company_id !== (int) $open ? (int) $account->company_id : null;
+
+        return $account;
+    }
+
+    /** Runs $callback in the company of the account the code went to. */
+    protected function inAccountCompany(callable $callback): mixed
+    {
+        $company = $this->accountCompanyId === null ? null : Company::query()->whereKey($this->accountCompanyId)->where('is_active', true)->first();
+
+        return $company === null ? $callback() : app(CompanyContext::class)->within($company, $callback);
+    }
+
     /** Back to the first step, e.g. to ask for a new code or use the other way. */
     public function startOver(): void
     {
         $this->sentBy = null;
         $this->sentTo = null;
+        $this->accountCompanyId = null;
         $this->form->fill(['channel' => array_key_first($this->channels()) ?? self::BY_SMS]);
     }
 

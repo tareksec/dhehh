@@ -4,6 +4,7 @@ namespace App\Filament\Investor\Pages;
 
 use App\Filament\Investor\Concerns\InvestorPortalPage;
 use App\Services\InvestorPortalCards;
+use App\Services\InvestorPortfolio;
 use App\Support\ImsNumbers;
 use BackedEnum;
 use Carbon\CarbonImmutable;
@@ -89,6 +90,48 @@ class Dashboard extends Page
         }
 
         return $actions;
+    }
+
+    /** @var array<string, array<string, float>>|null */
+    protected ?array $portfolioCache = null;
+
+    /**
+     * The balance card's figures: for someone who invests in more than one
+     * company, every company added up in this company's currency
+     * (18_IMS_ALL_COMPANIES_PLAN.md §4); otherwise this company's own.
+     *
+     * @return array{capital_at_work: float, total_invested: float, profit_received: float, profit_pending: float, paid_out: float}
+     */
+    public function homeSummary(): array
+    {
+        $totals = $this->portfolioTotals();
+
+        return $totals[$this->currency()] ?? $this->portal()->investorSummary($this->account());
+    }
+
+    /**
+     * Capital at work in the person's other currencies, if any (never added to the main figure).
+     *
+     * @return array<string, float>
+     */
+    public function otherCurrencies(): array
+    {
+        return collect($this->portfolioTotals())
+            ->except($this->currency())
+            ->map(fn (array $sum): float => (float) $sum['capital_at_work'])
+            ->filter(fn (float $amount): bool => $amount > 0)
+            ->all();
+    }
+
+    public function spansCompanies(): bool
+    {
+        return app(InvestorPortfolio::class)->spansCompanies($this->account());
+    }
+
+    /** @return array<string, array<string, float>> */
+    protected function portfolioTotals(): array
+    {
+        return $this->portfolioCache ??= $this->spansCompanies() ? app(InvestorPortfolio::class)->summary($this->account()) : [];
     }
 
     /** @return list<array{label: string, long: string, value: float}> */

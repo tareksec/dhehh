@@ -166,7 +166,7 @@ class CommunicationAndToolsTest extends TestCase
 
         $this->actingAs($admin)->withSession(['current_company_id' => $this->company->id])
             ->get('http://localhost/admin/investments/investors')
-            ->assertRedirect('http://'.$this->company->ims_domain.'/office/investments/investors');
+            ->assertRedirect('http://'.$this->company->ims_domain.'/office/investments/investors?office_company='.$this->company->id);
 
         $this->actingAs($admin)->withSession(['current_company_id' => $this->company->id])
             ->get('http://localhost/admin/investments/investor-portal-settings')

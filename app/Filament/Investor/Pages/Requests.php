@@ -2,13 +2,17 @@
 
 namespace App\Filament\Investor\Pages;
 
+use App\Filament\Investor\Concerns\CombinedPortalTable;
 use App\Filament\Investor\Concerns\InvestorPortalPage;
 use App\Models\Investment;
 use App\Models\InvestorCycleElection;
 use App\Models\InvestorGroupMember;
+use App\Models\InvestorPortalAccount;
 use App\Models\InvestorRequest;
 use App\Models\SettlementPayout;
 use App\Services\Investment\InvestmentTargets;
+use App\Services\CompanyContext;
+use App\Services\InvestorPortfolio;
 use App\Services\InvestorRequestService;
 use App\Support\MoneyFormatter;
 use BackedEnum;
@@ -34,6 +38,7 @@ use Filament\Tables\Table;
  */
 class Requests extends Page implements HasTable
 {
+    use CombinedPortalTable;
     use InteractsWithTable;
     use InvestorPortalPage;
 
@@ -64,6 +69,9 @@ class Requests extends Page implements HasTable
     {
         $currency = $this->currency();
         $isType = fn (string ...$types): \Closure => fn (Get $get): bool => in_array($get('type'), $types, true);
+        $portfolio = app(InvestorPortfolio::class);
+        // Every choice is keyed "<company id>:<key>": the request goes to the company of what was chosen (18_IMS_ALL_COMPANIES_PLAN.md §4).
+        $targets = fn (?int $onlyCompany = null): array => $portfolio->choices($this->account(), fn (): array => app(InvestmentTargets::class)->options(), $onlyCompany);
 
         return [
             Action::make('new')
@@ -84,7 +92,7 @@ class Requests extends Page implements HasTable
                     // Top-up
                     Select::make('target')
                         ->label(__('Group'))
-                        ->options(fn (): array => app(InvestmentTargets::class)->options())
+                        ->options(fn (): array => $targets())
                         ->required()
                         ->visible($isType(InvestorRequest::TYPE_TOP_UP))
                         ->helperText(__('New money joins a group that is still open. A group that has started takes no new members.')),
@@ -97,7 +105,7 @@ class Requests extends Page implements HasTable
                     // Withdrawal notice
                     Select::make('withdrawal_target')
                         ->label(__('Group'))
-                        ->options(fn (): array => $this->withdrawalOptions())
+                        ->options(fn (): array => $portfolio->choices($this->account(), fn (InvestorPortalAccount $account): array => $this->withdrawalOptions($account)))
                         ->required()
                         ->visible($isType(InvestorRequest::TYPE_WITHDRAWAL)),
                     Text::make(__('Under the deed, a withdrawal needs 60 days\' written notice. Once the company accepts this request, the notice runs from the day you sent it.'))->visible($isType(InvestorRequest::TYPE_WITHDRAWAL)),
@@ -105,9 +113,10 @@ class Requests extends Page implements HasTable
                     // Payout choice
                     Select::make('settlement_payout_id')
                         ->label(__('Payout'))
-                        ->options(fn (): array => $this->portal()->payouts($this->account())
+                        ->options(fn (): array => $portfolio->choices($this->account(), fn (InvestorPortalAccount $account): array => $this->portal()->payouts($account)
                             ->where('payment_status', 'pending')->whereDoesntHave('cycleElection')->with('settlement.project')->get()
-                            ->mapWithKeys(fn (SettlementPayout $payout): array => [$payout->getKey() => $this->portal()->projectLabel($payout->settlement?->project).' — '.MoneyFormatter::currency($payout->total_payout, $currency)])->all())
+                            ->mapWithKeys(fn (SettlementPayout $payout): array => [$payout->getKey() => $this->portal()->projectLabel($payout->settlement?->project).' — '.MoneyFormatter::currency($payout->total_payout, app(CompanyContext::class)->company()?->currency ?: $currency)])->all()))
+                        ->live()
                         ->required()
                         ->visible($isType(InvestorRequest::TYPE_REINVEST)),
                     Select::make('election')
@@ -118,7 +127,8 @@ class Requests extends Page implements HasTable
                         ->visible($isType(InvestorRequest::TYPE_REINVEST)),
                     Select::make('next_target')
                         ->label(__('Reinvest into'))
-                        ->options(fn (): array => app(InvestmentTargets::class)->options())
+                        // Reinvested money stays in the payout's company.
+                        ->options(fn (Get $get): array => $targets(InvestorPortfolio::splitChoice($get('settlement_payout_id'))[0] ?? 0))
                         ->required()
                         ->visible(fn (Get $get): bool => $get('type') === InvestorRequest::TYPE_REINVEST && in_array($get('election'), ['reinvest', 'partial_reinvest'], true)),
                     TextInput::make('reinvest_amount')
@@ -144,25 +154,63 @@ class Requests extends Page implements HasTable
                         $data['amount'] = $data['reinvest_amount'] ?? null;
                     }
 
-                    app(InvestorRequestService::class)->create($this->account(), $type, $data);
+                    $this->send($type, $data);
                     Notification::make()->title(__('Request sent. The company will answer here.'))->success()->send();
                 }),
         ];
     }
 
     /**
+     * Sends the request to the company of what was chosen (the group, project
+     * or payout, keyed "<company id>:<key>"), as the person's own account
+     * there (18_IMS_ALL_COMPANIES_PLAN.md §4). A question (no choice) goes to
+     * the open company.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function send(string $type, array $data): void
+    {
+        $main = match ($type) {
+            InvestorRequest::TYPE_TOP_UP, InvestorRequest::TYPE_WITHDRAWAL => 'target',
+            InvestorRequest::TYPE_REINVEST => 'settlement_payout_id',
+            default => null,
+        };
+        $chosen = $main === null ? null : InvestorPortfolio::splitChoice($data[$main] ?? null);
+
+        if ($main === null || $chosen === null) {
+            app(InvestorRequestService::class)->create($this->account(), $type, $data);
+
+            return;
+        }
+
+        [$companyId] = $chosen;
+
+        foreach (['target', 'settlement_payout_id', 'next_target'] as $field) {
+            if (filled($data[$field] ?? null)) {
+                $split = InvestorPortfolio::splitChoice((string) $data[$field]);
+
+                // Every choice in one request belongs to the same company.
+                abort_if($split === null || $split[0] !== $companyId, 422);
+                $data[$field] = $split[1];
+            }
+        }
+
+        app(InvestorPortfolio::class)->inCompany($this->account(), $companyId, fn (InvestorPortalAccount $account) => app(InvestorRequestService::class)->create($account, $type, $data));
+    }
+
+    /**
      * Groups the investor is in (and projects outside any group they have
-     * money in), keyed `g<id>` / `p<id>`.
+     * money in), keyed `g<id>` / `p<id>`, for $account in the open company.
      *
      * @return array<string, string>
      */
-    private function withdrawalOptions(): array
+    private function withdrawalOptions(InvestorPortalAccount $account): array
     {
         $targets = app(InvestmentTargets::class);
         $options = [];
 
         InvestorGroupMember::query()
-            ->where('investor_id', $this->account()->investor_id ?? 0)
+            ->where('investor_id', $account->investor_id ?? 0)
             ->where('status', InvestorGroupMember::STATUS_ACTIVE)
             ->with('group')
             ->get()
@@ -170,7 +218,7 @@ class Requests extends Page implements HasTable
                 $options['g'.$member->group_id] = $targets->label($member->group);
             });
 
-        $this->portal()->investments($this->account())
+        $this->portal()->investments($account)
             ->where('status', Investment::STATUS_ACTIVE)->whereNull('group_member_id')->with('project')->get()
             ->each(function (Investment $investment) use (&$options): void {
                 $options['p'.$investment->project_id] = $this->portal()->projectLabel($investment->project);
@@ -181,22 +229,29 @@ class Requests extends Page implements HasTable
 
     public function table(Table $table): Table
     {
-        $currency = $this->currency();
-
+        // Every company's requests in one list (18_IMS_ALL_COMPANIES_PLAN.md §4, phase E).
         return $table
-            ->query(fn () => InvestorRequest::query()->where('portal_account_id', $this->account()->getKey())->with(['project', 'group']))
-            ->defaultSort('id', 'desc')
+            ->records(fn (?array $filters, int|string $page, int|string $recordsPerPage) => $this->pageOfRows(
+                app(InvestorPortfolio::class)->requests($this->account(), $this->chosenProject($filters)),
+                $page,
+                $recordsPerPage,
+            ))
+            ->filters([$this->projectFilter()])
             ->columns([
                 TextColumn::make('type')
                     ->label(__('Request'))
                     ->formatStateUsing(fn (string $state): string => InvestorRequest::typeLabel($state))
-                    ->description(fn (InvestorRequest $record): ?string => collect([
-                        $record->group ? app(InvestmentTargets::class)->label($record->group) : null,
-                        $record->project ? $this->portal()->projectLabel($record->project) : null,
-                        filled($record->admin_note) ? __('Company\'s answer').': '.$record->admin_note : null,
+                    ->description(fn (array $record): ?string => collect([
+                        $record['about'] ?: null,
+                        $this->showsCompanies() ? $record['company_name'] : null,
+                        filled($record['admin_note']) ? __('Company\'s answer').': '.$record['admin_note'] : null,
                     ])->filter()->implode(' · ') ?: null)
                     ->wrap(),
-                TextColumn::make('amount')->label(__('Amount'))->formatStateUsing(fn ($state): string => MoneyFormatter::currency($state, $currency))->placeholder('-')->visibleFrom('md'),
+                TextColumn::make('amount')
+                    ->label(__('Amount'))
+                    ->state(fn (array $record): ?string => $record['amount'] === null ? null : MoneyFormatter::currency($record['amount'], $record['currency']))
+                    ->placeholder('-')
+                    ->visibleFrom('md'),
                 TextColumn::make('created_at')->label(__('Sent'))->date('d M Y')->visibleFrom('md'),
                 TextColumn::make('status')
                     ->label(__('Status'))
@@ -215,10 +270,15 @@ class Requests extends Page implements HasTable
                     ->label(__('Cancel'))
                     ->color('danger')
                     ->requiresConfirmation()
-                    ->visible(fn (InvestorRequest $record): bool => $record->isPending() && ! $this->isStaffPreview())
-                    ->action(function (InvestorRequest $record): void {
+                    ->visible(fn (array $record): bool => $record['pending'] && ! $this->isStaffPreview())
+                    ->action(function (array $record): void {
                         $this->refuseInStaffPreview();
-                        app(InvestorRequestService::class)->cancel($this->account(), $record);
+
+                        // In the request's own company, as the person's own account there.
+                        app(InvestorPortfolio::class)->inCompany($this->account(), (int) $record['company_id'], function (InvestorPortalAccount $account) use ($record): void {
+                            $request = InvestorRequest::query()->where('portal_account_id', $account->getKey())->findOrFail($record['request_id']);
+                            app(InvestorRequestService::class)->cancel($account, $request);
+                        });
                     }),
             ])
             ->emptyStateHeading(__('No requests yet.'))

@@ -55,7 +55,7 @@ class InvestorPortalStaffEntryService
 
         $this->audit->record('investor_portal.staff_entry_issued', $account);
 
-        return (string) $company->investorPortalUrl('staff-entry/'.$token);
+        return (string) $company->investorLinkUrl('staff-entry/'.$token);
     }
 
     /**

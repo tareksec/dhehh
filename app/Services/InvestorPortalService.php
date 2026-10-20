@@ -316,7 +316,7 @@ class InvestorPortalService
         return trim(($project->project_code ? $project->project_code.' — ' : '').$project->name);
     }
 
-    /** @return array{date: Carbon, type: string, label: string, project: string, amount: float, info_amount: ?float, order: int} */
+    /** @return array{date: Carbon, type: string, label: string, project: string, project_id: ?int, amount: float, info_amount: ?float, order: int} */
     protected function entry(mixed $date, string $type, string $label, InvestmentProject|string|null $project, float $amount, ?float $infoAmount = null): array
     {
         $order = ['deposit' => 1, 'profit' => 2, 'loss' => 2, 'payout' => 3, 'reinvest' => 4, 'withdrawal' => 5, 'capital_return' => 5][$type] ?? 9;
@@ -326,6 +326,7 @@ class InvestorPortalService
             'type' => $type,
             'label' => $label,
             'project' => is_string($project) ? $project : $this->projectLabel($project),
+            'project_id' => $project instanceof InvestmentProject ? (int) $project->getKey() : null,
             'amount' => round($amount, 2),
             'info_amount' => $infoAmount === null ? null : round($infoAmount, 2),
             'order' => $order,

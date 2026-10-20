@@ -79,7 +79,7 @@ class InvestorPortalAccountService
             return $account;
         });
 
-        $link = $company->investorPortalUrl('invite/'.$token);
+        $link = $company->investorLinkUrl('invite/'.$token);
 
         $this->audit->record('investor_portal.invited', $account, null, ['phone' => $phone, 'role' => $column]);
 

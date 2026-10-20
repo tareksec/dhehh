@@ -24,6 +24,7 @@ use App\Http\Controllers\Admin\InvestorPortalOpenController;
 use App\Http\Controllers\Ims\ImsOfficeFileController;
 use App\Http\Controllers\Ims\ImsOfficeLocaleController;
 use App\Http\Middleware\ResolveCompanyFromImsDomain;
+use App\Http\Middleware\ResolveImsOfficeCompany;
 use App\Http\Middleware\RestrictPortalHosts;
 use App\Http\Middleware\SetImsOfficeLocale;
 use App\Models\Company;
@@ -54,8 +55,10 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * The IMS office (IMS-V2/ARCHITECTURE.md §4): staff run investors, KYC,
  * groups, settlements, payouts, capital returns, the feed and support at
  * "<IMS domain>/office". Same staff accounts as the ERP (guard "web"), but
- * the domain differs, so the sign-in is separate. The company is the one
- * whose IMS domain this is (ResolveCompanyFromImsDomain); RestrictPortalHosts
+ * the domain differs, so the sign-in is separate. Every company runs on the
+ * one IMS domain (18_IMS_ALL_COMPANIES_PLAN.md): the domain is checked by
+ * ResolveCompanyFromImsDomain, and the company is the one the signed-in
+ * person chose in the top bar (ResolveImsOfficeCompany); RestrictPortalHosts
  * keeps /office off every other host.
  *
  * The ERP's investor resources are registered here unchanged (one code, two
@@ -126,10 +129,12 @@ class ImsOfficePanelProvider extends PanelProvider
                 });
             })
             ->renderHook(PanelsRenderHook::BODY_START, fn (): View => view('filament.ims.icon-rail', ['rail' => OfficeNavigation::rail()]))
+            ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn (): View => view('filament.ims.office.company-picker'))
             ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn (): View => view('filament.ims.office.language-switch'))
             ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_AFTER, fn (): View => view('filament.ims.theme-toggle'))
             // Small phones: the language switch sits in the menu drawer instead of the top bar.
             ->renderHook(PanelsRenderHook::SIDEBAR_NAV_START, fn (): View => view('filament.ims.office.language-switch', ['drawer' => true]))
+            ->renderHook(PanelsRenderHook::SIDEBAR_NAV_START, fn (): View => view('filament.ims.office.company-picker', ['drawer' => true]))
             ->renderHook(PanelsRenderHook::SIMPLE_LAYOUT_START, fn (): View => view('filament.ims.auth-hero', ['panel' => 'office']))
             ->renderHook(PanelsRenderHook::SIMPLE_PAGE_START, fn (): View => view('filament.ims.auth-tools', ['panel' => 'office']))
             ->middleware([
@@ -139,6 +144,8 @@ class ImsOfficePanelProvider extends PanelProvider
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
                 AuthenticateSession::class,
+                // Every company is on the one IMS domain: the signed-in person's chosen company (18_IMS_ALL_COMPANIES_PLAN.md §3.2).
+                ResolveImsOfficeCompany::class,
                 SetImsOfficeLocale::class,
                 ShareErrorsFromSession::class,
                 PreventRequestForgery::class,
@@ -150,6 +157,7 @@ class ImsOfficePanelProvider extends PanelProvider
             // the company would not be resolved on a form submit.
             ->persistentMiddleware([
                 ResolveCompanyFromImsDomain::class,
+                ResolveImsOfficeCompany::class,
                 SetImsOfficeLocale::class,
             ])
             ->authMiddleware([
@@ -157,8 +165,9 @@ class ImsOfficePanelProvider extends PanelProvider
             ]);
     }
 
+    /** The name and logo at the top are the IMS domain's, whichever company is open (18_IMS_ALL_COMPANIES_PLAN.md §3.2). */
     protected function officeCompany(): ?Company
     {
-        return app(CompanyContext::class)->company();
+        return Company::forImsHost(request()->getHost()) ?? app(CompanyContext::class)->company();
     }
 }

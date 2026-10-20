@@ -3,6 +3,7 @@
 namespace App\Filament\Investor\Pages;
 
 use App\Filament\Investor\Concerns\InvestorPortalPage;
+use App\Services\InvestorPortfolio;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Pages\Page;
@@ -13,7 +14,10 @@ use Livewire\Attributes\Url;
 
 /**
  * Page 3 of §6.1: the investor's statement, with a date filter and a
- * printable copy (browser "Save as PDF"; dompdf cannot shape Bangla).
+ * printable copy (browser "Save as PDF"; dompdf cannot shape Bangla). Lines
+ * from every company the person invests in, with a Project filter
+ * (18_IMS_ALL_COMPANIES_PLAN.md §4); the printable copy and the monthly PDFs
+ * are the open company's.
  */
 class Statement extends Page
 {
@@ -33,6 +37,10 @@ class Statement extends Page
     #[Url]
     public ?string $until = null;
 
+    /** The Project filter: "<company id>:<project id>", empty = all projects. */
+    #[Url]
+    public ?string $project = null;
+
     public static function getNavigationGroup(): ?string
     {
         return __('Overview');
@@ -48,9 +56,21 @@ class Statement extends Page
         return __('Statement');
     }
 
+    /** Every company's lines in one list, newest first (18_IMS_ALL_COMPANIES_PLAN.md §4, phase E). */
     public function entries(): Collection
     {
-        return $this->portal()->statement($this->account(), $this->date($this->from), $this->date($this->until));
+        return app(InvestorPortfolio::class)->statement($this->account(), $this->date($this->from), $this->date($this->until), filled($this->project) ? $this->project : null);
+    }
+
+    /** @return array<string, string> */
+    public function projectOptions(): array
+    {
+        return app(InvestorPortfolio::class)->projectOptions($this->account());
+    }
+
+    public function showsCompanies(): bool
+    {
+        return app(InvestorPortfolio::class)->spansCompanies($this->account());
     }
 
     protected function getHeaderActions(): array

@@ -331,7 +331,7 @@ class InvestorPortalStaffEntryTest extends TestCase
 
         Livewire::test(Requests::class)
             ->assertActionHidden('new')
-            ->assertTableActionHidden('cancel', $pending);
+            ->assertTableActionHidden('cancel', $pending->company_id.'-'.$pending->id);
 
         $this->assertSame(InvestorRequest::STATUS_PENDING, $pending->fresh()->status);
         $this->assertSame(1, InvestorRequest::query()->withoutGlobalScopes()->count());
@@ -345,7 +345,7 @@ class InvestorPortalStaffEntryTest extends TestCase
 
         Livewire::test(Requests::class)
             ->assertActionVisible('new')
-            ->callTableAction('cancel', $pending);
+            ->callTableAction('cancel', $pending->company_id.'-'.$pending->id);
 
         $this->assertSame(InvestorRequest::STATUS_CANCELLED, $pending->fresh()->status);
     }
