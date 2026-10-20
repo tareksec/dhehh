@@ -3,10 +3,10 @@
 namespace App\Filament\Resources\InvestmentProjects\RelationManagers;
 
 use App\Filament\Resources\InvestmentRecords\InvestmentRecordResource;
-use App\Filament\Resources\Vouchers\VoucherResource;
 use App\Models\Investment;
 use App\Models\Investor;
 use App\Services\Investment\InvestmentLedgerService;
+use App\Support\ImsPanelLinks;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -15,6 +15,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\Summarizers\Sum;
@@ -58,6 +59,13 @@ class InvestmentsRelationManager extends RelationManager
             Select::make('payment_method')->options(Investment::PAYMENT_METHODS)->required(),
             TextInput::make('payment_reference'),
             DatePicker::make('invested_at')->default(now())->required(),
+            // IMS v2 (PRD FR-23): an optional tenor; the maturity date follows from it.
+            TextInput::make('tenor_months')->label(__('Tenor in months (optional)'))->numeric()->integer()->minValue(1)->maxValue(240)
+                ->helperText(__('Leave empty for no fixed term: the money then leaves with a 60-day notice.')),
+            Toggle::make('pending')->label(__('The money has not arrived yet'))
+                ->helperText(__('It waits on "Money to confirm" and is not part of any settlement until it is confirmed.'))
+                ->default(false)
+                ->hiddenOn('edit'),
             Textarea::make('override_reason')
                 ->label('Reason (investment window closed)')
                 ->rows(2)
@@ -101,11 +109,16 @@ class InvestmentsRelationManager extends RelationManager
                 ->label('Voucher')
                 ->badge()
                 ->placeholder('-')
-                ->url(fn (Investment $record): ?string => $record->voucher_id ? VoucherResource::getUrl('view', ['record' => $record->voucher_id]) : null),
+                ->url(fn (Investment $record): ?string => $record->voucher_id ? ImsPanelLinks::voucher($record->voucher_id) : null),
         ])->headerActions([
             CreateAction::make()
                 ->hidden(fn (): bool => $this->isGroupProject())
-                ->mutateDataUsing(fn (array $data): array => [...$data, 'company_id' => $this->getOwnerRecord()->company_id, 'received_by' => auth()->id()])
+                ->mutateDataUsing(function (array $data): array {
+                    $pending = (bool) ($data['pending'] ?? false);
+                    unset($data['pending']);
+
+                    return [...$data, 'company_id' => $this->getOwnerRecord()->company_id, 'received_by' => auth()->id(), 'status' => $pending ? Investment::STATUS_PENDING : Investment::STATUS_ACTIVE];
+                })
                 ->after(fn (Investment $record) => app(InvestmentLedgerService::class)->recordInvestmentReceived($record)),
         ])
             ->recordActions([

@@ -116,13 +116,6 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(3000)->by('storefront-api:ip:'.$request->ip()),
         ]);
 
-        // The IMS data feed is read by ONE server, in bursts while it pages
-        // through history, so bucket by the presented key like the storefront.
-        RateLimiter::for('sync-api', fn (Request $request): array => [
-            Limit::perMinute(300)->by('sync-api:token:'.sha1((string) $request->bearerToken())),
-            Limit::perMinute(1500)->by('sync-api:ip:'.$request->ip()),
-        ]);
-
         // Sign-in, registration, one-time codes and password resets from the
         // Next.js site: every visitor reaches the ERP from the website's one
         // server address, so the limit is per VISITOR (the IP the website

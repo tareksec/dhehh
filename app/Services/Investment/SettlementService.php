@@ -2,11 +2,15 @@
 
 namespace App\Services\Investment;
 
+use App\Ims\Capital\GroupCapitalSync;
+use App\Ims\Notifications\ImsNotifier;
 use App\Jobs\SendInvestorProjectStatusSmsJob;
 use App\Models\ChannelPartnerPayout;
+use App\Models\Company;
 use App\Models\InvestmentProject;
 use App\Models\ProjectSettlement;
 use App\Models\SettlementPayout;
+use App\Models\User;
 use App\Services\AuditLogService;
 use App\Services\InvestorProjectMessageService;
 use App\Services\SmsTemplateService;
@@ -114,17 +118,14 @@ class SettlementService
                     throw new RuntimeException('Net profit is negative. Choose how the loss is borne (per the contract) and give a reason.');
                 }
 
-                // In a group the principal stays invested in the next project. A loss that
-                // eats into it needs the owner's rule for reducing a member's stake, which
-                // is not decided yet: never settle it silently.
-                if ($isGroupProject && $outcome === 'loss_investor_borne') {
-                    throw new RuntimeException(__('A loss borne by the investors cannot be settled on a group project yet: it needs the owner\'s rule for reducing a member\'s stake. Settle it as "company bears the loss", or ask for this rule to be built.'));
-                }
                 if (blank($lossReason)) {
                     throw new RuntimeException('A loss reason is required when settling a losing project.');
                 }
 
-                $figures = $this->allocateLoss($outcome, $netProfit, $capitalBase, $grouped);
+                // Owner (2026-10-19, IMS-V2/PLAN.md Q1): the investors bear the loss × the
+                // project's investor %, taken from their capital — in a group too, where the
+                // smaller capital carries on into the next project.
+                $figures = $this->allocateLoss($outcome, $netProfit, $capitalBase, $grouped, (float) $lockedProject->investor_share_percent);
             } else {
                 $outcome = 'profit';
                 $lossReason = null;
@@ -143,6 +144,7 @@ class SettlementService
                 'annualized_return_percent' => $figures['annualized'],
                 'rate_per_lac' => $figures['rate_per_lac'],
                 'outcome' => $outcome,
+                'investor_loss_percent' => $outcome === 'loss_investor_borne' ? $lockedProject->investor_share_percent : null,
                 'basis' => $isManual ? ProjectSettlement::BASIS_MANUAL : ProjectSettlement::BASIS_SALES,
                 'loss_reason' => $lossReason,
                 'status' => 'draft',
@@ -156,15 +158,24 @@ class SettlementService
             $principalLeaving = $isGroupProject ? $this->principalLeaving($lockedProject, $investments) : [];
 
             foreach ($figures['payout_rows'] as $row) {
+                $capitalLoss = round($row['capital_loss'] ?? 0.0, 2);
                 $principalReturned = $isGroupProject ? round($principalLeaving[$row['investor_id']] ?? 0.0, 2) : $row['principal'];
+
+                // The loss comes out of the capital that goes back (or, in a group,
+                // out of the capital that stays and carries on): never below zero.
+                if ($capitalLoss > 0 && $principalReturned > 0) {
+                    $leavingShare = $isGroupProject && $row['principal'] > 0 ? $principalReturned / $row['principal'] : 1.0;
+                    $principalReturned = round(max(0.0, $principalReturned - $capitalLoss * $leavingShare), 2);
+                }
 
                 SettlementPayout::query()->create([
                     'company_id' => $lockedProject->company_id,
                     'settlement_id' => $settlement->id,
                     'investor_id' => $row['investor_id'],
                     'investment_amount' => $row['principal'],
-                    'principal_returned_amount' => $isGroupProject ? $principalReturned : null,
+                    'principal_returned_amount' => ($isGroupProject || $capitalLoss > 0) ? $principalReturned : null,
                     'profit_share_amount' => $row['profit_share'],
+                    'capital_loss_amount' => $capitalLoss,
                     'total_payout' => round($principalReturned + $row['profit_share'], 2),
                     'recipient_name' => $row['recipient_name'],
                 ]);
@@ -228,6 +239,26 @@ class SettlementService
         // "Profit settled" SMS to the project's investors, when the owner has written one (SMS Templates).
         $project = $settlement->project;
 
+        // A loss taken from capital: the group's next project carries the smaller capital.
+        if ($project !== null && (float) $settlement->payouts()->sum('capital_loss_amount') > 0) {
+            app(GroupCapitalSync::class)->afterSettlementOf($project);
+        }
+
+        // IMS v2 news to each investor (portal always; SMS / e-mail as set in IMS settings).
+        if ($project !== null && Company::query()->find($settlement->company_id)?->imsIsLive()) {
+            foreach ($settlement->payouts()->with('investor')->get() as $payout) {
+                if ($payout->investor === null) {
+                    continue;
+                }
+
+                if ((float) $payout->capital_loss_amount > 0) {
+                    app(ImsNotifier::class)->send('loss_shared', $payout->investor, ['amount' => (float) $payout->capital_loss_amount, 'project' => (string) $project->name]);
+                } elseif ((float) $payout->profit_share_amount > 0) {
+                    app(ImsNotifier::class)->send('profit_shared', $payout->investor, ['amount' => (float) $payout->profit_share_amount, 'project' => (string) $project->name]);
+                }
+            }
+        }
+
         if ($project !== null && app(InvestorProjectMessageService::class)->configured($project, SmsTemplateService::PROJECT_SETTLED)) {
             SendInvestorProjectStatusSmsJob::dispatch($project->getKey(), SmsTemplateService::PROJECT_SETTLED, $settlement->getKey())->afterCommit();
         }
@@ -243,6 +274,15 @@ class SettlementService
     {
         if (blank($reason)) {
             throw new RuntimeException('A void reason is required.');
+        }
+
+        // IMS v2 (PRD FR-48): only a Super Admin voids, with a reason of 10 letters or more.
+        if (mb_strlen(trim($reason)) < 10) {
+            throw new RuntimeException(__('Write a reason of at least 10 letters for voiding.'));
+        }
+
+        if (! User::query()->find($userId)?->hasPermission('ims.settlement.void')) {
+            throw new RuntimeException(__('Only a Super Admin can void a settlement.'));
         }
 
         DB::transaction(function () use ($settlement, $reason, $userId): void {
@@ -267,6 +307,10 @@ class SettlementService
             $locked->delete();
 
             $project?->forceFill(['status' => 'closed'])->saveQuietly();
+
+            if ($project !== null) {
+                app(GroupCapitalSync::class)->afterSettlementOf($project);
+            }
         });
     }
 
@@ -344,18 +388,26 @@ class SettlementService
     }
 
     /**
-     * Mudarabah loss rule (deed clause 4): the financial loss falls on the
-     * capital owners (investors + the company's own gap-fill) in proportion to
-     * capital — unless it was the company's negligence or breach, in which case
-     * the company bears all of it and investors get their principal back.
+     * Loss rule (owner, 2026-10-19, IMS-V2/TRD.md §4.2): the investors bear
+     * the loss × the project's investor %, shared by capital and taken from
+     * their capital — never more than one put in; the company bears the rest.
+     * Unless it was the company's negligence or breach (deed clause 4): then
+     * the company bears all of it and investors keep their whole principal.
      *
-     * @return array{investor_pool: float, channel_payout: float, partner_rows: array<int, float>, company_net: float, annualized: null, rate_per_lac: float|null, payout_rows: list<array{investor_id:int, principal:float, profit_share:float, recipient_name:string}>}
+     *   investorLoss = round2(loss × investor% ÷ 100)
+     *   lossShare_i  = min(capital_i, round2(investorLoss × capital_i ÷ capitalBase))
+     *   companyLoss  = loss − Σ lossShare_i
+     *
+     * Example: % = 35, loss ৳1,00,000 → investors −৳35,000, company −৳65,000.
+     *
+     * @return array{investor_pool: float, channel_payout: float, partner_rows: array<int, float>, company_net: float, annualized: null, rate_per_lac: float|null, payout_rows: list<array{investor_id:int, principal:float, profit_share:float, capital_loss?: float, recipient_name:string}>}
      */
     private function allocateLoss(
         string $outcome,
         float $netProfit,
         float $capitalBase,
         Collection $grouped,
+        float $investorPercent = 100.0,
     ): array {
         $loss = round(-$netProfit, 2); // positive
         $payoutRows = [];
@@ -383,17 +435,20 @@ class SettlementService
         }
 
         // loss_investor_borne
+        $investorLoss = round($loss * ($investorPercent / 100), 2);
         $externalLossBorne = 0.0;
 
         foreach ($grouped as $investorId => $rows) {
             $principal = round((float) $rows->sum('amount'), 2);
-            $borne = round($loss * ($principal / $capitalBase), 2);
+            $borne = round(min($principal, $investorLoss * ($principal / $capitalBase)), 2);
             $externalLossBorne = round($externalLossBorne + $borne, 2);
 
             $payoutRows[] = [
                 'investor_id' => (int) $investorId,
                 'principal' => $principal,
-                'profit_share' => round(-$borne, 2), // negative — capital eroded
+                'profit_share' => 0.0,
+                // Taken from the capital (settlement_payouts.capital_loss_amount).
+                'capital_loss' => $borne,
                 'recipient_name' => $rows->first()->investor->name,
             ];
         }
@@ -405,7 +460,7 @@ class SettlementService
             'channel_payout' => 0.0,
             'partner_rows' => [],
             // netProfit is negative; adding back what investors bear leaves the
-            // company's own gap-fill share of the loss (also negative, or zero).
+            // company's share of the loss (negative, or zero at 100%).
             'company_net' => round($netProfit + $externalLossBorne, 2),
             'annualized' => null,
             'rate_per_lac' => round($investorPool / max($capitalBase / 100000, 0.01), 2),

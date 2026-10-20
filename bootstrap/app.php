@@ -57,6 +57,13 @@ return Application::configure(basePath: dirname(__DIR__))
             ->hourly()
             ->withoutOverlapping()
             ->onOneServer();
+        // IMS v2 (IMS-V2/TRD.md §6): each loops the companies with IMS on, can be
+        // switched off in IMS settings, and never sends the same thing twice.
+        $schedule->command('ims:profit-proposals')->dailyAt('07:00')->withoutOverlapping()->onOneServer();
+        $schedule->command('ims:maturity-reminders')->dailyAt('08:00')->withoutOverlapping()->onOneServer();
+        $schedule->command('ims:owner-digest')->dailyAt('08:05')->withoutOverlapping()->onOneServer();
+        $schedule->command('ims:monthly-statements')->monthlyOn(1, '09:00')->withoutOverlapping()->onOneServer();
+        $schedule->command('ims:shipment-delays')->hourly()->withoutOverlapping()->onOneServer();
         $schedule->command('release:notify-deploy')
             ->everyFiveMinutes()
             ->withoutOverlapping()
@@ -96,7 +103,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // server's real .env is wrong. Admin panel, Livewire, and API/webhook
         // requests are left completely alone — Filament and Laravel's own
         // JSON error handling for those must not be touched.
-        $exceptions->render(function (\Throwable $e, Request $request) {
+        $exceptions->render(function (Throwable $e, Request $request) {
             // A crashed admin / portal page: "this part has a problem, the rest
             // keeps working" with links back, instead of the bare 500 page.
             if (PanelErrorPages::appliesTo($request, $e)) {

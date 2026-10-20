@@ -22,4 +22,17 @@
             {{ __('Profit and loss appear once the company confirms a project\'s settlement. A reinvested amount moves into a new investment, which is listed as its own entry.') }}
         </p>
     </x-filament::section>
+
+    {{-- IMS v2 (PRD FR-65): a PDF statement for each month. --}}
+    <x-filament::section :heading="__('Monthly statements (PDF)')">
+        <div class="flex flex-wrap gap-2" data-ims-monthly-statements>
+            @foreach (range(0, 11) as $back)
+                @php $month = now()->startOfMonth()->subMonths($back); @endphp
+                <x-filament::button tag="a" size="sm" color="gray" icon="heroicon-o-arrow-down-tray"
+                    :href="route('filament.investor.ims.statement-pdf', ['period' => $month->format('Y-m')])">
+                    {{ \App\Support\ImsNumbers::digits($month->copy()->locale(app()->getLocale())->translatedFormat('M Y')) }}
+                </x-filament::button>
+            @endforeach
+        </div>
+    </x-filament::section>
 </x-filament-panels::page>

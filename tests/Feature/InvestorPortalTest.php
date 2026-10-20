@@ -391,15 +391,17 @@ class InvestorPortalTest extends TestCase
             ->assertSee('http://investor.menu.example.test/investor/profile', false);
     }
 
-    public function test_the_menu_is_grouped_and_phones_get_a_bottom_menu(): void
+    public function test_the_menu_has_the_main_pages_on_top_and_phones_get_a_bottom_menu(): void
     {
         $company = $this->company('groups.example.test');
         [$project, $investorA] = $this->settledProject($company, confirm: true);
         $this->actingAs($this->activeAccount($company, $investorA), 'investor');
 
+        // IMS v2 look (IMS-V2/DESIGN.md §6.1): the main pages as top-bar pills, the rest under "More".
         $this->get('http://investor.groups.example.test/investor/dashboard')
             ->assertOk()
-            ->assertSeeInOrder(['Overview', 'Dashboard', 'My investments', 'Statement', 'Money', 'Payouts', 'Requests', 'Account', 'Documents', 'Agreements', 'Profile'])
+            ->assertSeeInOrder(['Home', 'Investments', 'Profit', 'Statement', 'More', 'Requests', 'Documents', 'Agreements', 'Profile'])
+            ->assertSee('ims-rail', false)
             ->assertSee('fi-investor-mobile-nav', false)
             ->assertSee('Quick menu');
     }
@@ -561,7 +563,8 @@ class InvestorPortalTest extends TestCase
         $company = $this->company('no-permission.example.test');
         app(CompanyContext::class)->set($company);
         Filament::setCurrentPanel(Filament::getPanel('admin'));
-        $this->actingAs(User::factory()->create(['role' => 'manager']));
+        // An accountant has no investments.portal_manage (a manager now does, IMS-V2/ROLES.md §3.3).
+        $this->actingAs(User::factory()->create(['role' => 'accountant']));
 
         $this->assertFalse(InvestorPortalSettings::canAccess());
     }

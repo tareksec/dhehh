@@ -5,6 +5,7 @@ namespace App\Filament\Resources\InvestmentProjects\RelationManagers;
 use App\Models\ProjectCostItem;
 use App\Services\CompanyStorageService;
 use App\Support\CompanyMedia;
+use App\Support\ImsPanelLinks;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -96,7 +97,7 @@ class CostItemsRelationManager extends RelationManager
                     ->icon('heroicon-o-arrow-down-tray')
                     ->visible(fn (ProjectCostItem $record): bool => ($record->documents_count ?? 0) > 0)
                     ->url(fn (ProjectCostItem $record): ?string => ($doc = $record->documents()->latest('id')->first())
-                        ? route('investment-documents.download', $doc)
+                        ? ImsPanelLinks::route('investment-documents.download', $doc)
                         : null)
                     ->openUrlInNewTab(),
                 EditAction::make(),

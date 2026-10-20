@@ -2,6 +2,8 @@
 
 namespace App\Services\Investment;
 
+use App\Ims\Capital\CapitalCalculator;
+use App\Ims\Kyc\KycService;
 use App\Models\Investment;
 use App\Models\InvestmentProject;
 use App\Models\Investor;
@@ -36,6 +38,10 @@ class InvestorGroupService
                 throw ValidationException::withMessages(['group_id' => __('New members can be added only while the group is Open.')]);
             }
 
+            // IMS v2 (PRD FR-14, FR-22): money waits as "pending" until it is confirmed;
+            // while IMS is on, a new investor's money waits until their KYC is verified.
+            $pending = (bool) ($data['pending'] ?? false) || KycService::blocksNewMoney($investor);
+
             return InvestorGroupMember::query()->create([
                 'group_id' => $locked->getKey(),
                 'investor_id' => $investor->getKey(),
@@ -46,6 +52,10 @@ class InvestorGroupService
                 'notes' => $data['notes'] ?? null,
                 'paperwork' => ($data['paperwork'] ?? []) ?: null,
                 'received_by' => $by?->getKey(),
+                'tenor_months' => filled($data['tenor_months'] ?? null) ? (int) $data['tenor_months'] : null,
+                'status' => $pending ? InvestorGroupMember::STATUS_PENDING : InvestorGroupMember::STATUS_ACTIVE,
+                'confirmed_at' => $pending ? null : now(),
+                'confirmed_by' => $pending ? null : $by?->getKey(),
             ]);
         });
 
@@ -74,6 +84,11 @@ class InvestorGroupService
 
             if ($locked->totalActiveDeposits() <= 0) {
                 throw ValidationException::withMessages(['status' => __('Add at least one member before starting the group.')]);
+            }
+
+            // Money still waiting could never join once the group runs.
+            if (($waiting = $locked->members()->pending()->count()) > 0) {
+                throw ValidationException::withMessages(['status' => __('Confirm or remove the :count deposits still waiting for money before starting the group.', ['count' => $waiting])]);
             }
 
             $locked->forceFill(['status' => InvestorGroup::STATUS_RUNNING, 'running_since' => $runningSince->toDateString()])->save();
@@ -175,16 +190,25 @@ class InvestorGroupService
     public function snapshotMembers(InvestorGroup $group, InvestmentProject $project): int
     {
         $copied = 0;
+        $capital = app(CapitalCalculator::class);
 
         foreach ($group->activeMembers()->orderBy('id')->get() as $member) {
             $firstProject = ! $member->investments()->exists();
+
+            // IMS v2 (TRD §4.2): what goes on is the capital after earlier losses
+            // and capital paid back; a member with nothing left is not copied.
+            $carried = $firstProject ? (float) $member->amount : $capital->forMember($member)['outstanding'];
+
+            if ($carried <= 0) {
+                continue;
+            }
 
             $investment = Investment::query()->create([
                 'company_id' => $project->company_id,
                 'project_id' => $project->getKey(),
                 'group_member_id' => $member->getKey(),
                 'investor_id' => $member->investor_id,
-                'amount' => $member->amount,
+                'amount' => $carried,
                 'payment_method' => $member->payment_method ?: 'other',
                 'payment_reference' => $member->payment_reference,
                 'invested_at' => $member->invested_at,

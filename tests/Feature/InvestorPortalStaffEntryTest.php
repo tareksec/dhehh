@@ -80,7 +80,8 @@ class InvestorPortalStaffEntryTest extends TestCase
         $investor = $this->investor($company, 'Rahim', '01711000103');
         $this->onAdmin($company);
 
-        $this->actingAs(User::factory()->create(['role' => 'manager']));
+        // An accountant has no investments.portal_manage (a manager now does, IMS-V2/ROLES.md §3.3).
+        $this->actingAs(User::factory()->create(['role' => 'accountant']));
         Livewire::test(ViewInvestor::class, ['record' => $investor->getKey()])->assertActionHidden('portalOpen');
 
         $this->actingAs($this->staff);
@@ -131,8 +132,9 @@ class InvestorPortalStaffEntryTest extends TestCase
         $investor = $this->investor($company, 'Rahim', '01711000106');
         $url = route('investor-portal.open-investor', $investor);
 
-        $manager = User::factory()->create(['role' => 'manager']);
-        $manager->companies()->attach($company->getKey(), ['role' => 'manager', 'is_default' => true]);
+        // An accountant has no investments.portal_manage (a manager now does, IMS-V2/ROLES.md §3.3).
+        $manager = User::factory()->create(['role' => 'accountant']);
+        $manager->companies()->attach($company->getKey(), ['role' => 'accountant', 'is_default' => true]);
 
         $this->asStaff($company, $manager)->get($url)->assertForbidden();
         $this->assertSame(0, InvestorPortalAccount::query()->withoutGlobalScopes()->count());

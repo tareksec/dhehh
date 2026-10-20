@@ -7,6 +7,7 @@ use App\Filament\Resources\ProjectSettlements\ProjectSettlementResource;
 use App\Models\InvestmentProject;
 use App\Models\ProjectSettlement;
 use App\Services\Investment\SettlementService;
+use App\Support\ImsPanelLinks;
 use App\Support\MoneyFormatter;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -58,7 +59,7 @@ class ViewInvestmentProject extends ViewRecord
                 ->label('Investor Register')
                 ->icon('heroicon-o-table-cells')
                 ->color('gray')
-                ->url(fn (): string => route('investments.reports.project-register', $this->record))
+                ->url(fn (): string => ImsPanelLinks::route('investments.reports.project-register', $this->record))
                 ->openUrlInNewTab(),
             Action::make('settle')
                 ->label('Calculate & Settle')
@@ -99,13 +100,15 @@ class ViewInvestmentProject extends ViewRecord
                             'pool' => MoneyFormatter::currency(round((float) ($get('manual_net_profit') ?? 0) * (float) $this->record->investor_share_percent / 100, 2)),
                         ])),
                     Select::make('outcome')
-                        // A group's principal stays invested, so a loss that eats into it waits for the owner's rule.
-                        ->options(fn (): array => $this->record->isGrouped() ? array_diff_key(ProjectSettlement::OUTCOMES, ['loss_investor_borne' => true]) : ProjectSettlement::OUTCOMES)
+                        ->options(ProjectSettlement::OUTCOMES)
                         ->default('profit')
                         ->required()
                         ->live()
                         ->visible(fn (Get $get): bool => $get('basis') !== ProjectSettlement::BASIS_MANUAL)
-                        ->helperText('Net profit নেগেটিভ হলে চুক্তির ধারা ৪ অনুযায়ী লোকসান কে বহন করবে বেছে নিন।'),
+                        ->helperText(fn (): string => 'Net profit নেগেটিভ হলে চুক্তির ধারা ৪ অনুযায়ী লোকসান কে বহন করবে বেছে নিন। '
+                            .__('Borne by investors: they bear :percent% of the loss, shared by capital and taken from their capital; the company bears the rest.', [
+                                'percent' => rtrim(rtrim(number_format((float) $this->record->investor_share_percent, 2), '0'), '.'),
+                            ])),
                     Textarea::make('loss_reason')
                         ->rows(2)
                         ->required(fn (Get $get): bool => $get('basis') !== ProjectSettlement::BASIS_MANUAL && $get('outcome') !== 'profit')

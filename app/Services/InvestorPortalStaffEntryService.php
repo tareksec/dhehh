@@ -74,7 +74,7 @@ class InvestorPortalStaffEntryService
 
         $entry = Cache::pull(self::CACHE_PREFIX.hash('sha256', $token));
 
-        if (! is_array($entry) || (int) ($entry['company_id'] ?? 0) !== (int) $company->getKey() || ! $company->investor_portal_enabled) {
+        if (! is_array($entry) || (int) ($entry['company_id'] ?? 0) !== (int) $company->getKey() || ! $company->investorPortalIsOn()) {
             return null;
         }
 

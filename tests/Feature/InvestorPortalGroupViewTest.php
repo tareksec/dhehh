@@ -187,7 +187,7 @@ class InvestorPortalGroupViewTest extends TestCase
         $this->signIn($me);
 
         Livewire::test(Dashboard::class)
-            ->assertSee('Welcome, '.$me->name)
+            ->assertSeeInOrder(['Welcome back,', $me->name])
             ->assertSee('Capital by group')
             ->assertSee('Project calendar 2026')
             ->assertSeeHtml('data-calendar-state="confirmed"')

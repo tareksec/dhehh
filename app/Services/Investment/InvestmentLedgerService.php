@@ -31,7 +31,8 @@ class InvestmentLedgerService
         // A group project's rows are snapshots of the group's members. The
         // money was booked once, when the member joined the group
         // (`recordGroupDepositReceived`) -- never a second voucher here.
-        if ($investment->group_member_id) {
+        // Money still waiting to be confirmed (IMS v2) is booked when it is confirmed.
+        if ($investment->group_member_id || $investment->isPending()) {
             return;
         }
 
@@ -70,7 +71,7 @@ class InvestmentLedgerService
         $group = $member->group;
         $fundSource = $group?->receiving_fund_source_id ? FundSource::query()->find($group->receiving_fund_source_id) : null;
 
-        if (! $fundSource || (float) $member->amount <= 0) {
+        if (! $fundSource || (float) $member->amount <= 0 || $member->isPending()) {
             return;
         }
 

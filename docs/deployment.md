@@ -574,6 +574,41 @@ https:// {
 
 It needs no account (Let's Encrypt certificates are free and automatic). It has to receive the traffic for reseller domains on ports 80/443, which Coolify's own Traefik already uses, so how to place it (in front of Traefik, or on its own IP for custom domains) depends on the live server and has to be decided there. Until then, leave **Reseller custom domains enabled** off. The DNS check compares the reseller's domain IPs with the company domain's IPs, so the company domain must resolve to this server.
 
+## IMS v2: KYC OCR (Tesseract)
+
+IMS v2 provides on-server Optical Character Recognition (OCR) for Bangladeshi National Identity (NID) cards during investor onboarding (`App\Ims\Kyc\NidOcr`, `IMS-V2/TRD.md` §7). This allows extracting NID numbers, dates of birth, and names locally without sending sensitive identity documents to third-party APIs.
+
+### 1. Coolify / Nixpacks Build Configuration
+The repository includes `tesseract-ocr` and `tesseract-ocr-ben` in `nixpacks.toml`:
+
+```toml
+[phases.setup]
+aptPkgs = ["...", "tesseract-ocr", "tesseract-ocr-ben"]
+```
+
+When building with Nixpacks on Coolify:
+- Nixpacks runs on Debian and automatically executes `apt-get install -y tesseract-ocr tesseract-ocr-ben` during the setup phase.
+- The binary `/usr/bin/tesseract` and trained models (`eng`, `ben`, `osd`) are placed in standard system paths (`/usr/share/tesseract-ocr/5/tessdata` or `/usr/share/tessdata`).
+- No modifications to `[start]` or custom container wrappers are required.
+
+### 2. Coolify Owner Action
+To apply this on the Coolify production instance:
+1. Navigate to the Application in Coolify dashboard.
+2. Trigger a normal **Deploy / Redeploy** (with cache clear if needed) after pushing these changes.
+3. Once the build finishes and the container is healthy, verify Tesseract from Coolify terminal or command execution:
+   ```bash
+   tesseract --version
+   tesseract --list-langs
+   ```
+   Confirm that output lists `ben` along with `eng` and `osd`.
+4. (Optional) In application environment variables, `IMS_TESSERACT_PATH` defaults to `tesseract` and does not need to be set unless installed in a non-standard binary path.
+
+### 3. Graceful Fallback
+If Tesseract is not installed or temporarily fails:
+- `NidOcr::available()` catches errors and returns `false`.
+- KYC document submission is never blocked for investors.
+- Staff members can view the uploaded images and verify the NID manually in the IMS office (`/office/kyc`).
+
 ## Production Checklist
 
 - `APP_ENV=production`

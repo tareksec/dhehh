@@ -6,7 +6,10 @@ use App\Models\Account;
 use App\Models\AgreementAcceptance;
 use App\Models\AgreementTemplate;
 use App\Models\AuditLog;
+use App\Models\BankStatementImport;
+use App\Models\BankStatementLine;
 use App\Models\Broadcast;
+use App\Models\CapitalReturn;
 use App\Models\Category;
 use App\Models\ChannelPartner;
 use App\Models\ChannelPartnerPayout;
@@ -32,6 +35,11 @@ use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\ExpenseScan;
 use App\Models\ExpenseScanItem;
+use App\Models\FeedComment;
+use App\Models\FeedPost;
+use App\Models\FeedPostImage;
+use App\Models\FeedPostLike;
+use App\Models\FeedPostView;
 use App\Models\FraudCheck;
 use App\Models\FundSource;
 use App\Models\FundTransfer;
@@ -48,6 +56,10 @@ use App\Models\InvestorCycleElection;
 use App\Models\InvestorDraft;
 use App\Models\InvestorGroup;
 use App\Models\InvestorGroupMember;
+use App\Models\InvestorInvite;
+use App\Models\InvestorKycDocument;
+use App\Models\InvestorNominee;
+use App\Models\InvestorOtpCode;
 use App\Models\InvestorPortalAccount;
 use App\Models\InvestorRequest;
 use App\Models\InvestorSecurityInstrument;
@@ -70,8 +82,13 @@ use App\Models\PayoutBatchItem;
 use App\Models\Product;
 use App\Models\ProductCarousel;
 use App\Models\ProductReview;
+use App\Models\ProfitProposal;
 use App\Models\ProjectCostItem;
+use App\Models\ProjectMilestone;
+use App\Models\ProjectReport;
 use App\Models\ProjectSettlement;
+use App\Models\ProjectUpdate;
+use App\Models\ProjectUpdatePhoto;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
 use App\Models\QuickReply;
@@ -84,6 +101,7 @@ use App\Models\ResellerPayoutRequest;
 use App\Models\SettlementPayout;
 use App\Models\Shipment;
 use App\Models\SmsTemplate;
+use App\Models\StatementDispatch;
 use App\Models\StockMovement;
 use App\Models\StorefrontCartRecord;
 use App\Models\StorefrontCheckoutAttempt;
@@ -97,6 +115,8 @@ use App\Models\StorefrontSetting;
 use App\Models\StorefrontSlide;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
+use App\Models\SupportMessage;
+use App\Models\SupportThread;
 use App\Models\TransactionLedger;
 use App\Models\User;
 use App\Models\Voucher;
@@ -145,6 +165,12 @@ class MultiCompanyIsolationTest extends TestCase
             ExpenseScan::class, ExpenseScanItem::class,
             ResellerCommission::class, ResellerPayoutRequest::class, ResellerPayoutAccount::class, ResellerDepositEntry::class,
             WhatsAppContact::class,
+            // IMS v2
+            InvestorNominee::class, InvestorKycDocument::class, InvestorInvite::class, InvestorOtpCode::class,
+            CapitalReturn::class, ProfitProposal::class, ProjectUpdate::class, ProjectUpdatePhoto::class,
+            ProjectMilestone::class, ProjectReport::class, FeedPost::class, FeedPostImage::class,
+            FeedPostView::class, FeedPostLike::class, FeedComment::class, SupportThread::class,
+            SupportMessage::class, StatementDispatch::class, BankStatementImport::class, BankStatementLine::class,
         ];
 
         foreach ($models as $modelClass) {
