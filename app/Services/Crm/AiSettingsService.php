@@ -2,6 +2,7 @@
 
 namespace App\Services\Crm;
 
+use App\Models\AiInstructionVersion;
 use App\Models\Company;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Crypt;
@@ -83,7 +84,16 @@ class AiSettingsService
         'input_cost_per_million' => 0,
         'output_cost_per_million' => 0,
         'sales_follow_ups_enabled' => false,
-        'follow_up_delay_hours' => 4,
+        // Reminders after the customer's last message, in hours, then one a
+        // week for follow_up_weekly_count weeks (owner answer O4, 2026-10-19).
+        'follow_up_schedule_hours' => '1, 6, 24, 48',
+        'follow_up_weekly_count' => 4,
+        // No reminder goes out from start hour until end hour (company time).
+        'follow_up_quiet_start_hour' => 22,
+        'follow_up_quiet_end_hour' => 8,
+        // Text for Messenger and Instagram reminders (they have no templates).
+        // {link} becomes the order link. Empty: the team does those reminders.
+        'follow_up_message' => '',
         'follow_up_template' => '',
         'follow_up_template_language' => 'bn',
         // Off by default: the agent answers only what was asked, with no
@@ -105,7 +115,45 @@ class AiSettingsService
         // and past order line items so the agent can personalize tone
         // ("welcome back") without inventing purchase history.
         'personalization_enabled' => false,
+        // AI inbox control plane (16_AI_INBOX_CONTROL_PLANE_PLAN.md). How
+        // long a chat stays with the team after someone takes it over or the
+        // AI hands it over, before it returns to the AI on its own. 6 hours
+        // is AiPraktor's default for a new page; the owner changes it here.
+        'takeover_minutes' => 360,
+        // Seconds to wait after a customer message before the AI answers, so
+        // two quick messages get one combined reply (0-15).
+        'reply_delay_seconds' => 3,
+        // Off by default: on handover the customer is not told anything. On:
+        // one short "a colleague is looking into this" message is sent.
+        'handover_notice_enabled' => false,
+        // Off by default: compact one-line facts. On: product facts on their
+        // own lines with small labels (price, sizes, stock, delivery).
+        'rich_replies_enabled' => false,
+        // none | sir_maam | bhaiya_apu — how the AI addresses the customer
+        // in Bangla replies.
+        'address_style' => 'none',
+        // Minutes a chat the AI handed over may wait for a person's first
+        // reply before the Needs attention page marks it late. 30 is the
+        // owner's answer (O2, 2026-10-19), around the clock; 0 = no target
+        // (nothing is marked late).
+        'response_target_minutes' => 30,
+        // What the business is, for the agent's background only (Agent Desk).
+        'business_about' => '',
+        // Practice mode (owner request 2026-10-19, replacing the earlier "no
+        // practice mode" answer O7) has no default on purpose: while `ai_live`
+        // is false the AI answers only chats that staff marked as test chats.
+        // all() works the value out: a company that never saved it is live
+        // exactly when the AI is on, so nothing changes for companies already
+        // running, and only the Integrations form saves it explicitly.
+        // On: the customer sees "Seen" and "typing..." while the AI works on
+        // an answer (Messenger, WhatsApp).
+        'typing_indicator_enabled' => true,
+        // Off by default: Messenger customers also get a carousel of product
+        // cards (photo, price, a button) after an answer that names products.
+        'product_cards_enabled' => false,
     ];
+
+    public const ADDRESS_STYLES = ['none', 'sir_maam', 'bhaiya_apu'];
 
     public function all(Company $company, string $tool): array
     {
@@ -120,6 +168,7 @@ class AiSettingsService
         $settings['api_key'] = $this->decrypt($stored['api_key'] ?? null);
         $settings['image_api_key'] = $this->decrypt($stored['image_api_key'] ?? null);
         $settings['voice_api_key'] = $this->decrypt($stored['voice_api_key'] ?? null);
+        $settings['ai_live'] = array_key_exists('ai_live', $stored) ? (bool) $stored['ai_live'] : (bool) $settings['enabled'];
 
         return $settings;
     }
@@ -128,6 +177,7 @@ class AiSettingsService
     {
         $settings = (array) $company->settings;
         $existing = (array) data_get($settings, "ai_tools.{$tool}", []);
+        $instructionsBefore = $tool === self::TOOL_MESSAGING ? $this->instructionBlocks($company) : null;
 
         $settings['ai_tools'][$tool] = [
             'enabled' => (bool) ($data['enabled'] ?? false),
@@ -166,19 +216,82 @@ class AiSettingsService
             'input_cost_per_million' => max(0, (float) ($data['input_cost_per_million'] ?? $existing['input_cost_per_million'] ?? 0)),
             'output_cost_per_million' => max(0, (float) ($data['output_cost_per_million'] ?? $existing['output_cost_per_million'] ?? 0)),
             'sales_follow_ups_enabled' => (bool) ($data['sales_follow_ups_enabled'] ?? $existing['sales_follow_ups_enabled'] ?? false),
-            'follow_up_delay_hours' => max(1, min(168, (int) ($data['follow_up_delay_hours'] ?? $existing['follow_up_delay_hours'] ?? 4))),
+            'follow_up_schedule_hours' => implode(', ', self::followUpHours((string) ($data['follow_up_schedule_hours'] ?? $existing['follow_up_schedule_hours'] ?? self::DEFAULTS['follow_up_schedule_hours']))),
+            'follow_up_weekly_count' => max(0, min(12, (int) ($data['follow_up_weekly_count'] ?? $existing['follow_up_weekly_count'] ?? 4))),
+            'follow_up_quiet_start_hour' => max(0, min(23, (int) ($data['follow_up_quiet_start_hour'] ?? $existing['follow_up_quiet_start_hour'] ?? 22))),
+            'follow_up_quiet_end_hour' => max(0, min(23, (int) ($data['follow_up_quiet_end_hour'] ?? $existing['follow_up_quiet_end_hour'] ?? 8))),
+            'follow_up_message' => trim(mb_substr((string) ($data['follow_up_message'] ?? $existing['follow_up_message'] ?? ''), 0, 900)),
             'follow_up_template' => trim((string) ($data['follow_up_template'] ?? $existing['follow_up_template'] ?? '')),
             'follow_up_template_language' => trim((string) ($data['follow_up_template_language'] ?? $existing['follow_up_template_language'] ?? 'bn')),
             'proactive_mode_enabled' => (bool) ($data['proactive_mode_enabled'] ?? $existing['proactive_mode_enabled'] ?? false),
             'objection_handling_enabled' => (bool) ($data['objection_handling_enabled'] ?? $existing['objection_handling_enabled'] ?? false),
             'cross_sell_enabled' => (bool) ($data['cross_sell_enabled'] ?? $existing['cross_sell_enabled'] ?? false),
             'personalization_enabled' => (bool) ($data['personalization_enabled'] ?? $existing['personalization_enabled'] ?? false),
+            'takeover_minutes' => max(30, min(1440, (int) ($data['takeover_minutes'] ?? $existing['takeover_minutes'] ?? self::DEFAULTS['takeover_minutes']))),
+            'reply_delay_seconds' => max(0, min(15, (int) ($data['reply_delay_seconds'] ?? $existing['reply_delay_seconds'] ?? self::DEFAULTS['reply_delay_seconds']))),
+            'handover_notice_enabled' => (bool) ($data['handover_notice_enabled'] ?? $existing['handover_notice_enabled'] ?? false),
+            'rich_replies_enabled' => (bool) ($data['rich_replies_enabled'] ?? $existing['rich_replies_enabled'] ?? false),
+            'address_style' => in_array($data['address_style'] ?? $existing['address_style'] ?? 'none', self::ADDRESS_STYLES, true)
+                ? ($data['address_style'] ?? $existing['address_style'] ?? 'none')
+                : 'none',
+            'response_target_minutes' => max(0, min(1440, (int) ($data['response_target_minutes'] ?? $existing['response_target_minutes'] ?? self::DEFAULTS['response_target_minutes']))),
+            'business_about' => mb_substr(trim((string) ($data['business_about'] ?? $existing['business_about'] ?? '')), 0, 4000),
+            'ai_live' => (bool) ($data['ai_live'] ?? $existing['ai_live'] ?? $existing['enabled'] ?? $data['enabled'] ?? false),
+            'typing_indicator_enabled' => (bool) ($data['typing_indicator_enabled'] ?? $existing['typing_indicator_enabled'] ?? self::DEFAULTS['typing_indicator_enabled']),
+            'product_cards_enabled' => (bool) ($data['product_cards_enabled'] ?? $existing['product_cards_enabled'] ?? self::DEFAULTS['product_cards_enabled']),
             'api_key' => filled($data['api_key'] ?? null)
                 ? Crypt::encryptString(trim((string) $data['api_key']))
                 : ($existing['api_key'] ?? null), // keep existing when left blank
         ];
 
         $company->forceFill(['settings' => $settings])->save();
+
+        if ($instructionsBefore !== null) {
+            app(AiInstructionService::class)->recordSettingsChange($company, $instructionsBefore, $this->instructionBlocks($company), auth()->user());
+        }
+    }
+
+    /** The owner's written guidance as stored in the settings: about, voice, guidelines. */
+    public function instructionBlocks(Company $company): array
+    {
+        $all = $this->all($company, self::TOOL_MESSAGING);
+        $blocks = [];
+        foreach (AiInstructionVersion::BLOCKS as $block => $key) {
+            $blocks[$block] = (string) ($all[$key] ?? '');
+        }
+
+        return AiInstructionVersion::normalize($blocks);
+    }
+
+    /** Write the guidance blocks straight into the settings (publishing from the Agent Desk). */
+    public function setInstructions(Company $company, array $blocks): void
+    {
+        $blocks = AiInstructionVersion::normalize($blocks);
+        $settings = (array) $company->settings;
+        foreach (AiInstructionVersion::BLOCKS as $block => $key) {
+            $settings['ai_tools'][self::TOOL_MESSAGING][$key] = mb_substr($blocks[$block], 0, match ($block) {
+                'about' => 4000,
+                'voice' => 2000,
+                default => 16000,
+            });
+        }
+        $company->forceFill(['settings' => $settings])->save();
+    }
+
+    /** Go live (or back to practice mode) without touching the other settings. */
+    public function setLive(Company $company, bool $live): void
+    {
+        $settings = (array) $company->settings;
+        $stored = (array) data_get($settings, 'ai_tools.'.self::TOOL_MESSAGING, []);
+        // Nothing saved for this tool yet: keep reading the old shared settings.
+        $settings['ai_tools'][self::TOOL_MESSAGING] = [...($stored !== [] ? $stored : ($this->legacyGlobalSettings($company) ?? [])), 'ai_live' => $live];
+        $company->forceFill(['settings' => $settings])->save();
+    }
+
+    /** True when the AI may answer real customers (not only staff test chats). */
+    public function isLive(Company $company): bool
+    {
+        return (bool) $this->all($company, self::TOOL_MESSAGING)['ai_live'];
     }
 
     public function enabled(Company $company, string $tool): bool
@@ -241,5 +354,22 @@ class AiSettingsService
         } catch (DecryptException) {
             return null;
         }
+    }
+
+    /**
+     * "1, 6, 24, 48" as whole hours, rising, 1 to 720. Falls back to the
+     * default when nothing usable is left, so a typo cannot switch the
+     * reminders off by accident.
+     *
+     * @return list<int>
+     */
+    public static function followUpHours(string $value): array
+    {
+        $hours = collect(preg_split('/[\s,;]+/', $value, -1, PREG_SPLIT_NO_EMPTY) ?: [])
+            ->map(fn (string $hour): int => (int) $hour)
+            ->filter(fn (int $hour): bool => $hour >= 1 && $hour <= 720)
+            ->unique()->sort()->values()->all();
+
+        return $hours !== [] ? $hours : array_map('intval', explode(',', self::DEFAULTS['follow_up_schedule_hours']));
     }
 }

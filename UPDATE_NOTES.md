@@ -2,6 +2,14 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-20 - IMS v2: `main` (v2.88.1) merged into `feature/ims-v2`
+
+Reason - GitHub showed the branch in conflict with `main` (CHANGELOG.md, UPDATE_NOTES.md, lang/en.json, lang/bn.json).
+
+What changed: both sides kept. CHANGELOG keeps IMS v2 under [Unreleased] above the released 2.87.1–2.88.1 entries; UPDATE_NOTES keeps both sets of entries; the language files keep both blocks of new keys, with the one key added on both sides ("Question", same wording) kept once. No code conflicts.
+
+Commit status: merge committed and pushed to `feature/ims-v2`; not on `main`.
+
 ## 2026-10-20 - IMS v2: brief for the VPS AI agent, and the first push
 
 Reason - owner: push the IMS v2 work now, and before that explain to the owner's AI agent (which has the VPS access) everything it has to do to put IMS on its separate domain — the owner will not do the VPS work themselves.
@@ -102,6 +110,37 @@ Deploy: `php artisan migrate --force`; a queue worker must run; Nixpacks build a
 
 Still open (owner's questions in `IMS-V2/AGENT.md` §7): sales of one product across two projects; the old IMS's data (phase 7 waits for owner Q10 answer); 2FA for office admins.
 
+## 2026-10-19 (mp-footer) - Marketplace Pro: unreadable footer and top bar
+
+Reason - owner's screenshot ("blade থিমের ui বাজে হয়েছে"): grey footer with near-invisible text, grey top bar, white header over a dark page. Cause: the top bar and footer used the admin secondary colour (mixed 72% with black) as background with fixed light text, so a light secondary gave low contrast.
+
+What changed: new `secondary_deep` palette colour (secondary if dark, else `#0F172A`) used for the top bar and footer. Hero banner (owner asked, same day): Marketplace Pro desktop no longer forces a 4:1 frame with `cover`; it takes the image's height (max 30rem) with `contain`, so no slide is cropped (CSS only, Marketplace Pro only). Not changed: the white header (follows the admin secondary colour on purpose). Verified: StorefrontThemeTest, SEO and Marketplace tests, `npm run build`.
+
+Commit status: committed and pushed to `claude/erpf-marketplace-pro-customization-5m95cn` with the owner's approval (2026-10-19); not on `main`.
+
+## 2026-10-19 (media) - WhatsApp Web: pictures and voice notes that do not open in the Inbox
+
+Reason - owner's new screenshots after the redeploy: the audio player shows but pressing play does nothing, and the image is still a broken picture ("অডিও প্লেয়ার আসছে কিন্তু অডিও প্লে করলে কাজ করে না। আর ইমেজ এখনো দেখাচ্ছে না।").
+
+What I found:
+- A message only gets a player or picture when `media_path` is set, so the file was saved; the failure happens when the browser fetches `conversation-messages.media`. I ran the real route locally with a real PNG and a real Ogg/Opus header: it answers 200 with `image/png` / `audio/ogg`, correct length. So the ERP route is fine on a normal setup and the cause on the owner's server is not visible from here (possible: the file is missing from the server's storage after a redeploy, or the server answers something else). I do not know which; the Inbox now tells.
+- Real defect found in the bridge: the media queue was strictly ordered, so one picture/voice note that WhatsApp can no longer serve (very old history media) blocked every file behind it for about 4 minutes (8 attempts with growing waits) - with thousands of history media this starves new media too.
+- `ConversationMediaController` had no byte-range support (Safari/iPhone, seeking), and the Content-Type came only from sniffing the bytes.
+
+What changed:
+- Inbox: when a picture / audio / video cannot be shown, the bubble now says why in plain words ("The browser could not show this file. Server answer: 404 (application/json). ..."): it asks the same URL with `Range: bytes=0-0` and prints the HTTP status, content type and the server's reason. Only on messages that have a saved file; nothing extra for text messages.
+- `ConversationMediaController`: answers `206`/`416` for byte ranges, sends `Accept-Ranges`, `Content-Length` and an exact `Content-Type` (the type WhatsApp declared wins for audio/video when sniffing says something else, e.g. `application/ogg`); for an authorized user a missing/unreadable file returns JSON with the reason (still 404/500). Unauthorized requests are still a plain 404.
+- Bridge `Outbox` has `independent: true` for the media queue: a failing file is retried later on its own schedule (2 s doubling, max 5 min, 8 attempts as before) and the next file is tried right away. The event queue stays strictly ordered.
+- 5 lang keys (en/bn).
+
+Not verified: that this fixes the owner's broken images; it needs the redeploy (ERP and Wa Bridge). After it, a broken file shows its reason in the bubble - send me that line (or a screenshot) if it still does not open.
+
+Needs Bangla review: the 5 new keys ("The browser could not show this file...", "...and the server did not answer.", "The stored file path is not valid...", "The file is not in the server storage...", "The server could not read the file: :error.").
+
+Tests: bridge `npm test` (20 passing, 2 new for the independent outbox); `WhatsAppWebArchiveTest` (32; 5 new: real PNG/Ogg types, audio type, byte ranges, missing-file reason, Inbox failure notice), `PrivateAttachmentStorageTest`, `InboxPageTest`, `TranslationParityTest`, Pint pass.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
+
 ## 2026-10-18 - Pay a cycle's profit without waiting for sales (manual-profit settlement)
 
 Owner (in Bangla), after I read the group code: some projects are outside any group and some groups are project-based, so keep that flexible; and do not tie a project's payout to sales, because a cycle is two months but sales can take longer. Answers to my three questions: group structure "stays as before" (nothing to change there); "the payout must also be possible without sales — our investment rule is that every two months investors are handed their profit, sales or not, so keep a manual option"; the amount is entered by staff.
@@ -123,6 +162,7 @@ Decisions I made that you may want to change: (1) staff enter the **net profit b
 Needs Bangla review: the 10 new strings in `lang/bn.json` — "অঙ্ক কীভাবে ঠিক হবে?", "সেলস রাজস্ব থেকে", "হাতে বসানো লাভ (সেলস লাগবে না)", "বণ্টনের নিট লাভ", "অঙ্ক ঠিক হয়েছে", "হাতে বসানো লাভ", the helper texts, and the report line "এই সাইকেলের লাভ (কোম্পানি ঘোষিত, সেলস থেকে হিসাব করা নয়)".
 
 Commit status: committed on `claude/nifty-carson-r2vpby`, merged with `main` (v2.86.4) and pushed to `main` with owner approval (2026-10-19).
+
 
 ## 2026-10-19 (names and media) - WhatsApp Web chats: names, video/audio, refresh
 
@@ -155,7 +195,7 @@ Follow-up (owner: "যাদের নাম নেই তাদের ফোন
 
 Follow-up (owner: "আর রিয়েল টাইম সিংক লাগবে"): what already was real time: the bridge sends each live message to the ERP the moment WhatsApp delivers it. The delays were (1) the queue worker before the message was saved, (2) the Inbox only re-drew every 8 seconds, and (3) messages that arrived while the bridge was offline were filed as old history (no unread, no lead). Changed: live batches (<= 25) are saved inline, the Inbox polls a cheap change signature every 3 seconds (`Inbox::checkForChanges()`, `skipRender()` when unchanged, full refresh on change and every 30 seconds), and recent `append` upserts count as live (`splitLiveMessages`). New tests: inline vs queued, failure returns 500, Inbox notices a new message, bridge `splitLiveMessages`. Not done, needs an owner decision: true push (no polling) needs a websocket server (Laravel Reverb) as another Coolify service plus Echo in the frontend; polling every 3 seconds is the no-new-infrastructure version. Not verified: behaviour under many open Inbox tabs at once.
 
-Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
+Commit status: on `main` (v2.86.5, owner approved the push on 2026-10-19).
 
 ## 2026-10-19 (later) - WhatsApp Web bridge: show why a connection fails, and a switchable device identity
 
@@ -235,6 +275,22 @@ Checked: `BulkSmsBdPolicyTest` (7), `SmsTemplatesTest` (16), `InvestorPortalTest
 Needs Bangla review: the 9 new keys in `lang/bn.json` (BulkSMSBD rules box, masking notice, the three policy messages, "Use suggested wording", the counter).
 
 Commit status: not committed yet; branch `feature/sms-bulksmsbd-policy`, waiting for the owner's approval.
+
+## 2026-10-18 - Fix: signed-out visit to an old admin link threw "Route [login] not defined"
+
+Trigger: Deploy Error Logs showed `module:page:admin.clusters.legacy` — `RouteNotFoundException: Route [login] not defined` at `UrlGenerator.php:542`, request `https://app.zamzamint.com/admin/users`, raised from `Authenticate::redirectTo()` via the default `redirectGuestsTo(fn () => route('login'))` that `ApplicationBuilder` installs.
+
+Cause: `/admin/users` (and every other old top-level admin path in `LegacyAdminClusterRedirectController::legacySegments()`) is served by a plain route inside `Route::middleware('auth')` in `routes/web.php`, not by the Filament panel, so a guest hits Laravel's `auth` middleware. The app defines no route named `login` (Filament's is `filament.admin.auth.login`), so the redirect itself crashed; `ModuleGuard` then reported it and showed the module error page instead of the sign-in page. The same crash applied to the other plain `auth` routes: order print, bulk print, report exports (CSV/PDF), supplier PDF, push-devices and app-upgrade endpoints.
+
+What changed: `bootstrap/app.php` — `$middleware->redirectGuestsTo(fn () => route('filament.admin.auth.login'))`. All plain `auth` routes are `/admin/*`, so one target is correct; the intended URL is kept so sign-in returns to the page. Nothing else touched. `tests/Feature/AdminGuestRedirectTest.php` (5 tests) covers four guest paths and the remembered intended URL.
+
+Not done / worth knowing: the 500 + Deploy Error Log rows already recorded stay there until a Super Admin clears them. A guest who opens `/admin/...` on a reseller/investor portal host is redirected to that portal by `RestrictPortalHosts` before the `auth` middleware runs, so the admin login target does not leak across portals.
+
+Environment note: the container had PHP 8.3; PHP 8.4 + imagick were installed from the ondrej/php PPA for this session only (not part of the commit).
+
+Verification: `php artisan test --filter=AdminGuestRedirectTest` 5 passed; with the `bootstrap/app.php` line removed the same tests fail with the exact production error (`Route [login] not defined`, `UrlGenerator.php:542`). Full plain `php artisan test` (after `npm run build`): 2,594 passed, 2 skipped, 0 failed. Pint reports only older style issues in `bootstrap/app.php` (`\Throwable`, `!` spacing), none on the new lines. Not tried in a real browser.
+
+Commit status: committed on `claude/inspiring-mendel-llkhz0`; `main` (v2.86.5) was merged in, the full suite re-run, and the branch pushed to `main` on the owner's explicit approval (2026-10-19).
 
 ## 2026-10-18 - Supplier Report (Reports module)
 
@@ -1349,6 +1405,74 @@ Verification:
 - Full `php artisan test` (plain, no `--env`): 2017 passed, 1 skipped, 0 failed. `npm run build` passes. Pint passes on the changed PHP files (`bootstrap/app.php` and one line in `LowStockProducts.php` were already failing Pint before this change and were left as they were).
 
 Commit status: committed and pushed to `ccr-59b8ca5b-4zc27z`, then to `main` once the branch's MySQL migrations check passed (owner approved 2026-10-09: "হ্যাঁ, কমিট করে পুশ করো এবং মেইন এ পুশ কর").
+
+## 2026-10-09 - AI inbox control plane, phase 1: AI or team, return to AI, activity log, neat replies
+
+Built from `16_AI_INBOX_CONTROL_PLANE_PLAN.md` after a read-only walk through AiPraktor's dashboard, home page and help page (119 answers). Owner instruction: "aipraktor এর মত করে বিল্ড কর" — so the AiPraktor behaviour is the rule: takeover time 6 hours by default (owner can change it), timer choices 30 min / 1 hour / 6 hours / no limit, return to the AI on its own when the time is up, "." from the page inbox switches the chat, AI hands over with a reason from a fixed list.
+
+- Inbox: "AI or team" panel replaces the AI on/off switch (Take over, timer, Back to AI, Claim; shows return time and handover reason).
+- AI handover records a reason and goes through `ConversationModeService`; optional customer notice ("বিষয়টা আমাদের একজন প্রতিনিধি এখনই দেখছেন, একটু অপেক্ষা করুন।"), off by default because the existing tests and earlier design said a handover sends nothing.
+- Staff reply / page-inbox reply: team keeps the chat for the takeover time (was a fixed 24 hours).
+- `crm:revert-conversations` every minute; CRM → AI / Team Activity page with CSV.
+- Settings: takeover minutes, wait before answering, handover notice, neat replies, address style.
+- Neat replies (opt-in) follow AiPraktor's reply layout: labelled lines for price, options in stock, stock, delivery, order link; optional "জ্বি স্যার," opening.
+- Phase 2 (same day, owner: "ওকে পরের কাজ কর"): CRM → Needs attention page (`attention_items`, `AttentionQueueService`, `NeedsAttention`) — one record per AI handover with first-reply time and outcome (answered / given back to the AI / never answered / closed without a reply); setting "Reply target for handed-over chats", default 0 = no target. Only AI handovers go in the queue for now (O3); payment proof, website leads and follow-up events are not added — they need the owner's list. The reply target number (O2) is the owner's to set; business hours are not applied.
+
+- Phase 3 (owner: "পরবর্তি কাজ কর"): CRM → AI Inbox Report (`AiInboxReportService`, `AiInboxReport` page).
+  - It shows the share of chats the AI handled alone, AI and team replies, handovers, takeovers and auto-returns.
+  - It shows average and median first reply, late share, never answered, waiting now, handover reasons, and a by-channel table.
+  - Nothing is stored; the numbers are worked out when the page opens. "Handled by the AI alone" means a chat with customer messages in the period and no switch to the team in the period.
+
+- Phase 4 (owner: "ধাপ ৪ শুরু কর"): CRM → Agent Desk (`AgentDesk`, `AiInstructionService`, `AiInstructionVersion`) and CRM → Unanswered questions (`UnansweredQuestions`).
+  - **Decision O6 not asked yet:** editing, publishing and testing need `canManageSettings()`, the same people who can already change these texts on Integrations. No new permission was added.
+  - **Plan changed on purpose:** the plan listed five blocks (about, delivery, voice, exact words, other). The agent never writes free text. The server renders every customer-visible fact from the catalog, FAQ and delivery tools, so a "delivery" or "exact words" box would have no effect. The Agent Desk has three boxes instead: about (new), voice and guidelines (the two existing settings). Facts like delivery time or warranty belong in FAQ answers, and the Unanswered questions page makes that quick.
+  - Migration `2026_10_10_000100_create_ai_instruction_versions_table` also adds `crm_ai_runs.is_test` and makes `crm_ai_runs.conversation_id` nullable (test runs have no conversation). Not yet run on the demo database.
+  - Plain-language change requests ("make the fee 25,000") are not built, as the plan said.
+  - Needs Bangla review: 55 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to `feature/ai-inbox-control-plane` (owner approved: "ওকে কমিট এবং পুশ কর"). Not merged to `main`. The migration has not been run on the demo DB.
+
+- Phase 5 (owner: "পরের ধাপের কাজ শুরু কর"): CRM → Knowledge base (`KnowledgeDocumentResource`, `KnowledgeBaseService`, `KnowledgeDocument`) and the AI tool `lookup_knowledge`.
+  - Documents are plain text or Markdown. Headings split them into passages of up to 700 characters. The agent looks passages up and selects `knowledge:<id>`; the server sends the stored passage as written (same rule as FAQ answers). Amounts written in a looked-up passage count as grounded. The tool is offered only when the company has an active document.
+  - **Plan changed on purpose:** search runs in PHP over the cached passages instead of MySQL FULLTEXT, because InnoDB's tokenizer breaks Bangla words at vowel signs. Matching drops a trailing "s" and, for words of 5+ characters, the last two characters (the Bangla ending ের), and needs at least half of the question's words to match. Embeddings are not built (the plan said only if quality proves insufficient).
+  - Who can edit: `crm.manage` (same as Broadcasts), because the text is sent to customers as written. Not asked of the owner.
+  - **Known limit (resolved 2026-10-19, see phase 6):** a customer message with a hand-over word used to go to the team before the FAQ or the knowledge base was checked.
+  - Test box: **Test a question** on the Knowledge base list runs the same search (no AI call). Unanswered questions has a new **Add to knowledge base** action. File import accepts .md/.txt up to 200 KB.
+  - Migration `2026_10_11_000100_create_knowledge_documents_table`. Not run on the demo DB.
+  - Needs Bangla review: 17 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+- Phase 8, checklist part (owner: "ওকে এখন পরবর্তি কাজ কর"): CRM → Setup checklist (`AiSetupChecklist`, `AiSetupChecklistService`). Phases 6 and 7 and the go-live switch need owner answers (O4, O5, O7, O8, O9), so only the part that needs no decision was built.
+  - Eight steps, all worked out from data, nothing stored (no "dismissed" state either): channel, AI key + switch on, business description (`business_about`), every active product has a photo, default courier has delivery charges, at least one FAQ or knowledge document, the signed-in user has a push device, a test chat run exists.
+  - Not built: the practice mode / go-live switch (`ai_live`, O7), so there is no "go live" step yet. The "alerts" step is per user, not per company.
+  - Needs Bangla review: 23 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+
+- Owner answers (2026-10-19, asked with `AskUserQuestion`): O2 = 30 minutes, all hours; O3 = add payment proof, website lead, call and booking requests, complaint words; O4 = reminders at 1, 6, 24, 48 hours then weekly for 4 weeks, nothing 22:00–08:00, only for customers who got a link or quotation and have not ordered, counted from the customer's last message; O4a = Messenger steps after 24 hours go to the Needs attention list; O5 = Messenger broadcast allowed, test to own chat first, CRM manage people send; O6 = same permission as Integrations; **O7 = no practice mode** (AI on = live); O8 = parcel count + total COD, per-parcel list, consignment/tracking number, no rider block; O9 = all four sources (days not answered); returns words look in saved answers first. Full table: plan §3.1.
+- Phase 6 (owner: "প্রশ্ন করে জেনে নাও" — then built from the answers above): the hand-over rules, follow-up schedule and Messenger broadcast.
+  - **Hand-over rules** (`AiReplyService::keywordHandover()`): returns/refund words look in FAQ and knowledge first; payment, call, booking and wider complaint wording go to the team with their own reason. An image-only payment screenshot is recognised only when the separate image model describes photos (Auto Messaging → image model); with the main model reading the photo directly, only the customer's caption is checked. New Needs attention kinds and reasons; website leads open an item (`attention_items.lead_id`).
+  - **Follow-ups:** my reading of "weekly" is 7 days after the previous reminder, i.e. hours 216, 384, 552, 720 from the base message. The schedule restarts from the customer's newest message (the first reminder still ahead, not an old one), a person's reply cancels it, a newer offer replaces it. Links expire after 7 days but reminders go on for 30: the weekly WhatsApp template does not carry the link; Messenger text with `{link}` only goes inside the 24-hour window, when the link is still valid. Companies with Messenger need to enter the reminder text on Integrations; until then those reminders go to the team.
+  - **Broadcast:** window is 23 hours (one hour margin). The test goes to a chat the sender picks; it must be a chat with the Page inside the window, so the sender writes to the Page from their phone first. "Who may send" = `crm.manage`, the permission the Broadcasts resource already needs; no new permission.
+  - **Not run on the demo DB:** migrations `2026_10_19_000100`, `000200`, `000300` (phase 6) and `000400` (phase 7).
+  - Needs Bangla review: 35 new keys in `lang/bn.json` (O3 5, O4 11, O5 19).
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+- Phase 7 (same day): Courier → Scan parcels, Courier → Handover sheet, CRM → To chase.
+  - **Not built, on purpose:** the invoice QR (the invoice already prints a scannable Code 128 barcode of the order number) and the **Offer tapped** source of To chase (nothing records who tapped an offer, so there is nobody to contact). **Checkout attempt** is read as "checkout stopped at the advance payment", because `StorefrontCheckoutAttempt` keeps only masked contacts.
+  - **Owner decision still needed:** look-back days for To chase were not answered; it offers 7 / 14 / 30, default 7. Scan parcels moves to a stage the user picks (default Shipping); stages that need a reason (cancelled, returned, refunded) are not offered.
+  - Camera scanning uses the browser's `BarcodeDetector` (Chrome/Edge on Android and desktop); it was not tried on a real device. The USB-scanner path (type + Enter) is covered by tests.
+  - Needs Bangla review: 44 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+- Phase 9 (2026-10-20, owner: "Meta Seen আর টাইপিং ইন্ডিকেটর, প্রোডাক্ট কার্ড / carousel, Practice mode সহ কর। এই কাজ গুলো শেষ কর।"): the three things left in the plan.
+  - **Practice mode reverses the 2026-10-19 answer O7 ("no practice mode") on the owner's new instruction.** `ai_live` is a per-company setting with no default on purpose: when nothing was saved it equals `enabled`, so every company already running stays live and the existing tests did not change. Only the Integrations form saves it explicitly (its switch starts off for a company that never turned the AI on). While not live, `AiReplyService::maybeReply()` writes a `skipped` run and answers only chats with `conversations.is_staff_test`; `SalesFollowUpService::process()` leaves reminders `pending`. Staff mark a chat from the Inbox header (**Use as test chat**); **Go live** / **Back to practice mode** are on the Setup checklist (ninth step **Go live**) and the switch is on Integrations → Auto Messaging.
+  - **Seen and typing** (`ConversationPresenceService`, setting `typing_indicator_enabled`, default on): sent just before each model round, never for an instant FAQ answer or a keyword handover. Messenger: `mark_seen` once per message, `typing_on` renewed at most every 12 s, `typing_off` when the AI hands over. WhatsApp: one call that marks the message read and shows typing. Failures are swallowed on purpose and are not recorded as a channel fault.
+  - **Product cards** (`ProductCardService`, setting `product_cards_enabled`, default off): only Messenger; up to 10 cards from the products behind the reply keys; price and stock come from the records; button = the order link in the answer, else the product page on the company's `domain`; no card for a product without a photo. A failed row is only logged and leaves no failed bubble. Not shown in the Agent Desk test chat.
+  - Not done / limits: the Messenger "Seen" is not sent when a person opens a chat in the Inbox (only when the AI works on a message). Meta's typing sign lasts about 20 s on Messenger and 25 s on WhatsApp, so a very slow model answer can show a gap. Practice mode and cards were tested with faked Meta calls only; nothing was tried against a real Page or number. Migration `2026_10_20_000100` was not run on the demo DB.
+  - Needs Bangla review: 18 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane, then merged into main (owner approved commit, push and merge to main on 2026-10-20).
+
+Not done yet (next phases of the plan): nothing. Plan 16 is built.
+
+Needs Bangla review: the new Inbox/Activity/settings strings in `lang/bn.json` (51 keys) the Needs attention strings (19 keys) and the AI Inbox Report strings (26 keys) were written by the agent.
+
+Commit status: committed and pushed on branch `feature/ai-inbox-control-plane` (owner approved 2026-10-10: "কমিট এবং পুশ কর ফিচার ব্রাঞ্ছে"). Phases 1-3 are in this one commit. Not merged to `main`; the 8 PayStation/Storefront checkout tests that fail on this working tree belong to other uncommitted work, not to this branch.
 
 ## 2026-10-09 - Lead CRM sales agent: 5 opt-in intelligence upgrades (proactive mode, objection handling, multi-product cart, cross-sell, personalization)
 

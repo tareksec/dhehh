@@ -1069,6 +1069,9 @@ class StorefrontSetting extends Model
             'primary_contrast' => $this->themeForegroundColor(),
             'secondary' => $secondary,
             'secondary_contrast' => $this->contrastColor($secondary),
+            // The utility bar and footer carry light text, so they need a dark
+            // surface even when the admin picked a light secondary colour.
+            'secondary_deep' => self::relativeLuminance($secondary) > 0.179 ? '#0F172A' : $secondary,
             'accent' => $accent,
             'accent_contrast' => $this->contrastColor($accent),
             'background' => $this->normalizedColor('theme_background_color', '#FFFFFF'),

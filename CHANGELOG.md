@@ -49,6 +49,136 @@ All notable production changes to Business Dashboard are documented here.
 - 14 new permissions (`ims.*`). PDFs use the self-hosted Hind Siliguri font (dompdf caches it in `storage/fonts`, now git-ignored); complex Bangla letters may not join perfectly in PDFs (a dompdf limit).
 - Tests: new `tests/Feature/Ims/*` (domain routing, onboarding, KYC, transparency + privacy, capital, proposals and jobs, communication and tools). Updated to the owner's new rules: `InvestmentSettlementTest` (loss × %), `InvestorGroupExitTest` (group loss now allowed), `PayoutBatchTest` and `InvestorPortalTest` (new role defaults). 513 new strings in `lang/en.json` / `lang/bn.json` with Bangla naturalization verified via `TranslationParityTest`.
 
+## [2.88.1] - 2026-10-19
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Marketplace Pro: footer and top bar unreadable when the secondary colour is light.** The top bar and footer carry light text but took their background from the admin's secondary colour, so a white or pale secondary turned them light grey and the text vanished. They now keep a dark surface (the secondary colour when it is dark, otherwise the default navy). The header still follows the secondary colour, with text colour chosen for contrast.
+
+- **Marketplace Pro: hero banner no longer cut off on desktop.** The banner was locked to a 4:1 frame and cropped any slide that was not exactly 4:1. It now takes the height of the uploaded image (up to 30 rem) and shows the whole picture. Mobile is unchanged.
+
+### Technical Notes
+
+- New palette key `secondary_deep` (`StorefrontSetting::themePalette()`), printed as `--storefront-secondary-deep`; no migration. Test: `StorefrontThemeTest::test_light_secondary_colour_keeps_the_footer_surface_dark`.
+## [2.88.0] - 2026-10-19
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **AI or team: every chat now shows who answers it, and goes back to the AI on its own** (16_AI_INBOX_CONTROL_PLANE_PLAN.md, phase 1, modelled on AiPraktor). The Inbox's "AI assistant" switch is replaced by an **AI or team** panel: **Take over** (for the company's takeover time), **Keep with the team for** 30 min / 1 hour / 6 hours / No time limit, **Back to AI**, and **Claim** (assign to me). It shows when the chat returns to the AI and, when the AI handed it over, why.
+- **The AI hands over with a reason.** When the AI gives a chat to the team it records one reason from a fixed list (asked for a discount, complaint, refund, asked for a person, outside what the AI knows, angry customer, ready to buy, AI could not reply, other). The chat goes back to the AI when the takeover time is up, unless someone keeps it with no time limit.
+- **Type "." from the page inbox** (Messenger / Business Suite) to take a chat for the team; another "." gives it back to the AI.
+- **CRM → AI / Team Activity**: every switch between the AI and the team, from every source (Dashboard, AI, Auto-revert, Answered, Page inbox, Dot command), with filters and CSV export.
+- **New Auto Messaging settings** (Integrations → Auto Messaging): team time before a chat returns to the AI (default 360 minutes, like AiPraktor), wait before answering (0–15 seconds, default 3, unchanged), tell the customer when a person takes over (off by default), neatly arranged replies (off by default), and how the AI addresses the customer in Bangla (no title / Sir–Madam / Bhaiya–Apu, default no title).
+- **Neatly arranged replies (opt-in).** Product facts go on their own lines with small labels: 💰 price, 📏 sizes/colours in stock (never a stock count), ✅/❌ in stock, 🚚 delivery charge per zone, 🛒 order link, followed by "which one would you like?" for products with options. With an address style chosen, a Bangla reply can open with "জ্বি স্যার," / "জ্বি আপু," when the customer's words or name make it clear.
+- **CRM → Needs attention** (plan 16, phase 2): every chat the AI handed to the team, with its reason, how long it waited for a person's first reply, who answered, and how it ended — answered, given back to the AI, never answered (went back to the AI on its own with no reply), or closed without a reply. Filters for open / done, reason, outcome, late only and "given to me"; **Claim** and **Done** buttons; the menu shows the number still open, red when one is late.
+- **Reply target for handed-over chats** (Integrations → Auto Messaging, minutes, 0–1440): a handed-over chat with no reply from a person within this time is marked late. Default 30 minutes, around the clock (owner decision 2026-10-19); 0 = no target.
+- **CRM → AI Inbox Report** (plan 16, phase 3), for today / 7 / 30 / 90 days:
+  - chats with customer messages, and the share the AI handled alone;
+  - AI replies and team replies;
+  - AI handovers and team takeovers, and chats that went back to the AI on their own;
+  - average and median first reply after a handover;
+  - late share, never answered, and waiting now (with the longest wait);
+  - why the AI handed over;
+  - a by-channel table.
+- **CRM → Agent Desk** (plan 16, phase 4):
+  - three boxes for the sales agent's written guidance: about the business, voice, and conversation guidelines (the last two are the existing "Brand voice" and "Sales agent conversation guidelines" settings);
+  - **Save draft**, **Publish** (with an optional note) and **Discard draft**;
+  - a **test chat** where the owner writes as a customer and sees the AI's reply, or that it would hand the chat to the team and why, plus what it looked up. It reads the real catalog and FAQ, sends nothing to anyone and creates no order, link or lead; it can try the unpublished text in the editor;
+  - a **Versions** list (including changes saved on Integrations) with **Open in editor** and **Make live again**.
+  - Only people who can manage settings can edit, publish or test; everyone with CRM view access can read it.
+- **CRM → Unanswered questions**: chats the AI handed to the team in the last 30 days because it had no verified answer, with what the customer asked and an **Add FAQ answer** button, so the AI can answer the same question next time.
+- **CRM → Knowledge base** (plan 16, phase 5): the company's own documents for the sales agent (fees, rules, packages, returns, policies).
+  - Write plain text or Markdown, or **Import file** (.md / .txt). A heading starts a new topic; the AI finds a short passage (up to about 700 characters) and it is sent to the customer exactly as written, the same way FAQ answers are.
+  - **Test a question** shows which passages the AI would find for a customer question. Nothing is sent and the AI is not called.
+  - Only active documents are used. Only people who can reply and manage the CRM can change them.
+  - **Unanswered questions** has a new **Add to knowledge base** button next to **Add FAQ answer**.
+- **CRM → Setup checklist** (plan 16, phase 8, checklist part): eight steps that make the AI inbox ready for real customers, each with a link to where it is done: connect a chat channel, add an AI key and turn the AI on, describe the business, products with photos, delivery charges, saved answers or documents, phone alerts, and a test chat run. Steps turn done by themselves from the company's data; a progress bar shows how many are done.
+- **More messages go to the team, each with its own reason** (plan 16, owner answers of 2026-10-19). A customer who writes that they paid (bKash/Nagad, TrxID, "টাকা পাঠিয়েছি"), asks for a phone call, or asks for a booking is handed to the team at once, and the Needs attention list shows the reason: **Payment proof sent**, **Asked for a call**, **Asked for a booking**. A payment screenshot is recognised when the customer adds a caption, or when the separate image model describes the photo. More complaint wording now counts as a complaint: damaged, wrong item, fraud, scam, প্রতারণা, ধোঁকা, ভুল পণ্য, ভাঙা, ড্যামেজ.
+- **Website leads on Needs attention.** A new lead that comes in from the website is a line on the list (reason **New website lead**, with its interest as the note) and is answered as soon as someone moves the lead past "New". The list has an **Open lead** button.
+- **Sales follow-up reminders follow a schedule** (plan 16, owner answer O4). A customer who was sent a checkout link or a quotation and has not ordered gets a reminder **1, 6, 24 and 48 hours after their last message, then once a week for 4 weeks**. A new message from the customer starts the count again. Nothing is sent from 22:00 to 08:00 (company time). The reminders stop when the customer orders, opts out, or a person writes to them; a newer offer replaces the older schedule.
+  - WhatsApp uses the approved template at every step. Messenger and Instagram allow a normal message only within 24 hours of the customer's last message: inside that time the company's **reminder text** goes out (Integrations → Auto Messaging; `{link}` becomes the order link); after it, or with no text saved, the reminder is a line on Needs attention for the team.
+  - The hours, the number of weekly reminders, the quiet hours and the Messenger text are settings on Integrations → Auto Messaging. **Sales Follow-ups** shows how many reminders each customer has had.
+- **Messenger broadcast** (plan 16, owner answer O5). A broadcast can go to a Facebook Page's Messenger chats. The audience is the chats that wrote to the Page in the last 23 hours (Messenger allows nothing else), and every chat is checked again at the moment its message is sent. **Send test** sends the exact message to your own chat first; the broadcast cannot be sent until a test of its current text succeeded, and changing the text asks for a new test. People with CRM manage permission can send.
+- **Courier → Scan parcels** (plan 16, phase 7): scan or type invoice numbers (USB scanner, or the phone camera reading the barcode printed on the invoice), then move the whole list to one stage, for example Shipping. Every order goes through the order workflow, so the allowed steps and the status log still apply; an order that cannot make the move is skipped with the reason.
+- **Courier → Handover sheet**: one courier, one day: how many parcels, the cash to collect, and a list with invoice, customer, phone, address, cash and the consignment/tracking number. **Print sheet** opens a clean page for the rider.
+- **CRM → To chase**: people who wanted to buy and did not: carts left behind, checkouts that stopped at the advance payment, and leads with no order, for the last 7 / 14 / 30 days. Each person appears once, with call and WhatsApp buttons and **Mark contacted**; someone who ordered since is left out, and someone marked contacted comes back only if they show interest again. Offer taps are not on the list: nothing records who tapped an offer.
+- **Practice mode** (plan 16, §4.9; owner request 2026-10-19, which replaces the earlier answer "no practice mode"). A company that turns the AI on from Integrations starts in practice mode: the AI answers only the chats that staff marked as test chats. Real customers get no AI reply and no reminder until someone goes live.
+  - Inbox: **Use as test chat** / **Remove test mark** (people who can manage the CRM), shown while the AI is not live.
+  - Setup checklist: a ninth step **Go live**, and **Go live** / **Back to practice mode** buttons (people who manage settings; the AI must be on). Integrations → Auto Messaging has the same switch, **AI answers real customers (live)**.
+  - A company whose AI was already on keeps answering everyone: nothing changes for it until it chooses practice mode.
+  - Handovers to the team, the Agent Desk test chat and broadcasts do not depend on it.
+- **"Seen" and "typing..." while the AI answers** (Integrations → Auto Messaging, on by default). Just before the AI works on an answer, a Messenger customer sees the message marked as seen and "typing...", and a WhatsApp customer sees the message read and "typing...". Nothing is shown for an instant saved answer or when the AI hands the chat to the team (Messenger gets "typing" taken away). A failed call is ignored: it never delays or stops the answer.
+- **Messenger product cards** (Integrations → Auto Messaging, off by default). After an answer that names products, a Messenger customer also gets a swipeable row of up to 10 cards: photo, price and stock, and a button. The button opens the order link when the answer has one, otherwise the product page on the company's storefront domain. A product without a photo gets no card. The chat history shows the row as "🛍 product names". A failed row is only logged; the written answer has already been delivered.
+
+### Changed
+
+- **A message with "ফেরত", "রিফান্ড" or "refund" now looks in the saved answers first.** If an FAQ or a knowledge passage covers it, the AI answers with that; only when nothing does the chat goes to the team. "complaint", "human", "agent" and the discount words still go to the team at once.
+- **The reply target for handed-over chats is 30 minutes by default** (was none). A company that already saved its own number keeps it.
+- **Sales follow-up settings:** "Sales follow-up delay (hours)" is replaced by the reminder times, weekly reminders, quiet hours and Messenger text. A checkout link that expired after 7 days no longer ends the reminders; only a finished checkout does. "One follow-up per conversation per day" is gone, because the schedule sends more than one a day.
+- **The Setup checklist has nine steps:** the new last step is **Go live** (done when the AI is on and live).
+- **A staff reply now keeps the chat with the team for the company's takeover time (default 6 hours) instead of a fixed 24 hours**, and a reply typed in the page's own inbox does the same. A chat the AI handed over now returns to the AI after that time instead of staying off until someone switches it back.
+
+### Technical Notes
+
+- New `conversations` columns `automation_mode` (`ai` | `human`), `handover_reason`, `mode_changed_at`, `mode_changed_by`; `human_handled_until` keeps its meaning and is the return-to-AI time (NULL = no time limit). Migration backfills `human` for every chat with AI switched off or held until a future time. New company-owned table `conversation_mode_events` (`ConversationModeEvent`, in `MultiCompanyIsolationTest`).
+- `App\Services\Crm\ConversationModeService` is the only writer of the mode (`toHuman()`, `toAi()`, `staffAnswered()`, `revertDue()`); it keeps `ai_enabled` in step (false while the team has the chat) so existing checks keep working, and writes one event per switch. `AiReplyService::escalate()` takes a reason code and switches through it; `escalate_to_human` gained a required `reason_code` enum.
+- New command `crm:revert-conversations`, scheduled every minute, loops per company.
+- `AiAutoReplyJob::dispatchAfterWait()` replaces the fixed 3-second delay with `reply_delay_seconds`.
+- `SalesReplyRenderer::render()` gained a `$style` argument (`rich`, `address_style`) and `submit_reply` an optional `salutation` (sir | maam | none); `handoverNotice()` renders the handover message in the chat's language. Defaults leave every existing reply byte-for-byte unchanged.
+- Tests: `ConversationModeTest` (14 tests); `InboxPageTest` updated for the new panel keys.
+- New company-owned table `attention_items` (`AttentionItem`, in `MultiCompanyIsolationTest`): `kind`, `conversation_id`, `reason`, `note`, `opened_at`, `due_at`, `first_response_at`/`_by`, `resolved_at`/`_by`, `outcome`. `App\Services\Crm\AttentionQueueService` keeps at most one open item per chat; `ConversationModeService` opens it when the AI hands over (source `ai`), records the first staff reply in `staffAnswered()`, and closes it on every switch back to the AI. A takeover from the dashboard, a staff reply or "." opens nothing. The push alert from `AiReplyService::escalate()` is unchanged. New setting `response_target_minutes`. Tests: `AttentionQueueTest` (7 tests).
+- `App\Services\Crm\AiInboxReportService` computes the report on request from `conversation_messages`, `conversation_mode_events` and `attention_items` in the current company's scope; nothing new is stored. Page `AiInboxReport`. Tests: `AiInboxReportTest` (3 tests).
+- New company-owned table `ai_instruction_versions` (`AiInstructionVersion`, in `MultiCompanyIsolationTest`): `blocks` (about, voice, guidelines), `status` (draft | published | superseded), `source` (agent_desk | settings | restore), `change_note`, `published_at`/`_by`. The live text stays in the company's AI settings (`business_about`, `brand_voice`, `sales_guidelines`), so the agent's prompt source is unchanged: `AiInstructionService::publishDraft()` / `restore()` write the settings, and `AiSettingsService::save()` records a version whenever the Integrations page changes those fields. New `business_about` setting, added to the prompt as background that is explicitly not a source of prices, stock or promises.
+- `AiReplyService::dryRun()` runs the real agent for the Agent Desk test chat: read-only lookups are real, `create_order_link` / `update_qualification` / `create_quotation` answer "test mode", `escalate()` and `sendAiReply()` return at once while the flag is on, and `ConversationMessengerService::send()` now refuses an unsaved conversation. Test runs are logged as `crm_ai_runs.is_test` (with `conversation_id` now nullable): they count toward the daily budget but not the daily run limit and are left out of Sales Automation and its metrics.
+- Tests: `AgentDeskTest` (12 tests).
+- New company-owned table `knowledge_documents` (`KnowledgeDocument`, in `MultiCompanyIsolationTest`): `title`, `content` (max 20,000 characters), `is_active`, `source_file`. Saving or deleting a document clears the per-company passage cache (`crm:knowledge:{company}`, 5 minutes).
+- `KnowledgeBaseService` splits a document at its headings into passages of at most 700 characters and searches them in PHP, not with MySQL FULLTEXT: InnoDB's tokenizer breaks Bangla words at vowel signs. A word matches when it, the word without a trailing `s`, or (5+ characters) the word without its last two characters is in the passage; a hit in the title or heading counts three times; at least half of the question's words must match.
+- New agent tool `lookup_knowledge(query)` is offered only while the company has an active document. Its reply option is `knowledge:<document id>.<position>`; `SalesReplyRenderer` sends the stored passage and rejects a passage the agent did not look up. Amounts written in a looked-up passage count as grounded (`AiReplyService::amountsIn()` is the shared amount reader).
+- Tests: `KnowledgeBaseTest` (10 tests).
+- `AiSetupChecklistService::steps()` works the checklist out from the data (channel, AI settings, `business_about`, products with a photo, the default courier's `delivery_fees`, FAQs and knowledge documents, the signed-in user's `PushDevice`, a `crm_ai_runs.is_test` row). Nothing is stored. Tests: `AiSetupChecklistTest` (6 tests).
+- `AiReplyService::keywordHandover()` is the one place that decides whether a message goes to the team without asking the model (also used by the Agent Desk test chat). Word lists are constants: `HANDOFF_KEYWORDS` (= `COMPLAINT_KEYWORDS` + `HUMAN_KEYWORDS`), `RETURN_KEYWORDS` (saved answers first, via `hasSavedAnswer()`), `PAYMENT_KEYWORDS`, `CALL_KEYWORDS`, `BOOKING_KEYWORDS`. New handover reasons `payment_proof`, `call_requested`, `booking_requested`, `website_lead`, `follow_up_due`; `AttentionItem::KIND_BY_REASON` maps them to the item kinds `payment_proof`, `call_request`, `booking_request`, `website_lead` (anything else stays `handover`). `response_target_minutes` default is 30.
+- Migration `2026_10_19_000100`: `attention_items.lead_id` (nullable, cascade). `AttentionQueueService::openedForLead()` / `leadWorked()`; `LeadController::store()` opens the item and `Lead::booted()` closes it when the status leaves `new`. Tests: `AiHandoverRulesTest` (11).
+- Migration `2026_10_19_000200`: `crm_sales_follow_ups.step` and `base_at`. One row now carries a whole schedule: `step` = reminders dealt with, `base_at` = the customer message the hours are counted from, `due_at` = the next one. `SalesFollowUpService::offsets()` builds the list (`follow_up_schedule_hours` + `follow_up_weekly_count` weeks of 168 hours after the last daily step); new settings `follow_up_schedule_hours`, `follow_up_weekly_count`, `follow_up_quiet_start_hour`, `follow_up_quiet_end_hour`, `follow_up_message` (`follow_up_delay_hours` is no longer read). Statuses: `pending` between steps, `sent` or `completed` at the end. Tests: `SalesFollowUpScheduleTest` (11); `CrmSalesAutomationTest` follow-up tests updated.
+- Migration `2026_10_19_000300`: `broadcasts.messenger_channel_id`, `messenger_text`, `tested_hash`, `tested_at`; `broadcast_recipients.phone` is nullable (a Messenger recipient is a conversation: `recipient_type` = `conversation`). `Broadcast::needsTest()` compares `tested_hash` with `contentHash()` (Page + text); `BroadcastService::queue()` refuses an untested Messenger broadcast; `sendTest()` / `messengerBlocker()` re-check the 23-hour window per recipient. Tests: `MessengerBroadcastTest` (9).
+- Migration `2026_10_19_000400`: company-owned `chase_marks` (`ChaseMark`, in `MultiCompanyIsolationTest`): normalised phone + who/when. `ToChaseService` works the list out from `StorefrontCartRecord`, pending `StorefrontPayment` rows that still hold `checkout_data` (the only place an unpaid checkout keeps a phone), and `Lead`; `StorefrontCheckoutAttempt` stores only masked contacts, so it cannot be chased. Tests: `ToChaseListTest` (7).
+- `AiSettingsService`: new `ai_live` (deliberately not in `DEFAULTS`: `all()` returns the saved value, or the `enabled` value when nothing was saved, so companies already running stay live; `save()` ties an unsaved value to `enabled`, and only the Integrations form saves it explicitly), `typing_indicator_enabled` (default true) and `product_cards_enabled` (default false); `setLive()` and `isLive()`.
+- Migration `2026_10_20_000100`: `conversations.is_staff_test`. `AiReplyService::maybeReply()` writes a `skipped` run with the practice-mode reason for a non-test chat while the AI is not live; `SalesFollowUpService::process()` leaves the reminders `pending` meanwhile.
+- `MetaGraphService`: `sendMessengerAction()` (`mark_seen`, `typing_on`, `typing_off`), `sendWhatsAppTyping()` (`status: read` + `typing_indicator`), `sendMessengerCards()` (generic template) and `publicMediaUrl()`. `ConversationPresenceService` is called by `AiReplyService::runAgentLoop()` before each model round (typing renewed at most every 12 seconds; seen once per message in `raw_payload._local.seen_at`) and never records a channel fault.
+- `ProductCardService` builds the cards from the reply keys the renderer already accepted (price and stock read from the records); `ConversationMessengerService::sendCards()` stores the row as an outgoing message with `ai_meta.kind = product_cards` and deletes it again if Meta refuses it, so there is no failed bubble to retry. `consecutiveAiReplies()` and the AI Inbox Report skip such messages.
+- Tests: `PracticeModeTest` (12) and `AiPresenceAndCardsTest` (13); `AiSetupChecklistTest` now expects nine steps.
+- `NeedsAttention` writes its sidebar badge as `navigationBadge()` with `HasGuardedNavigationBadge`, the rule `ModuleGuardTest` enforces for every badge.
+- New pages `ScanParcels` (Courier cluster, `sales.update`), `CourierHandoverSheet` (Courier cluster, `sales.view`) and `ToChase` (CRM cluster, `crm.view`; marking needs `crm.manage`); route `courier.handover-sheet` (`CourierHandoverSheetController`) for the print view; `CourierHandoverSheetService` takes bookings of one courier whose `booked_at` falls in the company's day and drops not-booked, pending, cancelled and failed ones. The invoice already prints a Code 128 barcode of the order number (`App\Support\Code128`), which a USB scanner and the camera page both read, so no QR code was added. Tests: `ScanParcelsTest` (6), `CourierHandoverSheetTest` (4).
+## [2.87.2] - 2026-10-19
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **WhatsApp Web: a picture or voice note that does not open in the Inbox now says why.** Instead of a silently broken picture or a player that does nothing, the message shows the server's answer (status, file type and reason, for example "the file is not in the server storage"), so the real cause can be fixed quickly.
+- **One WhatsApp file that can no longer be downloaded no longer holds up all the others.** The bridge used to wait about 4 minutes on every expired picture or voice note before trying the next, which starved new media; each file is now retried on its own schedule while the rest go through.
+- **Audio and video can be played and wound forward from any point** (and play on Safari / iPhone): the Inbox file route now supports byte ranges and sends the exact file type WhatsApp declared.
+
+### Technical Notes
+
+- `ConversationMediaController` returns `206` / `416` for `Range`, sends `Accept-Ranges`, `Content-Length` and an exact `Content-Type` (declared audio/video type wins over byte sniffing; generic sniffed types fall back to the declared type). For an authorized user a missing or unreadable file answers JSON `{message}` with status 404 / 500; unauthorized requests stay a plain 404.
+- Inbox: messages with a saved file get a small Alpine `error.capture` handler that fetches the same URL with `Range: bytes=0-0` and prints the HTTP status, content type and reason. 5 new lang keys (en + bn).
+- `whatsapp-bridge`: `Outbox` option `independent` (used by the media queue only) defers a failed entry in memory with its own backoff and continues with the next one; the event queue is unchanged. Redeploy the ERP and the `whatsapp-bridge` app to get this. Tests: 2 new bridge tests, 5 new `WhatsAppWebArchiveTest` tests.
+## [2.87.1] - 2026-10-19
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Opening an old admin link while signed out (for example a bookmarked `/admin/users`) showed the "this page has a problem" error instead of the sign-in page.** The old admin addresses, the order print pages and the report downloads are protected by a plain sign-in check that tried to send a signed-out visitor to a page named `login`, which this app does not have. The visitor is now sent to the admin sign-in page and, after signing in, returns to the page they asked for. It also stops filling Deploy Error Logs with `module:page:admin.clusters.legacy` ("Route [login] not defined").
+
+### Technical Notes
+
+- Guest redirect: `bootstrap/app.php` sets `$middleware->redirectGuestsTo(fn () => route('filament.admin.auth.login'))`, replacing Laravel's default `route('login')`. Every plain `auth` route in `routes/web.php` is under `/admin`, so the admin login is the right target; Filament's own panels (`/admin`, `/portal`, `/investor`) use their own authenticate middleware and are unchanged. No migration, no new string. Tests: `AdminGuestRedirectTest` (5).
+
 ## [2.87.0] - 2026-10-19
 
 **Release type:** Minor Feature Update
@@ -60,6 +190,7 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - Manual-profit settlement: migration `2026_10_18_100000_add_basis_to_project_settlements` adds `project_settlements.basis` (`sales` default / `manual`, guarded by `hasColumn`); `ProjectSettlement::BASIS_SALES` / `BASIS_MANUAL`, `isManualBasis()`, `basis` is immutable like the other settlement figures. `SettlementService::calculateAndSettle()` takes a last optional `?float $manualNetProfit`: when set it ignores `$totalRevenue` and the cost-proof check, stores `total_revenue = total_cost + profit` so the stored figures still add up, and records `basis = manual` (also in the audit entry). Existing callers and the sales path are unchanged. Settle modal in `ViewInvestmentProject`, summary in `ProjectSettlementResource` (selling amount and gross profit hidden when manual) and `investments/reports/investor-payout.blade.php`. Tests: 8 new in `InvestmentSettlementTest` and 1 in `InvestorGroupExitTest`, mutation-checked (cost check kept for manual, basis not recorded). **Deploy: run `php artisan migrate --force`.** 10 new interface strings in `lang/en.json` / `lang/bn.json` (Bangla to review).
+
 ## [2.86.5] - 2026-10-19
 
 **Release type:** Patch/Fix Update

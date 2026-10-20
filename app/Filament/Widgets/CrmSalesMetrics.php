@@ -30,7 +30,7 @@ class CrmSalesMetrics extends StatsOverviewWidget
         if (! app(CompanyContext::class)->hasCompany()) {
             return [Stat::make('Sales automation', 'Select a company')->description('Revenue is reported in that company’s currency')];
         }
-        $runs = CrmAiRun::query()->where('created_at', '>=', now()->subDays(30));
+        $runs = CrmAiRun::query()->where('created_at', '>=', now()->subDays(30))->where('is_test', false);
         $links = ChatOrderLink::query()->where('created_at', '>=', now()->subDays(30));
         $orders = Order::query()->whereIn('source', [Order::SOURCE_CHAT, Order::SOURCE_CRM])->where('status', Order::STATUS_COMPLETED)->where('created_at', '>=', now()->subDays(30));
         $completed = (clone $orders)->count();
