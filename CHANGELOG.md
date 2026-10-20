@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.90.0] - 2026-10-20
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -14,7 +16,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - Exchange rates: migrations `2026_10_19_100000_create_exchange_rates_table` (unique `company_id` + `currency` + `rate_date`, named index) and `2026_10_19_100100_add_foreign_currency_to_project_cost_items` (nullable `currency`, `original_amount`, `exchange_rate`, `cost_date`; guarded by `hasColumn`). New `ExchangeRate` model (company-scoped, in `MultiCompanyIsolationTest`), `ExchangeRate::rateOn()`, `ExchangeRateResource` in the Investments cluster. `ProjectCostItem` converts in its `saving` hook and rejects a foreign cost without both figures. Tests: `ExchangeRateTest` (13), mutation-checked (form amount kept instead of recomputed; rate from the day after). **Deploy: run `php artisan migrate --force`.** 19 new interface strings in `lang/en.json` / `lang/bn.json` (Bangla to review). The resource is registered in `ImsOfficePanelProvider` and listed in `OfficeNavigation` (Tools); `tests/Feature/Ims/ExchangeRatesInOfficeTest` (2) pins the office page, its menu entry and the redirect from the ERP address.
-
 ## [2.89.0] - 2026-10-20
 
 **Release type:** Minor Feature Update
