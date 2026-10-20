@@ -8,6 +8,7 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Added
 
+- **Plan: every company in one IMS on zamzaminv.app.** New `18_IMS_ALL_COMPANIES_PLAN.md`: all ERP companies run on the one IMS domain; the IMS office gets a company picker and an "All companies" home with the simplest UI (Super Admins and office admins see everything and grant role-based access); the investor portal lists projects from every company with the company name and a Project filter. Not built yet.
 - **The IMS domain is a sign-in for every business too** (owner request 2026-10-20). Investors only know the business's IMS address (for example `zamzaminv.app`), so its sign-in page now works like the central address: someone who also has an account in another business signs in there with phone and password, and the password of any of their accounts opens that business (the IMS domain's own business is tried first). The **Switch business** button then changes the business on the same address, without leaving it. Someone with an account in only this business signs in exactly as before (SMS code, password reset, sign-up and invites unchanged). The IMS office at `/office` is unchanged. The separate central address is no longer needed and can be left blank.
 
 ### Security

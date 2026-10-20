@@ -2,6 +2,14 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-20 - Plan: every company in one IMS on zamzaminv.app
+
+Reason - owner (in Bangla): every ERP company comes into the IMS; all IMS work on `zamzaminv.app`, no subdomain; office admins and ERP Super Admins have full access and grant role-based access; very simple UI; investors see projects (with the company name) and a project filter. Plan only, no code.
+
+What changed: new `18_IMS_ALL_COMPANIES_PLAN.md` (phases A–E, answers in §6).
+
+Commit status: committed and pushed to `feature/ims-all-companies`; not merged into `main`.
+
 ## 2026-10-20 - The IMS domain signs in to every business
 
 Reason - owner brief: investors only know `zamzaminv.app` (the IMS domain); the multi-business sign-in worked only on the central address `ims.zamzaminv.app`. Settings could not fix it (the central address may not be the IMS domain, and the IMS domain may not be blank while IMS is on). Do not turn IMS off or change settings; `/office` must keep working.
