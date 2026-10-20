@@ -140,6 +140,12 @@ class SmsTemplates extends Page
                                 Text::make(__('Sent by SMS to every investor of a project when it changes status. A status you leave empty sends nothing. A group\'s next project is announced when the previous one is completed.')),
                                 ...$this->fieldsFor($templates, SmsTemplateService::GROUP_PROJECT),
                             ]),
+                        Tab::make(__('IMS news'))
+                            ->icon(Heroicon::OutlinedBellAlert)
+                            ->schema([
+                                Text::make(__('IMS v2 news to investors by SMS. The portal always shows the news; an SMS goes out only for the messages you write here and switch on in the IMS office (IMS settings).')),
+                                ...$this->fieldsFor($templates, SmsTemplateService::GROUP_IMS),
+                            ]),
                     ]),
             ]);
     }

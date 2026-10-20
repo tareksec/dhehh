@@ -187,3 +187,60 @@ test('outbox delivers in order and keeps entries until delivered', async () => {
   assert.deepEqual(delivered, [1, 2])
   assert.equal((await outbox.pending()).length, 0)
 })
+
+test('an independent outbox keeps going when one entry keeps failing', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'outbox-'))
+  const delivered = []
+  const outbox = new Outbox({
+    dir,
+    logger: silent,
+    independent: true,
+    maxAttempts: 3,
+    deliver: async (entry) => {
+      if (entry.n === 1) {
+        return 'retry'
+      }
+
+      delivered.push(entry.n)
+
+      return 'done'
+    },
+  })
+
+  outbox.stopped = true
+  await outbox.push({ n: 1 })
+  await outbox.push({ n: 2 })
+  await outbox.push({ n: 3 })
+
+  outbox.stopped = false
+  await outbox.run()
+
+  // Entry 1 failed and waits for its own retry; 2 and 3 were not held up.
+  assert.deepEqual(delivered, [2, 3])
+  assert.equal((await outbox.pending()).length, 1)
+  assert.ok(outbox.deferred.size === 1)
+  assert.ok(outbox.timer, 'a retry is scheduled for the failed entry')
+
+  clearTimeout(outbox.timer)
+  outbox.timer = null
+  outbox.stopped = true
+})
+
+test('an independent outbox drops an entry after its last attempt', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'outbox-'))
+  const outbox = new Outbox({ dir, logger: silent, independent: true, maxAttempts: 2, deliver: async () => 'retry' })
+
+  outbox.stopped = true
+  await outbox.push({ n: 1 })
+  outbox.stopped = false
+
+  await outbox.run()
+  assert.equal((await outbox.pending()).length, 1)
+
+  outbox.deferred.clear()
+  clearTimeout(outbox.timer)
+  outbox.timer = null
+  await outbox.run()
+  assert.equal((await outbox.pending()).length, 0)
+  outbox.stopped = true
+})

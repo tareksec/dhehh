@@ -13,6 +13,7 @@ use App\Filament\Widgets\LowStockProducts;
 use App\Filament\Widgets\SalesPurchaseTrend;
 use App\Filament\Widgets\TopBusinessPerformers;
 use App\Http\Middleware\PreventAdminPageCaching;
+use App\Http\Middleware\RedirectInvestmentsToImsOffice;
 use App\Http\Middleware\RestrictPortalHosts;
 use App\Http\Middleware\SetCurrentCompany;
 use App\Http\Middleware\SyncAppUpdates;
@@ -518,6 +519,8 @@ class AdminPanelProvider extends PanelProvider
                 PreventRequestForgery::class,
                 SubstituteBindings::class,
                 SetCurrentCompany::class,
+                // IMS v2: a company on IMS runs its investor pages in the IMS office.
+                RedirectInvestmentsToImsOffice::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])

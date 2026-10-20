@@ -12,6 +12,7 @@ use Illuminate\Auth\Authenticatable;
 use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Notifications\Notifiable;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -24,6 +25,7 @@ class InvestorPortalAccount extends Model implements AuthenticatableContract, Fi
 {
     use Authenticatable;
     use BelongsToCompany;
+    use Notifiable;
 
     /** Invited by staff; no password yet. */
     public const STATUS_INVITED = 'invited';
@@ -151,7 +153,7 @@ class InvestorPortalAccount extends Model implements AuthenticatableContract, Fi
 
         return $company !== null
             && (int) $company->getKey() === (int) $this->company_id
-            && $company->investor_portal_enabled
+            && $company->investorPortalIsOn()
             && ($this->isApplicant() || $this->isInvestor() || $this->isChannelPartner());
     }
 

@@ -21,6 +21,7 @@ class ProjectCostItem extends Model
         static::saving(function (self $item): void {
             if ($project = InvestmentProject::query()->find($item->project_id)) {
                 $item->company_id = $project->company_id;
+                static::refuseWhenFrozen($project);
             }
 
             // 17_IMS_IN_PORTAL_PLAN.md phase R: `amount` is always the BDT figure.
@@ -44,6 +45,20 @@ class ProjectCostItem extends Model
 
             $item->amount = round((float) $item->original_amount * (float) $item->exchange_rate, 2);
         });
+
+        static::deleting(function (self $item): void {
+            if ($project = InvestmentProject::query()->find($item->project_id)) {
+                static::refuseWhenFrozen($project);
+            }
+        });
+    }
+
+    /** IMS v2 (PRD FR-47): the costs of a fully paid cycle are frozen. */
+    protected static function refuseWhenFrozen(InvestmentProject $project): void
+    {
+        if ($project->isFrozen()) {
+            throw ValidationException::withMessages(['amount' => __('Every payout of this project is paid, so its costs are frozen and cannot change.')]);
+        }
     }
 
     /** True when the cost was entered in USD or RMB and converted with a rate. */

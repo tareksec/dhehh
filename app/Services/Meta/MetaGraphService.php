@@ -264,6 +264,77 @@ class MetaGraphService
         ]);
     }
 
+    /**
+     * "Seen" and "typing..." for a Messenger customer (Send API sender
+     * actions). typing_on lasts about 20 seconds or until the next message.
+     */
+    public function sendMessengerAction(ConversationChannel $channel, string $psid, string $action): void
+    {
+        if (! in_array($action, ['mark_seen', 'typing_on', 'typing_off'], true)) {
+            throw new MetaGraphException('That Messenger action is not supported.');
+        }
+        $this->requireToken($channel);
+
+        $this->request('POST', 'me/messages', (string) $channel->access_token, [
+            'recipient' => ['id' => $psid],
+            'sender_action' => $action,
+        ], retry: false);
+    }
+
+    /**
+     * Marks the customer's message as read and shows "typing..." for up to 25
+     * seconds, or until the next message is sent (WhatsApp Cloud API).
+     */
+    public function sendWhatsAppTyping(ConversationChannel $channel, string $messageId): void
+    {
+        $this->requireToken($channel);
+
+        $this->request('POST', rawurlencode((string) $channel->external_id).'/messages', (string) $channel->access_token, [
+            'messaging_product' => 'whatsapp',
+            'status' => 'read',
+            'message_id' => $messageId,
+            'typing_indicator' => ['type' => 'text'],
+        ], retry: false);
+    }
+
+    /**
+     * A Messenger carousel (generic template). Meta allows 10 cards; each
+     * element is built by the caller: title, subtitle, image_url, buttons.
+     *
+     * @param  array<int, array<string, mixed>>  $elements
+     */
+    public function sendMessengerCards(ConversationChannel $channel, string $psid, array $elements, ?string $metadata = null): string
+    {
+        $this->requireToken($channel);
+        $elements = array_slice(array_values($elements), 0, 10);
+
+        if ($elements === []) {
+            throw new MetaGraphException('There is no product card to send.');
+        }
+
+        $response = $this->request('POST', 'me/messages', (string) $channel->access_token, [
+            'recipient' => ['id' => $psid],
+            'message' => array_filter([
+                'attachment' => ['type' => 'template', 'payload' => ['template_type' => 'generic', 'elements' => $elements]],
+                'metadata' => $metadata,
+            ], fn ($value) => $value !== null),
+            'messaging_type' => 'RESPONSE',
+        ], retry: false);
+        $messageId = (string) ($response['message_id'] ?? '');
+
+        if ($messageId === '') {
+            throw new MetaGraphException('Meta accepted the request but returned no message ID. Check the Page connection.');
+        }
+
+        return $messageId;
+    }
+
+    /** An absolute public URL Meta can fetch, or null (relative paths are expanded with APP_URL; local addresses are dropped). */
+    public function publicMediaUrl(?string $url): ?string
+    {
+        return $this->outboundMediaUrl($url);
+    }
+
     /** @return array<string, mixed> */
     public function resolveWhatsAppMedia(ConversationChannel $channel, string $mediaId): array
     {

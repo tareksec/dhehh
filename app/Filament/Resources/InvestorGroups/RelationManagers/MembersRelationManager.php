@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\InvestorGroups\RelationManagers;
 
 use App\Filament\Resources\InvestorGroups\InvestorGroupResource;
-use App\Filament\Resources\Vouchers\VoucherResource;
 use App\Models\FundSource;
 use App\Models\Investment;
 use App\Models\Investor;
@@ -11,6 +10,7 @@ use App\Models\InvestorGroup;
 use App\Models\InvestorGroupMember;
 use App\Services\Investment\InvestmentWithdrawalService;
 use App\Services\Investment\InvestorGroupService;
+use App\Support\ImsPanelLinks;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -19,6 +19,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
@@ -70,6 +71,15 @@ class MembersRelationManager extends RelationManager
                 ->options(collect(Investment::PAYMENT_METHODS)->map(fn (string $label): string => __($label))->all())->required(),
             TextInput::make('payment_reference')->label(__('Payment reference (transaction ID)'))->maxLength(255),
             DatePicker::make('invested_at')->label(__('Invested on'))->default(now())->maxDate(now())->required(),
+            // IMS v2 (PRD FR-23): an optional tenor; the maturity date follows from it.
+            TextInput::make('tenor_months')->label(__('Tenor in months (optional)'))->numeric()->integer()->minValue(1)->maxValue(240)
+                ->helperText(__('Leave empty for no fixed term: the money then leaves with a 60-day notice.')),
+            // IMS v2 (PRD FR-22): "waiting for the money" until someone confirms it.
+            Toggle::make('pending')->label(__('The money has not arrived yet'))
+                ->helperText(__('It waits on "Money to confirm" and joins nothing until it is confirmed. While IMS is on, a new investor\'s money also waits for a verified KYC.'))
+                ->default(false)
+                ->hiddenOn('edit')
+                ->dehydrated(),
             Textarea::make('notes')->label(__('Notes'))->rows(2),
         ]);
     }
@@ -88,11 +98,16 @@ class MembersRelationManager extends RelationManager
                     ->formatStateUsing(fn (?string $state): string => __(Investment::PAYMENT_METHODS[$state] ?? (string) $state)),
                 TextColumn::make('status')->label(__('Status'))->badge()
                     ->formatStateUsing(fn (string $state): string => __(InvestorGroupMember::STATUSES[$state] ?? $state))
-                    ->color(fn (string $state): string => $state === InvestorGroupMember::STATUS_WITHDRAWN ? 'gray' : 'success'),
+                    ->color(fn (string $state): string => match ($state) {
+                        InvestorGroupMember::STATUS_WITHDRAWN => 'gray',
+                        InvestorGroupMember::STATUS_PENDING => 'warning',
+                        default => 'success',
+                    }),
+                TextColumn::make('maturity_date')->label(__('Matures on'))->date()->placeholder('-')->toggleable(),
                 TextColumn::make('investments_count')->label(__('Projects joined')),
                 TextColumn::make('leaves_after_sequence')->label(__('Left after project'))->formatStateUsing(fn ($state): string => 'P'.$state)->placeholder('-'),
                 TextColumn::make('voucher.status')->label(__('Voucher'))->badge()->placeholder('-')
-                    ->url(fn (InvestorGroupMember $record): ?string => $record->voucher_id ? VoucherResource::getUrl('view', ['record' => $record->voucher_id]) : null),
+                    ->url(fn (InvestorGroupMember $record): ?string => $record->voucher_id ? ImsPanelLinks::voucher($record->voucher_id) : null),
             ])
             ->headerActions([
                 CreateAction::make()

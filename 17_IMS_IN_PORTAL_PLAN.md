@@ -8,8 +8,8 @@ Status: **owner decision 2026-10-19** ("IMS টা এখন আমাদের 
 
 | Built for the separate IMS | Now |
 |---|---|
-| Business feed `/api/v1/sync/*` (orders, payments, returns, expenses, stock) | Not needed: the data is in the same database. **Code kept, no "Data sync" key is ever created.** |
-| Investor feed `/api/v1/sync/investor/*` (names, groups, project progress, payouts, screenshots, bank accounts, NID) | Already the portal's own pages (Dashboard progress, Payouts + screenshot, Bank accounts, Profile). **Code kept, no "Investor sync" key is ever created** (that key opens NID and bank numbers). |
+| Business feed `/api/v1/sync/*` (orders, payments, returns, expenses, stock) | Not needed: the data is in the same database. **Removed on `main` in v2.89.0** (the route answers 404; `ImsSyncFeed` and its tests are deleted). |
+| Investor feed `/api/v1/sync/investor/*` (names, groups, project progress, payouts, screenshots, bank accounts, NID) | Already the portal's own pages (Dashboard progress, Payouts + screenshot, Bank accounts, Profile). **Removed on `main` in v2.89.0** together with the business feed (the key carried NID, phone and bank numbers). |
 | "IMS reports a payout" intake (planned) | Cancelled: payouts are made in the ERP and the portal shows them. Nothing to sync. |
 | Owner rule: no customer, no supplier information | Stays: the portal never shows customer or supplier data. |
 | Soft deletes on expenses and order payments, returns, stock-loss value | Stay (they make the profit helper in §5 trustworthy). |
@@ -28,7 +28,7 @@ Status: **owner decision 2026-10-19** ("IMS টা এখন আমাদের 
 |---|---|---|
 | **R — rates and foreign-currency costs** | Daily rate table (USD, RMB) per company; a project cost can be entered in USD or RMB with the rate of its date; the BDT amount is stored as before, so the settlement maths do not change. | Nothing new (defaults in §4). |
 | **M — one login, many businesses** | See §5. | Answers to Q1–Q3. |
-| **P — profit helper from ERP data** | See §6. | Answers to Q4–Q6. |
+| **P — profit helper from ERP data** | **Covered by IMS v2 on `main` (v2.89.0)**: *Profit proposals* work out each cycle's profit and ask the office to accept, enter by hand or dismiss; project pages show totals from the purchases linked to the project. Not rebuilt here. | Only if the owner finds a gap (Q4–Q6 then apply). |
 
 ## 4. Phase R design (built first)
 
@@ -43,7 +43,7 @@ Status: **owner decision 2026-10-19** ("IMS টা এখন আমাদের 
 - Proposed: keep that boundary. A person is the same person across businesses **when the same phone number has an active portal account in each** (the same assumption the portal already makes inside a company). After signing in, the top bar shows a **business switcher** listing the businesses where that phone has an active account; choosing one sets that business as the active company for the session. Every page still renders under one company's context at a time, so no query ever mixes companies. Optional: a "My businesses" overview page that adds up the figures by switching context business by business.
 - Needs a host that is not tied to one company (a central address). The per-company hosts keep working.
 
-## 6. Phase P design (needs Q4–Q6)
+## 6. Phase P design (now covered by IMS v2; kept for the record)
 
 - A helper inside **Calculate & Settle**: "From the ERP data, this project's dates show ৳X collected". It is a **suggestion**: staff can use it, change it or ignore it; the hand-entered profit option stays, because investors are paid every cycle whether or not sales came in. Nothing is paid or settled by itself.
 - The IMS formula: profit = sales actually received − (costs of goods sold + other costs). The ERP has what it needs: order payments with their own dates (deleted ones are kept visible), returns, expenses, stock losses with a value, and the cost of goods on each order line.
@@ -61,4 +61,6 @@ Status: **owner decision 2026-10-19** ("IMS টা এখন আমাদের 
 ## 8. Build log
 
 - **R — built 2026-10-19.** `exchange_rates` table and *Investments → Exchange Rates* page; `project_cost_items.currency / original_amount / exchange_rate / cost_date`; the model computes `amount` (BDT) on save. Differences from the plan: none. Not done: foreign-currency purchases and shipment costs, rate download.
-- **M, P — not built:** waiting for the owner's answers to Q1–Q6.
+- **R inside IMS v2 — 2026-10-20.** `main` gained IMS v2 (v2.89.0, own domain and `/office`). `ExchangeRateResource` is registered in the office panel and listed in the office menu under Tools, so the page is reachable once a company runs IMS and the old `/admin/investments/exchange-rates` address redirects to it. Merge with `main` conflicted only in documents and language files.
+- **P — not built here:** IMS v2's profit proposals do this job.
+- **M — not built:** waiting for the owner's answers to Q1–Q3. IMS v2 still gives each company its own IMS domain, so one sign-in across several businesses is not covered.

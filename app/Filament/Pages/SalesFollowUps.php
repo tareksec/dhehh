@@ -45,12 +45,13 @@ class SalesFollowUps extends Page implements HasTable
         return $table->query(CrmSalesFollowUp::query()->with('conversation'))->defaultSort('due_at', 'desc')->columns([
             TextColumn::make('conversation.contact_name')->label('Customer')->searchable(),
             TextColumn::make('event_key')->label('Trigger'),
+            TextColumn::make('step')->label('Reminders done'),
             TextColumn::make('due_at')->dateTime()->sortable(),
             TextColumn::make('status')->badge(),
             TextColumn::make('reason')->wrap(),
             TextColumn::make('sent_at')->dateTime(),
         ])->filters([
-            SelectFilter::make('status')->options(['pending' => 'Pending', 'sent' => 'Sent', 'cancelled' => 'Cancelled', 'review' => 'Review', 'unknown' => 'Unknown delivery', 'sending' => 'Sending']),
+            SelectFilter::make('status')->options(['pending' => 'Pending', 'sent' => 'Sent', 'cancelled' => 'Cancelled', 'review' => 'Review', 'unknown' => 'Unknown delivery', 'sending' => 'Sending', 'completed' => 'Completed']),
         ])->recordActions([
             Action::make('inbox')->label('Open inbox')->url(fn (CrmSalesFollowUp $record) => Inbox::getUrl(['conversation' => $record->conversation_id, 'status' => 'all'])),
             Action::make('cancel')->requiresConfirmation()->visible(fn (CrmSalesFollowUp $record) => $record->status === 'pending' && auth()->user()?->hasPermission('crm.manage'))

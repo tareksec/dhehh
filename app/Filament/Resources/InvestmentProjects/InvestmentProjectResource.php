@@ -10,6 +10,8 @@ use App\Filament\Resources\InvestmentProjects\Pages\ViewInvestmentProject;
 use App\Filament\Resources\InvestmentProjects\RelationManagers\CostItemsRelationManager;
 use App\Filament\Resources\InvestmentProjects\RelationManagers\DocumentsRelationManager;
 use App\Filament\Resources\InvestmentProjects\RelationManagers\InvestmentsRelationManager;
+use App\Filament\Resources\InvestmentProjects\RelationManagers\LinkedPurchasesRelationManager;
+use App\Filament\Resources\InvestmentProjects\RelationManagers\MilestonesRelationManager;
 use App\Filament\Resources\InvestorGroups\InvestorGroupResource;
 use App\Models\InvestmentProject;
 use App\Models\InvestorGroup;
@@ -321,7 +323,7 @@ class InvestmentProjectResource extends Resource
 
     public static function getRelations(): array
     {
-        return [InvestmentsRelationManager::class, CostItemsRelationManager::class, DocumentsRelationManager::class];
+        return [InvestmentsRelationManager::class, CostItemsRelationManager::class, LinkedPurchasesRelationManager::class, MilestonesRelationManager::class, DocumentsRelationManager::class];
     }
 
     public static function getPages(): array

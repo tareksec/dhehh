@@ -257,8 +257,10 @@ class Integrations extends Page
             foreach ([
                 'vision_enabled', 'image_model_enabled', 'image_api_format', 'image_provider', 'image_base_url', 'image_model',
                 'voice_enabled', 'voice_provider', 'voice_base_url', 'voice_model',
-                'review_mode', 'daily_run_limit', 'max_run_tokens', 'daily_budget_usd', 'input_cost_per_million', 'output_cost_per_million', 'sales_follow_ups_enabled', 'follow_up_delay_hours', 'follow_up_template', 'follow_up_template_language',
+                'review_mode', 'daily_run_limit', 'max_run_tokens', 'daily_budget_usd', 'input_cost_per_million', 'output_cost_per_million', 'sales_follow_ups_enabled', 'follow_up_schedule_hours', 'follow_up_weekly_count', 'follow_up_quiet_start_hour', 'follow_up_quiet_end_hour', 'follow_up_message', 'follow_up_template', 'follow_up_template_language',
                 'proactive_mode_enabled', 'objection_handling_enabled', 'cross_sell_enabled', 'personalization_enabled',
+                'takeover_minutes', 'reply_delay_seconds', 'handover_notice_enabled', 'rich_replies_enabled', 'address_style',
+                'response_target_minutes', 'ai_live', 'typing_indicator_enabled', 'product_cards_enabled',
             ] as $key) {
                 $fill[$prefix.$key] = $ai[$key];
             }
@@ -429,6 +431,8 @@ class Integrations extends Page
                     ->label('ডিফল্ট লেখা ফিরিয়ে আনুন')
                     ->action(fn (Set $set) => $set("{$prefix}sales_guidelines", app(AiSettingsService::class)->defaultSalesGuidelines())))
                 ->columnSpanFull();
+            $fields[] = Toggle::make("{$prefix}ai_live")->label(__('AI answers real customers (live)'))
+                ->helperText(__('Off is practice mode: the AI answers only chats marked as test chats in the Inbox. Turn this on when you are happy with the test chat. You can also go live from the Setup checklist.'));
             $fields[] = Toggle::make("{$prefix}vision_enabled")
                 ->label('Read customer images (vision)')
                 ->live()
@@ -484,11 +488,42 @@ class Integrations extends Page
             $fields[] = Toggle::make("{$prefix}proactive_mode_enabled")->label('Proactive follow-up questions')->helperText('After fully answering, the agent may also ask one natural next-step question (size/colour, quantity, delivery area) to help move the sale forward. Off by default: it answers only what was asked.');
             $fields[] = Toggle::make("{$prefix}objection_handling_enabled")->label('Handle mild price objections')->helperText('A mild "can you reduce it a bit?" message reaches the agent, which may restate value or ask a clarifying question — grounded in real catalog facts, never an invented discount. Off by default: any discount/bargaining language always hands off to a human.');
             $fields[] = Toggle::make("{$prefix}cross_sell_enabled")->label('Suggest related products (cross-sell)')->helperText('Lets the agent offer one real same-category product alongside its answer. Off by default: the agent only discusses what the customer asked about.');
+            $fields[] = TextInput::make("{$prefix}takeover_minutes")->label(__('Team time before the chat returns to the AI (minutes)'))
+                ->numeric()->minValue(30)->maxValue(1440)->required()
+                ->helperText(__('Used when someone takes over a chat, answers it, or the AI hands it over. When the time is up the chat goes back to the AI on its own. 360 = 6 hours.'));
+            $fields[] = TextInput::make("{$prefix}response_target_minutes")->label(__('Reply target for handed-over chats (minutes)'))
+                ->numeric()->minValue(0)->maxValue(1440)->required()
+                ->helperText(__('A chat the AI hands to the team should get a first reply from a person within this time. Late chats are marked on the Needs attention page. 0 = no target.'));
+            $fields[] = TextInput::make("{$prefix}reply_delay_seconds")->label(__('Wait before answering (seconds)'))
+                ->numeric()->minValue(0)->maxValue(15)->required()
+                ->helperText(__('The AI waits this long after a message, so two quick messages get one combined answer. 0 answers every message on its own.'));
+            $fields[] = Toggle::make("{$prefix}handover_notice_enabled")->label(__('Tell the customer when a person takes over'))
+                ->helperText(__('When the AI hands a chat to the team it sends one short message saying a colleague is looking into it. It never promises a time.'));
+            $fields[] = Toggle::make("{$prefix}rich_replies_enabled")->label(__('Neatly arranged replies'))
+                ->helperText(__('Product facts go on their own lines with small labels: price, sizes, stock, delivery charge. Off: compact one-line replies.'));
+            $fields[] = Select::make("{$prefix}address_style")->label(__('How the AI addresses the customer in Bangla'))
+                ->options(['none' => __('No title, only "apni"'), 'sir_maam' => __('Sir / Madam'), 'bhaiya_apu' => __('Bhaiya / Apu')])
+                ->required()->native(false)
+                ->helperText(__('The AI picks the title from what the customer wrote or their name. If it cannot tell, it uses no title.'));
+            $fields[] = Toggle::make("{$prefix}typing_indicator_enabled")->label(__('Show "Seen" and "typing..." while the AI answers'))
+                ->helperText(__('The customer sees the message marked as seen and a typing sign until the answer arrives (Messenger and WhatsApp).'));
+            $fields[] = Toggle::make("{$prefix}product_cards_enabled")->label(__('Send product cards on Messenger'))
+                ->helperText(__('After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only.'));
             $fields[] = Toggle::make("{$prefix}personalization_enabled")->label('Personalize by purchase history')->helperText('Lets the agent greet a returning customer and reference their past orders. Off by default: no purchase-history signal is shown to the agent.');
-            foreach (['daily_run_limit' => 'Daily run limit', 'max_run_tokens' => 'Token budget per run', 'daily_budget_usd' => 'Daily estimated budget (USD)', 'input_cost_per_million' => 'Input price per million tokens (USD)', 'output_cost_per_million' => 'Output price per million tokens (USD)', 'follow_up_delay_hours' => 'Sales follow-up delay (hours)'] as $key => $label) {
+            foreach (['daily_run_limit' => 'Daily run limit', 'max_run_tokens' => 'Token budget per run', 'daily_budget_usd' => 'Daily estimated budget (USD)', 'input_cost_per_million' => 'Input price per million tokens (USD)', 'output_cost_per_million' => 'Output price per million tokens (USD)'] as $key => $label) {
                 $fields[] = TextInput::make($prefix.$key)->label($label)->numeric()->minValue(0)->required();
             }
-            $fields[] = Toggle::make("{$prefix}sales_follow_ups_enabled")->label('Enable sales follow-ups')->helperText('One approved-template follow-up per checkout link or sent quotation; stops after reply, purchase, opt-out or handoff.');
+            $fields[] = Toggle::make("{$prefix}sales_follow_ups_enabled")->label('Enable sales follow-ups')->helperText(__('Reminders for a customer who was sent a checkout link or a quotation and has not ordered. They stop on a purchase, an opt-out, or when a person takes the chat.'));
+            $fields[] = TextInput::make("{$prefix}follow_up_schedule_hours")->label(__('Reminder times (hours after the last message from the customer)'))->required()
+                ->helperText(__('Separate the hours with commas, for example 1, 6, 24, 48. A new message from the customer starts the count again.'));
+            $fields[] = TextInput::make("{$prefix}follow_up_weekly_count")->label(__('Weekly reminders after that'))
+                ->numeric()->minValue(0)->maxValue(12)->required()
+                ->helperText(__('One reminder a week, this many times. 0 = none.'));
+            $fields[] = TextInput::make("{$prefix}follow_up_quiet_start_hour")->label(__('No reminders from (hour, 0-23)'))->numeric()->minValue(0)->maxValue(23)->required();
+            $fields[] = TextInput::make("{$prefix}follow_up_quiet_end_hour")->label(__('No reminders until (hour, 0-23)'))->numeric()->minValue(0)->maxValue(23)->required()
+                ->helperText(__('Company time. A reminder due in these hours waits until the end hour.'));
+            $fields[] = Textarea::make("{$prefix}follow_up_message")->label(__('Messenger and Instagram reminder text'))->rows(3)->maxLength(900)
+                ->helperText(__('These channels allow a normal message only within 24 hours of the last message from the customer. Write {link} where the order link should go. Left empty, those reminders go to your team on the Needs attention page instead.'));
             $fields[] = TextInput::make("{$prefix}follow_up_template")->label('Approved WhatsApp follow-up template')->helperText('Template must accept one body parameter: customer name.');
             $fields[] = TextInput::make("{$prefix}follow_up_template_language")->label('Template language')->maxLength(20);
             $fields[] = TextInput::make("{$prefix}confidence_threshold")
@@ -1427,8 +1462,10 @@ class Integrations extends Page
                     ...collect([
                         'vision_enabled', 'image_model_enabled', 'image_api_format', 'image_provider', 'image_base_url', 'image_model',
                         'voice_enabled', 'voice_provider', 'voice_base_url', 'voice_model',
-                        'review_mode', 'daily_run_limit', 'max_run_tokens', 'daily_budget_usd', 'input_cost_per_million', 'output_cost_per_million', 'sales_follow_ups_enabled', 'follow_up_delay_hours', 'follow_up_template', 'follow_up_template_language',
+                        'review_mode', 'daily_run_limit', 'max_run_tokens', 'daily_budget_usd', 'input_cost_per_million', 'output_cost_per_million', 'sales_follow_ups_enabled', 'follow_up_schedule_hours', 'follow_up_weekly_count', 'follow_up_quiet_start_hour', 'follow_up_quiet_end_hour', 'follow_up_message', 'follow_up_template', 'follow_up_template_language',
                         'proactive_mode_enabled', 'objection_handling_enabled', 'cross_sell_enabled', 'personalization_enabled',
+                        'takeover_minutes', 'reply_delay_seconds', 'handover_notice_enabled', 'rich_replies_enabled', 'address_style',
+                        'response_target_minutes', 'ai_live', 'typing_indicator_enabled', 'product_cards_enabled',
                     ])->mapWithKeys(fn ($key) => [$key => $state[$prefix.$key] ?? null])->all(),
                     'api_key' => $state["{$prefix}api_key"] ?? null,
                     'image_api_key' => $state["{$prefix}image_api_key"] ?? null,

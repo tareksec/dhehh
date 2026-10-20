@@ -2,6 +2,8 @@
 
 namespace App\Services\Investment;
 
+use App\Ims\Capital\CapitalCalculator;
+use App\Ims\Capital\CapitalReturnService;
 use App\Models\FundSource;
 use App\Models\Investment;
 use App\Models\InvestorGroupMember;
@@ -39,8 +41,15 @@ class InvestmentWithdrawalService
 
             $locked->loadMissing('investor', 'project');
 
+            if ($locked->isPending()) {
+                throw ValidationException::withMessages(['status' => __('This money has not been confirmed yet, so there is nothing to withdraw.')]);
+            }
+
+            // IMS v2 (TRD §4.3): a loss taken from the capital is not paid back.
+            $returnable = app(CapitalCalculator::class)->forInvestment($locked)['returnable'];
+
             $voucher = $this->submitWithdrawalVoucher(
-                (float) $locked->amount,
+                $returnable,
                 $locked->company_id,
                 $data,
                 $user,
@@ -170,6 +179,9 @@ class InvestmentWithdrawalService
      */
     public function voucherVoided(Voucher $voucher): void
     {
+        // IMS v2: a capital return booked with this voucher no longer stands either.
+        app(CapitalReturnService::class)->voucherVoided($voucher);
+
         Investment::query()
             ->where('withdrawal_voucher_id', $voucher->getKey())
             ->where('status', Investment::STATUS_WITHDRAWN)

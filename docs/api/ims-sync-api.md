@@ -1,6 +1,6 @@
 # IMS data feed (read-only sync API)
 
-> **Not in use (owner decision 2026-10-19).** IMS is no longer a separate application: the built-in investor portal becomes the IMS (`17_IMS_IN_PORTAL_PLAN.md`). This feed and the investor feed are kept in the code but **no "Data sync" or "Investor sync" key is to be created** (the investor key opens NID and bank account numbers). Do not hand this page to anyone as a live contract.
+> **Turned off on 2026-10-19 (IMS-V2/PLAN.md phase 7).** The old IMS is gone and IMS v2 runs inside this app on the same database, so `/api/v1/sync/*` and `/api/v1/sync/investor/*` now answer 404, and no new "Data sync" / "Investor sync" key can be made. Keys made before stay in Settings → Integrations → Website API, marked "turned off"; revoke them there. The text below is the old contract, kept for reference only.
 
 This is the contract for **IMS** (`tareksec/ims`, Investment & Inventory Management System), which pulls its business data from this ERP. It answers IMS's questionnaire `ERP-INTEGRATION-REQUIREMENTS.md`; the answers are in the last section.
 

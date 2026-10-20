@@ -213,8 +213,14 @@ class StorefrontBannerTest extends TestCase
             "body[data-storefront-theme='marketplace_pro'] .storefront-image-banner {",
             $css,
         );
-        $this->assertStringContainsString('aspect-ratio: 4 / 1;', $css);
+        // The frame follows the uploaded image (owner screenshot 2026-10-19:
+        // a fixed 4:1 `cover` frame cut off slides of any other ratio).
+        $this->assertStringContainsString('aspect-ratio: auto;', $css);
         $this->assertStringContainsString('max-height: 30rem;', $css);
+        $this->assertStringContainsString(
+            "body[data-storefront-theme='marketplace_pro'] .storefront-image-banner img {\n        height: auto;\n        max-height: 30rem;\n        object-fit: contain;",
+            $css,
+        );
 
         $marketplace = StorefrontThemeRegistry::bannerSpec(StorefrontThemeRegistry::MARKETPLACE_PRO);
         $builtIn = StorefrontThemeRegistry::bannerSpec(StorefrontThemeRegistry::BUILT_IN);

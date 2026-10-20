@@ -53,6 +53,7 @@ export class Session {
       logger: this.logger,
       deliver: (entry) => this.uploadMedia(entry),
       maxAttempts: 8,
+      independent: true,
     })
   }
 

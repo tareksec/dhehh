@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Ims\Kyc\KycService;
 use App\Models\Concerns\BelongsToCompany;
+use App\Support\MaturityDate;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -17,16 +19,41 @@ class Investment extends Model
 
     public const STATUS_WITHDRAWN = 'withdrawn';
 
-    public const STATUSES = [self::STATUS_ACTIVE => 'Active', self::STATUS_WITHDRAWN => 'Withdrawn'];
+    /** IMS v2 (PRD FR-22): recorded, but the money is not confirmed yet. Never in a settlement. */
+    public const STATUS_PENDING = 'pending';
 
-    protected $fillable = ['company_id', 'project_id', 'group_member_id', 'investor_id', 'amount', 'status', 'withdrawn_at', 'withdrawal_voucher_id', 'withdrawal_note', 'payment_method', 'payment_reference', 'invested_at', 'override_reason', 'received_by', 'voucher_id'];
+    public const STATUSES = [self::STATUS_PENDING => 'Waiting for the money', self::STATUS_ACTIVE => 'Active', self::STATUS_WITHDRAWN => 'Withdrawn'];
+
+    protected $fillable = ['company_id', 'project_id', 'group_member_id', 'investor_id', 'amount', 'status', 'withdrawn_at', 'withdrawal_voucher_id', 'withdrawal_note', 'payment_method', 'payment_reference', 'invested_at', 'override_reason', 'received_by', 'voucher_id', 'tenor_months', 'maturity_date', 'confirmed_at', 'confirmed_by'];
 
     protected $attributes = ['status' => self::STATUS_ACTIVE];
 
-    protected $casts = ['amount' => 'decimal:2', 'invested_at' => 'date', 'withdrawn_at' => 'date'];
+    protected $casts = ['amount' => 'decimal:2', 'invested_at' => 'date', 'withdrawn_at' => 'date', 'tenor_months' => 'integer', 'maturity_date' => 'date', 'maturity_reminder_sent_at' => 'datetime', 'confirmed_at' => 'datetime'];
 
     protected static function booted(): void
     {
+        // An optional tenor sets the maturity date itself (IMS-V2/PRD.md FR-23).
+        static::saving(function (self $investment): void {
+            if ($investment->isDirty(['tenor_months', 'invested_at'])) {
+                $investment->maturity_date = MaturityDate::from($investment->invested_at, $investment->tenor_months);
+            }
+        });
+
+        // IMS v2 (PRD FR-14): while IMS is on, new money of an investor without a
+        // verified KYC waits as "pending". A group project's copy of a member is
+        // not new money and is never held back.
+        static::creating(function (self $investment): void {
+            if ($investment->group_member_id || $investment->status !== self::STATUS_ACTIVE) {
+                return;
+            }
+
+            $investor = Investor::query()->find($investment->investor_id);
+
+            if ($investor && KycService::blocksNewMoney($investor)) {
+                $investment->status = self::STATUS_PENDING;
+            }
+        });
+
         // Owner's fixed rules (2026-09-28): a withdrawal always gets a voucher,
         // and the status is "withdrawn" only while that voucher stands (not in
         // Trash, not rejected, not cancelled). A withdrawn investment is
@@ -140,6 +167,26 @@ class Investment extends Model
     public function isWithdrawn(): bool
     {
         return $this->status === self::STATUS_WITHDRAWN;
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === self::STATUS_PENDING;
+    }
+
+    public function capitalReturns()
+    {
+        return $this->hasMany(CapitalReturn::class);
+    }
+
+    public function confirmer()
+    {
+        return $this->belongsTo(User::class, 'confirmed_by');
+    }
+
+    public function scopePending($query)
+    {
+        return $query->where('status', self::STATUS_PENDING);
     }
 
     public function scopeActive($query)

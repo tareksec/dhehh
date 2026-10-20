@@ -67,6 +67,8 @@ class Company extends Model
         'investor_portal_enabled',
         'investor_portal_domain',
         'investor_project_completed_message',
+        'ims_enabled',
+        'ims_domain',
     ];
 
     protected $casts = [
@@ -76,6 +78,7 @@ class Company extends Model
         'reseller_subdomains_enabled' => 'boolean',
         'reseller_custom_domains_enabled' => 'boolean',
         'investor_portal_enabled' => 'boolean',
+        'ims_enabled' => 'boolean',
         'settings' => 'array',
     ];
 
@@ -101,6 +104,7 @@ class Company extends Model
             $company->domain = static::normalizeDomain($company->domain);
             $company->reseller_portal_domain = static::normalizeDomain($company->reseller_portal_domain);
             $company->investor_portal_domain = static::normalizeDomain($company->investor_portal_domain);
+            $company->ims_domain = static::normalizeDomain($company->ims_domain);
         });
 
         static::created(function (Company $company): void {
@@ -212,6 +216,11 @@ class Company extends Model
             return null;
         }
 
+        // IMS v2: the investor portal lives on the IMS domain once IMS is on.
+        if ($company = static::forImsHost($host)) {
+            return $company;
+        }
+
         $company = static::query()
             ->where('investor_portal_enabled', true)
             ->where('is_active', true)
@@ -234,9 +243,96 @@ class Company extends Model
             ->first();
     }
 
+    /**
+     * The company whose IMS v2 is on $host (IMS-V2/ARCHITECTURE.md §3): the
+     * exact ims_domain, with or without "www.", while IMS is switched on. There
+     * is no subdomain rule (owner, 2026-10-19: IMS has its own root domain).
+     */
+    public static function forImsHost(?string $host): ?self
+    {
+        $host = static::normalizeDomain($host);
+
+        if ($host === null || ! static::imsColumnsExist()) {
+            return null;
+        }
+
+        return static::query()
+            ->where('ims_enabled', true)
+            ->where('is_active', true)
+            ->where('ims_domain', $host)
+            ->first();
+    }
+
+    /**
+     * The company whose old investor-portal host this is, once its portal has
+     * moved to the IMS domain (IMS-V2/ARCHITECTURE.md §3): that host now only
+     * redirects to the IMS domain.
+     */
+    public static function forRetiredInvestorPortalHost(?string $host): ?self
+    {
+        $host = static::normalizeDomain($host);
+
+        if ($host === null || ! static::imsColumnsExist()) {
+            return null;
+        }
+
+        $live = fn ($query) => $query->where('ims_enabled', true)->where('is_active', true)->whereNotNull('ims_domain');
+
+        $company = static::query()->where($live)->where('investor_portal_domain', $host)->first();
+
+        if ($company || ! str_starts_with($host, 'investor.')) {
+            return $company;
+        }
+
+        return static::query()->where($live)->whereNull('investor_portal_domain')->where('domain', substr($host, strlen('investor.')))->first();
+    }
+
+    /** Whether this company runs IMS v2 on its own domain. */
+    public function imsIsLive(): bool
+    {
+        return (bool) $this->ims_enabled && filled($this->ims_domain) && (bool) $this->is_active;
+    }
+
+    /** An address on the IMS domain ("" = the investor portal's root), or null while IMS is off. */
+    public function imsUrl(string $path = ''): ?string
+    {
+        if (! $this->imsIsLive()) {
+            return null;
+        }
+
+        return request()->getScheme().'://'.$this->ims_domain.($path === '' ? '' : '/'.ltrim($path, '/'));
+    }
+
+    /** The investor portal is reachable: switched on itself, or carried by IMS v2. */
+    public function investorPortalIsOn(): bool
+    {
+        return (bool) $this->investor_portal_enabled || $this->imsIsLive();
+    }
+
+    protected static ?bool $imsColumnsExist = null;
+
+    protected static function imsColumnsExist(): bool
+    {
+        // The table is checked every time (as the other host lookups do); only the
+        // column check is remembered once it is true.
+        if (! Schema::hasTable('companies')) {
+            return false;
+        }
+
+        if (static::$imsColumnsExist !== true) {
+            static::$imsColumnsExist = Schema::hasColumn('companies', 'ims_domain');
+        }
+
+        return static::$imsColumnsExist;
+    }
+
     /** The host this company's investor portal opens on; the inverse of forInvestorPortalHost(). */
     public function investorPortalHost(): ?string
     {
+        if ($this->imsIsLive()) {
+            return $this->ims_domain;
+        }
+
         if (! $this->investor_portal_enabled) {
             return null;
         }
@@ -345,7 +441,8 @@ class Company extends Model
             return true;
         }
 
-        if (static::query()->where('domain', $host)->orWhere('reseller_portal_domain', $host)->orWhere('investor_portal_domain', $host)->exists()) {
+        if (static::query()->where('domain', $host)->orWhere('reseller_portal_domain', $host)->orWhere('investor_portal_domain', $host)
+            ->when(static::imsColumnsExist(), fn ($query) => $query->orWhere('ims_domain', $host))->exists()) {
             return true;
         }
 

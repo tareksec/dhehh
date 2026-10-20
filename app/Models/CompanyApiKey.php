@@ -27,21 +27,25 @@ class CompanyApiKey extends Model
 
     public const SCOPE_WEBSITE = 'website';
 
-    /** Read-only data feed for an outside system (IMS), see Api\V1\Sync. */
+    /**
+     * The old IMS data-sync keys (business feed, and the investor feed with NID,
+     * phone and bank details). Their API was turned off on 2026-10-19 (see
+     * routes/api.php), so such keys open nothing and no new one can be made;
+     * the constants stay so keys made before still show their type.
+     */
     public const SCOPE_SYNC = 'sync';
 
-    /**
-     * The investors' side of the IMS link: investors, their groups, projects,
-     * investments and payouts. A separate key from SCOPE_SYNC on purpose, because it carries
-     * personal data (NID, phone, bank accounts) that the business feed never does.
-     */
     public const SCOPE_INVESTOR_SYNC = 'investor_sync';
 
+    /** Every key type, for showing a key's type in the list. */
     public const SCOPES = [
         self::SCOPE_WEBSITE => 'Website (products, orders, leads)',
-        self::SCOPE_SYNC => 'Data sync (read-only feed for IMS)',
-        self::SCOPE_INVESTOR_SYNC => 'Investor sync (investors and payouts for IMS)',
+        self::SCOPE_SYNC => 'Data sync (old IMS, turned off)',
+        self::SCOPE_INVESTOR_SYNC => 'Investor sync (old IMS, turned off)',
     ];
+
+    /** The key types a new key can still be made for. */
+    public const CREATABLE_SCOPES = [self::SCOPE_WEBSITE];
 
     protected $fillable = [
         'company_id',

@@ -219,6 +219,7 @@
         --storefront-brand-contrast: {{ $themeForeground }};
         --storefront-secondary: {{ $themePalette['secondary'] }};
         --storefront-secondary-contrast: {{ $themePalette['secondary_contrast'] }};
+        --storefront-secondary-deep: {{ $themePalette['secondary_deep'] }};
         --storefront-accent: {{ $themePalette['accent'] }};
         --storefront-accent-contrast: {{ $themePalette['accent_contrast'] }};
         --storefront-background: {{ $themePalette['background'] }};

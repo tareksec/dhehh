@@ -51,7 +51,7 @@ class SalesAutomation extends Page implements HasTable
 
     public function table(Table $table): Table
     {
-        return $table->query(CrmAiRun::query()->with('conversation'))->defaultSort('id', 'desc')->columns([
+        return $table->query(CrmAiRun::query()->where('is_test', false)->with('conversation'))->defaultSort('id', 'desc')->columns([
             TextColumn::make('created_at')->dateTime()->sortable(),
             TextColumn::make('conversation.contact_name')->label('Customer')->searchable(),
             TextColumn::make('status')->badge(),

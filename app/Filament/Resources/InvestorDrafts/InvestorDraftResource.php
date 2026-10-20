@@ -15,6 +15,7 @@ use App\Models\InvestorDraft;
 use App\Models\InvestorGroup;
 use App\Services\Investment\InvestorImportService;
 use App\Services\InvestorOnboardingService;
+use App\Support\ImsPanelLinks;
 use App\Support\InvestorIdentity;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -111,7 +112,7 @@ class InvestorDraftResource extends Resource
                         ->label(__('Documents uploaded with the application'))
                         ->visible(fn (?InvestorDraft $record): bool => $record?->source === InvestorDraft::SOURCE_PORTAL)
                         ->state(fn (?InvestorDraft $record): array => $record?->documents()->get()
-                            ->map(fn (InvestmentDocument $document): string => '<a class="text-primary-600 underline" target="_blank" href="'.e(route('investment-documents.download', $document)).'">'.e(InvestmentDocument::categoryLabel($document->category)).'</a>')
+                            ->map(fn (InvestmentDocument $document): string => '<a class="text-primary-600 underline" target="_blank" href="'.e(ImsPanelLinks::route('investment-documents.download', $document)).'">'.e(InvestmentDocument::categoryLabel($document->category)).'</a>')
                             ->all() ?? [])
                         ->html()
                         ->listWithLineBreaks()

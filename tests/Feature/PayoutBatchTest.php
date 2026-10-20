@@ -137,14 +137,15 @@ class PayoutBatchTest extends TestCase
 
     public function test_staff_without_the_batch_permissions_cannot_make_or_approve_one(): void
     {
-        $manager = User::factory()->create(['role' => 'manager', 'is_active' => true]);
+        // Neither batch permission (IMS-V2/ROLES.md §3.3: a manager now approves, an accountant makes).
+        $manager = User::factory()->create(['role' => 'sales_staff', 'is_active' => true]);
         [, $alpha] = $this->settledProject();
         $this->approvedAccount($alpha);
         $service = app(PayoutBatchService::class);
 
         try {
             $service->create($manager, $service->payables()['eligible']->keys()->all());
-            $this->fail('A manager must not make a payout batch.');
+            $this->fail('Staff without the permission must not make a payout batch.');
         } catch (ValidationException) {
         }
 

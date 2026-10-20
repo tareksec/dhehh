@@ -1303,6 +1303,25 @@ Focused verification:
 php artisan test --compact tests/Feature/InvestmentSettlementTest.php tests/Feature/MultiCompanyIsolationTest.php tests/Feature/PhaseSixPermissionsTest.php tests/Feature/AdminNavigationClustersTest.php
 ```
 
+#### IMS v2 (investor system on its own domain, 2026-10-19)
+
+Plan and owner decisions: `IMS-V2/` (start with `IMS-V2/README.md` and `IMS-V2/AGENT.md`). Phases 1–6 are built; phase 7 (old IMS data) waits for the owner.
+
+- **Domain:** `companies.ims_enabled` + `ims_domain` (Super Admin, ERP → Investments → Investor Portal Settings). `Company::forImsHost()` matches the exact domain (with or without `www.`), no subdomain rule. `RestrictPortalHosts` serves only `/investor` (portal) and `/office` (office) on that host, redirects everything else to `/investor`, 404s `/office` elsewhere, and sends the company's old investor-portal host to the IMS domain. `Company::investorPortalHost()` returns the IMS domain once IMS is on, so every invite link follows.
+- **Office panel** `ImsOfficePanelProvider` (id `office`, guard `web`, `ResolveCompanyFromImsDomain`, `SetImsOfficeLocale`): the ERP's ten investor resources (registered as they are, under `/office/investments/...`) + `app/Filament/Ims/Office` (Home, IMS Settings, Money to confirm, KYC, Invites, Profit proposals, Capital returns, Project updates, Project reports, Feed, Support, Statement matching). Menu: `OfficeNavigation`. `User::canAccessPanel('office')` needs `ims.office.access` and the company. File links of the shared screens go through `App\Support\ImsPanelLinks` (office copies under `/office/files/...`; vouchers open in the ERP at `config('app.url')`). When IMS is on, `RedirectInvestmentsToImsOffice` sends `/admin/investments/...` to the office and the Investments menu becomes two links.
+- **Portal** (same `InvestorPanelProvider`, new pages in `app/Filament/Ims/Portal`): KYC, Nominees, Projects / ProjectDetail, Notifications, Feed, Support, `join/{token}` (JoinWithInvite); bell (`filament.ims.portal.bell`), 5-tab phone bar, Profile menu list. Theme `resources/css/filament/ims/theme.css` (DESIGN.md tokens; also maps the old `--portal-*` tokens).
+- **Money:** `App\Ims\Capital\CapitalCalculator` is the only place capital is worked out (loss from confirmed payouts' `capital_loss_amount`, returns, payout principal); `SettlementService::allocateLoss()` = loss × project investor %, capped at capital, groups allowed; `GroupCapitalSync` lowers later snapshot rows after a confirmed loss; `CapitalReturnService` (voucher, partial, void); `MaturityQueue`; `ProposalService` + `ProjectFinancials` (linked purchases' goods/import, cost lines, sales of confirmed/processing/completed orders in the project dates, products shared with another project left out); frozen cycle = `project_settlements.locked_at` (set at `paid_out`).
+- **Joining / KYC:** `InviteService`, `OtpService`, `NomineeService`, `KycService` + `NidOcr` (Tesseract `ben+eng`, `config/ims.php`), `MoneyConfirmationService`; `KycService::blocksNewMoney()` only while IMS is on.
+- **News:** `ImsNotifier` → `ImsPortalNotification` (database) + `SendImsMessageJob` (SMS via SMS Templates → IMS news, e-mail via the company SMTP); per-event switches in `ImsSettings` (`companies.settings['ims']`).
+- **Jobs** (`app/Console/Commands/Ims`, scheduled in `bootstrap/app.php`): `ims:profit-proposals`, `ims:maturity-reminders`, `ims:owner-digest`, `ims:monthly-statements`, `ims:shipment-delays`.
+- **Statement matching:** `StatementImporter` (CSV/XLSX, headings detected, duplicates skipped by `line_hash`) + `Matcher` (exact amount; reference first).
+
+How to check it: set a company's IMS domain to a host that points at the app (locally e.g. `ims.test` in the hosts file), open `http://ims.test/office` as a manager, and `http://ims.test/investor` as an investor.
+
+```bash
+php artisan test tests/Feature/Ims tests/Feature/InvestmentSettlementTest.php tests/Feature/InvestorGroupExitTest.php tests/Feature/InvestorPortalTest.php tests/Feature/MultiCompanyIsolationTest.php
+```
+
 AI auto-reply (grounded-only assistant):
 
 - `AiReplyService` (`app/Services/Crm/`) — tool-calling agent (Anthropic or OpenAI via `AiLlmClient`, per-company encrypted settings in `companies.settings['ai']` via `AiSettingsService`, admin page "AI Assistant"). Dispatched by `AiAutoReplyJob` after every incoming text message.
