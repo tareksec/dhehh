@@ -3306,5 +3306,15 @@
     "Approve profit and payouts": "লাভ ও পেমেন্ট অনুমোদন করুন",
     "Sign in to your account": "আপনার অ্যাকাউন্টে সাইন ইন করুন",
     "See your money and profit": "আপনার টাকা ও লাভ দেখুন",
-    "Follow every payout": "প্রতিটি পেমেন্টের খবর রাখুন"
+    "Follow every payout": "প্রতিটি পেমেন্টের খবর রাখুন",
+    "Sales channel": "বিক্রয় চ্যানেল",
+    "Website": "ওয়েবসাইট",
+    "Live chat": "লাইভ চ্যাট",
+    "Offline": "অফলাইন",
+    "Sales channels: :list": "বিক্রয় চ্যানেল: :list",
+    ":count courier bookings would be recorded: :list": ":count টি কুরিয়ার বুকিং রেকর্ড হবে: :list",
+    ":count courier bookings were recorded: :list": ":count টি কুরিয়ার বুকিং রেকর্ড হয়েছে: :list",
+    ":count couriers would be created (inactive, no API): :list": ":count টি কুরিয়ার তৈরি হবে (নিষ্ক্রিয়, API ছাড়া): :list",
+    ":count couriers were created (inactive, no API): :list": ":count টি কুরিয়ার তৈরি হয়েছে (নিষ্ক্রিয়, API ছাড়া): :list",
+    ":count orders have a parcel still on the way; its consignment number stays in the order note only.": ":count টি অর্ডারের পার্সেল এখনো পথে আছে; তার কনসাইনমেন্ট নম্বর শুধু অর্ডারের নোটে থাকবে।"
 }

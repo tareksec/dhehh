@@ -16,6 +16,21 @@ Verified: `InvestorBusinessSwitchTest` 21 passed (5 new: sign-in opens the other
 
 Commit status: committed and pushed to `feature/ims-domain-multi-business-login`, merged into `main` on owner approval (2026-10-20).
 
+## 2026-10-20 - Nuport import: sales channel, returned pieces, courier bookings
+
+Reason - owner (in Bangla): is there anything else to import from Nuport that helps our reports? Told: Order Source, the returned pieces and the courier parcels were in the file but not kept; owner said do it before the real import.
+
+What changed:
+- New columns `orders.sales_channel` and `order_items.returned_quantity` (one migration); `Order::SALES_CHANNELS`, `Order::salesChannelLabel()`.
+- `NuportOrderImportService`: stores the channel and the returned pieces; records a `CourierBooking` for a parcel with a consignment number whose delivery is over (delivered / partly delivered / returned / cancelled); parcels still on the way stay in the note; creates an inactive manual courier when the ERP has none of that name; report and summary list channels, bookings, new couriers, open parcels.
+- Orders list: Sales channel column (hidden by default) and filter; order page: channel badge and a Returned badge on a line.
+- Not kept on purpose: Entry By (one name on all 1,340 orders), Customer Tag (Nuport's label), website / campaign fields (mostly empty).
+- Checked on the real file (1,340 invoices): channels WhatsApp 865, Website 284, Other 120, Offline 50, Live chat 19, Messenger 2; 914 invoices have a consignment number, 1 is Pathao, the rest Steadfast.
+- Bangla to review: the 10 new strings ("Sales channel" = "বিক্রয় চ্যানেল", the courier / parcel summary lines).
+- Side effect to tell the owner: imported bookings count in a customer's delivered / returned / cancelled ratio (customer risk score), which is real history but can lower a score.
+
+Commit status: committed and pushed to `main` on the owner's approval (2026-10-20). Tests: `NuportOrderImportTest` 26 passed; full suite 2,821 passed, 1 skipped, 0 failed (29 investor / IMS tests first failed only because this worktree's `public/build` was old, and passed after `npm run build`).
+
 ## 2026-10-20 - Phase M: one login for all businesses (all of plan §5)
 
 Reason - owner (in Bangla): implement `17_IMS_IN_PORTAL_PLAN.md`, and "file a ja ache sob follow koro". Build everything §5 describes; the plan's own proposals answer Q1–Q3.

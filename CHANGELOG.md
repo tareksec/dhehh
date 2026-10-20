@@ -8,12 +8,43 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Added
 
+- **The IMS domain is a sign-in for every business too** (owner request 2026-10-20). Investors only know the business's IMS address (for example `zamzaminv.app`), so its sign-in page now works like the central address: someone who also has an account in another business signs in there with phone and password, and the password of any of their accounts opens that business (the IMS domain's own business is tried first). The **Switch business** button then changes the business on the same address, without leaving it. Someone with an account in only this business signs in exactly as before (SMS code, password reset, sign-up and invites unchanged). The IMS office at `/office` is unchanged. The separate central address is no longer needed and can be left blank.
+
+### Security
+
+- On an IMS domain, another business opens only while the account signed in to that session belongs to it; otherwise (and always on sign-up, invite, password-reset and staff pages) the domain's own business stays open.
+
+### Technical Notes
+
+- IMS domain sign-in for every business: `InvestorBusinessSwitchService::imsHostCompany()`, `switchesInSession()`, `hasAccountsElsewhere()`; `attemptCentralLogin()` takes a preferred company. The investor `Login` uses the multi-business path on an IMS domain only in password mode and only when the phone has an active account in another business. `ResolveCompanyFromCentralInvestorSession` opens the chosen business on an IMS domain only when the session's `investor` guard account belongs to it. No migration, no new strings, no settings change. Tests: `InvestorBusinessSwitchTest` (+5, 21).
+
+## [2.92.0] - 2026-10-20
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Nuport import keeps the sales channel, the returned pieces and the courier parcels** (owner request 2026-10-20, so the reports can use them). Nuport's *Order Source* (WhatsApp, Website, Live chat, Messenger, Offline, Other) becomes the order's **Sales channel**: a column on the Orders list (hidden until you switch it on), a filter, and a badge on the order page. Nuport's *Cancelled/Returned/Damaged Qty* becomes each line's **Returned** pieces (shown on the order page when above 0; a cancelled order has none, because it never shipped). A parcel with a consignment number whose delivery is over (delivered, partly delivered, returned, cancelled) becomes a **courier booking**, so the courier performance report, the delivery history of the customer and the COD figures count it; a parcel still on the way is not recorded and keeps its consignment number in the order note. The booking uses the company's courier of the same name (Steadfast, Pathao, ...); a courier the ERP does not have is created switched off and without an API, so staff cannot book with it by mistake. The import preview and result list the channels, the bookings per courier, any courier to be created and the parcels left in the note. Importing the same file again never doubles a booking, and a newer file fills the channel and the booking of an order imported earlier. Nuport's *Entry By* is one name on every order and *Customer Tag* is Nuport's own label, so neither is kept.
+
+### Fixed
+
+- **The Edit order page keeps an order's own courier in the Courier box when that courier is switched off.** The box listed active couriers only, so saving an order whose courier had been switched off failed with "The selected courier is invalid"; the imported Nuport parcels use a courier that is created switched off, so they would have hit it.
+
+### Technical Notes
+
+- `OrderForm`'s `courier_provider_id` select adds `OR id = <the order's courier_provider_id>` to its active-couriers query (covered by `NuportOrderImportTest::test_an_imported_order_of_a_zero_stock_product_shows_normally_and_never_asks_for_stock`, whose imported order has a switched-off courier). Migration `2026_10_20_100000_add_sales_channel_to_orders_and_returned_quantity_to_order_items` (nullable `orders.sales_channel` with a `company_id` + `sales_channel` index; `order_items.returned_quantity` unsigned, default 0). **Deploy: run `php artisan migrate --force`.** `Order::SALES_CHANNELS` / `Order::salesChannelLabel()`; a channel Nuport adds later is stored as snake case and shown as a headline.
+- `NuportOrderImportService`: `plan()` adds `sales_channel`, `booking` and `open_consignment`; `bookingPlan()` records only final courier statuses (`BOOKING_STATUSES`), so `couriers:sync-statuses` never polls an imported parcel and no stale-booking alert fires; `syncBooking()` saves quietly (no `CourierStatusLog`, no SMS, no customer risk review) and is idempotent per order + tracking id; `cod_amount` is Sales Amount + Delivery Fee for a COD order, else 0; `returned_at` is set only for Nuport's RETURNED sub-status (PENDING_RETURNED is still on its way back); delivery cost and margin stay empty (the file has none). `findProvider()` prefers an API driver named like the courier, then a slug or name match; `providerFor()` creates an inactive `manual` courier. Imported customers' bookings now count in `CustomerRiskService`'s delivered / returned / cancelled ratios. Tests: `NuportOrderImportTest` (3 new). 10 new interface strings in `lang/en.json` / `lang/bn.json`; `docs/codebase-map/sales-orders-couriers.md` updated.
+## [2.91.0] - 2026-10-20
+
+**Release type:** Minor Feature Update
+
+### Added
+
 - **One login for all businesses on the investor portal** (`17_IMS_IN_PORTAL_PLAN.md` §5, phase M). Someone with an active investor portal account under the **same phone number** in more than one business is treated as one person:
   - **Central sign-in address.** A Super Admin sets one address for every business in **Investments → Investor Portal Settings → One sign-in for all businesses** (for example `ims.yourdomain.com`; leave it blank to keep it off). There, investors sign in once with phone and password. Each business's own address keeps working as before. Password reset, SMS code sign-in, partner sign-up and invites stay on each business's own address.
   - **Switch business** button in the portal's top bar, listing the person's other businesses. On the central address, choosing one opens it in the same session. On a business's own address, it moves the person to the other business's address, already signed in.
   - **My businesses** page (under *More*, and in the switch menu). It has one card per business, showing capital at work, total invested, profit received, profit still to be paid and commission due, plus the totals. Businesses with different currencies are not added together.
   - Each business keeps its own account and figures, and a page never shows two businesses at once. A staff preview cannot switch. An account that is disabled, or has no password yet, is never offered.
-  - **The IMS domain is a sign-in for every business too** (owner request 2026-10-20). Investors only know the business's IMS address (for example `zamzaminv.app`), so its sign-in page now works like the central address: someone who also has an account in another business signs in there with phone and password, and the password of any of their accounts opens that business (the IMS domain's own business is tried first). The **Switch business** button then changes the business on the same address, without leaving it. Someone with an account in only this business signs in exactly as before (SMS code, password reset, sign-up and invites unchanged). The IMS office at `/office` is unchanged. The separate central address is no longer needed and can be left blank.
 - **Dark mode for the IMS** (owner request 2026-10-20). Both IMS panels — the investor portal (`/investor`) and the IMS office (`/office`) — now have **light and dark mode**. Light is the default. A round moon button in the top bar (and on the sign-in page) switches to dark, a sun button switches back, and the browser remembers the choice; Filament's own light/dark/system switch in the person menu works too. Green buttons, the balance card and the sign-in panel keep their green with white text; green text gets a lighter shade on dark cards.
 - **New IMS sign-in page** following the owner's reference design (sign in, sign up, forgot password, invite and join pages). Wide screens: one round frame with a green gradient welcome panel on the left — logo, a small badge (*Investor portal* / *IMS office*), the big heading, one line of text and three numbered step cards (the first one white) — and the form on the right with soft grey fields, a full-width green button and, where there is a second way in (sign in with an SMS code), an "Or" line and an outlined button. Phones and tablets: the green panel sits on top with the steps in a row, and the form sheet overlaps it. The light/dark and English/বাংলা switches sit at the top of the form. No stock photos and no invented links; logo and name come from the company settings.
 
@@ -21,7 +52,6 @@ All notable production changes to Business Dashboard are documented here.
 
 - Between two business addresses the switch uses a one-time token. It works for 60 seconds, only once, and only on the portal of the business it was made for. It is refused if either account was disabled after it was made.
 - On the central address, a page opens only for the business chosen in that session, and only with that business's own account. When no business is chosen, nothing company-owned can be read.
-- On an IMS domain, another business opens only while the account signed in to that session belongs to it; otherwise (and always on sign-up, invite, password-reset and staff pages) the domain's own business stays open.
 - Every switch is recorded in the audit log (`investor_portal.business_switch_issued`, `investor_portal.business_switched`) and counts as a sign-in. Changing the central address is recorded too (`ims.central_domain_saved`).
 
 ### Technical Notes
@@ -31,11 +61,9 @@ All notable production changes to Business Dashboard are documented here.
 - The central address may be a new name under a company's own domain (for example `ims.<company domain>`); `Company::centralHostIsTaken()` refuses only a host that already answers (company domain, any portal host, IMS or Next.js domain, a reseller's own domain or store subdomain). Once set, its label is reserved for that company's reseller store subdomains (`Company::reservedResellerSubdomains()`), and it never resolves as a reseller store.
 - No migration. 14 new interface strings in `lang/en.json` / `lang/bn.json`. Tests: `InvestorBusinessSwitchTest` (16).
 - **Deploy:** point the central domain to the server (Cloudflare + Coolify), then fill it in on the settings page.
-- IMS domain sign-in for every business: `InvestorBusinessSwitchService::imsHostCompany()`, `switchesInSession()`, `hasAccountsElsewhere()`; `attemptCentralLogin()` takes a preferred company. The investor `Login` uses the multi-business path on an IMS domain only in password mode and only when the phone has an active account in another business. `ResolveCompanyFromCentralInvestorSession` opens the chosen business on an IMS domain only when the session's `investor` guard account belongs to it. No migration, no new strings, no settings change. Tests: `InvestorBusinessSwitchTest` (+5, 21).
 - Both IMS panel providers: `->darkMode()` + `->defaultThemeMode(ThemeMode::Light)`. New views `filament/ims/theme-toggle` (top bar, `GLOBAL_SEARCH_AFTER`; dispatches Filament's `theme-changed`) and `filament/ims/auth-tools` (theme + language switch, `SIMPLE_PAGE_START`); `filament/ims/auth-hero` rewritten with the steps.
 - `resources/css/filament/ims/theme.css`: every hard-coded colour is now a token (`--ims-raised`, `--ims-nav-*`, `--ims-on-primary-*`, `--ims-primary-text` / `-ink`, soft warning/danger/info tones, `--ims-field`, `--ims-auth-*`); `:root.dark` redefines them. Older portal views with grey utility classes and no `dark:` variant are covered by a few dark overrides.
 - 8 new interface strings in `lang/en.json` / `lang/bn.json`. Test: `tests/Feature/Ims/ThemeAndSignInTest.php` (3). No migration.
-
 ## [2.90.1] - 2026-10-20
 
 **Release type:** Maintenance Update

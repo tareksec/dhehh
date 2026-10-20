@@ -3306,5 +3306,15 @@
     "Approve profit and payouts": "Approve profit and payouts",
     "Sign in to your account": "Sign in to your account",
     "See your money and profit": "See your money and profit",
-    "Follow every payout": "Follow every payout"
+    "Follow every payout": "Follow every payout",
+    "Sales channel": "Sales channel",
+    "Website": "Website",
+    "Live chat": "Live chat",
+    "Offline": "Offline",
+    "Sales channels: :list": "Sales channels: :list",
+    ":count courier bookings would be recorded: :list": ":count courier bookings would be recorded: :list",
+    ":count courier bookings were recorded: :list": ":count courier bookings were recorded: :list",
+    ":count couriers would be created (inactive, no API): :list": ":count couriers would be created (inactive, no API): :list",
+    ":count couriers were created (inactive, no API): :list": ":count couriers were created (inactive, no API): :list",
+    ":count orders have a parcel still on the way; its consignment number stays in the order note only.": ":count orders have a parcel still on the way; its consignment number stays in the order note only."
 }

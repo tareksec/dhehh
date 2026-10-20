@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Company;
 use App\Models\CourierBooking;
+use App\Models\CourierProvider;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -50,6 +51,15 @@ use Throwable;
  *   last non-zero unit price as selling price, cost price 0, stock 0 and
  *   inactive, so it never shows on the website or in stock. Off by default;
  *   the preview lists what would be created.
+ * - Report fields (owner request, 2026-10-20): Nuport's "Order Source" becomes
+ *   the order's sales channel; "Cancelled/Returned/Damaged Qty" becomes each
+ *   line's returned quantity (not for cancelled orders, which never shipped);
+ *   a parcel with a consignment number whose delivery is over (delivered,
+ *   partly delivered, returned, cancelled) becomes a courier booking so the
+ *   courier reports and a customer's delivery history see it. A parcel still on
+ *   the way is not recorded - the courier sync would poll it - and keeps its
+ *   consignment number in the order note. A courier the ERP does not have is
+ *   created inactive with no API, so staff cannot book with it by mistake.
  * - Imported orders never create stock movements, alerts or risk checks
  *   (Order::isHistoricalImport()), and their payments are posted with no
  *   account, so no account balance changes.
@@ -85,6 +95,14 @@ class NuportOrderImportService
      */
     public const SHIPPING_ZONE = 'imported';
 
+    /** Courier statuses that are final; only these become booking records (see the class note). */
+    protected const BOOKING_STATUSES = [
+        CourierBooking::STATUS_DELIVERED,
+        CourierBooking::STATUS_PARTIAL_DELIVERED,
+        CourierBooking::STATUS_RETURNED,
+        CourierBooking::STATUS_CANCELLED,
+    ];
+
     protected const PAYMENT_NOTE = 'Nuport import';
 
     protected const LIST_LIMIT = 15;
@@ -110,6 +128,9 @@ class NuportOrderImportService
 
     protected bool $createMissing = false;
 
+    /** @var Collection<int, CourierProvider>|null the company's couriers, loaded on first use */
+    protected ?Collection $providers = null;
+
     /** True once every unit price has been seen (see run()), so planning stops changing them. */
     protected bool $pricesLocked = false;
 
@@ -134,6 +155,7 @@ class NuportOrderImportService
         $this->customerCache = [];
         $this->createMissing = $createMissing;
         $this->newProducts = [];
+        $this->providers = null;
         $this->loadProducts();
 
         if (! $dryRun) {
@@ -189,6 +211,7 @@ class NuportOrderImportService
             }
 
             $this->addStatusTotals($report, $plan);
+            $this->addChannelAndBookingTotals($report, $plan);
 
             try {
                 if ($order) {
@@ -213,6 +236,8 @@ class NuportOrderImportService
                     }
                 }
             } catch (Throwable $exception) {
+                // A courier created inside the rolled-back transaction must not stay cached.
+                $this->providers = null;
                 $report['errors'][] = $plan['invoice'].': '.Str::limit($exception->getMessage(), 160);
             }
         }
@@ -287,6 +312,46 @@ class NuportOrderImportService
                 : __(':count products were created (inactive, stock 0, cost price 0): :list', $replace);
         }
 
+        if ($report['channels'] !== []) {
+            $lines[] = __('Sales channels: :list', [
+                'list' => $this->shorten(collect($report['channels'])
+                    ->map(fn (int $count, string $channel): string => Order::salesChannelLabel($channel).' '.$count)
+                    ->values()
+                    ->all()),
+            ]);
+        }
+
+        if ($report['bookings'] !== []) {
+            $replace = [
+                'count' => array_sum($report['bookings']),
+                'list' => $this->shorten(collect($report['bookings'])
+                    ->map(fn (int $count, string $partner): string => $partner.' '.$count)
+                    ->values()
+                    ->all()),
+            ];
+
+            $lines[] = $dryRun
+                ? __(':count courier bookings would be recorded: :list', $replace)
+                : __(':count courier bookings were recorded: :list', $replace);
+        }
+
+        if ($report['new_providers'] !== []) {
+            $replace = [
+                'count' => count($report['new_providers']),
+                'list' => $this->shorten(array_keys($report['new_providers'])),
+            ];
+
+            $lines[] = $dryRun
+                ? __(':count couriers would be created (inactive, no API): :list', $replace)
+                : __(':count couriers were created (inactive, no API): :list', $replace);
+        }
+
+        if ($report['open_consignments'] > 0) {
+            $lines[] = __(':count orders have a parcel still on the way; its consignment number stays in the order note only.', [
+                'count' => $report['open_consignments'],
+            ]);
+        }
+
         if ($unmatched > 0) {
             $lines[] = __(':count orders were skipped because a product was not found.', ['count' => $unmatched]);
             $lines[] = __('Products not found (SKU or name): :list', ['list' => $this->shorten(array_keys($report['unmatched']))]);
@@ -350,6 +415,10 @@ class NuportOrderImportService
             'mapped' => [],
             'map_ignored' => [],
             'new_products' => [],
+            'channels' => [],
+            'bookings' => [],
+            'new_providers' => [],
+            'open_consignments' => 0,
             'mismatch' => [],
             'errors' => [],
             'ignored_lines' => 0,
@@ -512,7 +581,12 @@ class NuportOrderImportService
                 $plan['mapped'][$resolved['mapped_from']] = true;
             }
 
-            $plan['lines'][] = $resolved + ['quantity' => $quantity, 'unit_price' => $unitPrice];
+            // A cancelled order never shipped, so its "cancelled" pieces are not returns.
+            $returned = $nuportStatus === 'CANCELLED'
+                ? 0
+                : max(0, min($quantity, (int) round($this->money($row['cancelledreturneddamagedqty'] ?? ''))));
+
+            $plan['lines'][] = $resolved + ['quantity' => $quantity, 'unit_price' => $unitPrice, 'returned_quantity' => $returned];
             $linesTotal += $quantity * $unitPrice;
             $afterDiscountTotal += $this->money($row['priceafterdiscount'] ?? $row['totalprice'] ?? '');
         }
@@ -537,9 +611,15 @@ class NuportOrderImportService
         // to the packaging fee so the ERP total still equals Nuport's.
         $plan['mismatch'] = abs($afterDiscountTotal - $this->money($head['orderdiscount'] ?? '') - $sales) > 0.01;
 
+        $deliveryStatus = $this->deliveryStatus($nuportStatus, $head);
+        $booking = $this->bookingPlan($head, $deliveryStatus, $sales + $fee, $shippedAt ?? $createdAt, $deliveredAt, $lastDate);
+
         return array_merge($plan, [
             'status' => self::STATUS_MAP[$nuportStatus],
-            'delivery_status' => $this->deliveryStatus($nuportStatus, $head),
+            'delivery_status' => $deliveryStatus,
+            'sales_channel' => $this->salesChannel($head['ordersource'] ?? ''),
+            'booking' => $booking,
+            'open_consignment' => $booking === null && ($head['deliveryid'] ?? '') !== '',
             'discount' => round(max($linesTotal - $sales, 0), 2),
             'packaging_fee' => round(max($sales - $linesTotal, 0), 2),
             'shipping_fee' => round($fee, 2),
@@ -569,6 +649,160 @@ class NuportOrderImportService
             'CANCELLED' => $hasBooking ? CourierBooking::STATUS_CANCELLED : CourierBooking::STATUS_NOT_BOOKED,
             default => $hasBooking ? CourierBooking::STATUS_BOOKED : CourierBooking::STATUS_NOT_BOOKED,
         };
+    }
+
+    /** "LIVE_CHAT" and "Live chat" are the same channel: lower-case words joined by underscores. */
+    protected function salesChannel(string $source): ?string
+    {
+        $channel = trim((string) preg_replace('/[^a-z0-9]+/', '_', Str::lower($source)), '_');
+
+        return $channel === '' ? null : Str::limit($channel, 40, '');
+    }
+
+    /**
+     * The courier booking to record for a parcel whose delivery is over, or
+     * null (no consignment number, or the parcel is still on the way).
+     *
+     * @param  array<string, string>  $head
+     * @return array<string, mixed>|null
+     */
+    protected function bookingPlan(array $head, string $deliveryStatus, float $total, Carbon $bookedAt, ?Carbon $deliveredAt, Carbon $lastDate): ?array
+    {
+        $tracking = trim($head['deliveryid'] ?? '');
+
+        if ($tracking === '' || ! in_array($deliveryStatus, self::BOOKING_STATUSES, true)) {
+            return null;
+        }
+
+        $delivered = in_array($deliveryStatus, [CourierBooking::STATUS_DELIVERED, CourierBooking::STATUS_PARTIAL_DELIVERED], true);
+        $collectsCash = (bool) preg_match('/cash on delivery|\bcod\b/', Str::lower($head['paymentmethod'] ?? ''));
+        // Nuport marks a parcel that came back as RETURNED; PENDING_RETURNED is still on its way back.
+        $backAtShop = $deliveryStatus === CourierBooking::STATUS_RETURNED && Str::upper(trim($head['substatus'] ?? '')) === 'RETURNED';
+
+        return [
+            'partner' => trim($head['deliverypartner'] ?? '') ?: 'Courier',
+            'tracking_id' => $tracking,
+            'status' => $deliveryStatus,
+            'cod_amount' => $collectsCash ? round($total, 2) : 0.0,
+            'delivery_fee_charged' => round($this->money($head['deliveryfee'] ?? ''), 2),
+            'booked_at' => $bookedAt,
+            'delivered_at' => $delivered ? ($deliveredAt ?? $lastDate) : null,
+            'returned_at' => $backAtShop ? $lastDate : null,
+        ];
+    }
+
+    protected function findProvider(string $partner): ?CourierProvider
+    {
+        $this->providers ??= CourierProvider::query()->orderByDesc('is_active')->orderBy('id')->get();
+        $slug = Str::slug($partner);
+
+        return $this->providers->first(fn (CourierProvider $provider): bool => in_array($provider->driver, CourierProvider::API_DRIVERS, true) && $provider->driver === $slug)
+            ?? $this->providers->first(fn (CourierProvider $provider): bool => $provider->slug === $slug || Str::lower(trim($provider->name)) === Str::lower(trim($partner)));
+    }
+
+    /** The company's courier of that name, or a new inactive one with no API. */
+    protected function providerFor(string $partner): CourierProvider
+    {
+        $provider = $this->findProvider($partner);
+
+        if ($provider) {
+            return $provider;
+        }
+
+        $provider = CourierProvider::query()->create([
+            'company_id' => $this->company->getKey(),
+            'name' => $partner,
+            'slug' => Str::slug($partner) ?: 'courier',
+            'driver' => CourierProvider::DRIVER_MANUAL,
+            'is_active' => false,
+        ]);
+
+        $this->providers->push($provider);
+
+        return $provider;
+    }
+
+    /**
+     * Keeps the one booking record of an order's consignment in line with the
+     * file. Quiet on purpose: no status logs, SMS or customer risk review for
+     * history. Returns whether anything changed.
+     *
+     * @param  array<string, mixed>  $plan
+     */
+    protected function syncBooking(Order $order, array $plan, ?Customer $customer = null): bool
+    {
+        $booking = $plan['booking'] ?? null;
+
+        if ($booking === null) {
+            return false;
+        }
+
+        $customer ??= $order->customer;
+        $row = CourierBooking::query()
+            ->where('order_id', $order->getKey())
+            ->where('tracking_id', $booking['tracking_id'])
+            ->first() ?? new CourierBooking;
+
+        $row->forceFill([
+            'company_id' => $order->company_id,
+            'courier_provider_id' => $this->providerFor($booking['partner'])->getKey(),
+            'order_id' => $order->getKey(),
+            'tracking_id' => $booking['tracking_id'],
+            'recipient_name' => $customer?->name ?: ($order->customer_name ?: 'Customer'),
+            'recipient_phone' => $customer?->phone,
+            'recipient_address' => ($plan['head']['customeraddress'] ?? '') !== '' ? $plan['head']['customeraddress'] : $customer?->address,
+            'cod_amount' => $booking['cod_amount'],
+            'delivery_fee_charged' => $booking['delivery_fee_charged'],
+            'status' => $booking['status'],
+            'booked_at' => $this->databaseTime($booking['booked_at']),
+            'delivered_at' => $this->databaseTime($booking['delivered_at']),
+            'returned_at' => $this->databaseTime($booking['returned_at']),
+            'note' => self::PAYMENT_NOTE,
+        ]);
+
+        if (! $row->exists) {
+            $row->forceFill([
+                'created_at' => $this->databaseTime($booking['booked_at']),
+                'updated_at' => $this->databaseTime($booking['booked_at']),
+            ]);
+        }
+
+        $changed = ! $row->exists || $row->isDirty();
+        $row->saveQuietly();
+
+        return $changed;
+    }
+
+    /** Company-timezone time as the application timezone the database stores. */
+    protected function databaseTime(?Carbon $time): ?Carbon
+    {
+        return $time?->copy()->setTimezone(config('app.timezone'));
+    }
+
+    /**
+     * @param  array<string, mixed>  $report
+     * @param  array<string, mixed>  $plan
+     */
+    protected function addChannelAndBookingTotals(array &$report, array $plan): void
+    {
+        if ($plan['sales_channel'] !== null) {
+            $report['channels'][$plan['sales_channel']] = ($report['channels'][$plan['sales_channel']] ?? 0) + 1;
+        }
+
+        if ($plan['open_consignment']) {
+            $report['open_consignments']++;
+        }
+
+        if ($plan['booking'] === null) {
+            return;
+        }
+
+        $partner = $plan['booking']['partner'];
+        $report['bookings'][$partner] = ($report['bookings'][$partner] ?? 0) + 1;
+
+        if ($this->findProvider($partner) === null) {
+            $report['new_providers'][$partner] = true;
+        }
     }
 
     protected function paymentMethod(string $label): string
@@ -860,6 +1094,9 @@ class NuportOrderImportService
         $plan['lines'] = $this->materialiseLines($plan['lines']);
 
         DB::transaction(function () use ($plan, $customer): void {
+            // The courier of a recorded parcel; any other order keeps the company's default courier.
+            $provider = $plan['booking'] !== null ? $this->providerFor($plan['booking']['partner']) : null;
+
             $order = new Order;
             $order->forceFill([
                 'company_id' => $this->company->getKey(),
@@ -876,7 +1113,9 @@ class NuportOrderImportService
                 'paid_amount' => 0,
                 'status' => $plan['status'],
                 'delivery_status' => $plan['delivery_status'],
+                'courier_provider_id' => $provider?->getKey(),
                 'source' => Order::SOURCE_NUPORT_IMPORT,
+                'sales_channel' => $plan['sales_channel'],
                 'note' => $plan['note'],
                 'created_at' => $plan['created_at']->copy()->setTimezone(config('app.timezone')),
                 'updated_at' => $plan['updated_at']->copy()->setTimezone(config('app.timezone')),
@@ -892,6 +1131,7 @@ class NuportOrderImportService
                         'product_variant_id' => $line['variant_id'],
                         'variant_label' => $line['label'],
                         'quantity' => $line['quantity'],
+                        'returned_quantity' => $line['returned_quantity'],
                         'unit_price' => $line['unit_price'],
                         'unit_cost' => $line['unit_cost'],
                         'subtotal' => $line['quantity'] * $line['unit_price'],
@@ -902,6 +1142,7 @@ class NuportOrderImportService
 
             $order->syncTotalsStockAndCustomerBalance();
             $this->syncPayment($order->refresh(), $plan);
+            $this->syncBooking($order, $plan, $customer);
             $order->syncCustomerBalance();
         });
     }
@@ -921,9 +1162,10 @@ class NuportOrderImportService
 
             $order->syncTotalsStockAndCustomerBalance();
             $paymentChanged = $this->syncPayment($order->refresh(), $plan);
+            $bookingChanged = $this->syncBooking($order, $plan);
             $order->syncCustomerBalance();
 
-            return $changed || $paymentChanged;
+            return $changed || $paymentChanged || $bookingChanged;
         });
     }
 
@@ -935,7 +1177,12 @@ class NuportOrderImportService
         $payment = $this->desiredPayment($plan);
         $current = (float) $order->payments()->where('note', 'like', self::PAYMENT_NOTE.'%')->sum('amount');
 
-        return $order->isDirty() || abs($current - $payment) > 0.005;
+        $bookingMissing = $plan['booking'] !== null && ! $order->courierBookings()
+            ->where('tracking_id', $plan['booking']['tracking_id'])
+            ->where('status', $plan['booking']['status'])
+            ->exists();
+
+        return $order->isDirty() || abs($current - $payment) > 0.005 || $bookingMissing;
     }
 
     /**
@@ -947,6 +1194,7 @@ class NuportOrderImportService
         return [
             'status' => $plan['status'],
             'delivery_status' => $plan['delivery_status'],
+            'sales_channel' => $plan['sales_channel'],
             'discount' => $plan['discount'],
             'shipping_fee' => $plan['shipping_fee'],
             'packaging_fee' => $plan['packaging_fee'],

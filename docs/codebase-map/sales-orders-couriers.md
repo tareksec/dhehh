@@ -1,5 +1,5 @@
 # Sales, Orders & Couriers
-> Last checked: 2026-10-20, commit 0e5316d
+> Last checked: 2026-10-20, commit 2e3fa5cd
 
 ## What it does
 The Sales, Orders & Couriers module orchestrates customer acquisition, order fulfillment, multi-carrier parcel delivery, and delivery fraud prevention. It manages the full lifecycle of orders from draft quotations to confirmed, processing, delivered, or returned states, while tracking payments and stock reservations. It integrates with major Bangladeshi courier logistics APIs (Steadfast, Pathao, RedX, eCourier, and manual delivery), automating airway bill booking, webhook tracking, parcel barcode scanning, and driver handover sheets. For fraud mitigation, it runs an intelligent customer risk scoring engine that evaluates historical courier return ratios, first-time high COD thresholds, phone number reuse, and a dual-tier (global and tenant-scoped) customer blacklist.
@@ -57,6 +57,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Services/CourierManager.php` | Factory resolving carrier adapter instances based on provider configurations. |
 | `app/Services/CourierService.php` | Business service executing consignment creation, cancellation, and fee balance syncing. |
 | `app/Services/CourierAlertService.php` | Raises alerts for stuck shipments, delayed deliveries, and abnormal return rates. |
+| `app/Services/NuportOrderImportService.php` | Copies past orders out of a Nuport CSV export (orders, lines, payments, status, sales channel, returned pieces, finished courier bookings) without touching stock or accounts; run from the Orders list or `orders:import-nuport`. |
 | `app/Services/CourierReportService.php` | Aggregates courier delivery performance, success rates, and COD settlement totals. |
 | `app/Services/CourierHandoverSheetService.php` | Generates printable handover manifests with barcodes for carrier pickup. |
 | `app/Services/ExternalCourierFraudService.php` | Queries third-party courier fraud databases (Pathao, Steadfast, RedX) by phone number. |
@@ -134,6 +135,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Jobs/CheckExternalCourierFraudJob.php` | Background job fetching delivery success ratios from external courier APIs. |
 | `app/Jobs/ProcessCourierWebhook.php` | Background job updating courier booking status and order status from webhook data. |
 | `app/Jobs/SendOrderStatusSmsJob.php` | Queued job dispatching order status update SMS messages to customers. |
+| `app/Console/Commands/ImportNuportOrders.php` | `orders:import-nuport {file} {company-slug}`: previews or applies a Nuport order import from the terminal. |
 | `app/Console/Commands/SyncCourierStatuses.php` | Cron job polling courier APIs for live parcel tracking updates. |
 | `app/Console/Commands/MarkExpiredQuotations.php` | Nightly cron job expiring quotations that have exceeded their valid date. |
 
@@ -165,6 +167,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `tests/Feature/SalesOrderTest.php` | Tests order creation, total calculations, and line item persistence. |
 | `tests/Feature/OrderStatusWorkflowTest.php` | Tests order stage progression, transitions, and stock reservation. |
 | `tests/Feature/CourierIntegrationTest.php` | Tests courier booking creation, airway bill generation, and webhooks. |
+| `tests/Feature/NuportOrderImportTest.php` | Tests the Nuport order import: mapping, statuses, SKU mapping, sales channel, returned pieces, courier bookings. |
 | `tests/Feature/CourierHandoverSheetTest.php` | Tests handover sheet manifest filtering and printable output. |
 | `tests/Feature/CustomerRiskTest.php` | Tests risk scoring algorithm, return ratio deduction, and blacklist matching. |
 | `tests/Feature/FraudCheckerPageTest.php` | Tests live phone check queries against external fraud adapters. |
@@ -190,8 +193,8 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
   - `GET|HEAD admin/customers/import/sample` (name `customers.import.sample`) -> `App\Http\Controllers\Admin\CustomerCsvController@sample`
 
 ## Data
-- `orders`: Core sales order records. Key columns: `id`, `company_id`, `customer_id`, `order_number`, `status` (`pending`, `processing`, `completed`, `cancelled`), `delivery_status`, `order_date`, `subtotal`, `shipping_fee`, `shipping_zone`, `discount`, `vat`, `total_amount`, `paid_amount`, `due_amount`, `source`, `courier_provider_id`, `packaging_fee`, `external_reference`, `deleted_at`, `created_at`, `updated_at`.
-- `order_items`: Order line items. Key columns: `id`, `company_id`, `order_id`, `product_id`, `product_variant_id`, `variant_label`, `quantity`, `unit_price`, `subtotal`, `unit_cost`, `reseller_base_price`, `reseller_retail_price`, `is_upsell`, `created_at`, `updated_at`.
+- `orders`: Core sales order records. Key columns: `id`, `company_id`, `customer_id`, `order_number`, `status` (`pending`, `processing`, `completed`, `cancelled`), `delivery_status`, `order_date`, `subtotal`, `shipping_fee`, `shipping_zone`, `discount`, `vat`, `total_amount`, `paid_amount`, `due_amount`, `source`, `sales_channel`, `courier_provider_id`, `packaging_fee`, `external_reference`, `deleted_at`, `created_at`, `updated_at`.
+- `order_items`: Order line items. Key columns: `id`, `company_id`, `order_id`, `product_id`, `product_variant_id`, `variant_label`, `quantity`, `returned_quantity`, `unit_price`, `subtotal`, `unit_cost`, `reseller_base_price`, `reseller_retail_price`, `is_upsell`, `created_at`, `updated_at`.
 - `customers`: Customer registry. Key columns: `id`, `company_id`, `name`, `phone`, `email`, `address`, `opening_balance`, `current_balance`, `is_active`, `customer_type`, `customer_source`, `reseller_status`, `business_name`, `created_at`, `updated_at`.
 - `customer_blacklists`: Dual-tier blacklist. Key columns: `id`, `company_id` (NULL for global across all companies), `phone`, `email`, `ip_address`, `address`, `reason`, `is_active`, `created_by`, `created_at`, `updated_at`.
 - `customer_risk_profiles`: Computed risk profile. Key columns: `id`, `company_id`, `customer_id`, `phone`, `total_courier_orders`, `delivered_orders`, `returned_orders`, `cancelled_orders`, `success_ratio`, `return_ratio`, `cancel_ratio`, `risk_score`, `risk_level`, `is_blacklisted`, `factors` (JSON), `evaluated_at`, `created_at`, `updated_at`.
