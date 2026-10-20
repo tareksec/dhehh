@@ -2,6 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-20 - The IMS domain signs in to every business
+
+Reason - owner brief: investors only know `zamzaminv.app` (the IMS domain); the multi-business sign-in worked only on the central address `ims.zamzaminv.app`. Settings could not fix it (the central address may not be the IMS domain, and the IMS domain may not be blank while IMS is on). Do not turn IMS off or change settings; `/office` must keep working.
+
+What changed:
+- On an IMS domain the investor sign-in (password mode) uses the central multi-business path when the phone has an active account in another business; the domain's own business is tried first. One-business investors sign in as before.
+- Switching business on an IMS domain stays in the same session on the same address (no token hop).
+- `ResolveCompanyFromCentralInvestorSession`: on an IMS domain, the chosen business opens only while the signed-in account belongs to it; business-only pages always use the domain's business.
+- No settings, migration or string change. `ims.zamzaminv.app` keeps working; once this is live it can be cleared from settings and redirected at DNS/Coolify level to `zamzaminv.app`.
+
+Verified: `InvestorBusinessSwitchTest` 21 passed (5 new: sign-in opens the other business, own business first, one-business sign-in unchanged, switch stays on the domain and `/office/login` still opens, stale choice ignored). Full suite: 2842 passed, 1 skipped, 0 failed.
+
+Commit status: committed and pushed to `feature/ims-domain-multi-business-login`; not merged into `main` (waits for owner approval).
+
 ## 2026-10-20 - Phase M: one login for all businesses (all of plan §5)
 
 Reason - owner (in Bangla): implement `17_IMS_IN_PORTAL_PLAN.md`, and "file a ja ache sob follow koro". Build everything §5 describes; the plan's own proposals answer Q1–Q3.

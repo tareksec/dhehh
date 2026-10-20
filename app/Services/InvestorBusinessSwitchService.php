@@ -31,6 +31,10 @@ use Illuminate\Support\Str;
  *   company) the person signs in once; the chosen business is kept in the
  *   session (SESSION_KEY) and switching signs the session in to that
  *   business's own account.
+ * - A business's IMS v2 domain works the same way (owner request
+ *   2026-10-20): the sign-in there opens any of the person's businesses and
+ *   switching stays in the session; with no other business chosen the
+ *   domain's own business is shown.
  * - The per-business hosts keep working. There a switch sends the browser
  *   to the other business's own host with a one-time token (60 seconds, kept
  *   in the cache under its hash), because two hosts cannot share a session.
@@ -58,6 +62,29 @@ class InvestorBusinessSwitchService
     public function onCentralHost(?Request $request = null): bool
     {
         return Company::isImsCentralHost(($request ?? request())->getHost());
+    }
+
+    /**
+     * The business whose IMS v2 domain this host is (owner request 2026-10-20:
+     * investors only know that address, so it signs in to every business too,
+     * the same way as the central host, while staying that business's portal).
+     */
+    public function imsHostCompany(?Request $request = null): ?Company
+    {
+        return Company::forImsHost(($request ?? request())->getHost());
+    }
+
+    /** Whether this host keeps the chosen business in the session: the central host or an IMS domain. */
+    public function switchesInSession(?Request $request = null): bool
+    {
+        return $this->onCentralHost($request) || $this->imsHostCompany($request) !== null;
+    }
+
+    /** Whether this phone has an active account with a password in a business other than $company. */
+    public function hasAccountsElsewhere(string $phone, Company $company): bool
+    {
+        return $this->activeAccountsFor($phone)
+            ->contains(fn (InvestorPortalAccount $account): bool => (int) $account->company_id !== (int) $company->getKey());
     }
 
     /**
@@ -109,7 +136,7 @@ class InvestorBusinessSwitchService
 
         $this->audit->record('investor_portal.business_switch_issued', $current, null, ['to_company_id' => $companyId]);
 
-        if ($this->onCentralHost($request)) {
+        if ($this->switchesInSession($request)) {
             $this->openOnCentralHost($target['account'], $target['company'], $request, 'business_switch');
             $this->audit->record('investor_portal.business_switched', $target['account']);
 
@@ -170,15 +197,22 @@ class InvestorBusinessSwitchService
     /**
      * Central host sign-in: phone + password. The password of any of the
      * person's active accounts opens the first business it belongs to (the
-     * same phone across businesses is one person, §5 Q2).
+     * same phone across businesses is one person, §5 Q2). On an IMS domain the
+     * account of that domain's business ($prefer) is tried first.
      *
      * @return array{account: InvestorPortalAccount, company: Company}|null
      *
      * @throws LoginThrottled when LoginGate stops the attempt before the password is checked
      */
-    public function attemptCentralLogin(string $phone, string $password): ?array
+    public function attemptCentralLogin(string $phone, string $password, ?Company $prefer = null): ?array
     {
         $candidates = $this->activeAccountsFor($phone);
+
+        if ($prefer !== null) {
+            $candidates = $candidates
+                ->sortBy(fn (InvestorPortalAccount $account): int => (int) $account->company_id === (int) $prefer->getKey() ? 0 : 1)
+                ->values();
+        }
         $client = LoginClient::fromRequest(request(), LoginGate::SURFACE_INVESTOR);
         $attempt = $this->loginGate->begin(LoginGate::SURFACE_INVESTOR, null, Phone::normalize($phone), $candidates->first(), $client);
 
