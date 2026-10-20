@@ -1,5 +1,5 @@
 # Investments & IMS v2
-> Last checked: 2026-10-20, feature/ims-all-companies (plan 18 phases A-D: every company on the one IMS domain, office company picker, All companies page, investor projects from every company)
+> Last checked: 2026-10-20, feature/ims-all-companies (plan 18 phases A-E: every company on the one IMS domain, office company picker, All companies page, investor projects and lists from every company)
 
 ## What it does
 The Investments & IMS v2 module manages Islamic Mudarabah investment partnerships, syndicated investor pools, commercial project funding, and comprehensive investor relations. Built natively into the application following the retirement of the legacy external IMS, it provides two dedicated Filament 5 panels: the IMS Office back-office panel (`/office`) for investment managers, and the Investor Portal (`/investor`) for self-service investor access. It automates investor onboarding with NID OCR verification, digital agreement acceptance, syndicated investor group lifecycles, and automated daily profit proposals. Additionally, it features an investor transparency feed, scheduled monthly statement generation, capital return queues, bank statement reconciliation, and channel partner commission settlements.
@@ -72,7 +72,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `app/Services/InvestorPortalService.php` | General portal business service resolving company contexts and dashboards. |
 | `app/Services/InvestorPortalAccountService.php` | Manages investor portal credentials, password updates, and phone changes. |
 | `app/Services/ImsOfficeCompanies.php` | Plan 18 §3.1–3.2: which companies a staff member may open in the office (Super Admin / `ims.all_companies` = every company, else their own), the chosen company (session `ims_office_company_id`, link `?office_company=`), `mayEnter()` for `User::canAccessPanel('office')`. |
-| `app/Services/InvestorPortfolio.php` | Plan 18 §4: one person's companies (same phone), projects and raising-money lists from every company, home totals per currency; each read under its own company. |
+| `app/Services/InvestorPortfolio.php` | Plan 18 §4: one person's companies (same phone); projects, raising-money lists, statement, payouts, documents, requests and request choices from every company; home totals per currency; each read under its own company. |
 | `app/Services/InvestorBusinessSwitchService.php` | One login, many businesses (plan 17 §5): the person's businesses by phone, central-host sign-in, switching (same session on the central host and on an IMS domain, one-time token between other business hosts). |
 | `app/Services/AgreementService.php` | Injects investor and project variables into contract templates and generates PDFs. |
 
@@ -103,10 +103,11 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `app/Filament/Investor/Pages/Dashboard.php` | Investor portal homepage displaying portfolio overview and recent earnings. |
 | `app/Filament/Investor/Pages/MyBusinesses.php` | "My businesses": one card per business where the person's phone has an active account, with totals (shown only with more than one). |
 | `app/Filament/Investor/Pages/MyInvestments.php` | Detailed listing of active and completed investments and fractional group units. |
-| `app/Filament/Investor/Pages/Payouts.php` | History of received profit payouts and pending bank disbursements. |
-| `app/Filament/Investor/Pages/Statement.php` | Interactive account statement viewer with monthly PDF downloads. |
+| `app/Filament/Investor/Pages/Payouts.php` | Payouts from every company the person invests in, with a Project filter (array table). |
+| `app/Filament/Investor/Pages/Statement.php` | Statement lines from every company with a Project filter; monthly PDF downloads (open company). |
 | `app/Filament/Investor/Pages/Agreements.php` | Digital archive of accepted investment agreements and legal contracts. |
-| `app/Filament/Investor/Pages/Requests.php` | Interface for investors to submit capital return or payout requests. |
+| `app/Filament/Investor/Pages/Requests.php` | Requests from every company; a new request goes to the company of the chosen group / project / payout. |
+| `app/Filament/Investor/Concerns/CombinedPortalTable.php` | Shared Project filter and paging for the portal's combined (array) tables. |
 | `app/Filament/Investor/Pages/Profile.php` | Investor profile, bank account details, and nominee management. |
 
 ### Controllers & Middleware

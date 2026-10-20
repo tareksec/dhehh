@@ -2,12 +2,9 @@
 
 namespace App\Filament\Investor\Pages;
 
+use App\Filament\Investor\Concerns\CombinedPortalTable;
 use App\Filament\Investor\Concerns\InvestorPortalPage;
-use App\Models\ChannelPartnerPayout;
-use App\Models\Investment;
-use App\Models\InvestmentDocument;
-use App\Models\InvestmentProject;
-use App\Models\SettlementPayout;
+use App\Services\InvestorPortfolio;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Pages\Page;
@@ -23,9 +20,13 @@ use Filament\Tables\Table;
  * money in (contract and cost evidence; see
  * InvestorPortalService::SHARED_PROJECT_DOCUMENT_CATEGORIES). Every download
  * goes through InvestorPortalDocumentController, which checks the same scope.
+ * From every company the person is in, with a Project filter
+ * (18_IMS_ALL_COMPANIES_PLAN.md §4); another company's paper downloads after
+ * opening the person's own account there (?business=).
  */
 class Documents extends Page implements HasTable
 {
+    use CombinedPortalTable;
     use InteractsWithTable;
     use InvestorPortalPage;
 
@@ -54,22 +55,21 @@ class Documents extends Page implements HasTable
 
     public function table(Table $table): Table
     {
+        // Every company's papers in one list (18_IMS_ALL_COMPANIES_PLAN.md §4, phase E).
         return $table
-            ->query(fn () => $this->portal()->documents($this->account())->with('documentable'))
-            ->defaultSort('id', 'desc')
+            ->records(fn (?array $filters, int|string $page, int|string $recordsPerPage) => $this->pageOfRows(
+                app(InvestorPortfolio::class)->documents($this->account(), $this->chosenProject($filters)),
+                $page,
+                $recordsPerPage,
+            ))
+            ->filters([$this->projectFilter()])
             ->columns([
-                TextColumn::make('category')
+                TextColumn::make('label')
                     ->label(__('Document'))
-                    ->formatStateUsing(fn (?string $state, InvestmentDocument $record): string => filled($record->label) ? (string) $record->label : InvestmentDocument::categoryLabel($state))
                     ->wrap(),
                 TextColumn::make('about')
                     ->label(__('About'))
-                    ->state(fn (InvestmentDocument $record): string => match (true) {
-                        $record->documentable instanceof InvestmentProject => $this->portal()->projectLabel($record->documentable),
-                        $record->documentable instanceof Investment => $this->portal()->projectLabel($record->documentable->project),
-                        $record->documentable instanceof SettlementPayout, $record->documentable instanceof ChannelPartnerPayout => __('Payment for :project', ['project' => $this->portal()->projectLabel($record->documentable->settlement?->project)]),
-                        default => __('You'),
-                    })
+                    ->description(fn (array $record): ?string => $this->showsCompanies() ? $record['company_name'] : null)
                     ->wrap(),
                 TextColumn::make('created_at')->label(__('Added'))->date('d M Y')->visibleFrom('md'),
             ])
@@ -77,7 +77,7 @@ class Documents extends Page implements HasTable
                 Action::make('download')
                     ->label(__('Download'))
                     ->icon(Heroicon::OutlinedArrowDownTray)
-                    ->url(fn (InvestmentDocument $record): string => route('filament.investor.documents.download', ['document' => $record->getKey()])),
+                    ->url(fn (array $record): string => $record['download_url']),
             ])
             ->emptyStateHeading(__('No documents yet.'))
             ->paginated([10, 25, 50]);

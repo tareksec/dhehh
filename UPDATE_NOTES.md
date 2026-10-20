@@ -2,6 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-21 - Plan 18 phase E: combined Statement, Payouts, Documents and Requests
+
+Reason - owner: "all phase done kro" (finish `18_IMS_ALL_COMPANIES_PLAN.md`).
+
+What changed:
+- Statement, Payouts, Documents and Requests list every company the person invests in, newest first, each line with its company name (only when more than one company) and its own currency; one Project select (empty = all) on each.
+- Rows are read company by company (`InvestorPortfolio`) and shown as array tables; another company's download / report / screenshot links carry `?business=` and open after the account check.
+- New request: the group / project / payout choices come from every company, keyed "<company id>:<key>"; the request is created in that company as the person's own account there; a request mixing companies is refused. Cancel works in the request's own company.
+- Decided by the rules (not removed): the **Switch business** button and **My businesses** page stay. The plan says they go once the combined lists are live, but KYC, Profile, bank accounts, nominees, agreements, Support, the feed, the home chart/cards/calendar and the monthly PDFs are still one company's record each, and the switcher is the only way to reach another company's. They can go when those pages are combined.
+
+Verified: `AllCompaniesImsTest` 24 passed (5 new); portal-related tests pass after updating the portal-page lines of four test files to the new keys (rows "<company id>-<id>", choices "<company id>:g<id>"): InvestorPortalStaffEntryTest, InvestorPortalGroupViewTest, PayoutPaymentProofTest, InvestorGroupMoneyFlowsTest. The first full run found the last three (6 failures, all key changes); fixed. Browser (preview copy, Gadget Items open): Statement, Payouts list Main Company lines with the company name; the Project filter narrows the statement to one project (`?project=1:4`). A console message "Uncaught (in promise) {status: null...}" also appears on the unchanged Profile page, so it is not from this work. Full suite: 2874 passed, 1 skipped, 0 failed; `npm run build` passes.
+
+Commit status: committed and pushed to `feature/ims-all-companies`; not merged into `main`.
+
 ## 2026-10-20 - Plan 18 phase D: investor projects from every company
 
 Reason - owner: "ok" after phase C (go on with phase D of `18_IMS_ALL_COMPANIES_PLAN.md`).

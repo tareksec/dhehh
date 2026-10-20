@@ -376,6 +376,104 @@ class AllCompaniesImsTest extends TestCase
         $this->assertNull($switches->locateOnImsDomain($finder, \Illuminate\Http\Request::create('http://group-ims.test/investor/password-reset')));
     }
 
+    // ---- Phase E: combined lists with a Project filter -----------------------
+
+    public function test_the_statement_lists_every_company_and_the_project_filter_keeps_one(): void
+    {
+        $person = $this->personInBothCompanies();
+        $this->signedInAs($person['owner']);
+
+        $this->get('http://group-ims.test/investor/statement')
+            ->assertOk()
+            ->assertSee('Owner Rice Import')
+            ->assertSee('Other Solar Lot')
+            ->assertSee('Other Co')
+            ->assertSee(__('All projects'));
+
+        $portfolio = app(\App\Services\InvestorPortfolio::class);
+        $only = $portfolio->statement($person['owner'], project: $this->other->id.':'.$person['otherProject']->id);
+        $this->assertNotEmpty($only);
+        $this->assertSame(['Other Co'], $only->pluck('company_name')->unique()->values()->all());
+        $this->assertSame(['USD' => 0, 'BDT' => 2], [
+            'USD' => $portfolio->statement($person['owner'])->where('currency', 'USD')->count(),
+            'BDT' => $portfolio->statement($person['owner'])->where('currency', 'BDT')->count(),
+        ]);
+    }
+
+    public function test_requests_from_every_company_are_listed_and_filtered_by_project(): void
+    {
+        $person = $this->personInBothCompanies();
+        $this->request($person['owner'], $person['ownerProject'], 'Owner question');
+        $this->request($person['other'], $person['otherProject'], 'Other question');
+        $this->signedInAs($person['owner']);
+
+        $this->get('http://group-ims.test/investor/requests')->assertOk()->assertSee('Other Co');
+
+        $portfolio = app(\App\Services\InvestorPortfolio::class);
+        $this->assertCount(2, $portfolio->requests($person['owner']));
+        $only = $portfolio->requests($person['owner'], $this->other->id.':'.$person['otherProject']->id);
+        $this->assertSame([$this->other->id], array_column($only, 'company_id'));
+    }
+
+    public function test_a_new_request_lands_in_the_company_of_the_chosen_project(): void
+    {
+        $person = $this->personInBothCompanies();
+        $this->signedInAs($person['owner']);
+        app(CompanyContext::class)->set($this->owner);
+        \Filament\Facades\Filament::setCurrentPanel(\Filament\Facades\Filament::getPanel('investor'));
+
+        \Livewire\Livewire::test(\App\Filament\Investor\Pages\Requests::class)
+            ->callAction('new', data: [
+                'type' => \App\Models\InvestorRequest::TYPE_TOP_UP,
+                'target' => $this->other->id.':p'.$person['otherProject']->id,
+                'amount' => 25000,
+                'payment_method' => 'bank',
+            ])
+            ->assertHasNoActionErrors();
+
+        $request = \App\Models\InvestorRequest::query()->withoutGlobalScopes()->latest('id')->firstOrFail();
+        $this->assertSame($this->other->id, (int) $request->company_id);
+        $this->assertSame($person['other']->id, (int) $request->portal_account_id, 'sent as the person\'s own account there');
+        $this->assertSame($person['otherProject']->id, (int) $request->project_id);
+        $this->assertSame($this->owner->id, app(CompanyContext::class)->id(), 'the open company is put back');
+    }
+
+    public function test_a_request_of_another_company_is_cancelled_in_that_company(): void
+    {
+        $person = $this->personInBothCompanies();
+        $other = $this->request($person['other'], $person['otherProject'], 'Other question');
+        $this->signedInAs($person['owner']);
+        app(CompanyContext::class)->set($this->owner);
+        \Filament\Facades\Filament::setCurrentPanel(\Filament\Facades\Filament::getPanel('investor'));
+
+        \Livewire\Livewire::test(\App\Filament\Investor\Pages\Requests::class)
+            ->callTableAction('cancel', $this->other->id.'-'.$other->id);
+
+        $this->assertSame(\App\Models\InvestorRequest::STATUS_CANCELLED, $other->fresh()->status);
+    }
+
+    public function test_payouts_and_documents_pages_open_with_every_company(): void
+    {
+        $person = $this->personInBothCompanies();
+        $this->signedInAs($person['owner']);
+
+        $this->get('http://group-ims.test/investor/payouts')->assertOk()->assertSee(__('No payouts yet.'));
+        $this->get('http://group-ims.test/investor/documents')->assertOk();
+    }
+
+    private function request(InvestorPortalAccount $account, \App\Models\InvestmentProject $project, string $message): \App\Models\InvestorRequest
+    {
+        return \App\Models\InvestorRequest::query()->withoutGlobalScopes()->create([
+            'company_id' => $account->company_id,
+            'portal_account_id' => $account->id,
+            'investor_id' => $account->investor_id,
+            'project_id' => $project->id,
+            'type' => \App\Models\InvestorRequest::TYPE_WITHDRAWAL,
+            'status' => \App\Models\InvestorRequest::STATUS_PENDING,
+            'message' => $message,
+        ]);
+    }
+
     private function project(Company $company, string $name, Investor $investor, float $amount): \App\Models\InvestmentProject
     {
         $project = \App\Models\InvestmentProject::query()->withoutGlobalScopes()->create([
