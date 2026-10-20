@@ -2,6 +2,25 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-20 - Nuport import: parcels are tracked here (Nuport is not used after the import)
+
+Reason - owner (in Bangla): the import is done once; the team stops working in Nuport and runs everything from the ERP.
+
+What changed:
+- The import saved Nuport's Delivery ID as the booking's tracking id. It is the courier's consignment id (a 9-digit number, so inferred - check one parcel in the Steadfast panel; the ERP keeps that in `provider_reference` and the alphanumeric tracking code in `tracking_id`). Fixed: it goes in `provider_reference` now.
+- Parcels still on the way (11 in transit and 4 approved with a parcel in the 2026-10-15 export) are recorded as active bookings, so the order says "Already booked" and cannot be booked twice, and Steadfast's callback updates them.
+- `ProcessCourierWebhook` looks a booking up by tracking code, tracking id and consignment id together.
+- Webhook receiver for Nuport: no longer needed, dropped from the to-do list.
+
+Owner decision (answered in chat): most of the 51 orders approved but never given to a courier (4,022 pieces, oldest 2025-12-29) are real and are shipped from the ERP, so they come in as live orders:
+- New source `nuport_open` ("Nuport (open order)"); import option `openAsLive` / dialog switch "Bring open orders in as live orders" (default on) / `--open-live`. Takes stock (may go negative; a colour stops at 0), can be booked, tracked, texted; no "New order received" alert and no risk check at import time; a later file never refreshes it.
+- The preview lists open orders, pieces, orders older than 30 days and the products that are short. The dialog opened with "Preview only" off before, because `fillForm()` replaced the field defaults; the defaults are repeated now.
+- Bangla to review: the 9 new open-order strings.
+
+Still open: cut-over day: stop Nuport, take a fresh export, recount the stock, then import once. The 2026-10-15 export is older than the 2026-10-16 stock count and misses everything after it.
+- Bangla to review: ":count টি পার্সেল এখনো পথে আছে; ERP এগুলোর ট্র্যাকিং চালিয়ে যাবে।"
+
+Commit status: committed and pushed to `main` on the owner's approval (2026-10-20). Tests: `NuportOrderImportTest` 30 passed; order / stock / courier / webhook / notification / risk / customer / translation groups 1,034 passed, 0 failed (the whole suite was not rerun for this change; the last full run was green).
 ## 2026-10-20 - Nuport import: sales channel, returned pieces, courier bookings
 
 Reason - owner (in Bangla): is there anything else to import from Nuport that helps our reports? Told: Order Source, the returned pieces and the courier parcels were in the file but not kept; owner said do it before the real import.

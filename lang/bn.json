@@ -2291,7 +2291,6 @@
     "Stock and account balances are never changed by this import.": "এই ইমপোর্টে স্টক ও অ্যাকাউন্টের ব্যালেন্স কখনো বদলায় না।",
     "Preview only: nothing was saved.": "শুধু প্রিভিউ: কিছুই সেভ হয়নি।",
     "Import Nuport orders": "Nuport অর্ডার ইমপোর্ট",
-    "Past orders from Nuport are copied in as history. Stock and account balances are never changed.": "Nuport-এর পুরনো অর্ডার ইতিহাস হিসেবে কপি হবে। স্টক ও অ্যাকাউন্টের ব্যালেন্স বদলাবে না।",
     "Start": "শুরু করুন",
     "Nuport orders CSV": "Nuport অর্ডার CSV",
     "In Nuport open Orders, then Action, then Export As CSV. Uploading a newer export again never duplicates orders.": "Nuport-এ Orders খুলে Action থেকে Export As CSV করুন। নতুন এক্সপোর্ট আবার আপলোড করলেও অর্ডার ডুপ্লিকেট হবে না।",
@@ -3316,5 +3315,15 @@
     ":count courier bookings were recorded: :list": ":count টি কুরিয়ার বুকিং রেকর্ড হয়েছে: :list",
     ":count couriers would be created (inactive, no API): :list": ":count টি কুরিয়ার তৈরি হবে (নিষ্ক্রিয়, API ছাড়া): :list",
     ":count couriers were created (inactive, no API): :list": ":count টি কুরিয়ার তৈরি হয়েছে (নিষ্ক্রিয়, API ছাড়া): :list",
-    ":count orders have a parcel still on the way; its consignment number stays in the order note only.": ":count টি অর্ডারের পার্সেল এখনো পথে আছে; তার কনসাইনমেন্ট নম্বর শুধু অর্ডারের নোটে থাকবে।"
+    ":count of these parcels are still on the way; the ERP keeps tracking them.": ":count টি পার্সেল এখনো পথে আছে; ERP এগুলোর ট্র্যাকিং চালিয়ে যাবে।",
+    ":count open orders (no courier parcel yet) would come in as live orders and take :pieces pieces out of stock. You ship them from the ERP.": ":count টি খোলা অর্ডার (এখনো কুরিয়ারে দেওয়া হয়নি) চালু অর্ডার হিসেবে আসবে এবং স্টক থেকে :pieces পিস কমাবে। এগুলো ERP থেকে পাঠাবেন।",
+    ":count open orders (no courier parcel yet) came in as live orders and took :pieces pieces out of stock. You ship them from the ERP.": ":count টি খোলা অর্ডার (এখনো কুরিয়ারে দেওয়া হয়নি) চালু অর্ডার হিসেবে এসেছে এবং স্টক থেকে :pieces পিস কমিয়েছে। এগুলো ERP থেকে পাঠাবেন।",
+    ":count of them were placed more than 30 days ago. Check that they are still wanted; cancel the others in the ERP.": ":count টি ৩০ দিনের বেশি আগের অর্ডার। এগুলো এখনো লাগবে কি না দেখুন; যেগুলো লাগবে না সেগুলো ERP-তে বাতিল করুন।",
+    ":count products are short for these orders, so their stock goes below zero until you correct it: :list": "এই অর্ডারগুলোর জন্য :count টি পণ্যের স্টক কম পড়েছে, তাই ঠিক না করা পর্যন্ত স্টক শূন্যের নিচে থাকবে: :list",
+    "needs :needed, in stock :has": "লাগবে :needed, স্টকে আছে :has",
+    "Nuport (open order)": "Nuport (খোলা অর্ডার)",
+    "Bring open orders in as live orders": "খোলা অর্ডার চালু অর্ডার হিসেবে আনুন",
+    "An order Nuport still has approved or processing, with no courier parcel yet, comes in as a live order: it takes stock and you ship it from the ERP. Stock can go below zero; the result lists the products that are short. Turn off to bring it in as history.": "Nuport-এ যে অর্ডার এখনো অনুমোদিত বা প্রক্রিয়াধীন এবং কুরিয়ারে দেওয়া হয়নি, সেটি চালু অর্ডার হিসেবে আসে: স্টক কমে এবং আপনি ERP থেকে পাঠান। স্টক শূন্যের নিচে যেতে পারে; ফলাফলে কোন পণ্যের স্টক কম তা দেখানো হয়। বন্ধ করলে এগুলোও ইতিহাস হিসেবে আসে।",
+    "Past orders from Nuport are copied in as history. Account balances are never changed. Orders still open in Nuport can come in as live orders.": "Nuport-এর পুরনো অর্ডার ইতিহাস হিসেবে কপি হয়। অ্যাকাউন্টের ব্যালেন্স কখনো বদলায় না। Nuport-এ এখনো খোলা অর্ডারগুলো চালু অর্ডার হিসেবে আসতে পারে।",
+    "Account balances are never changed by this import.": "এই ইমপোর্টে অ্যাকাউন্টের ব্যালেন্স কখনো বদলায় না।"
 }

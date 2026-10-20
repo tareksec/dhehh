@@ -2291,7 +2291,6 @@
     "Stock and account balances are never changed by this import.": "Stock and account balances are never changed by this import.",
     "Preview only: nothing was saved.": "Preview only: nothing was saved.",
     "Import Nuport orders": "Import Nuport orders",
-    "Past orders from Nuport are copied in as history. Stock and account balances are never changed.": "Past orders from Nuport are copied in as history. Stock and account balances are never changed.",
     "Start": "Start",
     "Nuport orders CSV": "Nuport orders CSV",
     "In Nuport open Orders, then Action, then Export As CSV. Uploading a newer export again never duplicates orders.": "In Nuport open Orders, then Action, then Export As CSV. Uploading a newer export again never duplicates orders.",
@@ -3316,5 +3315,15 @@
     ":count courier bookings were recorded: :list": ":count courier bookings were recorded: :list",
     ":count couriers would be created (inactive, no API): :list": ":count couriers would be created (inactive, no API): :list",
     ":count couriers were created (inactive, no API): :list": ":count couriers were created (inactive, no API): :list",
-    ":count orders have a parcel still on the way; its consignment number stays in the order note only.": ":count orders have a parcel still on the way; its consignment number stays in the order note only."
+    ":count of these parcels are still on the way; the ERP keeps tracking them.": ":count of these parcels are still on the way; the ERP keeps tracking them.",
+    ":count open orders (no courier parcel yet) would come in as live orders and take :pieces pieces out of stock. You ship them from the ERP.": ":count open orders (no courier parcel yet) would come in as live orders and take :pieces pieces out of stock. You ship them from the ERP.",
+    ":count open orders (no courier parcel yet) came in as live orders and took :pieces pieces out of stock. You ship them from the ERP.": ":count open orders (no courier parcel yet) came in as live orders and took :pieces pieces out of stock. You ship them from the ERP.",
+    ":count of them were placed more than 30 days ago. Check that they are still wanted; cancel the others in the ERP.": ":count of them were placed more than 30 days ago. Check that they are still wanted; cancel the others in the ERP.",
+    ":count products are short for these orders, so their stock goes below zero until you correct it: :list": ":count products are short for these orders, so their stock goes below zero until you correct it: :list",
+    "needs :needed, in stock :has": "needs :needed, in stock :has",
+    "Nuport (open order)": "Nuport (open order)",
+    "Bring open orders in as live orders": "Bring open orders in as live orders",
+    "An order Nuport still has approved or processing, with no courier parcel yet, comes in as a live order: it takes stock and you ship it from the ERP. Stock can go below zero; the result lists the products that are short. Turn off to bring it in as history.": "An order Nuport still has approved or processing, with no courier parcel yet, comes in as a live order: it takes stock and you ship it from the ERP. Stock can go below zero; the result lists the products that are short. Turn off to bring it in as history.",
+    "Past orders from Nuport are copied in as history. Account balances are never changed. Orders still open in Nuport can come in as live orders.": "Past orders from Nuport are copied in as history. Account balances are never changed. Orders still open in Nuport can come in as live orders.",
+    "Account balances are never changed by this import.": "Account balances are never changed by this import."
 }

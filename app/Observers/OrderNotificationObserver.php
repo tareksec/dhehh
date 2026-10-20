@@ -25,8 +25,9 @@ class OrderNotificationObserver
 
     public function created(Order $order): void
     {
-        // An import of past orders must not alert the owner once per order.
-        if ($order->isHistoricalImport() || ! $order->company) {
+        // An import of past orders must not alert the owner once per order, and an
+        // open order brought in from Nuport is not a new order.
+        if ($order->isHistoricalImport() || $order->source === Order::SOURCE_NUPORT_OPEN || ! $order->company) {
             return;
         }
 

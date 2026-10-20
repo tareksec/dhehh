@@ -15,6 +15,7 @@ class ImportNuportOrders extends Command
         {company : Company slug to import into}
         {--map= : Text file with lines of "NUPORT-SKU = ERP-SKU" for Nuport SKUs the ERP does not have}
         {--create-missing : Create products that no SKU or mapping finds (inactive, stock 0, cost price 0)}
+        {--open-live : Bring orders still open in Nuport (no courier parcel yet) in as live orders that take stock}
         {--apply : Save the orders. Without it the command only previews and saves nothing}';
 
     protected $description = 'Copy past orders (customer, products, payment, status) from a Nuport order export into a company';
@@ -57,6 +58,7 @@ class ImportNuportOrders extends Command
                 dryRun: ! $this->option('apply'),
                 skuMap: $map,
                 createMissing: (bool) $this->option('create-missing'),
+                openAsLive: (bool) $this->option('open-live'),
             );
         } catch (ValidationException $exception) {
             $this->error(collect($exception->errors())->flatten()->implode(' '));

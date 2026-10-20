@@ -54,9 +54,16 @@ class ListOrders extends ListRecords
             ->color('gray')
             ->visible($canImport)
             ->modalHeading(__('Import Nuport orders'))
-            ->modalDescription(__('Past orders from Nuport are copied in as history. Stock and account balances are never changed.'))
+            ->modalDescription(__('Past orders from Nuport are copied in as history. Account balances are never changed. Orders still open in Nuport can come in as live orders.'))
             ->modalSubmitActionLabel(__('Start'))
-            ->fillForm(fn (): array => ['sku_map' => $this->rememberedSkuMap()])
+            // fillForm() replaces the fields' own defaults, so they are repeated here:
+            // the dialog must open as a preview, with open orders coming in as live orders.
+            ->fillForm(fn (): array => [
+                'sku_map' => $this->rememberedSkuMap(),
+                'create_missing' => false,
+                'open_live' => true,
+                'preview_only' => true,
+            ])
             ->schema([
                 FileUpload::make('csv')
                     ->label(__('Nuport orders CSV'))
@@ -74,6 +81,10 @@ class ListOrders extends ListRecords
                     ->label(__('Create missing products'))
                     ->helperText(__('A product no SKU or mapping finds is created inactive with stock 0 and cost price 0, so no order is skipped. Set the cost price in the product afterwards.'))
                     ->default(false),
+                Toggle::make('open_live')
+                    ->label(__('Bring open orders in as live orders'))
+                    ->helperText(__('An order Nuport still has approved or processing, with no courier parcel yet, comes in as a live order: it takes stock and you ship it from the ERP. Stock can go below zero; the result lists the products that are short. Turn off to bring it in as history.'))
+                    ->default(true),
                 Toggle::make('preview_only')
                     ->label(__('Preview only (save nothing)'))
                     ->helperText(__('Turn this off to save the orders.'))
@@ -97,6 +108,7 @@ class ListOrders extends ListRecords
                         dryRun: $preview,
                         skuMap: $skuMap,
                         createMissing: (bool) ($data['create_missing'] ?? false),
+                        openAsLive: (bool) ($data['open_live'] ?? false),
                     );
                     $this->rememberSkuMap($skuMap);
                 } catch (ValidationException $exception) {

@@ -5,11 +5,13 @@ namespace Tests\Feature;
 use App\Filament\Resources\Orders\Pages\EditOrder;
 use App\Filament\Resources\Orders\Pages\ListOrders;
 use App\Filament\Resources\Orders\Pages\ViewOrder;
+use App\Jobs\ProcessCourierWebhook;
 use App\Models\AppSetting;
 use App\Models\Company;
 use App\Models\CourierBooking;
 use App\Models\CourierProvider;
 use App\Models\CourierStatusLog;
+use App\Models\CourierWebhookLog;
 use App\Models\Customer;
 use App\Models\FraudCheck;
 use App\Models\Order;
@@ -22,6 +24,8 @@ use App\Models\User;
 use App\Observers\OrderNotificationObserver;
 use App\Services\BusinessNotificationService;
 use App\Services\CompanyContext;
+use App\Services\CourierManager;
+use App\Services\CourierService;
 use App\Services\NuportOrderImportService;
 use App\Services\OrderStatusWorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -714,7 +718,7 @@ class NuportOrderImportTest extends TestCase
         $this->assertSame('live_chat', $order->refresh()->sales_channel);
     }
 
-    public function test_a_finished_parcel_becomes_a_courier_booking_and_a_parcel_still_moving_does_not(): void
+    public function test_every_parcel_with_a_consignment_id_becomes_a_courier_booking_even_one_still_on_its_way(): void
     {
         $money = ['Sales Amount' => '1000.00', 'Delivery Fee' => '110.00'];
         $line = [['sku' => 'ZMKMQ', 'name' => 'Key Chain', 'qty' => 10, 'unit' => 100]];
@@ -727,9 +731,9 @@ class NuportOrderImportTest extends TestCase
         );
 
         $preview = $this->import($rows, dryRun: true);
-        $this->assertSame(['Steadfast' => 3], $preview['bookings']);
+        $this->assertSame(['Steadfast' => 4], $preview['bookings']);
         $this->assertSame(['Steadfast' => true], $preview['new_providers']);
-        $this->assertSame(1, $preview['open_consignments']);
+        $this->assertSame(1, $preview['active_bookings']);
         $this->assertSame(0, CourierBooking::query()->count());
         $this->assertSame(0, CourierProvider::query()->count());
 
@@ -743,8 +747,10 @@ class NuportOrderImportTest extends TestCase
         $this->assertSame(CourierProvider::DRIVER_MANUAL, $provider->driver);
         $this->assertFalse($provider->is_active);
 
-        $this->assertSame(3, CourierBooking::query()->count());
-        $delivered = CourierBooking::query()->where('tracking_id', '9001')->sole();
+        $this->assertSame(4, CourierBooking::query()->count());
+        $delivered = CourierBooking::query()->where('provider_reference', '9001')->sole();
+        // Nuport's Delivery ID is Steadfast's consignment id: the ERP keeps that in the reference, not the tracking code.
+        $this->assertNull($delivered->tracking_id);
         $this->assertSame(CourierBooking::STATUS_DELIVERED, $delivered->status);
         $this->assertSame($provider->id, $delivered->courier_provider_id);
         $this->assertSame('SO-7001', $delivered->order->order_number);
@@ -756,14 +762,15 @@ class NuportOrderImportTest extends TestCase
         $this->assertSame('2025-08-25 16:10', $delivered->delivered_at->copy()->setTimezone('Asia/Dhaka')->format('Y-m-d H:i'));
         $this->assertNull($delivered->returned_at);
 
-        $back = CourierBooking::query()->where('tracking_id', '9002')->sole();
+        $back = CourierBooking::query()->where('provider_reference', '9002')->sole();
         $this->assertSame(CourierBooking::STATUS_RETURNED, $back->status);
         $this->assertNotNull($back->returned_at);
-        $this->assertNull(CourierBooking::query()->where('tracking_id', '9003')->sole()->returned_at);
+        $this->assertNull(CourierBooking::query()->where('provider_reference', '9003')->sole()->returned_at);
 
-        // A parcel still on the way keeps its consignment number in the note only.
+        // Nuport is not used after the import, so a parcel still on its way is tracked here and cannot be booked twice.
         $moving = Order::query()->where('order_number', 'SO-7004')->firstOrFail();
-        $this->assertSame(0, $moving->courierBookings()->count());
+        $this->assertSame(CourierBooking::STATUS_IN_TRANSIT, $moving->courierBookings()->sole()->status);
+        $this->assertStringContainsString('Already booked', (string) $moving->courierBookingBlocker());
         $this->assertStringContainsString('consignment: 9004', $moving->note);
         $this->assertSame(0, Order::query()->where('order_number', 'SO-7005')->firstOrFail()->courierBookings()->count());
 
@@ -771,11 +778,11 @@ class NuportOrderImportTest extends TestCase
         $this->assertSame(0, CourierStatusLog::query()->count());
 
         $this->assertSame(0, $this->import($rows, dryRun: false)['created']);
-        $this->assertSame(3, CourierBooking::query()->count());
+        $this->assertSame(4, CourierBooking::query()->count());
         $this->assertSame(1, CourierProvider::query()->count());
     }
 
-    public function test_an_existing_courier_is_used_and_an_order_that_finishes_later_gets_its_booking_once(): void
+    public function test_an_existing_courier_is_used_and_an_order_that_finishes_later_updates_its_booking(): void
     {
         $steadfast = CourierProvider::query()->create([
             'company_id' => $this->company->id, 'name' => 'Steadfast Courier', 'slug' => 'steadfast',
@@ -789,20 +796,153 @@ class NuportOrderImportTest extends TestCase
             'Payments/Paid Amount' => '0.00', 'Status' => 'IN_TRANSIT', 'Sub-Status' => '', 'Delivery Partner Status' => 'pending',
         ], $line));
         $this->assertSame(1, $service->run($moving, dryRun: false)['created']);
-        $this->assertSame(0, CourierBooking::query()->count());
+        $booking = CourierBooking::query()->sole();
+        $this->assertSame(CourierBooking::STATUS_IN_TRANSIT, $booking->status);
 
         $done = $this->csv($this->order('SO-8001', $money + ['Payments/Paid Amount' => '1110.00'], $line));
         $this->assertSame(1, $service->run($done, dryRun: true)['refreshed']);
-        $this->assertSame(0, CourierBooking::query()->count());
+        $this->assertSame(CourierBooking::STATUS_IN_TRANSIT, $booking->fresh()->status);
 
         $this->assertSame(1, $service->run($done, dryRun: false)['refreshed']);
-        $booking = CourierBooking::query()->sole();
+        $booking->refresh();
         $this->assertSame($steadfast->id, $booking->courier_provider_id);
         $this->assertSame(CourierBooking::STATUS_DELIVERED, $booking->status);
         $this->assertSame(1, CourierProvider::query()->count());
 
         $this->assertSame(1, $service->run($done, dryRun: false)['unchanged']);
         $this->assertSame(1, CourierBooking::query()->count());
+    }
+
+    public function test_a_steadfast_webhook_finds_an_imported_parcel_by_its_consignment_id(): void
+    {
+        $steadfast = CourierProvider::query()->create([
+            'company_id' => $this->company->id, 'name' => 'Steadfast', 'slug' => 'steadfast',
+            'driver' => CourierProvider::DRIVER_STEADFAST, 'is_active' => true,
+        ]);
+
+        $this->import($this->order('SO-8101', [
+            'Sales Amount' => '1000.00', 'Delivery Fee' => '110.00', 'Payments/Paid Amount' => '0.00',
+            'Status' => 'IN_TRANSIT', 'Sub-Status' => '', 'Delivery ID' => '9200', 'Delivery Partner Status' => 'pending',
+        ], [['sku' => 'ZMKMQ', 'name' => 'Key Chain', 'qty' => 10, 'unit' => 100]]), dryRun: false);
+
+        // Steadfast sends its own tracking code beside the consignment id.
+        $log = CourierWebhookLog::query()->create([
+            'company_id' => $this->company->id,
+            'courier_provider_id' => $steadfast->id,
+            'event' => 'delivery_status',
+            'delivery_id' => 'whk-9200',
+            'payload' => ['notification_type' => 'delivery_status', 'consignment_id' => 9200, 'tracking_code' => 'TRK9200', 'status' => 'delivered'],
+            'status' => 'received',
+            'attempts' => 0,
+        ]);
+
+        (new ProcessCourierWebhook($log->getKey()))->handle(app(CourierManager::class), app(CourierService::class), app(CompanyContext::class));
+        app(CompanyContext::class)->set($this->company);
+
+        $this->assertSame('processed', $log->refresh()->status);
+        $this->assertSame(CourierBooking::STATUS_DELIVERED, CourierBooking::query()->sole()->status);
+        $this->assertSame(CourierBooking::STATUS_DELIVERED, Order::query()->where('order_number', 'SO-8101')->firstOrFail()->delivery_status);
+    }
+
+    public function test_an_order_still_open_in_nuport_comes_in_as_a_live_order_that_takes_stock(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($admin)->withSession(['current_company_id' => $this->company->id]);
+
+        // Stock of a plain product is the sum of its movements, so give the key chain a real opening stock.
+        StockMovement::query()->create(['product_id' => $this->keyChain->id, 'type' => 'purchase', 'quantity' => 100, 'note' => 'Opening stock']);
+        $this->assertSame(100, $this->keyChain->fresh()->stock);
+
+        $open = [
+            'Status' => 'APPROVED', 'Sub-Status' => '', 'Delivery ID' => '', 'Delivery Partner Status' => '', 'Payments/Paid Amount' => '0.00', 'Delivery Fee' => '0.00',
+            'Creation Date' => now()->subDays(5)->format('F jS Y, g:i:s a'),
+        ];
+        $rows = array_merge(
+            $this->order('SO-9501', $open + ['Sales Amount' => '1000.00'], [['sku' => 'ZMKMQ', 'name' => 'Key Chain', 'qty' => 10, 'unit' => 100]]),
+            // More than the 40 in stock.
+            $this->order('SO-9502', $open + ['Sales Amount' => '30000.00'], [['sku' => 'ZMTFX05B', 'name' => 'X05 Fan - Black', 'qty' => 60, 'unit' => 500]]),
+            // Waiting since December.
+            $this->order('SO-9503', array_merge($open, ['Sales Amount' => '100.00', 'Creation Date' => 'December 29th 2025, 6:58:34 pm']), [['sku' => 'ZMKMQ', 'name' => 'Key Chain', 'qty' => 1, 'unit' => 100]]),
+            // Already given to the courier: history, its goods left before the stock count.
+            $this->order('SO-9504', array_merge($open, ['Sales Amount' => '1000.00', 'Delivery ID' => '9301', 'Delivery Partner Status' => 'pending']), [['sku' => 'ZMKMQ', 'name' => 'Key Chain', 'qty' => 10, 'unit' => 100]]),
+        );
+        $service = app(NuportOrderImportService::class);
+
+        $preview = $service->run($this->csv($rows), dryRun: true, openAsLive: true);
+        $this->assertSame(3, $preview['open_orders']);
+        $this->assertSame(71, $preview['open_pieces']);
+        $this->assertSame(1, $preview['open_old']);
+        $this->assertCount(1, $preview['open_short']);
+        $this->assertStringContainsString('needs 60, in stock 40', $preview['open_short'][0]);
+        $this->assertStringContainsString('3 open orders', implode("\n", $service->summary($preview)));
+        $this->assertSame(0, Order::query()->count());
+        $this->assertSame(40, $this->blackFan->fresh()->stock);
+
+        // Without the option every open order is history, as before.
+        $this->assertSame(0, $service->run($this->csv($rows), dryRun: true)['open_orders']);
+
+        $report = $service->run($this->csv($rows), dryRun: false, openAsLive: true);
+        $this->assertSame(4, $report['created']);
+        $this->assertSame([], $report['errors']);
+
+        $live = Order::query()->where('order_number', 'SO-9501')->firstOrFail();
+        $this->assertSame(Order::SOURCE_NUPORT_OPEN, $live->source);
+        $this->assertFalse($live->isHistoricalImport());
+        $this->assertSame(Order::STATUS_CONFIRMED, $live->status);
+        $this->assertSame(1, StockMovement::query()->where('reference_type', Order::class)->where('reference_id', $live->id)->where('type', 'sale')->count());
+        $this->assertSame(89, $this->keyChain->fresh()->stock);
+        // A colour's own stock never shows below zero (StockMovement::applyVariantStockDelta()); the preview already listed the shortage.
+        $this->assertSame(0, $this->blackFan->fresh()->stock);
+
+        $history = Order::query()->where('order_number', 'SO-9504')->firstOrFail();
+        $this->assertSame(Order::SOURCE_NUPORT_IMPORT, $history->source);
+        $this->assertSame(0, StockMovement::query()->where('reference_type', Order::class)->where('reference_id', $history->id)->count());
+        $this->assertSame(0, FraudCheck::query()->count());
+
+        // The ERP owns it from now on: a later file never refreshes it, and it opens and saves without a stock popup.
+        $later = $this->csv($this->order('SO-9501', ['Status' => 'DELIVERED', 'Sales Amount' => '1000.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '1000.00'], [['sku' => 'ZMKMQ', 'name' => 'Key Chain', 'qty' => 10, 'unit' => 100]]));
+        $again = $service->run($later, dryRun: false, openAsLive: true);
+        $this->assertSame(0, $again['created']);
+        $this->assertSame(1, $again['unchanged']);
+        $this->assertSame(Order::STATUS_CONFIRMED, $live->fresh()->status);
+
+        $fan = Order::query()->where('order_number', 'SO-9502')->firstOrFail();
+        Livewire::test(EditOrder::class, ['record' => $fan->getRouteKey()])
+            ->call('save')
+            ->assertActionNotMounted('stockShortage')
+            ->assertHasNoFormErrors();
+
+        // Shipped and finished from the ERP like any order; cancelling gives the stock back.
+        app(OrderStatusWorkflowService::class)->transition($live, Order::STAGE_COMPLETED);
+        $this->assertSame(Order::STATUS_COMPLETED, $live->refresh()->status);
+        $this->assertSame(89, $this->keyChain->fresh()->stock);
+
+        $old = Order::query()->where('order_number', 'SO-9503')->firstOrFail();
+        app(OrderStatusWorkflowService::class)->transition($old, Order::STAGE_CANCELLED, 'No longer wanted');
+        $this->assertSame(Order::STATUS_CANCELLED, $old->refresh()->status);
+        $this->assertSame(90, $this->keyChain->fresh()->stock);
+    }
+
+    public function test_an_open_order_brought_in_from_nuport_does_not_raise_a_new_order_alert(): void
+    {
+        $service = Mockery::mock(BusinessNotificationService::class);
+        $service->shouldNotReceive('notifyCompany');
+
+        $order = new Order(['order_number' => 'SO-2', 'source' => Order::SOURCE_NUPORT_OPEN]);
+        $order->setRelation('company', $this->company);
+
+        (new OrderNotificationObserver($service))->created($order);
+        $this->addToAssertionCount(1);
+    }
+
+    public function test_the_import_form_brings_open_orders_in_as_live_orders_by_default(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($admin)->withSession(['current_company_id' => $this->company->id]);
+
+        Livewire::test(ListOrders::class)
+            ->mountAction('importNuportOrders')
+            ->assertActionDataSet(['open_live' => true, 'preview_only' => true, 'create_missing' => false]);
     }
 
     public function test_the_orders_list_offers_the_import_and_previews_an_uploaded_file(): void

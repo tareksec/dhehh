@@ -170,6 +170,15 @@ class Order extends Model
      */
     public const SOURCE_NUPORT_IMPORT = 'nuport_import';
 
+    /**
+     * An order that was still open in Nuport (approved or processing, not yet
+     * given to a courier) when the owner moved to the ERP. Unlike the history
+     * above it is a live order: it takes stock, is shipped and tracked from
+     * the ERP, and texts the customer on later status changes. Only the
+     * "New order received" alert is skipped, because it is not new.
+     */
+    public const SOURCE_NUPORT_OPEN = 'nuport_open';
+
     public const SOURCES = [
         self::SOURCE_ADMIN => 'Admin',
         self::SOURCE_STOREFRONT => 'Storefront',
@@ -180,6 +189,7 @@ class Order extends Model
         self::SOURCE_API => 'Website (API)',
         self::SOURCE_RESELLER_PORTAL => 'Reseller portal',
         self::SOURCE_NUPORT_IMPORT => 'Nuport (imported)',
+        self::SOURCE_NUPORT_OPEN => 'Nuport (open order)',
     ];
 
     /**
@@ -352,7 +362,10 @@ class Order extends Model
                 app(ResellerOwnCourierService::class)->chargeReturn($order);
             }
             app(OrderWorkflowService::class)->syncPreviousCustomerBalance($order);
-            if ($order->wasChanged('status') && $order->isAccounted() && ! $order->isHistoricalImport() && Schema::hasTable('fraud_checks')) {
+            // An open order brought in from Nuport is checked when it moves on, not when it is imported.
+            $importedOpenOrder = $order->wasRecentlyCreated && $order->source === self::SOURCE_NUPORT_OPEN;
+
+            if ($order->wasChanged('status') && $order->isAccounted() && ! $order->isHistoricalImport() && ! $importedOpenOrder && Schema::hasTable('fraud_checks')) {
                 app(CustomerRiskService::class)->evaluateOrder($order);
             }
         });
@@ -673,6 +686,12 @@ class Order extends Model
     public function isHistoricalImport(): bool
     {
         return $this->source === self::SOURCE_NUPORT_IMPORT;
+    }
+
+    /** Copied in from Nuport, as history or as a live open order. */
+    public function isFromNuport(): bool
+    {
+        return in_array($this->source, [self::SOURCE_NUPORT_IMPORT, self::SOURCE_NUPORT_OPEN], true);
     }
 
     public static function salesChannelLabel(?string $channel): string

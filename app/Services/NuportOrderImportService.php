@@ -54,15 +54,26 @@ use Throwable;
  * - Report fields (owner request, 2026-10-20): Nuport's "Order Source" becomes
  *   the order's sales channel; "Cancelled/Returned/Damaged Qty" becomes each
  *   line's returned quantity (not for cancelled orders, which never shipped);
- *   a parcel with a consignment number whose delivery is over (delivered,
- *   partly delivered, returned, cancelled) becomes a courier booking so the
- *   courier reports and a customer's delivery history see it. A parcel still on
- *   the way is not recorded - the courier sync would poll it - and keeps its
- *   consignment number in the order note. A courier the ERP does not have is
- *   created inactive with no API, so staff cannot book with it by mistake.
- * - Imported orders never create stock movements, alerts or risk checks
- *   (Order::isHistoricalImport()), and their payments are posted with no
- *   account, so no account balance changes.
+ *   a parcel with a consignment number becomes a courier booking (the number
+ *   goes in the booking's reference, as the ERP does for a Steadfast
+ *   consignment id) so the courier reports and a customer's delivery history
+ *   see it. Nuport is not used after the import, so a parcel still on the way
+ *   is recorded too: the ERP then knows it is booked (no second booking) and
+ *   its courier webhook finds it by that reference. A courier the ERP does not
+ *   have is created inactive with no API, so staff cannot book with it by
+ *   mistake.
+ * - Open orders (owner decision, 2026-10-20: Nuport is not used after the
+ *   import): with "open orders as live orders" on, an order that Nuport still
+ *   has Approved or Processing and that has no courier parcel is imported as a
+ *   live order (source nuport_open): it takes stock, is shipped, tracked and
+ *   texted from the ERP like any other order, and only the "New order
+ *   received" alert is skipped. Its stock may go below zero (the goods are on
+ *   the shelf even when the count says otherwise); the preview lists every
+ *   product that is short. Once imported, such an order belongs to the ERP: a
+ *   later import never refreshes it from the file.
+ * - Every other imported order is history: it never creates stock movements,
+ *   alerts or risk checks (Order::isHistoricalImport()), and its payments are
+ *   posted with no account, so no account balance changes.
  * - Customers are matched by phone (01XXXXXXXXX, +8801XXXXXXXXX and
  *   8801XXXXXXXXX are the same person); an unknown phone creates a customer.
  * - The CSV totals win: the ERP discount is the list-price total of the lines
@@ -95,14 +106,6 @@ class NuportOrderImportService
      */
     public const SHIPPING_ZONE = 'imported';
 
-    /** Courier statuses that are final; only these become booking records (see the class note). */
-    protected const BOOKING_STATUSES = [
-        CourierBooking::STATUS_DELIVERED,
-        CourierBooking::STATUS_PARTIAL_DELIVERED,
-        CourierBooking::STATUS_RETURNED,
-        CourierBooking::STATUS_CANCELLED,
-    ];
-
     protected const PAYMENT_NOTE = 'Nuport import';
 
     protected const LIST_LIMIT = 15;
@@ -128,6 +131,11 @@ class NuportOrderImportService
 
     protected bool $createMissing = false;
 
+    protected bool $openAsLive = false;
+
+    /** @var array{product: array<int, int>, variant: array<int, int>} stock when the run started, by id */
+    protected array $stockAtStart = ['product' => [], 'variant' => []];
+
     /** @var Collection<int, CourierProvider>|null the company's couriers, loaded on first use */
     protected ?Collection $providers = null;
 
@@ -140,9 +148,10 @@ class NuportOrderImportService
     /**
      * @param  string  $skuMap  lines of "NUPORT-SKU = ERP-SKU"
      * @param  bool  $createMissing  create (inactive) products that no SKU or mapping finds
+     * @param  bool  $openAsLive  import orders still open in Nuport (no courier parcel yet) as live orders that take stock
      * @return array<string, mixed> the report (see emptyReport())
      */
-    public function run(string $path, bool $dryRun = true, string $skuMap = '', bool $createMissing = false): array
+    public function run(string $path, bool $dryRun = true, string $skuMap = '', bool $createMissing = false, bool $openAsLive = false): array
     {
         $company = app(CompanyContext::class)->company();
 
@@ -154,6 +163,7 @@ class NuportOrderImportService
         $this->timezone = $company->timezone ?: (string) config('app.timezone');
         $this->customerCache = [];
         $this->createMissing = $createMissing;
+        $this->openAsLive = $openAsLive;
         $this->newProducts = [];
         $this->providers = null;
         $this->loadProducts();
@@ -189,7 +199,7 @@ class NuportOrderImportService
 
             if ($plan['skip'] === null && $order?->trashed()) {
                 $plan['skip'] = 'in_trash';
-            } elseif ($plan['skip'] === null && $order && $order->source !== Order::SOURCE_NUPORT_IMPORT) {
+            } elseif ($plan['skip'] === null && $order && ! $order->isFromNuport()) {
                 $plan['skip'] = 'reference_in_use';
             }
 
@@ -214,6 +224,13 @@ class NuportOrderImportService
             $this->addChannelAndBookingTotals($report, $plan);
 
             try {
+                // A live open order is the ERP's from the day it is imported.
+                if ($order?->source === Order::SOURCE_NUPORT_OPEN) {
+                    $report['unchanged']++;
+
+                    continue;
+                }
+
                 if ($order) {
                     $changed = $dryRun ? $this->wouldChange($order, $plan) : $this->refreshOrder($order, $plan);
                     $changed ? $report['refreshed']++ : $report['unchanged']++;
@@ -229,6 +246,10 @@ class NuportOrderImportService
 
                 $report['created']++;
 
+                if ($plan['live']) {
+                    $this->addOpenOrderTotals($report, $plan);
+                }
+
                 foreach ($plan['lines'] as $line) {
                     if (isset($line['new'])) {
                         $new = $this->newProducts[$line['new']];
@@ -241,6 +262,8 @@ class NuportOrderImportService
                 $report['errors'][] = $plan['invoice'].': '.Str::limit($exception->getMessage(), 160);
             }
         }
+
+        $this->listShortProducts($report);
 
         return $report;
     }
@@ -312,6 +335,25 @@ class NuportOrderImportService
                 : __(':count products were created (inactive, stock 0, cost price 0): :list', $replace);
         }
 
+        if ($report['open_orders'] > 0) {
+            $replace = ['count' => $report['open_orders'], 'pieces' => number_format($report['open_pieces'])];
+
+            $lines[] = $dryRun
+                ? __(':count open orders (no courier parcel yet) would come in as live orders and take :pieces pieces out of stock. You ship them from the ERP.', $replace)
+                : __(':count open orders (no courier parcel yet) came in as live orders and took :pieces pieces out of stock. You ship them from the ERP.', $replace);
+
+            if ($report['open_old'] > 0) {
+                $lines[] = __(':count of them were placed more than 30 days ago. Check that they are still wanted; cancel the others in the ERP.', ['count' => $report['open_old']]);
+            }
+
+            if ($report['open_short'] !== []) {
+                $lines[] = __(':count products are short for these orders, so their stock goes below zero until you correct it: :list', [
+                    'count' => count($report['open_short']),
+                    'list' => $this->shorten($report['open_short']),
+                ]);
+            }
+        }
+
         if ($report['channels'] !== []) {
             $lines[] = __('Sales channels: :list', [
                 'list' => $this->shorten(collect($report['channels'])
@@ -346,9 +388,9 @@ class NuportOrderImportService
                 : __(':count couriers were created (inactive, no API): :list', $replace);
         }
 
-        if ($report['open_consignments'] > 0) {
-            $lines[] = __(':count orders have a parcel still on the way; its consignment number stays in the order note only.', [
-                'count' => $report['open_consignments'],
+        if ($report['active_bookings'] > 0) {
+            $lines[] = __(':count of these parcels are still on the way; the ERP keeps tracking them.', [
+                'count' => $report['active_bookings'],
             ]);
         }
 
@@ -391,7 +433,9 @@ class NuportOrderImportService
             $lines[] = __('Errors: :list', ['list' => $this->shorten($report['errors'])]);
         }
 
-        $lines[] = __('Stock and account balances are never changed by this import.');
+        $lines[] = $report['open_orders'] > 0
+            ? __('Account balances are never changed by this import.')
+            : __('Stock and account balances are never changed by this import.');
 
         if ($dryRun) {
             $lines[] = __('Preview only: nothing was saved.');
@@ -415,10 +459,15 @@ class NuportOrderImportService
             'mapped' => [],
             'map_ignored' => [],
             'new_products' => [],
+            'open_orders' => 0,
+            'open_pieces' => 0,
+            'open_old' => 0,
+            'open_needs' => [],
+            'open_short' => [],
             'channels' => [],
             'bookings' => [],
             'new_providers' => [],
-            'open_consignments' => 0,
+            'active_bookings' => 0,
             'mismatch' => [],
             'errors' => [],
             'ignored_lines' => 0,
@@ -489,6 +538,11 @@ class NuportOrderImportService
             ->keyBy(fn (ProductVariant $variant): string => Str::lower(trim((string) $variant->sku)));
 
         $products = Product::query()->get();
+
+        $this->stockAtStart = [
+            'product' => $products->mapWithKeys(fn (Product $product): array => [(int) $product->getKey() => (int) $product->stock])->all(),
+            'variant' => ProductVariant::query()->get()->mapWithKeys(fn (ProductVariant $variant): array => [(int) $variant->getKey() => (int) $variant->stock])->all(),
+        ];
 
         $this->productsBySku = $products
             ->filter(fn (Product $product): bool => filled($product->sku))
@@ -619,7 +673,7 @@ class NuportOrderImportService
             'delivery_status' => $deliveryStatus,
             'sales_channel' => $this->salesChannel($head['ordersource'] ?? ''),
             'booking' => $booking,
-            'open_consignment' => $booking === null && ($head['deliveryid'] ?? '') !== '',
+            'live' => $this->openAsLive && $booking === null && in_array($nuportStatus, ['APPROVED', 'PROCESSING'], true),
             'discount' => round(max($linesTotal - $sales, 0), 2),
             'packaging_fee' => round(max($sales - $linesTotal, 0), 2),
             'shipping_fee' => round($fee, 2),
@@ -660,17 +714,17 @@ class NuportOrderImportService
     }
 
     /**
-     * The courier booking to record for a parcel whose delivery is over, or
-     * null (no consignment number, or the parcel is still on the way).
+     * The courier booking to record for a parcel, or null (no consignment
+     * number). Nuport's "Delivery ID" is the courier's consignment id.
      *
      * @param  array<string, string>  $head
      * @return array<string, mixed>|null
      */
     protected function bookingPlan(array $head, string $deliveryStatus, float $total, Carbon $bookedAt, ?Carbon $deliveredAt, Carbon $lastDate): ?array
     {
-        $tracking = trim($head['deliveryid'] ?? '');
+        $reference = trim($head['deliveryid'] ?? '');
 
-        if ($tracking === '' || ! in_array($deliveryStatus, self::BOOKING_STATUSES, true)) {
+        if ($reference === '') {
             return null;
         }
 
@@ -681,7 +735,7 @@ class NuportOrderImportService
 
         return [
             'partner' => trim($head['deliverypartner'] ?? '') ?: 'Courier',
-            'tracking_id' => $tracking,
+            'reference' => $reference,
             'status' => $deliveryStatus,
             'cod_amount' => $collectsCash ? round($total, 2) : 0.0,
             'delivery_fee_charged' => round($this->money($head['deliveryfee'] ?? ''), 2),
@@ -740,14 +794,14 @@ class NuportOrderImportService
         $customer ??= $order->customer;
         $row = CourierBooking::query()
             ->where('order_id', $order->getKey())
-            ->where('tracking_id', $booking['tracking_id'])
+            ->where('provider_reference', $booking['reference'])
             ->first() ?? new CourierBooking;
 
         $row->forceFill([
             'company_id' => $order->company_id,
             'courier_provider_id' => $this->providerFor($booking['partner'])->getKey(),
             'order_id' => $order->getKey(),
-            'tracking_id' => $booking['tracking_id'],
+            'provider_reference' => $booking['reference'],
             'recipient_name' => $customer?->name ?: ($order->customer_name ?: 'Customer'),
             'recipient_phone' => $customer?->phone,
             'recipient_address' => ($plan['head']['customeraddress'] ?? '') !== '' ? $plan['head']['customeraddress'] : $customer?->address,
@@ -780,6 +834,47 @@ class NuportOrderImportService
     }
 
     /**
+     * What the live open orders need from stock, per product or variant, and how old they are.
+     *
+     * @param  array<string, mixed>  $report
+     * @param  array<string, mixed>  $plan
+     */
+    protected function addOpenOrderTotals(array &$report, array $plan): void
+    {
+        $report['open_orders']++;
+
+        if ($plan['created_at']->lt(now()->subDays(30))) {
+            $report['open_old']++;
+        }
+
+        foreach ($plan['lines'] as $line) {
+            $key = $line['variant_id'] ? 'v'.$line['variant_id'] : 'p'.$line['product_id'];
+            $report['open_needs'][$key] = ($report['open_needs'][$key] ?? 0) + $line['quantity'];
+            $report['open_pieces'] += $line['quantity'];
+        }
+    }
+
+    /** Products whose stock when the run started is below what the live open orders need. */
+    protected function listShortProducts(array &$report): void
+    {
+        foreach ($report['open_needs'] as $key => $needed) {
+            $id = (int) substr($key, 1);
+            $has = $key[0] === 'v' ? ($this->stockAtStart['variant'][$id] ?? 0) : ($this->stockAtStart['product'][$id] ?? 0);
+
+            if ($needed <= $has) {
+                continue;
+            }
+
+            $variant = $key[0] === 'v' ? ProductVariant::query()->with('product')->find($id) : null;
+            $label = $key[0] === 'v'
+                ? $variant?->product?->name.' '.$variant?->sku
+                : (Product::query()->find($id)?->name ?? $key);
+
+            $report['open_short'][] = trim((string) $label).': '.__('needs :needed, in stock :has', ['needed' => $needed, 'has' => max($has, 0)]);
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $report
      * @param  array<string, mixed>  $plan
      */
@@ -789,12 +884,12 @@ class NuportOrderImportService
             $report['channels'][$plan['sales_channel']] = ($report['channels'][$plan['sales_channel']] ?? 0) + 1;
         }
 
-        if ($plan['open_consignment']) {
-            $report['open_consignments']++;
-        }
-
         if ($plan['booking'] === null) {
             return;
+        }
+
+        if (in_array($plan['booking']['status'], CourierBooking::ACTIVE_STATUSES, true)) {
+            $report['active_bookings']++;
         }
 
         $partner = $plan['booking']['partner'];
@@ -1114,7 +1209,7 @@ class NuportOrderImportService
                 'status' => $plan['status'],
                 'delivery_status' => $plan['delivery_status'],
                 'courier_provider_id' => $provider?->getKey(),
-                'source' => Order::SOURCE_NUPORT_IMPORT,
+                'source' => $plan['live'] ? Order::SOURCE_NUPORT_OPEN : Order::SOURCE_NUPORT_IMPORT,
                 'sales_channel' => $plan['sales_channel'],
                 'note' => $plan['note'],
                 'created_at' => $plan['created_at']->copy()->setTimezone(config('app.timezone')),
@@ -1178,7 +1273,7 @@ class NuportOrderImportService
         $current = (float) $order->payments()->where('note', 'like', self::PAYMENT_NOTE.'%')->sum('amount');
 
         $bookingMissing = $plan['booking'] !== null && ! $order->courierBookings()
-            ->where('tracking_id', $plan['booking']['tracking_id'])
+            ->where('provider_reference', $plan['booking']['reference'])
             ->where('status', $plan['booking']['status'])
             ->exists();
 

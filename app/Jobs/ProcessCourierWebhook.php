@@ -38,10 +38,17 @@ class ProcessCourierWebhook implements ShouldQueue
                 return;
             }
 
-            $trackingId = $payload['tracking_code'] ?? $payload['tracking_id'] ?? $payload['consignment_id'] ?? null;
+            // Any id the courier sends: a booking made in this ERP holds the tracking
+            // code, one copied in from Nuport holds only the consignment id.
+            $identifiers = collect([$payload['tracking_code'] ?? null, $payload['tracking_id'] ?? null, $payload['consignment_id'] ?? null])
+                ->filter(fn ($identifier): bool => is_scalar($identifier) && (string) $identifier !== '')
+                ->map(fn ($identifier): string => (string) $identifier)
+                ->unique()
+                ->values()
+                ->all();
             $booking = CourierBooking::query()
                 ->where('courier_provider_id', $log->courier_provider_id)
-                ->where(fn ($query) => $query->where('tracking_id', $trackingId)->orWhere('provider_reference', $trackingId))
+                ->where(fn ($query) => $query->whereIn('tracking_id', $identifiers)->orWhereIn('provider_reference', $identifiers))
                 ->firstOrFail();
             $status = $couriers->adapter($log->provider)->webhookStatus($payload);
 

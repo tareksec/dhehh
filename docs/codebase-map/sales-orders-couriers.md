@@ -57,7 +57,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Services/CourierManager.php` | Factory resolving carrier adapter instances based on provider configurations. |
 | `app/Services/CourierService.php` | Business service executing consignment creation, cancellation, and fee balance syncing. |
 | `app/Services/CourierAlertService.php` | Raises alerts for stuck shipments, delayed deliveries, and abnormal return rates. |
-| `app/Services/NuportOrderImportService.php` | Copies past orders out of a Nuport CSV export (orders, lines, payments, status, sales channel, returned pieces, finished courier bookings) without touching stock or accounts; run from the Orders list or `orders:import-nuport`. |
+| `app/Services/NuportOrderImportService.php` | Copies past orders out of a Nuport CSV export (orders, lines, payments, status, sales channel, returned pieces, finished courier bookings) without touching stock or accounts; run from the Orders list or `orders:import-nuport`. Orders still open in Nuport can come in as live orders (`Order::SOURCE_NUPORT_OPEN`) that take stock. |
 | `app/Services/CourierReportService.php` | Aggregates courier delivery performance, success rates, and COD settlement totals. |
 | `app/Services/CourierHandoverSheetService.php` | Generates printable handover manifests with barcodes for carrier pickup. |
 | `app/Services/ExternalCourierFraudService.php` | Queries third-party courier fraud databases (Pathao, Steadfast, RedX) by phone number. |
