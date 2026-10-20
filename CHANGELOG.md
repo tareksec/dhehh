@@ -4,6 +4,20 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **The IMS domain is a sign-in for every business too** (owner request 2026-10-20). Investors only know the business's IMS address (for example `zamzaminv.app`), so its sign-in page now works like the central address: someone who also has an account in another business signs in there with phone and password, and the password of any of their accounts opens that business (the IMS domain's own business is tried first). The **Switch business** button then changes the business on the same address, without leaving it. Someone with an account in only this business signs in exactly as before (SMS code, password reset, sign-up and invites unchanged). The IMS office at `/office` is unchanged. The separate central address is no longer needed and can be left blank.
+
+### Security
+
+- On an IMS domain, another business opens only while the account signed in to that session belongs to it; otherwise (and always on sign-up, invite, password-reset and staff pages) the domain's own business stays open.
+
+### Technical Notes
+
+- IMS domain sign-in for every business: `InvestorBusinessSwitchService::imsHostCompany()`, `switchesInSession()`, `hasAccountsElsewhere()`; `attemptCentralLogin()` takes a preferred company. The investor `Login` uses the multi-business path on an IMS domain only in password mode and only when the phone has an active account in another business. `ResolveCompanyFromCentralInvestorSession` opens the chosen business on an IMS domain only when the session's `investor` guard account belongs to it. No migration, no new strings, no settings change. Tests: `InvestorBusinessSwitchTest` (+5, 21).
+
 ## [2.93.0] - 2026-10-20
 
 **Release type:** Minor Feature Update

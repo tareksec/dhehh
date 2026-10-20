@@ -296,6 +296,84 @@ class InvestorBusinessSwitchTest extends TestCase
         $this->get('http://ims.central.test/investor/dashboard')->assertForbidden();
     }
 
+    // ---- A business's IMS domain is a sign-in for every business ---------
+
+    public function test_the_sign_in_on_an_ims_domain_opens_another_business_of_that_password(): void
+    {
+        $a = $this->imsCompany('ims-one.example.test', 'imsone.test');
+        $b = $this->company('ims-two.example.test');
+        $this->activeAccount($a, self::PHONE, 'password-of-alpha-1');
+        $inB = $this->activeAccount($b, self::PHONE, 'password-of-beta-22');
+
+        $this->signInOnImsDomain($a, 'imsone.test', 'password-of-beta-22');
+
+        $this->assertSame($inB->id, auth('investor')->id());
+        $this->assertSame($b->id, session(InvestorBusinessSwitchService::SESSION_KEY));
+        $this->assertSame($b->id, app(CompanyContext::class)->id());
+    }
+
+    public function test_on_an_ims_domain_the_domains_own_business_is_tried_first(): void
+    {
+        $other = $this->company('ims-first-0.example.test');
+        $a = $this->imsCompany('ims-first-a.example.test', 'imsfirst.test');
+        $this->activeAccount($other, self::PHONE, 'same-password-123');
+        $inA = $this->activeAccount($a, self::PHONE, 'same-password-123');
+        $this->assertLessThan($a->id, $other->id);
+
+        $this->signInOnImsDomain($a, 'imsfirst.test', 'same-password-123');
+
+        $this->assertSame($inA->id, auth('investor')->id());
+        $this->assertSame($a->id, app(CompanyContext::class)->id());
+    }
+
+    public function test_on_an_ims_domain_a_person_of_one_business_signs_in_as_before(): void
+    {
+        $a = $this->imsCompany('ims-solo.example.test', 'imssolo.test');
+        $inA = $this->activeAccount($a, self::PHONE, 'password-of-alpha-1');
+
+        $this->signInOnImsDomain($a, 'imssolo.test', 'password-of-alpha-1');
+
+        $this->assertSame($inA->id, auth('investor')->id());
+        $this->assertNull(session(InvestorBusinessSwitchService::SESSION_KEY));
+    }
+
+    public function test_on_an_ims_domain_switching_stays_on_that_domain_and_the_office_keeps_working(): void
+    {
+        $a = $this->imsCompany('ims-sw-a.example.test', 'imsswitch.test', name: 'Alpha Traders');
+        $b = $this->company('ims-sw-b.example.test', name: 'Beta Imports');
+        $inA = $this->activeAccount($a, self::PHONE);
+        $inB = $this->activeAccount($b, self::PHONE);
+
+        $this->actingAs($inA, 'investor')->withSession([auth('investor')->getName() => $inA->id]);
+        $this->get('http://imsswitch.test/investor/dashboard')->assertOk()->assertSee('Switch business')->assertSee('Beta Imports');
+
+        $this->post('http://imsswitch.test/investor/switch-business/'.$b->id)
+            ->assertRedirect('http://imsswitch.test/investor');
+        $this->assertSame($inB->id, auth('investor')->id());
+        $this->assertSame($b->id, session(InvestorBusinessSwitchService::SESSION_KEY));
+
+        $this->get('http://imsswitch.test/investor/dashboard')->assertOk()->assertSee('Alpha Traders');
+        $this->assertSame($b->id, app(CompanyContext::class)->id());
+
+        $this->get('http://imsswitch.test/office/login')->assertOk();
+    }
+
+    public function test_on_an_ims_domain_a_stale_choice_never_opens_another_business(): void
+    {
+        $a = $this->imsCompany('ims-stale-a.example.test', 'imsstale.test');
+        $b = $this->company('ims-stale-b.example.test');
+        $inA = $this->activeAccount($a, self::PHONE);
+        $this->activeAccount($b, self::PHONE);
+
+        // The session still names business B, but the account signed in is A's.
+        $this->actingAs($inA, 'investor')->withSession([
+            InvestorBusinessSwitchService::SESSION_KEY => $b->id,
+            auth('investor')->getName() => $inA->id,
+        ]);
+        $this->get('http://imsstale.test/investor/dashboard')->assertOk();
+        $this->assertSame($a->id, app(CompanyContext::class)->id());
+    }
+
     // ---- My businesses ----------------------------------------------------
 
     public function test_my_businesses_lists_every_business_with_its_own_figures(): void
@@ -360,6 +438,30 @@ class InvestorBusinessSwitchTest extends TestCase
         ]);
 
         return $company;
+    }
+
+    /** A business whose portal lives on its IMS v2 domain only (the investor portal itself is off, as on the live system). */
+    private function imsCompany(string $domain, string $imsDomain, ?string $name = null): Company
+    {
+        $company = $this->company($domain, $name);
+        $company->forceFill(['investor_portal_enabled' => false, 'ims_enabled' => true, 'ims_domain' => $imsDomain])->save();
+
+        return $company;
+    }
+
+    private function signInOnImsDomain(Company $company, string $imsDomain, string $password): void
+    {
+        $request = Request::create('http://'.$imsDomain.'/investor/login');
+        $request->setLaravelSession(app('session.store'));
+        app()->instance('request', $request);
+        app(CompanyContext::class)->set($company);
+        Filament::setCurrentPanel(Filament::getPanel('investor'));
+
+        Livewire::test(Login::class)
+            ->set('data.phone', self::PHONE)
+            ->set('data.password', $password)
+            ->call('authenticate')
+            ->assertHasNoErrors();
     }
 
     private function investor(Company $company, string $phone): Investor

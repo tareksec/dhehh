@@ -2,6 +2,7 @@
 
 namespace App\Filament\Investor\Pages\Auth;
 
+use App\Models\Company;
 use App\Models\InvestorPortalAccount;
 use App\Services\CompanyContext;
 use App\Services\InvestorBusinessSwitchService;
@@ -92,6 +93,16 @@ class Login extends BaseLogin
             return $this->authenticateOnCentralHost($data);
         }
 
+        // An IMS domain (owner request 2026-10-20): a person who also invests in
+        // another business signs in to all of them here, by password.
+        $hostCompany = app(CompanyContext::class)->company();
+
+        if ($this->mode === 'password' && $hostCompany
+            && app(InvestorBusinessSwitchService::class)->imsHostCompany()
+            && app(InvestorBusinessSwitchService::class)->hasAccountsElsewhere((string) $data['phone'], $hostCompany)) {
+            return $this->authenticateOnCentralHost($data, $hostCompany);
+        }
+
         if ($this->mode === 'code' && $this->codePhone === null) {
             $this->sendCode((string) $data['phone']);
 
@@ -130,16 +141,17 @@ class Login extends BaseLogin
     /**
      * The central sign-in for every business (17_IMS_IN_PORTAL_PLAN.md §5):
      * phone + password only. It opens the first business the password belongs
-     * to; the top bar then switches between the person's businesses.
+     * to; the top bar then switches between the person's businesses. On an
+     * IMS domain $prefer (that domain's business) is tried first.
      *
      * @param  array<string, mixed>  $data
      */
-    protected function authenticateOnCentralHost(array $data): ?LoginResponse
+    protected function authenticateOnCentralHost(array $data, ?Company $prefer = null): ?LoginResponse
     {
         $switches = app(InvestorBusinessSwitchService::class);
 
         try {
-            $match = $switches->attemptCentralLogin((string) $data['phone'], (string) ($data['password'] ?? ''));
+            $match = $switches->attemptCentralLogin((string) $data['phone'], (string) ($data['password'] ?? ''), $prefer);
         } catch (LoginThrottled $exception) {
             Notification::make()->title($exception->getMessage())->danger()->send();
 
