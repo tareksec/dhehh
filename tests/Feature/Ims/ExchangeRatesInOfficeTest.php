@@ -45,6 +45,6 @@ class ExchangeRatesInOfficeTest extends TestCase
     {
         $this->actingAs($this->staff())->withSession(['current_company_id' => $this->company->id])
             ->get('http://localhost/admin/investments/exchange-rates')
-            ->assertRedirect('http://'.$this->company->ims_domain.'/office/investments/exchange-rates');
+            ->assertRedirect('http://'.$this->company->ims_domain.'/office/investments/exchange-rates?office_company='.$this->company->id);
     }
 }

@@ -2,6 +2,23 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-20 - Plan 18 phases A + B: every company on zamzaminv.app, office company picker
+
+Reason - owner: "start building - 18_IMS_ALL_COMPANIES_PLAN.md". Phases A (one domain for all) and B (office company picker + access rules) are built here; C (All companies home), D (investor projects) and E (combined lists) follow on this branch.
+
+What changed:
+- Phase A: `Company::imsHost()` - every active company uses the group IMS domain (the company with IMS on; lowest id). Invites, join, partner sign-up and staff links carry `?business=<id>`; the link page checks its token against that company. Old per-company investor-portal hosts redirect to the IMS domain. The daily IMS jobs run for every company. The KYC-before-new-money rule and the ERP's Investments redirect now apply to every company (plan §2 "effect to know").
+- Phase B: office company picker (top bar; menu drawer on phones), choice kept in the session and re-checked against the user on every request. Super Admins and roles with the new `ims.all_companies` permission ("office admin", decided: a permission, not a new role, per plan answer 2) open every company; others their own companies. ERP links open the office with that company (`?office_company=`).
+- Decided by the rules (no question): "office admin" is a permission a Super Admin gives a role, because roles are already managed in Settings → Roles; the picker hides itself when the person has one company only.
+
+Known gap (for phase D): on `zamzaminv.app`, "Forgot password?" and the SMS-code sign-in still look only at the domain's own company. An investor whose only account is in another company signs in with phone + password, which works.
+
+Deploy note: nothing to migrate. Once live, every company's investors use `zamzaminv.app`; the KYC rule then applies to new money in every company.
+
+Verified: `AllCompaniesImsTest` 11 passed; IMS + investor portal tests 148 passed. Browser (preview copy of the demo data, 5 companies): office picker lists all five, switching opens the chosen company with its own figures, the choice stays; on a phone the list sits in the menu drawer and the top bar fits (359 px). Full suite: 2861 passed, 1 skipped, 0 failed. `npm run build` passes.
+
+Commit status: committed and pushed to `feature/ims-all-companies`; not merged into `main`.
+
 ## 2026-10-20 - Plan: every company in one IMS on zamzaminv.app
 
 Reason - owner (in Bangla): every ERP company comes into the IMS; all IMS work on `zamzaminv.app`, no subdomain; office admins and ERP Super Admins have full access and grant role-based access; very simple UI; investors see projects (with the company name) and a project filter. Plan only, no code.

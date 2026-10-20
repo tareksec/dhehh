@@ -2,7 +2,9 @@
 
 > **বাংলা সারসংক্ষেপ:** অনুরোধ (২০২৬-১০-২০): ERP-র **সব কোম্পানি** IMS-এ আসবে, আর IMS-এর সব কাজ হবে শুধু **zamzaminv.app**-এ। কোনো আলাদা সাবডোমেন থাকবে না। অফিসে (`zamzaminv.app/office`) ERP-র Super Admin আর অফিস অ্যাডমিনের সব কোম্পানির সব কিছুতে পুরো অ্যাক্সেস থাকবে, আর তাঁরা বাকিদের রোল অনুযায়ী অ্যাক্সেস দিতে পারবেন। অফিসে কোম্পানি বাছার অপশন থাকবে, আর একটা "সব কোম্পানি" পাতা থাকবে। UI হবে সবচেয়ে সহজ (নন-টেকনিক্যাল মানুষের জন্য)। ইনভেস্টর পোর্টালে কোম্পানি বাছতে হবে না: সব প্রজেক্ট এক তালিকায় আসবে, প্রতিটা প্রজেক্টের সাথে কোম্পানির নাম স্বাভাবিকভাবে দেখাবে, আর প্রজেক্ট ফিল্টার থাকবে। নাম আর লোগো পরে সেটিংস থেকে বসানো হবে।
 
-Status: **plan, answers from 2026-10-20** (see §6). Follows `17_IMS_IN_PORTAL_PLAN.md` and `IMS-V2/` (ROLES, DESIGN). Not built yet.
+Status: **plan, answers from 2026-10-20** (see §6). Follows `17_IMS_IN_PORTAL_PLAN.md` and `IMS-V2/` (ROLES, DESIGN). **Phases A and B built 2026-10-20** on `feature/ims-all-companies` ("office admin" = the permission `ims.all_companies`); C, D and E not built yet.
+
+Known gap after phase A (for phase D): on `zamzaminv.app` the "Forgot password?" page and the SMS-code sign-in still look only at the domain's own company; an investor whose only account is in another company signs in with phone + password (that works for every company).
 
 ## 1. Today
 

@@ -37,7 +37,7 @@ class SendOwnerDigest extends ImsCompanyCommand
         }
 
         $lines = array_map(fn (array $item): string => ImsNumbers::count($item['count']).' — '.$item['label'], $items);
-        $officeUrl = (string) $company->imsUrl('office');
+        $officeUrl = (string) $company->imsOfficeUrl();
         $setting = StorefrontSetting::primaryFor((int) $company->getKey());
         $sent = 0;
 

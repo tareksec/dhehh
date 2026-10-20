@@ -4,7 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\ValidatesEmailAddress;
-use App\Services\CompanyContext;
+use App\Services\ImsOfficeCompanies;
 use App\Support\AppDeployment;
 use App\Support\AppRelease;
 use Database\Factories\UserFactory;
@@ -129,14 +129,10 @@ class User extends Authenticatable implements FilamentUser
             return false;
         }
 
-        // The IMS office (IMS-V2/ROLES.md): staff with the office permission
-        // who work for the company whose IMS domain this is.
+        // The IMS office (IMS-V2/ROLES.md, 18_IMS_ALL_COMPANIES_PLAN.md §3.1):
+        // staff with the office permission, in a company they may open there.
         if ($panel->getId() === 'office') {
-            $company = app(CompanyContext::class)->company();
-
-            return $company !== null
-                && $this->hasPermission('ims.office.access')
-                && ($this->isSuperAdmin() || $this->companies()->where('companies.id', $company->getKey())->exists());
+            return app(ImsOfficeCompanies::class)->mayEnter($this);
         }
 
         return true;
@@ -323,6 +319,7 @@ class User extends Authenticatable implements FilamentUser
         'ims.settings.manage' => 'IMS: Settings (notifications, sign-up switch, reminders)',
         'ims.money_rules.manage' => 'IMS: Change Investor and Partner Profit %',
         'ims.domain.manage' => 'IMS: Set the IMS Domain',
+        'ims.all_companies' => 'IMS: Office Admin (full access to every company in the office)',
         'marketing.view' => 'Marketing/Ads: View',
         'marketing.create' => 'Marketing/Ads: Create',
         'marketing.update' => 'Marketing/Ads: Update',

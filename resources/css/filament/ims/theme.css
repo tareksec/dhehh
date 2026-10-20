@@ -1968,6 +1968,84 @@ a.ims-group-tile[href]:hover {
     background-color: var(--ims-page);
 }
 
+/* The office's company picker (18_IMS_ALL_COMPANIES_PLAN.md §3.2): the open company's name in a pill. */
+.fi-ims-company-picker-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    max-width: 16rem;
+    padding-inline: 0.875rem;
+    border-radius: var(--ims-radius-pill);
+    border: 1px solid var(--ims-line);
+    background-color: var(--ims-card);
+    color: var(--ims-ink);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.fi-ims-company-picker-name {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.fi-ims-company-picker-btn:focus-visible {
+    outline: 3px solid var(--ims-primary-tint);
+    outline-offset: 2px;
+}
+
+/* Small phones: the picker is a list in the menu drawer instead, so the top bar fits. */
+.fi-ims-company-drawer {
+    display: none;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    border-radius: var(--ims-radius-card, 1rem);
+    background-color: var(--ims-page);
+}
+
+.fi-ims-company-drawer-title {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--ims-muted, var(--ims-ink));
+}
+
+.fi-ims-company-drawer a {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-height: 2.75rem;
+    padding-inline: 0.75rem;
+    border-radius: var(--ims-radius-pill);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--ims-ink);
+    text-decoration: none;
+}
+
+.fi-ims-company-drawer a[aria-current] {
+    background-color: var(--ims-primary);
+    color: #ffffff;
+}
+
+.fi-ims-company-drawer a:focus-visible {
+    outline: 3px solid var(--ims-primary-tint);
+    outline-offset: 2px;
+}
+
+@media (max-width: 639.98px) {
+    .fi-topbar .fi-ims-company-picker {
+        display: none;
+    }
+
+    .fi-ims-company-drawer {
+        display: flex;
+    }
+}
+
 @media (max-width: 639.98px) {
     /* Small phones: the language switch moves to the Profile page (portal) or the
        menu drawer (office), and the office search to the desktop, so the bar fits. */

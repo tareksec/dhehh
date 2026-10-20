@@ -181,10 +181,21 @@ class KycTest extends TestCase
 
     public function test_money_already_at_work_and_companies_without_ims_are_not_touched(): void
     {
+        // No company runs IMS at all.
+        $this->company->forceFill(['ims_enabled' => false])->save();
         $this->imsCompany(['ims_enabled' => false]);
         $member = app(InvestorGroupService::class)->addMember($this->openGroup(), $this->newInvestor(), ['amount' => 100000], $this->staff());
 
         $this->assertSame(InvestorGroupMember::STATUS_ACTIVE, $member->status, 'without IMS the ERP works as before');
+    }
+
+    public function test_a_company_on_the_group_ims_domain_needs_kyc_too(): void
+    {
+        // 18_IMS_ALL_COMPANIES_PLAN.md §2: every company is on the one IMS domain, so its rules apply to all.
+        $this->imsCompany(['ims_enabled' => false, 'ims_domain' => null]);
+        $member = app(InvestorGroupService::class)->addMember($this->openGroup(), $this->newInvestor(), ['amount' => 100000], $this->staff());
+
+        $this->assertSame(InvestorGroupMember::STATUS_PENDING, $member->status);
     }
 
     public function test_a_top_up_request_needs_kyc_while_ims_is_on(): void

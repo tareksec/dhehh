@@ -276,15 +276,34 @@ class Company extends Model
             return null;
         }
 
-        $live = fn ($query) => $query->where('ims_enabled', true)->where('is_active', true)->whereNotNull('ims_domain');
+        // Every company is on the group IMS domain (18_IMS_ALL_COMPANIES_PLAN.md §2), so any company's old portal host moves.
+        $company = static::query()->where('is_active', true)->where('investor_portal_domain', $host)->first();
 
-        $company = static::query()->where($live)->where('investor_portal_domain', $host)->first();
-
-        if ($company || ! str_starts_with($host, 'investor.')) {
-            return $company;
+        if (! $company && str_starts_with($host, 'investor.')) {
+            $company = static::query()->where('is_active', true)->whereNull('investor_portal_domain')->where('domain', substr($host, strlen('investor.')))->first();
         }
 
-        return static::query()->where($live)->whereNull('investor_portal_domain')->where('domain', substr($host, strlen('investor.')))->first();
+        return $company?->imsIsLive() ? $company : null;
+    }
+
+    /**
+     * The company that carries the group's IMS domain (18_IMS_ALL_COMPANIES_PLAN.md
+     * §2): the active company with IMS switched on and a domain set; with more
+     * than one, the lowest id. Null while no company runs IMS.
+     */
+    public static function groupImsCompany(): ?self
+    {
+        if (! static::imsColumnsExist()) {
+            return null;
+        }
+
+        return static::query()
+            ->where('ims_enabled', true)
+            ->where('is_active', true)
+            ->whereNotNull('ims_domain')
+            ->where('ims_domain', '!=', '')
+            ->orderBy('id')
+            ->first();
     }
 
     /** AppSetting key of the one sign-in address for every business (17_IMS_IN_PORTAL_PLAN.md §5). */
@@ -367,20 +386,71 @@ class Company extends Model
         return $central !== null && $host !== null && $host === $central;
     }
 
-    /** Whether this company runs IMS v2 on its own domain. */
-    public function imsIsLive(): bool
+    /** Whether this company has an IMS v2 domain of its own. */
+    public function ownsImsDomain(): bool
     {
         return (bool) $this->ims_enabled && filled($this->ims_domain) && (bool) $this->is_active;
+    }
+
+    /**
+     * The host this company's IMS runs on: its own IMS domain, else the group's
+     * (18_IMS_ALL_COMPANIES_PLAN.md §2: every active company uses the one IMS
+     * domain). Null while the company is inactive or no company runs IMS.
+     */
+    public function imsHost(): ?string
+    {
+        if (! $this->is_active) {
+            return null;
+        }
+
+        if ($this->ownsImsDomain()) {
+            return $this->ims_domain;
+        }
+
+        return static::groupImsCompany()?->ims_domain;
+    }
+
+    /** Whether this company runs IMS v2: on its own domain or on the group's. */
+    public function imsIsLive(): bool
+    {
+        return $this->imsHost() !== null;
     }
 
     /** An address on the IMS domain ("" = the investor portal's root), or null while IMS is off. */
     public function imsUrl(string $path = ''): ?string
     {
-        if (! $this->imsIsLive()) {
+        $host = $this->imsHost();
+
+        if ($host === null) {
             return null;
         }
 
-        return request()->getScheme().'://'.$this->ims_domain.($path === '' ? '' : '/'.ltrim($path, '/'));
+        return request()->getScheme().'://'.$host.($path === '' ? '' : '/'.ltrim($path, '/'));
+    }
+
+    /**
+     * A link to one of this company's own investor pages (invite, join,
+     * sign-up, staff link): on a shared IMS domain it says which company it is
+     * for (?business=<id>), so the page checks the token against that company
+     * (18_IMS_ALL_COMPANIES_PLAN.md §2). Null while the portal has no host.
+     */
+    public function investorLinkUrl(string $path): ?string
+    {
+        $url = $this->investorPortalUrl($path);
+
+        if ($url === null || $this->ownsImsDomain() || ! $this->imsIsLive()) {
+            return $url;
+        }
+
+        return $url.(str_contains($url, '?') ? '&' : '?').'business='.$this->getKey();
+    }
+
+    /** An office address that opens this company in the office (?office_company=<id>), or null while IMS is off. */
+    public function imsOfficeUrl(string $path = ''): ?string
+    {
+        $url = $this->imsUrl('office'.($path === '' ? '' : '/'.ltrim($path, '/')));
+
+        return $url === null ? null : $url.(str_contains($url, '?') ? '&' : '?').'office_company='.$this->getKey();
     }
 
     /** The investor portal is reachable: switched on itself, or carried by IMS v2. */
@@ -410,7 +480,7 @@ class Company extends Model
     public function investorPortalHost(): ?string
     {
         if ($this->imsIsLive()) {
-            return $this->ims_domain;
+            return $this->imsHost();
         }
 
         if (! $this->investor_portal_enabled) {

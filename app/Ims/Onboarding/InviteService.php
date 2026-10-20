@@ -93,7 +93,7 @@ class InviteService
             ]);
         });
 
-        $link = (string) $company->imsUrl('investor/join/'.$token);
+        $link = (string) $company->investorLinkUrl('join/'.$token);
         $sent = $this->deliver($company, $invite, $link);
 
         $this->audit->record('ims.invite_sent', $invite, null, ['contact_type' => $type, 'sent' => $sent]);

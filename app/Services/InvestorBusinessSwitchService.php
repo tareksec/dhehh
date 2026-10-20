@@ -51,6 +51,9 @@ class InvestorBusinessSwitchService
     /** The business chosen on the central sign-in host. */
     public const SESSION_KEY = 'investor_portal_central_company_id';
 
+    /** The business a link page on the IMS domain was opened for (?business=<id>). */
+    public const LINK_SESSION_KEY = 'investor_portal_link_company_id';
+
     protected const CACHE_PREFIX = 'investor-portal-business-switch:';
 
     public function __construct(
@@ -72,6 +75,43 @@ class InvestorBusinessSwitchService
     public function imsHostCompany(?Request $request = null): ?Company
     {
         return Company::forImsHost(($request ?? request())->getHost());
+    }
+
+    /**
+     * The business a link page (invite, join, sign-up, staff link) on an IMS
+     * domain is for (18_IMS_ALL_COMPANIES_PLAN.md §2): the link's ?business=<id>
+     * when that business runs on this domain. A page load remembers it in the
+     * session for the page's own form posts; a page load without it forgets it.
+     * Null = the domain's own business.
+     */
+    public function linkCompany(Request $request, Company $hostCompany): ?Company
+    {
+        $session = $request->hasSession() ? $request->session() : null;
+        // The real request: Livewire's form posts re-run this middleware with a copy that looks like the page's GET.
+        $pageLoad = request()->isMethod('GET');
+
+        if ($pageLoad) {
+            $id = (int) $request->query('business', 0);
+            $session?->forget(self::LINK_SESSION_KEY);
+        } else {
+            $id = (int) ($session?->get(self::LINK_SESSION_KEY, 0) ?? 0);
+        }
+
+        if ($id === 0 || $id === (int) $hostCompany->getKey()) {
+            return null;
+        }
+
+        $company = Company::query()->whereKey($id)->where('is_active', true)->first();
+
+        if (! $company || $company->imsHost() !== $hostCompany->ims_domain) {
+            return null;
+        }
+
+        if ($pageLoad) {
+            $session?->put(self::LINK_SESSION_KEY, $id);
+        }
+
+        return $company;
     }
 
     /** Whether this host keeps the chosen business in the session: the central host or an IMS domain. */
