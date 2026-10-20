@@ -182,6 +182,20 @@ class Order extends Model
         self::SOURCE_NUPORT_IMPORT => 'Nuport (imported)',
     ];
 
+    /**
+     * The channel a customer ordered through, as Nuport recorded it ("Order
+     * Source"). Only imported orders carry one for now; a value Nuport adds
+     * later is kept as it comes (snake case) and shown as a headline.
+     */
+    public const SALES_CHANNELS = [
+        'whatsapp' => 'WhatsApp',
+        'website' => 'Website',
+        'messenger' => 'Messenger',
+        'live_chat' => 'Live chat',
+        'offline' => 'Offline',
+        'other' => 'Other',
+    ];
+
     protected $fillable = [
         'company_id',
         'storefront_setting_id',
@@ -207,6 +221,7 @@ class Order extends Model
         'delivery_status',
         'courier_provider_id',
         'source',
+        'sales_channel',
         'external_reference',
         'note',
     ];
@@ -658,6 +673,11 @@ class Order extends Model
     public function isHistoricalImport(): bool
     {
         return $this->source === self::SOURCE_NUPORT_IMPORT;
+    }
+
+    public static function salesChannelLabel(?string $channel): string
+    {
+        return __(self::SALES_CHANNELS[$channel] ?? str((string) $channel)->headline()->toString());
     }
 
     /**

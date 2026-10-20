@@ -4,9 +4,12 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\Orders\Pages\EditOrder;
 use App\Filament\Resources\Orders\Pages\ListOrders;
+use App\Filament\Resources\Orders\Pages\ViewOrder;
 use App\Models\AppSetting;
 use App\Models\Company;
 use App\Models\CourierBooking;
+use App\Models\CourierProvider;
+use App\Models\CourierStatusLog;
 use App\Models\Customer;
 use App\Models\FraudCheck;
 use App\Models\Order;
@@ -661,6 +664,147 @@ class NuportOrderImportTest extends TestCase
         $this->assertSame(0, StockMovement::query()->where('product_id', $gift->id)->count());
     }
 
+    public function test_the_order_source_becomes_the_sales_channel_and_returned_pieces_are_kept_per_line(): void
+    {
+        $admin = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($admin)->withSession(['current_company_id' => $this->company->id]);
+
+        $report = $this->import(array_merge(
+            $this->order('SO-6001', [
+                'Order Source' => 'LIVE_CHAT', 'Sales Amount' => '800.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '800.00',
+            ], [
+                ['sku' => 'ZMKMQ', 'name' => 'Key Chain', 'qty' => 10, 'unit' => 50, 'returned' => 3],
+                ['sku' => 'ZMTFX05B', 'name' => 'X05 Fan - Black', 'qty' => 1, 'unit' => 300, 'returned' => 9],
+            ]),
+            $this->order('SO-6002', [
+                'Order Source' => 'WHATSAPP', 'Status' => 'CANCELLED', 'Sub-Status' => '', 'Cancelled/Flagged Reason' => 'Customer Unreachable',
+                'Sales Amount' => '500.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '0.00', 'Delivery ID' => '',
+            ], [['sku' => 'ZMKMQ', 'name' => 'Key Chain', 'qty' => 5, 'unit' => 100, 'returned' => 5]]),
+        ), dryRun: false);
+
+        $this->assertSame(2, $report['created']);
+        $this->assertSame(['live_chat' => 1, 'whatsapp' => 1], $report['channels']);
+        $this->assertStringContainsString('Live chat 1', implode("\n", app(NuportOrderImportService::class)->summary($report)));
+
+        $order = Order::query()->where('order_number', 'SO-6001')->firstOrFail();
+        $cancelled = Order::query()->where('order_number', 'SO-6002')->firstOrFail();
+        $this->assertSame('live_chat', $order->sales_channel);
+        $this->assertSame('Live chat', Order::salesChannelLabel($order->sales_channel));
+        $this->assertSame('whatsapp', $cancelled->sales_channel);
+
+        // A returned count is capped at the line quantity; a cancelled order never shipped, so it has none.
+        $this->assertSame([3, 1], $order->items()->orderBy('id')->pluck('returned_quantity')->all());
+        $this->assertSame(0, (int) $cancelled->items()->sole()->returned_quantity);
+
+        Livewire::test(ListOrders::class)
+            ->filterTable('sales_channel', 'live_chat')
+            ->assertCanSeeTableRecords([$order])
+            ->assertCanNotSeeTableRecords([$cancelled]);
+
+        Livewire::test(ViewOrder::class, ['record' => $order->getRouteKey()])->assertSee('Live chat');
+
+        // A newer export fills the channel of an order imported before it existed.
+        $order->forceFill(['sales_channel' => null])->saveQuietly();
+        $this->assertSame(1, $this->import($this->order('SO-6001', [
+            'Order Source' => 'LIVE_CHAT', 'Sales Amount' => '800.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '800.00',
+        ], [
+            ['sku' => 'ZMKMQ', 'name' => 'Key Chain', 'qty' => 10, 'unit' => 50, 'returned' => 3],
+            ['sku' => 'ZMTFX05B', 'name' => 'X05 Fan - Black', 'qty' => 1, 'unit' => 300, 'returned' => 9],
+        ]), dryRun: false)['refreshed']);
+        $this->assertSame('live_chat', $order->refresh()->sales_channel);
+    }
+
+    public function test_a_finished_parcel_becomes_a_courier_booking_and_a_parcel_still_moving_does_not(): void
+    {
+        $money = ['Sales Amount' => '1000.00', 'Delivery Fee' => '110.00'];
+        $line = [['sku' => 'ZMKMQ', 'name' => 'Key Chain', 'qty' => 10, 'unit' => 100]];
+        $rows = array_merge(
+            $this->order('SO-7001', $money + ['Payments/Paid Amount' => '1110.00', 'Delivery ID' => '9001', 'Delivered At' => 'August 25th 2025, 4:10:37 pm'], $line),
+            $this->order('SO-7002', $money + ['Payments/Paid Amount' => '0.00', 'Status' => 'FLAGGED', 'Sub-Status' => 'RETURNED', 'Delivery ID' => '9002', 'Delivery Partner Status' => 'cancelled'], $line),
+            $this->order('SO-7003', $money + ['Payments/Paid Amount' => '0.00', 'Status' => 'FLAGGED', 'Sub-Status' => 'PENDING_RETURNED', 'Delivery ID' => '9003', 'Delivery Partner Status' => 'cancelled'], $line),
+            $this->order('SO-7004', $money + ['Payments/Paid Amount' => '0.00', 'Status' => 'IN_TRANSIT', 'Sub-Status' => '', 'Delivery ID' => '9004', 'Delivery Partner Status' => 'pending'], $line),
+            $this->order('SO-7005', $money + ['Payments/Paid Amount' => '1110.00', 'Delivery ID' => '', 'Delivery Partner Status' => ''], $line),
+        );
+
+        $preview = $this->import($rows, dryRun: true);
+        $this->assertSame(['Steadfast' => 3], $preview['bookings']);
+        $this->assertSame(['Steadfast' => true], $preview['new_providers']);
+        $this->assertSame(1, $preview['open_consignments']);
+        $this->assertSame(0, CourierBooking::query()->count());
+        $this->assertSame(0, CourierProvider::query()->count());
+
+        $report = $this->import($rows, dryRun: false);
+        $this->assertSame(5, $report['created']);
+        $this->assertSame([], $report['errors']);
+
+        // The courier the ERP did not have is created switched off and without an API.
+        $provider = CourierProvider::query()->sole();
+        $this->assertSame('Steadfast', $provider->name);
+        $this->assertSame(CourierProvider::DRIVER_MANUAL, $provider->driver);
+        $this->assertFalse($provider->is_active);
+
+        $this->assertSame(3, CourierBooking::query()->count());
+        $delivered = CourierBooking::query()->where('tracking_id', '9001')->sole();
+        $this->assertSame(CourierBooking::STATUS_DELIVERED, $delivered->status);
+        $this->assertSame($provider->id, $delivered->courier_provider_id);
+        $this->assertSame('SO-7001', $delivered->order->order_number);
+        $this->assertSame($provider->id, $delivered->order->courier_provider_id);
+        $this->assertSame('Rahim', $delivered->recipient_name);
+        $this->assertSame('01712345678', $delivered->recipient_phone);
+        $this->assertEqualsWithDelta(1110.0, (float) $delivered->cod_amount, 0.001);
+        $this->assertEqualsWithDelta(110.0, (float) $delivered->delivery_fee_charged, 0.001);
+        $this->assertSame('2025-08-25 16:10', $delivered->delivered_at->copy()->setTimezone('Asia/Dhaka')->format('Y-m-d H:i'));
+        $this->assertNull($delivered->returned_at);
+
+        $back = CourierBooking::query()->where('tracking_id', '9002')->sole();
+        $this->assertSame(CourierBooking::STATUS_RETURNED, $back->status);
+        $this->assertNotNull($back->returned_at);
+        $this->assertNull(CourierBooking::query()->where('tracking_id', '9003')->sole()->returned_at);
+
+        // A parcel still on the way keeps its consignment number in the note only.
+        $moving = Order::query()->where('order_number', 'SO-7004')->firstOrFail();
+        $this->assertSame(0, $moving->courierBookings()->count());
+        $this->assertStringContainsString('consignment: 9004', $moving->note);
+        $this->assertSame(0, Order::query()->where('order_number', 'SO-7005')->firstOrFail()->courierBookings()->count());
+
+        // History is silent: no status logs, so nothing is texted or reviewed.
+        $this->assertSame(0, CourierStatusLog::query()->count());
+
+        $this->assertSame(0, $this->import($rows, dryRun: false)['created']);
+        $this->assertSame(3, CourierBooking::query()->count());
+        $this->assertSame(1, CourierProvider::query()->count());
+    }
+
+    public function test_an_existing_courier_is_used_and_an_order_that_finishes_later_gets_its_booking_once(): void
+    {
+        $steadfast = CourierProvider::query()->create([
+            'company_id' => $this->company->id, 'name' => 'Steadfast Courier', 'slug' => 'steadfast',
+            'driver' => CourierProvider::DRIVER_STEADFAST, 'is_active' => true,
+        ]);
+        $money = ['Sales Amount' => '1000.00', 'Delivery Fee' => '110.00', 'Delivery ID' => '9100'];
+        $line = [['sku' => 'ZMKMQ', 'name' => 'Key Chain', 'qty' => 10, 'unit' => 100]];
+        $service = app(NuportOrderImportService::class);
+
+        $moving = $this->csv($this->order('SO-8001', $money + [
+            'Payments/Paid Amount' => '0.00', 'Status' => 'IN_TRANSIT', 'Sub-Status' => '', 'Delivery Partner Status' => 'pending',
+        ], $line));
+        $this->assertSame(1, $service->run($moving, dryRun: false)['created']);
+        $this->assertSame(0, CourierBooking::query()->count());
+
+        $done = $this->csv($this->order('SO-8001', $money + ['Payments/Paid Amount' => '1110.00'], $line));
+        $this->assertSame(1, $service->run($done, dryRun: true)['refreshed']);
+        $this->assertSame(0, CourierBooking::query()->count());
+
+        $this->assertSame(1, $service->run($done, dryRun: false)['refreshed']);
+        $booking = CourierBooking::query()->sole();
+        $this->assertSame($steadfast->id, $booking->courier_provider_id);
+        $this->assertSame(CourierBooking::STATUS_DELIVERED, $booking->status);
+        $this->assertSame(1, CourierProvider::query()->count());
+
+        $this->assertSame(1, $service->run($done, dryRun: false)['unchanged']);
+        $this->assertSame(1, CourierBooking::query()->count());
+    }
+
     public function test_the_orders_list_offers_the_import_and_previews_an_uploaded_file(): void
     {
         Storage::fake('local');
@@ -702,7 +846,7 @@ class NuportOrderImportTest extends TestCase
      * money), later rows only the line, exactly like the real export.
      *
      * @param  array<string, string>  $head
-     * @param  array<int, array{sku: string, name: string, qty: int, unit: int|float, discount?: int|float}>  $lines
+     * @param  array<int, array{sku: string, name: string, qty: int, unit: int|float, discount?: int|float, returned?: int}>  $lines
      * @return array<int, array<string, string>>
      */
     protected function order(string $invoice, array $head, array $lines = []): array
@@ -727,6 +871,7 @@ class NuportOrderImportTest extends TestCase
                 'Total Price' => number_format($line['qty'] * $line['unit'], 2, '.', ''),
                 'Product Discount' => (string) $discount,
                 'Price After Discount' => number_format($line['qty'] * $line['unit'] - $discount, 2, '.', ''),
+                'Cancelled/Returned/Damaged Qty' => (string) ($line['returned'] ?? 0),
             ];
 
             $rows[] = $index === 0 ? $row + $head : $row;
