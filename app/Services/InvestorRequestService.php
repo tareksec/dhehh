@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Ims\Kyc\KycService;
 use App\Models\Investment;
 use App\Models\InvestmentProject;
 use App\Models\InvestmentWithdrawalNotice;
@@ -40,6 +41,11 @@ class InvestorRequestService
     {
         if (! $account->isInvestor()) {
             throw ValidationException::withMessages(['type' => __('Only investors can send requests.')]);
+        }
+
+        // IMS v2 (PRD FR-14): new money needs a verified KYC while IMS is on.
+        if ($type === InvestorRequest::TYPE_TOP_UP && KycService::blocksNewMoney($account->investor)) {
+            throw ValidationException::withMessages(['data.type' => __('Please complete your KYC first (Account → KYC). New money can be put in only after it is verified.')]);
         }
 
         $attributes = match ($type) {

@@ -2,7 +2,9 @@
 
 namespace App\Services\Investment;
 
+use App\Ims\Notifications\ImsNotifier;
 use App\Models\ChannelPartnerPayout;
+use App\Models\Company;
 use App\Models\PayoutBatchItem;
 use App\Models\ProjectSettlement;
 use App\Models\SettlementPayout;
@@ -62,6 +64,11 @@ class PayoutCompletionService
 
         if ($payout->settlement) {
             $this->syncSettlementStatus($payout->settlement);
+        }
+
+        // IMS v2: "money sent to you" (one payout or a whole batch).
+        if ($payout instanceof SettlementPayout && $payout->investor && Company::query()->find($payout->company_id)?->imsIsLive() && (float) $payout->total_payout > 0) {
+            app(ImsNotifier::class)->send('payout_paid', $payout->investor, ['amount' => (float) $payout->total_payout]);
         }
     }
 

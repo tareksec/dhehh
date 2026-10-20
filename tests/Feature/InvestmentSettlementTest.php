@@ -298,12 +298,16 @@ class InvestmentSettlementTest extends TestCase
 
         $this->assertEquals(-50000, $settlement->net_profit);
         $this->assertSame('loss_investor_borne', $settlement->outcome);
-        // 50k loss over 100k capital: A bears 30k, B bears 20k.
-        $this->assertEquals(-30000, $settlement->payouts()->where('investor_id', $investorA->id)->value('profit_share_amount'));
-        $this->assertEquals(30000, $settlement->payouts()->where('investor_id', $investorA->id)->value('total_payout'));
-        $this->assertEquals(20000, $settlement->payouts()->where('investor_id', $investorB->id)->value('total_payout'));
+        // Owner (2026-10-19): investors bear loss × the project's investor % (40%):
+        // 20k of the 50k, by capital — A 12k, B 8k — taken from the capital.
+        $this->assertEquals(40, $settlement->investor_loss_percent);
+        $this->assertEquals(0, $settlement->payouts()->where('investor_id', $investorA->id)->value('profit_share_amount'));
+        $this->assertEquals(12000, $settlement->payouts()->where('investor_id', $investorA->id)->value('capital_loss_amount'));
+        $this->assertEquals(48000, $settlement->payouts()->where('investor_id', $investorA->id)->value('total_payout'));
+        $this->assertEquals(32000, $settlement->payouts()->where('investor_id', $investorB->id)->value('total_payout'));
+        $this->assertEquals(-20000, $settlement->investor_pool_amount);
         $this->assertEquals(0, $settlement->channel_partner_amount);
-        $this->assertEquals(0, $settlement->company_net_amount); // no company contribution
+        $this->assertEquals(-30000, $settlement->company_net_amount); // the company bears the other 60%
     }
 
     public function test_loss_borne_by_company_returns_full_principal_to_investors(): void
@@ -1164,11 +1168,10 @@ class InvestmentSettlementTest extends TestCase
         $service->confirmSettlement($settlement, $this->user->id);
         $payout = $settlement->payouts()->first();
 
-        // 'manager' has investments.manage + investments.view but not the
-        // separately-granted investments.settle permission (v3 P3 gap: this
-        // permission-denied path had no UI-level test coverage).
-        $manager = User::factory()->create(['role' => 'manager']);
-        Auth::login($manager);
+        // An accountant views investments but does not hold investments.settle
+        // (IMS-V2/ROLES.md §3.3; a manager now does by default).
+        $accountant = User::factory()->create(['role' => 'accountant']);
+        Auth::login($accountant);
 
         Livewire::test(ViewInvestmentProject::class, ['record' => $project->getRouteKey()])
             ->assertActionHidden('settle');

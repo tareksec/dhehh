@@ -1,7 +1,5 @@
 {{-- The payout to follow (InvestorPortalCards::nextPayout()): its amount and its four steps. --}}
 @php
-    use App\Support\MoneyFormatter;
-
     $card = $next['card'];
     $stateText = ['done' => __('Done'), 'current' => __('In progress'), 'next' => __('Still to come')];
 @endphp
@@ -10,7 +8,7 @@
     <div class="flex flex-col gap-1">
         <h2 id="investor-next-payout" class="text-base font-semibold">{{ __('Next payout') }}</h2>
         @if ($card['total_payout'] !== null)
-            <p class="text-4xl font-bold tracking-tight tabular-nums">{{ MoneyFormatter::currency($card['total_payout'], $currency) }}</p>
+            <p class="text-3xl font-bold tracking-tight"><x-ims.money :amount="$card['total_payout']" :currency="$currency" /></p>
         @endif
         <p class="text-sm">{{ $card['title'] }}</p>
     </div>

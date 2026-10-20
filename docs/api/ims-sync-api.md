@@ -1,5 +1,7 @@
 # IMS data feed (read-only sync API)
 
+> **Turned off on 2026-10-19 (IMS-V2/PLAN.md phase 7).** The old IMS is gone and IMS v2 runs inside this app on the same database, so `/api/v1/sync/*` and `/api/v1/sync/investor/*` now answer 404, and no new "Data sync" / "Investor sync" key can be made. Keys made before stay in Settings → Integrations → Website API, marked "turned off"; revoke them there. The text below is the old contract, kept for reference only.
+
 This is the contract for **IMS** (`tareksec/ims`, Investment & Inventory Management System), which pulls its business data from this ERP. It answers IMS's questionnaire `ERP-INTEGRATION-REQUIREMENTS.md`; the answers are in the last section.
 
 The feed is **read-only**: `GET` only, so IMS can read a company's data and change nothing. Everything stays inside the company the key belongs to.

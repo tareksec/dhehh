@@ -10,6 +10,7 @@ use App\Filament\Resources\Investors\Pages\ListInvestors;
 use App\Filament\Resources\Investors\Pages\ViewInvestor;
 use App\Filament\Resources\Investors\RelationManagers\BankAccountsRelationManager;
 use App\Filament\Resources\Investors\RelationManagers\InvestmentsRelationManager;
+use App\Filament\Resources\Investors\RelationManagers\NomineesRelationManager;
 use App\Filament\Resources\Investors\RelationManagers\WithdrawalNoticesRelationManager;
 use App\Models\ChannelPartner;
 use App\Models\Company;
@@ -251,6 +252,7 @@ class InvestorResource extends Resource
                     ->state(fn (Investor $record): string => match ($record->investmentStatus()) {
                         Investor::STATUS_WITHDRAWN => __('Withdrawn'),
                         Investor::STATUS_ACTIVE => __('Active'),
+                        Investor::STATUS_PENDING => __('Waiting for the money'),
                         default => __('No investment'),
                     })
                     ->color(fn (Investor $record): string => match ($record->investmentStatus()) {
@@ -258,6 +260,12 @@ class InvestorResource extends Resource
                         Investor::STATUS_ACTIVE => 'success',
                         default => 'warning',
                     }),
+                TextColumn::make('kyc_status')
+                    ->label(__('KYC'))
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => Investor::kycStatusLabel($state))
+                    ->color(fn (?string $state): string => Investor::kycStatusColor($state))
+                    ->toggleable(),
                 TextColumn::make('documents_status')
                     ->label(__('Paper copies'))
                     ->badge()
@@ -375,7 +383,7 @@ class InvestorResource extends Resource
 
     public static function getRelations(): array
     {
-        return [InvestmentsRelationManager::class, DocumentsRelationManager::class, WithdrawalNoticesRelationManager::class, BankAccountsRelationManager::class];
+        return [InvestmentsRelationManager::class, NomineesRelationManager::class, DocumentsRelationManager::class, WithdrawalNoticesRelationManager::class, BankAccountsRelationManager::class];
     }
 
     public static function getPages(): array

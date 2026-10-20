@@ -43,17 +43,13 @@ class ResolveCompanyFromApiKey
             ], 401);
         }
 
-        // A key only opens the API it was made for: a website key never reads
-        // the purchase and cost feed, and a data-sync key never writes products.
+        // A key only opens the API it was made for: an old data-sync key
+        // (whose API is turned off) never opens the website API.
         if ($apiKey->scope !== $scope) {
             return response()->json([
                 'ok' => false,
                 'error' => 'wrong_key_scope',
-                'hint' => match ($scope) {
-                    CompanyApiKey::SCOPE_SYNC => 'This endpoint needs a "Data sync" API key. Generate one from ZamZam ERP → Settings → Integrations → Website API.',
-                    CompanyApiKey::SCOPE_INVESTOR_SYNC => 'This endpoint needs an "Investor sync" API key. Generate one from ZamZam ERP → Settings → Integrations → Website API.',
-                    default => 'This endpoint needs a "Website" API key; a sync key can only read its own /api/v1/sync/* feed.',
-                },
+                'hint' => 'This endpoint needs a "Website" API key. Generate one from ZamZam ERP → Settings → Integrations → Website API.',
             ], 403);
         }
 

@@ -17,12 +17,32 @@ class Investor extends Model
 
     public const STATUS_WITHDRAWN = 'withdrawn';
 
+    public const STATUS_PENDING = 'pending';
+
+    /** IMS v2 KYC (IMS-V2/PRD.md FR-10–14). */
+    public const KYC_NOT_SUBMITTED = 'not_submitted';
+
+    public const KYC_PENDING = 'pending';
+
+    public const KYC_VERIFIED = 'verified';
+
+    public const KYC_REJECTED = 'rejected';
+
+    public const KYC_STATUSES = [
+        self::KYC_NOT_SUBMITTED => 'Not sent yet',
+        self::KYC_PENDING => 'Waiting for review',
+        self::KYC_VERIFIED => 'Verified',
+        self::KYC_REJECTED => 'Not accepted',
+    ];
+
     protected $fillable = ['company_id', 'name', 'display_name', 'guardian_name', 'date_of_birth', 'phone', 'email', 'address', 'nid_number', 'stamp_number', 'cheque_number', 'channel_partner_id', 'channel_partner_change_reason', 'nominee_name', 'nominee_nid_or_passport', 'nominee_phone', 'nominee_relation', 'nominee_address'];
+
+    protected $attributes = ['kyc_status' => self::KYC_NOT_SUBMITTED];
 
     // nid_number / nominee_nid_or_passport are encrypted at rest (v3 P3) --
     // same `encrypted` cast this app already uses for other sensitive
     // columns (ConversationChannel tokens, StorefrontCartRecord email).
-    protected $casts = ['date_of_birth' => 'date', 'nid_number' => 'encrypted', 'nominee_nid_or_passport' => 'encrypted'];
+    protected $casts = ['date_of_birth' => 'date', 'nid_number' => 'encrypted', 'nominee_nid_or_passport' => 'encrypted', 'kyc_submitted_at' => 'datetime', 'kyc_reviewed_at' => 'datetime', 'kyc_check' => 'array', 'email_verified_at' => 'datetime'];
 
     protected static function booted(): void
     {
@@ -103,6 +123,47 @@ class Investor extends Model
         return $this->morphMany(InvestorBankAccount::class, 'holder');
     }
 
+    /** One to five nominees (IMS-V2/PRD.md FR-06). */
+    public function nominees()
+    {
+        return $this->hasMany(InvestorNominee::class)->orderBy('id');
+    }
+
+    public function kycDocuments()
+    {
+        return $this->hasMany(InvestorKycDocument::class);
+    }
+
+    public function capitalReturns()
+    {
+        return $this->hasMany(CapitalReturn::class);
+    }
+
+    public function portalAccount()
+    {
+        return $this->hasOne(InvestorPortalAccount::class);
+    }
+
+    public function isKycVerified(): bool
+    {
+        return $this->kyc_status === self::KYC_VERIFIED;
+    }
+
+    public static function kycStatusLabel(?string $status): string
+    {
+        return __(self::KYC_STATUSES[$status ?? self::KYC_NOT_SUBMITTED] ?? (string) $status);
+    }
+
+    public static function kycStatusColor(?string $status): string
+    {
+        return match ($status) {
+            self::KYC_VERIFIED => 'success',
+            self::KYC_PENDING => 'warning',
+            self::KYC_REJECTED => 'danger',
+            default => 'gray',
+        };
+    }
+
     /** 60-day written exit notices (v3 P2.4). */
     public function withdrawalNotices()
     {
@@ -124,7 +185,12 @@ class Investor extends Model
             return null;
         }
 
-        return $statuses->contains(Investment::STATUS_ACTIVE) ? self::STATUS_ACTIVE : self::STATUS_WITHDRAWN;
+        return match (true) {
+            $statuses->contains(Investment::STATUS_ACTIVE) => self::STATUS_ACTIVE,
+            // Only money that has not been confirmed yet (IMS v2).
+            $statuses->contains(Investment::STATUS_PENDING) && ! $statuses->contains(Investment::STATUS_WITHDRAWN) => self::STATUS_PENDING,
+            default => self::STATUS_WITHDRAWN,
+        };
     }
 
     /** Investors whose NID / passport number matches, whatever its formatting. */
@@ -188,7 +254,7 @@ class Investor extends Model
 
     public function totalInvestedLifetime(): float
     {
-        return (float) $this->investments()->sum('amount');
+        return (float) $this->investments()->where('status', '!=', Investment::STATUS_PENDING)->sum('amount');
     }
 
     public function totalProfitReceivedLifetime(): float

@@ -8,8 +8,6 @@ use App\Http\Controllers\Api\V1\StorefrontAccountController;
 use App\Http\Controllers\Api\V1\StorefrontCheckoutController;
 use App\Http\Controllers\Api\V1\StorefrontController;
 use App\Http\Controllers\Api\V1\StorefrontOrderTrackingController;
-use App\Http\Controllers\Api\V1\Sync\InvestorSyncController;
-use App\Http\Controllers\Api\V1\Sync\SyncController;
 use App\Http\Middleware\AuthenticateStorefrontCustomer;
 use App\Http\Middleware\EnsureNextjsSiteEnabled;
 use App\Http\Middleware\EnsureStorefrontAccountsEnabled;
@@ -46,35 +44,12 @@ Route::prefix('v1')
     });
 
 /*
-|--------------------------------------------------------------------------
-| Data sync API (v1) — read-only feed for IMS
-|--------------------------------------------------------------------------
-|
-| Needs a "Data sync" key (CompanyApiKey::SCOPE_SYNC); a website key gets a
-| 403 here, and a sync key gets a 403 on the website API. GET only, so the
-| outside system can read the company's business data and change nothing.
-| See docs/api/ims-sync-api.md.
+| The old IMS data-sync API (/api/v1/sync/* and /api/v1/sync/investor/*) was
+| turned off on 2026-10-19 (IMS-V2/PLAN.md phase 7): the old IMS is gone and
+| IMS v2 lives in this app on the same database, so nothing reads it any more,
+| and the investor feed carried NID, phone and bank details. Its paths now
+| answer 404; docs/api/ims-sync-api.md keeps the old contract for reference.
 */
-
-Route::prefix('v1/sync')
-    ->middleware(['throttle:sync-api', ForceJsonResponse::class, ResolveCompanyFromApiKey::class.':sync'])
-    ->group(function (): void {
-        Route::get('ping', [SyncController::class, 'ping']);
-        Route::get('{resource}', [SyncController::class, 'index'])->where('resource', '[a-z-]+');
-    });
-
-/*
-| The investors' side of the same link (owner, 2026-10-15): investors, groups,
-| projects (with how far each has run), investments and payouts. Its own
-| "Investor sync" key, because it carries NID, phone and bank accounts. GET only.
-*/
-Route::prefix('v1/sync/investor')
-    ->middleware(['throttle:sync-api', ForceJsonResponse::class, ResolveCompanyFromApiKey::class.':investor_sync'])
-    ->group(function (): void {
-        Route::get('ping', [InvestorSyncController::class, 'ping']);
-        Route::get('payouts/{payout}/proof', [InvestorSyncController::class, 'proof'])->whereNumber('payout');
-        Route::get('{resource}', [InvestorSyncController::class, 'index'])->where('resource', '[a-z-]+');
-    });
 
 /*
 |--------------------------------------------------------------------------

@@ -73,7 +73,11 @@ class Requests extends Page implements HasTable
                 ->schema([
                     Select::make('type')
                         ->label(__('What is it about?'))
-                        ->options(collect(InvestorRequest::TYPES)->map(fn (string $label): string => __($label))->all())
+                        // IMS v2 (PRD FR-64): questions go to Support as conversations.
+                        ->options(fn (): array => collect(InvestorRequest::TYPES)
+                            ->when($this->company()?->imsIsLive(), fn ($types) => $types->except(InvestorRequest::TYPE_SUPPORT))
+                            ->map(fn (string $label): string => __($label))->all())
+                        ->helperText(fn (): ?string => $this->company()?->imsIsLive() ? __('A question for the office? Use Support instead.') : null)
                         ->required()
                         ->live(),
 

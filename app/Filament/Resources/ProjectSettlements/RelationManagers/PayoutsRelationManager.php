@@ -3,13 +3,13 @@
 namespace App\Filament\Resources\ProjectSettlements\RelationManagers;
 
 use App\Filament\Actions\PayoutProofAction;
-use App\Filament\Resources\Vouchers\VoucherResource;
 use App\Models\InvestorCycleElection;
 use App\Models\SettlementPayout;
 use App\Services\Investment\CycleElectionService;
 use App\Services\Investment\InvestmentTargets;
 use App\Services\Investment\PayoutCompletionService;
 use App\Support\CompanyMedia;
+use App\Support\ImsPanelLinks;
 use App\Support\MoneyFormatter;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -82,11 +82,11 @@ class PayoutsRelationManager extends RelationManager
                 ->label('Voucher')
                 ->badge()
                 ->placeholder('-')
-                ->url(fn (SettlementPayout $record): ?string => $record->voucher_id ? VoucherResource::getUrl('view', ['record' => $record->voucher_id]) : null),
+                ->url(fn (SettlementPayout $record): ?string => $record->voucher_id ? ImsPanelLinks::voucher($record->voucher_id) : null),
             PayoutProofAction::column(),
         ])->recordActions([
             Action::make('report')->label('Report')->icon('heroicon-o-document-text')
-                ->url(fn ($record): string => route('investments.reports.investor-payout', $record))
+                ->url(fn ($record): string => ImsPanelLinks::route('investments.reports.investor-payout', $record))
                 ->openUrlInNewTab(),
             EditAction::make()->visible(fn ($record): bool => $this->payoutsUnlocked() && $record->payment_status === 'pending' && (auth()->user()?->hasPermission('investments.settle') ?? false)),
             Action::make('election')

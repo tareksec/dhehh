@@ -8,10 +8,10 @@ use App\Filament\Resources\InvestmentProjects\RelationManagers\DocumentsRelation
 use App\Filament\Resources\InvestmentRecords\Pages\ViewInvestmentRecord;
 use App\Filament\Resources\InvestmentRecords\RelationManagers\SecurityInstrumentsRelationManager;
 use App\Filament\Resources\InvestmentRecords\RelationManagers\WitnessesRelationManager;
-use App\Filament\Resources\Vouchers\VoucherResource;
 use App\Models\FundSource;
 use App\Models\Investment;
 use App\Services\Investment\InvestmentWithdrawalService;
+use App\Support\ImsPanelLinks;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -56,7 +56,7 @@ class InvestmentRecordResource extends Resource
                     TextEntry::make('withdrawn_at')->label(__('Withdrawn on'))->date(),
                     TextEntry::make('withdrawalVoucher.voucher_number')
                         ->label(__('Withdrawal voucher'))
-                        ->url(fn (Investment $record): ?string => $record->withdrawal_voucher_id ? VoucherResource::getUrl('view', ['record' => $record->withdrawal_voucher_id]) : null)
+                        ->url(fn (Investment $record): ?string => $record->withdrawal_voucher_id ? ImsPanelLinks::voucher($record->withdrawal_voucher_id) : null)
                         ->placeholder('-'),
                     TextEntry::make('withdrawalVoucher.status')->label(__('Voucher status'))->badge()->placeholder('-'),
                     TextEntry::make('withdrawal_note')->label(__('Note'))->placeholder('-')->columnSpanFull(),
@@ -71,7 +71,11 @@ class InvestmentRecordResource extends Resource
 
     public static function statusColor(?string $status): string
     {
-        return $status === Investment::STATUS_WITHDRAWN ? 'gray' : 'success';
+        return match ($status) {
+            Investment::STATUS_WITHDRAWN => 'gray',
+            Investment::STATUS_PENDING => 'warning',
+            default => 'success',
+        };
     }
 
     /**
@@ -85,7 +89,7 @@ class InvestmentRecordResource extends Resource
             ->label(__('Withdraw principal'))
             ->icon(Heroicon::OutlinedArrowUturnLeft)
             ->color('warning')
-            ->visible(fn (Investment $record): bool => ! $record->isWithdrawn() && (Auth::user()?->hasPermission('investments.manage') ?? false))
+            ->visible(fn (Investment $record): bool => ! $record->isWithdrawn() && ! $record->isPending() && (Auth::user()?->hasPermission('investments.manage') ?? false))
             ->modalHeading(fn (Investment $record): string => __('Withdraw :amount from :project', ['amount' => number_format((float) $record->amount), 'project' => (string) ($record->project?->project_code ?: $record->project?->name)]))
             ->modalDescription(__('Use this when the investor has taken their principal back. A pending debit voucher (Investor Payout) is created in Finance for the full amount, and only then is the investment marked withdrawn. The investment stays in the records; it is not deleted.'))
             ->schema([

@@ -86,7 +86,33 @@ Batches), takes payouts out of a draft, downloads the payment list, marks
 failed payments and records the batch as paid. `investments.payout_batch_approve`
 approves a batch. The approver must be a different user from the one who made
 the batch, even for Super Admin. Either permission can cancel a batch that is
-not yet recorded paid. No built-in role except Super Admin holds them.
+not yet recorded paid. Since IMS v2 (2026-10-19, `IMS-V2/ROLES.md` §3.3) a
+Manager holds `payout_batch_approve` and an Accountant `payout_batch_create`
+by default.
+
+IMS v2 permissions (`IMS-V2/ROLES.md` §3.2):
+
+```text
+ims.office.access          open the IMS office (Super Admin, Manager, Accountant)
+ims.kyc.review             approve / turn down KYC (Manager)
+ims.investments.confirm    confirm money received: waiting -> active (Manager)
+ims.proposals.approve      decide profit proposals (Manager)
+ims.settlement.void        void a settlement (Super Admin only)
+ims.capital_returns.manage pay back capital, void a return (Accountant)
+ims.updates.manage         project updates, milestones, reports (Manager)
+ims.feed.write             post to the feed (Manager)
+ims.feed.moderate          hide comments, see who saw a post (Manager)
+ims.support.reply          answer support conversations (Manager)
+ims.reconcile              read and match bank / bKash statements (Accountant)
+ims.settings.manage        IMS settings (Super Admin only)
+ims.money_rules.manage     investor / partner % (Super Admin only)
+ims.domain.manage          the IMS domain (Super Admin only)
+```
+
+A Manager also holds `investments.settle` and `investments.portal_manage` by
+default now. An Accountant never makes an investment active or shares out
+profit. An "office staff" person (support replies, project updates) is set up
+with custom permissions.
 
 `ai_tools.content_creation` is reserved for a future tool — the key exists now
 so role setup does not need revisiting when it ships, but nothing is gated by

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Support\MaturityDate;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -25,19 +26,29 @@ class InvestorGroupMember extends Model
 
     public const STATUS_WITHDRAWN = 'withdrawn';
 
-    public const STATUSES = [self::STATUS_ACTIVE => 'Active', self::STATUS_WITHDRAWN => 'Withdrawn'];
+    /** IMS v2 (PRD FR-22): recorded, the money not confirmed yet; not copied into any project. */
+    public const STATUS_PENDING = 'pending';
+
+    public const STATUSES = [self::STATUS_PENDING => 'Waiting for the money', self::STATUS_ACTIVE => 'Active', self::STATUS_WITHDRAWN => 'Withdrawn'];
 
     protected $fillable = [
         'company_id', 'group_id', 'investor_id', 'amount', 'invested_at', 'payment_method', 'payment_reference',
         'received_by', 'voucher_id', 'status', 'withdrawn_at', 'withdrawal_voucher_id', 'withdrawal_note', 'leaves_after_sequence', 'notes', 'paperwork',
+        'tenor_months', 'maturity_date', 'confirmed_at', 'confirmed_by',
     ];
 
     protected $attributes = ['status' => self::STATUS_ACTIVE];
 
-    protected $casts = ['amount' => 'decimal:2', 'invested_at' => 'date', 'withdrawn_at' => 'date', 'paperwork' => 'array', 'leaves_after_sequence' => 'integer'];
+    protected $casts = ['amount' => 'decimal:2', 'invested_at' => 'date', 'withdrawn_at' => 'date', 'paperwork' => 'array', 'leaves_after_sequence' => 'integer', 'tenor_months' => 'integer', 'maturity_date' => 'date', 'maturity_reminder_sent_at' => 'datetime', 'confirmed_at' => 'datetime'];
 
     protected static function booted(): void
     {
+        static::saving(function (self $member): void {
+            if ($member->isDirty(['tenor_months', 'invested_at'])) {
+                $member->maturity_date = MaturityDate::from($member->invested_at, $member->tenor_months);
+            }
+        });
+
         static::saving(function (self $member): void {
             $group = InvestorGroup::query()->find($member->group_id);
             $investor = Investor::query()->find($member->investor_id);
@@ -102,6 +113,21 @@ class InvestorGroupMember extends Model
     public function isWithdrawn(): bool
     {
         return $this->status === self::STATUS_WITHDRAWN;
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === self::STATUS_PENDING;
+    }
+
+    public function capitalReturns(): HasMany
+    {
+        return $this->hasMany(CapitalReturn::class, 'group_member_id');
+    }
+
+    public function scopePending($query)
+    {
+        return $query->where('status', self::STATUS_PENDING);
     }
 
     public function scopeActive($query)
