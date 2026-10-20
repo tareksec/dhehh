@@ -4,9 +4,18 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Maintenance Update (documentation for AI agents; no change to the app)
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Dark mode for the IMS** (owner request 2026-10-20). Both IMS panels — the investor portal (`/investor`) and the IMS office (`/office`) — now have **light and dark mode**. Light is the default. A round moon button in the top bar (and on the sign-in page) switches to dark, a sun button switches back, and the browser remembers the choice; Filament's own light/dark/system switch in the person menu works too. Green buttons, the balance card and the sign-in panel keep their green with white text; green text gets a lighter shade on dark cards.
+- **New IMS sign-in page** following the owner's reference design (sign in, sign up, forgot password, invite and join pages). Wide screens: one round frame with a green gradient welcome panel on the left — logo, a small badge (*Investor portal* / *IMS office*), the big heading, one line of text and three numbered step cards (the first one white) — and the form on the right with soft grey fields, a full-width green button and, where there is a second way in (sign in with an SMS code), an "Or" line and an outlined button. Phones and tablets: the green panel sits on top with the steps in a row, and the form sheet overlaps it. The light/dark and English/বাংলা switches sit at the top of the form. No stock photos and no invented links; logo and name come from the company settings.
 
 ### Technical Notes
+
+- Both IMS panel providers: `->darkMode()` + `->defaultThemeMode(ThemeMode::Light)`. New views `filament/ims/theme-toggle` (top bar, `GLOBAL_SEARCH_AFTER`; dispatches Filament's `theme-changed`) and `filament/ims/auth-tools` (theme + language switch, `SIMPLE_PAGE_START`); `filament/ims/auth-hero` rewritten with the steps.
+- `resources/css/filament/ims/theme.css`: every hard-coded colour is now a token (`--ims-raised`, `--ims-nav-*`, `--ims-on-primary-*`, `--ims-primary-text` / `-ink`, soft warning/danger/info tones, `--ims-field`, `--ims-auth-*`); `:root.dark` redefines them. Older portal views with grey utility classes and no `dark:` variant are covered by a few dark overrides.
+- 8 new interface strings in `lang/en.json` / `lang/bn.json`. Test: `tests/Feature/Ims/ThemeAndSignInTest.php` (3). No migration.
 
 - **Code map for AI agents** (owner request 2026-10-20): new `CODEBASE_MAP.md` (index) and one file per module in `docs/codebase-map/` (core platform, catalog/inventory, sales/orders/couriers, accounts/finance, Blade storefront, API/integrations, reseller, CRM/messaging, investments/IMS, AI/marketing tools, other apps) with where-to-start files, file tables, routes, main tables and rules. Agents read the index and one module file instead of scanning the repository. Drafted by another agent, then checked against the code: every path exists, every route matches `route:list`, every column appears in a migration; invented migration names, routes and behaviour were removed or corrected. `CLAUDE.md` and `AGENTS.md` now say to read the map first and to update it in the same commit as a structural change.
 

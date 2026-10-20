@@ -3284,5 +3284,13 @@
     "Show \"Seen\" and \"typing...\" while the AI answers": "AI উত্তর লেখার সময় \"Seen\" ও \"টাইপ করছে...\" দেখান",
     "The customer sees the message marked as seen and a typing sign until the answer arrives (Messenger and WhatsApp).": "উত্তর না আসা পর্যন্ত কাস্টমার দেখে যে মেসেজটি দেখা হয়েছে এবং টাইপ করার চিহ্ন (Messenger ও WhatsApp)।",
     "Send product cards on Messenger": "Messenger-এ প্রোডাক্ট কার্ড পাঠান",
-    "After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only.": "প্রোডাক্টের নাম আছে এমন উত্তরের পর Messenger-এর কাস্টমার ছবি, দাম ও একটি বাটনসহ সোয়াইপ করার মতো কার্ডের সারি পাবে। ছবি নেই এমন প্রোডাক্টের কার্ড হয় না। বন্ধ: শুধু লেখা।"
+    "After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only.": "প্রোডাক্টের নাম আছে এমন উত্তরের পর Messenger-এর কাস্টমার ছবি, দাম ও একটি বাটনসহ সোয়াইপ করার মতো কার্ডের সারি পাবে। ছবি নেই এমন প্রোডাক্টের কার্ড হয় না। বন্ধ: শুধু লেখা।",
+    "Or": "অথবা",
+    "IMS office": "আইএমএস অফিস",
+    "Sign in with your staff account": "আপনার স্টাফ অ্যাকাউন্ট দিয়ে সাইন ইন করুন",
+    "Check new money and KYC": "নতুন টাকা ও KYC দেখুন",
+    "Approve profit and payouts": "লাভ ও পেমেন্ট অনুমোদন করুন",
+    "Sign in to your account": "আপনার অ্যাকাউন্টে সাইন ইন করুন",
+    "See your money and profit": "আপনার টাকা ও লাভ দেখুন",
+    "Follow every payout": "প্রতিটি পেমেন্টের খবর রাখুন"
 }

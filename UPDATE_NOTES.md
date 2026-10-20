@@ -2,6 +2,22 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-20 - IMS dark mode and the new sign-in page
+
+Reason - owner (in Bangla): the IMS portal is light only; add dark and light mode with light as the default. The sign-in page looks beginner-level; rebuild it like the reference image the owner sent (another site's "Join Us" page), with our colours and our information, fully responsive on mobile and desktop.
+
+What changed:
+- Investor portal and IMS office: light/dark mode, light by default; a moon/sun button in the top bar and on the sign-in page (Filament's theme store, kept in the browser).
+- Theme colours are tokens with dark values (`:root.dark`); checked in the browser on the dashboard, projects and statement pages (desktop and phone).
+- Sign-in pages rebuilt to the reference layout: frame, green gradient panel with badge, heading, three step cards; form with grey fields, full-width button, "Or" line before the SMS-code button. Phones: panel on top, steps in a row, form sheet below. Checked at 1440, 1280 and 375 px, light and dark, English and Bangla; no horizontal scroll.
+- Left out of the reference on purpose: the Google button and the terms line (no such feature or page here), the emoji.
+
+Verified: `ThemeAndSignInTest` 3 passed; IMS/portal/translation/ModuleGuard tests 173 passed; full suite 2837 passed, 1 skipped, 0 failed; `npm run build` OK.
+
+Needs Bangla review: "আইএমএস অফিস", "আপনার স্টাফ অ্যাকাউন্ট দিয়ে সাইন ইন করুন", "নতুন টাকা ও KYC দেখুন", "লাভ ও পেমেন্ট অনুমোদন করুন", "আপনার অ্যাকাউন্টে সাইন ইন করুন", "আপনার টাকা ও লাভ দেখুন", "প্রতিটি পেমেন্টের খবর রাখুন", "অথবা".
+
+Commit status: committed to `feature/ims-dark-mode-login` (from `main`, not `main`; merging waits for the owner's approval).
+
 ## 2026-10-20 - Code map for AI agents
 
 Reason - owner: new sessions and other agents should not re-scan the whole codebase every time (token cost); a map should say where everything is, and be kept up to date.

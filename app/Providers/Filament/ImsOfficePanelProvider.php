@@ -29,6 +29,7 @@ use App\Http\Middleware\SetImsOfficeLocale;
 use App\Models\Company;
 use App\Services\CompanyContext;
 use App\Services\CompanySettingsService;
+use Filament\Enums\ThemeMode;
 use Filament\FontProviders\LocalFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -74,7 +75,9 @@ class ImsOfficePanelProvider extends PanelProvider
             ->brandLogoHeight('2.5rem')
             ->colors(['primary' => Color::hex(InvestorPanelProvider::IMS_PRIMARY)])
             ->font('Hind Siliguri', provider: LocalFontProvider::class)
-            ->darkMode(false)
+            // Light and dark mode; light until the person picks dark (the moon button in the top bar and on the sign-in page).
+            ->darkMode()
+            ->defaultThemeMode(ThemeMode::Light)
             ->maxContentWidth(Width::Full)
             // The reference look (IMS-V2/DESIGN.md §6.1): the menu as pills in a round
             // top bar, the most used pages in an icon rail on the left.
@@ -124,10 +127,11 @@ class ImsOfficePanelProvider extends PanelProvider
             })
             ->renderHook(PanelsRenderHook::BODY_START, fn (): View => view('filament.ims.icon-rail', ['rail' => OfficeNavigation::rail()]))
             ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn (): View => view('filament.ims.office.language-switch'))
+            ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_AFTER, fn (): View => view('filament.ims.theme-toggle'))
             // Small phones: the language switch sits in the menu drawer instead of the top bar.
             ->renderHook(PanelsRenderHook::SIDEBAR_NAV_START, fn (): View => view('filament.ims.office.language-switch', ['drawer' => true]))
             ->renderHook(PanelsRenderHook::SIMPLE_LAYOUT_START, fn (): View => view('filament.ims.auth-hero', ['panel' => 'office']))
-            ->renderHook(PanelsRenderHook::SIMPLE_PAGE_START, fn (): View => view('filament.ims.office.language-switch', ['simple' => true]))
+            ->renderHook(PanelsRenderHook::SIMPLE_PAGE_START, fn (): View => view('filament.ims.auth-tools', ['panel' => 'office']))
             ->middleware([
                 RestrictPortalHosts::class,
                 ResolveCompanyFromImsDomain::class,

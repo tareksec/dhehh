@@ -1,5 +1,5 @@
 # Investments & IMS v2
-> Last checked: 2026-10-20, commit 0e5316d
+> Last checked: 2026-10-20, branch feature/ims-dark-mode-login (dark mode, sign-in page)
 
 ## What it does
 The Investments & IMS v2 module manages Islamic Mudarabah investment partnerships, syndicated investor pools, commercial project funding, and comprehensive investor relations. Built natively into the application following the retirement of the legacy external IMS, it provides two dedicated Filament 5 panels: the IMS Office back-office panel (`/office`) for investment managers, and the Investor Portal (`/investor`) for self-service investor access. It automates investor onboarding with NID OCR verification, digital agreement acceptance, syndicated investor group lifecycles, and automated daily profit proposals. Additionally, it features an investor transparency feed, scheduled monthly statement generation, capital return queues, bank statement reconciliation, and channel partner commission settlements.
@@ -137,6 +137,10 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `resources/views/ims/pdf/layout.blade.php` | Master print layout for IMS PDF documents with bilingual headers and footers. |
 | `resources/views/ims/pdf/project-report.blade.php` | Printable PDF view for project settlement and financial audit reports. |
 | `resources/views/ims/pdf/statement.blade.php` | Printable monthly investor statement layout. |
+| `resources/css/filament/ims/theme.css` | The shared IMS theme of both panels; colours are tokens, `:root.dark` holds the dark values (light is the default). |
+| `resources/views/filament/ims/auth-hero.blade.php` | Green welcome panel with three steps beside the IMS sign-in forms. |
+| `resources/views/filament/ims/theme-toggle.blade.php` | Light / dark button (top bar and sign-in page), via Filament's theme store. |
+| `resources/views/filament/ims/auth-tools.blade.php` | Theme + language switches above the sign-in forms. |
 | `resources/views/investments/reports/investor-payout.blade.php` | Printable disbursement slip for investor profit payouts. |
 | `resources/views/investments/reports/project-register.blade.php` | Formal project capital register and legal participant schedule. |
 

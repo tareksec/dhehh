@@ -5,8 +5,9 @@
  * office (IMS-V2/DESIGN.md §3–6). The look follows the owner's reference
  * images (IMS-V2/design-references/, 2026-10-19): a light grey ground, white
  * cards with large round corners and almost no shadow, a deep green primary
- * with soft green tints, pill-shaped menu items and buttons. Light mode only
- * for now; every colour is a token so a dark mode can follow.
+ * with soft green tints, pill-shaped menu items and buttons. Light mode is the
+ * default; dark mode (owner request 2026-10-20) redefines the same tokens
+ * under html.dark at the end of this file, so colours come from tokens.
  *
  * The portal's Blade views were drawn with the --portal-* tokens of the old
  * investor theme; they are mapped onto the IMS tokens here, so the balance
@@ -27,6 +28,9 @@
     --ims-primary-deep: #0e6b3e;
     --ims-primary-soft: #dcefe4;
     --ims-primary-tint: #8fc7a7;
+    /* Green as text: links and labels (primary-text), text on a soft green ground (primary-ink). */
+    --ims-primary-text: #16834f;
+    --ims-primary-ink: #0e6b3e;
     --ims-ink: #111418;
     --ims-muted: #6b7280;
     --ims-success: #16a34a;
@@ -35,6 +39,37 @@
     --ims-radius-card: 24px;
     --ims-radius-pill: 999px;
     --ims-shadow: 0 1px 2px rgb(17 20 24 / 0.04);
+    --ims-shadow-pop: 0 12px 32px -4px rgb(17 24 39 / 0.14), 0 4px 12px -2px rgb(17 24 39 / 0.08);
+
+    /* Text on the green surfaces (balance card, chart tip, sign-in panel): the same in both modes. */
+    --ims-on-primary: #ffffff;
+    --ims-on-primary-muted: #dcefe4;
+    --ims-on-primary-faint: #8fc7a7;
+
+    /* Raised surfaces: menu pill on hover, dropdowns. */
+    --ims-raised: #ffffff;
+    --ims-nav-track: #f1f5f9;
+    --ims-nav-track-line: #e2e8f0;
+    --ims-nav-text: #334155;
+    --ims-nav-icon: #64748b;
+    --ims-toggle-hover: #cde9d8;
+
+    /* Soft tones for counts, banners, icons. */
+    --ims-warning-soft: #fdf0d8;
+    --ims-warning-ink: #8a4b05;
+    --ims-warning-banner: #fdf3e1;
+    --ims-warning-icon: #fbe3b8;
+    --ims-danger-soft: #fde2e2;
+    --ims-danger-ink: #a51d1d;
+    --ims-danger-tint: #f0a8a8;
+    --ims-info-soft: #e8eefb;
+    --ims-info-ink: #24406e;
+
+    /* Sign-in page: input fill and the welcome panel's gradient. */
+    --ims-field: #f4f5f7;
+    --ims-auth-from: #0b5a34;
+    --ims-auth-via: #16834f;
+    --ims-auth-to: #4fc98a;
 
     /* The old portal tokens, now IMS colours. */
     --portal-ink: var(--ims-primary);
@@ -239,7 +274,7 @@ body,
     margin-inline-start: 0.25rem;
     font-size: 1.25rem;
     font-weight: 700;
-    color: var(--ims-primary);
+    color: var(--ims-primary-text);
     white-space: nowrap;
 }
 
@@ -253,8 +288,8 @@ body,
     padding: 0.3125rem 0.375rem;
     gap: 0.375rem;
     border-radius: var(--ims-radius-pill);
-    background-color: #f1f5f9;
-    border: 1px solid #e2e8f0;
+    background-color: var(--ims-nav-track);
+    border: 1px solid var(--ims-nav-track-line);
     flex-wrap: nowrap;
     box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.04);
 }
@@ -269,7 +304,7 @@ body,
 }
 
 .fi-topbar-nav-groups .fi-topbar-item-btn:hover {
-    background-color: #ffffff;
+    background-color: var(--ims-raised);
     box-shadow: 0 2px 5px rgb(0 0 0 / 0.06);
 }
 
@@ -279,24 +314,24 @@ body,
     justify-content: center;
     width: 1.125rem;
     height: 1.125rem;
-    color: #64748b;
+    color: var(--ims-nav-icon);
     flex-shrink: 0;
     transition: color 150ms ease;
 }
 
 .fi-topbar-nav-groups .fi-topbar-item-btn:hover .fi-topbar-item-icon {
-    color: var(--ims-primary);
+    color: var(--ims-primary-text);
 }
 
 .fi-topbar-nav-groups .fi-topbar-item-label {
     font-size: 0.9375rem;
     font-weight: 600;
-    color: #334155;
+    color: var(--ims-nav-text);
     transition: color 150ms ease;
 }
 
 .fi-topbar-nav-groups .fi-topbar-item-btn:hover .fi-topbar-item-label {
-    color: var(--ims-primary-deep);
+    color: var(--ims-primary-ink);
 }
 
 /* Active item: strongly highlighted in Emerald Green */
@@ -317,7 +352,7 @@ body,
 .fi-topbar-nav-groups .fi-topbar-group-toggle-icon {
     width: 0.875rem;
     height: 0.875rem;
-    color: #64748b;
+    color: var(--ims-nav-icon);
     margin-inline-start: 0.125rem;
     transition: color 150ms ease, transform 150ms ease;
 }
@@ -327,7 +362,7 @@ body,
 }
 
 .fi-topbar-nav-groups .fi-topbar-item-btn:hover .fi-topbar-group-toggle-icon {
-    color: var(--ims-primary);
+    color: var(--ims-primary-text);
 }
 
 .fi-topbar-end {
@@ -392,9 +427,9 @@ body,
 .fi-dropdown-panel {
     border-radius: 1.25rem;
     padding: 0.375rem;
-    background-color: #ffffff;
+    background-color: var(--ims-raised);
     border: 1px solid var(--ims-line);
-    box-shadow: 0 12px 32px -4px rgb(17 24 39 / 0.14), 0 4px 12px -2px rgb(17 24 39 / 0.08);
+    box-shadow: var(--ims-shadow-pop);
 }
 
 .fi-dropdown-list-item {
@@ -402,13 +437,13 @@ body,
     border-radius: 0.75rem;
     padding-inline: 0.875rem;
     font-weight: 500;
-    color: #1e293b;
+    color: var(--ims-ink);
     transition: all 120ms ease;
 }
 
 .fi-dropdown-list-item:hover {
     background-color: var(--ims-primary-soft);
-    color: var(--ims-primary-deep);
+    color: var(--ims-primary-ink);
     font-weight: 600;
 }
 
@@ -450,7 +485,7 @@ body,
     html.ims-rail-hovered .fi-body.fi-body-has-top-navigation .ims-rail,
     .fi-body.fi-body-has-top-navigation .ims-rail:hover {
         width: 16.5rem;
-        box-shadow: 0 12px 32px -4px rgb(17 24 39 / 0.14), 0 4px 12px -2px rgb(17 24 39 / 0.08);
+        box-shadow: var(--ims-shadow-pop);
     }
 
     /* Smooth padding on the main content container: perfectly aligned, ZERO OVERLAP */
@@ -514,7 +549,7 @@ body,
 }
 
 .ims-rail-group + .ims-rail-group {
-    border-top: 1px solid #f1f5f9;
+    border-top: 1px solid var(--ims-line);
     padding-top: 0.375rem;
 }
 
@@ -583,19 +618,19 @@ html.ims-rail-hovered .ims-rail-label,
 }
 
 .ims-rail-toggle {
-    color: var(--ims-primary);
+    color: var(--ims-primary-text);
     background-color: var(--ims-primary-soft);
     font-weight: 600;
 }
 
 .ims-rail-toggle:hover {
-    background-color: #cde9d8;
-    color: var(--ims-primary-deep);
+    background-color: var(--ims-toggle-hover);
+    color: var(--ims-primary-ink);
 }
 
 .ims-rail-btn:hover {
     background-color: var(--ims-page);
-    color: var(--ims-primary-deep);
+    color: var(--ims-primary-ink);
 }
 
 .ims-rail-btn-active,
@@ -746,7 +781,7 @@ html.ims-rail-hovered .ims-rail-label,
 }
 
 .fi-investor-mobile-nav a[aria-current] {
-    color: var(--ims-primary);
+    color: var(--ims-primary-text);
     font-weight: 700;
 }
 
@@ -1025,7 +1060,7 @@ html.ims-rail-hovered .ims-rail-label,
 }
 
 .ims-balance-card .ims-label {
-    color: var(--ims-primary-soft);
+    color: var(--ims-on-primary-muted);
     font-size: 0.8125rem;
 }
 
@@ -1042,7 +1077,7 @@ html.ims-rail-hovered .ims-rail-label,
     justify-content: space-between;
     gap: 0.75rem;
     font-size: 0.875rem;
-    color: var(--ims-primary-soft);
+    color: var(--ims-on-primary-muted);
 }
 
 .ims-balance-split {
@@ -1059,7 +1094,7 @@ html.ims-rail-hovered .ims-rail-label,
 
 .ims-balance-split dt {
     font-size: 0.8125rem;
-    color: var(--ims-primary-soft);
+    color: var(--ims-on-primary-muted);
 }
 
 .ims-balance-split dd {
@@ -1073,7 +1108,7 @@ html.ims-rail-hovered .ims-rail-label,
 }
 
 .ims-balance-card .ims-amount-minor {
-    color: var(--ims-primary-tint);
+    color: var(--ims-on-primary-faint);
 }
 
 /* KPI cards (DESIGN.md §7 KpiCard, PillBadge). */
@@ -1144,18 +1179,18 @@ html.ims-rail-hovered .ims-rail-label,
 }
 
 .ims-count-warning {
-    background-color: #fdf0d8;
-    color: #8a4b05;
+    background-color: var(--ims-warning-soft);
+    color: var(--ims-warning-ink);
 }
 
 .ims-count-danger {
-    background-color: #fde2e2;
-    color: #a51d1d;
+    background-color: var(--ims-danger-soft);
+    color: var(--ims-danger-ink);
 }
 
 .ims-count-info {
     background-color: var(--ims-primary-soft);
-    color: var(--ims-primary-deep);
+    color: var(--ims-primary-ink);
 }
 
 .ims-todo {
@@ -1173,7 +1208,7 @@ html.ims-rail-hovered .ims-rail-label,
 }
 
 a.ims-todo-link:hover .ims-todo-label {
-    color: var(--ims-primary-deep);
+    color: var(--ims-primary-ink);
 }
 
 .ims-todo-label {
@@ -1214,7 +1249,7 @@ a.ims-todo-link:hover .ims-todo-label {
 }
 
 .ims-status-warning {
-    background-color: #fdf0d8;
+    background-color: var(--ims-warning-soft);
 }
 
 .ims-status-warning .ims-status-dot {
@@ -1251,9 +1286,9 @@ a.ims-todo-link:hover .ims-todo-label {
 }
 
 .ims-avatar-tone-0 { background-color: #fde7c8; color: #7a4a06; }
-.ims-avatar-tone-1 { background-color: #dbe7fb; color: #24406e; }
+.ims-avatar-tone-1 { background-color: #dbe7fb; color: var(--ims-info-ink); }
 .ims-avatar-tone-2 { background-color: #f6dcdc; color: #7c2121; }
-.ims-avatar-tone-3 { background-color: var(--ims-primary-soft); color: var(--ims-primary-deep); }
+.ims-avatar-tone-3 { background-color: var(--ims-primary-soft); color: var(--ims-primary-ink); }
 
 .ims-avatar-more {
     background-color: var(--ims-primary);
@@ -1476,7 +1511,7 @@ a.ims-todo-link:hover .ims-todo-label {
 }
 
 .ims-chart-bar-loss {
-    background-color: #f0a8a8;
+    background-color: var(--ims-danger-tint);
 }
 
 .ims-chart-bar-loss.ims-chart-bar-on {
@@ -1499,7 +1534,7 @@ a.ims-todo-link:hover .ims-todo-label {
 }
 
 .ims-chart-tip .ims-amount-minor {
-    color: var(--ims-primary-soft);
+    color: var(--ims-on-primary-muted);
 }
 
 .ims-chart-tip::after {
@@ -1511,7 +1546,7 @@ a.ims-todo-link:hover .ims-todo-label {
     height: 0.625rem;
     margin-top: 0.25rem;
     transform: translateX(-50%);
-    border: 2px solid #ffffff;
+    border: 2px solid var(--ims-card);
     border-radius: 999px;
     background-color: var(--ims-primary);
 }
@@ -1694,7 +1729,7 @@ a.ims-group-tile[href]:hover {
     height: 3.25rem;
     border-radius: 1.125rem;
     background-color: var(--ims-primary-soft);
-    color: var(--ims-primary-deep);
+    color: var(--ims-primary-ink);
     transition: background-color 75ms;
 }
 
@@ -1729,7 +1764,7 @@ a.ims-group-tile[href]:hover {
     min-height: 2.75rem;
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--ims-primary);
+    color: var(--ims-primary-text);
     text-decoration: none;
     white-space: nowrap;
 }
@@ -1750,12 +1785,12 @@ a.ims-group-tile[href]:hover {
 }
 
 .ims-banner-warning {
-    background-color: #fdf3e1;
+    background-color: var(--ims-warning-banner);
 }
 
 .ims-banner-warning .ims-card-icon {
-    background-color: #fbe3b8;
-    color: #8a4b05;
+    background-color: var(--ims-warning-icon);
+    color: var(--ims-warning-ink);
 }
 
 .ims-banner-text {
@@ -1770,7 +1805,7 @@ a.ims-group-tile[href]:hover {
 }
 
 .ims-pill-on-green .ims-amount-minor {
-    color: var(--ims-primary-soft);
+    color: var(--ims-on-primary-muted);
 }
 
 /* Transaction list (DESIGN.md §7 TransactionList). */
@@ -1804,17 +1839,17 @@ a.ims-group-tile[href]:hover {
 
 .ims-tx-icon-in {
     background-color: var(--ims-primary-soft);
-    color: var(--ims-primary-deep);
+    color: var(--ims-primary-ink);
 }
 
 .ims-tx-icon-out {
-    background-color: #e8eefb;
-    color: #24406e;
+    background-color: var(--ims-info-soft);
+    color: var(--ims-info-ink);
 }
 
 .ims-tx-icon-loss {
-    background-color: #fde2e2;
-    color: #a51d1d;
+    background-color: var(--ims-danger-soft);
+    color: var(--ims-danger-ink);
 }
 
 .ims-tx-icon-neutral {
@@ -2008,7 +2043,13 @@ a.ims-group-tile[href]:hover {
     background-color: var(--ims-primary);
 }
 
-/* ---------- Sign-in pages: the green welcome panel beside the form (DESIGN.md §8.1) ---------- */
+/* ---------- Sign-in pages (owner's reference sign-in page, 2026-10-20) ----------
+ * Wide screens: one big round frame on the page ground; inside it the coloured
+ * welcome panel on the left (logo, badge, heading, three step cards) and the
+ * form on the right with soft grey fields and a full-width green button.
+ * Phones and tablets: the welcome panel is a short block on top, the form sheet
+ * overlaps its lower edge.
+ */
 
 .fi-simple-layout {
     background-color: var(--ims-page);
@@ -2026,38 +2067,167 @@ a.ims-group-tile[href]:hover {
 
 .fi-simple-main {
     border-radius: 2rem;
+    background-color: var(--ims-card);
     box-shadow: 0 12px 40px -24px rgb(17 20 24 / 0.25);
     --tw-ring-color: transparent;
 }
 
-.fi-simple-layout .fi-btn {
-    width: 100%;
-    min-height: 3rem;
+.fi-simple-page {
+    position: relative;
 }
 
-.fi-simple-layout .fi-input-wrp {
-    min-height: 3rem;
-    border-radius: 1rem;
+/* Theme + language switches in the form's top corner. */
+.ims-auth-tools {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.ims-auth-tools .fi-investor-language-simple,
+.ims-auth-tools .fi-ims-language-simple {
+    align-self: auto;
+    margin: 0;
+    background-color: var(--ims-field);
+}
+
+.ims-auth-tools .ims-theme-toggle {
+    border-color: transparent;
+    background-color: var(--ims-field);
+}
+
+/* The heading: big and centred, like "Join Us" in the reference. */
+.fi-simple-header {
+    align-items: center;
+    text-align: center;
 }
 
 .fi-simple-header-heading {
-    font-size: 1.5rem;
-    font-weight: 700;
+    font-size: clamp(1.75rem, 1.4rem + 1.2vw, 2.25rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--ims-ink);
 }
 
+.fi-simple-header-subheading {
+    color: var(--ims-muted);
+}
+
+/* Labels above soft grey fields with no border. */
+.fi-simple-layout .fi-fo-field-label-content {
+    font-weight: 600;
+    color: var(--ims-ink);
+}
+
+.fi-simple-layout .fi-input-wrp {
+    min-height: 3.25rem;
+    border-radius: 0.875rem;
+    background-color: var(--ims-field);
+    --tw-ring-color: transparent;
+    box-shadow: none;
+    transition: box-shadow 120ms, background-color 120ms;
+}
+
+.fi-simple-layout .fi-input-wrp:focus-within {
+    background-color: var(--ims-card);
+    box-shadow: 0 0 0 2px var(--ims-primary);
+}
+
+.fi-simple-layout .fi-input-wrp .fi-input {
+    background-color: transparent;
+    color: var(--ims-ink);
+}
+
+.fi-simple-layout .fi-input-wrp.fi-invalid {
+    box-shadow: 0 0 0 2px var(--ims-danger);
+}
+
+/* The main button: full width, tall, a softer rounded rectangle as in the reference. */
+.fi-simple-layout .fi-btn {
+    width: 100%;
+    min-height: 3.25rem;
+    border-radius: 0.875rem;
+    font-size: 1rem;
+}
+
+/* A second way in ("Sign in with an SMS code instead"): "Or" line, then an outlined button. */
+.fi-simple-main .fi-sc-actions .fi-ac {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+}
+
+.fi-simple-main .fi-sc-actions .fi-ac > .fi-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 3.25rem;
+    margin-top: 2.25rem;
+    border: 1px solid var(--ims-line);
+    border-radius: 0.875rem;
+    background-color: var(--ims-card);
+    color: var(--ims-ink);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.fi-simple-main .fi-sc-actions .fi-ac > .fi-link:hover {
+    background-color: var(--ims-field);
+}
+
+.fi-simple-main .fi-sc-actions .fi-ac > .fi-link .fi-link-label,
+.fi-simple-main .fi-sc-actions .fi-ac > .fi-link .fi-icon {
+    color: var(--ims-ink);
+}
+
+.fi-simple-main .fi-sc-actions .fi-ac > .fi-link::before {
+    content: var(--ims-or-label, '');
+    position: absolute;
+    z-index: 1;
+    top: -2.25rem;
+    left: 50%;
+    transform: translateX(-50%);
+    padding-inline: 0.75rem;
+    background-color: var(--ims-card);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.5rem;
+    color: var(--ims-muted);
+    pointer-events: none;
+}
+
+/* The line behind "Or". */
+.fi-simple-main .fi-sc-actions .fi-ac > .fi-link::after {
+    content: '';
+    position: absolute;
+    top: calc(-2.25rem + 0.75rem);
+    left: 0;
+    right: 0;
+    height: 1px;
+    background-color: var(--ims-line);
+    pointer-events: none;
+}
+
+/* The welcome panel. */
 .ims-auth-hero {
     position: relative;
     overflow: hidden;
+    isolation: isolate;
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 1.5rem;
     width: 100%;
-    padding: 1.5rem 1.25rem 3.5rem;
-    background-color: var(--ims-primary);
+    padding: 1.25rem 1.25rem 3.5rem;
+    color: var(--ims-on-primary);
+    background-color: var(--ims-auth-via);
     background-image:
-        radial-gradient(circle at 105% -5%, rgb(255 255 255 / 0.16) 0 9rem, transparent 9.05rem),
-        radial-gradient(circle at -10% 110%, rgb(0 0 0 / 0.14) 0 12rem, transparent 12.05rem);
-    color: #ffffff;
+        radial-gradient(60% 55% at 30% 18%, rgb(255 255 255 / 0.28), transparent 70%),
+        radial-gradient(55% 60% at 85% 60%, var(--ims-auth-to), transparent 72%),
+        radial-gradient(70% 60% at 10% 100%, var(--ims-auth-to), transparent 70%),
+        linear-gradient(150deg, var(--ims-auth-from) 0%, var(--ims-auth-via) 45%, var(--ims-auth-from) 100%);
 }
 
 .ims-auth-brand {
@@ -2069,6 +2239,7 @@ a.ims-group-tile[href]:hover {
 
 .ims-auth-logo {
     display: inline-flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: center;
     height: 2.75rem;
@@ -2088,30 +2259,98 @@ a.ims-group-tile[href]:hover {
     overflow-wrap: anywhere;
 }
 
+.ims-auth-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
 .ims-auth-copy {
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
     gap: 0.75rem;
 }
 
+.ims-auth-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.875rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: rgb(255 255 255 / 0.18);
+    border: 1px solid rgb(255 255 255 / 0.22);
+    backdrop-filter: blur(6px);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
 .ims-auth-heading {
-    font-size: clamp(1.625rem, 1.2rem + 2vw, 2.75rem);
-    font-weight: 700;
-    line-height: 1.15;
-    letter-spacing: -0.02em;
+    font-size: clamp(1.625rem, 1.1rem + 2.4vw, 3.25rem);
+    font-weight: 600;
+    line-height: 1.12;
+    letter-spacing: -0.025em;
 }
 
 .ims-auth-text {
-    max-width: 30rem;
-    color: var(--ims-primary-soft);
+    max-width: 32rem;
+    color: var(--ims-on-primary-muted);
     font-size: 1rem;
 }
 
-.ims-auth-preview {
-    display: none;
+/* Three numbered step cards; the first is white. */
+.ims-auth-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
 }
 
-/* Phones: the form sheet slides up over the green block. */
+.ims-auth-step {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-width: 0;
+    padding: 0.75rem;
+    border-radius: 1rem;
+    background-color: rgb(255 255 255 / 0.14);
+    border: 1px solid rgb(255 255 255 / 0.16);
+    backdrop-filter: blur(6px);
+    color: rgb(255 255 255 / 0.82);
+}
+
+.ims-auth-step-on {
+    background-color: #ffffff;
+    border-color: #ffffff;
+    color: #111418;
+}
+
+.ims-auth-step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: var(--ims-radius-pill);
+    border: 1px solid rgb(255 255 255 / 0.5);
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.ims-auth-step-on .ims-auth-step-number {
+    border-color: var(--ims-auth-via);
+    background-color: var(--ims-auth-via);
+    color: #ffffff;
+}
+
+.ims-auth-step-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+/* Phones and tablets: the form sheet slides up over the green block. */
 @media (max-width: 1023.98px) {
     .fi-simple-main-ctn {
         margin-top: -2rem;
@@ -2121,7 +2360,6 @@ a.ims-group-tile[href]:hover {
     .fi-simple-main {
         margin-top: 0;
         margin-bottom: 2rem;
-        border-radius: 2rem;
     }
 }
 
@@ -2131,89 +2369,215 @@ a.ims-group-tile[href]:hover {
     }
 
     .fi-simple-main {
-        padding: 2rem 1.25rem;
+        padding: 1.5rem 1.125rem 2rem;
+    }
+
+    .ims-auth-hero {
+        gap: 1.25rem;
+        padding: 1rem 1rem 3.25rem;
+    }
+
+    .ims-auth-step {
+        padding: 0.625rem;
+        gap: 0.5rem;
+    }
+
+    .ims-auth-step-label {
+        font-size: 0.75rem;
     }
 }
 
-/* Wide screens: the welcome panel on the left, the form on the right. */
+/* Wide screens: one round frame, the welcome panel on the left, the form on the right. */
 @media (min-width: 1024px) {
     .fi-simple-layout {
         display: grid;
-        grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
         align-items: stretch;
-        padding: 1rem;
-        gap: 1rem;
+        width: min(100% - 2.5rem, 80rem);
+        min-height: calc(100dvh - 2.5rem);
+        margin: 1.25rem auto;
+        padding: 0.625rem;
+        gap: 0;
+        border-radius: 2.25rem;
+        background-color: var(--ims-card);
+        box-shadow: 0 24px 60px -32px rgb(17 20 24 / 0.3);
+    }
+
+    .fi-body:has(.fi-simple-layout) {
+        background-color: var(--ims-page);
     }
 
     .ims-auth-hero {
         grid-column: 1;
         grid-row: 1 / span 3;
-        min-height: calc(100dvh - 2rem);
         justify-content: space-between;
+        gap: 2rem;
         padding: 2.5rem;
-        border-radius: 2rem;
+        border-radius: 1.75rem;
+    }
+
+    .ims-auth-body {
+        gap: 2.25rem;
+    }
+
+    .ims-auth-steps {
+        gap: 0.875rem;
+    }
+
+    .ims-auth-step {
+        min-height: 8.5rem;
+        padding: 1rem;
+        border-radius: 1.25rem;
+    }
+
+    .ims-auth-step-label {
+        font-size: 0.9375rem;
     }
 
     .fi-simple-main-ctn {
         grid-column: 2;
         grid-row: 1 / span 3;
-    }
-
-    .fi-simple-main {
-        margin-block: 2rem;
-    }
-
-    .ims-auth-preview {
-        display: grid;
-        grid-template-columns: 1fr 1.3fr;
-        gap: 1rem;
-        max-width: 34rem;
-    }
-
-    .ims-auth-preview-card {
         display: flex;
-        flex-direction: column;
-        gap: 0.625rem;
-        padding: 1.25rem;
-        border-radius: 1.5rem;
-        background-color: rgb(255 255 255 / 0.12);
-        backdrop-filter: blur(2px);
+        align-items: center;
+        justify-content: center;
+        padding: 2rem clamp(1.5rem, 4vw, 4rem);
     }
 
-    .ims-auth-preview-balance {
-        justify-content: flex-end;
-        background-color: #ffffff;
+    /* The form lives in the frame itself: no second card. */
+    .fi-simple-main {
+        width: 100%;
+        max-width: 26rem;
+        margin: 0;
+        padding: 0;
+        border-radius: 0;
+        background-color: transparent;
+        box-shadow: none;
+    }
+}
+
+/* ---------- Light / dark switch (top bar and sign-in page) ---------- */
+
+.ims-theme-toggle {
+    cursor: pointer;
+    transition: background-color 120ms, color 120ms;
+}
+
+.ims-theme-toggle:hover {
+    background-color: var(--ims-primary-soft);
+    color: var(--ims-primary-ink);
+}
+
+.ims-theme-toggle:focus-visible {
+    outline: 3px solid var(--ims-primary-tint);
+    outline-offset: 2px;
+}
+
+.ims-theme-toggle-sun,
+.dark .ims-theme-toggle-moon {
+    display: none;
+}
+
+.dark .ims-theme-toggle-sun {
+    display: inline-block;
+}
+
+/* ---------- Dark mode (owner request 2026-10-20) ----------
+ * The same tokens, dark values. Green surfaces (buttons, balance card, the
+ * sign-in panel) keep their colour and white text; green used as text gets a
+ * lighter shade so it reads on the dark cards.
+ */
+
+:root.dark {
+    color-scheme: dark;
+
+    --ims-page: #0b0f13;
+    --ims-card: #141a20;
+    --ims-line: #262e37;
+    --ims-primary: #16834f;
+    --ims-primary-deep: #11a05f;
+    --ims-primary-soft: #133a28;
+    --ims-primary-tint: #2f7d55;
+    --ims-primary-text: #4cc387;
+    --ims-primary-ink: #8be0b4;
+    --ims-ink: #e7eaee;
+    --ims-muted: #9aa4b1;
+    --ims-success: #22c55e;
+    --ims-warning: #f59e0b;
+    --ims-danger: #ef4444;
+    --ims-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+    --ims-shadow-pop: 0 16px 40px -8px rgb(0 0 0 / 0.6), 0 4px 12px -2px rgb(0 0 0 / 0.4);
+
+    --ims-raised: #1c242c;
+    --ims-nav-track: #0f1418;
+    --ims-nav-track-line: #262e37;
+    --ims-nav-text: #c9d0d8;
+    --ims-nav-icon: #8d97a3;
+    --ims-toggle-hover: #1a4a33;
+
+    --ims-warning-soft: #3a2a10;
+    --ims-warning-ink: #fcd38a;
+    --ims-warning-banner: #2b2112;
+    --ims-warning-icon: #4a3512;
+    --ims-danger-soft: #3d1a1a;
+    --ims-danger-ink: #fca5a5;
+    --ims-danger-tint: #8a3a3a;
+    --ims-info-soft: #18243b;
+    --ims-info-ink: #b7c9f0;
+
+    --ims-field: #1c242c;
+    --ims-auth-from: #06371f;
+    --ims-auth-via: #0f6b3f;
+    --ims-auth-to: #1f9d5f;
+}
+
+/* Filament's own cards, tables and top bar use the IMS dark card colour. */
+.dark .fi-section:not(.fi-section-not-contained),
+.dark .fi-ta-ctn,
+.dark .fi-wi-stats-overview-stat,
+.dark .fi-modal-window,
+.dark .fi-simple-main {
+    background-color: var(--ims-card);
+}
+
+.dark .fi-topbar-nav-groups .fi-topbar-item-btn:hover {
+    box-shadow: none;
+}
+
+.dark .fi-topbar-nav-groups .fi-topbar-item.fi-active .fi-topbar-item-btn {
+    box-shadow: 0 4px 14px -4px rgb(22 131 79 / 0.6);
+}
+
+/* Soft initials and status tones. */
+.dark .ims-avatar-tone-0 { background-color: #3a2a10; color: #fcd38a; }
+.dark .ims-avatar-tone-1 { background-color: #18243b; color: #b7c9f0; }
+.dark .ims-avatar-tone-2 { background-color: #3d1a1a; color: #fca5a5; }
+
+.dark .ims-chart-bar {
+    background-image: repeating-linear-gradient(135deg, rgb(255 255 255 / 0.08) 0 2px, transparent 2px 8px);
+}
+
+/* Older portal views drawn with grey utility classes and no dark variant. */
+.dark .fi-body .text-gray-500,
+.dark .fi-body .text-gray-600 {
+    color: var(--ims-muted);
+}
+
+.dark .fi-body .bg-gray-50,
+.dark .fi-body .bg-gray-100 {
+    background-color: var(--ims-raised);
+}
+
+.dark .fi-body .bg-primary-50 {
+    background-color: var(--ims-primary-soft);
+}
+
+/* The sign-in frame on a dark page. */
+@media (min-width: 1024px) {
+    .dark .fi-simple-layout {
+        box-shadow: 0 0 0 1px var(--ims-line), 0 24px 60px -32px rgb(0 0 0 / 0.8);
     }
 
-    .ims-auth-preview-line {
-        display: block;
-        height: 0.5rem;
-        border-radius: 999px;
-        background-color: var(--ims-primary-soft);
-    }
-
-    .ims-auth-preview-big {
-        display: block;
-        width: 80%;
-        height: 1.5rem;
-        border-radius: 999px;
-        background-color: var(--ims-primary);
-    }
-
-    .ims-auth-preview-chart {
-        flex-direction: row;
-        align-items: flex-end;
-        height: 10rem;
-    }
-
-    .ims-auth-preview-bar {
-        flex: 1 1 0;
-        border-radius: 999px;
-        background-color: rgb(255 255 255 / 0.35);
-        background-image: repeating-linear-gradient(135deg, rgb(255 255 255 / 0.25) 0 2px, transparent 2px 8px);
-    }
-
-    .ims-auth-preview-bar-on {
-        background-color: #ffffff;
+    .dark .fi-simple-main {
+        background-color: transparent;
     }
 }

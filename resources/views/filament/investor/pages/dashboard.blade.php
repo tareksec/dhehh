@@ -154,7 +154,7 @@
                         </div>
                         <div class="flex flex-wrap items-center gap-5">
                             <svg viewBox="0 0 150 150" class="size-32 shrink-0 -rotate-90" role="img" aria-label="{{ collect($shares)->map(fn ($s) => $s['code'].' '.$s['percent'].'%')->implode(', ') }}">
-                                <circle cx="75" cy="75" r="60" fill="none" stroke-width="20" class="stroke-[#eef0f2]" />
+                                <circle cx="75" cy="75" r="60" fill="none" stroke-width="20" class="stroke-[#eef0f2] dark:stroke-white/10" />
                                 @foreach ($shares as $share)
                                     <circle cx="75" cy="75" r="60" fill="none" stroke-width="20" stroke-linecap="round" class="{{ $tones[$share['tone']] }}" stroke-dasharray="{{ $share['dash'] }} 377" stroke-dashoffset="{{ $share['offset'] }}" />
                                 @endforeach
