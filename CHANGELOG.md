@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.91.0] - 2026-10-20
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -32,7 +34,6 @@ All notable production changes to Business Dashboard are documented here.
 - Both IMS panel providers: `->darkMode()` + `->defaultThemeMode(ThemeMode::Light)`. New views `filament/ims/theme-toggle` (top bar, `GLOBAL_SEARCH_AFTER`; dispatches Filament's `theme-changed`) and `filament/ims/auth-tools` (theme + language switch, `SIMPLE_PAGE_START`); `filament/ims/auth-hero` rewritten with the steps.
 - `resources/css/filament/ims/theme.css`: every hard-coded colour is now a token (`--ims-raised`, `--ims-nav-*`, `--ims-on-primary-*`, `--ims-primary-text` / `-ink`, soft warning/danger/info tones, `--ims-field`, `--ims-auth-*`); `:root.dark` redefines them. Older portal views with grey utility classes and no `dark:` variant are covered by a few dark overrides.
 - 8 new interface strings in `lang/en.json` / `lang/bn.json`. Test: `tests/Feature/Ims/ThemeAndSignInTest.php` (3). No migration.
-
 ## [2.90.1] - 2026-10-20
 
 **Release type:** Maintenance Update
