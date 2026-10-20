@@ -4,6 +4,10 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.93.0] - 2026-10-20
+
+**Release type:** Minor Feature Update
+
 ### Added
 
 - **Orders still open in Nuport come in as live orders** (owner decision 2026-10-20: most of the 51 approved-but-never-shipped orders are real and are shipped from the ERP). In the **Import Nuport orders** dialog the new switch **Bring open orders in as live orders** (on by default; `--open-live` for the terminal command) imports every order that Nuport still has Approved or Processing and that has no courier parcel as a live order, source **Nuport (open order)**: it takes its stock out of the shelf, can be booked with a courier, tracked, texted and finished from the ERP like any order, and a later import file never changes it. Only the "New order received" alert and the risk check are skipped at import time, because the order is not new. The preview says how many open orders come in, how many pieces they take, how many were placed over 30 days ago (to check or cancel) and which products are short; a plain product's stock can go below zero, a colour's stock stops at 0. Orders that already have a courier parcel stay history. Turn the switch off to bring them in as history, as before.
