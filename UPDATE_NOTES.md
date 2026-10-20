@@ -14,7 +14,7 @@ What changed:
 
 Verified: `InvestorBusinessSwitchTest` 21 passed (5 new: sign-in opens the other business, own business first, one-business sign-in unchanged, switch stays on the domain and `/office/login` still opens, stale choice ignored). Full suite: 2842 passed, 1 skipped, 0 failed.
 
-Commit status: committed and pushed to `feature/ims-domain-multi-business-login`; not merged into `main` (waits for owner approval).
+Commit status: committed and pushed to `feature/ims-domain-multi-business-login`, merged into `main` on owner approval (2026-10-20).
 
 ## 2026-10-20 - Phase M: one login for all businesses (all of plan §5)
 
