@@ -4,6 +4,10 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.92.0] - 2026-10-20
+
+**Release type:** Minor Feature Update
+
 ### Added
 
 - **Nuport import keeps the sales channel, the returned pieces and the courier parcels** (owner request 2026-10-20, so the reports can use them). Nuport's *Order Source* (WhatsApp, Website, Live chat, Messenger, Offline, Other) becomes the order's **Sales channel**: a column on the Orders list (hidden until you switch it on), a filter, and a badge on the order page. Nuport's *Cancelled/Returned/Damaged Qty* becomes each line's **Returned** pieces (shown on the order page when above 0; a cancelled order has none, because it never shipped). A parcel with a consignment number whose delivery is over (delivered, partly delivered, returned, cancelled) becomes a **courier booking**, so the courier performance report, the delivery history of the customer and the COD figures count it; a parcel still on the way is not recorded and keeps its consignment number in the order note. The booking uses the company's courier of the same name (Steadfast, Pathao, ...); a courier the ERP does not have is created switched off and without an API, so staff cannot book with it by mistake. The import preview and result list the channels, the bookings per courier, any courier to be created and the parcels left in the note. Importing the same file again never doubles a booking, and a newer file fills the channel and the booking of an order imported earlier. Nuport's *Entry By* is one name on every order and *Customer Tag* is Nuport's own label, so neither is kept.
@@ -16,7 +20,6 @@ All notable production changes to Business Dashboard are documented here.
 
 - `OrderForm`'s `courier_provider_id` select adds `OR id = <the order's courier_provider_id>` to its active-couriers query (covered by `NuportOrderImportTest::test_an_imported_order_of_a_zero_stock_product_shows_normally_and_never_asks_for_stock`, whose imported order has a switched-off courier). Migration `2026_10_20_100000_add_sales_channel_to_orders_and_returned_quantity_to_order_items` (nullable `orders.sales_channel` with a `company_id` + `sales_channel` index; `order_items.returned_quantity` unsigned, default 0). **Deploy: run `php artisan migrate --force`.** `Order::SALES_CHANNELS` / `Order::salesChannelLabel()`; a channel Nuport adds later is stored as snake case and shown as a headline.
 - `NuportOrderImportService`: `plan()` adds `sales_channel`, `booking` and `open_consignment`; `bookingPlan()` records only final courier statuses (`BOOKING_STATUSES`), so `couriers:sync-statuses` never polls an imported parcel and no stale-booking alert fires; `syncBooking()` saves quietly (no `CourierStatusLog`, no SMS, no customer risk review) and is idempotent per order + tracking id; `cod_amount` is Sales Amount + Delivery Fee for a COD order, else 0; `returned_at` is set only for Nuport's RETURNED sub-status (PENDING_RETURNED is still on its way back); delivery cost and margin stay empty (the file has none). `findProvider()` prefers an API driver named like the courier, then a slug or name match; `providerFor()` creates an inactive `manual` courier. Imported customers' bookings now count in `CustomerRiskService`'s delivered / returned / cancelled ratios. Tests: `NuportOrderImportTest` (3 new). 10 new interface strings in `lang/en.json` / `lang/bn.json`; `docs/codebase-map/sales-orders-couriers.md` updated.
-
 ## [2.91.0] - 2026-10-20
 
 **Release type:** Minor Feature Update
