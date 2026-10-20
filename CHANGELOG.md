@@ -4,7 +4,9 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-**Release type:** Major Version Update (IMS v2 — the investor system on its own domain; off until a Super Admin switches it on)
+## [2.89.0] - 2026-10-20
+
+**Release type:** Minor Feature Update
 
 ### Added
 
@@ -48,7 +50,6 @@ All notable production changes to Business Dashboard are documented here.
 - E-mail reset: `InvestorPortalAccountService::findByEmail()` (one matching investor only), `emailAvailable()`, `sendResetCodeByEmail()` (`EMAIL_CODE_VALID_MINUTES = 10`, same `otp_*` columns and 5-try rule as SMS, sent with `ImsMessage` through the company SMTP); `Investor\Pages\Auth\ForgotPassword` has a `channel` choice (`sentBy` / `sentTo` replace `phone`). New `tests/Feature/Ims/EmailPasswordResetTest.php`. 11 new strings in both language files.
 - 14 new permissions (`ims.*`). PDFs use the self-hosted Hind Siliguri font (dompdf caches it in `storage/fonts`, now git-ignored); complex Bangla letters may not join perfectly in PDFs (a dompdf limit).
 - Tests: new `tests/Feature/Ims/*` (domain routing, onboarding, KYC, transparency + privacy, capital, proposals and jobs, communication and tools). Updated to the owner's new rules: `InvestmentSettlementTest` (loss × %), `InvestorGroupExitTest` (group loss now allowed), `PayoutBatchTest` and `InvestorPortalTest` (new role defaults). 513 new strings in `lang/en.json` / `lang/bn.json` with Bangla naturalization verified via `TranslationParityTest`.
-
 ## [2.88.1] - 2026-10-19
 
 **Release type:** Patch/Fix Update
