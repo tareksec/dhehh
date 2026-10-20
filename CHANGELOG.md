@@ -4,6 +4,12 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Maintenance Update (documentation for AI agents; no change to the app)
+
+### Technical Notes
+
+- **Code map for AI agents** (owner request 2026-10-20): new `CODEBASE_MAP.md` (index) and one file per module in `docs/codebase-map/` (core platform, catalog/inventory, sales/orders/couriers, accounts/finance, Blade storefront, API/integrations, reseller, CRM/messaging, investments/IMS, AI/marketing tools, other apps) with where-to-start files, file tables, routes, main tables and rules. Agents read the index and one module file instead of scanning the repository. Drafted by another agent, then checked against the code: every path exists, every route matches `route:list`, every column appears in a migration; invented migration names, routes and behaviour were removed or corrected. `CLAUDE.md` and `AGENTS.md` now say to read the map first and to update it in the same commit as a structural change.
+
 ## [2.90.0] - 2026-10-20
 
 **Release type:** Minor Feature Update
