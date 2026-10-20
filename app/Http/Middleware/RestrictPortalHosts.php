@@ -56,6 +56,11 @@ class RestrictPortalHosts
             return $next($request);
         }
 
+        // The central investor sign-in for every business (17_IMS_IN_PORTAL_PLAN.md §5): the investor portal only.
+        if (Company::isImsCentralHost($request->getHost())) {
+            return $this->isUnder($path, 'investor') ? $next($request) : redirect()->to('/investor');
+        }
+
         // IMS v2 (IMS-V2/ARCHITECTURE.md §2): its own domain carries two panels,
         // the investor portal (the domain's root) and the office at /office.
         if (Company::forImsHost($request->getHost())) {

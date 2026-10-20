@@ -1,5 +1,5 @@
 # Investments & IMS v2
-> Last checked: 2026-10-20, commit 0e5316d
+> Last checked: 2026-10-20, branch feature/ims-multi-business (business switcher)
 
 ## What it does
 The Investments & IMS v2 module manages Islamic Mudarabah investment partnerships, syndicated investor pools, commercial project funding, and comprehensive investor relations. Built natively into the application following the retirement of the legacy external IMS, it provides two dedicated Filament 5 panels: the IMS Office back-office panel (`/office`) for investment managers, and the Investor Portal (`/investor`) for self-service investor access. It automates investor onboarding with NID OCR verification, digital agreement acceptance, syndicated investor group lifecycles, and automated daily profit proposals. Additionally, it features an investor transparency feed, scheduled monthly statement generation, capital return queues, bank statement reconciliation, and channel partner commission settlements.
@@ -70,6 +70,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `app/Services/Investment/InvestmentWithdrawalService.php` | Coordinates formal capital withdrawal requests and ledger deductions. |
 | `app/Services/InvestorPortalService.php` | General portal business service resolving company contexts and dashboards. |
 | `app/Services/InvestorPortalAccountService.php` | Manages investor portal credentials, password updates, and phone changes. |
+| `app/Services/InvestorBusinessSwitchService.php` | One login, many businesses (plan 17 §5): the person's businesses by phone, central-host sign-in, switching (same session on the central host, one-time token between business hosts). |
 | `app/Services/AgreementService.php` | Injects investor and project variables into contract templates and generates PDFs. |
 
 ### Filament Panel Providers, Resources & Pages
@@ -96,6 +97,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `app/Filament/Ims/Office/Resources/ProjectUpdates/ProjectUpdateResource.php` | Manages project milestone notices and photos. |
 | `app/Filament/Ims/Office/Resources/SupportThreads/SupportThreadResource.php` | Support ticket helpdesk for investor inquiries. |
 | `app/Filament/Investor/Pages/Dashboard.php` | Investor portal homepage displaying portfolio overview and recent earnings. |
+| `app/Filament/Investor/Pages/MyBusinesses.php` | "My businesses": one card per business where the person's phone has an active account, with totals (shown only with more than one). |
 | `app/Filament/Investor/Pages/MyInvestments.php` | Detailed listing of active and completed investments and fractional group units. |
 | `app/Filament/Investor/Pages/Payouts.php` | History of received profit payouts and pending bank disbursements. |
 | `app/Filament/Investor/Pages/Statement.php` | Interactive account statement viewer with monthly PDF downloads. |
@@ -107,7 +109,8 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | Path | What it does |
 | --- | --- |
 | `app/Http/Middleware/ResolveCompanyFromImsDomain.php` | Binds tenant company context from custom IMS office hostnames. |
-| `app/Http/Middleware/ResolveCompanyFromInvestorPortalDomain.php` | Binds tenant company context from custom investor portal hostnames. |
+| `app/Http/Middleware/ResolveCompanyFromInvestorPortalDomain.php` | Binds tenant company context from custom investor portal hostnames; on the central sign-in host it closes the context (`none()`). |
+| `app/Http/Middleware/ResolveCompanyFromCentralInvestorSession.php` | On the central sign-in host, sets the company the person chose (kept in the session); sends business-only pages to sign-in. |
 | `app/Http/Middleware/RedirectInvestmentsToImsOffice.php` | Redirects staff visiting legacy investment URLs to the modern `/office` panel. |
 | `app/Http/Middleware/SetImsOfficeLocale.php` | Sets session locale (Bangla/English) for the IMS Office panel. |
 | `app/Http/Middleware/SetInvestorPortalLocale.php` | Sets session locale (Bangla/English) for the Investor Portal. |
@@ -119,6 +122,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `app/Http/Controllers/InvestorPortal/InvestorPortalLocaleController.php` | Switches language preference in the investor portal. |
 | `app/Http/Controllers/InvestorPortal/InvestorPortalReportController.php` | Generates on-demand portfolio summary reports for logged-in investors. |
 | `app/Http/Controllers/InvestorPortal/InvestorPortalStaffEntryController.php` | Allows authorized staff to preview the portal as an investor. |
+| `app/Http/Controllers/InvestorPortal/InvestorBusinessSwitchController.php` | Both ends of the portal's "Switch business" button: issues the token, then signs the person in on the other business's portal. |
 
 ### Console Commands & Schedule
 | Path | What it does |
@@ -157,6 +161,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `tests/Feature/Ims/ProposalsAndJobsTest.php` | Tests daily automated profit proposal creation and scheduled jobs. |
 | `tests/Feature/Ims/TransparencyTest.php` | Tests project update feed posts, comments, and investor notifications. |
 | `tests/Feature/InvestorGroupCycleTest.php` | Tests group lifecycle progression (collecting, running, maturing, settled). |
+| `tests/Feature/InvestorBusinessSwitchTest.php` | Tests the business switcher: who is offered, the one-time token, staff preview and disabled accounts. |
 | `tests/Feature/InvestorPortalTest.php` | Tests investor portal authentication, dashboard metrics, and statement downloads. |
 
 ## Routes and panels
@@ -179,6 +184,8 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
   - `GET|HEAD investor/ims/project-reports/{report}/pdf` (name `filament.investor.ims.project-report`) -> `App\Http\Controllers\Ims\ImsPortalFileController@projectReport`
   - `GET|HEAD investor/ims/statements/{period}/pdf` (name `filament.investor.ims.statement-pdf`) -> `App\Http\Controllers\Ims\ImsPortalStatementController@pdf`
   - `GET|HEAD investor/documents/{document}/download` (name `filament.investor.documents.download`) -> `App\Http\Controllers\InvestorPortal\InvestorPortalDocumentController`
+  - `POST investor/switch-business/{company}` (name `filament.investor.switch-business`) -> `App\Http\Controllers\InvestorPortal\InvestorBusinessSwitchController@switch`
+  - `GET|HEAD investor/business-entry/{token}` (name `filament.investor.business-entry`) -> `App\Http\Controllers\InvestorPortal\InvestorBusinessSwitchController@enter`
   - `GET|HEAD investor/payouts/{payout}/report` (name `filament.investor.reports.payout`) -> `App\Http\Controllers\InvestorPortal\InvestorPortalReportController@payout`
   - `GET|HEAD admin/investor-portal/investors/{investor}/open` (name `investor-portal.open-investor`) -> `App\Http\Controllers\Admin\InvestorPortalOpenController@investor`
   - `GET|HEAD admin/investor-portal/channel-partners/{partner}/open` (name `investor-portal.open-partner`) -> `App\Http\Controllers\Admin\InvestorPortalOpenController@partner`
@@ -195,6 +202,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 ## Rules that matter
 - **Native IMS Architecture & Legacy API Decommission**: The legacy external IMS data-sync API (`/api/v1/sync/*`) was permanently retired on 2026-10-19. IMS v2 is fully implemented within this monolithic repository on the shared PostgreSQL/MySQL database across the `/office` and `/investor` panels. Legacy sync routes return 404. Documented in `IMS-V2/PLAN.md` and `routes/api.php`.
 - **Domain-Based Multi-Company Routing**: IMS domains are configured per tenant on `companies.ims_domain`. `ResolveCompanyFromImsDomain` resolves tenant context using `Company::forImsHost`. `RestrictPortalHosts` prevents access to storefront/admin URLs from IMS domains and vice versa. Enforced by `app/Http/Middleware/ResolveCompanyFromImsDomain.php` and `app/Http/Middleware/RestrictPortalHosts.php`.
+- **Central investor sign-in host (one login, many businesses)**: `app_settings.ims_central_domain` (`Company::imsCentralHost()`, set in Investor Portal Settings) serves only `/investor`, for every company. The company comes from the session (`InvestorBusinessSwitchService::SESSION_KEY`), never from the host; with none chosen, `CompanyContext` is `none()`. The same phone with an active account in several businesses is one person. Enforced by `ResolveCompanyFromCentralInvestorSession`, `RestrictPortalHosts` and `InvestorPortalAccount::canAccessPanel()`.
 - **Office Panel Permission Gate**: Staff members accessing the `/office` panel must possess the explicit `ims.office.access` permission in their role and be associated with the tenant company owning the domain. Enforced by `app/Models/User.php`.
 - **Automated Profit Proposal Rules**: Scheduled job `ims:profit-proposals` runs daily at 07:00, evaluating completed order revenues against purchase landed costs to generate draft profit allocations. It uses idempotent database locks to guarantee proposals are never generated twice for the same sales period. Enforced by `bootstrap/app.php` and `app/Console/Commands/Ims/MakeProfitProposals.php`.
 - **Mudarabah Shariah Principles & Ledger Invariant**: Capital placement and profit sharing strictly follow Islamic Mudarabah contracts based on the defined PSR (Profit Sharing Ratio). Capital investments and profit payouts represent balance sheet fund reallocations; per accounting rules, they NEVER generate `Expense` records. Enforced by `app/Services/Investment/SettlementService.php` and `app/Services/VoucherService.php`.

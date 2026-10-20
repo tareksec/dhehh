@@ -3284,5 +3284,19 @@
     "Show \"Seen\" and \"typing...\" while the AI answers": "AI উত্তর লেখার সময় \"Seen\" ও \"টাইপ করছে...\" দেখান",
     "The customer sees the message marked as seen and a typing sign until the answer arrives (Messenger and WhatsApp).": "উত্তর না আসা পর্যন্ত কাস্টমার দেখে যে মেসেজটি দেখা হয়েছে এবং টাইপ করার চিহ্ন (Messenger ও WhatsApp)।",
     "Send product cards on Messenger": "Messenger-এ প্রোডাক্ট কার্ড পাঠান",
-    "After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only.": "প্রোডাক্টের নাম আছে এমন উত্তরের পর Messenger-এর কাস্টমার ছবি, দাম ও একটি বাটনসহ সোয়াইপ করার মতো কার্ডের সারি পাবে। ছবি নেই এমন প্রোডাক্টের কার্ড হয় না। বন্ধ: শুধু লেখা।"
+    "After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only.": "প্রোডাক্টের নাম আছে এমন উত্তরের পর Messenger-এর কাস্টমার ছবি, দাম ও একটি বাটনসহ সোয়াইপ করার মতো কার্ডের সারি পাবে। ছবি নেই এমন প্রোডাক্টের কার্ড হয় না। বন্ধ: শুধু লেখা।",
+    "Switch business": "ব্যবসা বদলান",
+    "That business cannot be opened from here.": "এখান থেকে ওই ব্যবসাটি খোলা যাচ্ছে না।",
+    "This link has expired. Please sign in.": "এই লিংকের মেয়াদ শেষ। অনুগ্রহ করে সাইন ইন করুন।",
+    "My businesses": "আমার সব ব্যবসা",
+    "Profit still to be paid": "যে লাভ এখনো পাওয়া বাকি",
+    "Open now": "এখন খোলা",
+    "Open this business": "এই ব্যবসাটি খুলুন",
+    "One sign-in for all businesses": "সব ব্যবসার জন্য একটাই সাইন-ইন",
+    "An investor who has an account with the same phone number in several businesses signs in once at this address and moves between the businesses from the top bar. It is the same for every company. Each business's own address keeps working. Point the domain to the server first (Cloudflare and Coolify). Super Admin only.": "যে ইনভেস্টরের একই ফোন নম্বরে একাধিক ব্যবসায় অ্যাকাউন্ট আছে, তিনি এই ঠিকানায় একবার সাইন ইন করে উপরের বার থেকে এক ব্যবসা থেকে আরেক ব্যবসায় যেতে পারবেন। ঠিকানাটি সব কোম্পানির জন্য একই। প্রতিটি ব্যবসার নিজের ঠিকানাও চালু থাকবে। আগে ডোমেইনটি সার্ভারে যুক্ত করুন (Cloudflare ও Coolify)। শুধু Super Admin।",
+    "Central sign-in address": "কেন্দ্রীয় সাইন-ইন ঠিকানা",
+    "Leave blank to turn it off.": "বন্ধ রাখতে খালি রাখুন।",
+    "Off. Investors sign in at each business's own address.": "বন্ধ। ইনভেস্টররা প্রতিটি ব্যবসার নিজের ঠিকানায় সাইন ইন করেন।",
+    "Central sign-in:": "কেন্দ্রীয় সাইন-ইন:",
+    "This domain is already used by a company, a portal or a store.": "এই ডোমেইনটি আগে থেকেই কোনো কোম্পানি, পোর্টাল বা স্টোর ব্যবহার করছে।"
 }

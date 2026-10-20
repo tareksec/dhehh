@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Clusters\Investments;
+use App\Models\AppSetting;
 use App\Models\Company;
 use App\Models\InvestorPortalAccount;
 use App\Services\AuditLogService;
@@ -73,6 +74,7 @@ class InvestorPortalSettings extends Page
             'investor_portal_domain' => $company->investor_portal_domain,
             'ims_enabled' => (bool) $company->ims_enabled,
             'ims_domain' => $company->ims_domain,
+            'ims_central_domain' => Company::imsCentralHost(),
         ]);
     }
 
@@ -111,6 +113,17 @@ class InvestorPortalSettings extends Page
                             ->maxLength(255)
                             ->disabled(fn (): bool => ! (Auth::user()?->hasPermission('ims.domain.manage') ?? false)),
                         Text::make(fn (): HtmlString|string => $this->imsAddress()),
+                    ]),
+                Section::make(__('One sign-in for all businesses'))
+                    ->description(__('An investor who has an account with the same phone number in several businesses signs in once at this address and moves between the businesses from the top bar. It is the same for every company. Each business\'s own address keeps working. Point the domain to the server first (Cloudflare and Coolify). Super Admin only.'))
+                    ->schema([
+                        TextInput::make('ims_central_domain')
+                            ->label(__('Central sign-in address'))
+                            ->placeholder('ims.example.com')
+                            ->helperText(__('Leave blank to turn it off.'))
+                            ->maxLength(255)
+                            ->disabled(fn (): bool => ! (Auth::user()?->hasPermission('ims.domain.manage') ?? false)),
+                        Text::make(fn (): HtmlString|string => $this->centralAddress()),
                     ]),
                 Section::make(__('Messages'))
                     ->schema([
@@ -164,6 +177,19 @@ class InvestorPortalSettings extends Page
             .e(__('IMS office:')).' <a class="text-primary-600 underline" href="'.e($office).'" target="_blank" rel="noopener">'.e($office).'</a>');
     }
 
+    protected function centralAddress(): HtmlString|string
+    {
+        $host = Company::imsCentralHost();
+
+        if ($host === null) {
+            return __('Off. Investors sign in at each business\'s own address.');
+        }
+
+        $url = request()->getScheme().'://'.$host.'/investor';
+
+        return new HtmlString(e(__('Central sign-in:')).' <a class="text-primary-600 underline" href="'.e($url).'" target="_blank" rel="noopener">'.e($url).'</a>');
+    }
+
     public function save(): void
     {
         $company = $this->company();
@@ -203,6 +229,22 @@ class InvestorPortalSettings extends Page
 
             $company->ims_domain = $imsDomain;
             $company->ims_enabled = (bool) ($data['ims_enabled'] ?? false);
+
+            $centralBefore = Company::imsCentralHost();
+            $central = Company::normalizeDomain($data['ims_central_domain'] ?? null);
+
+            if ($central !== null && $central !== $centralBefore && Company::centralHostIsTaken($central)) {
+                throw ValidationException::withMessages(['data.ims_central_domain' => __('This domain is already used by a company, a portal or a store.')]);
+            }
+
+            if ($central !== null && $central === $imsDomain) {
+                throw ValidationException::withMessages(['data.ims_central_domain' => __('This domain is already used by a company, a portal or a store.')]);
+            }
+
+            if ($central !== $centralBefore) {
+                AppSetting::setValue(Company::IMS_CENTRAL_DOMAIN_SETTING, $central);
+                app(AuditLogService::class)->record('ims.central_domain_saved', $company, ['ims_central_domain' => $centralBefore], ['ims_central_domain' => $central]);
+            }
         }
 
         $company->save();

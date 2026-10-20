@@ -287,6 +287,86 @@ class Company extends Model
         return static::query()->where($live)->whereNull('investor_portal_domain')->where('domain', substr($host, strlen('investor.')))->first();
     }
 
+    /** AppSetting key of the one sign-in address for every business (17_IMS_IN_PORTAL_PLAN.md §5). */
+    public const IMS_CENTRAL_DOMAIN_SETTING = 'ims_central_domain';
+
+    /**
+     * The central investor sign-in host that is not tied to one company
+     * (17_IMS_IN_PORTAL_PLAN.md §5), set by a Super Admin in Investor Portal
+     * Settings; null while none is set.
+     */
+    public static function imsCentralHost(): ?string
+    {
+        if (! Schema::hasTable('app_settings')) {
+            return null;
+        }
+
+        return static::normalizeDomain((string) AppSetting::getValue(self::IMS_CENTRAL_DOMAIN_SETTING, ''));
+    }
+
+    /**
+     * Whether $host cannot be the central investor sign-in host because
+     * something already answers on it: a company domain, any portal host
+     * (custom or the "investor." / "reseller." default), an IMS domain, a
+     * Next.js storefront domain, or a reseller's own domain or store
+     * subdomain. Unlike hostIsTakenByThePlatform(), a new name under a
+     * company's own domain (for example "ims.<company domain>") is allowed.
+     */
+    public static function centralHostIsTaken(string $host): bool
+    {
+        $host = static::normalizeDomain($host) ?? '';
+
+        if ($host === '') {
+            return true;
+        }
+
+        if (static::query()->where('domain', $host)->orWhere('reseller_portal_domain', $host)->orWhere('investor_portal_domain', $host)
+            ->when(static::imsColumnsExist(), fn ($query) => $query->orWhere('ims_domain', $host))->exists()) {
+            return true;
+        }
+
+        if (StorefrontSetting::nextjsDomainTaken($host)
+            || static::forInvestorPortalHost($host)
+            || static::forResellerPortalHost($host)
+            || static::forRetiredInvestorPortalHost($host)
+            || static::forResellerCustomDomainHost($host)) {
+            return true;
+        }
+
+        $subdomain = static::forResellerSubdomainHost($host);
+
+        return $subdomain !== null && Customer::withoutGlobalScopes()
+            ->where('company_id', $subdomain[0]->getKey())
+            ->where('reseller_subdomain', $subdomain[1])
+            ->exists();
+    }
+
+    /** The store subdomain labels a reseller of this company may not take: the reserved ones and the central sign-in host's. */
+    public function reservedResellerSubdomains(): array
+    {
+        $reserved = self::RESERVED_RESELLER_SUBDOMAINS;
+        $central = static::imsCentralHost();
+
+        if ($central !== null && filled($this->domain) && str_ends_with($central, '.'.$this->domain)) {
+            $label = substr($central, 0, -strlen('.'.$this->domain));
+
+            if (! str_contains($label, '.')) {
+                $reserved[] = $label;
+            }
+        }
+
+        return $reserved;
+    }
+
+    /** Whether $host is the central investor sign-in host (with or without "www."). */
+    public static function isImsCentralHost(?string $host): bool
+    {
+        $central = static::imsCentralHost();
+        $host = static::normalizeDomain($host);
+
+        return $central !== null && $host !== null && $host === $central;
+    }
+
     /** Whether this company runs IMS v2 on its own domain. */
     public function imsIsLive(): bool
     {
@@ -373,7 +453,7 @@ class Company extends Model
     {
         $host = static::normalizeDomain($host);
 
-        if ($host === null || ! str_contains($host, '.') || ! Schema::hasTable('companies')) {
+        if ($host === null || ! str_contains($host, '.') || ! Schema::hasTable('companies') || static::isImsCentralHost($host)) {
             return null;
         }
 
@@ -437,7 +517,7 @@ class Company extends Model
     {
         $host = static::normalizeDomain($host) ?? '';
 
-        if ($host === '') {
+        if ($host === '' || static::isImsCentralHost($host)) {
             return true;
         }
 

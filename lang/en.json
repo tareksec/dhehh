@@ -3284,5 +3284,19 @@
     "Show \"Seen\" and \"typing...\" while the AI answers": "Show \"Seen\" and \"typing...\" while the AI answers",
     "The customer sees the message marked as seen and a typing sign until the answer arrives (Messenger and WhatsApp).": "The customer sees the message marked as seen and a typing sign until the answer arrives (Messenger and WhatsApp).",
     "Send product cards on Messenger": "Send product cards on Messenger",
-    "After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only.": "After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only."
+    "After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only.": "After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only.",
+    "Switch business": "Switch business",
+    "That business cannot be opened from here.": "That business cannot be opened from here.",
+    "This link has expired. Please sign in.": "This link has expired. Please sign in.",
+    "My businesses": "My businesses",
+    "Profit still to be paid": "Profit still to be paid",
+    "Open now": "Open now",
+    "Open this business": "Open this business",
+    "One sign-in for all businesses": "One sign-in for all businesses",
+    "An investor who has an account with the same phone number in several businesses signs in once at this address and moves between the businesses from the top bar. It is the same for every company. Each business's own address keeps working. Point the domain to the server first (Cloudflare and Coolify). Super Admin only.": "An investor who has an account with the same phone number in several businesses signs in once at this address and moves between the businesses from the top bar. It is the same for every company. Each business's own address keeps working. Point the domain to the server first (Cloudflare and Coolify). Super Admin only.",
+    "Central sign-in address": "Central sign-in address",
+    "Leave blank to turn it off.": "Leave blank to turn it off.",
+    "Off. Investors sign in at each business's own address.": "Off. Investors sign in at each business's own address.",
+    "Central sign-in:": "Central sign-in:",
+    "This domain is already used by a company, a portal or a store.": "This domain is already used by a company, a portal or a store."
 }

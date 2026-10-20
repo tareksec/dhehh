@@ -99,7 +99,7 @@ class MyStore extends Page
                             ->maxLength(40)
                             ->regex('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/')
                             ->validationMessages(['regex' => __('Use lowercase letters, numbers and dashes only, and do not start or end with a dash.')])
-                            ->notIn(Company::RESERVED_RESELLER_SUBDOMAINS)
+                            ->notIn(fn (): array => $this->company()?->reservedResellerSubdomains() ?? Company::RESERVED_RESELLER_SUBDOMAINS)
                             ->unique(
                                 table: 'customers',
                                 column: 'reseller_subdomain',

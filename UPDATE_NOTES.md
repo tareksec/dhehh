@@ -2,6 +2,28 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-20 - Phase M: one login for all businesses (all of plan §5)
+
+Reason - owner (in Bangla): implement `17_IMS_IN_PORTAL_PLAN.md`, and "file a ja ache sob follow koro". Build everything §5 describes; the plan's own proposals answer Q1–Q3.
+
+What changed:
+- **Central sign-in address** (Q1). Set by a Super Admin in Investor Portal Settings → "One sign-in for all businesses" (`app_settings.ims_central_domain`; blank = off). On that host only the investor portal is served: phone + password, and the password of any of the person's active accounts opens the first business it belongs to. The chosen business is kept in the session (`ResolveCompanyFromCentralInvestorSession` sets `CompanyContext` from it, or `none()` when nothing is chosen). Partner sign-up, invites, password reset, SMS code sign-in and staff links are not offered there; they stay on each business's own address, which keeps working.
+- **Same person** (Q2) = the same phone number with an active account (with a password, linked to an investor or an active channel partner) in each business whose portal is on.
+- **Switch business** in the top bar: on the central host it re-signs the same session to the account in the chosen business; on a business's own host it moves the person to the other business's own address with a one-time token (60 s, used once, only valid on that portal).
+- **My businesses** page (Q3): one card per business with its figures, plus totals per currency; the figures are worked out under each business's own context.
+- A staff preview and an applicant cannot switch. Every switch is audited and counts as a sign-in.
+- Plan §3 / §8 and the code map are updated.
+
+Verified: `InvestorBusinessSwitchTest` 16 passed. Full suite: 2833 passed, 1 skipped, 0 failed. The commit was also tested alone (without other uncommitted work in the folder): 149 related tests passed.
+
+Not in this commit: another agent's uncommitted IMS dark-mode work in the same folder (`theme.css`, `theme-toggle`, `auth-tools`, `auth-hero`, `ImsOfficePanelProvider`, the dark-mode lines in `InvestorPanelProvider`, one line in the portal dashboard). It was left as it is.
+
+Deploy: point the central domain to the server (Cloudflare + Coolify), then enter it in the settings. No migration.
+
+Needs Bangla review: the 14 new strings — "ব্যবসা বদলান", "আমার সব ব্যবসা", "যে লাভ এখনো পাওয়া বাকি", "এখন খোলা", "এই ব্যবসাটি খুলুন", "সব ব্যবসার জন্য একটাই সাইন-ইন", "কেন্দ্রীয় সাইন-ইন ঠিকানা" and the settings help text and error messages.
+
+Commit status: committed and pushed to `feature/ims-multi-business` (not `main`; merging to `main` waits for the owner's approval).
+
 ## 2026-10-20 - Code map for AI agents
 
 Reason - owner: new sessions and other agents should not re-scan the whole codebase every time (token cost); a map should say where everything is, and be kept up to date.

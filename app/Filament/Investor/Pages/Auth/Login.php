@@ -4,6 +4,7 @@ namespace App\Filament\Investor\Pages\Auth;
 
 use App\Models\InvestorPortalAccount;
 use App\Services\CompanyContext;
+use App\Services\InvestorBusinessSwitchService;
 use App\Services\InvestorPortalAccountService;
 use App\Services\LoginGate;
 use App\Support\LoginThrottled;
@@ -57,7 +58,8 @@ class Login extends BaseLogin
                 ->revealable(filament()->arePasswordsRevealable())
                 ->autocomplete('current-password')
                 ->required()
-                ->hint(filament()->hasPasswordReset()
+                // The central sign-in has no password reset: that is done on the business's own address.
+                ->hint(filament()->hasPasswordReset() && ! $this->onCentralHost()
                     ? new HtmlString(Blade::render('<x-filament::link :href="filament()->getRequestPasswordResetUrl()" tabindex="3">{{ __(\'Forgot your password?\') }}</x-filament::link>'))
                     : null)
                 ->visible(fn (): bool => $this->mode === 'password'),
@@ -85,6 +87,10 @@ class Login extends BaseLogin
 
         $data = $this->form->getState();
         $accounts = app(InvestorPortalAccountService::class);
+
+        if ($this->onCentralHost()) {
+            return $this->authenticateOnCentralHost($data);
+        }
 
         if ($this->mode === 'code' && $this->codePhone === null) {
             $this->sendCode((string) $data['phone']);
@@ -119,6 +125,39 @@ class Login extends BaseLogin
         app(LoginGate::class)->rememberDevice(LoginGate::SURFACE_INVESTOR, app(CompanyContext::class)->id(), $account);
 
         return app(LoginResponse::class);
+    }
+
+    /**
+     * The central sign-in for every business (17_IMS_IN_PORTAL_PLAN.md §5):
+     * phone + password only. It opens the first business the password belongs
+     * to; the top bar then switches between the person's businesses.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function authenticateOnCentralHost(array $data): ?LoginResponse
+    {
+        $switches = app(InvestorBusinessSwitchService::class);
+
+        try {
+            $match = $switches->attemptCentralLogin((string) $data['phone'], (string) ($data['password'] ?? ''));
+        } catch (LoginThrottled $exception) {
+            Notification::make()->title($exception->getMessage())->danger()->send();
+
+            return null;
+        }
+
+        if ($match === null) {
+            throw ValidationException::withMessages(['data.phone' => __('filament-panels::auth/pages/login.messages.failed')]);
+        }
+
+        $switches->openOnCentralHost($match['account'], $match['company'], request(), 'central_password', (bool) ($data['remember'] ?? false));
+
+        return app(LoginResponse::class);
+    }
+
+    protected function onCentralHost(): bool
+    {
+        return app(InvestorBusinessSwitchService::class)->onCentralHost();
     }
 
     protected function sendCode(string $phone): void
@@ -189,7 +228,7 @@ class Login extends BaseLogin
 
     protected function getFormActions(): array
     {
-        $smsAvailable = app(InvestorPortalAccountService::class)->smsAvailable(app(CompanyContext::class)->company());
+        $smsAvailable = ! $this->onCentralHost() && app(InvestorPortalAccountService::class)->smsAvailable(app(CompanyContext::class)->company());
 
         return array_values(array_filter([
             $this->getAuthenticateFormAction(),
