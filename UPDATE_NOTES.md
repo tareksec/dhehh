@@ -2,6 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-20 - Plan 18 phase C: "All companies" page in the IMS office
+
+Reason - owner: "ok next phase start kro" (phase C of `18_IMS_ALL_COMPANIES_PLAN.md`).
+
+What changed:
+- New office page `/office/all-companies` ("All companies" at the top of the company button / phone menu; only for people who may open more than one company): total money invested and capital at work, profit to pay, waiting for a decision (the existing "What to do today" lines of every company, with the company name), one card per company, every open/running project, new investors this month.
+- Every figure is read company by company under its own context and added up per currency (`AllCompaniesFigures`); the page approves nothing - each line opens the company's own office page (`?office_company=`), where the existing buttons and permissions apply.
+- Decided by the rules: "Total money invested" = confirmed money (active + withdrawn deposits and ungrouped investments); "profit this cycle" on the company card is shown as "Profit paid this month" (no cycle-wide figure exists across groups and projects); the plan's short menu is a row of jump buttons on the page (Waiting, Companies, Projects, New investors), the full menu stays as it is.
+- Needs Bangla review: the 16 new strings (translations added).
+
+Verified: `AllCompaniesImsTest` 14 passed (3 new). Browser (preview copy of the demo data, 5 companies): every section shows real figures (৳ 25,00,000 invested, 6 investments waiting in Main Company, 2 running projects, 3 new investors); phone width one column, no sideways scroll; Bangla page checked. Full suite: 2864 passed, 1 skipped, 0 failed; `npm run build` passes.
+
+Commit status: committed and pushed to `feature/ims-all-companies`; not merged into `main`.
+
 ## 2026-10-20 - Plan 18 phases A + B: every company on zamzaminv.app, office company picker
 
 Reason - owner: "start building - 18_IMS_ALL_COMPANIES_PLAN.md". Phases A (one domain for all) and B (office company picker + access rules) are built here; C (All companies home), D (investor projects) and E (combined lists) follow on this branch.

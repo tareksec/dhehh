@@ -3326,5 +3326,21 @@
     "Bring open orders in as live orders": "খোলা অর্ডার চালু অর্ডার হিসেবে আনুন",
     "An order Nuport still has approved or processing, with no courier parcel yet, comes in as a live order: it takes stock and you ship it from the ERP. Stock can go below zero; the result lists the products that are short. Turn off to bring it in as history.": "Nuport-এ যে অর্ডার এখনো অনুমোদিত বা প্রক্রিয়াধীন এবং কুরিয়ারে দেওয়া হয়নি, সেটি চালু অর্ডার হিসেবে আসে: স্টক কমে এবং আপনি ERP থেকে পাঠান। স্টক শূন্যের নিচে যেতে পারে; ফলাফলে কোন পণ্যের স্টক কম তা দেখানো হয়। বন্ধ করলে এগুলোও ইতিহাস হিসেবে আসে।",
     "Past orders from Nuport are copied in as history. Account balances are never changed. Orders still open in Nuport can come in as live orders.": "Nuport-এর পুরনো অর্ডার ইতিহাস হিসেবে কপি হয়। অ্যাকাউন্টের ব্যালেন্স কখনো বদলায় না। Nuport-এ এখনো খোলা অর্ডারগুলো চালু অর্ডার হিসেবে আসতে পারে।",
-    "Account balances are never changed by this import.": "এই ইমপোর্টে অ্যাকাউন্টের ব্যালেন্স কখনো বদলায় না।"
+    "Account balances are never changed by this import.": "এই ইমপোর্টে অ্যাকাউন্টের ব্যালেন্স কখনো বদলায় না।",
+    "All companies": "সব কোম্পানি",
+    "Companies": "কোম্পানি",
+    "New investors": "নতুন ইনভেস্টর",
+    "Total money invested": "মোট বিনিয়োগ",
+    "All companies, money confirmed so far": "সব কোম্পানি, এ পর্যন্ত নিশ্চিত হওয়া টাকা",
+    "Profit to pay": "যে লাভ দিতে হবে",
+    ":count payout confirmed, not sent yet|:count payouts confirmed, not sent yet": ":countটি পেআউট নিশ্চিত, এখনও পাঠানো হয়নি|:countটি পেআউট নিশ্চিত, এখনও পাঠানো হয়নি",
+    "No company can be shown.": "দেখানোর মতো কোনো কোম্পানি নেই।",
+    "From every company. Tap to open it.": "সব কোম্পানি থেকে। খুলতে চাপুন।",
+    "Tap a company to open it.": "কোনো কোম্পানি খুলতে সেটিতে চাপুন।",
+    "Money in": "জমা টাকা",
+    ":count project running|:count projects running": ":countটি প্রজেক্ট চলছে|:countটি প্রজেক্ট চলছে",
+    "Open and running projects of every company": "সব কোম্পানির খোলা ও চলমান প্রজেক্ট",
+    "No project is open or running": "কোনো প্রজেক্ট খোলা বা চলমান নেই",
+    "New investors this month": "এই মাসের নতুন ইনভেস্টর",
+    ":count new investor in all companies|:count new investors in all companies": "সব কোম্পানিতে :count জন নতুন ইনভেস্টর|সব কোম্পানিতে :count জন নতুন ইনভেস্টর"
 }

@@ -1,5 +1,5 @@
 # Investments & IMS v2
-> Last checked: 2026-10-20, feature/ims-all-companies (plan 18 phases A + B: every company on the one IMS domain, office company picker)
+> Last checked: 2026-10-20, feature/ims-all-companies (plan 18 phases A-C: every company on the one IMS domain, office company picker, All companies page)
 
 ## What it does
 The Investments & IMS v2 module manages Islamic Mudarabah investment partnerships, syndicated investor pools, commercial project funding, and comprehensive investor relations. Built natively into the application following the retirement of the legacy external IMS, it provides two dedicated Filament 5 panels: the IMS Office back-office panel (`/office`) for investment managers, and the Investor Portal (`/investor`) for self-service investor access. It automates investor onboarding with NID OCR verification, digital agreement acceptance, syndicated investor group lifecycles, and automated daily profit proposals. Additionally, it features an investor transparency feed, scheduled monthly statement generation, capital return queues, bank statement reconciliation, and channel partner commission settlements.
@@ -55,6 +55,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `app/Ims/Kyc/KycService.php` | Coordinates identity verification workflow and status transitions. |
 | `app/Ims/Kyc/NidOcr.php` | OCR extraction engine parsing text from scanned Bangladeshi NID cards. |
 | `app/Ims/Notifications/ImsNotifier.php` | Dispatches SMS, email, and portal alerts for profit credits and statements. |
+| `app/Ims/Office/AllCompaniesFigures.php` | Plan 18 §3.3: the All companies page's figures, read company by company under its own context and added up per currency. |
 | `app/Ims/Office/OfficeFigures.php` | Aggregates portfolio KPIs (total assets under management, payout obligations) for the office. |
 | `app/Ims/Onboarding/InviteService.php` | Generates secure registration tokens and handles onboarding link acceptance. |
 | `app/Ims/Profit/ProposalService.php` | Compiles daily profit distribution proposals from completed project sales. |
@@ -87,6 +88,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `app/Filament/Resources/InvestorDrafts/InvestorDraftResource.php` | Admin queue for reviewing new investor applications. |
 | `app/Filament/Resources/InvestorRequests/InvestorRequestResource.php` | Admin queue for capital withdrawal and reinvestment requests. |
 | `app/Filament/Ims/Office/Pages/Home.php` | IMS Office dashboard with daily KPIs, pending actions, and financial charts. |
+| `app/Filament/Ims/Office/Pages/AllCompanies.php` | `/office/all-companies`: money, waiting items, companies, projects and new investors of every company the person may open; each line opens that company's own page. |
 | `app/Filament/Ims/Office/Pages/ImsSettings.php` | Office configuration for automated schedules, notification rules, and statements. |
 | `app/Filament/Ims/Office/Pages/PendingMoney.php` | Reconciliation queue for incoming bank transfers awaiting verification. |
 | `app/Filament/Ims/Office/Resources/CapitalReturns/CapitalReturnResource.php` | Queue for approving and disbursing matured capital repayments. |

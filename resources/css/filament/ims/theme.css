@@ -1995,6 +1995,81 @@ a.ims-group-tile[href]:hover {
     outline-offset: 2px;
 }
 
+/* "All companies" in the office (18_IMS_ALL_COMPANIES_PLAN.md §3.3): one column on phones, two on wide screens. */
+.ims-all-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.ims-all-nav a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding-inline: 1rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-card);
+    color: var(--ims-ink);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.ims-all-nav a:focus-visible {
+    outline: 3px solid var(--ims-primary-tint);
+    outline-offset: 2px;
+}
+
+.ims-all-nav-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5rem;
+    height: 1.5rem;
+    padding-inline: 0.375rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-primary);
+    color: #ffffff;
+    font-size: 0.8125rem;
+}
+
+.ims-all-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+    margin-top: 1.25rem;
+}
+
+@media (min-width: 1024px) {
+    .ims-all-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ims-all-wide {
+        grid-column: 1 / -1;
+    }
+}
+
+.ims-all-grid > section {
+    scroll-margin-top: 6rem;
+}
+
+.ims-all-company {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ims-muted);
+}
+
+.ims-all-facts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    font-size: 0.875rem;
+    color: var(--ims-ink);
+}
+
 /* Small phones: the picker is a list in the menu drawer instead, so the top bar fits. */
 .fi-ims-company-drawer {
     display: none;

@@ -197,6 +197,92 @@ class AllCompaniesImsTest extends TestCase
         $this->assertSame([], $companies->for($this->staffOf($this->other, 'sales_staff'))->map->getKey()->all(), 'no office permission: nothing');
     }
 
+    // ---- Phase C: the "All companies" home --------------------------------
+
+    public function test_the_all_companies_home_reads_every_company_on_its_own_and_adds_up_per_currency(): void
+    {
+        $this->other->forceFill(['currency' => 'USD'])->save();
+        $this->owner->forceFill(['currency' => 'BDT'])->save();
+        $ownerInvestor = $this->verified($this->investor($this->owner, 'Rahim Owner', '01711000401'));
+        $otherInvestor = $this->verified($this->investor($this->other, 'Karim Other', '01711000402'));
+        $this->investor($this->other, 'Waiting Person', '01711000404')->forceFill(['kyc_status' => Investor::KYC_PENDING])->save();
+        $this->project($this->owner, 'Owner Rice Import', $ownerInvestor, 300000);
+        $this->project($this->other, 'Other Solar Lot', $otherInvestor, 50000);
+
+        $figures = app(\App\Ims\Office\AllCompaniesFigures::class);
+        app(CompanyContext::class)->set($this->owner);
+        $rows = $figures->perCompany(collect([$this->owner, $this->other]));
+
+        $this->assertSame($this->owner->id, app(CompanyContext::class)->id(), 'the page\'s company is put back');
+        $this->assertSame(300000.0, $rows[0]['invested']);
+        $this->assertSame(50000.0, $rows[1]['invested']);
+        $this->assertSame(['Owner Rice Import'], array_map(fn (array $entry): string => $entry['project']->name, $rows[0]['projects']));
+        $this->assertSame(['kyc'], array_column($rows[1]['waiting'], 'key'));
+        $this->assertSame([], $rows[0]['waiting']);
+
+        $totals = $figures->totals($rows);
+        $this->assertSame(['BDT', 'USD'], array_keys($totals), 'never added across currencies');
+        $this->assertSame(300000.0, $totals['BDT']['invested']);
+        $this->assertSame(50000.0, $totals['USD']['invested']);
+    }
+
+    public function test_the_all_companies_page_names_each_company_and_opens_its_own_pages(): void
+    {
+        $otherInvestor = $this->investor($this->other, 'Karim Other', '01711000403');
+        $otherInvestor->forceFill(['kyc_status' => Investor::KYC_PENDING])->save();
+        $this->project($this->other, 'Other Solar Lot', $otherInvestor, 50000);
+        $admin = $this->staffOf($this->owner, 'super_admin');
+
+        $this->actingAs($admin)->get('http://group-ims.test/office/all-companies')
+            ->assertOk()
+            ->assertSee(__('Waiting for a decision'))
+            ->assertSee(__('KYC waiting for review'))
+            ->assertSee('Owner Co')
+            ->assertSee('Other Co')
+            ->assertSee('Other Solar Lot')
+            ->assertSee('office_company='.$this->other->id, false);
+
+        // Rendering it never changes the company open in the office.
+        $this->assertSame($this->owner->id, app(CompanyContext::class)->id());
+    }
+
+    public function test_someone_with_one_company_has_no_all_companies_page(): void
+    {
+        $this->actingAs($this->staffOf($this->other))->get('http://group-ims.test/office/all-companies')->assertForbidden();
+    }
+
+    private function verified(Investor $investor): Investor
+    {
+        $investor->forceFill(['kyc_status' => Investor::KYC_VERIFIED, 'kyc_reviewed_at' => now()])->save();
+
+        return $investor;
+    }
+
+    private function project(Company $company, string $name, Investor $investor, float $amount): void
+    {
+        $project = \App\Models\InvestmentProject::query()->withoutGlobalScopes()->create([
+            'company_id' => $company->id,
+            'name' => $name,
+            'duration_type' => 'custom_days',
+            'trade_cycle_days' => 60,
+            'start_date' => now()->toDateString(),
+            'investor_share_percent' => 35,
+            'channel_partner_share_percent' => 0,
+            'company_share_percent' => 65,
+            'status' => 'running',
+        ]);
+
+        \App\Models\Investment::query()->withoutGlobalScopes()->create([
+            'company_id' => $company->id,
+            'project_id' => $project->id,
+            'investor_id' => $investor->id,
+            'amount' => $amount,
+            'payment_method' => 'bank',
+            'invested_at' => now()->toDateString(),
+            'status' => \App\Models\Investment::STATUS_ACTIVE,
+        ]);
+    }
+
     public function test_the_erp_investments_address_opens_the_same_company_in_the_office(): void
     {
         $admin = $this->staffOf($this->other, 'super_admin');
