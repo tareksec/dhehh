@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\InvestorPortalOpenController;
 use App\Http\Controllers\Admin\LegacyAdminClusterRedirectController;
 use App\Http\Controllers\Admin\OrderPdfController;
 use App\Http\Controllers\Admin\ProductCsvController;
+use App\Http\Controllers\Admin\PurchaseCsvController;
 use App\Http\Controllers\Admin\PurchaseDocumentController;
 use App\Http\Controllers\Admin\PushDeviceController;
 use App\Http\Controllers\Admin\ReportExportController;
@@ -715,6 +716,9 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('/admin/suppliers/import/sample', [SupplierCsvController::class, 'sample'])
         ->name('suppliers.import.sample');
+
+    Route::get('/admin/purchases/import/sample', [PurchaseCsvController::class, 'sample'])
+        ->name('purchases.import.sample');
 
     Route::get('/admin/backups/download/{filename}', BackupDownloadController::class)
         ->where('filename', '[A-Za-z0-9._-]+')

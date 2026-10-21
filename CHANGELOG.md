@@ -4,6 +4,25 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Purchases → Import purchases from CSV**: upload a CSV and the purchases are created for you (owner request 2026-10-21, shaped like the Stock History sheet).
+  - Pick the **supplier** and the **status** in the upload box. The status starts as **Draft**, which changes no stock and no supplier balance; **Received** adds the quantity to stock at once, so use it only for goods that are not already in stock.
+  - Columns: `date`, `product` (the product name) or `sku`, `quantity`, and optionally `unit_cost`, `short_qty` and `damaged_qty`. **Sample CSV** downloads a file with these headings.
+  - **One purchase per date**: all rows of one date become the items of one purchase. A blank date takes the date of the row above, as merged cells do in a spreadsheet export. Dates such as `2026-02-21`, `21/02/2026` and `08/28/2025` are understood; a date like `10/09/2025` that could be day/month or month/day is read day first, and the result tells you how many were like that.
+  - A product is found by SKU, then by its exact name. A blank `unit_cost` uses the product's cost price.
+  - A row that cannot be used (product not found, more than one product with that name, bad date or quantity, short plus damaged above the quantity) is **left out and listed**; nothing is guessed and no product is created.
+  - **Preview only** shows what would be created without saving. Uploading the same file again does not create the purchases twice.
+
+### Fixed
+
+- **The Items section of the purchase form is laid out in rows again.** Every field of an item had been squeezed into one long row. It is now three rows: Product, Quantity, Short Qty, Damaged Qty; then Unit Cost, Subtotal, Allocated Cost, Landed Unit Cost; then HS Code, Spec / Model Note, FOB Price, Net Weight, Gross Weight. On a phone the fields stack one under another.
+
+### Technical Notes
+
+- `App\Services\PurchaseCsvImportService` holds the rules (see its class comment); the Purchases list page action is `ListPurchases::importPurchasesAction()` and the sample is `GET /admin/purchases/import/sample` (`purchases.import.sample`, `PurchaseCsvController`). A created purchase carries `[csv:<12 hex>]` in its note, made from the supplier, the date and the typed lines, so a second upload of the same file is recognised and skipped. No migration, no new model. Tests: `PurchaseCsvImportTest` (10).
+- `PurchaseForm`: the items repeater no longer uses `->table()`; it is a 12-column grid (`columns(['default' => 1, 'md' => 12])`) and each field takes its share with `itemSpan()`.
+
 ## [2.96.1] - 2026-10-21
 
 **Release type:** Patch/Fix Update

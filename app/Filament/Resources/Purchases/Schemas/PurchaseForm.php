@@ -208,23 +208,9 @@ class PurchaseForm
                     ->schema([
                         Repeater::make('items')
                             ->relationship()
-                            ->table([
-                                TableColumn::make('Product'),
-                                TableColumn::make('Quantity'),
-                                TableColumn::make(__('Short Qty')),
-                                TableColumn::make(__('Damaged Qty')),
-                                TableColumn::make('Unit Cost'),
-                                TableColumn::make('Subtotal'),
-                                TableColumn::make('Allocated Cost'),
-                                TableColumn::make('Landed Unit Cost'),
-                                TableColumn::make(__('HS Code')),
-                                TableColumn::make(__('Spec / Model Note')),
-                                TableColumn::make(__('FOB Price (USD)')),
-                                TableColumn::make(__('Net Weight (kg)')),
-                                TableColumn::make(__('Gross Weight (kg)')),
-                            ])
                             ->schema([
                                 Select::make('product_id')
+                                    ->columnSpan(self::itemSpan(6))
                                     ->label('Product')
                                     ->relationship('product', 'name', fn ($query) => $query->where('is_active', true))
                                     ->searchable(['name', 'sku', 'barcode', 'brand'])
@@ -365,6 +351,7 @@ class PurchaseForm
                                     }),
 
                                 TextInput::make('quantity')
+                                    ->columnSpan(self::itemSpan(2))
                                     ->integer()
                                     ->minValue(1)
                                     ->default(1)
@@ -376,6 +363,7 @@ class PurchaseForm
                                     }),
 
                                 TextInput::make('short_quantity')
+                                    ->columnSpan(self::itemSpan(2))
                                     ->label(__('Short Qty'))
                                     ->integer()
                                     ->minValue(0)
@@ -383,6 +371,7 @@ class PurchaseForm
                                     ->helperText(__('Billed but not delivered.')),
 
                                 TextInput::make('damaged_quantity')
+                                    ->columnSpan(self::itemSpan(2))
                                     ->label(__('Damaged Qty'))
                                     ->integer()
                                     ->minValue(0)
@@ -390,6 +379,7 @@ class PurchaseForm
                                     ->helperText(__('Delivered but not sellable.')),
 
                                 TextInput::make('unit_cost')
+                                    ->columnSpan(self::itemSpan(3))
                                     ->numeric()
                                     ->prefix('৳')
                                     ->minValue(0)
@@ -401,11 +391,13 @@ class PurchaseForm
                                     }),
 
                                 TextInput::make('subtotal')
+                                    ->columnSpan(self::itemSpan(3))
                                     ->numeric()
                                     ->prefix('৳')
                                     ->readOnly(),
 
                                 TextInput::make('allocated_cost')
+                                    ->columnSpan(self::itemSpan(3))
                                     ->label('Allocated Cost')
                                     ->numeric()
                                     ->prefix('৳')
@@ -413,6 +405,7 @@ class PurchaseForm
                                     ->dehydrated(false),
 
                                 TextInput::make('landed_unit_cost')
+                                    ->columnSpan(self::itemSpan(3))
                                     ->label('Landed Unit Cost')
                                     ->numeric()
                                     ->prefix('৳')
@@ -420,34 +413,39 @@ class PurchaseForm
                                     ->dehydrated(false),
 
                                 TextInput::make('hs_code')
+                                    ->columnSpan(self::itemSpan(2))
                                     ->label(__('HS Code'))
                                     ->helperText(__('Defaults from the product; override per purchase if needed.'))
                                     ->maxLength(50),
 
                                 TextInput::make('spec_note')
+                                    ->columnSpan(self::itemSpan(4))
                                     ->label(__('Spec / Model Note'))
                                     ->placeholder(__('e.g. 7.5L 220V 1850W'))
                                     ->maxLength(255),
 
                                 TextInput::make('fob_unit_price_usd')
+                                    ->columnSpan(self::itemSpan(2))
                                     ->label(__('FOB Price (USD)'))
                                     ->numeric()
                                     ->prefix('$')
                                     ->minValue(0),
 
                                 TextInput::make('net_weight_kg')
+                                    ->columnSpan(self::itemSpan(2))
                                     ->label(__('Net Weight (kg)'))
                                     ->numeric()
                                     ->minValue(0)
                                     ->step('0.001'),
 
                                 TextInput::make('gross_weight_kg')
+                                    ->columnSpan(self::itemSpan(2))
                                     ->label(__('Gross Weight (kg)'))
                                     ->numeric()
                                     ->minValue(0)
                                     ->step('0.001'),
                             ])
-                            ->columns(8)
+                            ->columns(['default' => 1, 'md' => 12])
                             ->defaultItems(1)
                             ->addActionLabel('Add item')
                             ->reorderable(false)
@@ -618,6 +616,17 @@ class PurchaseForm
                     ])
                     ->collapsible(),
             ]);
+    }
+
+    /**
+     * Column span of one field of a purchase line: full width on a phone, a
+     * share of a 12-column row from the md breakpoint up.
+     *
+     * @return array<string, int|string>
+     */
+    protected static function itemSpan(int $columns): array
+    {
+        return ['default' => 'full', 'md' => $columns];
     }
 
     protected static function setItemSubtotal(Get $get, Set $set): void

@@ -2,6 +2,27 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-21 - Purchases: import from CSV, and the Items layout
+
+Owner request (Bangla): add an option on Purchases so that uploading a CSV creates all the purchases, the same idea as the investor-list import; and fix the Items section, where every field was in one row. The owner shared the Stock History sheet (columns Date, Product Name, Quantity, merged date cells, mixed day/month and month/day dates).
+
+Owner decisions (asked 2026-10-21): the supplier is picked at upload (not a CSV column); one purchase per date; the status is picked at upload and starts as Draft; a product that is not found is skipped and listed (never created).
+
+What changed: new `PurchaseCsvImportService`, `PurchaseCsvController` (sample), route `purchases.import.sample`, two header actions on the Purchases list (**Import purchases from CSV**, **Sample CSV**), `PurchaseForm` items repeater changed from a table to a 12-column grid, 29 new keys in `lang/en.json` + `lang/bn.json`, `tests/Feature/PurchaseCsvImportTest.php` (10 tests).
+
+Rules worth the owner's check against the real sheet:
+
+- A blank date cell takes the date of the row above (merged cells). A date that could be day/month or month/day (10/09/2025) is read **day first**; `08/28/2025` can only be month first, so it is read that way. The result says how many ambiguous dates there were, because the sheet mixes both forms.
+- Draft purchases change nothing; marking each **Received** later adds stock. Received at upload adds the quantity to stock at once, so it would double-count goods that are already in stock.
+- Rows are not de-duplicated within a file: the same product twice on one date becomes two items.
+- A file is read line by line, so a product name with a line break inside quotes is not supported. XLSX is not read (CSV only, as asked); the investor import also reads Excel and pasted text, which this one does not.
+
+Checked: the new tests and `TranslationParityTest` pass; on a throwaway local database the purchase form shows the three-row layout and the import dialog opens with its fields, Draft by default. A real file upload through the browser was not tried (the action is covered by a Livewire test).
+
+Needs Bangla review: all 29 new keys, especially the long dialog and status help texts and "Imported from CSV".
+
+Commit status: committed and pushed to `feature/purchase-csv-import`; `main` moves only on the owner's explicit approval.
+
 ## 2026-10-21 - Pushing without asking each time
 
 Owner: pushes must work without asking for permission every time (other agents push directly).
