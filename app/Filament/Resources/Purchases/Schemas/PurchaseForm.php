@@ -121,6 +121,7 @@ class PurchaseForm
 
                         TextInput::make('pi_number')
                             ->label('PI Number')
+                            ->helperText(__('Leave empty — filled automatically the first time you click "Generate PI".'))
                             ->maxLength(255),
 
                         DatePicker::make('pi_date')
@@ -128,12 +129,78 @@ class PurchaseForm
 
                         TextInput::make('ci_number')
                             ->label('CI Number')
+                            ->helperText(__('Leave empty — filled automatically the first time you click "Generate CI".'))
                             ->maxLength(255),
 
                         DatePicker::make('ci_date')
                             ->label('CI Date'),
+
+                        TextInput::make('pl_number')
+                            ->label(__('PL Number'))
+                            ->helperText(__('Leave empty — filled automatically the first time you click "Generate PL".'))
+                            ->maxLength(255),
+
+                        DatePicker::make('pl_date')
+                            ->label(__('PL Date')),
                     ])
                     ->columns(3)
+                    ->collapsible(),
+
+                Section::make(__('Trade Documents'))
+                    ->description(__('Feeds the printable PI / CI / PL documents (Purchase > Generate PI/CI/PL). CI and PL also need Delivery Terms, Port of Loading, and Port of Discharge filled in below before they can be generated.'))
+                    ->columnSpanFull()
+                    ->schema([
+                        TextInput::make('delivery_terms')
+                            ->label(__('Delivery Terms'))
+                            ->placeholder(__('e.g. FOB Ningbo, CFR Chattogram by Sea'))
+                            ->maxLength(255),
+
+                        TextInput::make('country_of_origin')
+                            ->label(__('Country of Origin'))
+                            ->maxLength(255),
+
+                        TextInput::make('port_of_loading')
+                            ->label(__('Port of Loading'))
+                            ->placeholder(__('e.g. Any Port From China'))
+                            ->maxLength(255),
+
+                        TextInput::make('port_of_discharge')
+                            ->label(__('Port of Discharge'))
+                            ->placeholder(__('e.g. Chattogram, Bangladesh'))
+                            ->maxLength(255),
+
+                        TextInput::make('payment_method_summary')
+                            ->label(__('Payment Method'))
+                            ->placeholder(__('e.g. 100% TT in advance, 100% LC at Sight'))
+                            ->maxLength(255),
+
+                        TextInput::make('freight_usd')
+                            ->label(__('Freight (USD)'))
+                            ->numeric()
+                            ->prefix('$')
+                            ->minValue(0)
+                            ->helperText(__('International freight only, in USD — separate from the "Freight to Ctg" BDT cost below, which may include additional inland charges.')),
+
+                        TextInput::make('exchange_rate')
+                            ->label(__('Exchange Rate (BDT per USD)'))
+                            ->numeric()
+                            ->minValue(0)
+                            ->step('0.0001')
+                            ->helperText(__('Informational only — does not change the BDT costs above.')),
+
+                        Textarea::make('terms_conditions')
+                            ->label(__('Payment Terms / Terms & Conditions'))
+                            ->rows(4)
+                            ->placeholder(__('Leave empty to use the default from Company Settings > Purchase Documents.'))
+                            ->columnSpanFull(),
+
+                        Textarea::make('pl_certification_note')
+                            ->label(__('Packing List Certification Note'))
+                            ->rows(3)
+                            ->placeholder(__('Leave empty to use the default from Company Settings > Purchase Documents.'))
+                            ->columnSpanFull(),
+                    ])
+                    ->columns(2)
                     ->collapsible(),
 
                 Section::make('Items')
@@ -150,6 +217,11 @@ class PurchaseForm
                                 TableColumn::make('Subtotal'),
                                 TableColumn::make('Allocated Cost'),
                                 TableColumn::make('Landed Unit Cost'),
+                                TableColumn::make(__('HS Code')),
+                                TableColumn::make(__('Spec / Model Note')),
+                                TableColumn::make(__('FOB Price (USD)')),
+                                TableColumn::make(__('Net Weight (kg)')),
+                                TableColumn::make(__('Gross Weight (kg)')),
                             ])
                             ->schema([
                                 Select::make('product_id')
@@ -223,6 +295,10 @@ class PurchaseForm
                                             ->required()
                                             ->maxLength(50),
 
+                                        TextInput::make('hs_code')
+                                            ->label(__('HS Code'))
+                                            ->maxLength(50),
+
                                         TextInput::make('cost_price')
                                             ->label('Cost Price')
                                             ->numeric()
@@ -256,6 +332,7 @@ class PurchaseForm
                                             'barcode' => $data['barcode'] ?? null,
                                             'brand' => $data['brand'] ?? null,
                                             'unit' => $data['unit'] ?? 'pcs',
+                                            'hs_code' => $data['hs_code'] ?? null,
                                             'cost_price' => $data['cost_price'] ?? 0,
                                             'sale_price' => $data['sale_price'] ?? 0,
                                             'price' => $data['sale_price'] ?? 0,
@@ -283,6 +360,7 @@ class PurchaseForm
 
                                         $set('unit_cost', $unitCost);
                                         $set('subtotal', (int) ($get('quantity') ?? 0) * $unitCost);
+                                        $set('hs_code', $product->hs_code);
                                         self::setPurchaseTotalsFromRepeater($get, $set);
                                     }),
 
@@ -340,6 +418,34 @@ class PurchaseForm
                                     ->prefix('৳')
                                     ->readOnly()
                                     ->dehydrated(false),
+
+                                TextInput::make('hs_code')
+                                    ->label(__('HS Code'))
+                                    ->helperText(__('Defaults from the product; override per purchase if needed.'))
+                                    ->maxLength(50),
+
+                                TextInput::make('spec_note')
+                                    ->label(__('Spec / Model Note'))
+                                    ->placeholder(__('e.g. 7.5L 220V 1850W'))
+                                    ->maxLength(255),
+
+                                TextInput::make('fob_unit_price_usd')
+                                    ->label(__('FOB Price (USD)'))
+                                    ->numeric()
+                                    ->prefix('$')
+                                    ->minValue(0),
+
+                                TextInput::make('net_weight_kg')
+                                    ->label(__('Net Weight (kg)'))
+                                    ->numeric()
+                                    ->minValue(0)
+                                    ->step('0.001'),
+
+                                TextInput::make('gross_weight_kg')
+                                    ->label(__('Gross Weight (kg)'))
+                                    ->numeric()
+                                    ->minValue(0)
+                                    ->step('0.001'),
                             ])
                             ->columns(8)
                             ->defaultItems(1)

@@ -15,13 +15,18 @@ class PurchaseItem extends Model
         'company_id',
         'purchase_id',
         'product_id',
+        'hs_code',
+        'spec_note',
         'quantity',
         'short_quantity',
         'damaged_quantity',
         'unit_cost',
+        'fob_unit_price_usd',
         'subtotal',
         'allocated_cost',
         'landed_unit_cost',
+        'net_weight_kg',
+        'gross_weight_kg',
     ];
 
     protected $casts = [
@@ -29,9 +34,12 @@ class PurchaseItem extends Model
         'short_quantity' => 'integer',
         'damaged_quantity' => 'integer',
         'unit_cost' => 'decimal:2',
+        'fob_unit_price_usd' => 'decimal:2',
         'subtotal' => 'decimal:2',
         'allocated_cost' => 'decimal:2',
         'landed_unit_cost' => 'decimal:2',
+        'net_weight_kg' => 'decimal:3',
+        'gross_weight_kg' => 'decimal:3',
     ];
 
     protected static function booted(): void

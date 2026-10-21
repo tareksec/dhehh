@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources\Purchases\Tables;
 
+use App\Filament\Resources\Purchases\Support\PurchaseDocumentActions;
 use App\Models\Purchase;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -110,6 +112,13 @@ class PurchasesTable
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
+                ActionGroup::make([
+                    PurchaseDocumentActions::make('pi'),
+                    PurchaseDocumentActions::make('ci'),
+                    PurchaseDocumentActions::make('pl'),
+                ])
+                    ->label(__('Documents'))
+                    ->icon('heroicon-o-printer'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

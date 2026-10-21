@@ -81,6 +81,11 @@ class ProductForm
                             ->label('Brand')
                             ->maxLength(255),
 
+                        TextInput::make('hs_code')
+                            ->label(__('HS Code'))
+                            ->helperText(__('Customs classification code. Defaults the HS Code column on the Purchase items table and prints on the PI/CI/Packing List.'))
+                            ->maxLength(50),
+
                         TextInput::make('unit')
                             ->label('Unit')
                             ->default('pcs')

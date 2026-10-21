@@ -40,6 +40,27 @@ class PurchaseWorkflowService
         $this->syncSupplierBalance($purchase);
     }
 
+    /**
+     * Fills the given trade document's number/date only when blank, derived
+     * from the purchase number (e.g. "PUR-...-XXXXX-PI"), then saves quietly.
+     * An existing value (already generated, or entered manually) is left
+     * untouched — Generate is a one-way default-fill, never an overwrite.
+     */
+    public function ensureDocumentNumber(Purchase $purchase, string $type): void
+    {
+        $numberColumn = "{$type}_number";
+        $dateColumn = "{$type}_date";
+
+        if (filled($purchase->{$numberColumn}) && filled($purchase->{$dateColumn})) {
+            return;
+        }
+
+        $purchase->forceFill([
+            $numberColumn => $purchase->{$numberColumn} ?: $purchase->purchase_number.'-'.strtoupper($type),
+            $dateColumn => $purchase->{$dateColumn} ?: now()->toDateString(),
+        ])->saveQuietly();
+    }
+
     public function syncPreviousSupplierBalance(Purchase $purchase): void
     {
         if ($purchase->wasChanged('supplier_id')) {

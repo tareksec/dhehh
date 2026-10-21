@@ -8,6 +8,8 @@ Owner request in chat (2026-10-21): "পুরোনো ৪টা branch এক�
 
 - `claude/whatsapp-web-login-sync`: the fix was not in `main` (`attachMedia()` still returned early for any filled `media_path`) - merged. Conflicts only in CHANGELOG / UPDATE_NOTES; its notes moved under `[Unreleased]` and below.
 - `claude/reseller-module-status` (2026-10-16, never reached `main`, no decision against it found): reseller sales report, SMS to resellers (approved / profit payable / withdrawal paid, texts empty until the company writes them), the "Become a reseller" menu item in `GET /site`, reseller levels set by hand, and the label *Warehouse damage* for damage source `other`. Merged. CHANGELOG: its older lines were already in `[2.82.0]`; only the four new entries and their notes went under `[Unreleased]` (release type now Minor). Lang files: union of both sides (52 new keys), `Other damage` replaced by the branch as intended (no code uses it). `docs/codebase-map/reseller.md` updated. Two migrations (`reseller_levels`, reseller SMS texts) - **deploy runs `php artisan migrate`**; the SMS need a running queue worker. Reseller-related tests + isolation, parity and migration-name tests: 462 passed.
+- `claude/purchase-module-automation` (2026-09-03/04, never reached `main`; nothing equivalent in `main`): printable PI / CI / Packing List from a purchase, and the fix for "Add shipment plan" always failing with "Purchase must belong to the same company" (`main` still had the bug). Merged. Conflicts: `Company::$fillable` and `routes/web.php` (kept both sides), CHANGELOG (its two entries moved under `[Unreleased]`). The branch was written before the bilingual rule: on merge its 60-odd admin labels, hints and messages were wrapped in `__()` and added to both language files (Bangla written by the agent). The printed PI/CI/PL stay English on purpose (they go to Chinese suppliers and banks). Five migrations - **deploy runs `php artisan migrate`**. Purchase / supplier / company-settings / parity tests: 86 passed.
+- Needs Bangla review (purchase documents): the 63 new keys, mainly "লোডিং বন্দর", "খালাস বন্দর", "উৎপত্তির দেশ", "প্রত্যয়ন নোট", "সুবিধাভোগীর অ্যাকাউন্ট", "বাণিজ্যিক কাগজপত্র".
 
 Commit status: merge commits on `main`, pushed from the owner's terminal after the full suite.
 
@@ -4833,6 +4835,67 @@ Verification:
 - Full `php artisan test` (plain, no `--env` flag, per CLAUDE.md): **1053 passed, 0 failed**.
 
 Commit status: Not committed yet — awaiting owner approval.
+
+## 2026-09-04 - Fix: "Add shipment plan" never created a shipment
+
+Reason — owner reported (Bengali): "add shipment plan এ ক্রিয়েট করলে লিস্ট তৈরি হয় না। কয়েকবার চেষ্টা করেছি কিন্তু কাজ হচ্ছে না।" (Creating via "add shipment plan" doesn't create the list entry — tried several times, doesn't work).
+
+Diagnosis: reproduced directly against the model (`$purchase->shipments()->create([...])`, the exact call `HasMany::create()`/Filament's `CreateAction` makes under the hood) — it threw `ValidationException: Purchase must belong to the same company.` on every attempt, even with nothing but the required tracking number filled in. Root cause in `app/Models/Shipment.php`'s `booted()`: the own-company consistency check (`$shipment->container?->company_id !== $shipment->company_id` / same for `purchase`) runs on the `saving` event. For a brand-new Eloquent model, `Model::save()`/`performInsert()` fires `saving` *before* `creating` — and it's `BelongsToCompany`'s `creating` hook that actually assigns `$model->company_id`. So at the point this check ran, `$shipment->company_id` was still null on every single creation, `(int) null` is `0`, and the real (non-zero) purchase/container company_id could never equal `0` — the check failed unconditionally, regardless of what the form actually contained. This is why the owner's repeated attempts all silently did nothing: the row was never inserted, Filament just kept showing the validation error.
+
+What changed:
+
+- `app/Models/Company.php` — new `resolveActiveCompanyId(): ?int`, factoring out the exact company-resolution logic `BelongsToCompany`'s `creating` hook already used (active `CompanyContext` company, else `defaultCompanyId()`), so another model's own validation can know what company_id a new record is about to get before that hook has actually run.
+- `app/Models/Shipment.php` (`booted()`) — the `saving` check now compares against `$shipment->company_id ?: Company::resolveActiveCompanyId()` instead of the possibly-still-blank `$shipment->company_id` directly. Cross-company rejection (a container or purchase genuinely belonging to a different company) still works exactly as before — confirmed by reverting the fix and re-running the new tests, which then fail with the same `ValidationException` the owner hit.
+
+Important changed files:
+
+- `app/Models/Shipment.php`, `app/Models/Company.php`
+- `tests/Feature/ShipmentTest.php` — new file: `test_a_shipment_plan_can_be_created_for_a_draft_purchase`, `test_a_shipment_plan_with_a_container_can_be_created`, `test_shipment_creation_is_still_rejected_for_a_container_from_another_company`, `test_shipment_creation_is_still_rejected_for_a_purchase_from_another_company`.
+
+Verification:
+
+- Targeted run — `ShipmentTest`: **4 passed**. Confirmed the fix is real by temporarily reverting `Shipment.php`/`Company.php` (`git stash`) and re-running: the two creation tests failed with the exact same `ValidationException` message the owner reported, then passed again once restored.
+- `MultiCompanyIsolationTest`, `PurchaseTest`, `PurchaseDocumentTest`, `ShipmentTest` together: **25 passed** (confirms the reused `resolveActiveCompanyId()` logic doesn't disturb existing company-scoping behavior).
+- Full `php artisan test` (plain, no `--env` flag, per CLAUDE.md): **1050 passed, 0 failed**.
+- No frontend assets touched — `npm run build` not required for this change.
+
+Commit status: Committed and pushed (`419d983`, owner approved: "হ্যাঁ কর শুধু এই সেশনের কাজ করবে").
+
+## 2026-09-03 - Feature: Purchase module automation — auto-generated PI/CI/Packing List
+
+Reason — owner asked (Bengali): "আমাদের পারচেস মডিউলটি অটোমেট করা যায় কীভাবে? আমি জাস্ট purchase info দিবো বাকি সব অটো ফিলাপ হয়ে যাবে। ci, pi, pl formate অনুযায়ী অটো জেনারেট হয়ে যাবে এবং সেগুলো প্রিন্টেবল হবে।" (How can we automate the Purchase module — I just give purchase info and the rest auto-fills; CI/PI/PL should auto-generate per format and be printable). Per CLAUDE.md ("never invent business rules"), asked the owner for the real format instead of guessing one; they uploaded their three actual Excel templates currently used with suppliers/bank (`MAMUN__PI.xlsx`, `Comarcial_Invoice.xlsx`, `Air_Fryer_PACKING_LISTF.xlsx`), inspected cell-by-cell with openpyxl. Wrote a plan (`EnterPlanMode`/`ExitPlanMode`) covering the field mapping, data model, and workflow before implementing; owner approved it.
+
+What changed:
+
+- Five additive migrations (`2026_09_03_09000{0..4}_*.php`) — new nullable fields: `companies` (bin/irc/tin number, signatory name/title/signature image), `suppliers` (country, fax, bank name/address/account name/account number/SWIFT/extra note, signature image), `products` (hs_code), `purchases` (pl_number, pl_date, delivery_terms, country_of_origin, port_of_loading, port_of_discharge, payment_method_summary, terms_conditions, pl_certification_note, freight_usd, exchange_rate), `purchase_items` (hs_code, spec_note, fob_unit_price_usd, net_weight_kg, gross_weight_kg). None of this touches the existing BDT landed-cost columns/engine — the new USD/trade fields are additive and purely for the printed documents.
+- `app/Models/{Company,Supplier,Product,Purchase,PurchaseItem}.php` — new fillable/cast columns; `Purchase` gains `fobTotalUsd()`, `cfrTotalUsd()`, `totalQuantity()`, `netWeightTotalKg()`, `grossWeightTotalKg()`, `cfrAmountInWords()`/`fobAmountInWords()`, `hasShippingDetailsForDocuments()`, `termsConditionsText()`/`paymentTermsText()`/`plCertificationNoteText()` (the last three fall back to a company-wide default from Company Settings when the purchase's own field is blank).
+- `app/Support/NumberToWords.php` (new) — plain English number-to-words, used for the PI "In Word" / CI "SAY USD ... ONLY" lines.
+- `app/Services/CompanySettingsService.php` — new `purchaseDocuments()`/`savePurchaseDocuments()` pair (mirrors the existing `invoice()`/`saveInvoice()`) storing the three documents' default boilerplate text in `companies.settings->purchase_documents`; new `documentImagePath()` (DomPDF-safe path resolver, reused for signature images).
+- `app/Services/PurchaseWorkflowService.php` — new `ensureDocumentNumber(Purchase, string $type)`: fills `{pi,ci,pl}_number`/`_date` from the purchase number only when blank, never overwrites an existing/manually-entered value.
+- `app/Http/Controllers/Admin/PurchaseDocumentController.php` (new) + `routes/web.php` (`purchases.documents`) — mirrors `OrderPdfController`'s single-action-controller pattern; streams (not downloads) one of `resources/views/purchases/documents/{pi,ci,pl}.blade.php` (new, laid out to match the owner's three real templates) so it opens as a print-preview in a new tab.
+- `app/Filament/Resources/Purchases/Support/PurchaseDocumentActions.php` (new) — the "Generate PI/CI/PL" action, wired into `ViewPurchase`/`EditPurchase` header actions and a `PurchasesTable` row action group. Per the owner's earlier decision (Q&A this session): PI is generatable once the purchase has a supplier + items; CI/PL unlock once Delivery Terms, Port of Loading, and Port of Discharge are filled in — no document is ever silently auto-created, each needs an explicit click, and a warning notification explains what's missing instead of opening a broken PDF.
+- `app/Filament/Resources/Purchases/Schemas/PurchaseForm.php` — new "Trade Documents" section (delivery terms, country of origin, ports, payment method, freight USD, exchange rate, terms/certification text) and new item-repeater columns (HS Code, spec note, FOB price USD, net/gross weight); picking a product now also defaults the item's HS Code from the product.
+- `app/Filament/Resources/Suppliers/Schemas/SupplierForm.php` — new "Trade & Banking Details" section (country, fax, bank fields, signature upload, `CompanyMedia` pattern).
+- `app/Filament/Resources/Companies/CompanyResource.php` — new "Import/Export Registration" section (BIN/IRC/TIN, signatory name/title, signature upload).
+- `app/Filament/Resources/Products/Schemas/ProductForm.php` — new HS Code field.
+- `app/Filament/Pages/CompanySettings.php` — new "Purchase Documents" section for the three admin-editable default texts.
+
+Important changed files:
+
+- `app/Http/Controllers/Admin/PurchaseDocumentController.php`, `app/Filament/Resources/Purchases/Support/PurchaseDocumentActions.php`, `app/Support/NumberToWords.php` (new)
+- `resources/views/purchases/documents/{pi,ci,pl}.blade.php`, `resources/views/purchases/documents/partials/styles.blade.php` (new)
+- `app/Models/Purchase.php`, `app/Services/PurchaseWorkflowService.php`, `app/Services/CompanySettingsService.php`
+- `routes/web.php` — new `purchases.documents` route (intentionally has no `whereIn` type constraint; the controller's own `abort_unless` gives a clean, predictable 404 for a bad `{type}` instead of letting the request silently fall through to some unrelated catch-all route)
+- `tests/Feature/PurchaseDocumentTest.php` (new) — PDF routes for all 3 document types, invalid-type 404, permission-denied 403, `ensureDocumentNumber()` fill/no-overwrite behavior, FOB/CFR/weight totals.
+
+Verification:
+
+- Targeted run — `PurchaseDocumentTest`: **6 passed**. `PurchaseTest`: **8 passed** (existing suite unaffected). `MultiCompanyIsolationTest`, `CompanySettingsTest`: **34 passed** (no new company-owned model, so `MultiCompanyIsolationTest`'s hardcoded model list needed no change). `SupplierCsvTest`, `ProductCsvTest`, `ProductStockCsvTest`, `ProductVariantTest`, and 5 other Product-related suites: **45 passed** (confirms the new `hs_code`/trade columns don't break CSV import/export or variant handling).
+- Full `php artisan test` (plain, no `--env` flag, per CLAUDE.md): **1046 passed, 0 failed**.
+- `npm run build`: succeeded (Vite build, no errors).
+- Debugged one real routing bug along the way (not a pre-existing issue): the route's `{purchase}` implicit binding failed for a test-created company because `SetCurrentCompany` middleware re-resolves the active company from session on every HTTP request, independent of any in-process `CompanyContext::set()` — fixed by having the test set session explicitly (matching `InvoiceDesignTest`'s existing convention) and by dropping the route-level `whereIn('type', ...)` constraint in favor of the controller's own `abort_unless()` check, so a mismatched `{type}` can't silently fall through to some other route.
+
+Commit status: Committed and pushed (`f040348`, owner approved: "হ্যাঁ, কমিট আর পুশ করে দাও").
 
 ## 2026-08-30 - Fix: WooCommerce orders that oversell ERP stock never synced
 

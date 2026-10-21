@@ -1,5 +1,5 @@
 # Catalog & Inventory
-> Last checked: 2026-10-20, commit 0e5316d
+> Last checked: 2026-10-21, merge of `claude/purchase-module-automation` into main (PI / CI / Packing List, trade document columns on companies, suppliers, products, purchases and purchase items)
 
 ## What it does
 The Catalog & Inventory module manages products, variants, categories, digital media assets, and stock lifecycle across warehouses and companies. It implements an immutable stock movement ledger where on-hand quantities are strictly computed from transactional movements (opening, purchase, sale, return, damage, adjustment, and internal transfers). It provides multi-company physical inventory sharing through Stock Pools, allowing different companies to sell from the same physical stock without inventory drift. For purchasing and supply chain operations, it tracks suppliers, import purchase orders with detailed China-to-BD landed costs, shipping containers, and customs tracking. Additionally, it provides batch operations for bulk stock updates, product setup onboarding, and CSV import/export capabilities.
@@ -81,6 +81,7 @@ The Catalog & Inventory module manages products, variants, categories, digital m
 | `app/Http/Controllers/Admin/ProductCsvController.php` | Handles product CSV export, blank template downloads, and bulk uploads. |
 | `app/Http/Controllers/Admin/SupplierCsvController.php` | Handles supplier CSV export and template generation. |
 | `app/Http/Controllers/Admin/SupplierReportPdfController.php` | Generates downloadable PDF statements for selected suppliers. |
+| `app/Http/Controllers/Admin/PurchaseDocumentController.php` | `GET /admin/purchases/{purchase}/documents/{type}` (`purchases.documents`, `pi` / `ci` / `pl`): streams the Proforma Invoice, Commercial Invoice or Packing List PDF; buttons from `Purchases/Support/PurchaseDocumentActions` (numbers filled by `PurchaseWorkflowService::ensureDocumentNumber()`, amounts in words by `App\Support\NumberToWords`). |
 
 ### Console Commands
 | Path | What it does |
@@ -92,6 +93,7 @@ The Catalog & Inventory module manages products, variants, categories, digital m
 | --- | --- |
 | `resources/views/filament/pages/product-setup.blade.php` | Blade view for product setup and onboarding settings. |
 | `resources/views/filament/pages/supplier-report.blade.php` | Blade view for generating supplier financial reports. |
+| `resources/views/purchases/documents/{pi,ci,pl}.blade.php` | The printed trade documents (English on purpose: they go to suppliers and banks). Company trade fields (BIN/IRC/TIN, signatory) and supplier bank fields fill the buyer and seller blocks; default wording from Company Settings → Purchase Documents. |
 
 ### Migrations (name pattern only)
 - Find a table's migrations by searching `database/migrations/` for the table name: several tables are created together in one migration, so the file name does not always match the table.

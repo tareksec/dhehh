@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\CompanyContext;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -69,6 +70,12 @@ class Company extends Model
         'investor_project_completed_message',
         'ims_enabled',
         'ims_domain',
+        'bin_number',
+        'irc_number',
+        'tin_number',
+        'signatory_name',
+        'signatory_title',
+        'signature_path',
     ];
 
     protected $casts = [
@@ -686,6 +693,25 @@ class Company extends Model
     public static function defaultCompanyId(): ?int
     {
         return static::defaultCompany()?->getKey();
+    }
+
+    /**
+     * The company_id a new company-owned model will end up with once
+     * `BelongsToCompany`'s `creating` hook runs: the active `CompanyContext`
+     * company, falling back to `defaultCompanyId()`. Exposed so a model's
+     * own `saving` hook (which fires *before* `creating` — see
+     * `Model::save()`/`performInsert()` — so `$model->company_id` is still
+     * blank there on a brand-new record) can validate against the
+     * company this record is actually about to get, instead of against a
+     * not-yet-set null.
+     */
+    public static function resolveActiveCompanyId(): ?int
+    {
+        if (app()->bound(CompanyContext::class) && app(CompanyContext::class)->hasCompany()) {
+            return app(CompanyContext::class)->id();
+        }
+
+        return static::defaultCompanyId();
     }
 
     public static function seedCoreCompanies(): void

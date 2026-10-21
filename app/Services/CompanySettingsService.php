@@ -183,6 +183,60 @@ class CompanySettingsService
         AppSetting::setValue(self::DATE_FORMAT, trim((string) ($data['date_format'] ?? 'd M Y')));
     }
 
+    /**
+     * Default boilerplate wording for the Purchase module's printed trade
+     * documents (Proforma Invoice, Commercial Invoice, Packing List) — kept
+     * admin-editable here rather than hardcoded in the Blade views, per
+     * CLAUDE.md's rule that such content must be manageable from the
+     * Filament admin panel. A purchase's own `terms_conditions` /
+     * `pl_certification_note` fields override these per-purchase; when
+     * blank, the printed document falls back to this default.
+     */
+    public const PURCHASE_DOCUMENT_DEFAULTS = [
+        'pi_payment_terms' => "1. 100% TT in advance.\n2. PI validity 30 days.",
+        'ci_terms_conditions' => "1. DELIVERY TIME: IN 30 DAYS AFTER RECEIVING 100% CLEAN LC AT SIGHT.\n2. VALIDITY TIME: 45 DAYS.\n3. PARTIAL SHIPMENT: ALLOWED.\n4. PAYMENT: 100% IRREVOCABLE L/C AT SIGHT.\n5. CERTIFICATE OF ORIGIN ISSUED BY THE COMPETENT AUTHORITY.\n6. PRE-SHIPMENT INSPECTION FOR QUANTITY, QUALITY, DESCRIPTION, CLASSIFICATION AUDITED BY SGS/ITS/BV AND PRESENTING INSPECTION REPORT TO THE EFFECT THAT MACHINES HAVE 10 (TEN) YEARS ECONOMIC LIFE FROM THE DATE OF SHIPMENT.",
+        'pl_certification_note' => "WE HEREBY CERTIFY THAT THE MERCHANDISE TO BE OF {country_of_origin} ORIGIN AND THE PACKING OF GOODS TO BE PACKED IN EXPORT STANDARD SEA WORTHY PACKING.\n\nWE HEREBY CERTIFY THAT THE GOODS SUPPLIED ARE STRICTLY AS PER THE ABOVE MENTIONED PROFORMA INVOICE NO: {pi_number} DATE: {pi_date}.",
+    ];
+
+    public function purchaseDocuments(?Company $company = null): array
+    {
+        $company ??= $this->currentCompany();
+        $stored = (array) (((array) $company?->settings)['purchase_documents'] ?? []);
+
+        return array_merge(self::PURCHASE_DOCUMENT_DEFAULTS, array_intersect_key($stored, self::PURCHASE_DOCUMENT_DEFAULTS));
+    }
+
+    public function savePurchaseDocuments(array $data, ?Company $company = null): void
+    {
+        $company ??= $this->currentCompany();
+
+        if (! $company) {
+            throw new LogicException('Select a company before saving purchase document settings.');
+        }
+
+        $purchaseDocuments = self::PURCHASE_DOCUMENT_DEFAULTS;
+
+        foreach ($purchaseDocuments as $key => $default) {
+            $purchaseDocuments[$key] = trim((string) ($data[$key] ?? $default));
+        }
+
+        $settings = $company->settings ?? [];
+        $settings['purchase_documents'] = $purchaseDocuments;
+
+        $company->forceFill(['settings' => $settings])->save();
+    }
+
+    /**
+     * Resolves an uploaded image (company/supplier signature, logo, ...) to
+     * a DomPDF-safe filesystem path or base64 data URI — never a remote
+     * URL, since DomPDF cannot fetch those. Shared by the invoice PDF and
+     * the Purchase PI/CI/PL PDFs.
+     */
+    public function documentImagePath(?string $path, Company $company): ?string
+    {
+        return $this->publicPath($path, $company);
+    }
+
     public function logoUrl(?Company $company = null): ?string
     {
         $company ??= $this->currentCompany();

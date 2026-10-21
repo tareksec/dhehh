@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\InvestorPortalOpenController;
 use App\Http\Controllers\Admin\LegacyAdminClusterRedirectController;
 use App\Http\Controllers\Admin\OrderPdfController;
 use App\Http\Controllers\Admin\ProductCsvController;
+use App\Http\Controllers\Admin\PurchaseDocumentController;
 use App\Http\Controllers\Admin\PushDeviceController;
 use App\Http\Controllers\Admin\ReportExportController;
 use App\Http\Controllers\Admin\ReportPdfController;
@@ -643,6 +644,18 @@ Route::middleware('auth')
 Route::middleware('auth')
     ->get('/admin/courier-handover-sheet', CourierHandoverSheetController::class)
     ->name('courier.handover-sheet');
+
+// Purchase trade documents: {type} is 'pi' (Proforma Invoice), 'ci'
+// (Commercial Invoice), or 'pl' (Packing List) — see
+// PurchaseDocumentController::TYPES, which validates it (a bad value 404s
+// cleanly from the controller itself rather than relying on a route regex,
+// so a mismatched {type} can't silently fall through to some unrelated
+// catch-all route). Streamed (not downloaded) so it opens inline in the new
+// tab the Filament "Generate ..." action opens, giving a print-preview the
+// browser's native print/save handles the "printable" requirement for.
+Route::middleware('auth')
+    ->get('/admin/purchases/{purchase}/documents/{type}', PurchaseDocumentController::class)
+    ->name('purchases.documents');
 
 Route::middleware('auth')
     ->get('/admin/reports/export/{type}', ReportExportController::class)
