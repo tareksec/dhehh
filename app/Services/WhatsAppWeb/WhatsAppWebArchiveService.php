@@ -11,6 +11,7 @@ use App\Models\WhatsAppContact;
 use App\Services\CompanyStorageService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 /**
  * Writes what the whatsapp-bridge syncs into the ERP: contacts, 1:1
@@ -332,7 +333,9 @@ class WhatsAppWebArchiveService
             return false;
         }
 
-        if (filled($message->media_path)) {
+        // A message that points to a file the server no longer has (for example
+        // after a redeploy without persistent storage) takes the file again.
+        if (filled($message->media_path) && $this->storedFileExists($channel, (string) $message->media_path)) {
             return true;
         }
 
@@ -346,6 +349,15 @@ class WhatsAppWebArchiveService
         $message->forceFill(['media_path' => $path, 'media_mime' => $mime])->save();
 
         return true;
+    }
+
+    protected function storedFileExists(ConversationChannel $channel, string $path): bool
+    {
+        try {
+            return app(CompanyStorageService::class)->locatePrivate($path, $channel->company) !== null;
+        } catch (InvalidArgumentException) {
+            return false;
+        }
     }
 
     /** @return array<string, int> */
