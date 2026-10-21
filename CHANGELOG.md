@@ -4,6 +4,10 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.97.0] - 2026-10-21
+
+**Release type:** Minor Feature Update
+
 ### Added
 
 - **Purchases → Import purchases from CSV**: upload a CSV and the purchases are created for you (owner request 2026-10-21, shaped like the Stock History sheet).
@@ -22,7 +26,6 @@ All notable production changes to Business Dashboard are documented here.
 
 - `App\Services\PurchaseCsvImportService` holds the rules (see its class comment); the Purchases list page action is `ListPurchases::importPurchasesAction()` and the sample is `GET /admin/purchases/import/sample` (`purchases.import.sample`, `PurchaseCsvController`). A created purchase carries `[csv:<12 hex>]` in its note, made from the supplier, the date and the typed lines, so a second upload of the same file is recognised and skipped. No migration, no new model. Tests: `PurchaseCsvImportTest` (10).
 - `PurchaseForm`: the items repeater no longer uses `->table()`; it is a 12-column grid (`columns(['default' => 1, 'md' => 12])`) and each field takes its share with `itemSpan()`.
-
 ## [2.96.1] - 2026-10-21
 
 **Release type:** Patch/Fix Update
