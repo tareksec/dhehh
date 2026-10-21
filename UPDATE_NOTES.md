@@ -21,7 +21,9 @@ Checked: the new tests and `TranslationParityTest` pass; on a throwaway local da
 
 Needs Bangla review: all 29 new keys, especially the long dialog and status help texts and "Imported from CSV".
 
-Commit status: committed and pushed to `feature/purchase-csv-import`; `main` moves only on the owner's explicit approval.
+Full plain `php artisan test` on the branch (assets built from this tree): 2,957 passed, 1 skipped, 1 failed. The one failure, `InvestorPortalStaffEntryTest` "the preview opens the portal pages even before a password was set", passed when run alone, with its whole class (18) and with every InvestorPortal test (76); it is unrelated to purchases and looks like a one-off flake.
+
+Commit status: committed on `feature/purchase-csv-import` and pushed to `main` on the owner's explicit approval (2026-10-21), after the full test run and the MySQL migration check.
 
 ## 2026-10-21 - Pushing without asking each time
 
