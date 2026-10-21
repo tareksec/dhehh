@@ -12,6 +12,7 @@ use App\Services\LoginGate;
 use App\Services\StorefrontCustomerActivityService;
 use App\Services\StorefrontMetaTrackingService;
 use App\Services\StorefrontNotificationService;
+use App\Support\LoginThrottled;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -169,7 +170,17 @@ class AccountAuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $customer = $this->accounts->attemptLogin($data['identifier'], $data['password']);
+        try {
+            $customer = $this->accounts->attemptLogin($data['identifier'], $data['password']);
+        } catch (LoginThrottled $exception) {
+            // An unknown device while the account or the site is under attack:
+            // the login form shows the CAPTCHA on the page it is sent back to.
+            if ($exception->captcha) {
+                session()->flash('captcha_required', true);
+            }
+
+            throw $exception;
+        }
 
         if (! $customer) {
             throw ValidationException::withMessages([

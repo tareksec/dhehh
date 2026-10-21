@@ -19,6 +19,8 @@ final class LoginAttempt
         public readonly bool $trusted,
         public readonly string $outcome,
         public readonly int $retryAfter = 0,
+        /** A CAPTCHA is set up, so the visitor can clear a CHALLENGE by solving one. */
+        public readonly bool $captchaAvailable = false,
     ) {}
 
     /** Told "login failed" without a password hash being computed. */
@@ -27,7 +29,7 @@ final class LoginAttempt
         return $this->outcome === LoginGate::DENY;
     }
 
-    /** Must wait (or, once a CAPTCHA is set up, solve one) before trying again. */
+    /** Must wait, or solve the CAPTCHA when one is set up (requiresCaptcha()), before trying again. */
     public function isBlocked(): bool
     {
         return in_array($this->outcome, [LoginGate::THROTTLE, LoginGate::CHALLENGE], true);
@@ -36,5 +38,11 @@ final class LoginAttempt
     public function requiresChallenge(): bool
     {
         return $this->outcome === LoginGate::CHALLENGE;
+    }
+
+    /** The visitor is asked to solve the CAPTCHA (rather than just wait). */
+    public function requiresCaptcha(): bool
+    {
+        return $this->requiresChallenge() && $this->captchaAvailable;
     }
 }

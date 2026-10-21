@@ -1,5 +1,5 @@
 # Core Platform
-> Last checked: 2026-10-20, commit 0e5316d
+> Last checked: 2026-10-21, merge of `ccr-4505e72d-hwaq92` into main (CAPTCHA for a challenged sign-in)
 
 ## What it does
 The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and four distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated backups to Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
@@ -54,7 +54,10 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Services/AppUpdatePushService.php` | Dispatches deployment update notifications to administrators. |
 | `app/Services/CoolifyDeploymentService.php` | Interacts with Coolify webhook APIs to trigger container redeployments. |
 | `app/Services/DeploymentErrorReporter.php` | Captures, deduplicates, and logs critical module and migration exceptions. |
-| `app/Services/LoginGate.php` | Evaluates login requests against brute-force rules before executing bcrypt checks. |
+| `app/Services/LoginGate.php` | Evaluates login requests against brute-force rules before executing bcrypt checks; at a `CHALLENGE` a solved CAPTCHA token clears it. |
+| `app/Services/TurnstileVerifier.php` | Checks a Cloudflare Turnstile token with `siteverify`; any failure counts as "not solved". |
+| `app/Support/LoginCaptchaSettings.php` | Global CAPTCHA switch and Turnstile keys (encrypted `AppSetting`), set on Settings → Login Security (`app/Filament/Pages/LoginSecuritySettings.php`, super admin). |
+| `app/Filament/Concerns/HasLoginCaptcha.php` | The CAPTCHA step shared by the admin/office, reseller and investor sign-in pages (view `filament/components/login-captcha`). |
 | `app/Services/LicenseActivationService.php` | Verifies and stores system software license keys and activation metadata. |
 | `app/Services/AuditLogService.php` | Records administrative actions and data modifications to the audit log. |
 

@@ -289,7 +289,7 @@ class InvestorBusinessSwitchService
      *
      * @throws LoginThrottled when LoginGate stops the attempt before the password is checked
      */
-    public function attemptCentralLogin(string $phone, string $password, ?Company $prefer = null): ?array
+    public function attemptCentralLogin(string $phone, string $password, ?Company $prefer = null, ?LoginClient $client = null): ?array
     {
         $candidates = $this->activeAccountsFor($phone);
 
@@ -298,7 +298,8 @@ class InvestorBusinessSwitchService
                 ->sortBy(fn (InvestorPortalAccount $account): int => (int) $account->company_id === (int) $prefer->getKey() ? 0 : 1)
                 ->values();
         }
-        $client = LoginClient::fromRequest(request(), LoginGate::SURFACE_INVESTOR);
+        // The sign-in page passes its own client, which carries a solved CAPTCHA token.
+        $client ??= LoginClient::fromRequest(request(), LoginGate::SURFACE_INVESTOR);
         $attempt = $this->loginGate->begin(LoginGate::SURFACE_INVESTOR, null, Phone::normalize($phone), $candidates->first(), $client);
 
         if ($attempt->isDenied()) {

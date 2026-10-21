@@ -22,18 +22,23 @@ final class LoginClient
         public readonly string $userAgent,
         public readonly string $language,
         public readonly ?string $deviceToken,
+        /** The visitor's answer to the CAPTCHA (Turnstile response token), if they solved one. */
+        public readonly ?string $captchaToken = null,
     ) {}
 
     /** A browser talking to the ERP directly: the token is a cookie. */
     public static function fromRequest(Request $request, string $surface): self
     {
         $token = $request->cookie(LoginGate::cookieName($surface));
+        // Turnstile's widget adds this field to the form it sits in.
+        $captcha = $request->input('cf-turnstile-response');
 
         return new self(
             (string) $request->ip(),
             self::clean((string) $request->userAgent()),
             self::clean((string) $request->header('Accept-Language')),
             is_string($token) && $token !== '' ? $token : null,
+            is_string($captcha) && $captcha !== '' ? $captcha : null,
         );
     }
 
@@ -43,13 +48,21 @@ final class LoginClient
         $ip = $request->input('client_ip');
         $agent = $request->input('client_user_agent');
         $token = $request->input('device_token', $request->header('X-Device-Token'));
+        $captcha = $request->input('captcha_token');
 
         return new self(
             is_string($ip) && filter_var($ip, FILTER_VALIDATE_IP) ? $ip : (string) $request->ip(),
             is_string($agent) ? self::clean($agent) : '',
             '',
             is_string($token) && $token !== '' ? $token : null,
+            is_string($captcha) && $captcha !== '' ? $captcha : null,
         );
+    }
+
+    /** The same client, carrying the CAPTCHA answer a Livewire page collected. */
+    public function withCaptchaToken(?string $captchaToken): self
+    {
+        return new self($this->ip, $this->userAgent, $this->language, $this->deviceToken, $captchaToken !== '' ? $captchaToken : null);
     }
 
     /**

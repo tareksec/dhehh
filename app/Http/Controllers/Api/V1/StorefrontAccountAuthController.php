@@ -12,6 +12,7 @@ use App\Services\CustomerAccountService;
 use App\Services\LoginGate;
 use App\Services\StorefrontCustomerActivityService;
 use App\Services\StorefrontNotificationService;
+use App\Support\LoginCaptchaSettings;
 use App\Support\LoginClient;
 use App\Support\LoginThrottled;
 use App\Support\StorefrontApi\AccountPayload;
@@ -108,6 +109,7 @@ class StorefrontAccountAuthController extends Controller
             'password' => ['required', 'string', 'max:200'],
             'remember' => ['nullable', 'boolean'],
             'device_token' => ['nullable', 'string', 'max:300'],
+            'captcha_token' => ['nullable', 'string', 'max:2100'],
         ]);
 
         $identifier = Phone::identifier($data['identifier']);
@@ -115,6 +117,17 @@ class StorefrontAccountAuthController extends Controller
         try {
             $customer = $this->accounts->attemptLogin($identifier, $data['password'], LoginClient::fromApiRequest($request));
         } catch (LoginThrottled $exception) {
+            // An unknown device while the account or the site is under attack and a
+            // CAPTCHA is set up: the website shows the Turnstile widget with this
+            // public site key and sends the answer back as "captcha_token".
+            if ($exception->captcha) {
+                return $this->fail('captcha_required', 429, [
+                    'retry_after' => $exception->retryAfter,
+                    'challenge' => true,
+                    'captcha' => ['provider' => 'turnstile', 'site_key' => LoginCaptchaSettings::siteKey()],
+                ]);
+            }
+
             return $this->fail('too_many_attempts', 429, ['retry_after' => $exception->retryAfter, 'challenge' => $exception->challenge]);
         }
 
