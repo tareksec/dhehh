@@ -27,7 +27,7 @@ use Filament\Navigation\NavigationItem;
 
 /**
  * The investor portal menu (IMS-V2/DESIGN.md §6.1, §8.1): on wide screens the
- * five main pages as pills in the top bar with everything else under "More",
+ * main pages as pills in the top bar with everything else under "More",
  * plus an icon rail on the left; on phones the bottom tab bar
  * (filament.investor.mobile-nav) and the Profile page's list. A page shows
  * only to the people allowed to open it (InvestorPortalPage::canAccess()).
@@ -40,6 +40,8 @@ class PortalNavigation
         return [
             ['group' => null, 'items' => [
                 [Dashboard::class, 'Home', 'heroicon-o-home'],
+                // A project is what the person puts money in, company by company (owner request 2026-10-21): right after Home.
+                [Projects::class, null, 'heroicon-o-rectangle-stack'],
                 [MyInvestments::class, 'Investments', 'heroicon-o-briefcase'],
                 [Payouts::class, 'Profit', 'heroicon-o-banknotes'],
                 [Statement::class, null, 'heroicon-o-document-text'],
@@ -47,7 +49,6 @@ class PortalNavigation
             ]],
             ['group' => 'More', 'icon' => 'heroicon-o-squares-plus', 'items' => [
                 [MyBusinesses::class, null, 'heroicon-o-building-office-2'],
-                [Projects::class, null, 'heroicon-o-rectangle-stack'],
                 [Notifications::class, null, 'heroicon-o-bell'],
                 [Requests::class, null, 'heroicon-o-inbox-arrow-down'],
                 [Support::class, null, 'heroicon-o-chat-bubble-left-right'],
@@ -121,7 +122,7 @@ class PortalNavigation
 
         return [
             'groups' => array_values(array_filter([
-                $pick([Dashboard::class, MyInvestments::class, Payouts::class, Statement::class]),
+                $pick([Dashboard::class, Projects::class, MyInvestments::class, Payouts::class, Statement::class]),
                 $pick([Feed::class, Support::class, Notifications::class]),
                 $pick([MyInvestors::class, Commissions::class]),
             ])),

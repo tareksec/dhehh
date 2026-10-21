@@ -2,6 +2,16 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-21 - Both feature branches merged into main
+
+Owner approval in chat (2026-10-21): "sob kicu push kro ... sobkiucui push kore deo and marge kore deo".
+
+- `origin/main` had the v2.95.0 release cut; `main` was fast-forwarded to it, then `feature/ims-office-login-session` and `feature/ims-header-and-projects-tab` were merged. Both branches' CHANGELOG lines had landed inside `[2.95.0]`; they were moved under `[Unreleased]` (the released sections are unchanged from `origin/main`).
+- The working copy held an uncommitted duplicate of the login-session files (identical to that branch's commit); it was put aside with `git stash`, not deleted.
+- Not merged: the older cloud-session branches on GitHub (`origin/claude/*`, `origin/ccr-*`, weeks old and 24-420 commits behind `main`); see the chat for what each holds.
+
+Commit status: merge commit on `main`; pushed from the owner's terminal.
+
 ## 2026-10-21 - Fix: office sign-in lands on the investor sign-in when the browser also uses the portal
 
 Reason - owner report (brief of 2026-10-21): in the owner's main browser `zamzaminv.app/office/login` ends on the investor sign-in; a clean browser works.
@@ -17,7 +27,22 @@ What changed:
 
 Verified: new `Ims\OfficeAndPortalSessionTest` 8 passed (before the fix 5 failed: the office sign-in landed on `/investor/dashboard`, the portal sign-in on `/office`, and each sign-out signed the other panel out). `DomainRoutingTest`, `InvestorBusinessSwitchTest`, `LoginGateTest`, `ThemeAndSignInTest` pass (61 with the new file). Full suite: 2882 passed, 1 skipped, 0 failed. The live acceptance tests on zamzaminv.app need the deploy (main moves only on owner approval).
 
-Commit status: committed and pushed to `feature/ims-office-login-session`; not merged into `main`.
+Commit status: committed and pushed to `feature/ims-office-login-session`; merged into `main` (see above).
+
+## 2026-10-21 - IMS top bar fix and Projects as a main portal page
+
+Reason - owner: the office UI still breaks (the dark mode and profile buttons slide off to the side), and on the investor side the Projects section works as the company, so it should be highlighted / brought to the side tab.
+
+What changed:
+- Top bar of both IMS panels: the right-hand buttons keep their size; on laptops the menu gets its own line under them when it does not fit (office 1024-1799px, portal 1024-1359px). Measured before the fix: at 1280px the office needed ~1410px (Bangla menu alone 856px), so the theme button and profile were pushed out; the portal broke below ~1280px.
+- Office on 640-899px: company picker and language switch go to the menu drawer (the profile button was off-screen at 660px).
+- Filament's light/dark/system switch in the profile menu is hidden: it did not follow the moon button, and pressing its stale "light" did nothing. The moon / sun button is the one switch.
+- Portal: Projects right after Home in the top menu and the left rail; on phones the bottom bar is Home · Projects · Investments · Profit · Profile (Feed moved into the Profile list; it stays in the top menu and rail).
+- Decided by the rules: two lines instead of hiding menu words (the owner is non-technical; icon-only office groups have no icons in Filament).
+
+Verified: browser (preview copy) office at 660, 768, 1024, 1280, 1700, 1800, 1900px and portal at 375, 1060, 1280, 1360, 1400px, light and dark, English and Bangla - every button on screen, profile menu opens inside the screen. `InvestorPortalTest` + `OfficeHomeTest` + `TranslationParityTest` pass; full suite 2875 passed, 1 skipped, 0 failed; `npm run build` passes.
+
+Commit status: committed to `feature/ims-header-and-projects-tab`; merged into `main` (see above).
 
 ## 2026-10-21 - Plan 18 (phases A-E) merged into main
 
