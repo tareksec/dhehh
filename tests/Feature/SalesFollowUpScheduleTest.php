@@ -114,6 +114,21 @@ class SalesFollowUpScheduleTest extends TestCase
         $this->assertSame(3, $conversation->messages()->where('direction', 'outgoing')->where('generated_by', 'automation')->count());
     }
 
+    public function test_a_reminder_due_days_ago_is_cancelled_not_sent(): void
+    {
+        // Owner decision 2026-10-21: when the scheduler starts after a long stop, old offers are not all chased at once.
+        Http::fake();
+        $this->settings(['follow_up_schedule_hours' => '1, 2', 'follow_up_weekly_count' => 1]);
+        $conversation = $this->chat();
+        $followUp = app(SalesFollowUpService::class)->schedule($conversation, $this->link($conversation));
+
+        $this->travelTo($followUp->due_at->copy()->addDays(SalesFollowUpService::STALE_AFTER_DAYS)->addHour());
+        $followUp = $this->process($followUp);
+
+        $this->assertSame('cancelled', $followUp->status);
+        Http::assertNothingSent();
+    }
+
     public function test_nothing_is_sent_in_the_quiet_hours(): void
     {
         Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.q']]])]);

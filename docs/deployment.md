@@ -454,6 +454,22 @@ Add this cron entry:
 * * * * * cd /path/to/project && php artisan schedule:run >> /dev/null 2>&1
 ```
 
+**On Coolify** nothing in the container runs the scheduler (Nixpacks starts only
+the web server), so add it as a scheduled task of the ERP application, once:
+Coolify → the app → **Scheduled Tasks** → **Add**: name `laravel-scheduler`,
+command `php artisan schedule:run`, frequency `* * * * *`, container = the app
+itself. Check first that no such task exists (two would run every job twice
+per minute's check; `onOneServer()` stops a double run only while the cache
+lock works). This one task runs every job in `bootstrap/app.php` for every
+company: backups, courier status sync, cart and CRM reminders, and the IMS
+jobs (profit proposals, maturity reminders, owner digest, monthly statements,
+late shipments).
+
+Starting the scheduler after a long stop does not message old customers at
+once: abandoned carts older than 3 days (on top of the company's delay) get no
+reminder, a lead follow-up due more than 3 days ago reaches only the staff
+member, and a sales follow-up due more than 3 days ago is cancelled.
+
 ## Queue Worker
 
 If `QUEUE_CONNECTION=sync`, no queue worker is required — but see the

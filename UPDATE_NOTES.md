@@ -2,6 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-21 - Reminder age limits before the scheduler is switched on
+
+Reason - another agent proposed adding `php artisan schedule:run` (every minute) as a Coolify scheduled task. Checked in the repo: nothing in the container runs the scheduler (Nixpacks starts only the web server; no supervisor or cron), so none of the 15 jobs in `bootstrap/app.php` run today. Owner: "এটা তো করবই".
+
+Risk found before switching it on: three jobs message customers and had no upper age limit, so the first run would have sent every waiting reminder at once - every abandoned cart with a phone that was never reminded (however old), every overdue lead follow-up, every overdue sales follow-up. The other jobs are safe to start late (backup, courier sync, Meta retry, revert-to-AI, quotation expiry, IMS jobs are idempotent or once per record).
+
+What changed: a 3-day limit on those three (carts skipped, lead gets no message but the staff member is still told, sales follow-up cancelled "Too old"). `docs/deployment.md` has the Coolify steps.
+
+Owner / agent still to do in Coolify: Scheduled Tasks → check none exists → Add `php artisan schedule:run`, `* * * * *`, on the ERP app. The next morning: a backup ran, `ims:profit-proposals` made drafts at 07:00. Queued jobs (reseller SMS) also need a queue worker - separate decision.
+
+Verified: reminder / follow-up / CRM test files 98 passed (3 new). Full suite: 2947 passed, 1 skipped, 0 failed.
+
+Commit status: committed to `feature/scheduler-backlog-guard` and merged into `main` on the owner's go-ahead ("তুমি যেভাবে করার করো", 2026-10-21), so the limits are live before the scheduler is switched on.
+
 ## 2026-10-21 - Older cloud branches checked one by one
 
 Owner request in chat (2026-10-21): "পুরোনো ৪টা branch একটা একটা করে দেখো, যেটা এখনো লাগবে সেটা merge করো, conflict মিটিয়ে টেস্ট চালিয়ে". (`claude/auto-profit-payment-system` was left out: `main` already has its own payout batch engine.)

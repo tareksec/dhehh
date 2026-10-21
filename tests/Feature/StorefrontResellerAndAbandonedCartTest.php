@@ -183,6 +183,29 @@ class StorefrontResellerAndAbandonedCartTest extends TestCase
         $this->assertNotNull($stale->fresh()->reminded_at);
     }
 
+    public function test_a_cart_left_days_ago_gets_no_reminder(): void
+    {
+        // Owner decision 2026-10-21: when the scheduler starts after a long stop, old carts are not all messaged at once.
+        $company = $this->createStore('remind-old.example.test', reminders: true);
+        Http::fake();
+
+        $old = StorefrontCartRecord::withoutGlobalScopes()->create([
+            'company_id' => $company->getKey(),
+            'session_id' => 'sess-old',
+            'phone' => '01844444445',
+            'items' => [['product_id' => 1, 'variant_id' => null, 'quantity' => 1]],
+            'status' => StorefrontCartRecord::STATUS_ACTIVE,
+        ]);
+        StorefrontCartRecord::withoutGlobalScopes()->whereKey($old->getKey())->update(['updated_at' => now()->subDays(30)]);
+
+        $this->artisan('storefront:send-abandoned-cart-reminders')
+            ->expectsOutputToContain('reminders sent: 0')
+            ->assertSuccessful();
+
+        Http::assertNothingSent();
+        $this->assertNull($old->fresh()->reminded_at);
+    }
+
     public function test_whatsapp_reminder_prefers_the_selected_company_chat_channel_over_legacy_credentials(): void
     {
         $company = $this->createStore('central-channel.example.test', reminders: true);

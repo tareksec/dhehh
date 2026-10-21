@@ -29,6 +29,13 @@ use Illuminate\Support\Str;
  */
 class SalesFollowUpService
 {
+    /**
+     * A reminder due longer ago than this is cancelled, not sent: when the
+     * scheduler starts after a long stop, old offers are not all chased at
+     * once (owner decision 2026-10-21).
+     */
+    public const STALE_AFTER_DAYS = 3;
+
     public function schedule(Conversation $conversation, ?ChatOrderLink $link = null, ?Quotation $quotation = null): ?CrmSalesFollowUp
     {
         if (($link && ((int) $link->company_id !== (int) $conversation->company_id || (int) $link->conversation_id !== (int) $conversation->getKey()))
@@ -79,7 +86,12 @@ class SalesFollowUpService
             if ($followUp->status !== 'pending' || $followUp->due_at->isFuture()) {
                 return;
             }
-            $conversation = $followUp->conversation()->with(['company', 'channel', 'lead'])->first();
+            if ($followUp->due_at->lt(now()->subDays(self::STALE_AFTER_DAYS))) {
+                $followUp->update(['status' => 'cancelled', 'reason' => 'Too old: it was due more than '.self::STALE_AFTER_DAYS.' days ago and was not sent then.']);
+
+                return;
+            }
+            $conversation =$followUp->conversation()->with(['company', 'channel', 'lead'])->first();
             if (! $conversation) {
                 return;
             }

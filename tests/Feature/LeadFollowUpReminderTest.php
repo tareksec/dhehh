@@ -195,6 +195,29 @@ class LeadFollowUpReminderTest extends TestCase
         $this->assertNotNull($lead->fresh()->follow_up_reminded_at);
     }
 
+    public function test_a_follow_up_overdue_for_days_reaches_the_staff_member_but_not_the_lead(): void
+    {
+        // Owner decision 2026-10-21: when the scheduler starts after a long stop, old leads are not all messaged at once.
+        $lead = $this->dueLead(['next_follow_up_at' => now()->subDays(4)]);
+        StorefrontSetting::query()->create([
+            'company_id' => $this->company->getKey(),
+            'is_published' => true,
+            'new_customer_delivery_advance_enabled' => false,
+            'lead_follow_up_reminders_enabled' => true,
+            'notification_credentials' => [
+                'lead_follow_up_whatsapp_template_name' => 'lead_followup',
+                'whatsapp_token' => 'wa-token',
+                'whatsapp_phone_number_id' => '1234567890',
+            ],
+        ]);
+        Http::preventStrayRequests();
+
+        Artisan::call('crm:send-follow-up-reminders');
+
+        $this->assertSame(1, $this->agent->notifications()->count());
+        $this->assertNotNull($lead->fresh()->follow_up_reminded_at);
+    }
+
     public function test_moving_the_follow_up_date_rearms_the_reminder(): void
     {
         $lead = $this->dueLead();

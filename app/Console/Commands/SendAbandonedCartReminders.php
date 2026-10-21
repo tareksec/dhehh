@@ -13,6 +13,13 @@ class SendAbandonedCartReminders extends Command
 
     protected $description = 'Send SMS/WhatsApp reminders for abandoned storefront carts with a known customer phone';
 
+    /**
+     * A cart left longer ago than this (on top of the company's delay) gets no
+     * reminder: when the scheduler starts after a long stop, old carts are not
+     * all messaged at once (owner decision 2026-10-21).
+     */
+    public const STALE_AFTER_DAYS = 3;
+
     public function handle(StorefrontNotificationService $notifications): int
     {
         // Carts belong to the Blade storefront; the Next.js site keeps its cart in the browser.
@@ -37,6 +44,7 @@ class SendAbandonedCartReminders extends Command
                 ->whereNotNull('phone')
                 ->whereNull('reminded_at')
                 ->where('updated_at', '<=', now()->subHours($delayHours))
+                ->where('updated_at', '>=', now()->subHours($delayHours)->subDays(self::STALE_AFTER_DAYS))
                 ->get();
 
             foreach ($carts as $cart) {
