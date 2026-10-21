@@ -12,6 +12,7 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Technical Notes
 
+- Maintenance: `.claude/settings.local.json` (each machine's own Claude Code permissions) is git-ignored.
 - Reminder age limits: `STALE_AFTER_DAYS = 3` on `SendAbandonedCartReminders` (carts with `updated_at` older than the delay + 3 days are skipped and stay unreminded), `SendLeadFollowUpReminders` (the staff notification and `follow_up_reminded_at` as before; `messageLead()` only when `next_follow_up_at` is within 3 days) and `Crm\SalesFollowUpService` (`process()` cancels a pending row whose `due_at` is older than 3 days). `docs/deployment.md` → Scheduler now has the Coolify scheduled-task steps. No migration, no new strings. Tests: `StorefrontResellerAndAbandonedCartTest`, `LeadFollowUpReminderTest`, `SalesFollowUpScheduleTest` (+1 each).
 
 ## [2.96.0] - 2026-10-21
