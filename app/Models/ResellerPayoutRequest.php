@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Services\ResellerNotificationService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -58,6 +59,22 @@ class ResellerPayoutRequest extends Model
         'approved_at',
         'paid_at',
     ];
+
+    protected static function booted(): void
+    {
+        // The "your withdrawal was paid" SMS (wording set in Reseller Settings; empty = not sent).
+        static::updated(function (ResellerPayoutRequest $request): void {
+            if ($request->wasChanged('status') && $request->status === self::STATUS_PAID) {
+                $reseller = Customer::withoutGlobalScopes()->find($request->customer_id);
+
+                if ($reseller) {
+                    app(ResellerNotificationService::class)->notify(
+                        ResellerNotificationService::EVENT_PAYOUT_PAID, $reseller, (int) $request->getKey(), 'payout-'.$request->getKey(),
+                    );
+                }
+            }
+        });
+    }
 
     protected function casts(): array
     {

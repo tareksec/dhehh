@@ -55,7 +55,9 @@ with the Google Fonts URL, `typography`, `appearance`), `contact`, `social_links
 `announcement`, `utility_bar`, `campaign`, `trust_items`, `offer_countdown` (`null` once it ended),
 `business` (business-account text, bulk-pricing rows — wholesale), `features`, `menus.header` /
 `menus.footer` (category and page ids already resolved to slugs; an inactive category or an
-unpublished page is dropped), `footer_blocks` (the Footer Builder, see below), `design`, `home_sections`
+unpublished page is dropped; an item of type `reseller` ("Become a reseller") carries `url`, the address of
+the reseller portal's guide or application form, and is dropped while the company's reseller module is off),
+`footer_blocks` (the Footer Builder, see below), `design`, `home_sections`
 (the Home Page Builder, see below) and `seo`.
 
 ### `GET /categories`

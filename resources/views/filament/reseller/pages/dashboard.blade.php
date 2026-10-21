@@ -118,6 +118,12 @@
                     <div>
                         <p class="text-sm text-white/80">{{ $this->greeting() }},</p>
                         <h2 class="mt-0.5 text-2xl font-bold sm:text-3xl">{{ $reseller->name }}</h2>
+                        @if ($reseller->resellerLevel)
+                            <span data-reseller-level class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white ring-1 ring-white/30">
+                                <x-filament::icon icon="heroicon-m-trophy" class="h-4 w-4" />
+                                {{ $reseller->resellerLevel->name }}
+                            </span>
+                        @endif
 
                         <p class="mt-6 text-xs font-medium uppercase tracking-wider text-white/70">{{ __('Available to withdraw') }}</p>
                         <p class="mt-1 text-4xl font-extrabold tracking-tight sm:text-5xl">{{ MoneyFormatter::currency($balances['available'], $currency) }}</p>

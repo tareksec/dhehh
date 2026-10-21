@@ -7,6 +7,7 @@ This file is a working update log for changes that may become commits. Use it to
 Owner request in chat (2026-10-21): "পুরোনো ৪টা branch একটা একটা করে দেখো, যেটা এখনো লাগবে সেটা merge করো, conflict মিটিয়ে টেস্ট চালিয়ে". (`claude/auto-profit-payment-system` was left out: `main` already has its own payout batch engine.)
 
 - `claude/whatsapp-web-login-sync`: the fix was not in `main` (`attachMedia()` still returned early for any filled `media_path`) - merged. Conflicts only in CHANGELOG / UPDATE_NOTES; its notes moved under `[Unreleased]` and below.
+- `claude/reseller-module-status` (2026-10-16, never reached `main`, no decision against it found): reseller sales report, SMS to resellers (approved / profit payable / withdrawal paid, texts empty until the company writes them), the "Become a reseller" menu item in `GET /site`, reseller levels set by hand, and the label *Warehouse damage* for damage source `other`. Merged. CHANGELOG: its older lines were already in `[2.82.0]`; only the four new entries and their notes went under `[Unreleased]` (release type now Minor). Lang files: union of both sides (52 new keys), `Other damage` replaced by the branch as intended (no code uses it). `docs/codebase-map/reseller.md` updated. Two migrations (`reseller_levels`, reseller SMS texts) - **deploy runs `php artisan migrate`**; the SMS need a running queue worker. Reseller-related tests + isolation, parity and migration-name tests: 462 passed.
 
 Commit status: merge commits on `main`, pushed from the owner's terminal after the full suite.
 
@@ -887,7 +888,7 @@ Owner request (in Bangla): "কী কী লাগবে প্রশ্ন ক
 What changed (details in `CHANGELOG.md` [Unreleased]):
 
 1. **Returned / refunded orders: no trash; restore recreates the sale.** `Order::canBeMovedToTrash()`; the order page's delete button is hidden, the list's bulk "Move to trash" skips and reports them, and the model refuses a soft delete in those statuses. `restored` now calls `OrderWorkflowService::restoreFromTrash()`, which rebuilds the sale for every status.
-2. **Damaged goods with a source label.** New column `stock_movements.damage_source` (migration `2026_10_15_120000`): *Customer return damage* / *Shipment damage* / *Other damage*; required on the stock movement form for a damage entry; column + filter in the movement list and history; the Total Damage card links to the damage list. **Put returned goods back in stock** now asks *Good pieces* and *Damaged pieces* per item; damaged pieces are booked as a Return and straight away written off as a customer-return Damage (net zero on the shelf, counted in Total Damage). Shipment damage is entered with the existing stock movement form (type Damage, source Shipment damage).
+2. **Damaged goods with a source label.** New column `stock_movements.damage_source` (migration `2026_10_15_120000`): *Customer return damage* / *Shipment damage* / *Warehouse damage* (renamed from *Other damage* on 2026-10-16); required on the stock movement form for a damage entry; column + filter in the movement list and history; the Total Damage card links to the damage list. **Put returned goods back in stock** now asks *Good pieces* and *Damaged pieces* per item; damaged pieces are booked as a Return and straight away written off as a customer-return Damage (net zero on the shelf, counted in Total Damage). Shipment damage is entered with the existing stock movement form (type Damage, source Shipment damage).
 3. **Resellers → Variation selling prices.** One list of every active variation with the wholesale price (read only) and an editable suggested price, a "no suggested price yet" filter and two bulk actions (same price, clear). No percentages.
 4. **Reseller portal tab bar on phones** (Dashboard, Products, raised Create order, Orders, Earnings).
 5. **Dashboard: announcement** (Reseller Settings → Portal announcement; migration `2026_10_15_130000`), **Get started** checklist (4 steps), **Best-selling products** (last 30 days).
@@ -898,7 +899,7 @@ Looked at in a real browser (Chromium, throw-away SQLite file with made-up data,
 
 Decisions I made without asking, for the owner to confirm or change:
 
-- A third damage source **Other damage**, so an entry that is neither a customer return nor a shipment is not forced into a wrong group. Older damage entries have no source (shown as "-").
+- A third damage source (now **Warehouse damage**, the owner's name from 2026-10-16), so an entry that is neither a customer return nor a shipment is not forced into a wrong group. Older damage entries have no source (shown as "-").
 - **Refunded** orders are also never trashed (they keep the same returned-goods record as Returned).
 - A damaged returned piece shows as two movements (Return then Damage) in the product's history, so on-hand stock stays right and the order's "checked" count includes it.
 - Best sellers count **pieces** over the **last 30 days** from confirmed / processing / completed orders (cancelled, returned and draft ones are left out); no money amounts, because a reseller's own-courier orders and store orders price their lines differently.
@@ -910,11 +911,118 @@ Decisions I made without asking, for the owner to confirm or change:
 
 Deploy: `php artisan migrate` (two migrations: `stock_movements.damage_source`, `storefront_settings.reseller_announcement_*`) and `npm run build` (new portal CSS). Then fill the suggested prices (Resellers → Variation selling prices) and write an announcement if wanted.
 
-Needs Bangla review (new keys): Customer return damage (কাস্টমার ফেরত ড্যামেজ), Shipment damage (শিপমেন্টের ড্যামেজ), Other damage (অন্যান্য ড্যামেজ), Damage source, Good pieces (ভালো পিস), Damaged pieces (ড্যামেজ পিস), the Put-returned-goods dialog texts, the trash message, Variation selling prices (ভেরিয়েশনের বিক্রয় দাম), Set the same price, Clear the suggested price, Portal announcement, Get started steps (Name your store, Add products to your store, Add a payout account hint, Get your first order), Best-selling products, :count piece / pieces, Portal menu, the guide's return-charge sentences, Test subdomain setup and its three result messages.
+Needs Bangla review (new keys): Customer return damage (কাস্টমার ফেরত ড্যামেজ), Shipment damage (শিপমেন্টের ড্যামেজ), Warehouse damage (গুদামের ড্যামেজ), Damage source, Good pieces (ভালো পিস), Damaged pieces (ড্যামেজ পিস), the Put-returned-goods dialog texts, the trash message, Variation selling prices (ভেরিয়েশনের বিক্রয় দাম), Set the same price, Clear the suggested price, Portal announcement, Get started steps (Name your store, Add products to your store, Add a payout account hint, Get your first order), Best-selling products, :count piece / pieces, Portal menu, the guide's return-charge sentences, Test subdomain setup and its three result messages.
 
 Tests: `OrderReturnedStockTest` (14), `ResellerVariationPriceToolTest` (6), `ResellerPortalBottomNavTest` (3), `ResellerPortalDashboardExtrasTest` (7), `ResellerSubdomainSetupCheckTest` (4), `ResellerGuidePageTest` (6, +1). Full `php artisan test` (plain, no `--env`): 2514 passed, 1 skipped, 1 failed on the first run — `ResellerPortalCreateOrderTest` counted exactly one link to the create-order page, and the new tab bar adds a second; the test now ignores the tab bar and checks it separately (17 passed on its own). Nothing else failed. `npm run build` OK.
 
-Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-15). **Not pushed to `main`**: the owner checks the brief first and approves `main` himself.
+Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-15). Pushed to `main` on 2026-10-15 with the owner's approval (`414a85f`, includes the merge of v2.79.0).
+
+## 2026-10-16 - Owner's answers on the open points; admin Reseller sales report (step 2 of 5)
+
+Owner request (in Bangla): "প্রশ্ন কর" on the open points, then "এটা একটা ক্রম সাজাও ... সবগুলো করতে হবে". Answers: (1) keep the third damage source, named **"গুদামের ড্যামেজ" (Warehouse damage)**; (2) a Refunded order is also never trashed (as built); (3) for a returned product: good condition goes back to stock, a damaged one goes to damage — which is what "Put returned goods back in stock" already does (good pieces are added to the shelf; damaged pieces are counted as *Customer return damage* and the shelf is unchanged), so nothing else changed there; (4) do **all** the next jobs, in an order I choose. Order chosen: 1 the answers above, 2 the admin reseller sales report, 3 reseller notifications (SMS/WhatsApp, texts editable from the admin), 4 the Next.js site's open tasks, 5 reseller tiers last (needs the owner's rules, so I will ask).
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+
+1. **Label rename:** *Other damage* → *Warehouse damage* (গুদামের ড্যামেজ). The stored value stays `other`, so no data changes.
+2. **Resellers → Reseller sales report** (new page, read only): a row per reseller for a period (this month by default, other presets, or custom dates) with orders, cancelled and returned counts, sales, cost, profit (payable / pending delivery) and paid out; totals cards on top. `ResellerSalesReportService` + `ResellerSalesReport` page; no migration.
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- "Sales" = confirmed / processing / completed orders by **order date** (the rule the reseller's own dashboard uses). Cancelled and returned orders are counted, not added to money.
+- "Paid out" = withdrawal requests marked paid whose **paid date** is in the period, so it can include money for earlier orders.
+- A reseller with no order and no payout in the period is not listed. No return-rate percentage is shown (not asked for).
+- Access follows "view reseller profits" plus the company's reseller module switch.
+
+Needs Bangla review (new keys): Reseller sales report (রিসেলার সেলস রিপোর্ট), Custom dates (নিজের দেওয়া তারিখ), Paid out (পরিশোধ করা হয়েছে), Resellers with orders (অর্ডার পাওয়া রিসেলার), ":cancelled cancelled, :returned returned" (:cancelled বাতিল, :returned ফেরত), the period names (This month, Last month, Last 7 days, Last 30 days, This year, All time), Period, the empty-state texts and the long note under the cards.
+
+Tests: `ResellerSalesReportTest` (6); related groups (Reseller, ModuleGuard, TranslationParity, OrderReturnedStock, MultiCompanyIsolation, Permission) 499 passed.
+
+Verified: full suite 2521 passed, 1 skipped, 0 failed.
+
+Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16). Not pushed to `main`.
+
+## 2026-10-16 (later) - Reseller SMS: approved, profit payable, withdrawal paid (step 3 of 5)
+
+Step 3 of the order I gave the owner (see the entry above).
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+
+1. **Reseller Settings → SMS to resellers**: three boxes (when an application is approved / a profit becomes payable / a withdrawal is paid), up to 300 characters, with the usable words listed under each box. **Empty = never sent**, exactly like the investor "Project completed message". Migration `2026_10_16_100000` (three text columns on `storefront_settings`).
+2. A header button **Fill empty SMS texts with suggested wording** puts my drafts in the empty boxes only (it never overwrites what is written); it is a draft until Save.
+3. Sending: `ResellerNotificationService` + `SendResellerNotificationJob` on the queue, through the company's SMS gateway (the Next.js row if the company has one, else the Blade row, like the other company-level messages). Opted-out numbers are skipped; a profit or withdrawal is never messaged twice (30-day guard); a failed send is logged and can be tried again later; one try only.
+4. Three model hooks start it: a reseller's status changing to approved (any way staff approve: row action, bulk action, edit form), a commission becoming payable (an order delivered or completed), a withdrawal becoming paid (admin pays it, or its voucher is confirmed).
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- **SMS only, no WhatsApp.** WhatsApp Business needs a Meta-approved template per message, and the WhatsApp Web (QR) rule forbids automatic sending. If the owner wants WhatsApp too, he must give approved template names; then it can be added next to each SMS.
+- **No message for a rejected application** (not asked for).
+- A profit worth 0 does not send an SMS. A profit that goes back to pending or cancelled sends nothing more.
+- One SMS per delivered order (a reseller with many deliveries a day gets many SMS). If that is too many, the alternative is one daily summary; say so.
+- The messages follow the company's opt-out list (the same rule as every other automatic SMS).
+
+Deploy: `php artisan migrate`; a **queue worker must be running** (`php artisan queue:work`, see `docs/deployment.md`), otherwise the SMS stays in the queue. Then open Reseller Settings, press the suggested-wording button (or write your own), read the texts and press Save changes. Until then nothing is sent.
+
+Needs Bangla review (new keys): SMS to resellers (রিসেলারকে SMS), the long description of that section (it names "Settings → Integrations" in English), the three box labels (আবেদন অনুমোদন হলে / প্রফিট পেআউটযোগ্য হলে / উইথড্র পরিশোধ হলে), the button and its notice, and the three suggested SMS texts (they start with "প্রিয় :name," on purpose, no religious greeting).
+
+Tests: `ResellerNotificationsTest` (11). Verified: full suite 2532 passed, 1 skipped, 0 failed.
+
+Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16). Not pushed to `main`.
+
+## 2026-10-16 (later still) - Next.js site: what is really open, and the "Become a reseller" menu item (step 4 of 5)
+
+Step 4 of the order I gave the owner. The owner never said which Next.js jobs he meant, so I read the website repo (`bhd4232/zamzamint-new-website-theme`, now attached to this session) against the ERP API and the old "not done" notes.
+
+What I found:
+
+- **Already done, the old note is out of date:** sign-up with the SMS code. The website's `RegisterForm` already has the "enter the 6-digit code" step and the proxy passes `verification_required`, so the line "the Next.js site does not show a code field yet" in the 2026-10-07 notes no longer holds.
+- **Real gap, fixed now:** the header / footer / top-bar menu builders offer a *Become a reseller* item, but the API sent it with no address and the website dropped it (`menuHref` returned null). ERP: `StorefrontSiteConfigService::menu()` now gives the item `url` = the reseller portal's guide (or application form when the guide is off), the same address the Blade store uses, and drops it while the reseller module is off. Website: `menuHref` accepts the `reseller` type (branch `feature/reseller-menu-link`, commit `2cdee4b`; typecheck passes, the repo has no test suite). Both must be deployed for the link to show; the website part alone changes nothing visible.
+- **Still open, needs the owner (nothing built, no rule invented):**
+  1. *Request for Quote* page: the ERP has the switch `marketplace_quote_enabled` and a Quotations module, but no storefront endpoint takes a quote request and the website has no page. Needs: which fields, who is told, which ERP record it becomes.
+  2. *Meta pixel / conversion events and a cookie-consent banner* for the Next.js site: needs the owner's decision on the consent wording and which events.
+  3. A live payment run (needs real PayStation / ZiniPay credentials) and the DNS cut-over on Coolify: the owner's side.
+  4. The OpenAPI file still does not describe the storefront endpoints (documentation only; `docs/api/storefront-api.md` is the working contract).
+
+Decision I made without asking: the item is gated only by the reseller module and the portal address (the Blade store does the same); the Next.js row's own `features.reseller_program_enabled` flag is left as it was.
+
+Deploy: nothing to migrate. After deploying both the ERP and the website, add a *Become a reseller* item in the Next.js row's header or footer menu to see it.
+
+Tests: `StorefrontApiTest` (+1). Verified: full suite 2533 passed, 1 skipped, 0 failed.
+
+Commit status: ERP part committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16) after the full suite; website part pushed to the website repo's branch `feature/reseller-menu-link`. Neither is on `main`.
+
+## 2026-10-16 (merge) - origin/main (v2.80.0 - v2.81.1) merged into the work branch
+
+`main` moved while this branch was open (IMS investor feed v2.80.0, v2.81.0, investor-portal SMS v2.81.1). I merged `origin/main` into `claude/reseller-module-status-v9tobe` so the branch can be pushed to `main` as a fast-forward. Only `CHANGELOG.md` conflicted: main's release commits had moved their own entries into versioned sections, so I kept main's history and put this branch's [Unreleased] block back on top. Full suite after the merge: 2554 passed, 1 skipped, 0 failed.
+
+Commit status: merge committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16); not pushed to `main`.
+
+## 2026-10-16 (last) - Reseller levels (step 5 of 5)
+
+Step 5 of the order I gave the owner. Because levels were never defined, I asked first (the owner's answers, in Bangla): the admin sets a reseller's level by hand; the admin makes up the level names and how many there are; a level may show a badge/name, **lower the return charge** and **lower the minimum withdrawal**; no automatic period is needed.
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+
+1. **Resellers → Reseller levels** (new, one list with pop-up forms): name, order, optional return charge, optional minimum withdrawal. Migration `2026_10_16_110000` (table + `customers.reseller_level_id`).
+2. The level is chosen on the reseller's edit page, in bulk (*Set level*) and filtered on the list; shown on the reseller's page and list.
+3. The reseller sees the level name as a badge on the portal dashboard.
+4. The lower amounts really apply: a returned order's charge, the Withdrawals page's minimum, and the store's withdrawal check, all through `Customer::resellerReturnCharge()` / `resellerMinWithdrawal()`.
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- The owner ticked "badge only, no money change" **together with** the two "lower" options. I read it as: the badge is always shown, and money only changes where the admin fills in an amount on a level. A level with both amounts empty changes nothing.
+- A level's amount is **not forced to be lower** than the company's (I do not know the owner's rule; the helper text says a lower amount rewards the level). 0 means free returns / no minimum.
+- The return charge uses the level the reseller has **when the order comes back**; changing a level later does not touch charges already taken.
+- Levels are per company, names unique inside a company, a level can only be given to a reseller of the same company. Deleting a level never deletes resellers or touches money.
+- Same permission as the other reseller screens (the Sales module rights, plus the company's reseller module switch).
+- The public reseller guide still shows only the company's return charge and minimum (an applicant has no level yet).
+
+Deploy: `php artisan migrate`. Then open Resellers → Reseller levels, make the levels, and give the resellers their levels.
+
+Needs Bangla review (new keys): Reseller levels (রিসেলার লেভেল), Level name, Order in lists (তালিকায় ক্রম), the two "for this level" labels and their helper line, Company amount (কোম্পানির অঙ্ক), the empty-state and delete-warning sentences, New level, No level, Set level, the two bulk-result messages, and the helper line on the reseller form.
+
+Tests: `ResellerLevelsTest` (10). Verified: full suite 2543 passed, 1 skipped, 0 failed.
+
+Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16). Not pushed to `main`.
 
 ## 2026-10-15 - Admin: reset a reseller's password / email a reset link; portal ↔ admin audit
 

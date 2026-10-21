@@ -60,7 +60,8 @@ class Withdrawals extends Page implements HasTable
 
     public function minimumWithdrawal(): float
     {
-        return (float) ($this->company()?->storefrontSetting?->reseller_min_withdrawal ?? 0);
+        // The reseller's level may lower the company's minimum (owner decision 2026-10-16).
+        return $this->reseller()->resellerMinWithdrawal();
     }
 
     protected function getHeaderActions(): array

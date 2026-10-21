@@ -1,5 +1,5 @@
 # Reseller Program & Portal
-> Last checked: 2026-10-20, commit 0e5316d
+> Last checked: 2026-10-21, merge of `claude/reseller-module-status` into main (levels, sales report, reseller SMS)
 
 ## What it does
 The Reseller Program & Portal module enables wholesale multi-vendor dropshipping, affiliate storefronts, commission earnings, and reseller account management. Approved resellers log into a dedicated Filament 5 portal (`/portal`) to browse wholesale catalogs, place customer dropship orders, track commission earnings, and request payout withdrawals to mobile banking or bank accounts. It allows resellers to launch their own branded affiliate stores on company subdomains (e.g. `shop.company.com`) or verified custom domains with automatic on-demand SSL issuance. The module supports customizable variation selling prices, security deposit ledgers, own-courier merchant account fulfillment, and self-service password recovery workflows.
@@ -26,6 +26,7 @@ The Reseller Program & Portal module enables wholesale multi-vendor dropshipping
 | `app/Models/ResellerPayoutRequest.php` | Withdrawal requests submitted by resellers to withdraw earned profits. |
 | `app/Models/ResellerPayoutAccount.php` | Saved withdrawal payment methods (bKash, Nagad, Rocket, Bank Account) per reseller. |
 | `app/Models/ProductVariant.php` | Serves as the underlying model for `ResellerVariationPriceResource` to set suggested prices. |
+| `app/Models/ResellerLevel.php` | Company-made reseller level (set by hand) with an optional own return charge and minimum withdrawal; `Customer::resellerReturnCharge()` / `resellerMinWithdrawal()` pick the level's amount or the company's. |
 
 ### Services
 | Path | What it does |
@@ -39,6 +40,9 @@ The Reseller Program & Portal module enables wholesale multi-vendor dropshipping
 | `app/Services/ResellerPasswordResetService.php` | Generates secure password reset links and SMS OTP tokens for resellers. |
 | `app/Services/ResellerDomainDnsChecker.php` | Queries DNS records to verify CNAME/A records for custom reseller domains. |
 | `app/Services/ResellerSubdomainProbe.php` | Validates subdomain availability and checks for reserved system prefixes. |
+| `app/Services/ResellerSalesReportService.php` | Per-reseller sales, profit (payable / pending delivery) and payouts for a period, for the admin sales report. |
+| `app/Services/ResellerNotificationService.php` | SMS to a reseller when approved, when a profit becomes payable and when a withdrawal is paid; texts come from Reseller Settings and an empty text is never sent. |
+| `app/Jobs/SendResellerNotificationJob.php` | Queued send of one reseller SMS (one try; restores the company context afterwards). |
 
 ### Filament Panel Provider & Portal Pages (`app/Filament/Reseller/`)
 | Path | What it does |
@@ -71,7 +75,9 @@ The Reseller Program & Portal module enables wholesale multi-vendor dropshipping
 | `app/Filament/Resources/ResellerDeposits/ResellerDepositResource.php` | Admin viewer and manual adjustment ledger for security deposits. |
 | `app/Filament/Resources/ResellerPayoutRequests/ResellerPayoutRequestResource.php` | Workflow queue for approving, processing, or rejecting withdrawal requests. |
 | `app/Filament/Resources/ResellerVariationPrices/ResellerVariationPriceResource.php` | Batch tool for setting suggested reseller retail prices on variants. |
-| `app/Filament/Pages/ResellerSettings.php` | Configures reseller program defaults, commission payout minimums, and terms. |
+| `app/Filament/Pages/ResellerSettings.php` | Configures reseller program defaults, commission payout minimums, terms and the SMS-to-resellers texts. |
+| `app/Filament/Pages/ResellerSalesReport.php` | Read-only report, one row per reseller for a chosen period (view `filament/pages/reseller-sales-report`). |
+| `app/Filament/Resources/ResellerLevels/ResellerLevelResource.php` | Reseller levels list with pop-up forms; the level is set on the reseller's edit page or in bulk on the reseller list. |
 
 ### Controllers & Middleware
 | Path | What it does |
@@ -117,6 +123,9 @@ The Reseller Program & Portal module enables wholesale multi-vendor dropshipping
 | `tests/Feature/ResellerPortalPasswordResetTest.php` | Tests password reset workflows and token verification. |
 | `tests/Feature/ResellerStorefrontTest.php` | Tests branded affiliate store rendering on custom subdomains. |
 | `tests/Feature/ResellerVariationPricingTest.php` | Tests variant price overrides and suggested price fallbacks. |
+| `tests/Feature/ResellerLevelsTest.php` | Tests levels, the level's return charge and minimum withdrawal, and company isolation. |
+| `tests/Feature/ResellerNotificationsTest.php` | Tests the three reseller SMS, empty texts, opt-outs and no repeats. |
+| `tests/Feature/ResellerSalesReportTest.php` | Tests the sales report figures and access. |
 
 ## Routes and panels
 - **Panels**:
@@ -140,6 +149,8 @@ The Reseller Program & Portal module enables wholesale multi-vendor dropshipping
 - `reseller_deposit_entries`: Security deposit ledger. Key columns: `id`, `company_id`, `customer_id`, `order_id`, `storefront_payment_id`, `type`, `amount`, `note`, `created_by`, `created_at`, `updated_at`.
 - `reseller_payout_requests`: Withdrawal requests. Key columns: `id`, `company_id`, `customer_id`, `amount`, `method`, `account_details` (JSON), `status`, `payment_reference`, `admin_note`, `processed_by`, `voucher_id`, `approved_at`, `paid_at`, `created_at`, `updated_at`.
 - `reseller_payout_accounts`: Beneficiary payout details. Key columns: `id`, `company_id`, `customer_id`, `method`, `account_details` (JSON), `label`, `is_default`, `created_at`, `updated_at`.
+- `reseller_levels`: Company-made levels. Key columns: `id`, `company_id`, `name` (unique per company), `sort_order`, `return_charge` and `min_withdrawal` (nullable = company amount), timestamps; `customers.reseller_level_id` (nullable, `nullOnDelete`).
+- `storefront_settings` reseller SMS texts: `reseller_message_approved`, `reseller_message_profit_payable`, `reseller_message_payout_paid` (nullable).
 - `reseller_products`: Per-reseller pricing overrides. Key columns: `id`, `customer_id`, `product_id`, `is_active`, `price`, `variant_prices` (JSON), `created_at`, `updated_at`.
 
 ## Rules that matter

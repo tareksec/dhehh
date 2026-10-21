@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Services\ResellerNotificationService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,24 @@ class ResellerCommission extends Model
         'status',
         'payable_at',
     ];
+
+    protected static function booted(): void
+    {
+        // The "your profit is payable" SMS (wording set in Reseller Settings; empty = not sent).
+        // Only when a profit becomes payable, once per order.
+        static::saved(function (ResellerCommission $commission): void {
+            if ($commission->status === self::STATUS_PAYABLE && (float) $commission->amount > 0
+                && ($commission->wasRecentlyCreated || $commission->wasChanged('status'))) {
+                $reseller = Customer::withoutGlobalScopes()->find($commission->customer_id);
+
+                if ($reseller) {
+                    app(ResellerNotificationService::class)->notify(
+                        ResellerNotificationService::EVENT_PROFIT_PAYABLE, $reseller, (int) $commission->getKey(), 'commission-'.$commission->getKey(),
+                    );
+                }
+            }
+        });
+    }
 
     protected function casts(): array
     {

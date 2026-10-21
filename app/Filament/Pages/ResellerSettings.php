@@ -9,6 +9,7 @@ use App\Models\StorefrontPayment;
 use App\Models\StorefrontPaymentMethod;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
+use App\Services\ResellerNotificationService;
 use App\Services\ResellerOwnCourierService;
 use App\Services\ResellerSubdomainProbe;
 use BackedEnum;
@@ -102,6 +103,7 @@ class ResellerSettings extends Page
             'reseller_guide_rules' => $setting?->reseller_guide_rules ?? [],
             'reseller_announcement_enabled' => (bool) ($setting?->reseller_announcement_enabled ?? false),
             'reseller_announcement' => $setting?->reseller_announcement,
+            ...collect(ResellerNotificationService::COLUMNS)->mapWithKeys(fn (string $column): array => [$column => $setting?->{$column}])->all(),
             ...$this->paymentFormState($setting),
         ]);
     }
@@ -289,6 +291,18 @@ class ResellerSettings extends Page
                             ->columnSpanFull(),
                     ]),
 
+                Section::make(__('SMS to resellers'))
+                    ->description(__('Write the text of each SMS a reseller gets. Leave a message empty and it is not sent. SMS goes through the SMS gateway in Settings → Integrations, and numbers that opted out are skipped. You can use the words shown under each box; they are replaced with the reseller\'s own details.'))
+                    ->schema(collect(ResellerNotificationService::COLUMNS)
+                        ->map(fn (string $column, string $event): Textarea => Textarea::make($column)
+                            ->label($this->messageLabel($event))
+                            ->helperText(__('Words you can use: :words', ['words' => implode(' ', ResellerNotificationService::placeholders()[$event])]))
+                            ->rows(2)
+                            ->maxLength(300)
+                            ->columnSpanFull())
+                        ->values()
+                        ->all()),
+
                 Section::make(__('Own-courier advance payments'))
                     ->description(__('Resellers pay the advance of their own-courier orders into these channels. Tick the store\'s payment methods they may use, and add channels that exist only for resellers. The store\'s checkout never shows the reseller-only channels.'))
                     ->schema([
@@ -352,6 +366,12 @@ class ResellerSettings extends Page
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('useSuggestedMessages')
+                ->label(__('Fill empty SMS texts with suggested wording'))
+                ->icon(Heroicon::OutlinedChatBubbleLeftRight)
+                ->color('gray')
+                ->visible(fn (): bool => $this->company() !== null)
+                ->action(fn () => $this->useSuggestedMessages()),
             Action::make('checkSubdomainSetup')
                 ->label(__('Test subdomain setup'))
                 ->icon(Heroicon::OutlinedSignal)
@@ -359,6 +379,35 @@ class ResellerSettings extends Page
                 ->visible(fn (): bool => filled($this->company()?->domain))
                 ->action(fn () => $this->testSubdomainSetup()),
         ];
+    }
+
+    /** The label of one SMS message box. */
+    protected function messageLabel(string $event): string
+    {
+        return match ($event) {
+            ResellerNotificationService::EVENT_APPROVED => __('When an application is approved'),
+            ResellerNotificationService::EVENT_PROFIT_PAYABLE => __('When a profit becomes payable'),
+            default => __('When a withdrawal is paid'),
+        };
+    }
+
+    /**
+     * Puts suggested wording into the SMS boxes that are still empty. It is only a draft in the
+     * form: nothing is saved or sent until the admin presses Save, and wording already written is kept.
+     */
+    protected function useSuggestedMessages(): void
+    {
+        foreach (ResellerNotificationService::COLUMNS as $event => $column) {
+            if (blank($this->data[$column] ?? null)) {
+                $this->data[$column] = ResellerNotificationService::suggestedWording($event);
+            }
+        }
+
+        Notification::make()
+            ->title(__('Suggested wording added'))
+            ->body(__('Read and change it if you like, then press Save changes. Nothing is sent until you save.'))
+            ->success()
+            ->send();
     }
 
     /**
@@ -506,6 +555,9 @@ class ResellerSettings extends Page
             'reseller_guide_show_figures' => (bool) $data['reseller_guide_show_figures'],
             'reseller_announcement_enabled' => (bool) ($data['reseller_announcement_enabled'] ?? false),
             'reseller_announcement' => filled($data['reseller_announcement'] ?? null) ? trim($data['reseller_announcement']) : null,
+            ...collect(ResellerNotificationService::COLUMNS)
+                ->mapWithKeys(fn (string $column): array => [$column => filled($data[$column] ?? null) ? trim($data[$column]) : null])
+                ->all(),
             'reseller_guide_rules' => collect($data['reseller_guide_rules'] ?? [])
                 ->map(fn (array $rule): array => ['title' => trim((string) ($rule['title'] ?? '')), 'body' => filled($rule['body'] ?? null) ? trim($rule['body']) : null])
                 ->filter(fn (array $rule): bool => $rule['title'] !== '')
