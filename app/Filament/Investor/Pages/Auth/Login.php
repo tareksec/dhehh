@@ -8,6 +8,7 @@ use App\Services\CompanyContext;
 use App\Services\InvestorBusinessSwitchService;
 use App\Services\InvestorPortalAccountService;
 use App\Services\LoginGate;
+use App\Support\ImsPanelSessions;
 use App\Support\LoginThrottled;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use Filament\Actions\Action;
@@ -44,6 +45,14 @@ class Login extends BaseLogin
     /** The company of the account the code went to, when it is not the open one (the shared IMS domain). */
     #[Locked]
     public ?int $codeCompanyId = null;
+
+    public function mount(): void
+    {
+        // Already signed in: go to the portal, never an office page left from before (ImsPanelSessions).
+        ImsPanelSessions::forgetForeignIntendedUrl(Filament::getCurrentPanel());
+
+        parent::mount();
+    }
 
     public function form(Schema $schema): Schema
     {

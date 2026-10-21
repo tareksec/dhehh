@@ -4,6 +4,7 @@ namespace App\Filament\Auth;
 
 use App\Models\User;
 use App\Services\LoginGate;
+use App\Support\ImsPanelSessions;
 use App\Support\LoginClient;
 use App\Support\LoginThrottled;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
@@ -24,6 +25,14 @@ use Illuminate\Validation\ValidationException;
  */
 class AdminLogin extends BaseLogin
 {
+    public function mount(): void
+    {
+        // Already signed in: go to this panel, never a portal page left from before (ImsPanelSessions).
+        ImsPanelSessions::forgetForeignIntendedUrl(Filament::getCurrentPanel());
+
+        parent::mount();
+    }
+
     public function authenticate(): ?LoginResponse
     {
         $gate = app(LoginGate::class);
