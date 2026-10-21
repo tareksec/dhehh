@@ -7,7 +7,7 @@
             [\App\Filament\Investor\Pages\BankAccounts::class, __('Bank accounts'), 'heroicon-o-building-library'],
             [\App\Filament\Investor\Pages\Agreements::class, __('Agreements'), 'heroicon-o-document-check'],
             [\App\Filament\Investor\Pages\Documents::class, __('Documents'), 'heroicon-o-folder'],
-            [\App\Filament\Ims\Portal\Pages\Projects::class, __('Projects'), 'heroicon-o-briefcase'],
+            [\App\Filament\Ims\Portal\Pages\Feed::class, __('Feed'), 'heroicon-o-newspaper'],
             [\App\Filament\Investor\Pages\Statement::class, __('Statement'), 'heroicon-o-document-text'],
             [\App\Filament\Investor\Pages\Requests::class, __('Requests'), 'heroicon-o-inbox-arrow-down'],
             [\App\Filament\Ims\Portal\Pages\Support::class, __('Support'), 'heroicon-o-chat-bubble-left-right'],

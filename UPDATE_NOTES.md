@@ -2,6 +2,21 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-21 - IMS top bar fix and Projects as a main portal page
+
+Reason - owner: the office UI still breaks (the dark mode and profile buttons slide off to the side), and on the investor side the Projects section works as the company, so it should be highlighted / brought to the side tab.
+
+What changed:
+- Top bar of both IMS panels: the right-hand buttons keep their size; on laptops the menu gets its own line under them when it does not fit (office 1024-1799px, portal 1024-1359px). Measured before the fix: at 1280px the office needed ~1410px (Bangla menu alone 856px), so the theme button and profile were pushed out; the portal broke below ~1280px.
+- Office on 640-899px: company picker and language switch go to the menu drawer (the profile button was off-screen at 660px).
+- Filament's light/dark/system switch in the profile menu is hidden: it did not follow the moon button, and pressing its stale "light" did nothing. The moon / sun button is the one switch.
+- Portal: Projects right after Home in the top menu and the left rail; on phones the bottom bar is Home · Projects · Investments · Profit · Profile (Feed moved into the Profile list; it stays in the top menu and rail).
+- Decided by the rules: two lines instead of hiding menu words (the owner is non-technical; icon-only office groups have no icons in Filament).
+
+Verified: browser (preview copy) office at 660, 768, 1024, 1280, 1700, 1800, 1900px and portal at 375, 1060, 1280, 1360, 1400px, light and dark, English and Bangla - every button on screen, profile menu opens inside the screen. `InvestorPortalTest` + `OfficeHomeTest` + `TranslationParityTest` pass; full suite 2875 passed, 1 skipped, 0 failed; `npm run build` passes.
+
+Commit status: committed and pushed to `feature/ims-header-and-projects-tab`; not merged into `main`.
+
 ## 2026-10-21 - Plan 18 (phases A-E) merged into main
 
 Owner approval in chat (2026-10-21): "হ্যাঁ, main-এ merge করো".

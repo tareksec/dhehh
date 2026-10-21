@@ -1,10 +1,11 @@
 {{--
     Phones only (hidden from lg up, where the sidebar is always open): the five
-    tabs of IMS v2 (IMS-V2/PRD.md FR-73) — Home · Investments · Profit · Feed ·
-    Profile. The Profile page lists every other page.
+    tabs of IMS v2 (IMS-V2/PRD.md FR-73) — Home · Projects · Investments · Profit ·
+    Profile (Projects took Feed's place, owner request 2026-10-21). The Profile
+    page lists every other page.
 --}}
 @php
-    use App\Filament\Ims\Portal\Pages\Feed;
+    use App\Filament\Ims\Portal\Pages\Projects;
     use App\Filament\Investor\Pages\Dashboard;
     use App\Filament\Investor\Pages\MyInvestments;
     use App\Filament\Investor\Pages\Payouts;
@@ -18,9 +19,9 @@
     if ($account instanceof InvestorPortalAccount) {
         foreach ([
             [Dashboard::class, __('Home'), 'heroicon-o-home'],
+            [Projects::class, __('Projects'), 'heroicon-o-rectangle-stack'],
             [MyInvestments::class, __('Investments'), 'heroicon-o-briefcase'],
             [Payouts::class, __('Profit'), 'heroicon-o-banknotes'],
-            [Feed::class, __('Feed'), 'heroicon-o-newspaper'],
             [Profile::class, __('Profile'), 'heroicon-o-user-circle'],
         ] as [$page, $label, $icon]) {
             if ($page::canAccess()) {

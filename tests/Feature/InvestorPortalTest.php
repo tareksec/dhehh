@@ -400,10 +400,35 @@ class InvestorPortalTest extends TestCase
         // IMS v2 look (IMS-V2/DESIGN.md §6.1): the main pages as top-bar pills, the rest under "More".
         $this->get('http://investor.groups.example.test/investor/dashboard')
             ->assertOk()
-            ->assertSeeInOrder(['Home', 'Investments', 'Profit', 'Statement', 'More', 'Requests', 'Documents', 'Agreements', 'Profile'])
+            ->assertSeeInOrder(['Home', 'Projects', 'Investments', 'Profit', 'Statement', 'More', 'Requests', 'Documents', 'Agreements', 'Profile'])
             ->assertSee('ims-rail', false)
             ->assertSee('fi-investor-mobile-nav', false)
             ->assertSee('Quick menu');
+    }
+
+    public function test_projects_sit_right_after_home_in_every_menu(): void
+    {
+        $company = $this->company('projects-menu.example.test');
+        [$project, $investorA] = $this->settledProject($company, confirm: true);
+        $this->actingAs($this->activeAccount($company, $investorA), 'investor');
+
+        // Owner request 2026-10-21: a project is what the person invests in, so it is a main page, not under "More".
+        $html = $this->get('http://investor.projects-menu.example.test/investor/dashboard')->assertOk()->getContent();
+        $section = function (string $start) use ($html): string {
+            $from = strpos($html, $start);
+            $this->assertNotFalse($from, $start);
+
+            return substr($html, $from, strpos($html, '</nav>', $from) - $from);
+        };
+
+        // The rail on the left of wide screens, and the bottom tab bar on phones.
+        foreach (['class="ims-rail"', 'class="fi-investor-mobile-nav"'] as $menu) {
+            $part = $section($menu);
+            $projects = strpos($part, '/investor/projects');
+            $this->assertNotFalse($projects, $menu);
+            $this->assertLessThan($projects, strpos($part, '/investor/dashboard'), $menu);
+            $this->assertGreaterThan($projects, strpos($part, '/investor/investments'), $menu);
+        }
     }
 
     public function test_the_language_switch_turns_the_portal_bangla_and_remembers_it_on_the_account(): void
