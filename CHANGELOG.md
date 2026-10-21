@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.96.0] - 2026-10-21
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -40,7 +42,6 @@ All notable production changes to Business Dashboard are documented here.
 - `LoginGate` takes a `TurnstileVerifier`: at the two `CHALLENGE` conditions (account failures, site-wide failures) a solved token clears the challenge and the token is verified at most once per attempt. `LoginClient` carries `captchaToken` (form field `cf-turnstile-response`, API field `captcha_token`); `LoginAttempt::requiresCaptcha()` and `LoginThrottled::$captcha` tell the callers whether to show the widget. The Blade controller flashes `captcha_required`; the login view renders the widget only then.
 - 16 new interface strings in `lang/en.json` and `lang/bn.json`. Tests: `LoginCaptchaTest` (20: settings and encryption, the verifier against Cloudflare answers and failures, the gate, Blade, API and the three Filament pages). Also checked end to end in a real browser against Cloudflare's always-pass test keys (admin sign-in and the storefront form). `docs/login-protection.md` and `docs/api/storefront-api.md` §6 describe the setup and the API.
 - On merge, the investor sign-in that tries every business of the phone (`InvestorBusinessSwitchService::attemptCentralLogin()`, built after the CAPTCHA branch) takes the page's `LoginClient` (new optional 4th argument) so a solved CAPTCHA counts there too, and shows the widget on a challenge; `AdminLogin` keeps the office/portal `mount()` from the sign-in fix next to the CAPTCHA form. Test: `LoginCaptchaTest` (+1, 21).
-
 ## [2.95.1] - 2026-10-21
 
 **Release type:** Patch/Fix Update
