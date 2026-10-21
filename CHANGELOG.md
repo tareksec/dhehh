@@ -4,13 +4,19 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-## [2.96.0] - 2026-10-21
-
-**Release type:** Minor Feature Update
+**Release type:** Patch/Fix Update
 
 ### Changed
 
 - **Reminders never go out days late.** The scheduled jobs are about to be switched on in Coolify for the first time, and many reminders were waiting. So that customers are not all messaged at once about old things: an abandoned cart left more than 3 days ago (on top of the company's reminder delay) gets no SMS/WhatsApp; a lead follow-up that was due more than 3 days ago still reaches the staff member but sends nothing to the lead; and a sales follow-up (checkout link or quotation reminder) that was due more than 3 days ago is cancelled with the reason "Too old", not sent. Recent ones work as before. Owner decision 2026-10-21.
+
+### Technical Notes
+
+- Reminder age limits: `STALE_AFTER_DAYS = 3` on `SendAbandonedCartReminders` (carts with `updated_at` older than the delay + 3 days are skipped and stay unreminded), `SendLeadFollowUpReminders` (the staff notification and `follow_up_reminded_at` as before; `messageLead()` only when `next_follow_up_at` is within 3 days) and `Crm\SalesFollowUpService` (`process()` cancels a pending row whose `due_at` is older than 3 days). `docs/deployment.md` → Scheduler now has the Coolify scheduled-task steps. No migration, no new strings. Tests: `StorefrontResellerAndAbandonedCartTest`, `LeadFollowUpReminderTest`, `SalesFollowUpScheduleTest` (+1 each).
+
+## [2.96.0] - 2026-10-21
+
+**Release type:** Minor Feature Update
 
 ### Added
 
@@ -36,7 +42,6 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Technical Notes
 
-- Reminder age limits: `STALE_AFTER_DAYS = 3` on `SendAbandonedCartReminders` (carts with `updated_at` older than the delay + 3 days are skipped and stay unreminded), `SendLeadFollowUpReminders` (the staff notification and `follow_up_reminded_at` as before; `messageLead()` only when `next_follow_up_at` is within 3 days) and `Crm\SalesFollowUpService` (`process()` cancels a pending row whose `due_at` is older than 3 days). `docs/deployment.md` → Scheduler now has the Coolify scheduled-task steps. No migration, no new strings. Tests: `StorefrontResellerAndAbandonedCartTest`, `LeadFollowUpReminderTest`, `SalesFollowUpScheduleTest` (+1 each).
 - Purchase branch `claude/purchase-module-automation` (2026-09-03/04, merged 2026-10-21): `PurchaseDocumentController` + route `purchases.documents`, `PurchaseDocumentActions`, `App\Support\NumberToWords`, views `purchases/documents/{pi,ci,pl}`; five migrations add trade-document columns to `companies` (BIN/IRC/TIN, signatory, signature), `suppliers` (country, bank/beneficiary details, signature), `products` (`hs_code`), `purchases` (PI/CI/PL numbers and dates, delivery terms, ports, freight, exchange rate, terms) and `purchase_items` (HS code, spec note, FOB price, weights); `CompanySettingsService::purchaseDocuments()` holds the default wording. `Shipment`'s same-company check uses `Company::resolveActiveCompanyId()` when `company_id` is still empty on a new record. On merge every admin string the branch added was wrapped in `__()` (63 new keys in `lang/en.json` / `lang/bn.json`); the printed documents stay English. Tests: `PurchaseDocumentTest`, `ShipmentTest`. **Deploy: `php artisan migrate`.**
 - Reseller branch `claude/reseller-module-status` (merged 2026-10-21). Reseller sales report: new `ResellerSalesReportService` (`rows()` / `totals()`, reads `Order`, `ResellerCommission` and `ResellerPayoutRequest` through their company scopes) and the `ResellerSalesReport` page in the Resellers cluster (table with `records()`, period + custom-date filters). No migration or new model. Damage source value `other` is unchanged; only its label is now *Warehouse damage* (lang key `Other damage` replaced). Tests: `ResellerSalesReportTest` (6).
 - Reseller SMS: migration `2026_10_16_100000_add_reseller_messages_to_storefront_settings` (three nullable text columns `reseller_message_approved`, `reseller_message_profit_payable`, `reseller_message_payout_paid`); `ResellerNotificationService` + queued `SendResellerNotificationJob` (one try; restores the request's company context afterwards so the sync queue is safe); model hooks in `Customer` (status becomes approved), `ResellerCommission` (becomes payable) and `ResellerPayoutRequest` (becomes paid); each hook only calls `notify()`, which never throws. Tests: `ResellerNotificationsTest` (11). **Deploy: `php artisan migrate`, and a running queue worker for the SMS to leave.**
