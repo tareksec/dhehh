@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.95.1] - 2026-10-21
+
 **Release type:** Patch/Fix Update
 
 ### Added
@@ -20,7 +22,6 @@ All notable production changes to Business Dashboard are documented here.
 
 - Office / portal sign-in in one browser: root cause was Laravel's shared `url.intended` session key (set by the investor panel's `Authenticate` for a signed-out visit, consumed by Filament's `LoginResponse` / `Login::mount()` of the office panel on guard `web`) and Filament's `LogoutController` calling `session()->invalidate()` (which dropped the other guard's sign-in). No middleware redirected investors; `RestrictPortalHosts` was not involved. New `App\Support\ImsPanelSessions` (IMS panels `office` / `investor` only: `forgetForeignIntendedUrl()`, `otherPanelSignedIn()`, `forgetPanelKeys()`), `App\Filament\Auth\PanelLoginResponse` (bound to Filament's `LoginResponse` contract) and `App\Http\Controllers\Auth\PanelLogoutController` (bound over Filament's `LogoutController`; while the other IMS guard is signed in it logs out only this guard, forgets this panel's keys - office: `ims_office_company_id`, `password_hash_web`; portal: business switch, link, staff preview, `password_hash_investor` - and regenerates the session id and CSRF token), both bound in `AppServiceProvider::boot()`. `AdminLogin::mount()` and the investor `Login::mount()` drop a foreign intended URL first. Other panels: no change in behaviour. No migration, no new strings, no settings change. Tests: new `Ims\OfficeAndPortalSessionTest` (8; every request starts with fresh guards so only the session carries over, as in a browser).
 - IMS top bar and Projects (owner report 2026-10-21): `resources/css/filament/ims/theme.css` - `.fi-topbar-end > *` no longer shrinks; between 1024px and 1799.98px (office) / 1359.98px (portal) the top bar wraps (`::after` line break, nav `order: 3`, `--topbar-height: 7.75rem` so the rail and page start below it); office `<900px` shows the company picker and language switch only in the drawer; company picker name capped at 12rem below 1280px; Filament's user-menu theme switcher hidden (`.fi-dropdown-list:has(> .fi-theme-switcher)`). `PortalNavigation`: Projects moved from "More" to the top level after Home and into the rail's first group; `filament.investor.mobile-nav`: Projects replaces Feed; the Profile page list shows Feed instead of Projects. No migration, no new strings. Tests: `InvestorPortalTest` (1 changed, 1 new).
-
 ## [2.95.0] - 2026-10-20
 
 **Release type:** Minor Feature Update
