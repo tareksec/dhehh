@@ -2,6 +2,23 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-21 - Fix: office sign-in lands on the investor sign-in when the browser also uses the portal
+
+Reason - owner report (brief of 2026-10-21): in the owner's main browser `zamzaminv.app/office/login` ends on the investor sign-in; a clean browser works.
+
+Root cause found in the code (not the guard check the brief suspected - no middleware redirects investors, `RestrictPortalHosts` lets `/office` through, and Filament's "already signed in" check on `/office/login` uses only guard `web`):
+- Laravel keeps one "after sign-in" address (`url.intended`) per session. A signed-out visit to a portal page stores it; the office sign-in (and `/office/login` while already signed in to the office) then redirected there, and the signed-out portal sent the person on to `/investor/login`.
+- Filament's sign-out throws the whole session away, so signing out of either panel also signed the browser out of the other - which is how the portal ended up signed out with its address left behind.
+
+What changed:
+- Each IMS sign-in goes back only to a page of its own panel, else its own home (`ImsPanelSessions`, `PanelLoginResponse`, both login pages' `mount()`).
+- Signing out of one IMS panel while the other is signed in clears only that panel's guard and session keys (`PanelLogoutController`); with one sign-in it clears the whole session as before.
+- Only the `office` and `investor` panels; the ERP admin, reseller portal, routing, settings, DNS and env are untouched.
+
+Verified: new `Ims\OfficeAndPortalSessionTest` 8 passed (before the fix 5 failed: the office sign-in landed on `/investor/dashboard`, the portal sign-in on `/office`, and each sign-out signed the other panel out). `DomainRoutingTest`, `InvestorBusinessSwitchTest`, `LoginGateTest`, `ThemeAndSignInTest` pass (61 with the new file). Full suite: 2882 passed, 1 skipped, 0 failed. The live acceptance tests on zamzaminv.app need the deploy (main moves only on owner approval).
+
+Commit status: committed and pushed to `feature/ims-office-login-session`; not merged into `main`.
+
 ## 2026-10-21 - Plan 18 (phases A-E) merged into main
 
 Owner approval in chat (2026-10-21): "হ্যাঁ, main-এ merge করো".

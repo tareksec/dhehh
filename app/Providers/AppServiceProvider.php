@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Filament\Auth\PanelLoginResponse;
 use App\Filament\Resources\CategoryResource\Pages\CreateCategory;
 use App\Filament\Resources\CategoryResource\Pages\EditCategory;
 use App\Filament\Resources\CategoryResource\Pages\ListCategories;
@@ -51,6 +52,7 @@ use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use App\Models\TransactionLedger;
 use App\Models\User;
+use App\Http\Controllers\Auth\PanelLogoutController;
 use App\Observers\AuditObserver;
 use App\Observers\CompanyNotificationObserver;
 use App\Observers\OrderNotificationObserver;
@@ -63,6 +65,8 @@ use App\Support\FileUploadClearAction;
 use App\Support\GuardedViewManager;
 use App\Support\ModuleHealth;
 use App\Support\MoneyFormatter;
+use Filament\Auth\Http\Controllers\LogoutController;
+use Filament\Auth\Http\Responses\Contracts\LoginResponse as LoginResponseContract;
 use Filament\Forms\Components\FileUpload;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Livewire\Notifications;
@@ -99,8 +103,21 @@ class AppServiceProvider extends ServiceProvider
         $this->app->extend(ViewManager::class, fn (): GuardedViewManager => new GuardedViewManager);
     }
 
+    /**
+     * The two IMS panels share one session on the IMS domain: neither sign-in
+     * lands on, or signs out of, the other (App\Support\ImsPanelSessions).
+     * Bound in boot() so they win over Filament's own bindings.
+     */
+    protected function bindPanelSignInResponses(): void
+    {
+        $this->app->bind(LoginResponseContract::class, PanelLoginResponse::class);
+        $this->app->bind(LogoutController::class, PanelLogoutController::class);
+    }
+
     public function boot(): void
     {
+        $this->bindPanelSignInResponses();
+
         // A migration run may have created a missing table: re-check (ModuleHealth).
         Event::listen(MigrationsEnded::class, function (): void {
             ModuleHealth::forget();
