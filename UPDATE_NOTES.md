@@ -1138,7 +1138,7 @@ Decisions I made without asking, for the owner to confirm or change:
 
 Tests: `ResellerLandingPageTest` (+1: the page loads its own stylesheet and brand colours). Focused files pass (`ResellerLandingPageTest`, `ResellerGuidePageTest`, `ResellerPortalTest`, `StorefrontApiTest`: 51 passed); full suite: 2564 passed, 1 skipped, 0 failed.
 
-Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-22). Not pushed to `main`.
+Commit status: committed to the work branch `claude/reseller-module-status-v9tobe`, `origin/main` (v2.98.0) merged in, full suite on the merged tree 2969 passed, 1 skipped, 0 failed; pushed to `main` on the owner's explicit approval ("main এ পুশ কর", 2026-10-22).
 
 ## 2026-10-22 - Reseller landing page at reseller.<domain> with the website's footer; "Become a reseller" banner button on the website
 
@@ -1167,7 +1167,7 @@ Tests: `ResellerLandingPageTest` (9: front page, guide off, other hosts untouche
 
 Verified: asset build passes (`npm run build`), the website builds and typechecks, and the landing page and the banner button were rendered in Chromium (desktop, phone, hover). Full suite: 2562 passed, 1 skipped, 1 failed — the failure was that old redirect test; after updating it, it passes on its own and the other files were not changed, so the full suite was not run a second time.
 
-Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` and the website's `feature/reseller-menu-link` (2026-10-22). Not pushed to `main`.
+Commit status: committed to the work branch `claude/reseller-module-status-v9tobe` and the website's `feature/reseller-menu-link`; both pushed to `main` on the owner's explicit approval ("main এ পুশ কর", 2026-10-22), ERP first, then the website.
 
 ## 2026-10-15 - Admin: reset a reseller's password / email a reset link; portal ↔ admin audit
 
