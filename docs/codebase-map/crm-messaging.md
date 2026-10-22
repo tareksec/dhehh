@@ -1,5 +1,5 @@
 # CRM & Omnichannel Messaging
-> Last checked: 2026-10-20, commit 0e5316d
+> Last checked: 2026-10-22
 
 ## What it does
 The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, multi-channel chat conversations, automated follow-ups, and marketing broadcasts. It unifies customer communications across WhatsApp Cloud API, WhatsApp Web (QR Baileys bridge), Facebook Messenger, SMS gateways, and Telegram into a single real-time inbox. It incorporates an AI Inbox Control Plane featuring intelligent automated replies, multimodal image/voice note comprehension, intent qualification, cart link generation, and smart human hand-over queues (Agent Desk, Needs Attention, To Chase, Unanswered Questions). Additionally, it coordinates scheduled sales automation cadences, promotional SMS/Messenger broadcasts, quick-reply snippet management, and Firebase Cloud Messaging (FCM) web push notifications.
@@ -85,6 +85,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Filament/Pages/ConnectWhatsAppBusinessApp.php` | Embedded Meta Cloud API onboarding wizard for coexisting official WhatsApp channels. |
 | `app/Filament/Pages/WhatsAppWebLogin.php` | Displays live QR code for scanning and linking WhatsApp Web Baileys bridge. |
 | `app/Filament/Pages/SmsTemplates.php` | Admin editor for system notification SMS templates. |
+| `app/Filament/Pages/OrderWhatsAppCard.php` | Settings → Order WhatsApp card: switch on the automatic order card, pick the official channel and approved template. |
 | `app/Filament/Pages/PushNotificationSettings.php` | Configures Firebase Cloud Messaging credentials and web push permissions. |
 
 ### Controllers

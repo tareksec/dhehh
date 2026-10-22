@@ -3524,5 +3524,19 @@
     "Partially paid": "Partially paid",
     "Payment due": "Payment due",
     "Contact": "Contact",
-    "Payment": "Payment"
+    "Payment": "Payment",
+    "Order WhatsApp card": "Order WhatsApp card",
+    "The customer is sent the order summary card as a picture on WhatsApp when the order is created and every time it reaches a new stage (confirmed, processing, shipping, delivered, completed, cancelled, returned, refunded). It goes through the official WhatsApp Cloud API only: a QR-linked WhatsApp Web channel is never used for automatic messages. A number without WhatsApp is skipped. Orders of resellers and imported past orders are never sent, nor customers who opted out.": "The customer is sent the order summary card as a picture on WhatsApp when the order is created and every time it reaches a new stage (confirmed, processing, shipping, delivered, completed, cancelled, returned, refunded). It goes through the official WhatsApp Cloud API only: a QR-linked WhatsApp Web channel is never used for automatic messages. A number without WhatsApp is skipped. Orders of resellers and imported past orders are never sent, nor customers who opted out.",
+    "This server can draw the card picture.": "This server can draw the card picture.",
+    "This server cannot draw the card picture yet: :problem. Until that is fixed no card is sent (the SMS is not affected).": "This server cannot draw the card picture yet: :problem. Until that is fixed no card is sent (the SMS is not affected).",
+    "Send the order card on WhatsApp automatically": "Send the order card on WhatsApp automatically",
+    "WhatsApp channel": "WhatsApp channel",
+    "Only your active Cloud API or Coexistence channels are listed. Add one under Chat Channels.": "Only your active Cloud API or Coexistence channels are listed. Add one under Chat Channels.",
+    "Approved template": "Approved template",
+    "Create the template in Meta Business Manager with an Image header and a body with exactly five variables, in this order: {{1}} customer name, {{2}} order number, {{3}} status, {{4}} total, {{5}} amount due. Only approved templates like that are listed.": "Create the template in Meta Business Manager with an Image header and a body with exactly five variables, in this order: {{1}} customer name, {{2}} order number, {{3}} status, {{4}} total, {{5}} amount due. Only approved templates like that are listed.",
+    "Choose the WhatsApp channel and an approved template first.": "Choose the WhatsApp channel and an approved template first.",
+    "Order WhatsApp card settings saved": "Order WhatsApp card settings saved",
+    "Choose a company first: the order WhatsApp card belongs to one company.": "Choose a company first: the order WhatsApp card belongs to one company.",
+    "Items ordered (product names with quantities)": "Items ordered (product names with quantities)",
+    "Settings": "Settings"
 }

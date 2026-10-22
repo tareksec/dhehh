@@ -87,7 +87,10 @@ class MetaGraphService
      * follow-up reminders). Never surface PENDING/REJECTED templates to a
      * picker; queuing a send against one of those just fails at Meta.
      *
-     * @return array<int, array{name: string, language: string, category: ?string}>
+     * `has_image_header` is true when the template starts with an image, and `body_variables` is how many
+     * {{n}} the body has: the order card needs both (OrderWhatsAppCardService).
+     *
+     * @return array<int, array{name: string, language: string, category: ?string, has_image_header: bool, body_variables: int}>
      */
     public function listMessageTemplates(ConversationChannel $channel): array
     {
@@ -97,7 +100,7 @@ class MetaGraphService
             'GET',
             rawurlencode((string) $channel->waba_id).'/message_templates',
             (string) $channel->access_token,
-            ['fields' => 'name,status,language,category', 'limit' => 200],
+            ['fields' => 'name,status,language,category,components', 'limit' => 200],
         );
 
         return collect((array) ($response['data'] ?? []))
@@ -106,6 +109,8 @@ class MetaGraphService
                 'name' => (string) $template['name'],
                 'language' => (string) ($template['language'] ?? 'en'),
                 'category' => $template['category'] ?? null,
+                'has_image_header' => $this->templateHasImageHeader($template),
+                'body_variables' => $this->templateBodyVariables($template),
             ])
             ->unique(fn (array $template): string => $template['name'].'|'.$template['language'])
             ->values()
@@ -406,6 +411,7 @@ class MetaGraphService
         string $templateName,
         string $language,
         array $bodyParameters = [],
+        ?string $headerImageId = null,
     ): string {
         $payload = [
             'messaging_product' => 'whatsapp',
@@ -417,14 +423,28 @@ class MetaGraphService
             ],
         ];
 
+        $components = [];
+
+        // A template with an image header needs the picture (uploaded earlier with uploadWhatsAppMedia()).
+        if (filled($headerImageId)) {
+            $components[] = [
+                'type' => 'header',
+                'parameters' => [['type' => 'image', 'image' => ['id' => $headerImageId]]],
+            ];
+        }
+
         if ($bodyParameters !== []) {
-            $payload['template']['components'] = [[
+            $components[] = [
                 'type' => 'body',
                 'parameters' => array_map(
                     fn (string $value): array => ['type' => 'text', 'text' => $value],
                     $bodyParameters,
                 ),
-            ]];
+            ];
+        }
+
+        if ($components !== []) {
+            $payload['template']['components'] = $components;
         }
 
         $response = $this->request('POST', rawurlencode($phoneNumberId).'/messages', $accessToken, $payload, retry: false);
@@ -435,6 +455,40 @@ class MetaGraphService
         }
 
         return $messageId;
+    }
+
+    /**
+     * Uploads a picture to WhatsApp and returns its media ID, to use as a template's image header. An upload
+     * needs no public link, so it works behind any firewall.
+     */
+    public function uploadWhatsAppMedia(string $phoneNumberId, string $accessToken, string $bytes, string $mimeType, string $filename): string
+    {
+        if (blank($accessToken)) {
+            throw new MetaGraphException('The Meta access token is missing. Add a permanent system-user token in Chat Channels.');
+        }
+
+        try {
+            $response = $this->client($accessToken, false)
+                ->attach('file', $bytes, $filename, ['Content-Type' => $mimeType])
+                ->post($this->url(rawurlencode($phoneNumberId).'/media'), [
+                    'messaging_product' => 'whatsapp',
+                    'type' => $mimeType,
+                ]);
+        } catch (Throwable $exception) {
+            throw new MetaGraphException('Could not reach Meta. Check the server network and retry.');
+        }
+
+        if (! $response->successful()) {
+            throw $this->exceptionFromResponse($response);
+        }
+
+        $mediaId = (string) $response->json('id', '');
+
+        if ($mediaId === '') {
+            throw new MetaGraphException('Meta accepted the picture but returned no media ID. Check the WhatsApp channel setup.');
+        }
+
+        return $mediaId;
     }
 
     public function statusErrorMessage(array $status): ?string
@@ -469,6 +523,24 @@ class MetaGraphService
     }
 
     /** @return array<string, mixed> */
+    /** @param array<string, mixed> $template */
+    protected function templateHasImageHeader(array $template): bool
+    {
+        return collect((array) ($template['components'] ?? []))
+            ->contains(fn (mixed $component): bool => is_array($component)
+                && ($component['type'] ?? null) === 'HEADER'
+                && ($component['format'] ?? null) === 'IMAGE');
+    }
+
+    /** @param array<string, mixed> $template */
+    protected function templateBodyVariables(array $template): int
+    {
+        $body = collect((array) ($template['components'] ?? []))
+            ->first(fn (mixed $component): bool => is_array($component) && ($component['type'] ?? null) === 'BODY');
+
+        return is_array($body) ? preg_match_all('/\{\{\s*\d+\s*\}\}/', (string) ($body['text'] ?? '')) : 0;
+    }
+
     protected function request(string $method, string $path, string $accessToken, array $data = [], bool $retry = true): array
     {
         if (blank($accessToken)) {

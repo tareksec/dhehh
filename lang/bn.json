@@ -3524,5 +3524,19 @@
     "Partially paid": "আংশিক পরিশোধিত",
     "Payment due": "পেমেন্ট বাকি",
     "Contact": "যোগাযোগ",
-    "Payment": "পেমেন্ট"
+    "Payment": "পেমেন্ট",
+    "Order WhatsApp card": "অর্ডার WhatsApp কার্ড",
+    "The customer is sent the order summary card as a picture on WhatsApp when the order is created and every time it reaches a new stage (confirmed, processing, shipping, delivered, completed, cancelled, returned, refunded). It goes through the official WhatsApp Cloud API only: a QR-linked WhatsApp Web channel is never used for automatic messages. A number without WhatsApp is skipped. Orders of resellers and imported past orders are never sent, nor customers who opted out.": "অর্ডার তৈরি হলে এবং প্রতিবার নতুন ধাপে (কনফার্মড, প্রসেসিং, শিপিং, ডেলিভারড, কমপ্লিটেড, ক্যানসেলড, রিটার্নড, রিফান্ডেড) পৌঁছালে কাস্টমারকে অর্ডার সামারি কার্ড ছবি হিসেবে WhatsApp-এ পাঠানো হয়। এটি শুধু অফিসিয়াল WhatsApp Cloud API দিয়ে যায়: QR দিয়ে লিংক করা WhatsApp Web চ্যানেল অটোমেটিক মেসেজে কখনো ব্যবহার হয় না। যে নম্বরে WhatsApp নেই সেটি বাদ যায়। রিসেলারের অর্ডার, ইমপোর্ট করা পুরোনো অর্ডার এবং অপ্ট-আউট করা কাস্টমারকে কখনো পাঠানো হয় না।",
+    "This server can draw the card picture.": "এই সার্ভার কার্ডের ছবি আঁকতে পারে।",
+    "This server cannot draw the card picture yet: :problem. Until that is fixed no card is sent (the SMS is not affected).": "এই সার্ভার এখনো কার্ডের ছবি আঁকতে পারছে না: :problem। এটি ঠিক না হওয়া পর্যন্ত কোনো কার্ড যাবে না (SMS-এ কোনো প্রভাব নেই)।",
+    "Send the order card on WhatsApp automatically": "অর্ডার কার্ড WhatsApp-এ অটোমেটিক পাঠান",
+    "WhatsApp channel": "WhatsApp চ্যানেল",
+    "Only your active Cloud API or Coexistence channels are listed. Add one under Chat Channels.": "শুধু আপনার সক্রিয় Cloud API বা Coexistence চ্যানেল দেখানো হয়। চ্যাট চ্যানেল থেকে একটি যোগ করুন।",
+    "Approved template": "অনুমোদিত টেমপ্লেট",
+    "Create the template in Meta Business Manager with an Image header and a body with exactly five variables, in this order: {{1}} customer name, {{2}} order number, {{3}} status, {{4}} total, {{5}} amount due. Only approved templates like that are listed.": "Meta Business Manager-এ একটি টেমপ্লেট বানান যার হেডার Image এবং বডিতে ঠিক পাঁচটি ভেরিয়েবল এই ক্রমে: {{1}} কাস্টমারের নাম, {{2}} অর্ডার নম্বর, {{3}} স্ট্যাটাস, {{4}} মোট, {{5}} বাকি। শুধু এ ধরনের অনুমোদিত টেমপ্লেট তালিকায় আসে।",
+    "Choose the WhatsApp channel and an approved template first.": "আগে WhatsApp চ্যানেল ও একটি অনুমোদিত টেমপ্লেট বেছে নিন।",
+    "Order WhatsApp card settings saved": "অর্ডার WhatsApp কার্ডের সেটিংস সংরক্ষিত হয়েছে",
+    "Choose a company first: the order WhatsApp card belongs to one company.": "আগে একটি কোম্পানি বেছে নিন: অর্ডার WhatsApp কার্ড একটি কোম্পানির নিজস্ব।",
+    "Items ordered (product names with quantities)": "অর্ডার করা পণ্য (নামসহ পরিমাণ)",
+    "Settings": "সেটিংস"
 }

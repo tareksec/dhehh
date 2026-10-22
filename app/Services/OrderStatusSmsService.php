@@ -2,12 +2,14 @@
 
 namespace App\Services;
 
+use App\Jobs\SendOrderPlacedSmsJob;
 use App\Jobs\SendOrderStatusSmsJob;
 use App\Models\CourierBooking;
 use App\Models\Order;
 use App\Models\OrderStatusTransition;
 use App\Services\Crm\ContactSuppressionService;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 /**
  * Texts the customer when their order reaches a new stage, with the wording
@@ -21,12 +23,31 @@ use Illuminate\Support\Facades\Cache;
  */
 class OrderStatusSmsService
 {
+    /** How long a new order waits before its "placed" message, so its items are saved by then. */
+    public const PLACED_DELAY_SECONDS = 45;
+
     public function __construct(
         protected SmsTemplateService $templates,
         protected StorefrontNotificationService $notifications,
         protected ContactSuppressionService $suppression,
         protected StorefrontMetaTrackingService $tracking,
     ) {}
+
+    /**
+     * Queues the "order placed" SMS for a new order, but only when the company has written that wording.
+     * It waits a little first: the items and the first payment are saved just after the order itself, and the
+     * message lists them.
+     */
+    public function dispatchForOrderPlaced(Order $order): void
+    {
+        if ($order->isHistoricalImport()
+            || filled($order->reseller_customer_id)
+            || $this->templates->body((int) $order->company_id, SmsTemplateService::ORDER_PLACED) === null) {
+            return;
+        }
+
+        SendOrderPlacedSmsJob::dispatch($order->getKey())->delay(now()->addSeconds(self::PLACED_DELAY_SECONDS))->afterCommit();
+    }
 
     /** Queues the SMS for a status change, but only when that stage has wording. */
     public function dispatchForTransition(OrderStatusTransition $transition): void
@@ -84,15 +105,7 @@ class OrderStatusSmsService
             return false;
         }
 
-        $values = [
-            'name' => (string) ($order->customer?->name ?? $order->customer_name),
-            'order' => (string) ($order->order_number ?: $order->getKey()),
-            'status' => __(Order::WORKFLOW_STAGES[$stage]),
-            'total' => $this->money($order->total_amount),
-            'due' => $this->money($order->due_amount),
-            'tracking' => (string) $order->latestCourierBooking?->tracking_id,
-            'company' => (string) $order->company?->name,
-        ];
+        $values = $this->values($order, __(Order::WORKFLOW_STAGES[$stage]));
         $message = $this->templates->render($companyId, SmsTemplateService::orderKey($stage), $values);
         $setting = $this->templates->gatewayFor($companyId, $order->siteSetting());
 
@@ -105,6 +118,57 @@ class OrderStatusSmsService
         }
 
         return $this->notifications->sendSms($setting, $phone, $message);
+    }
+
+    /** The "order placed" SMS (same exclusions as a status SMS). */
+    public function sendPlaced(int $orderId): bool
+    {
+        $order = Order::withoutGlobalScopes()->with(['customer', 'company', 'storefrontSetting', 'latestCourierBooking', 'items.product'])->find($orderId);
+
+        if ($order === null || $order->isHistoricalImport() || filled($order->reseller_customer_id)) {
+            return false;
+        }
+
+        $companyId = (int) $order->company_id;
+        $phone = trim((string) $order->customer?->phone);
+
+        if ($phone === '' || $this->suppression->suppressed($companyId, $phone)) {
+            return false;
+        }
+
+        $status = Order::STATUSES[$order->status] ?? (string) str((string) $order->status)->headline();
+        $message = $this->templates->render($companyId, SmsTemplateService::ORDER_PLACED, $this->values($order, __($status)));
+        $setting = $this->templates->gatewayFor($companyId, $order->siteSetting());
+
+        if (blank($message) || $setting === null || ! Cache::add('order-placed-sms:'.$order->getKey(), true, now()->addDays(2))) {
+            return false;
+        }
+
+        return $this->notifications->sendSms($setting, $phone, $message);
+    }
+
+    /**
+     * What the owner's wording can use. `items` is "Product x2, Other x1", short enough to leave room in one SMS.
+     *
+     * @return array<string, string>
+     */
+    protected function values(Order $order, string $status): array
+    {
+        $order->loadMissing(['items.product', 'items.productVariant']);
+        $items = $order->items
+            ->map(fn ($item): string => trim(($item->product?->name ?? __('Item')).' x'.(int) $item->quantity))
+            ->implode(', ');
+
+        return [
+            'name' => (string) ($order->customer?->name ?? $order->customer_name),
+            'order' => (string) ($order->order_number ?: $order->getKey()),
+            'status' => $status,
+            'items' => Str::limit($items, 100, '...'),
+            'total' => $this->money($order->total_amount),
+            'due' => $this->money($order->due_amount),
+            'tracking' => (string) $order->latestCourierBooking?->tracking_id,
+            'company' => (string) $order->company?->name,
+        ];
     }
 
     protected function money(mixed $amount): string

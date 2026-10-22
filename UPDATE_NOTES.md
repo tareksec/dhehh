@@ -2,6 +2,22 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-22 - Automatic order messages: SMS on creation + WhatsApp summary card
+
+Owner (Bangla): "আর কোন অর্ডার তৈরি হলে সাথে সাথে কাস্টমারের ফোন নাম্বারে অর্ডার ডিটেইলস এবং অর্ডার স্ট্যাটাস সহ চলে যাবে। প্রতিটা অর্ডার স্ট্যাটাস পরিবর্তন হলে কাস্টমারে ফোন নাম্বারে অর্ডার ইনফো সহ মেসেজ চলে যাবে, এবং তার যদি whatsapp থাকে তাহলে তাকে অর্ডার সামারি কার্ড অটো পাঠানো হবে।" Owner's answers to my two questions: WhatsApp through the **official Cloud API** (Recommended) and **try every customer** (a number without WhatsApp just fails).
+
+What already existed: a status SMS at every stage, using the owner's wording on SMS Templates (empty wording = nothing sent, owner decision 2026-10-17). I kept that rule, so **nothing is sent until the owner saves the wording** for "Order placed" and for each stage (one click: "Use suggested wording"). If the owner wants the SMS to go before any wording is saved, that is a separate decision.
+
+What changed: SMS "Order placed" (+ `:items`), the WhatsApp card (new page Settings → Order WhatsApp card; server-drawn card picture; Cloud API template with Image header and five body variables), see CHANGELOG. Rules kept: never web (QR) channels (whatsapp-web-rules rule 4), never reseller / imported / opted-out, one send per event.
+
+**What the owner must do before the WhatsApp card works:** (1) have a Cloud API or Coexistence channel in Chat Channels; (2) create and get approved a Meta template with an Image header and a body using {{1}} name, {{2}} order number, {{3}} status, {{4}} total, {{5}} due; (3) pick channel and template on Settings → Order WhatsApp card and switch it on; (4) make sure the server can draw the picture — the page says so; if not, install ImageMagick's Pango support (`libmagickcore-6.q16-6-extra` on Debian/Ubuntu). WhatsApp's business-initiated messages are charged by Meta per template message.
+
+Checked: the card picture was drawn on this machine (Imagick 6.9 with Pango; Bangla names, addresses and product names join correctly) for a company with a logo and for a reseller; Meta calls are tested with faked responses only — **not tested against the real Meta API or a real phone**. Not run on the production server, whose ImageMagick build is unknown.
+
+Needs Bangla review (new keys): all new keys of the Order WhatsApp card page and "Items ordered (product names with quantities)" → "অর্ডার করা পণ্য (নামসহ পরিমাণ)".
+
+Commit status: Committed and pushed to `claude/order-management-features-nafks7` only. Not pushed to `main` (needs the owner's approval).
+
 ## 2026-10-22 - Order summary card: corporate layout
 
 Owner (Bangla): "সামারি কার্ডকে আরো প্রফেশনাল ডিজাইন করা লাগবে এটা একদম জেনেরিক ডিজাইন হয়ে গেছে। কম্পানী লোগো, কন্টাক্ট ইনফো, অর্ডার ইনফো, কাস্টমার ইনফো, সব আরো গুছানো কর্পোরেট এন্টারপ্রাইজ লেভেলের হতে হবে।" (make the summary card more professional — company logo, contact info, order info, customer info, all organised at corporate enterprise level).

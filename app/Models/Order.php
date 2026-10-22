@@ -6,6 +6,8 @@ use App\Jobs\PushWooCommerceOrderStatusJob;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\GeneratesSequentialNumber;
 use App\Services\CustomerRiskService;
+use App\Services\OrderStatusSmsService;
+use App\Services\OrderWhatsAppCardService;
 use App\Services\OrderWorkflowService;
 use App\Services\ResellerCommissionService;
 use App\Services\ResellerOwnCourierService;
@@ -21,6 +23,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class Order extends Model
 {
@@ -309,6 +312,19 @@ class Order extends Model
                     'note' => 'Recorded at order creation.',
                     'paid_at' => $order->order_date ?? now()->toDateString(),
                 ]);
+            }
+
+            // The customer hears about the new order right away (SMS with the owner's wording, and the
+            // summary card on WhatsApp). Both wait a little in the queue so the items are saved first, and
+            // a failure here must never undo the order.
+            try {
+                if (Schema::hasTable('sms_templates')) {
+                    app(OrderStatusSmsService::class)->dispatchForOrderPlaced($order);
+                }
+
+                app(OrderWhatsAppCardService::class)->dispatchForOrderPlaced($order);
+            } catch (Throwable $exception) {
+                report($exception);
             }
         });
 

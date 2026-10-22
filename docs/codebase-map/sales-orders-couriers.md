@@ -1,5 +1,5 @@
 # Sales, Orders & Couriers
-> Last checked: 2026-10-20, commit 2e3fa5cd
+> Last checked: 2026-10-22
 
 ## What it does
 The Sales, Orders & Couriers module orchestrates customer acquisition, order fulfillment, multi-carrier parcel delivery, and delivery fraud prevention. It manages the full lifecycle of orders from draft quotations to confirmed, processing, delivered, or returned states, while tracking payments and stock reservations. It integrates with major Bangladeshi courier logistics APIs (Steadfast, Pathao, RedX, eCourier, and manual delivery), automating airway bill booking, webhook tracking, parcel barcode scanning, and driver handover sheets. For fraud mitigation, it runs an intelligent customer risk scoring engine that evaluates historical courier return ratios, first-time high COD thresholds, phone number reuse, and a dual-tier (global and tenant-scoped) customer blacklist.
@@ -45,9 +45,12 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Services/OrderWorkflowService.php` | Coordinates order status flows, stock reservation checks, and payment reconciliations. |
 | `app/Services/OrderStatusWorkflowService.php` | Enforces valid status transitions and triggers SMS notifications on stage changes. |
 | `app/Services/OrderStockCheckService.php` | Checks inventory levels before confirming an order to prevent overselling. |
-| `app/Services/OrderSummaryCardService.php` | Generates summary KPIs (subtotal, paid, balance, margin) for order views. |
+| `app/Services/OrderSummaryCardService.php` | Builds the shareable order summary card data (logo, contact, order and customer details, items with pictures, totals, payment state); the browser draws it on the order page. |
+| `app/Services/OrderSummaryCardImageService.php` | Draws the same card as a PNG on the server (Imagick + Pango, Bangla-safe) for the automatic WhatsApp card. |
 | `app/Services/OrderActivityFeedService.php` | Combines audit logs, status changes, and courier events into a unified order timeline. |
-| `app/Services/OrderStatusSmsService.php` | Dispatches localized SMS updates to customers when parcels ship or get delivered. |
+| `app/Services/OrderStatusSmsService.php` | Texts the customer when an order is created (`order.placed`) and at each new stage, using the owner's SMS Templates wording. |
+| `app/Services/OrderWhatsAppCardService.php` | Sends the summary card picture on WhatsApp (official Cloud API, approved image-header template) on order creation and each stage change. |
+| `app/Services/OrderWhatsAppSettings.php` | Company settings for the WhatsApp order card (on/off, channel, template), stored in `companies.settings`. |
 | `app/Services/ShippingFeeService.php` | Calculates inside/outside Dhaka shipping fees based on customer address and weight. |
 | `app/Services/CustomerRiskService.php` | Calculates risk scores from return ratios, duplicate orders, and blacklist hits. |
 | `app/Services/CustomerRiskSettingsService.php` | Manages risk factor thresholds and score deduction weights. |
@@ -135,6 +138,8 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Jobs/CheckExternalCourierFraudJob.php` | Background job fetching delivery success ratios from external courier APIs. |
 | `app/Jobs/ProcessCourierWebhook.php` | Background job updating courier booking status and order status from webhook data. |
 | `app/Jobs/SendOrderStatusSmsJob.php` | Queued job dispatching order status update SMS messages to customers. |
+| `app/Jobs/SendOrderPlacedSmsJob.php` | Queued (delayed) job texting the customer a new order's details. |
+| `app/Jobs/SendOrderWhatsAppCardJob.php` | Queued job sending the order summary card on WhatsApp. |
 | `app/Console/Commands/ImportNuportOrders.php` | `orders:import-nuport {file} {company-slug}`: previews or applies a Nuport order import from the terminal. |
 | `app/Console/Commands/SyncCourierStatuses.php` | Cron job polling courier APIs for live parcel tracking updates. |
 | `app/Console/Commands/MarkExpiredQuotations.php` | Nightly cron job expiring quotations that have exceeded their valid date. |
