@@ -35,6 +35,7 @@ class ResellerGuideController extends Controller
         abort_if($setting !== null && ! $setting->reseller_guide_enabled, 404);
 
         $panel = Filament::getPanel('reseller');
+        $brandColor = preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $setting?->theme_color) ? $setting->theme_color : '#0F766E';
         $paymentMethods = app(ResellerOwnCourierService::class)->paymentMethods($company);
         $showFigures = (bool) ($setting?->reseller_guide_show_figures ?? false);
 
@@ -42,7 +43,9 @@ class ResellerGuideController extends Controller
             'company' => $company,
             'companyName' => app(CompanySettingsService::class)->name($company),
             'logoUrl' => app(CompanySettingsService::class)->logoUrl($company),
-            'brandColor' => preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $setting?->theme_color) ? $setting->theme_color : '#0F766E',
+            'brandColor' => $brandColor,
+            // Text on the brand colour: white on a dark brand, near-black on a light one.
+            'onBrandColor' => StorefrontSiteConfigService::isDarkColor($brandColor) ? '#FFFFFF' : '#111111',
             'currency' => $company->currency ?: 'BDT',
             'intro' => $setting?->reseller_guide_intro,
             'rules' => collect($setting?->reseller_guide_rules ?? [])

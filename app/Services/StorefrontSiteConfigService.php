@@ -287,7 +287,7 @@ class StorefrontSiteConfigService
             'name' => $this->company->name,
             'logo_url' => Media::url($this->setting->logo, $this->company),
             'background' => $background,
-            'dark' => $this->isDark($background),
+            'dark' => self::isDarkColor($background),
             'social_links' => $this->socialLinks(),
             'menu' => $links($this->menu($this->setting->footer_menu)),
             'columns' => $columns,
@@ -311,7 +311,7 @@ class StorefrontSiteConfigService
     }
 
     /** True when white text reads better than black text on this hex colour (WCAG relative luminance, like the website). */
-    protected function isDark(string $hex): bool
+    public static function isDarkColor(string $hex): bool
     {
         if (! preg_match('/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i', trim($hex), $m)) {
             return false;

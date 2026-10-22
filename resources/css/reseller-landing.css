@@ -1,0 +1,268 @@
+/*
+ * The public reseller landing page (resources/views/reseller/guide.blade.php),
+ * drawn in the neo-brutalist style the owner chose on 2026-10-22: flat bright
+ * colours, thick ink borders, hard offset shadows that "press" on click, big
+ * heavy headlines. It loads after app.css, whose utility classes it builds on.
+ *
+ * These rules are not in a cascade layer, so they win over Tailwind's utilities
+ * (which are): never put a utility that fights a .nb-* rule (display, background,
+ * border) on the same element; wrap it instead.
+ *
+ * Text face: Hind Siliguri (SIL OFL 1.1, resources/fonts/hind-siliguri/OFL.txt),
+ * the same self-hosted face as the reseller portal, so Bangla and English match.
+ * Headlines: Unbounded (declared in app.css, Latin only); Bangla glyphs fall
+ * through to Hind Siliguri. Both are only fetched by pages that use them.
+ */
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('../fonts/hind-siliguri/hind-siliguri-bengali-500-normal.woff2') format('woff2');
+    unicode-range: U+0951-0952,U+0964-0965,U+0980-09FE,U+1CD0,U+1CD2,U+1CD5-1CD6,U+1CD8,U+1CE1,U+1CEA,U+1CED,U+1CF2,U+1CF5-1CF7,U+200C-200D,U+20B9,U+25CC,U+A8F1;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('../fonts/hind-siliguri/hind-siliguri-latin-500-normal.woff2') format('woff2');
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('../fonts/hind-siliguri/hind-siliguri-bengali-700-normal.woff2') format('woff2');
+    unicode-range: U+0951-0952,U+0964-0965,U+0980-09FE,U+1CD0,U+1CD2,U+1CD5-1CD6,U+1CD8,U+1CE1,U+1CEA,U+1CED,U+1CF2,U+1CF5-1CF7,U+200C-200D,U+20B9,U+25CC,U+A8F1;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('../fonts/hind-siliguri/hind-siliguri-latin-700-normal.woff2') format('woff2');
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+.nb {
+    --nb-ink: #111111;
+    --nb-paper: #fff6e5;
+    --nb-card: #ffffff;
+    --nb-dots: rgb(17 17 17 / 0.16);
+    --nb-yellow: #ffd84d;
+    --nb-pink: #ff8fd0;
+    --nb-mint: #78e6b4;
+    --nb-sky: #8ec8ff;
+    --nb-orange: #ffa45c;
+    --nb-brand: var(--brand, #1d4ed8);
+    --nb-on-brand: var(--on-brand, #ffffff);
+
+    background: var(--nb-paper);
+    color: var(--nb-ink);
+    font-family: 'Hind Siliguri', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 500;
+}
+
+.dark .nb {
+    --nb-ink: #f4f1ea;
+    --nb-paper: #14131a;
+    --nb-card: #1f1e28;
+    --nb-dots: rgb(244 241 234 / 0.14);
+}
+
+.nb ::selection {
+    background: var(--nb-yellow);
+    color: #111111;
+}
+
+/* Colour blocks keep their own dark text in light and dark mode. */
+.nb-yellow { background: var(--nb-yellow); color: #111111; }
+.nb-pink { background: var(--nb-pink); color: #111111; }
+.nb-mint { background: var(--nb-mint); color: #111111; }
+.nb-sky { background: var(--nb-sky); color: #111111; }
+.nb-orange { background: var(--nb-orange); color: #111111; }
+.nb-brand { background: var(--nb-brand); color: var(--nb-on-brand); }
+.nb-paper { background: var(--nb-paper); }
+
+.nb-display {
+    font-family: 'Unbounded', 'Hind Siliguri', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.08;
+}
+
+.nb-h2 {
+    font-family: 'Unbounded', 'Hind Siliguri', ui-sans-serif, system-ui, sans-serif;
+    font-weight: 800;
+    font-size: clamp(1.5rem, 3.6vw, 2.35rem);
+    letter-spacing: -0.03em;
+    line-height: 1.12;
+}
+
+.nb-border { border: 3px solid var(--nb-ink); }
+.nb-border-y { border-top: 3px solid var(--nb-ink); border-bottom: 3px solid var(--nb-ink); }
+.nb-border-b { border-bottom: 3px solid var(--nb-ink); }
+.nb-border-t { border-top: 3px solid var(--nb-ink); }
+
+.nb-box {
+    background: var(--nb-card);
+    border: 3px solid var(--nb-ink);
+    border-radius: 16px;
+    box-shadow: 6px 6px 0 var(--nb-ink);
+    color: var(--nb-ink);
+}
+
+.nb-box.nb-yellow { background: var(--nb-yellow); color: #111111; }
+.nb-box.nb-pink { background: var(--nb-pink); color: #111111; }
+.nb-box.nb-mint { background: var(--nb-mint); color: #111111; }
+.nb-box.nb-sky { background: var(--nb-sky); color: #111111; }
+.nb-box.nb-orange { background: var(--nb-orange); color: #111111; }
+.nb-box.nb-brand { background: var(--nb-brand); color: var(--nb-on-brand); }
+
+.nb-lift {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nb-lift:hover {
+    transform: translate(-3px, -3px);
+    box-shadow: 9px 9px 0 var(--nb-ink);
+}
+
+.nb-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 3rem;
+    padding: 0 1.4rem;
+    border: 3px solid var(--nb-ink);
+    border-radius: 12px;
+    background: var(--nb-brand);
+    box-shadow: 4px 4px 0 var(--nb-ink);
+    color: var(--nb-on-brand);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1;
+    text-decoration: none;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.nb-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 var(--nb-ink);
+}
+
+.nb-btn:active {
+    transform: translate(4px, 4px);
+    box-shadow: 0 0 0 var(--nb-ink);
+}
+
+.nb-btn--light { background: var(--nb-card); color: var(--nb-ink); }
+.nb-btn--yellow { background: var(--nb-yellow); color: #111111; }
+.nb-btn--small { min-height: 2.5rem; padding: 0 1rem; font-size: 0.9rem; box-shadow: 3px 3px 0 var(--nb-ink); }
+
+.nb-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.8rem;
+    border: 2px solid var(--nb-ink);
+    border-radius: 999px;
+    background: var(--nb-card);
+    color: var(--nb-ink);
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: transform 0.12s ease, background 0.12s ease;
+}
+
+/* Colour chips keep their own dark text in light and dark mode. */
+.nb-chip.nb-yellow { background: var(--nb-yellow); color: #111111; }
+.nb-chip.nb-pink { background: var(--nb-pink); color: #111111; }
+
+a.nb-chip:hover {
+    background: var(--nb-yellow);
+    color: #111111;
+    transform: translateY(-2px);
+}
+
+.nb-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 3px solid var(--nb-ink);
+    border-radius: 999px;
+    background: var(--nb-ink);
+    color: var(--nb-paper);
+    font-family: 'Unbounded', 'Hind Siliguri', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 800;
+}
+
+.nb-dots {
+    background-image: radial-gradient(circle, var(--nb-dots) 1.6px, transparent 1.6px);
+    background-size: 22px 22px;
+}
+
+.nb-sticker {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid var(--nb-ink);
+    box-shadow: 4px 4px 0 var(--nb-ink);
+    font-weight: 800;
+}
+
+.nb-marquee {
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.nb-marquee__track {
+    display: inline-flex;
+    animation: nb-scroll 32s linear infinite;
+}
+
+.nb-marquee__item {
+    padding: 0.7rem 0;
+    font-family: 'Unbounded', 'Hind Siliguri', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+}
+
+.nb-marquee__item::after {
+    content: '✦';
+    padding: 0 1.4rem;
+}
+
+@keyframes nb-scroll {
+    to { transform: translateX(-50%); }
+}
+
+.nb a:focus-visible,
+.nb summary:focus-visible {
+    outline: 3px solid var(--nb-ink);
+    outline-offset: 3px;
+}
+
+.nb-faq summary { list-style: none; cursor: pointer; }
+.nb-faq summary::-webkit-details-marker { display: none; }
+.nb-faq[open] .nb-faq__icon svg { transform: rotate(45deg); }
+.nb-faq__icon svg { transition: transform 0.15s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+    .nb-marquee__track { animation: none; }
+    .nb-lift, .nb-btn, .nb-chip, .nb-faq__icon svg { transition: none; }
+    .nb-lift:hover, .nb-btn:hover, a.nb-chip:hover { transform: none; }
+}

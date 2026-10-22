@@ -307,6 +307,28 @@ Tests: `ResellerLevelsTest` (10). Verified: full suite 2543 passed, 1 skipped, 0
 
 Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16). Not pushed to `main`.
 
+## 2026-10-22 (later) - Landing page redesigned in neo-brutalism
+
+The owner (in Bangla) said the landing page was not beautiful and asked for names of trending UI styles; I listed eight and recommended Bento + gradient; the owner chose **Neo-brutalism**.
+
+What changed (details in `CHANGELOG.md` [Unreleased]): only the look of `resources/views/reseller/guide.blade.php`; every text, number, link, `data-reseller-guide` / `data-guide-cta` hook and admin-managed content is unchanged, and there are **no new lang keys**.
+
+- New stylesheet `resources/css/reseller-landing.css` (new Vite entry in `vite.config.js`): thick ink borders, flat colour blocks, hard shadows with lift-on-hover and press-on-click, dot-grid hero, yellow ticker of the four step titles (repeats existing text, hidden from screen readers), numbered colour step cards, accordion rules, bold closing banner. Fonts: Hind Siliguri (self-hosted, same as the portal) and Unbounded (already in `app.css`).
+- Colours: cream / yellow / pink / mint / sky / orange are fixed style colours; the store's own `theme_color` is used for the main buttons and the closing banner, with white or near-black text chosen for readability. Dark mode (OS setting) flips paper, cards and outlines and keeps the colour blocks.
+- I rendered it in Chromium at desktop, 390 px phone and dark mode, found and fixed three things (colour blocks showing white, an unreadable chip in dark mode, a header chip squeezing the name on phones), and re-checked.
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- I kept the cream background and bright pastel blocks (classic neo-brutalism) with the brand colour as the button colour, instead of making the whole page the brand colour.
+- The first-screen card shows "price − cost = profit" using only the words the page already had; I added no promises or numbers.
+- The footer under the page is still the website's dark footer.
+
+**Deploy: `npm run build`** — the page now needs the new CSS entry in the build, or it fails to load its stylesheet.
+
+Tests: `ResellerLandingPageTest` (+1: the page loads its own stylesheet and brand colours). Focused files pass (`ResellerLandingPageTest`, `ResellerGuidePageTest`, `ResellerPortalTest`, `StorefrontApiTest`: 51 passed); full suite: 2564 passed, 1 skipped, 0 failed.
+
+Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-22). Not pushed to `main`.
+
 ## 2026-10-22 - Reseller landing page at reseller.<domain> with the website's footer; "Become a reseller" banner button on the website
 
 The owner (in Bangla), with the "Reselling Program — Start Your Online Business Without Investment" banner attached: make `reseller.zamzamint.com` the landing page, with login / registration buttons and call-to-action buttons on the page; take the footer from the Next.js site built for zamzamint; and in the Next.js site's footer replace "Become a reseller" with a call-to-action button, using the attached image itself as the button so it looks interactive.

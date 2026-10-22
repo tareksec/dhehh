@@ -67,6 +67,19 @@ class ResellerLandingPageTest extends TestCase
         $this->get($this->portal.'/portal/guide')->assertOk()->assertSee('data-reseller-guide', false);
     }
 
+    public function test_the_landing_page_is_drawn_in_the_neo_brutalist_style_with_its_own_stylesheet(): void
+    {
+        $this->get($this->portal.'/')
+            ->assertOk()
+            ->assertSee('reseller-landing', false)
+            ->assertSee('class="nb ', false)
+            ->assertSee('nb-box', false)
+            ->assertSee('nb-btn', false)
+            // The brand colour and a readable text colour on it reach the page's styles.
+            ->assertSee('--brand: #0F766E', false)
+            ->assertSee('--on-brand: #FFFFFF', false);
+    }
+
     public function test_switching_the_guide_off_sends_the_front_page_to_the_sign_in_page(): void
     {
         $this->blade->forceFill(['reseller_guide_enabled' => false])->save();
