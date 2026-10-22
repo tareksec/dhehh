@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.98.0] - 2026-10-22
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -22,7 +24,6 @@ All notable production changes to Business Dashboard are documented here.
 - `OfficeNavigation::mobile()` builds the bar, the "+" list (`canAccess()` + `canCreate()` + a create page), the to-do (`OwnerTodo`) and the menu tiles; `resources/views/filament/ims/office/mobile-nav.blade.php` draws them at `BODY_END` through `ModuleGuard::run('ims-office-mobile-nav')` — if it fails nothing is drawn and the top-bar menu button comes back (it is hidden only while `.ims-tabbar` is on the page). `Home::quickActions()` (guarded too) feeds the round buttons; the welcome header takes `app: true` for the phone greeting.
 - Lists: `Table::configureUsing()` in `AppServiceProvider` sets Filament's `stackedOnMobile()` for the `office` and `investor` panels only; the card look is in `resources/css/filament/ims/theme.css` (below 640px).
 - The sheets lock the page by a veil with `touch-action: none` rather than `overflow: hidden` on the page, which made phones jump/zoom in testing. No migration, no new model or route. 10 new keys in `lang/en.json` + `lang/bn.json`. Test: `OfficeHomeTest` (+1).
-
 ## [2.97.0] - 2026-10-21
 
 **Release type:** Minor Feature Update
