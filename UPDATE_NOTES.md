@@ -307,6 +307,35 @@ Tests: `ResellerLevelsTest` (10). Verified: full suite 2543 passed, 1 skipped, 0
 
 Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16). Not pushed to `main`.
 
+## 2026-10-22 - Reseller landing page at reseller.<domain> with the website's footer; "Become a reseller" banner button on the website
+
+The owner (in Bangla), with the "Reselling Program — Start Your Online Business Without Investment" banner attached: make `reseller.zamzamint.com` the landing page, with login / registration buttons and call-to-action buttons on the page; take the footer from the Next.js site built for zamzamint; and in the Next.js site's footer replace "Become a reseller" with a call-to-action button, using the attached image itself as the button so it looks interactive.
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+
+1. **The landing page already existed** (`/portal/guide`: header with *Sign in* / *Apply now*, hero, how it works, money, store, orders, rules, closing banner with two buttons). `reseller.<domain>` now **opens it directly** instead of redirecting to the sign-in page. `/portal/guide` still works. The existing *Show the reseller guide* switch controls it; off, the address redirects to `/portal` (sign-in) as before.
+2. **Its footer is the Next.js website's footer**: same Footer Builder blocks, footer menu, social links and background colour (the *Next.js* row's), laid out like `Footer.tsx`. Links to the website's pages (shop, categories, pages, track, account, legal links) are built on the row's **website domain**. If the company has no website domain, only absolute links stay (links to website pages cannot be built, so they are left out). A menu link that points at the reseller program is left out of this footer, since it sits on that page. No Next.js row: the old plain copyright line stays.
+3. **Website: the footer's "Become a reseller" item is a banner button.** The ERP now sends `image_url` on *Become a reseller* menu items; the website's footer pulls those items out of the link lists and shows the picture once, above the columns, as the button (hover lift + zoom, a light sweep every few seconds, both off for `prefers-reduced-motion`; keyboard focus ring; the menu label is its alt text). The header and mobile menu keep the text link. I rendered it in Chromium (desktop, hover, 390 px phone) and checked the Tailwind build output.
+4. **The picture is admin-managed**: **Reseller Settings → Website banner button** (upload; cleared = standard). The owner's attached banner ships with the ERP as the standard one (`public/images/reseller-program-banner.png`, 1080 × 360), so nothing needs uploading for it to appear.
+5. The storefront's *Become a reseller* links (account menu, footer, API menu item) now point at the portal address itself (`https://reseller.<domain>/`), not `/portal/guide`.
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- The footer comes from the **Next.js row only**. A company with only a Blade row gets the simple footer; I did not fall back to the Blade footer because the owner asked for the website's footer.
+- The banner sits **above the footer columns**, centred, up to 672 px wide. A 1080 × 360 banner inside a narrow link column would make its small line unreadable.
+- The banner is shown for every *Become a reseller* item the admin placed in the footer menu or in a footer link column (once, even if two items point to the same address); the header keeps the text link. To remove the button, remove the item from the footer menu.
+- The banner picture has English text. It ships as the standard picture for every company until that company uploads its own.
+
+Needs Bangla review (new keys, all in `lang/bn.json`): *Website banner button* (ওয়েবসাইটের ব্যানার বাটন), its helper line (it keeps the English names "Become a reseller" and "Reselling Program" because the menu label and the banner text are English), the new *Show the reseller guide* helper line (front page of the portal address), *Contact* (যোগাযোগ), *Social link* (সোশ্যাল লিংক). The old helper line for the guide switch was replaced.
+
+Deploy: `php artisan migrate` (new column `storefront_settings.reseller_banner_image`), `npm run build`, and deploy the website branch `feature/reseller-menu-link` for the button (the ERP part alone only changes the landing page and sends the extra field).
+
+Tests: `ResellerLandingPageTest` (9: front page, guide off, other hosts untouched, module off, footer from the website, no domain, no website, banner upload and clear through the settings page, standard banner ships); `StorefrontApiTest` and `ResellerGuidePageTest` updated for the new address. `ModuleGuard` wraps the footer, but isolation is off in tests, so no test covers a failing footer. `ResellerPortalTest` had one test that expected the old redirect from the portal host's `/`; it now expects the landing page (`test_visiting_the_portal_host_root_shows_the_reseller_landing_page`).
+
+Verified: asset build passes (`npm run build`), the website builds and typechecks, and the landing page and the banner button were rendered in Chromium (desktop, phone, hover). Full suite: 2562 passed, 1 skipped, 1 failed — the failure was that old redirect test; after updating it, it passes on its own and the other files were not changed, so the full suite was not run a second time.
+
+Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` and the website's `feature/reseller-menu-link` (2026-10-22). Not pushed to `main`.
+
 ## 2026-10-15 - Admin: reset a reseller's password / email a reset link; portal ↔ admin audit
 
 The owner (in Bangla): *"From the admin, resellers' passwords can be reset, and a password reset request can be sent by email to the email the reseller set."* and *"Check whether the portal and the admin dashboard are connected without problems, whether stock works properly, and whether orders work properly."*

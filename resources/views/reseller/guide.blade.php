@@ -251,8 +251,12 @@
         </section>
     </main>
 
-    <footer class="border-t border-gray-200/70 py-8 text-center text-sm text-gray-500 dark:border-white/10 dark:text-gray-400">
-        © {{ now()->year }} {{ $companyName }}
-    </footer>
+    @if ($footer)
+        @include('reseller.partials.footer', ['footer' => $footer])
+    @else
+        <footer class="border-t border-gray-200/70 py-8 text-center text-sm text-gray-500 dark:border-white/10 dark:text-gray-400">
+            © {{ now()->year }} {{ $companyName }}
+        </footer>
+    @endif
 </body>
 </html>

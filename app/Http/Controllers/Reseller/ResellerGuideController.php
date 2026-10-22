@@ -4,17 +4,21 @@ namespace App\Http\Controllers\Reseller;
 
 use App\Http\Controllers\Controller;
 use App\Models\Company;
+use App\Models\StorefrontSetting;
 use App\Services\CompanySettingsService;
 use App\Services\ResellerOwnCourierService;
+use App\Services\StorefrontSiteConfigService;
+use App\Support\ModuleGuard;
 use Filament\Facades\Filament;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
- * The public reseller guide on the portal host ("/portal/guide", owner
- * request 2026-10-07): what the program is and the rules a reseller works
- * under, read before applying, with buttons to apply or sign in. The
- * how-it-works sections describe what the system actually enforces; the
+ * The public reseller landing page: the portal host's front page, and still
+ * "/portal/guide" (owner requests 2026-10-07 and 2026-10-22). What the program
+ * is and the rules a reseller works under, read before applying, with buttons
+ * to apply or sign in, ending with the footer of the company's Next.js website.
+ * The how-it-works sections describe what the system actually enforces; the
  * intro, the store's own rules and whether money figures are shown are
  * admin-managed on Resellers → Reseller Settings.
  */
@@ -57,6 +61,23 @@ class ResellerGuideController extends Controller
             'subdomainExample' => filled($company->domain) ? 'your-shop.'.$company->domain : null,
             'applyUrl' => $panel->getRegistrationUrl(),
             'loginUrl' => $panel->getLoginUrl(),
+            'footer' => $this->footer($request, $company),
         ]);
+    }
+
+    /**
+     * The footer of the company's Next.js website, so the landing page ends like the website does
+     * (owner request 2026-10-22). Null when the company has no Next.js site row; a problem building it
+     * only costs the page its footer, never the page.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function footer(Request $request, Company $company): ?array
+    {
+        return ModuleGuard::run('reseller-landing.footer', function () use ($request, $company): ?array {
+            $site = StorefrontSetting::nextjsFor($company->getKey());
+
+            return $site ? (new StorefrontSiteConfigService($company, $site))->footer($request->getScheme()) : null;
+        }, null);
     }
 }

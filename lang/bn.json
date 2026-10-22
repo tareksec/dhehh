@@ -1207,7 +1207,6 @@
     "Read the reseller guide": "রিসেলার গাইড পড়ুন",
     "Reseller guide page": "রিসেলার গাইড পেজ",
     "Show the reseller guide": "রিসেলার গাইড দেখান",
-    "A public page on the reseller portal that explains how the program works and lists your rules, with buttons to apply or sign in. The storefront's \"Become a reseller\" link opens it while it is on.": "রিসেলার পোর্টালের একটা পাবলিক পেজ, যেখানে প্রোগ্রাম কীভাবে কাজ করে তা বোঝানো থাকে এবং আপনার নিয়মগুলো থাকে, সাথে আবেদন বা সাইন ইনের বাটন। এটা চালু থাকলে স্টোরফ্রন্টের \"Become a reseller\" লিংক এই পেজ খোলে।",
     "Show money figures on the guide": "গাইডে টাকার অঙ্ক দেখান",
     "Shows the minimum withdrawal and the packaging charge per piece on the guide. Reseller costs are never shown.": "গাইডে সর্বনিম্ন উইথড্র আর প্রতি পিসের প্যাকেজিং চার্জ দেখায়। রিসেলারের খরচ কখনো দেখানো হয় না।",
     "Introduction": "ভূমিকা",
@@ -2311,5 +2310,10 @@
     ":count resellers updated.": ":count জন রিসেলার হালনাগাদ হয়েছে।",
     ":count resellers were left as they are: they belong to another company.": ":count জন রিসেলার আগের মতোই আছেন: তাঁরা অন্য কোম্পানির।",
     "Minimum withdrawal": "ন্যূনতম উইথড্র",
-    "Resellers": "রিসেলার"
+    "Resellers": "রিসেলার",
+    "Website banner button": "ওয়েবসাইটের ব্যানার বাটন",
+    "The picture the website's footer shows as the \"Become a reseller\" button. Leave it empty for the standard \"Reselling Program\" banner. A wide picture works best, about 3:1 (for example 1080 × 360).": "ওয়েবসাইটের ফুটারে \"Become a reseller\" বাটন হিসেবে যে ছবি দেখানো হয়। খালি রাখলে স্ট্যান্ডার্ড \"Reselling Program\" ব্যানার দেখাবে। চওড়া ছবি ভালো, প্রায় ৩:১ অনুপাতে (যেমন ১০৮০ × ৩৬০)।",
+    "The front page of the reseller portal address: it explains how the program works and lists your rules, with buttons to apply or sign in, and ends with the website's footer. The storefront's \"Become a reseller\" link opens it while it is on; off, the address goes straight to the sign-in page.": "রিসেলার পোর্টাল ঠিকানার প্রথম পাতা: প্রোগ্রাম কীভাবে কাজ করে ও আপনার নিয়মগুলো দেখায়, আবেদন বা সাইন ইনের বাটন থাকে, আর শেষে ওয়েবসাইটের ফুটার দেখায়। স্টোরফ্রন্টের \"Become a reseller\" লিংক এটি খোলে; বন্ধ থাকলে ঠিকানাটি সরাসরি সাইন ইন পেজে যায়।",
+    "Contact": "যোগাযোগ",
+    "Social link": "সোশ্যাল লিংক"
 }

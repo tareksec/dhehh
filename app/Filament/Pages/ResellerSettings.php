@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Filament\Clusters\Resellers;
 use App\Filament\Resources\StorefrontPaymentMethods\StorefrontPaymentMethodResource;
+use App\Filament\Resources\StorefrontSettings\StorefrontSettingResource;
 use App\Models\Company;
 use App\Models\StorefrontPayment;
 use App\Models\StorefrontPaymentMethod;
@@ -28,6 +29,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 use Illuminate\Support\HtmlString;
@@ -103,6 +105,7 @@ class ResellerSettings extends Page
             'reseller_guide_rules' => $setting?->reseller_guide_rules ?? [],
             'reseller_announcement_enabled' => (bool) ($setting?->reseller_announcement_enabled ?? false),
             'reseller_announcement' => $setting?->reseller_announcement,
+            'reseller_banner_image' => $setting?->reseller_banner_image,
             ...collect(ResellerNotificationService::COLUMNS)->mapWithKeys(fn (string $column): array => [$column => $setting?->{$column}])->all(),
             ...$this->paymentFormState($setting),
         ]);
@@ -239,6 +242,8 @@ class ResellerSettings extends Page
                         Toggle::make('reseller_program_enabled')
                             ->label(__('Show reseller program'))
                             ->helperText(__('Off hides "Become a reseller" from the storefront\'s account menu and footer. The reseller pages keep working at their direct URL — only the links are hidden.')),
+                        StorefrontSettingResource::designImageUpload('reseller_banner_image', __('Website banner button'))
+                            ->helperText(__('The picture the website\'s footer shows as the "Become a reseller" button. Leave it empty for the standard "Reselling Program" banner. A wide picture works best, about 3:1 (for example 1080 × 360).')),
                     ]),
 
                 Section::make(__('Reseller guide page'))
@@ -246,7 +251,7 @@ class ResellerSettings extends Page
                     ->schema([
                         Toggle::make('reseller_guide_enabled')
                             ->label(__('Show the reseller guide'))
-                            ->helperText(__('A public page on the reseller portal that explains how the program works and lists your rules, with buttons to apply or sign in. The storefront\'s "Become a reseller" link opens it while it is on.')),
+                            ->helperText(__('The front page of the reseller portal address: it explains how the program works and lists your rules, with buttons to apply or sign in, and ends with the website\'s footer. The storefront\'s "Become a reseller" link opens it while it is on; off, the address goes straight to the sign-in page.')),
                         Toggle::make('reseller_guide_show_figures')
                             ->label(__('Show money figures on the guide'))
                             ->helperText(__('Shows the minimum withdrawal and the packaging charge per piece on the guide. Reseller costs are never shown.')),
@@ -451,7 +456,7 @@ class ResellerSettings extends Page
             return new HtmlString($text.' '.e(__('It goes live once the reseller module is on and the company has a domain.')));
         }
 
-        $url = request()->getScheme().'://'.$host.'/portal/guide';
+        $url = request()->getScheme().'://'.$host.'/';
 
         return new HtmlString($text.' <a class="text-primary-600 underline" href="'.e($url).'" target="_blank" rel="noopener">'.e($url).'</a>');
     }
@@ -555,6 +560,7 @@ class ResellerSettings extends Page
             'reseller_guide_show_figures' => (bool) $data['reseller_guide_show_figures'],
             'reseller_announcement_enabled' => (bool) ($data['reseller_announcement_enabled'] ?? false),
             'reseller_announcement' => filled($data['reseller_announcement'] ?? null) ? trim($data['reseller_announcement']) : null,
+            'reseller_banner_image' => filled($banner = Arr::first(Arr::wrap($data['reseller_banner_image'] ?? null))) ? $banner : null,
             ...collect(ResellerNotificationService::COLUMNS)
                 ->mapWithKeys(fn (string $column): array => [$column => filled($data[$column] ?? null) ? trim($data[$column]) : null])
                 ->all(),

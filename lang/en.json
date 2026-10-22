@@ -1207,7 +1207,6 @@
     "Read the reseller guide": "Read the reseller guide",
     "Reseller guide page": "Reseller guide page",
     "Show the reseller guide": "Show the reseller guide",
-    "A public page on the reseller portal that explains how the program works and lists your rules, with buttons to apply or sign in. The storefront's \"Become a reseller\" link opens it while it is on.": "A public page on the reseller portal that explains how the program works and lists your rules, with buttons to apply or sign in. The storefront's \"Become a reseller\" link opens it while it is on.",
     "Show money figures on the guide": "Show money figures on the guide",
     "Shows the minimum withdrawal and the packaging charge per piece on the guide. Reseller costs are never shown.": "Shows the minimum withdrawal and the packaging charge per piece on the guide. Reseller costs are never shown.",
     "Introduction": "Introduction",
@@ -2311,5 +2310,10 @@
     ":count resellers updated.": ":count resellers updated.",
     ":count resellers were left as they are: they belong to another company.": ":count resellers were left as they are: they belong to another company.",
     "Minimum withdrawal": "Minimum withdrawal",
-    "Resellers": "Resellers"
+    "Resellers": "Resellers",
+    "Website banner button": "Website banner button",
+    "The picture the website's footer shows as the \"Become a reseller\" button. Leave it empty for the standard \"Reselling Program\" banner. A wide picture works best, about 3:1 (for example 1080 × 360).": "The picture the website's footer shows as the \"Become a reseller\" button. Leave it empty for the standard \"Reselling Program\" banner. A wide picture works best, about 3:1 (for example 1080 × 360).",
+    "The front page of the reseller portal address: it explains how the program works and lists your rules, with buttons to apply or sign in, and ends with the website's footer. The storefront's \"Become a reseller\" link opens it while it is on; off, the address goes straight to the sign-in page.": "The front page of the reseller portal address: it explains how the program works and lists your rules, with buttons to apply or sign in, and ends with the website's footer. The storefront's \"Become a reseller\" link opens it while it is on; off, the address goes straight to the sign-in page.",
+    "Contact": "Contact",
+    "Social link": "Social link"
 }

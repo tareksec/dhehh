@@ -56,7 +56,10 @@ with the Google Fonts URL, `typography`, `appearance`), `contact`, `social_links
 `business` (business-account text, bulk-pricing rows — wholesale), `features`, `menus.header` /
 `menus.footer` (category and page ids already resolved to slugs; an inactive category or an
 unpublished page is dropped; an item of type `reseller` ("Become a reseller") carries `url`, the address of
-the reseller portal's guide or application form, and is dropped while the company's reseller module is off),
+the reseller landing page (the portal host's front page) or of the application form when the landing page
+is off, and `image_url`, the reseller program banner the website's footer shows as a call-to-action button
+(the company's own picture from Reseller Settings, else the standard banner the ERP ships); it is dropped
+while the company's reseller module is off),
 `footer_blocks` (the Footer Builder, see below), `design`, `home_sections`
 (the Home Page Builder, see below) and `seo`.
 
