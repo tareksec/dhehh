@@ -12,20 +12,36 @@ use App\Support\PhoneLinks;
  * The card is drawn as a PNG image in the browser and sent as that image to
  * WhatsApp, WeChat, Messenger or Telegram; the plain text version is only
  * for the "Copy text" button.
+ *
+ * Like the printed invoice, a reseller's order carries the reseller's store
+ * name and logo and none of the company's contact details (owner rule
+ * 2026-10-07), and a reseller's own-courier customer only ever sees the
+ * reseller's retail prices (owner rule 2026-10-06).
  */
 class OrderSummaryCardService
 {
     /** Side of the square product picture drawn on the card, in pixels. */
     protected const IMAGE_SIZE = 160;
 
+    /** The logo is shrunk to fit inside this box (drawn at 2x on the card). */
+    protected const LOGO_WIDTH = 520;
+
+    protected const LOGO_HEIGHT = 160;
+
     /**
      * @return array{
      *     company: string,
-     *     company_phone: ?string,
+     *     logo: ?string,
+     *     contact: list<string>,
+     *     address: string,
+     *     invoice: string,
      *     title: string,
-     *     meta: list<array{label: string, value: string}>,
-     *     items: list<array{name: string, quantity: int, amount: string, image: ?string}>,
+     *     order_rows: list<array{key: string, label: string, value: string}>,
+     *     customer_rows: list<array{key: string, label: string, value: string}>,
+     *     payment: array{key: string, label: string},
+     *     items: list<array{name: string, quantity: int, price: string, amount: string, image: ?string}>,
      *     totals: list<array{key: string, label: string, value: string, strong: bool}>,
+     *     note: ?string,
      *     labels: array<string, string>,
      *     text: string,
      *     customer_phone: ?string,
@@ -39,33 +55,42 @@ class OrderSummaryCardService
         $currency = $order->company?->currency ?: 'BDT';
         $money = fn ($amount): string => MoneyFormatter::currency((float) $amount, $currency);
 
-        $meta = array_values(array_filter([
-            ['label' => __('Invoice'), 'value' => (string) $order->order_number],
-            ['label' => __('Date'), 'value' => (string) $order->order_date?->format('d M Y')],
-            ['label' => __('Customer'), 'value' => (string) ($order->customer_name ?: $order->customer?->name)],
-            ['label' => __('Phone'), 'value' => (string) $order->customer?->phone],
-            ['label' => __('Address'), 'value' => (string) $order->customer?->address],
-            ['label' => __('Status'), 'value' => Order::STATUSES[$order->status] ?? (string) str($order->status)->headline()],
-            ['label' => __('Courier'), 'value' => (string) $order->latestCourierBooking?->provider?->name],
-            ['label' => __('Tracking ID'), 'value' => (string) $order->latestCourierBooking?->tracking_id],
-        ], fn (array $row): bool => trim($row['value']) !== ''));
+        // The card is sent to the buyer: a reseller's own-courier customer sees
+        // only the reseller's retail prices and what they owe, never the
+        // store's prices or the reseller's advance.
+        $buyerView = $order->showsResellerPricesToBuyer();
+        $resellerBrand = $order->showsResellerBranding();
+
+        $courier = $buyerView ? $order->reseller_courier_name : $order->latestCourierBooking?->provider?->name;
+        $tracking = $buyerView ? $order->reseller_parcel_id : $order->latestCourierBooking?->tracking_id;
+
+        $orderRows = $this->filled([
+            ['key' => 'invoice', 'label' => __('Invoice'), 'value' => (string) $order->order_number],
+            ['key' => 'date', 'label' => __('Date'), 'value' => (string) $order->order_date?->format('d M Y')],
+            ['key' => 'status', 'label' => __('Status'), 'value' => Order::STATUSES[$order->status] ?? (string) str($order->status)->headline()],
+            ['key' => 'courier', 'label' => __('Courier'), 'value' => (string) $courier],
+            ['key' => 'tracking', 'label' => __('Tracking ID'), 'value' => (string) $tracking],
+        ]);
+
+        $customerRows = $this->filled([
+            ['key' => 'customer', 'label' => __('Customer'), 'value' => (string) ($order->customer_name ?: $order->customer?->name)],
+            ['key' => 'phone', 'label' => __('Phone'), 'value' => (string) $order->customer?->phone],
+            ['key' => 'address', 'label' => __('Address'), 'value' => (string) $order->customer?->address],
+        ]);
 
         $items = $order->items
             ->map(fn (OrderItem $item): array => [
                 'name' => trim(($item->product?->name ?? __('Item')).($item->variant_label ? ' ('.$item->variant_label.')' : '')),
                 'quantity' => (int) $item->quantity,
                 'image' => $this->itemImage($item, $order),
-                'amount' => $money($order->showsResellerPricesToBuyer()
+                'price' => $money($buyerView ? $item->buyerUnitPrice() : (float) $item->unit_price),
+                'amount' => $money($buyerView
                     ? $item->buyerSubtotal()
                     : ((float) $item->subtotal ?: (int) $item->quantity * (float) $item->unit_price)),
             ])
             ->values()
             ->all();
 
-        // The card is sent to the buyer: a reseller's own-courier customer sees
-        // only the reseller's retail total and what they owe, never the
-        // store's prices or the reseller's advance (owner rule).
-        $buyerView = $order->showsResellerPricesToBuyer();
         $totals = $buyerView ? [
             ['key' => 'total', 'label' => __('Total'), 'value' => $order->buyerTotal(), 'strong' => true, 'always' => true, 'minus' => false],
             ['key' => 'due', 'label' => __('Due'), 'value' => $order->buyerTotal(), 'strong' => true, 'always' => true, 'minus' => false],
@@ -79,6 +104,15 @@ class OrderSummaryCardService
             ['key' => 'due', 'label' => __('Due'), 'value' => (float) $order->due_amount, 'strong' => true, 'always' => true, 'minus' => false],
         ], fn (array $row): bool => $row['always'] || $row['value'] > 0));
 
+        $total = $buyerView ? $order->buyerTotal() : (float) $order->total_amount;
+        $due = $buyerView ? $order->buyerTotal() : (float) $order->due_amount;
+        $paid = $buyerView ? 0.0 : (float) $order->paid_amount;
+        $payment = match (true) {
+            $total > 0 && $due <= 0 => ['key' => 'paid', 'label' => __('Paid in full')],
+            $paid > 0 => ['key' => 'partial', 'label' => __('Partially paid')],
+            default => ['key' => 'unpaid', 'label' => __('Payment due')],
+        };
+
         $totals = array_map(fn (array $row): array => [
             'key' => $row['key'],
             'label' => $row['label'],
@@ -86,26 +120,41 @@ class OrderSummaryCardService
             'strong' => $row['strong'],
         ], $totals);
 
-        // ...and it carries the reseller's store name, not the company's.
-        // (every reseller-portal order, owner rule 2026-10-07).
-        $resellerBrand = $order->showsResellerBranding();
         $company = $resellerBrand
             ? (string) $order->reseller?->resellerStoreName()
             : (string) ($order->company?->name ?? config('app.name'));
+        $contact = $resellerBrand ? [] : $this->contactLines($order);
+        $address = $resellerBrand ? '' : trim((string) $order->company?->address);
+        $note = $resellerBrand || $buyerView ? null : (filled($order->note) ? trim((string) $order->note) : null);
         $title = __('Order summary');
-        $text = $this->text($company, $title, $meta, $items, $totals);
+
+        $text = $this->text($company, $title, [...$orderRows, ...$customerRows], $items, $totals);
 
         return [
             'company' => $company,
-            'company_phone' => $resellerBrand ? null : $order->company?->phone,
+            'logo' => $this->logo($order, $resellerBrand),
+            'contact' => $contact,
+            'address' => $address,
+            'invoice' => (string) $order->order_number,
             'title' => $title,
-            'meta' => $meta,
+            'order_rows' => $orderRows,
+            'customer_rows' => $customerRows,
+            'payment' => $payment,
             'items' => $items,
             'totals' => $totals,
+            'note' => $note,
             'labels' => [
-                'items' => __('Items'),
+                'invoice' => __('Invoice'),
+                'payment' => __('Payment'),
+                'address' => __('Address'),
+                'contact' => __('Contact'),
+                'order_details' => __('Order details'),
+                'customer_details' => __('Customer details'),
+                'item' => __('Item'),
+                'price' => __('Price'),
                 'quantity' => __('Qty'),
                 'amount' => __('Amount'),
+                'note' => __('Note'),
                 'thanks' => __('Thank you for your order!'),
             ],
             'text' => $text,
@@ -115,6 +164,51 @@ class OrderSummaryCardService
             'customer_phone' => PhoneLinks::internationalDigits($order->customer?->phone),
             'file_name' => 'order-'.str($order->order_number)->slug().'.png',
         ];
+    }
+
+    /**
+     * Company phone, e-mail, website and WhatsApp / hotline from the invoice
+     * settings, one short line each (the header and footer of the card).
+     *
+     * @return list<string>
+     */
+    protected function contactLines(Order $order): array
+    {
+        $company = $order->company;
+        $invoice = $company ? app(CompanySettingsService::class)->invoice($company) : [];
+        $website = preg_replace('#^https?://#', '', rtrim((string) ($invoice['website'] ?? ''), '/'));
+
+        return array_values(array_unique(array_filter([
+            trim((string) ($invoice['hotline'] ?? '')) ?: trim((string) $company?->phone),
+            trim((string) $company?->email),
+            trim((string) $website),
+        ], fn ($line): bool => $line !== '')));
+    }
+
+    /**
+     * Rows whose value is empty are left off the card.
+     *
+     * @param  list<array{key: string, label: string, value: string}>  $rows
+     * @return list<array{key: string, label: string, value: string}>
+     */
+    protected function filled(array $rows): array
+    {
+        return array_values(array_filter($rows, fn (array $row): bool => trim((string) $row['value']) !== ''));
+    }
+
+    /**
+     * The company logo (the reseller's own store logo on a reseller order),
+     * shrunk to fit a small box and embedded as a PNG data URI so the browser
+     * canvas stays untainted. Null when there is no logo or it cannot be read:
+     * the card then writes the name in large type instead.
+     */
+    protected function logo(Order $order, bool $resellerBrand): ?string
+    {
+        $path = $resellerBrand
+            ? ($order->reseller?->reseller_logo ?: $order->reseller?->reseller_logo_dark)
+            : ($order->company?->logo ?: ((array) $order->company?->settings)['dark_logo'] ?? null);
+
+        return $this->imageDataUri($path, $order, self::LOGO_WIDTH, self::LOGO_HEIGHT, square: false);
     }
 
     /**
@@ -130,6 +224,11 @@ class OrderSummaryCardService
         $path = collect($item->productVariant?->images ?? [])->first(fn ($image): bool => is_string($image) && $image !== '')
             ?: $item->product?->image;
 
+        return $this->imageDataUri($path, $order, self::IMAGE_SIZE, self::IMAGE_SIZE, square: true);
+    }
+
+    protected function imageDataUri(mixed $path, Order $order, int $width, int $height, bool $square): ?string
+    {
         if (! is_string($path) || $path === '' || ! function_exists('imagecreatefromstring')) {
             return null;
         }
@@ -142,27 +241,46 @@ class OrderSummaryCardService
                 return null;
             }
 
-            $width = imagesx($source);
-            $height = imagesy($source);
-            $side = min($width, $height);
+            $sourceWidth = imagesx($source);
+            $sourceHeight = imagesy($source);
 
-            if ($side < 1) {
+            if ($sourceWidth < 1 || $sourceHeight < 1) {
                 return null;
             }
 
-            $thumb = imagecreatetruecolor(self::IMAGE_SIZE, self::IMAGE_SIZE);
-            imagefill($thumb, 0, 0, imagecolorallocate($thumb, 255, 255, 255));
-            imagecopyresampled(
-                $thumb, $source, 0, 0,
-                intdiv($width - $side, 2), intdiv($height - $side, 2),
-                self::IMAGE_SIZE, self::IMAGE_SIZE, $side, $side,
-            );
+            if ($square) {
+                // Product picture: centre-crop to a square on white, as a JPEG.
+                $side = min($sourceWidth, $sourceHeight);
+                $canvas = imagecreatetruecolor($width, $height);
+                imagefill($canvas, 0, 0, imagecolorallocate($canvas, 255, 255, 255));
+                imagecopyresampled(
+                    $canvas, $source, 0, 0,
+                    intdiv($sourceWidth - $side, 2), intdiv($sourceHeight - $side, 2),
+                    $width, $height, $side, $side,
+                );
+
+                ob_start();
+                imagejpeg($canvas, null, 82);
+                $bytes = (string) ob_get_clean();
+
+                return $bytes === '' ? null : 'data:image/jpeg;base64,'.base64_encode($bytes);
+            }
+
+            // Logo: fit inside the box (never enlarged), keep transparency, PNG.
+            $scale = min($width / $sourceWidth, $height / $sourceHeight, 1);
+            $targetWidth = max(1, (int) round($sourceWidth * $scale));
+            $targetHeight = max(1, (int) round($sourceHeight * $scale));
+            $canvas = imagecreatetruecolor($targetWidth, $targetHeight);
+            imagealphablending($canvas, false);
+            imagesavealpha($canvas, true);
+            imagefill($canvas, 0, 0, imagecolorallocatealpha($canvas, 255, 255, 255, 127));
+            imagecopyresampled($canvas, $source, 0, 0, 0, 0, $targetWidth, $targetHeight, $sourceWidth, $sourceHeight);
 
             ob_start();
-            imagejpeg($thumb, null, 82);
-            $jpeg = (string) ob_get_clean();
+            imagepng($canvas);
+            $bytes = (string) ob_get_clean();
 
-            return $jpeg === '' ? null : 'data:image/jpeg;base64,'.base64_encode($jpeg);
+            return $bytes === '' ? null : 'data:image/png;base64,'.base64_encode($bytes);
         } catch (\Throwable) {
             return null;
         }

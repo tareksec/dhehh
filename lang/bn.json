@@ -3518,5 +3518,11 @@
     "Record an investment": "বিনিয়োগ লিখুন",
     "New project": "নতুন প্রজেক্ট",
     "Post a project update": "প্রজেক্টের আপডেট দিন",
-    "Write a feed post": "ফিডে পোস্ট লিখুন"
+    "Write a feed post": "ফিডে পোস্ট লিখুন",
+    "Customer details": "কাস্টমারের তথ্য",
+    "Paid in full": "সম্পূর্ণ পরিশোধিত",
+    "Partially paid": "আংশিক পরিশোধিত",
+    "Payment due": "পেমেন্ট বাকি",
+    "Contact": "যোগাযোগ",
+    "Payment": "পেমেন্ট"
 }

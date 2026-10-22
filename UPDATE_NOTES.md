@@ -2,6 +2,18 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-22 - Order summary card: corporate layout
+
+Owner (Bangla): "সামারি কার্ডকে আরো প্রফেশনাল ডিজাইন করা লাগবে এটা একদম জেনেরিক ডিজাইন হয়ে গেছে। কম্পানী লোগো, কন্টাক্ট ইনফো, অর্ডার ইনফো, কাস্টমার ইনফো, সব আরো গুছানো কর্পোরেট এন্টারপ্রাইজ লেভেলের হতে হবে।" (make the summary card more professional — company logo, contact info, order info, customer info, all organised at corporate enterprise level).
+
+What changed: the card is redrawn with a logo + contact header, a navy title band with the invoice number, Order details and Customer details boxes side by side (payment badge in the order box), a striped items table with picture, unit price, qty and amount, note / address boxes, totals ending in a big Due band (orange, green when paid), and a footer. `OrderSummaryCardService` supplies the logo (data URI), contact lines, address, note, payment state and unit prices. Reseller orders keep the reseller's name/logo and show no company contact details.
+
+Checked in headless Chromium with a logo, three items (two pictures, one without), a Bangla customer name and address, and the reseller variant (no logo, no contact). Not tested on a phone — the sending path is unchanged.
+
+Needs Bangla review (new keys): "Customer details" → "কাস্টমারের তথ্য", "Paid in full" → "সম্পূর্ণ পরিশোধিত", "Partially paid" → "আংশিক পরিশোধিত", "Payment due" → "পেমেন্ট বাকি", "Contact" → "যোগাযোগ", "Payment" → "পেমেন্ট".
+
+Commit status: Committed and pushed to `claude/order-management-features-nafks7` only. Not pushed to `main` (needs the owner's approval).
+
 ## 2026-10-22 - Order summary card: product pictures
 
 Owner (Bangla): "অর্ডার সামারি কার্ড এ প্রডাক্ট ইমেজ এড করতে। তাহলে কাস্টমার বুঝবে যে তাকে তার অর্ডার করা প্রডাক্ট ই দেয়া হচ্ছে।" (add the product image to the order summary card so the customer knows they get the product they ordered).
