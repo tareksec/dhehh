@@ -5,6 +5,7 @@ namespace App\Filament\Trade\Resources\GoodsIn;
 use App\Filament\Trade\Resources\DeliveryChallans\DeliveryChallanResource;
 use App\Filament\Trade\Resources\GoodsIn\Pages\CreateGoodsIn;
 use App\Filament\Trade\Resources\GoodsIn\Pages\ListGoodsIn;
+use App\Filament\Trade\TradeErrors;
 use App\Models\Purchase;
 use App\Models\Supplier;
 use App\Support\ImsNumbers;
@@ -141,9 +142,10 @@ class GoodsInResource extends Resource
                     ->visible(fn (Purchase $record): bool => $record->status === 'draft')
                     ->requiresConfirmation()
                     ->modalDescription(fn (Purchase $record): string => __('These go into stock: :items', ['items' => $record->items->map(fn ($item): string => ($item->product?->name ?? '—').' × '.(int) $item->quantity)->implode(', ')]))
-                    ->action(function (Purchase $record): void {
-                        $record->update(['status' => 'received']);
-                        Notification::make()->title(__('Goods added to stock'))->success()->send();
+                    ->action(function (Purchase $record, Action $action): void {
+                        TradeErrors::attempt(fn () => $record->update(['status' => 'received']))
+                            ? Notification::make()->title(__('Goods added to stock'))->success()->send()
+                            : $action->halt();
                     }),
             ])
             ->emptyStateHeading(__('No purchase yet'));

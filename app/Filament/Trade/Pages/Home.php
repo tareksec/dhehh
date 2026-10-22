@@ -54,12 +54,14 @@ class Home extends Dashboard
             'dues' => $home->dues(),
             'lowStock' => $home->lowStock(),
             'lcs' => $home->openLcs(),
+            'money' => CashBook::canAccess() ? $home->money() : null,
             'quick' => $this->quickActions(),
             'links' => [
                 'sales' => DeliveryChallanResource::canAccess() ? DeliveryChallanResource::getUrl(panel: 'trade') : null,
                 'dues' => DueResource::canAccess() ? DueResource::getUrl(panel: 'trade') : null,
                 'stock' => StockItemResource::canAccess() ? StockItemResource::getUrl(panel: 'trade') : null,
                 'lcs' => GoodsInResource::canAccess() ? GoodsInResource::getUrl(panel: 'trade') : null,
+                'money' => CashBook::canAccess() ? CashBook::getUrl(panel: 'trade') : null,
             ],
         ];
     }

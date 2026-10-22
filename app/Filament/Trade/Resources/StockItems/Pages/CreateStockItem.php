@@ -3,6 +3,7 @@
 namespace App\Filament\Trade\Resources\StockItems\Pages;
 
 use App\Filament\Trade\Resources\StockItems\StockItemResource;
+use App\Filament\Trade\TradeErrors;
 use App\Models\Product;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -17,8 +18,20 @@ class CreateStockItem extends CreateRecord
     /** The item, then its opening stock as an "opening" movement in the stock ledger. */
     protected function handleRecordCreation(array $data): Model
     {
-        $opening = (int) ($this->data['opening_stock'] ?? 0);
+        $product = null;
 
+        if (! TradeErrors::attempt(function () use ($data, &$product): void {
+            $product = $this->createItem($data, (int) ($this->data['opening_stock'] ?? 0));
+        })) {
+            $this->halt();
+        }
+
+        return $product;
+    }
+
+    /** @param  array<string, mixed>  $data */
+    protected function createItem(array $data, int $opening): Product
+    {
         return DB::transaction(function () use ($data, $opening): Product {
             $product = Product::query()->create([
                 ...$data,

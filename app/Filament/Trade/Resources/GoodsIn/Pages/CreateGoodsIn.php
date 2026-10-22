@@ -3,6 +3,7 @@
 namespace App\Filament\Trade\Resources\GoodsIn\Pages;
 
 use App\Filament\Trade\Resources\GoodsIn\GoodsInResource;
+use App\Filament\Trade\TradeErrors;
 use App\Models\Purchase;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -19,6 +20,20 @@ class CreateGoodsIn extends CreateRecord
      * are already here — the ERP's purchase rules move the stock either way.
      */
     protected function handleRecordCreation(array $data): Model
+    {
+        $purchase = null;
+
+        if (! TradeErrors::attempt(function () use ($data, &$purchase): void {
+            $purchase = $this->createPurchase($data);
+        })) {
+            $this->halt();
+        }
+
+        return $purchase;
+    }
+
+    /** @param  array<string, mixed>  $data */
+    protected function createPurchase(array $data): Purchase
     {
         return DB::transaction(function () use ($data): Purchase {
             $purchase = Purchase::query()->create([

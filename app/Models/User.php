@@ -364,6 +364,8 @@ class User extends Authenticatable implements FilamentUser
         'trade.stock' => 'Trade Portal: Stock (add items, correct counts)',
         'trade.dues' => 'Trade Portal: Dues (see who owes, receive money)',
         'trade.import' => 'Trade Portal: Bring In Old Data (buyers with old dues, items with stock)',
+        'trade.cashbook' => 'Trade Portal: Cash Book and Balance Sheet (see them, record bank deposits, supplier payments and costs)',
+        'trade.money_accounts' => 'Trade Portal: Cash and Bank Accounts (add accounts, set the money in them at the start)',
         'marketing.view' => 'Marketing/Ads: View',
         'marketing.create' => 'Marketing/Ads: Create',
         'marketing.update' => 'Marketing/Ads: Update',

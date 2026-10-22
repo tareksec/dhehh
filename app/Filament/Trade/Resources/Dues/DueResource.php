@@ -3,6 +3,7 @@
 namespace App\Filament\Trade\Resources\Dues;
 
 use App\Filament\Trade\Resources\Dues\Pages\ListDues;
+use App\Filament\Trade\TradeErrors;
 use App\Models\Customer;
 use App\Models\DeliveryChallan;
 use App\Models\OrderPayment;
@@ -15,7 +16,6 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -126,22 +126,26 @@ class DueResource extends Resource
                         Select::make('account_id')
                             ->label(__('Where the money went'))
                             ->options(fn (): array => OrderPayment::accountOptions())
-                            ->required(fn (Get $get): bool => $get('against') === self::OLD_DUE)
-                            ->helperText(fn (Get $get): ?string => $get('against') === self::OLD_DUE && OrderPayment::accountOptions() === [] ? __('No cash or bank account yet: ask your admin to add one.') : null),
+                            ->required()
+                            ->helperText(fn (): ?string => OrderPayment::accountOptions() === [] ? __('No cash or bank account yet: add one in Menu → Cash and bank accounts.') : null),
                         TextInput::make('note')->label(__('Note'))->placeholder(__('e.g. cheque no. and bank'))->maxLength(255),
                     ])
-                    ->action(function (Customer $record, array $data): void {
+                    ->action(function (Customer $record, array $data, Action $action): void {
                         $service = app(DeliveryChallanService::class);
                         $account = filled($data['account_id'] ?? null) ? (int) $data['account_id'] : null;
 
-                        if (($data['against'] ?? null) === self::OLD_DUE) {
-                            $service->receiveOldDue($record, (float) $data['amount'], $data['date'] ?? null, $account, $data['note'] ?? null);
-                        } else {
+                        $saved = TradeErrors::attempt(function () use ($service, $record, $data, $account): void {
+                            if (($data['against'] ?? null) === self::OLD_DUE) {
+                                $service->receiveOldDue($record, (float) $data['amount'], $data['date'] ?? null, $account, $data['note'] ?? null);
+
+                                return;
+                            }
+
                             $challan = DeliveryChallan::query()->where('customer_id', $record->getKey())->findOrFail((int) $data['against']);
                             $service->receivePayment($challan, (float) $data['amount'], $data['date'] ?? null, $account, $data['note'] ?? null);
-                        }
+                        });
 
-                        Notification::make()->title(__('Money received'))->success()->send();
+                        $saved ? Notification::make()->title(__('Money received'))->success()->send() : $action->halt();
                     }),
             ])
             ->emptyStateHeading(__('No customer owes you money.'));

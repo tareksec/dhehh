@@ -197,6 +197,59 @@
     margin-top: 0.25rem;
 }
 
+/* Cash book: Day / Month switch and the date with back / forward. */
+.trade-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.trade-stepper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.trade-stepper .trade-round-btn {
+    background-color: var(--trade-card);
+    border: 1px solid var(--trade-line);
+}
+
+.trade-stepper .trade-round-btn:disabled {
+    opacity: 0.4;
+}
+
+.trade-date-input {
+    min-height: 2.75rem;
+    padding-inline: 0.75rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--trade-line);
+    background-color: var(--trade-card);
+}
+
+.trade-month {
+    min-width: 8rem;
+    text-align: center;
+}
+
+.trade-in {
+    color: var(--trade-green-ink);
+}
+
+.trade-out {
+    color: var(--trade-red-ink);
+}
+
+.trade-line-move {
+    opacity: 0.75;
+}
+
+.trade-card-big-sm {
+    font-size: 1.25rem;
+}
+
 /* Label / value pairs on a challan's page. */
 .trade-facts {
     display: grid;

@@ -163,7 +163,8 @@ class DeliveryChallanResource extends Resource
                     Select::make('payment_account_id')
                         ->label(__('Where the money went'))
                         ->options(fn (): array => OrderPayment::accountOptions())
-                        ->helperText(__('Cash box or bank account. Can be left empty.'))
+                        ->helperText(__('Cash box or bank account, so the money shows in the cash book. Needed when anything was paid.'))
+                        ->required(fn (Get $get): bool => (float) $get('advance_amount') + (float) $get('cash_amount') > 0)
                         ->columnSpanFull(),
                     Text::make(fn (Get $get): string => __('Due: :due', ['due' => ImsNumbers::money(max(static::totalOf($get('items') ?? []) - (float) $get('advance_amount') - (float) $get('cash_amount'), 0))]))
                         ->weight('bold')

@@ -23,6 +23,27 @@
     @endif
 
     <div class="trade-cards">
+        {{-- Cash and bank now (only for people who may see the cash book) --}}
+        @if ($links['money'])
+            <section class="trade-card" aria-labelledby="trade-card-money">
+                <div class="trade-card-head">
+                    <span class="trade-card-icon trade-tone-green"><x-filament::icon icon="heroicon-o-wallet" class="h-6 w-6" /></span>
+                    <h2 id="trade-card-money" class="trade-card-title">{{ __('Cash and bank now') }}</h2>
+                    <a href="{{ $links['money'] }}" class="trade-card-link">{{ __('Cash book') }}</a>
+                </div>
+                @if ($money === null)
+                    <p class="trade-card-error">{{ __('This card could not be loaded. Please try again later.') }}</p>
+                @elseif ($money['accounts'] === 0)
+                    <p class="trade-card-empty">{{ __('Add your cash box and bank accounts first, with the money in each today.') }}</p>
+                @else
+                    <ul class="trade-list">
+                        <li><span>{{ __('Cash in hand') }}</span><strong>{{ ImsNumbers::money($money['cash']) }}</strong></li>
+                        <li><span>{{ __('In the bank and mobile banking') }}</span><strong>{{ ImsNumbers::money($money['bank']) }}</strong></li>
+                    </ul>
+                @endif
+            </section>
+        @endif
+
         {{-- Today's sales --}}
         <section class="trade-card" aria-labelledby="trade-card-sales">
             <div class="trade-card-head">

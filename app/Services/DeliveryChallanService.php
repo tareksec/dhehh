@@ -61,6 +61,12 @@ class DeliveryChallanService
         }
 
         $accountId = $this->accountId($data['payment_account_id'] ?? null);
+
+        // Money received goes into a cash or bank account, so it shows in the cash book (PLAN.md §5).
+        if ($advance + $cash > 0 && $accountId === null) {
+            throw ValidationException::withMessages(['payment_account_id' => __('Choose where the money went.')]);
+        }
+
         $this->assertStock($lines);
 
         return DB::transaction(function () use ($data, $lines, $total, $advance, $cash, $date, $number, $accountId, $by): DeliveryChallan {
@@ -163,9 +169,11 @@ class DeliveryChallanService
             ]);
         }
 
+        $accountId = $this->accountId($accountId) ?? throw ValidationException::withMessages(['account_id' => __('Choose where the money went.')]);
+
         return $challan->order->payments()->create([
             'type' => $amount >= $due ? OrderPayment::TYPE_FINAL : OrderPayment::TYPE_PARTIAL,
-            'account_id' => $this->accountId($accountId),
+            'account_id' => $accountId,
             'amount' => $amount,
             'paid_at' => Carbon::parse($date ?? now())->toDateString(),
             'note' => $this->text($note) ?? __('Payment for Delivery Challan :number', ['number' => $challan->challan_number]),

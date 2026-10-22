@@ -3,6 +3,7 @@
 namespace App\Filament\Trade\Resources\DeliveryChallans\Pages;
 
 use App\Filament\Trade\Resources\DeliveryChallans\DeliveryChallanResource;
+use App\Filament\Trade\TradeErrors;
 use App\Services\DeliveryChallanService;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\CreateRecord;
@@ -22,7 +23,15 @@ class CreateDeliveryChallan extends CreateRecord
     /** Writing the challan is the sale: stock, due and payments in one go. */
     protected function handleRecordCreation(array $data): Model
     {
-        return app(DeliveryChallanService::class)->create($data, auth()->user());
+        $challan = null;
+
+        if (! TradeErrors::attempt(function () use ($data, &$challan): void {
+            $challan = app(DeliveryChallanService::class)->create($data, auth()->user());
+        })) {
+            $this->halt();
+        }
+
+        return $challan;
     }
 
     protected function getRedirectUrl(): string

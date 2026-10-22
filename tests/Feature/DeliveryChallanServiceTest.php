@@ -30,7 +30,10 @@ class DeliveryChallanServiceTest extends TestCase
             'is_active' => true, 'trade_portal_enabled' => true,
         ]);
         app(CompanyContext::class)->set($this->company);
+        $this->cashBox = Account::query()->create(['name' => 'Cash box', 'type' => 'cash', 'opening_balance' => 0, 'is_active' => true]);
     }
+
+    protected Account $cashBox;
 
     protected function product(string $name, int $stock, string $unit = 'pcs'): Product
     {
@@ -58,6 +61,7 @@ class DeliveryChallanServiceTest extends TestCase
             'advance_date' => '2026-08-10',
             'advance_note' => 'To Afsar Boss',
             'cash_amount' => 800000,
+            'payment_account_id' => $this->cashBox->getKey(),
             'cheque_number' => '3097332',
             'cheque_bank' => 'DBBL',
             'due_terms' => 'Due Taka 6,00,000 to be paid within next 2 months.',
@@ -109,18 +113,22 @@ class DeliveryChallanServiceTest extends TestCase
         $service = app(DeliveryChallanService::class);
         $challan = $service->create($this->paperChallan());
 
-        $service->receivePayment($challan, 250000, '2026-09-01');
+        $this->assertThrows(fn () => $service->receivePayment($challan, 1000, '2026-09-01'), ValidationException::class);
+
+        $service->receivePayment($challan, 250000, '2026-09-01', $this->cashBox->getKey());
         $this->assertSame(350000.0, $challan->refresh()->dueNow());
 
         try {
-            $service->receivePayment($challan, 400000);
+            $service->receivePayment($challan, 400000, null, $this->cashBox->getKey());
             $this->fail('More than the due must be refused.');
         } catch (ValidationException) {
         }
 
-        $service->receivePayment($challan, 350000);
+        $service->receivePayment($challan, 350000, null, $this->cashBox->getKey());
         $this->assertSame(0.0, $challan->refresh()->dueNow());
         $this->assertSame(0.0, (float) $challan->customer->refresh()->current_balance);
+        // Everything received is in the cash box: 9,00,000 with the challan + 6,00,000 later.
+        $this->assertSame(1500000.0, (float) $this->cashBox->refresh()->current_balance);
     }
 
     public function test_cancelling_puts_the_goods_back_and_removes_the_due(): void
@@ -168,6 +176,11 @@ class DeliveryChallanServiceTest extends TestCase
         $data = $this->paperChallan();
         $data['cash_amount'] = 1500000;
         $this->assertThrows(fn () => $service->create($data), ValidationException::class);
+
+        $data = $this->paperChallan();
+        $data['payment_account_id'] = null;
+        // Money paid with the challan must name its account, or it would be missing from the cash book.
+        $this->assertThrows(fn () => $service->create($data), ValidationException::class);
     }
 
     public function test_numbers_follow_the_pad_and_cannot_repeat(): void
@@ -192,7 +205,7 @@ class DeliveryChallanServiceTest extends TestCase
     {
         $customer = Customer::query()->create(['name' => 'Old Party', 'opening_balance' => 50000]);
         $customer->syncCurrentBalance();
-        $cash = Account::query()->create(['name' => 'Cash in hand', 'type' => 'cash']);
+        $cash = $this->cashBox;
 
         $this->assertThrows(fn () => app(DeliveryChallanService::class)->receiveOldDue($customer, 20000), ValidationException::class);
 

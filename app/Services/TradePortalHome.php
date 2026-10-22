@@ -96,6 +96,25 @@ class TradePortalHome
         });
     }
 
+    /**
+     * Money in the cash box and in the bank right now, from the company's own
+     * money accounts. Null when the card could not be built.
+     *
+     * @return array{cash: float, bank: float, accounts: int}|null
+     */
+    public function money(): ?array
+    {
+        return ModuleGuard::run('trade-home-money', function (): array {
+            $accounts = app(TradeCashBookService::class)->accounts();
+
+            return [
+                'cash' => round((float) $accounts->where('type', 'cash')->sum(fn ($account): float => (float) $account->current_balance), 2),
+                'bank' => round((float) $accounts->where('type', '!=', 'cash')->sum(fn ($account): float => (float) $account->current_balance), 2),
+                'accounts' => $accounts->count(),
+            ];
+        });
+    }
+
     /** The furthest paper a purchase has: the Commercial Invoice means it is shipped, else the LC is open. */
     public static function lcStage(Purchase $purchase): string
     {

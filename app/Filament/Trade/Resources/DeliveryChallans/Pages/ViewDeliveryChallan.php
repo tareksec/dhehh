@@ -3,6 +3,7 @@
 namespace App\Filament\Trade\Resources\DeliveryChallans\Pages;
 
 use App\Filament\Trade\Resources\DeliveryChallans\DeliveryChallanResource;
+use App\Filament\Trade\TradeErrors;
 use App\Models\DeliveryChallan;
 use App\Models\OrderPayment;
 use App\Services\DeliveryChallanService;
@@ -52,9 +53,10 @@ class ViewDeliveryChallan extends ViewRecord
                 ->requiresConfirmation()
                 ->modalDescription(fn (): string => __('The goods go back to stock and the due is removed. Money already received (:paid) stays recorded; give it back by hand if needed.', ['paid' => ImsNumbers::money($this->getRecord()->paidSoFar())]))
                 ->schema([Textarea::make('reason')->label(__('Why'))->required()->minLength(5)])
-                ->action(function (array $data): void {
-                    app(DeliveryChallanService::class)->cancel($this->getRecord(), (string) $data['reason'], auth()->user());
-                    Notification::make()->title(__('Challan cancelled'))->success()->send();
+                ->action(function (array $data, Action $action): void {
+                    TradeErrors::attempt(fn () => app(DeliveryChallanService::class)->cancel($this->getRecord(), (string) $data['reason'], auth()->user()))
+                        ? Notification::make()->title(__('Challan cancelled'))->success()->send()
+                        : $action->halt();
                 }),
         ];
     }
@@ -70,19 +72,19 @@ class ViewDeliveryChallan extends ViewRecord
             ->schema([
                 TextInput::make('amount')->label(__('Amount'))->numeric()->minValue(1)->required(),
                 DatePicker::make('date')->label(__('Date'))->default(now())->maxDate(now())->required(),
-                Select::make('account_id')->label(__('Where the money went'))->options(fn (): array => OrderPayment::accountOptions()),
+                Select::make('account_id')->label(__('Where the money went'))->options(fn (): array => OrderPayment::accountOptions())->required(),
                 TextInput::make('note')->label(__('Note'))->placeholder(__('e.g. cheque no. and bank'))->maxLength(255),
             ])
-            ->action(function (array $data, ViewDeliveryChallan $livewire): void {
-                app(DeliveryChallanService::class)->receivePayment(
+            ->action(function (array $data, ViewDeliveryChallan $livewire, Action $action): void {
+                TradeErrors::attempt(fn () => app(DeliveryChallanService::class)->receivePayment(
                     $livewire->getRecord(),
                     (float) $data['amount'],
                     $data['date'] ?? null,
                     filled($data['account_id'] ?? null) ? (int) $data['account_id'] : null,
                     $data['note'] ?? null,
-                );
-
-                Notification::make()->title(__('Money received'))->success()->send();
+                ))
+                    ? Notification::make()->title(__('Money received'))->success()->send()
+                    : $action->halt();
             });
     }
 }

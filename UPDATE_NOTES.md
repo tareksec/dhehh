@@ -2,6 +2,32 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - Trade Portal phase 3 (cash book + balance sheet)
+
+Owner request: start Phase 3 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-cash-book`. The branch starts from `feature/trade-portal-shop-work` (phases 1 and 2 are not on `main` yet), so it carries all three.
+
+What changed: Cash and bank accounts page, Cash book (day and month), Balance sheet, the buttons Bank deposit / move money, Pay a supplier, Other cost, Receive money, a "Cash and bank now" card on Home. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief: "Cash book + simple balance sheet over the existing accounts/vouchers, no new ledger", and PLAN.md §5):
+
+- The book is the ERP's account ledger (`TransactionLedger`) of the company's cash, bank and mobile-banking accounts. Nothing new is stored; entries made from the portal are the ERP's own records (fund transfer, supplier payment, expense), so they also show in the ERP's Finance pages.
+- A bank deposit is a fund transfer that is approved at once (the owner records what already happened); it is dated the day chosen, not the day it was typed.
+- Moves between own accounts are shown but not counted as money in or out; a bank charge on a move counts as a cost.
+- An account's opening money counts from the start of the book, also on days before the account was added (simple; correct once the accounts are added on the first day).
+- Balance sheet: cash, bank + mobile banking, stock at buying price (`AccountBalanceService::inventoryValue`), buyers' dues; less supplier payables. Bank loans, LC margin and owner's drawings are not in the system yet, so they are not shown — the page says so.
+- Money received must now name its account (with a challan, on a challan's page, in Dues), or it would be missing from the cash book. Phase 2 allowed it to be empty.
+- Portal refusals: every button and form now shows the ERP's reason in a red notice (found in the browser: a cost bigger than the cash box saved nothing and said nothing).
+
+Checked in the browser at 390px on a throwaway copy of the dev database (never the real DB): the empty cash book, adding a bank account, a move bank → cash and a "Truck fare" cost (both in the day's book, the move not counted as in/out), a cost bigger than the account refused with the Bangla reason and the form kept, the month view, the balance sheet (8,48,500 = 18,500 + 2,30,000 + 6,00,000).
+
+Needs Bangla review: the 70 new keys, especially "Bank deposit / move money", "What is left (your capital)", "Money in it when you started", and the four ERP refusal messages.
+
+Not done: PDF / Excel of the cash book and balance sheet (phase 6), other income (only buyers' money comes in), owner's drawings, bank loans, editing or deleting a cash-book entry from the portal (the ERP's Finance pages still can).
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 2,998 passed, 1 skipped, 0 failed. New: `TradeCashBookServiceTest` (5), `TradePortalCashBookTest` (4).
+
+Commit status: committed and pushed to `feature/trade-portal-cash-book`; not on `main` (waits for the owner's approval; it contains phases 1 and 2 too).
+
 ## 2026-10-22 - Trade Portal phase 2 (shop work)
 
 Owner request: start Phase 2 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-shop-work`. The branch starts from `feature/trade-portal-foundation` (phase 1 is not on `main` yet and phase 2 needs it), so merging phase 2 brings phase 1 with it.

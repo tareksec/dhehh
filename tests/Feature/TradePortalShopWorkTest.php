@@ -10,6 +10,7 @@ use App\Filament\Trade\Resources\GoodsIn\Pages\ListGoodsIn;
 use App\Filament\Trade\Resources\StockItems\Pages\CreateStockItem;
 use App\Filament\Trade\Resources\StockItems\Pages\ListStockItems;
 use App\Http\Middleware\SetTradePortalLocale;
+use App\Models\Account;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\DeliveryChallan;
@@ -43,7 +44,11 @@ class TradePortalShopWorkTest extends TestCase
 
         $this->company = $this->company();
         $this->owner = $this->staff($this->company, 'trade_owner');
+        app(CompanyContext::class)->set($this->company);
+        $this->cashBox = Account::query()->create(['name' => 'Cash box', 'type' => 'cash', 'opening_balance' => 0, 'is_active' => true]);
     }
+
+    protected Account $cashBox;
 
     protected function company(array $attributes = []): Company
     {
@@ -118,6 +123,7 @@ class TradePortalShopWorkTest extends TestCase
                 ],
                 'advance_amount' => 100000,
                 'cash_amount' => 800000,
+                'payment_account_id' => $this->cashBox->getKey(),
                 'cheque_number' => '3097332',
                 'cheque_bank' => 'DBBL',
                 'due_terms' => 'Within next 2 months',
@@ -139,6 +145,24 @@ class TradePortalShopWorkTest extends TestCase
             ->assertSee('Brand: Chuantian 34X72F')
             ->assertSee('6,00,000')
             ->assertSee('Within next 2 months');
+    }
+
+    public function test_a_refused_challan_tells_the_owner_why_and_keeps_the_form(): void
+    {
+        $machine = $this->product('Circular knitting machine', 1, 'set');
+        $this->inPortal();
+
+        Livewire::test(CreateDeliveryChallan::class)
+            ->fillForm([
+                'challan_number' => '030',
+                'buyer_name' => 'Madina Knitwear',
+                'items' => [['product_id' => $machine->getKey(), 'description' => 'Machine', 'quantity' => 3, 'unit' => 'set', 'unit_price' => 750000]],
+            ])
+            ->call('create')
+            ->assertNotified(__('Not saved'))
+            ->assertSet('data.buyer_name', 'Madina Knitwear');
+
+        $this->assertSame(0, DeliveryChallan::query()->count());
     }
 
     public function test_another_companys_challan_is_not_shown_or_printed(): void
@@ -164,7 +188,7 @@ class TradePortalShopWorkTest extends TestCase
         $this->inPortal();
 
         Livewire::test(ViewDeliveryChallan::class, ['record' => $challan->getKey()])
-            ->callAction('receiveMoney', ['amount' => 200000, 'date' => now()->toDateString()])
+            ->callAction('receiveMoney', ['amount' => 200000, 'date' => now()->toDateString(), 'account_id' => $this->cashBox->getKey()])
             ->assertHasNoActionErrors();
 
         $this->assertSame(300000.0, $challan->refresh()->dueNow());
@@ -172,7 +196,7 @@ class TradePortalShopWorkTest extends TestCase
         $customer = Customer::query()->where('name', 'Rahim Knit')->firstOrFail();
         Livewire::test(ListDues::class)
             ->assertCanSeeTableRecords([$customer])
-            ->callTableAction('receiveMoney', $customer, ['against' => (string) $challan->getKey(), 'amount' => 300000, 'date' => now()->toDateString()])
+            ->callTableAction('receiveMoney', $customer, ['against' => (string) $challan->getKey(), 'amount' => 300000, 'date' => now()->toDateString(), 'account_id' => $this->cashBox->getKey()])
             ->assertHasNoTableActionErrors();
 
         $this->assertSame(0.0, $challan->refresh()->dueNow());

@@ -5,6 +5,7 @@ namespace App\Filament\Trade\Resources\StockItems;
 use App\Filament\Trade\Resources\StockItems\Pages\CreateStockItem;
 use App\Filament\Trade\Resources\StockItems\Pages\EditStockItem;
 use App\Filament\Trade\Resources\StockItems\Pages\ListStockItems;
+use App\Filament\Trade\TradeErrors;
 use App\Models\Product;
 use App\Support\ImsNumbers;
 use BackedEnum;
@@ -127,9 +128,10 @@ class StockItemResource extends Resource
                 TextInput::make('stock')->label(__('How many are in the shop now'))->numeric()->integer()->minValue(0)->default((int) $record->stock)->required(),
                 TextInput::make('reason')->label(__('Why'))->placeholder(__('e.g. counted the shelf'))->required()->maxLength(255),
             ])
-            ->action(function (Product $record, array $data): void {
-                $record->setStockFromProductForm((int) $data['stock'], reason: (string) $data['reason'], note: __('Stock count corrected in the Trade Portal'));
-                Notification::make()->title(__('Stock corrected'))->success()->send();
+            ->action(function (Product $record, array $data, Action $action): void {
+                TradeErrors::attempt(fn () => $record->setStockFromProductForm((int) $data['stock'], reason: (string) $data['reason'], note: __('Stock count corrected in the Trade Portal')))
+                    ? Notification::make()->title(__('Stock corrected'))->success()->send()
+                    : $action->halt();
             });
     }
 
