@@ -1,5 +1,5 @@
 # Reseller Program & Portal
-> Last checked: 2026-10-21, merge of `claude/reseller-module-status` into main (levels, sales report, reseller SMS)
+> Last checked: 2026-10-22, reseller landing page (portal host front page, website footer, Bangla switch, Anek Bangla) and the website banner button
 
 ## What it does
 The Reseller Program & Portal module enables wholesale multi-vendor dropshipping, affiliate storefronts, commission earnings, and reseller account management. Approved resellers log into a dedicated Filament 5 portal (`/portal`) to browse wholesale catalogs, place customer dropship orders, track commission earnings, and request payout withdrawals to mobile banking or bank accounts. It allows resellers to launch their own branded affiliate stores on company subdomains (e.g. `shop.company.com`) or verified custom domains with automatic on-demand SSL issuance. The module supports customizable variation selling prices, security deposit ledgers, own-courier merchant account fulfillment, and self-service password recovery workflows.
@@ -84,9 +84,10 @@ The Reseller Program & Portal module enables wholesale multi-vendor dropshipping
 | --- | --- |
 | `app/Http/Middleware/ResolveCompanyFromResellerPortalDomain.php` | Identifies tenant company from incoming `reseller.<domain>` hosts. |
 | `app/Http/Middleware/ResolveResellerFromSlug.php` | Identifies reseller from subdomain or URL slug during storefront visits. |
-| `app/Http/Middleware/RestrictPortalHosts.php` | Enforces domain isolation between portal, admin, and storefront routes. |
+| `app/Http/Middleware/RestrictPortalHosts.php` | Enforces domain isolation between portal, admin, and storefront routes; lets the reseller host's `/` through (the landing page) while `Company::resellerLandingEnabled()` and remembers the portal company on the request. |
+| `app/Http/Middleware/SetResellerPortalLocale.php` | The English / Bangla switch of the portal's public pages: `?lang=` sets cookie `reseller_portal_locale`; runs on portal hosts only (web group, panel stack, Livewire persistent middleware). |
 | `app/Http/Controllers/TlsAskController.php` | Authorizes on-demand TLS SSL certificate issuance for reseller domains. |
-| `app/Http/Controllers/Reseller/ResellerGuideController.php` | Renders reseller training guides and onboarding documentation. |
+| `app/Http/Controllers/Reseller/ResellerGuideController.php` | The public reseller landing page (portal host front page via `HomeController`, and `/portal/guide`): program explanation, questions and answers, rules, apply / sign-in buttons, the Next.js site's footer. |
 | `app/Http/Controllers/Reseller/ResellerOnlinePaymentReturnController.php` | Handles gateway callbacks when resellers top up security deposits online. |
 | `app/Http/Controllers/Reseller/ResellerProductPhotosController.php` | Generates zip archives of high-resolution product photos for resellers. |
 | `app/Http/Controllers/Storefront/ResellerController.php` | Public reseller application processing on the Blade storefront. |
@@ -101,6 +102,9 @@ The Reseller Program & Portal module enables wholesale multi-vendor dropshipping
 | `resources/views/filament/reseller/pages/my-store.blade.php` | Reseller custom store configuration view. |
 | `resources/views/filament/reseller/pages/earnings.blade.php` | Reseller earnings and commission breakdown view. |
 | `resources/views/filament/pages/reseller-settings.blade.php` | Admin reseller configuration view. |
+| `resources/views/reseller/guide.blade.php` | The landing page, neo-brutalist (styles in `resources/css/reseller-landing.css`, font Anek Bangla in `resources/fonts/anek-bangla/`). |
+| `resources/views/reseller/partials/footer.blade.php` | The Next.js website's Footer Builder footer on the landing page (data from `StorefrontSiteConfigService::footer()`). |
+| `resources/views/reseller/partials/language-switch.blade.php`, `resources/views/filament/reseller/language-switch.blade.php` | The English / Bangla switch on the landing page and on the sign-in / application pages. |
 
 ### Migrations (name pattern only)
 - Find a table's migrations by searching `database/migrations/` for the table name: several tables are created together in one migration, so the file name does not always match the table.
@@ -126,6 +130,8 @@ The Reseller Program & Portal module enables wholesale multi-vendor dropshipping
 | `tests/Feature/ResellerLevelsTest.php` | Tests levels, the level's return charge and minimum withdrawal, and company isolation. |
 | `tests/Feature/ResellerNotificationsTest.php` | Tests the three reseller SMS, empty texts, opt-outs and no repeats. |
 | `tests/Feature/ResellerSalesReportTest.php` | Tests the sales report figures and access. |
+| `tests/Feature/ResellerLandingPageTest.php` | Tests the landing page at the portal host, its footer from the Next.js site, the questions and answers, the Bangla switch, the banner picture setting and the shipped font. |
+| `tests/Feature/ResellerGuidePageTest.php` | Tests the guide content, money figures and the switch that turns the landing page off. |
 
 ## Routes and panels
 - **Panels**:
@@ -133,7 +139,7 @@ The Reseller Program & Portal module enables wholesale multi-vendor dropshipping
   - `admin` panel: Resellers Cluster (`admin/resellers/*`).
 - **HTTP Routes**:
   - `GET|HEAD internal/tls-ask` (name `internal.tls-ask`) -> `App\Http\Controllers\TlsAskController`
-  - `GET|HEAD portal/guide` (name `reseller.portal.guide`) -> `App\Http\Controllers\Reseller\ResellerGuideController`
+  - `GET|HEAD /` on a reseller portal host (name `marketing.home`, `HomeController` hands over) and `GET|HEAD portal/guide` (name `reseller.portal.guide`) -> `App\Http\Controllers\Reseller\ResellerGuideController`
   - `GET|HEAD portal/products/{product}/photos` (name `reseller.portal.products.photos`) -> `App\Http\Controllers\Reseller\ResellerProductPhotosController`
   - `GET|HEAD portal/orders/payment/{payment}/return` (name `reseller.portal.orders.payment-return`) -> `App\Http\Controllers\Reseller\ResellerOnlinePaymentReturnController`
   - `GET|HEAD portal/register` (name `filament.reseller.auth.register`) -> `App\Filament\Reseller\Pages\Auth\Apply`
@@ -150,6 +156,7 @@ The Reseller Program & Portal module enables wholesale multi-vendor dropshipping
 - `reseller_payout_requests`: Withdrawal requests. Key columns: `id`, `company_id`, `customer_id`, `amount`, `method`, `account_details` (JSON), `status`, `payment_reference`, `admin_note`, `processed_by`, `voucher_id`, `approved_at`, `paid_at`, `created_at`, `updated_at`.
 - `reseller_payout_accounts`: Beneficiary payout details. Key columns: `id`, `company_id`, `customer_id`, `method`, `account_details` (JSON), `label`, `is_default`, `created_at`, `updated_at`.
 - `reseller_levels`: Company-made levels. Key columns: `id`, `company_id`, `name` (unique per company), `sort_order`, `return_charge` and `min_withdrawal` (nullable = company amount), timestamps; `customers.reseller_level_id` (nullable, `nullOnDelete`).
+- `storefront_settings.reseller_banner_image` (nullable path): the picture of the website footer's "Become a reseller" button; empty means the standard banner `public/images/reseller-program-banner.png`.
 - `storefront_settings` reseller SMS texts: `reseller_message_approved`, `reseller_message_profit_payable`, `reseller_message_payout_paid` (nullable).
 - `reseller_products`: Per-reseller pricing overrides. Key columns: `id`, `customer_id`, `product_id`, `is_active`, `price`, `variant_prices` (JSON), `created_at`, `updated_at`.
 

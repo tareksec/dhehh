@@ -3,6 +3,7 @@
 use App\Http\Middleware\InvalidateStaleCustomerSession;
 use App\Http\Middleware\PreventDemoModeWrites;
 use App\Http\Middleware\RestrictPortalHosts;
+use App\Http\Middleware\SetResellerPortalLocale;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetCurrentCompany;
 use App\Support\ModuleGuard;
@@ -91,6 +92,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // §6. Also appended to the admin panel's own middleware stack (it
         // doesn't route through the "web" group) in AdminPanelProvider.
         $middleware->appendToGroup('web', RestrictPortalHosts::class);
+        // The language switch of the reseller portal's public pages; needs RestrictPortalHosts to have run.
+        $middleware->appendToGroup('web', SetResellerPortalLocale::class);
         $middleware->appendToGroup('web', PreventDemoModeWrites::class);
         $middleware->appendToGroup('web', SetCurrentCompany::class);
         $middleware->appendToGroup('web', SecurityHeaders::class);
