@@ -2,6 +2,35 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-22 - Trade Portal phase 1 (foundation)
+
+Owner request: build the Tasneem Knitting Industry Trade Portal from `docs/tasneem-samples/BUILD-BRIEF.md`, Phase 1 only, on `feature/trade-portal-foundation`, nothing to `main`.
+
+What changed: new panel `/trade` (`TradePortalPanelProvider`, Bangla first, phone tab bar, light theme), home with four cards (today's sales, dues, low stock, open LCs), Business profile page, company switch "Trade Portal" on Companies → edit (Super Admin only) with the new profile fields, the editable **Trade Owner** role and permissions `trade.access` / `trade.profile.manage`, the `canAccessPanel` security fix (trade-only roles are kept out of `/admin`; staff accounts are refused by unknown panels), `RestrictPortalHosts` serving `/trade` on the main domain. Migration adds 6 columns to `companies` and the `trade_owner` role row. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief and the rules):
+
+- "Only the trade role" = a role whose permissions are all `trade.*`. Every existing role, any custom role with another permission and a role with no permissions keep `/admin` as before.
+- The open company in `/trade` is the person's default company with the portal on, else the first; a Super Admin sees every company with the portal on. A company list appears in the Menu only with two or more.
+- BIN: the existing `bin_number` stays the import-paper BIN (it is already printed on PI/CI/PL); the new `challan_bin_number` is for the Delivery Challan and falls back to `bin_number` when empty. **Which BIN goes on which paper is still to be confirmed with the owner** (challan sample `006673859-0403`, import papers `006673859-0112`).
+- The existing `address` column is left as the general contact address; the two new address fields are separate.
+- LC stage on the home card is read only from what is filled in: an LC number → "LC opened", plus a Commercial Invoice number → "Shipped (invoice received)"; received or cancelled purchases are not listed. The real LC file with its stages comes in phase 4.
+- Tasneem's company was not created or switched on by code (no data seeded): a Super Admin switches **Trade Portal** on for "Garments Machinery Company" / Tasneem in Companies → edit and gives the owner's user the Trade Owner role.
+
+Found and fixed on the way: saving a company from a non-admin panel crashed in `CompanyNotificationObserver` (link built for the current panel); the trade sign-in could land on a leftover `/admin` or `/investor` address.
+
+Checked in the browser on a throwaway copy of the dev database (scratchpad, never the real DB): `/trade/login` and home at 375px and 390px in Bangla, the Menu sheet, the Business profile page (no sideways scroll), `/admin` returns 403 for the Trade Owner; a quick look at 800px. In that copy `localhost` is the IMS domain, so `/trade` correctly redirected to `/investor` there until the copy's IMS domain was moved.
+
+Needs Bangla review: all 42 new keys, especially "Dues (to collect)" (বাকি (পাওনা)), "Low stock" (মাল কম), "Shipped (invoice received)", "Letterhead" (প্যাড (লেটারহেড)), "items at or below their reorder level".
+
+Not done (later phases): Delivery Challan, purchases, stock, receivables, cash book, LC file and papers, landed cost, reports. The home's sales card counts ERP orders until the Delivery Challan exists.
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 2,973 passed, 1 skipped, 0 failed. `TradePortalTest`: 14 passed.
+
+Not committed on purpose: the owner's original sample files in `docs/tasneem-samples/` (the .docx / .xlsx documents and the challan photo) — business papers, kept local; only `PLAN.md`, `SUMMARY.md` and `BUILD-BRIEF.md` are in the commit.
+
+Commit status: committed and pushed to `feature/trade-portal-foundation`; not on `main` (waits for the owner's approval).
+
 ## 2026-10-22 - IMS office: phone layout like an app
 
 Owner (Bangla): the IMS dashboard for admin / super admin was to be highly mobile friendly, non-tech friendly and very easy, but nothing like that was done for phones; three mobile reference designs given as inspiration (a green fitness app, a green finance app, a green marketplace app) — bottom tab bar with a raised round centre button, greeting with avatar, round quick buttons, big cards.

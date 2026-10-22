@@ -1,0 +1,430 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+/*
+ * The Trade Portal's theme (docs/tasneem-samples/PLAN.md §1): light only,
+ * phone first, big touch targets and big numbers for a non-technical shop
+ * owner. Colours come from the tokens below. On phones the top menu button
+ * gives way to the bottom tab bar (filament/trade/mobile-nav).
+ */
+@source '../../../../app/Filament/Trade/**/*';
+@source '../../../../resources/views/filament/trade/**/*';
+
+:root {
+    --trade-page: #f3f5f8;
+    --trade-card: #ffffff;
+    --trade-line: #e3e7ed;
+    --trade-ink: #111827;
+    --trade-muted: #5b6472;
+    --trade-primary: #1d4ed8;
+    --trade-primary-soft: #e3ebfd;
+    --trade-blue-soft: #e3ebfd;
+    --trade-blue-ink: #1d4ed8;
+    --trade-amber-soft: #fdf0d8;
+    --trade-amber-ink: #8a4b05;
+    --trade-red-soft: #fde2e2;
+    --trade-red-ink: #a51d1d;
+    --trade-green-soft: #dcefe4;
+    --trade-green-ink: #0e6b3e;
+    --trade-radius: 20px;
+    --trade-shadow-pop: 0 12px 32px -4px rgb(17 24 39 / 0.14), 0 4px 12px -2px rgb(17 24 39 / 0.08);
+}
+
+.fi-panel-trade .fi-body,
+.fi-panel-trade.fi-body {
+    background-color: var(--trade-page);
+    color: var(--trade-ink);
+}
+
+/* Bangla reads better a little larger. */
+.fi-panel-trade {
+    font-size: 1.0625rem;
+}
+
+/* The business name stays in the top bar on phones too (Filament hides it below lg). */
+.fi-panel-trade .fi-topbar-start {
+    display: flex;
+    flex-shrink: 1;
+    min-width: 0;
+    margin-inline-end: auto;
+}
+
+.fi-panel-trade .fi-topbar-start .fi-logo {
+    overflow: hidden;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--trade-primary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---------- Home ---------- */
+
+.trade-date {
+    margin-top: -0.75rem;
+    color: var(--trade-muted);
+    font-size: 0.9375rem;
+}
+
+.trade-cards {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+}
+
+@media (min-width: 768px) {
+    .trade-cards {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.trade-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.25rem;
+    border-radius: var(--trade-radius);
+    border: 1px solid var(--trade-line);
+    background-color: var(--trade-card);
+}
+
+.trade-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.trade-card-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.875rem;
+}
+
+.trade-tone-blue { background-color: var(--trade-blue-soft); color: var(--trade-blue-ink); }
+.trade-tone-amber { background-color: var(--trade-amber-soft); color: var(--trade-amber-ink); }
+.trade-tone-red { background-color: var(--trade-red-soft); color: var(--trade-red-ink); }
+.trade-tone-green { background-color: var(--trade-green-soft); color: var(--trade-green-ink); }
+
+.trade-card-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+}
+
+.trade-card-big {
+    font-size: 1.875rem;
+    font-weight: 700;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+}
+
+.trade-card-note,
+.trade-card-empty {
+    color: var(--trade-muted);
+}
+
+.trade-card-error {
+    padding: 0.75rem;
+    border-radius: 0.75rem;
+    background-color: var(--trade-amber-soft);
+    color: var(--trade-amber-ink);
+}
+
+.trade-list {
+    display: flex;
+    flex-direction: column;
+    margin-top: 0.25rem;
+    border-top: 1px solid var(--trade-line);
+}
+
+.trade-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 3rem;
+    padding-block: 0.5rem;
+    border-bottom: 1px solid var(--trade-line);
+}
+
+.trade-list li:last-child {
+    border-bottom: 0;
+}
+
+.trade-list span {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.trade-list small {
+    color: var(--trade-muted);
+    font-size: 0.8125rem;
+}
+
+.trade-list strong {
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.trade-stage {
+    padding: 0.25rem 0.625rem;
+    border-radius: 999px;
+    background-color: var(--trade-green-soft);
+    color: var(--trade-green-ink);
+    font-size: 0.8125rem;
+}
+
+/* ---------- Language switch ---------- */
+
+.trade-language {
+    display: inline-flex;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 999px;
+    background-color: var(--trade-page);
+}
+
+.trade-language a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.25rem;
+    padding-inline: 0.875rem;
+    border-radius: 999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--trade-muted);
+    text-decoration: none;
+}
+
+.trade-language a[aria-current] {
+    background-color: var(--trade-card);
+    color: var(--trade-primary);
+    box-shadow: 0 1px 2px rgb(17 24 39 / 0.08);
+}
+
+.trade-language-simple {
+    align-self: center;
+    margin-bottom: 1rem;
+}
+
+.trade-language-sheet {
+    display: flex;
+}
+
+.trade-language-sheet a {
+    flex: 1 1 0;
+    justify-content: center;
+    min-height: 3rem;
+    font-size: 1rem;
+}
+
+/* On phones the top bar keeps only the brand: the switch is in the menu sheet. */
+@media (max-width: 1023.98px) {
+    .fi-topbar .trade-language {
+        display: none;
+    }
+}
+
+/* ---------- Phones: the bottom tab bar and the menu sheet ---------- */
+
+.trade-mobile [x-cloak] {
+    display: none !important;
+}
+
+.trade-tabbar {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 30;
+    display: flex;
+    padding: 0.375rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom));
+    background-color: var(--trade-card);
+    border-radius: 1.25rem 1.25rem 0 0;
+    box-shadow: 0 -1px 0 var(--trade-line), 0 -10px 30px -18px rgb(17 24 39 / 0.25);
+}
+
+.trade-tabbar-item {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    min-height: 3.75rem;
+    border-radius: 1rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--trade-muted);
+    text-align: center;
+    text-decoration: none;
+    touch-action: manipulation;
+}
+
+.trade-tabbar-item > span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.trade-tabbar-icon {
+    width: 1.625rem;
+    height: 1.625rem;
+    padding: 0.25rem 1rem;
+    box-sizing: content-box;
+    border-radius: 999px;
+}
+
+.trade-tabbar-item[aria-current],
+.trade-tabbar-item[aria-expanded='true'] {
+    color: var(--trade-primary);
+    font-weight: 700;
+}
+
+.trade-tabbar-item[aria-current] .trade-tabbar-icon,
+.trade-tabbar-item[aria-expanded='true'] .trade-tabbar-icon {
+    background-color: var(--trade-primary-soft);
+}
+
+.trade-tabbar-item:focus-visible,
+.trade-companies a:focus-visible {
+    outline: 3px solid var(--trade-primary);
+    outline-offset: 2px;
+}
+
+.trade-sheet-veil {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    background-color: rgb(10 14 18 / 0.45);
+    touch-action: none;
+}
+
+.trade-sheet {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-height: 85dvh;
+    padding: 0.75rem 1rem calc(1.25rem + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 1.5rem 1.5rem 0 0;
+    background-color: var(--trade-card);
+    box-shadow: var(--trade-shadow-pop);
+}
+
+.trade-sheet::before {
+    content: '';
+    flex-shrink: 0;
+    align-self: center;
+    width: 2.75rem;
+    height: 0.3125rem;
+    border-radius: 999px;
+    background-color: var(--trade-line);
+}
+
+.trade-sheet-move {
+    transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.trade-sheet-off {
+    transform: translateY(100%);
+}
+
+.trade-sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.trade-sheet-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.trade-round-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 999px;
+    background-color: var(--trade-page);
+}
+
+.trade-companies {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.trade-companies-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--trade-muted);
+}
+
+.trade-companies a {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 3rem;
+    padding-inline: 0.875rem;
+    border-radius: 0.875rem;
+    background-color: var(--trade-page);
+    text-decoration: none;
+}
+
+.trade-companies a[aria-current] {
+    background-color: var(--trade-primary-soft);
+    color: var(--trade-primary);
+    font-weight: 700;
+}
+
+.trade-btn-ghost {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    min-height: 3rem;
+    border-radius: 0.875rem;
+    border: 1px solid var(--trade-line);
+    font-weight: 600;
+}
+
+/* The bar replaces the menu button in the top bar. */
+.fi-body:has(.trade-tabbar) .fi-topbar-open-sidebar-btn,
+.fi-body:has(.trade-tabbar) .fi-topbar-close-sidebar-btn {
+    display: none !important;
+}
+
+@media (max-width: 1023.98px) {
+    /* Keep the last lines of a page above the bottom bar. */
+    .fi-panel-trade .fi-main {
+        padding-bottom: 6.5rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .trade-mobile {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .trade-sheet-move {
+        transition: none;
+    }
+}

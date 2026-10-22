@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\ValidatesEmailAddress;
 use App\Services\ImsOfficeCompanies;
+use App\Services\TradePortalCompanies;
 use App\Support\AppDeployment;
 use App\Support\AppRelease;
 use Database\Factories\UserFactory;
@@ -133,6 +134,42 @@ class User extends Authenticatable implements FilamentUser
         // staff with the office permission, in a company they may open there.
         if ($panel->getId() === 'office') {
             return app(ImsOfficeCompanies::class)->mayEnter($this);
+        }
+
+        // The Trade Portal (docs/tasneem-samples/PLAN.md §1): "trade.access",
+        // in a company that has the portal switched on.
+        if ($panel->getId() === 'trade') {
+            return app(TradePortalCompanies::class)->mayEnter($this);
+        }
+
+        // The ERP admin: every active staff member as before, except people
+        // whose role only opens the Trade Portal.
+        if ($panel->getId() === 'admin') {
+            return ! $this->isTradePortalOnly();
+        }
+
+        // The investor and reseller portals sign in with their own guards; a
+        // staff account has no business in any other panel.
+        return false;
+    }
+
+    /**
+     * Whether this user's role gives nothing but Trade Portal permissions
+     * ("trade.*"), as the Trade Owner role does: such a person works in /trade
+     * only. A role with any other permission, or none at all, is unaffected.
+     */
+    public function isTradePortalOnly(): bool
+    {
+        $permissions = $this->rolePermissions();
+
+        if ($permissions === [] || in_array('*', $permissions, true)) {
+            return false;
+        }
+
+        foreach ($permissions as $permission) {
+            if (! str_starts_with((string) $permission, 'trade.')) {
+                return false;
+            }
         }
 
         return true;
@@ -320,6 +357,8 @@ class User extends Authenticatable implements FilamentUser
         'ims.money_rules.manage' => 'IMS: Change Investor and Partner Profit %',
         'ims.domain.manage' => 'IMS: Set the IMS Domain',
         'ims.all_companies' => 'IMS: Office Admin (full access to every company in the office)',
+        'trade.access' => 'Trade Portal: Open the Trade Portal (/trade)',
+        'trade.profile.manage' => 'Trade Portal: Edit the Business Profile (addresses, TIN/BIN/IRC, bank accounts, letterhead)',
         'marketing.view' => 'Marketing/Ads: View',
         'marketing.create' => 'Marketing/Ads: Create',
         'marketing.update' => 'Marketing/Ads: Update',

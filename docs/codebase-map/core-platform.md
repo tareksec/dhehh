@@ -1,8 +1,8 @@
 # Core Platform
-> Last checked: 2026-10-21, merge of `ccr-4505e72d-hwaq92` into main (CAPTCHA for a challenged sign-in)
+> Last checked: 2026-10-22, branch `feature/trade-portal-foundation` (Trade Portal phase 1)
 
 ## What it does
-The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and four distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated backups to Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
+The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and five distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal, Trade Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated backups to Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
 
 ## Where to start
 - `app/Models/Concerns/BelongsToCompany.php` — Trait that automatically assigns the active company ID on model creation and registers `CompanyScope`.
@@ -85,6 +85,12 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Providers/Filament/ImsOfficePanelProvider.php` | Configures the IMS office management panel (`/office`, ID: `office`). |
 | `app/Providers/Filament/InvestorPanelProvider.php` | Configures the external investor portal (`/investor`, ID: `investor`). |
 | `app/Providers/Filament/ResellerPanelProvider.php` | Configures the reseller program portal (`/portal`, ID: `reseller`). |
+| `app/Providers/Filament/TradePortalPanelProvider.php` | Configures the Trade Portal (`/trade`, ID: `trade`): phone-first, Bangla-first shop portal on the main domain (docs/tasneem-samples/PLAN.md). |
+| `app/Filament/Trade/TradeNavigation.php` | The Trade Portal's menu: top menu on wide screens, bottom tab bar on phones (`resources/views/filament/trade/mobile-nav.blade.php`). |
+| `app/Filament/Trade/Pages/Home.php` | Trade Portal home: four cards (today's sales, dues, low stock, open LCs) from `TradePortalHome`. |
+| `app/Filament/Trade/Pages/BusinessProfile.php` | Trade Portal business profile (addresses, TIN/BIN/IRC, bank accounts, signatory, letterhead); needs `trade.profile.manage`. |
+| `app/Services/TradePortalCompanies.php` | Which companies a user may open in `/trade` (`trade.access` + `companies.trade_portal_enabled`), the chosen one, `mayEnter()`. |
+| `app/Services/TradePortalHome.php` | The Trade Portal home figures, each card inside `ModuleGuard::run()`. |
 | `app/Filament/Clusters/CompanyManagement.php` | Navigation cluster grouping tenant company resources and settings. |
 | `app/Filament/Clusters/Settings.php` | Navigation cluster grouping system-wide configuration pages. |
 | `app/Filament/Resources/Companies/CompanyResource.php` | CRUD interface for managing companies, domains, and branding. |
@@ -116,7 +122,9 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | Path | What it does |
 | --- | --- |
 | `app/Http/Middleware/SetCurrentCompany.php` | Sets the request's `CompanyContext` based on user session, host, or fallback. |
-| `app/Http/Middleware/RestrictPortalHosts.php` | Ensures reseller and investor portals are accessed only via authorized domains. |
+| `app/Http/Middleware/RestrictPortalHosts.php` | Ensures reseller and investor portals are accessed only via authorized domains; `MAIN_HOST_PATHS` (`trade`) are served on every non-portal host. |
+| `app/Http/Middleware/ResolveTradePortalCompany.php` | Trade Portal: opens the signed-in person's chosen company (or none) on every request, before route bindings. |
+| `app/Http/Middleware/SetTradePortalLocale.php` | Trade Portal language: Bangla by default, English by choice (`GET trade/language/{locale}`, `Trade\TradePortalLocaleController`). |
 | `app/Http/Middleware/PreventDemoModeWrites.php` | Blocks mutating HTTP requests when demo mode is active. |
 | `app/Http/Middleware/SecurityHeaders.php` | Adds strict CSP, HSTS, X-Frame-Options, and nosniff HTTP response headers. |
 | `app/Http/Middleware/InvalidateStaleCustomerSession.php` | Flushes outdated storefront customer session tokens upon schema or password changes. |
@@ -191,6 +199,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `tests/Feature/ReleaseNotesTest.php` | Tests release notes rendering and version display. |
 | `tests/Feature/ReleaseCutterTest.php` | Tests semantic release creation script. |
 | `tests/Feature/ReleaseNotificationTest.php` | Tests notification dispatching when updates complete. |
+| `tests/Feature/TradePortalTest.php` | Trade Portal access both ways (`/trade` vs `/admin`), host rule, company isolation, home cards, business profile. |
 | `tests/Feature/UserManagementEscalationTest.php` | Ensures non-super admins cannot elevate privileges or modify protected users. |
 
 ## Routes and panels
@@ -198,6 +207,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 - **IMS Office Panel**: URL prefix `office`, provider: `App\Providers\Filament\ImsOfficePanelProvider`, panel ID `office`. Dedicated investment back-office.
 - **Investor Portal**: URL prefix `investor`, provider: `App\Providers\Filament\InvestorPanelProvider`, panel ID `investor`. Public investor self-service portal.
 - **Reseller Portal**: URL prefix `portal`, provider: `App\Providers\Filament\ResellerPanelProvider`, panel ID `reseller`. Reseller management portal.
+- **Trade Portal**: URL prefix `trade`, provider: `App\Providers\Filament\TradePortalPanelProvider`, panel ID `trade`. Shop portal for a company with `trade_portal_enabled`; guard `web`; route `GET trade/language/{locale}` (name `filament.trade.language`).
 - **Core HTTP Routes**:
   - `POST admin/company/switch` (name `admin.company.switch`) -> `App\Http\Controllers\Admin\CompanySwitchController`
   - `POST admin/app-updates/sync` (name `admin.app-updates.sync`) -> `App\Http\Controllers\Admin\AppUpgradeController@synchronize`
@@ -207,7 +217,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
   - `POST install` (name `install.store`) -> `App\Http\Controllers\InstallController@store`
 
 ## Data
-- `companies`: Primary tenant table. Key columns: `id`, `name`, `slug`, `business_type`, `logo`, `phone`, `email`, `address`, `currency`, `timezone`, `invoice_prefix`, `is_active`, `settings` (JSON), `domain`, `domain_verified`, `dashboard_color`, `reseller_module_enabled`, `reseller_portal_domain`, `reseller_subdomains_enabled`, `reseller_custom_domains_enabled`, `investor_portal_enabled`, `investor_portal_domain`, `investor_project_completed_message`, `ims_enabled`, `ims_domain`, `created_at`, `updated_at`.
+- `companies`: Primary tenant table. Key columns: `id`, `name`, `slug`, `business_type`, `logo`, `phone`, `email`, `address`, `currency`, `timezone`, `invoice_prefix`, `is_active`, `settings` (JSON), `domain`, `domain_verified`, `dashboard_color`, `reseller_module_enabled`, `reseller_portal_domain`, `reseller_subdomains_enabled`, `reseller_custom_domains_enabled`, `investor_portal_enabled`, `investor_portal_domain`, `investor_project_completed_message`, `ims_enabled`, `ims_domain`, `bin_number` (import papers), `irc_number`, `tin_number`, `signatory_name`, `signatory_title`, `signature_path`, `trade_portal_enabled`, `registered_address`, `factory_address`, `challan_bin_number` (Delivery Challan; blank = `bin_number`, `Company::challanBin()`), `bank_accounts` (JSON list), `letterhead_path`, `created_at`, `updated_at`.
 - `company_user`: Pivot table associating users with accessible companies. Key columns: `id`, `company_id`, `user_id`, `role`, `is_default`, `created_at`, `updated_at`.
 - `users`: Staff and administrator accounts. Key columns: `id`, `name`, `email`, `email_verified_at`, `password`, `remember_token`, `role`, `is_active`, `acknowledged_app_deployment_id`, `app_upgrade_acknowledged_at`, `acknowledged_app_version`, `acknowledged_app_commit`, `acknowledged_app_built_at`, `last_company_selection`, `created_at`, `updated_at`.
 - `user_roles`: Custom role permissions table. Key columns: `id`, `name`, `slug`, `permissions` (JSON), `is_active`, `created_at`, `updated_at`.
@@ -219,6 +229,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 - **Tenant Isolation Enforcement**: Every company-owned model MUST use the `BelongsToCompany` trait and register `CompanyScope`. In queries, if the active `CompanyContext` is denied (`none`), queries fail-closed with `1 = 0`. Enforced by `app/Scopes/CompanyScope.php` and `app/Models/Concerns/BelongsToCompany.php`.
 - **Middleware Precedence for Route Binding**: `SetCurrentCompany` middleware is prepended before `SubstituteBindings` in `bootstrap/app.php` so that route-model-binding resolution queries are constrained to the tenant. Enforced by `bootstrap/app.php`.
 - **Super Admin Protection**: An admin cannot delete or deactivate their own user account, and at least one active `super_admin` must remain in the database at all times. Enforced by `app/Models/User.php`.
+- **Panel Access**: `User::canAccessPanel()` — `office` via `ImsOfficeCompanies::mayEnter()`, `trade` via `TradePortalCompanies::mayEnter()`, `admin` for every active user except a role whose permissions are all `trade.*` (`isTradePortalOnly()`, e.g. the editable `trade_owner` role); any other panel is refused (the investor and reseller portals use their own guards). Tested by `tests/Feature/TradePortalTest.php`.
 - **Permission Checking Hierarchy**: Super admins (`super_admin`) bypass permission gates with wildcard access (`*`). All other users must have the explicit permission slug present in their role's JSON permission array. Enforced by `app/Models/User.php`.
 - **Module Failure Isolation**: Navigation badges, widget rendering, and layout hooks must run inside `ModuleGuard::run` or `renderView` so a database or runtime crash inside one module does not bring down the entire admin panel. Production isolates; local/testing environments rethrow by default unless `ISOLATE_MODULE_ERRORS=true`. Enforced by `app/Support/ModuleGuard.php`.
 - **Login Gate Protection**: All authentication attempts must be evaluated by `LoginGate::begin` prior to invoking bcrypt hashes to thwart DDoS credential stuffing. Enforced by `app/Services/LoginGate.php` and `app/Filament/Auth/AdminLogin.php`.

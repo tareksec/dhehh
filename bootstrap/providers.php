@@ -5,6 +5,7 @@ use App\Providers\Filament\AdminPanelProvider;
 use App\Providers\Filament\ImsOfficePanelProvider;
 use App\Providers\Filament\InvestorPanelProvider;
 use App\Providers\Filament\ResellerPanelProvider;
+use App\Providers\Filament\TradePortalPanelProvider;
 
 return [
     AppServiceProvider::class,
@@ -12,4 +13,5 @@ return [
     ResellerPanelProvider::class,
     InvestorPanelProvider::class,
     ImsOfficePanelProvider::class,
+    TradePortalPanelProvider::class,
 ];

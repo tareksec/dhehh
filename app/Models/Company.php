@@ -76,6 +76,12 @@ class Company extends Model
         'signatory_name',
         'signatory_title',
         'signature_path',
+        'trade_portal_enabled',
+        'registered_address',
+        'factory_address',
+        'challan_bin_number',
+        'bank_accounts',
+        'letterhead_path',
     ];
 
     protected $casts = [
@@ -86,6 +92,8 @@ class Company extends Model
         'reseller_custom_domains_enabled' => 'boolean',
         'investor_portal_enabled' => 'boolean',
         'ims_enabled' => 'boolean',
+        'trade_portal_enabled' => 'boolean',
+        'bank_accounts' => 'array',
         'settings' => 'array',
     ];
 
@@ -458,6 +466,21 @@ class Company extends Model
         $url = $this->imsUrl('office'.($path === '' ? '' : '/'.ltrim($path, '/')));
 
         return $url === null ? null : $url.(str_contains($url, '?') ? '&' : '?').'office_company='.$this->getKey();
+    }
+
+    /** Whether the Trade Portal (/trade) is open for this company (docs/tasneem-samples/PLAN.md §1). */
+    public function tradePortalIsOn(): bool
+    {
+        return (bool) $this->trade_portal_enabled && (bool) $this->is_active;
+    }
+
+    /**
+     * The BIN a Delivery Challan prints: its own when one is set, else the one
+     * of the import papers. The two differ at Tasneem (PLAN.md §4), so both are kept.
+     */
+    public function challanBin(): ?string
+    {
+        return filled($this->challan_bin_number) ? $this->challan_bin_number : $this->bin_number;
     }
 
     /** The investor portal is reachable: switched on itself, or carried by IMS v2. */

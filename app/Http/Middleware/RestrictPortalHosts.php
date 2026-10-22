@@ -43,6 +43,15 @@ class RestrictPortalHosts
     public const IMS_PATHS = ['investor', 'office'];
 
     /**
+     * Staff panels that live on the main domain, not on a portal host: the
+     * Trade Portal (docs/tasneem-samples/PLAN.md §1). Served on every host that
+     * is not a portal / IMS host; a portal host still redirects them away.
+     *
+     * @var list<string>
+     */
+    public const MAIN_HOST_PATHS = ['trade'];
+
+    /**
      * Always allowed regardless of host: framework/infra routes no page can
      * function without.
      */
@@ -85,7 +94,14 @@ class RestrictPortalHosts
             }
         }
 
-        // Not a portal host: no portal path is served here.
+        // Not a portal host: the main-domain panels are served here...
+        foreach (self::MAIN_HOST_PATHS as $panelPath) {
+            if ($this->isUnder($path, $panelPath)) {
+                return $next($request);
+            }
+        }
+
+        // ...and no portal path is.
         foreach ([...array_keys(self::PORTALS), ...self::IMS_PATHS] as $panelPath) {
             if ($this->isUnder($path, $panelPath)) {
                 abort(404);
