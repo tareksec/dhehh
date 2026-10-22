@@ -4,6 +4,25 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **IMS office on a phone works like an app.** Owner request 2026-10-22 (the owner's mobile reference designs). On phones and tablets the office (`/office`) now has:
+  - **A tab bar at the bottom**: Home · Investors · a round green **+** · **To do** · **Menu**, with names under every icon. The menu button in the top bar is gone on phones; everything is in the bar.
+  - **+** opens the things staff add (add an investor, new project, and the others the person is allowed to add).
+  - **To do** opens "What to do today" from any page; a red number on the tab says how many things are waiting.
+  - **Menu** shows every page as big tiles in the same groups as the top menu (with their waiting numbers), the English / বাংলা switch, light / dark, the company list and Sign out.
+  - **Home**: initials, "Good morning!" and the name at the top, then the green card, then four round buttons — Confirm money, KYC, Payouts, Support — each with how many are waiting.
+  - **Every list is a stack of cards** on a phone: the first column in bold as the card's title, then "label … value" lines and the buttons at the bottom, instead of a table that had to be scrolled sideways. The investor portal's lists do the same.
+  - Desktop and laptop screens are unchanged.
+
+### Technical Notes
+
+- `OfficeNavigation::mobile()` builds the bar, the "+" list (`canAccess()` + `canCreate()` + a create page), the to-do (`OwnerTodo`) and the menu tiles; `resources/views/filament/ims/office/mobile-nav.blade.php` draws them at `BODY_END` through `ModuleGuard::run('ims-office-mobile-nav')` — if it fails nothing is drawn and the top-bar menu button comes back (it is hidden only while `.ims-tabbar` is on the page). `Home::quickActions()` (guarded too) feeds the round buttons; the welcome header takes `app: true` for the phone greeting.
+- Lists: `Table::configureUsing()` in `AppServiceProvider` sets Filament's `stackedOnMobile()` for the `office` and `investor` panels only; the card look is in `resources/css/filament/ims/theme.css` (below 640px).
+- The sheets lock the page by a veil with `touch-action: none` rather than `overflow: hidden` on the page, which made phones jump/zoom in testing. No migration, no new model or route. 10 new keys in `lang/en.json` + `lang/bn.json`. Test: `OfficeHomeTest` (+1).
+
 ## [2.97.0] - 2026-10-21
 
 **Release type:** Minor Feature Update

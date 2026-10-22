@@ -39,6 +39,31 @@ class OfficeHomeTest extends TestCase
             ->assertSee(__('Groups now'));
     }
 
+    /** Owner request 2026-10-22: the office on a phone works like an app (DESIGN.md §6.2). */
+    public function test_phones_get_the_bottom_tab_bar_quick_buttons_and_card_lists(): void
+    {
+        $this->imsCompany();
+        $this->actingAs($this->staff());
+
+        $this->get($this->imsUrl('office'))
+            ->assertOk()
+            ->assertSee('ims-tabbar', false)
+            ->assertSeeInOrder([__('Home'), __('Investors'), __('Add new'), __('To do'), __('Menu')])
+            // "+" opens the things to add, "Menu" every page in its group.
+            ->assertSee(__('Add investor'))
+            ->assertSee(__('Talk to investors'))
+            ->assertSee(__('IMS settings'))
+            // The greeting and the round quick buttons on the home.
+            ->assertSeeText([__('Good morning!'), __('Good afternoon!'), __('Good evening!')][CarbonImmutable::now()->hour < 12 ? 0 : (CarbonImmutable::now()->hour < 17 ? 1 : 2)])
+            ->assertSee('ims-quick-actions-office', false)
+            ->assertSeeInOrder([__('Confirm money'), __('KYC'), __('Payouts'), __('Support')]);
+
+        // Lists stack into cards on phones instead of scrolling sideways.
+        $this->get($this->imsUrl('office/investments/investors'))
+            ->assertOk()
+            ->assertSee('fi-ta-table-stacked-on-mobile', false);
+    }
+
     public function test_the_home_speaks_bangla(): void
     {
         $this->imsCompany();

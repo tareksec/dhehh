@@ -129,6 +129,8 @@ class ImsOfficePanelProvider extends PanelProvider
                 });
             })
             ->renderHook(PanelsRenderHook::BODY_START, fn (): View => view('filament.ims.icon-rail', ['rail' => OfficeNavigation::rail()]))
+            // Phones and tablets: the bottom tab bar with its sheets (DESIGN.md §6.2).
+            ->renderHook(PanelsRenderHook::BODY_END, fn (): View => view('filament.ims.office.mobile-nav'))
             ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn (): View => view('filament.ims.office.company-picker'))
             ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn (): View => view('filament.ims.office.language-switch'))
             ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_AFTER, fn (): View => view('filament.ims.theme-toggle'))

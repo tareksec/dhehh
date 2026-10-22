@@ -73,6 +73,7 @@ use Filament\Notifications\Livewire\Notifications;
 use Filament\Support\View\ViewManager;
 use Filament\Tables\Columns\Summarizers\Summarizer;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Facades\Filament;
 use Filament\Tables\Table;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Builder;
@@ -232,6 +233,9 @@ class AppServiceProvider extends ServiceProvider
         // docblock for why this is needed at all.
         Table::configureUsing(function (Table $table): void {
             $table->defaultSort(fn (Builder $query): string => DefaultTableSort::column($query), 'desc');
+            // IMS on phones (IMS-V2/DESIGN.md §6.2): every list is a stack of
+            // cards with labels instead of a table that scrolls sideways.
+            $table->stackedOnMobile(fn (): bool => in_array(Filament::getCurrentPanel()?->getId(), ['office', 'investor'], true));
         });
 
         // Every FileUpload gets a label-row "Remove" action so an image whose

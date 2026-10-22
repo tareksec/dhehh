@@ -2,6 +2,24 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-22 - IMS office: phone layout like an app
+
+Owner (Bangla): the IMS dashboard for admin / super admin was to be highly mobile friendly, non-tech friendly and very easy, but nothing like that was done for phones; three mobile reference designs given as inspiration (a green fitness app, a green finance app, a green marketplace app) — bottom tab bar with a raised round centre button, greeting with avatar, round quick buttons, big cards.
+
+What changed (office `/office`, phones and tablets below 1024px; desktop unchanged): bottom tab bar Home · Investors · + · To do · Menu with sheets that slide up; Menu = page tiles by group + language + light/dark + company list + Sign out; home greeting with initials, four round quick buttons with waiting counts; every Filament list in the office and the investor portal becomes stacked cards below 640px (`stackedOnMobile()`).
+
+Decided without asking (by the design rules in `IMS-V2/DESIGN.md` §6.2): the five tabs and the four quick buttons are the daily jobs from "What to do today"; "+" lists only resources that have a create page and that the person may create (Investments, Invites, Project updates and the Feed have no create page or are not creatable by this user on the test data, so they show only when they qualify).
+
+Checked in the browser on a throwaway copy of the demo database (never the demo DB): 375px and 360px, English and Bangla, light and dark, the three sheets, the Investors and Settlements lists as cards; 1366px desktop looks as before. Tablet (768–1023px) lists still scroll sideways — Filament stacks only below 640px.
+
+Needs Bangla review: "Add new" (নতুন যোগ করুন), "To do" (করণীয়), "Confirm money" (টাকা নিশ্চিত), "Good morning!/afternoon!/evening!" (শুভ সকাল/দুপুর/সন্ধ্যা), "Record an investment", "New project", "Post a project update", "Write a feed post".
+
+Not done: the office's other pages (forms, detail pages) are Filament's own one-column layout on phones and were not redesigned; some list column titles are still English in Bangla (existing keys, not part of this change).
+
+Full plain `php artisan test` on the branch (assets built from this tree): 2,959 passed, 1 skipped, 0 failed.
+
+Commit status: committed and pushed to `feature/ims-office-mobile`; not on `main` (waits for the owner's approval).
+
 ## 2026-10-21 - Purchases: import from CSV, and the Items layout
 
 Owner request (Bangla): add an option on Purchases so that uploading a CSV creates all the purchases, the same idea as the investor-list import; and fix the Items section, where every field was in one row. The owner shared the Stock History sheet (columns Date, Product Name, Quantity, merged date cells, mixed day/month and month/day dates).

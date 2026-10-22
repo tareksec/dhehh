@@ -887,6 +887,451 @@ html.ims-rail-hovered .ims-rail-label,
     }
 }
 
+/* ---------- Office on phones and tablets: the bottom tab bar and its sheets (DESIGN.md §6.2, owner request 2026-10-22) ---------- */
+
+.ims-mobile [x-cloak] {
+    display: none !important;
+}
+
+.ims-tabbar {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 30;
+    display: flex;
+    align-items: flex-end;
+    padding: 0.375rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom));
+    background-color: var(--ims-card);
+    border-radius: 1.5rem 1.5rem 0 0;
+    box-shadow: 0 -1px 0 var(--ims-line), 0 -10px 30px -18px rgb(17 20 24 / 0.25);
+}
+
+.ims-tabbar-item {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.1875rem;
+    min-height: 3.5rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--ims-muted);
+    text-align: center;
+    text-decoration: none;
+    touch-action: manipulation;
+}
+
+.ims-tabbar-item > span:last-child {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ims-tabbar-icon-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.ims-tabbar-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0.25rem 0.875rem;
+    box-sizing: content-box;
+    border-radius: var(--ims-radius-pill);
+    transition: background-color 120ms, color 120ms;
+}
+
+.ims-tabbar-item[aria-current],
+.ims-tabbar-item[aria-expanded='true'] {
+    color: var(--ims-primary-text);
+    font-weight: 700;
+}
+
+.ims-tabbar-item[aria-current] .ims-tabbar-icon,
+.ims-tabbar-item[aria-expanded='true'] .ims-tabbar-icon {
+    background-color: var(--ims-primary-soft);
+    color: var(--ims-primary-ink);
+}
+
+.ims-tabbar-item:focus-visible,
+.ims-tabbar-fab:focus-visible,
+.ims-sheet-tile:focus-visible {
+    outline: 3px solid var(--ims-primary-tint);
+    outline-offset: 2px;
+}
+
+/* The round green "+" in the middle, raised above the bar. */
+.ims-tabbar-fab-slot {
+    flex: 1 1 0;
+    display: flex;
+    justify-content: center;
+}
+
+.ims-tabbar-fab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.75rem;
+    height: 3.75rem;
+    margin-top: -1.75rem;
+    margin-bottom: 0.25rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-primary);
+    color: #ffffff;
+    border: 4px solid var(--ims-card);
+    box-shadow: 0 8px 20px -6px rgb(22 131 79 / 0.6);
+    transition: background-color 120ms, transform 120ms;
+}
+
+.ims-tabbar-fab:hover,
+.ims-tabbar-fab[aria-expanded='true'] {
+    background-color: var(--ims-primary-deep);
+}
+
+.ims-tabbar-fab[aria-expanded='true'] {
+    transform: rotate(45deg);
+}
+
+/* A small red count on an icon (to-do total, menu badges, quick buttons). */
+.ims-tabbar-count {
+    position: absolute;
+    top: -0.375rem;
+    inset-inline-end: -0.375rem;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding-inline: 0.3125rem;
+    border-radius: var(--ims-radius-pill);
+    border: 2px solid var(--ims-card);
+    box-sizing: content-box;
+    background-color: var(--ims-danger);
+    color: #ffffff;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1.25rem;
+    text-align: center;
+}
+
+.ims-tabbar-icon-wrap .ims-tabbar-count {
+    top: -0.25rem;
+    inset-inline-end: 0.25rem;
+}
+
+/* The sheets. */
+.ims-sheet-veil {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    background-color: rgb(10 14 18 / 0.45);
+    /* The page behind does not scroll while a sheet is open (no overflow lock on the page, which makes phones jump). */
+    touch-action: none;
+}
+
+.ims-sheet {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-height: 85dvh;
+    padding: 0.75rem 1rem calc(1.25rem + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 1.75rem 1.75rem 0 0;
+    background-color: var(--ims-card);
+    box-shadow: var(--ims-shadow-pop);
+}
+
+.ims-sheet-tall {
+    height: 92dvh;
+    max-height: 92dvh;
+}
+
+/* The grab handle at the top. */
+.ims-sheet::before {
+    content: '';
+    flex-shrink: 0;
+    align-self: center;
+    width: 2.75rem;
+    height: 0.3125rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-line);
+}
+
+.ims-sheet-move {
+    transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.ims-sheet-off {
+    transform: translateY(100%);
+}
+
+.ims-sheet-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.ims-sheet-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--ims-ink);
+}
+
+.ims-sheet-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.ims-sheet-group {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--ims-muted);
+}
+
+.ims-sheet-settings {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ims-sheet-settings .fi-ims-language {
+    flex: 1 1 auto;
+    margin: 0;
+}
+
+/* In the sheet the company and language lists always show (the drawer versions hide them on wider screens). */
+.ims-sheet .fi-ims-company-drawer,
+.ims-sheet .fi-ims-language-drawer {
+    display: flex;
+    margin-bottom: 0;
+}
+
+.ims-sheet-tiles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+    .ims-sheet-tiles {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+}
+
+.ims-sheet-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    padding: 0.75rem 0.25rem;
+    border-radius: 1.25rem;
+    background-color: var(--ims-page);
+    color: var(--ims-ink);
+    text-align: center;
+    text-decoration: none;
+}
+
+.ims-sheet-tile:hover {
+    background-color: var(--ims-primary-soft);
+}
+
+.ims-sheet-tile-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 1rem;
+    background-color: var(--ims-card);
+    color: var(--ims-primary-text);
+}
+
+.ims-sheet-tile-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+.ims-sheet-tile-on {
+    background-color: var(--ims-primary-soft);
+}
+
+.ims-sheet-tile-on .ims-sheet-tile-icon {
+    background-color: var(--ims-primary);
+    color: #ffffff;
+}
+
+/* "+" sheet: two columns of wider tiles, icon beside the words. */
+.ims-sheet-tiles-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ims-sheet-tiles-2 .ims-sheet-tile {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    min-height: 4.5rem;
+    padding: 0.75rem;
+    text-align: start;
+}
+
+.ims-sheet-tiles-2 .ims-sheet-tile-icon {
+    flex-shrink: 0;
+    background-color: var(--ims-primary-soft);
+    color: var(--ims-primary-ink);
+}
+
+.ims-sheet-signout {
+    margin-top: 0.25rem;
+}
+
+.ims-sheet .fi-ims-company-drawer {
+    margin-top: 0.75rem;
+}
+
+/* The bar replaces the menu button in the top bar. */
+.fi-body:has(.ims-tabbar) .fi-topbar-open-sidebar-btn,
+.fi-body:has(.ims-tabbar) .fi-topbar-close-sidebar-btn {
+    display: none !important;
+}
+
+@media (min-width: 1024px) {
+    .ims-mobile {
+        display: none;
+    }
+}
+
+/*
+ * Lists on phones (stackedOnMobile, AppServiceProvider): each row is a soft
+ * card — the first column as its title, then "label … value" lines, the
+ * buttons at the bottom — instead of a table that scrolls sideways.
+ */
+@media (max-width: 639.98px) {
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody {
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+        padding: 0.75rem;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr {
+        padding-block: 0.625rem;
+        border-width: 0;
+        border-radius: 1.25rem;
+        background-color: var(--ims-page);
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr.fi-ta-group-header-row,
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr.fi-ta-summary-row {
+        background-color: transparent;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:not(.fi-ta-selection-cell):has(> .fi-ta-cell-label) {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-block: 0.1875rem;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell > .fi-ta-cell-label {
+        flex-shrink: 0;
+        max-width: 45%;
+        padding-top: 0;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--ims-muted);
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell > .fi-ta-cell-content {
+        min-width: 0;
+        text-align: end;
+        font-weight: 600;
+        color: var(--ims-ink);
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell > .fi-ta-cell-content .fi-ta-text {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell > .fi-ta-cell-content .fi-ta-text-has-badges > * {
+        flex-shrink: 0;
+        max-width: 100%;
+    }
+
+    /* The first column is the card's title. */
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-selection-cell + .fi-ta-cell,
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:first-child:not(.fi-ta-selection-cell) {
+        display: block !important;
+        padding-inline-end: 3rem;
+        padding-bottom: 0.375rem;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-selection-cell + .fi-ta-cell > .fi-ta-cell-label,
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:first-child:not(.fi-ta-selection-cell) > .fi-ta-cell-label {
+        display: none;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-selection-cell + .fi-ta-cell > .fi-ta-cell-content,
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:first-child:not(.fi-ta-selection-cell) > .fi-ta-cell-content {
+        text-align: start;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-selection-cell + .fi-ta-cell .fi-ta-text,
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:first-child:not(.fi-ta-selection-cell) .fi-ta-text {
+        justify-content: flex-start;
+        font-size: 1rem;
+        font-weight: 700;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-selection-cell {
+        top: 0.625rem;
+    }
+
+    /* Row buttons: a line of their own at the bottom of the card. */
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:has(.fi-ta-actions) {
+        margin-top: 0.375rem;
+        padding-top: 0.625rem;
+        border-top: 1px solid var(--ims-line);
+    }
+}
+
+/* Office home on phones and tablets: round quick buttons under the green card. */
+.ims-area-quick {
+    grid-area: quick;
+}
+
+.ims-quick-actions-office {
+    padding: 1rem 0.5rem;
+    border-radius: var(--ims-radius-card);
+    background-color: var(--ims-card);
+}
+
+.ims-quick-actions-office .ims-quick-icon {
+    position: relative;
+    border-radius: var(--ims-radius-pill);
+}
+
+@media (min-width: 1024px) {
+    .ims-home-grid .ims-quick-actions-office {
+        display: none;
+    }
+}
+
 /* ---------- The home heading: "Welcome back, name" (DESIGN.md §6.1) ---------- */
 
 .ims-welcome {
@@ -921,6 +1366,70 @@ html.ims-rail-hovered .ims-rail-label,
     flex-wrap: wrap;
     align-items: center;
     gap: 0.75rem;
+}
+
+.ims-welcome .ims-welcome-avatar {
+    display: none;
+}
+
+/* Office on phones and tablets: initials, "Good morning!" and the name, like an app (DESIGN.md §6.2). */
+@media (max-width: 1023.98px) {
+    .ims-welcome-app {
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        gap: 0.75rem;
+        padding-top: 0;
+    }
+
+    .ims-welcome-app .ims-welcome-avatar {
+        display: inline-flex;
+    }
+
+    .ims-welcome-app .ims-welcome-text {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .ims-welcome-app .ims-welcome-greeting {
+        font-size: 0.875rem;
+        line-height: 1.3;
+    }
+
+    .ims-welcome-app .ims-welcome-heading {
+        font-size: 1.25rem;
+        font-weight: 700;
+        line-height: 1.3;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .ims-welcome-app .ims-welcome-lead {
+        display: none;
+    }
+
+    .ims-welcome-app .ims-welcome-name {
+        color: var(--ims-ink);
+        font-weight: 700;
+    }
+
+    /* The main button is the "+" in the bottom bar; the date is a small pill. */
+    .ims-welcome-app .ims-welcome-actions .ims-btn {
+        display: none;
+    }
+
+    .ims-welcome-app .ims-date-pill {
+        min-height: 2.5rem;
+        padding: 0.375rem 0.875rem;
+        font-size: 0.875rem;
+        white-space: nowrap;
+    }
+}
+
+@media (max-width: 419.98px) {
+    .ims-welcome-app .ims-date-pill {
+        display: none;
+    }
 }
 
 .ims-date-pill {
@@ -1683,7 +2192,7 @@ a.ims-group-tile[href]:hover {
 }
 
 .ims-office-grid {
-    grid-template-areas: 'money' 'todo' 'chart' 'payouts' 'latest' 'groups';
+    grid-template-areas: 'money' 'quick' 'todo' 'chart' 'payouts' 'latest' 'groups';
 }
 
 @media (min-width: 768px) {
@@ -1691,6 +2200,18 @@ a.ims-group-tile[href]:hover {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         grid-template-areas:
             'money todo'
+            'chart chart'
+            'latest latest'
+            'payouts groups';
+    }
+}
+
+/* Tablets: the quick buttons sit under the money and to-do cards. */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+    .ims-office-grid {
+        grid-template-areas:
+            'money todo'
+            'quick quick'
             'chart chart'
             'latest latest'
             'payouts groups';

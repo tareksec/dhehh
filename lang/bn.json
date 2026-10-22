@@ -3508,5 +3508,15 @@
     "Shows what would be created without saving it.": "কী তৈরি হতো তা সংরক্ষণ না করে দেখায়।",
     "Purchase import failed": "ক্রয় ইম্পোর্ট ব্যর্থ হয়েছে",
     "Purchase import preview": "ক্রয় ইম্পোর্ট প্রিভিউ",
-    "Purchases imported": "ক্রয় ইম্পোর্ট হয়েছে"
+    "Purchases imported": "ক্রয় ইম্পোর্ট হয়েছে",
+    "Add new": "নতুন যোগ করুন",
+    "To do": "করণীয়",
+    "Confirm money": "টাকা নিশ্চিত",
+    "Good morning!": "শুভ সকাল!",
+    "Good afternoon!": "শুভ দুপুর!",
+    "Good evening!": "শুভ সন্ধ্যা!",
+    "Record an investment": "বিনিয়োগ লিখুন",
+    "New project": "নতুন প্রজেক্ট",
+    "Post a project update": "প্রজেক্টের আপডেট দিন",
+    "Write a feed post": "ফিডে পোস্ট লিখুন"
 }
