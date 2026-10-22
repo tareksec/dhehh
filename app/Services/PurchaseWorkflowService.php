@@ -40,6 +40,27 @@ class PurchaseWorkflowService
         $this->syncSupplierBalance($purchase);
     }
 
+    /**
+     * Fills the given trade document's number/date only when blank, derived
+     * from the purchase number (e.g. "PUR-...-XXXXX-PI"), then saves quietly.
+     * An existing value (already generated, or entered manually) is left
+     * untouched — Generate is a one-way default-fill, never an overwrite.
+     */
+    public function ensureDocumentNumber(Purchase $purchase, string $type): void
+    {
+        $numberColumn = "{$type}_number";
+        $dateColumn = "{$type}_date";
+
+        if (filled($purchase->{$numberColumn}) && filled($purchase->{$dateColumn})) {
+            return;
+        }
+
+        $purchase->forceFill([
+            $numberColumn => $purchase->{$numberColumn} ?: $purchase->purchase_number.'-'.strtoupper($type),
+            $dateColumn => $purchase->{$dateColumn} ?: now()->toDateString(),
+        ])->saveQuietly();
+    }
+
     public function syncPreviousSupplierBalance(Purchase $purchase): void
     {
         if ($purchase->wasChanged('supplier_id')) {
@@ -97,9 +118,13 @@ class PurchaseWorkflowService
 
     protected function syncStockMovements(Purchase $purchase, Collection $items): void
     {
+        // Only units that arrived in sellable shape reach stock: short and
+        // damaged units stay on the supplier report as a loss. A product whose
+        // every unit was lost has no movement (a movement must be > 0).
         $quantitiesByProduct = $items
             ->groupBy('product_id')
-            ->map(fn ($productItems): int => $productItems->sum('quantity'));
+            ->map(fn ($productItems): int => $productItems->sum(fn (PurchaseItem $item): int => $item->sellableQuantity()))
+            ->filter(fn (int $quantity): bool => $quantity > 0);
 
         foreach ($quantitiesByProduct as $productId => $quantity) {
             StockMovement::query()->updateOrCreate(

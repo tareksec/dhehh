@@ -312,6 +312,15 @@ class StorefrontThemeTest extends TestCase
             ->assertDontSee('<meta name="robots" content="noindex, nofollow">', false);
     }
 
+    public function test_light_secondary_colour_keeps_the_footer_surface_dark(): void
+    {
+        $light = new StorefrontSetting(['theme_secondary_color' => '#FFFFFF']);
+        $dark = new StorefrontSetting(['theme_secondary_color' => '#0F2A43']);
+
+        $this->assertSame('#0F172A', $light->themePalette()['secondary_deep']);
+        $this->assertSame('#0F2A43', $dark->themePalette()['secondary_deep']);
+    }
+
     public function test_noor_solar_theme_is_registered_with_its_brand_presets(): void
     {
         $this->assertSame('Noor Solar Energy', StorefrontThemeRegistry::themeOptions()[StorefrontThemeRegistry::NOOR_SOLAR]);

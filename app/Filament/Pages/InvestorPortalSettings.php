@@ -3,12 +3,12 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Clusters\Investments;
+use App\Models\AppSetting;
 use App\Models\Company;
 use App\Models\InvestorPortalAccount;
 use App\Services\AuditLogService;
 use App\Services\CompanyContext;
 use BackedEnum;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
@@ -72,7 +72,9 @@ class InvestorPortalSettings extends Page
         $this->form->fill([
             'investor_portal_enabled' => (bool) $company->investor_portal_enabled,
             'investor_portal_domain' => $company->investor_portal_domain,
-            'investor_project_completed_message' => $company->investor_project_completed_message,
+            'ims_enabled' => (bool) $company->ims_enabled,
+            'ims_domain' => $company->ims_domain,
+            'ims_central_domain' => Company::imsCentralHost(),
         ]);
     }
 
@@ -98,14 +100,34 @@ class InvestorPortalSettings extends Page
                             ->disabled(fn (): bool => ! static::isSuperAdmin()),
                         Text::make(fn (): HtmlString|string => $this->portalAddress()),
                     ]),
-                Section::make(__('Messages'))
-                    ->description(__('Sent by SMS to every investor of a group project when its two months are over. It starts empty: nothing is sent until you write the message. The SMS gateway is set in the storefront notification settings.'))
+                Section::make(__('IMS v2 on its own domain'))
+                    ->description(__('IMS v2 opens on a separate main domain you bought (not a subdomain): the investor portal at the domain itself, the IMS office at /office. Point the domain and its www to the server first (Cloudflare and Coolify, see IMS-V2/ARCHITECTURE.md). Super Admin only.'))
                     ->schema([
-                        Textarea::make('investor_project_completed_message')
-                            ->label(__('Project completed message'))
-                            ->rows(3)
-                            ->maxLength(480)
-                            ->helperText(__('Use :name for the investor, :group for the group name and :project for the project number. Leave empty to send nothing. Example: Congratulations :name! Project :project of :group is complete. Your profit will be announced soon.')),
+                        Toggle::make('ims_enabled')
+                            ->label(__('IMS v2 switched on'))
+                            ->disabled(fn (): bool => ! (Auth::user()?->hasPermission('ims.domain.manage') ?? false)),
+                        TextInput::make('ims_domain')
+                            ->label(__('IMS domain'))
+                            ->placeholder('example.com')
+                            ->helperText(__('The main domain only, for example example.com. www.example.com opens it too.'))
+                            ->maxLength(255)
+                            ->disabled(fn (): bool => ! (Auth::user()?->hasPermission('ims.domain.manage') ?? false)),
+                        Text::make(fn (): HtmlString|string => $this->imsAddress()),
+                    ]),
+                Section::make(__('One sign-in for all businesses'))
+                    ->description(__('An investor who has an account with the same phone number in several businesses signs in once at this address and moves between the businesses from the top bar. It is the same for every company. Each business\'s own address keeps working. Point the domain to the server first (Cloudflare and Coolify). Super Admin only.'))
+                    ->schema([
+                        TextInput::make('ims_central_domain')
+                            ->label(__('Central sign-in address'))
+                            ->placeholder('ims.example.com')
+                            ->helperText(__('Leave blank to turn it off.'))
+                            ->maxLength(255)
+                            ->disabled(fn (): bool => ! (Auth::user()?->hasPermission('ims.domain.manage') ?? false)),
+                        Text::make(fn (): HtmlString|string => $this->centralAddress()),
+                    ]),
+                Section::make(__('Messages'))
+                    ->schema([
+                        Text::make(__('The SMS investors get (sign-in and password-reset codes, project started, completed and profit settled) are written on Settings → SMS Templates. The SMS gateway is set on Settings → Integrations.')),
                     ]),
                 Section::make(__('Accounts'))
                     ->schema([
@@ -140,6 +162,34 @@ class InvestorPortalSettings extends Page
         return new HtmlString($text.' <a class="text-primary-600 underline" href="'.e($url).'" target="_blank" rel="noopener">'.e($url).'</a>');
     }
 
+    protected function imsAddress(): HtmlString|string
+    {
+        $company = $this->company();
+
+        if (! $company?->imsIsLive()) {
+            return __('IMS v2 is off. Investors keep using the portal address above.');
+        }
+
+        $portal = (string) $company->imsUrl();
+        $office = (string) $company->imsUrl('office');
+
+        return new HtmlString(e(__('Investor portal:')).' <a class="text-primary-600 underline" href="'.e($portal).'" target="_blank" rel="noopener">'.e($portal).'</a> · '
+            .e(__('IMS office:')).' <a class="text-primary-600 underline" href="'.e($office).'" target="_blank" rel="noopener">'.e($office).'</a>');
+    }
+
+    protected function centralAddress(): HtmlString|string
+    {
+        $host = Company::imsCentralHost();
+
+        if ($host === null) {
+            return __('Off. Investors sign in at each business\'s own address.');
+        }
+
+        $url = request()->getScheme().'://'.$host.'/investor';
+
+        return new HtmlString(e(__('Central sign-in:')).' <a class="text-primary-600 underline" href="'.e($url).'" target="_blank" rel="noopener">'.e($url).'</a>');
+    }
+
     public function save(): void
     {
         $company = $this->company();
@@ -147,10 +197,9 @@ class InvestorPortalSettings extends Page
         abort_unless($company !== null && static::canAccess(), 404);
 
         $data = $this->form->getState();
-        $before = $company->only(['investor_portal_enabled', 'investor_portal_domain', 'investor_project_completed_message']);
+        $before = $company->only(['investor_portal_enabled', 'investor_portal_domain']);
 
         $company->investor_portal_enabled = (bool) $data['investor_portal_enabled'];
-        $company->investor_project_completed_message = filled($data['investor_project_completed_message'] ?? null) ? trim((string) $data['investor_project_completed_message']) : null;
 
         if (static::isSuperAdmin()) {
             $domain = Company::normalizeDomain($data['investor_portal_domain'] ?? null);
@@ -165,9 +214,46 @@ class InvestorPortalSettings extends Page
             $company->investor_portal_domain = $domain;
         }
 
+        $imsBefore = $company->only(['ims_enabled', 'ims_domain']);
+
+        if (Auth::user()?->hasPermission('ims.domain.manage')) {
+            $imsDomain = Company::normalizeDomain($data['ims_domain'] ?? null);
+
+            if ($imsDomain !== null && $imsDomain !== $company->ims_domain && Company::hostIsTakenByThePlatform($imsDomain)) {
+                throw ValidationException::withMessages(['data.ims_domain' => __('This domain is already used by a company, a portal or a store. IMS needs its own main domain.')]);
+            }
+
+            if ((bool) ($data['ims_enabled'] ?? false) && $imsDomain === null) {
+                throw ValidationException::withMessages(['data.ims_domain' => __('Enter the IMS domain before switching IMS on.')]);
+            }
+
+            $company->ims_domain = $imsDomain;
+            $company->ims_enabled = (bool) ($data['ims_enabled'] ?? false);
+
+            $centralBefore = Company::imsCentralHost();
+            $central = Company::normalizeDomain($data['ims_central_domain'] ?? null);
+
+            if ($central !== null && $central !== $centralBefore && Company::centralHostIsTaken($central)) {
+                throw ValidationException::withMessages(['data.ims_central_domain' => __('This domain is already used by a company, a portal or a store.')]);
+            }
+
+            if ($central !== null && $central === $imsDomain) {
+                throw ValidationException::withMessages(['data.ims_central_domain' => __('This domain is already used by a company, a portal or a store.')]);
+            }
+
+            if ($central !== $centralBefore) {
+                AppSetting::setValue(Company::IMS_CENTRAL_DOMAIN_SETTING, $central);
+                app(AuditLogService::class)->record('ims.central_domain_saved', $company, ['ims_central_domain' => $centralBefore], ['ims_central_domain' => $central]);
+            }
+        }
+
         $company->save();
 
-        app(AuditLogService::class)->record('investor_portal.settings_saved', $company, $before, $company->only(['investor_portal_enabled', 'investor_portal_domain', 'investor_project_completed_message']));
+        app(AuditLogService::class)->record('investor_portal.settings_saved', $company, $before, $company->only(['investor_portal_enabled', 'investor_portal_domain']));
+
+        if ($imsBefore !== $company->only(['ims_enabled', 'ims_domain'])) {
+            app(AuditLogService::class)->record('ims.domain_saved', $company, $imsBefore, $company->only(['ims_enabled', 'ims_domain']));
+        }
 
         Notification::make()->title(__('Investor portal settings saved'))->success()->send();
     }

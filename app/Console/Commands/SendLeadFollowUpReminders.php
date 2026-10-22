@@ -16,6 +16,13 @@ class SendLeadFollowUpReminders extends Command
 
     protected $description = 'Notify the assigned staff member and (optionally) message the lead when a CRM follow-up date arrives';
 
+    /**
+     * A follow-up due longer ago than this still reaches the staff member, but
+     * the lead gets no message: when the scheduler starts after a long stop,
+     * old leads are not all messaged at once (owner decision 2026-10-21).
+     */
+    public const STALE_AFTER_DAYS = 3;
+
     public function handle(
         BusinessNotificationService $businessNotifications,
         StorefrontNotificationService $storefrontNotifications,
@@ -46,7 +53,9 @@ class SendLeadFollowUpReminders extends Command
                 'Open lead',
             );
 
-            $this->messageLead($lead, $storefrontNotifications);
+            if ($lead->next_follow_up_at->gte(now()->subDays(self::STALE_AFTER_DAYS))) {
+                $this->messageLead($lead, $storefrontNotifications);
+            }
 
             $lead->forceFill(['follow_up_reminded_at' => now()])->saveQuietly();
             $notified++;

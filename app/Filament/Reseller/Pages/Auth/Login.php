@@ -2,8 +2,12 @@
 
 namespace App\Filament\Reseller\Pages\Auth;
 
+use App\Filament\Concerns\HasLoginCaptcha;
 use App\Models\Customer;
+use App\Services\CompanyContext;
 use App\Services\CustomerAccountService;
+use App\Services\LoginGate;
+use App\Support\LoginThrottled;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use Filament\Actions\Action;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
@@ -11,6 +15,7 @@ use Filament\Auth\Pages\Login as BaseLogin;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Component;
+use Filament\Schemas\Schema;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Validation\ValidationException;
 use SensitiveParameter;
@@ -25,6 +30,18 @@ use SensitiveParameter;
  */
 class Login extends BaseLogin
 {
+    use HasLoginCaptcha;
+
+    public function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            $this->getEmailFormComponent(),
+            $this->getPasswordFormComponent(),
+            $this->getRememberFormComponent(),
+            $this->captchaFormComponent(),
+        ]);
+    }
+
     protected function getEmailFormComponent(): Component
     {
         return TextInput::make('email')
@@ -52,9 +69,17 @@ class Login extends BaseLogin
 
         $data = $this->form->getState();
 
-        $customer = app(CustomerAccountService::class)->attemptLogin($data['email'], $data['password']);
+        try {
+            $customer = app(CustomerAccountService::class)->attemptLogin($data['email'], $data['password'], $this->loginClient(LoginGate::SURFACE_CUSTOMER));
+        } catch (LoginThrottled $exception) {
+            $this->showLoginChallenge($exception);
+
+            return null;
+        }
 
         if (! $customer || ! $this->isUserAllowedToAccessPanel($customer)) {
+            $this->resetCaptcha();
+
             throw ValidationException::withMessages([
                 'data.email' => __('filament-panels::auth/pages/login.messages.failed'),
             ]);
@@ -63,6 +88,8 @@ class Login extends BaseLogin
         Filament::auth()->login($customer, $data['remember'] ?? false);
 
         session()->regenerate();
+
+        app(LoginGate::class)->rememberDevice(LoginGate::SURFACE_CUSTOMER, app(CompanyContext::class)->id(), $customer);
 
         return app(LoginResponse::class);
     }

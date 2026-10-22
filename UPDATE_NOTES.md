@@ -2,6 +2,817 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-22 - IMS office: phone layout like an app
+
+Owner (Bangla): the IMS dashboard for admin / super admin was to be highly mobile friendly, non-tech friendly and very easy, but nothing like that was done for phones; three mobile reference designs given as inspiration (a green fitness app, a green finance app, a green marketplace app) — bottom tab bar with a raised round centre button, greeting with avatar, round quick buttons, big cards.
+
+What changed (office `/office`, phones and tablets below 1024px; desktop unchanged): bottom tab bar Home · Investors · + · To do · Menu with sheets that slide up; Menu = page tiles by group + language + light/dark + company list + Sign out; home greeting with initials, four round quick buttons with waiting counts; every Filament list in the office and the investor portal becomes stacked cards below 640px (`stackedOnMobile()`).
+
+Decided without asking (by the design rules in `IMS-V2/DESIGN.md` §6.2): the five tabs and the four quick buttons are the daily jobs from "What to do today"; "+" lists only resources that have a create page and that the person may create (Investments, Invites, Project updates and the Feed have no create page or are not creatable by this user on the test data, so they show only when they qualify).
+
+Checked in the browser on a throwaway copy of the demo database (never the demo DB): 375px and 360px, English and Bangla, light and dark, the three sheets, the Investors and Settlements lists as cards; 1366px desktop looks as before. Tablet (768–1023px) lists still scroll sideways — Filament stacks only below 640px.
+
+Needs Bangla review: "Add new" (নতুন যোগ করুন), "To do" (করণীয়), "Confirm money" (টাকা নিশ্চিত), "Good morning!/afternoon!/evening!" (শুভ সকাল/দুপুর/সন্ধ্যা), "Record an investment", "New project", "Post a project update", "Write a feed post".
+
+Not done: the office's other pages (forms, detail pages) are Filament's own one-column layout on phones and were not redesigned; some list column titles are still English in Bangla (existing keys, not part of this change).
+
+Full plain `php artisan test` on the branch (assets built from this tree): 2,959 passed, 1 skipped, 0 failed.
+
+Commit status: committed and pushed to `feature/ims-office-mobile`; not on `main` (waits for the owner's approval).
+
+## 2026-10-21 - Purchases: import from CSV, and the Items layout
+
+Owner request (Bangla): add an option on Purchases so that uploading a CSV creates all the purchases, the same idea as the investor-list import; and fix the Items section, where every field was in one row. The owner shared the Stock History sheet (columns Date, Product Name, Quantity, merged date cells, mixed day/month and month/day dates).
+
+Owner decisions (asked 2026-10-21): the supplier is picked at upload (not a CSV column); one purchase per date; the status is picked at upload and starts as Draft; a product that is not found is skipped and listed (never created).
+
+What changed: new `PurchaseCsvImportService`, `PurchaseCsvController` (sample), route `purchases.import.sample`, two header actions on the Purchases list (**Import purchases from CSV**, **Sample CSV**), `PurchaseForm` items repeater changed from a table to a 12-column grid, 29 new keys in `lang/en.json` + `lang/bn.json`, `tests/Feature/PurchaseCsvImportTest.php` (10 tests).
+
+Rules worth the owner's check against the real sheet:
+
+- A blank date cell takes the date of the row above (merged cells). A date that could be day/month or month/day (10/09/2025) is read **day first**; `08/28/2025` can only be month first, so it is read that way. The result says how many ambiguous dates there were, because the sheet mixes both forms.
+- Draft purchases change nothing; marking each **Received** later adds stock. Received at upload adds the quantity to stock at once, so it would double-count goods that are already in stock.
+- Rows are not de-duplicated within a file: the same product twice on one date becomes two items.
+- A file is read line by line, so a product name with a line break inside quotes is not supported. XLSX is not read (CSV only, as asked); the investor import also reads Excel and pasted text, which this one does not.
+
+Checked: the new tests and `TranslationParityTest` pass; on a throwaway local database the purchase form shows the three-row layout and the import dialog opens with its fields, Draft by default. A real file upload through the browser was not tried (the action is covered by a Livewire test).
+
+Needs Bangla review: all 29 new keys, especially the long dialog and status help texts and "Imported from CSV".
+
+Full plain `php artisan test` on the branch (assets built from this tree): 2,957 passed, 1 skipped, 1 failed. The one failure, `InvestorPortalStaffEntryTest` "the preview opens the portal pages even before a password was set", passed when run alone, with its whole class (18) and with every InvestorPortal test (76); it is unrelated to purchases and looks like a one-off flake.
+
+Commit status: committed on `feature/purchase-csv-import` and pushed to `main` on the owner's explicit approval (2026-10-21), after the full test run and the MySQL migration check.
+
+## 2026-10-21 - Pushing without asking each time
+
+Owner: pushes must work without asking for permission every time (other agents push directly).
+
+- Cause: the remote URL had no account name and Windows Credential Manager holds several GitHub accounts, so git asked which one (a window); Claude Code's sandbox also blocked the credential store.
+- Fixed on this machine (not in the repo): `origin` is `https://bhd4232@github.com/bhd4232/Business-Dashboard.git`; `.claude/settings.local.json` allows the git commands without prompts and runs push/fetch/pull outside the sandbox. That file is now git-ignored.
+- Verified: fetch and push from the agent's own shell, no prompt.
+
+Commit status: committed and pushed to `main` by the agent itself (the push test).
+
+## 2026-10-21 - Reminder age limits before the scheduler is switched on
+
+Reason - another agent proposed adding `php artisan schedule:run` (every minute) as a Coolify scheduled task. Checked in the repo: nothing in the container runs the scheduler (Nixpacks starts only the web server; no supervisor or cron), so none of the 15 jobs in `bootstrap/app.php` run today. Owner: "এটা তো করবই".
+
+Risk found before switching it on: three jobs message customers and had no upper age limit, so the first run would have sent every waiting reminder at once - every abandoned cart with a phone that was never reminded (however old), every overdue lead follow-up, every overdue sales follow-up. The other jobs are safe to start late (backup, courier sync, Meta retry, revert-to-AI, quotation expiry, IMS jobs are idempotent or once per record).
+
+What changed: a 3-day limit on those three (carts skipped, lead gets no message but the staff member is still told, sales follow-up cancelled "Too old"). `docs/deployment.md` has the Coolify steps.
+
+Owner / agent still to do in Coolify: Scheduled Tasks → check none exists → Add `php artisan schedule:run`, `* * * * *`, on the ERP app. The next morning: a backup ran, `ims:profit-proposals` made drafts at 07:00. Queued jobs (reseller SMS) also need a queue worker - separate decision.
+
+Verified: reminder / follow-up / CRM test files 98 passed (3 new). Full suite: 2947 passed, 1 skipped, 0 failed.
+
+Commit status: committed to `feature/scheduler-backlog-guard` and merged into `main` on the owner's go-ahead ("তুমি যেভাবে করার করো", 2026-10-21), so the limits are live before the scheduler is switched on.
+
+## 2026-10-21 - Older cloud branches checked one by one
+
+Owner request in chat (2026-10-21): "পুরোনো ৪টা branch একটা একটা করে দেখো, যেটা এখনো লাগবে সেটা merge করো, conflict মিটিয়ে টেস্ট চালিয়ে". (`claude/auto-profit-payment-system` was left out: `main` already has its own payout batch engine.)
+
+- `claude/whatsapp-web-login-sync`: the fix was not in `main` (`attachMedia()` still returned early for any filled `media_path`) - merged. Conflicts only in CHANGELOG / UPDATE_NOTES; its notes moved under `[Unreleased]` and below.
+- `claude/reseller-module-status` (2026-10-16, never reached `main`, no decision against it found): reseller sales report, SMS to resellers (approved / profit payable / withdrawal paid, texts empty until the company writes them), the "Become a reseller" menu item in `GET /site`, reseller levels set by hand, and the label *Warehouse damage* for damage source `other`. Merged. CHANGELOG: its older lines were already in `[2.82.0]`; only the four new entries and their notes went under `[Unreleased]` (release type now Minor). Lang files: union of both sides (52 new keys), `Other damage` replaced by the branch as intended (no code uses it). `docs/codebase-map/reseller.md` updated. Two migrations (`reseller_levels`, reseller SMS texts) - **deploy runs `php artisan migrate`**; the SMS need a running queue worker. Reseller-related tests + isolation, parity and migration-name tests: 462 passed.
+- `claude/purchase-module-automation` (2026-09-03/04, never reached `main`; nothing equivalent in `main`): printable PI / CI / Packing List from a purchase, and the fix for "Add shipment plan" always failing with "Purchase must belong to the same company" (`main` still had the bug). Merged. Conflicts: `Company::$fillable` and `routes/web.php` (kept both sides), CHANGELOG (its two entries moved under `[Unreleased]`). The branch was written before the bilingual rule: on merge its 60-odd admin labels, hints and messages were wrapped in `__()` and added to both language files (Bangla written by the agent). The printed PI/CI/PL stay English on purpose (they go to Chinese suppliers and banks). Five migrations - **deploy runs `php artisan migrate`**. Purchase / supplier / company-settings / parity tests: 86 passed.
+- `ccr-4505e72d-hwaq92` (2026-10-18, owner request "CAPTCHA এর কাজটা শুরু কর", never reached `main`): Cloudflare Turnstile CAPTCHA for a challenged sign-in. Off until a super admin pastes the Turnstile keys in Settings → Login Security, so nothing changes on deploy. Merged. Conflicts: both IMS sign-in pages (kept today's office/portal `mount()` and added the CAPTCHA trait and form), lang (union), CHANGELOG (new Security section under `[Unreleased]`). Also wired the CAPTCHA into the investor "every business of this phone" sign-in on the IMS domain, which was built after the branch and would otherwise have kept a challenge as a plain wait (`attemptCentralLogin()` takes the page's `LoginClient`). No migration.
+- Needs Bangla review (purchase documents): the 63 new keys, mainly "লোডিং বন্দর", "খালাস বন্দর", "উৎপত্তির দেশ", "প্রত্যয়ন নোট", "সুবিধাভোগীর অ্যাকাউন্ট", "বাণিজ্যিক কাগজপত্র".
+
+Commit status: merge commits on `main`, pushed from the owner's terminal after the full suite.
+
+## 2026-10-21 - Both feature branches merged into main
+
+Owner approval in chat (2026-10-21): "sob kicu push kro ... sobkiucui push kore deo and marge kore deo".
+
+- `origin/main` had the v2.95.0 release cut; `main` was fast-forwarded to it, then `feature/ims-office-login-session` and `feature/ims-header-and-projects-tab` were merged. Both branches' CHANGELOG lines had landed inside `[2.95.0]`; they were moved under `[Unreleased]` (the released sections are unchanged from `origin/main`).
+- The working copy held an uncommitted duplicate of the login-session files (identical to that branch's commit); it was put aside with `git stash`, not deleted.
+- Not merged: the older cloud-session branches on GitHub (`origin/claude/*`, `origin/ccr-*`, weeks old and 24-420 commits behind `main`); see the chat for what each holds.
+
+Commit status: merge commit on `main`; pushed from the owner's terminal.
+
+## 2026-10-21 - Fix: office sign-in lands on the investor sign-in when the browser also uses the portal
+
+Reason - owner report (brief of 2026-10-21): in the owner's main browser `zamzaminv.app/office/login` ends on the investor sign-in; a clean browser works.
+
+Root cause found in the code (not the guard check the brief suspected - no middleware redirects investors, `RestrictPortalHosts` lets `/office` through, and Filament's "already signed in" check on `/office/login` uses only guard `web`):
+- Laravel keeps one "after sign-in" address (`url.intended`) per session. A signed-out visit to a portal page stores it; the office sign-in (and `/office/login` while already signed in to the office) then redirected there, and the signed-out portal sent the person on to `/investor/login`.
+- Filament's sign-out throws the whole session away, so signing out of either panel also signed the browser out of the other - which is how the portal ended up signed out with its address left behind.
+
+What changed:
+- Each IMS sign-in goes back only to a page of its own panel, else its own home (`ImsPanelSessions`, `PanelLoginResponse`, both login pages' `mount()`).
+- Signing out of one IMS panel while the other is signed in clears only that panel's guard and session keys (`PanelLogoutController`); with one sign-in it clears the whole session as before.
+- Only the `office` and `investor` panels; the ERP admin, reseller portal, routing, settings, DNS and env are untouched.
+
+Verified: new `Ims\OfficeAndPortalSessionTest` 8 passed (before the fix 5 failed: the office sign-in landed on `/investor/dashboard`, the portal sign-in on `/office`, and each sign-out signed the other panel out). `DomainRoutingTest`, `InvestorBusinessSwitchTest`, `LoginGateTest`, `ThemeAndSignInTest` pass (61 with the new file). Full suite: 2882 passed, 1 skipped, 0 failed. The live acceptance tests on zamzaminv.app need the deploy (main moves only on owner approval).
+
+Commit status: committed and pushed to `feature/ims-office-login-session`; merged into `main` (see above).
+
+## 2026-10-21 - IMS top bar fix and Projects as a main portal page
+
+Reason - owner: the office UI still breaks (the dark mode and profile buttons slide off to the side), and on the investor side the Projects section works as the company, so it should be highlighted / brought to the side tab.
+
+What changed:
+- Top bar of both IMS panels: the right-hand buttons keep their size; on laptops the menu gets its own line under them when it does not fit (office 1024-1799px, portal 1024-1359px). Measured before the fix: at 1280px the office needed ~1410px (Bangla menu alone 856px), so the theme button and profile were pushed out; the portal broke below ~1280px.
+- Office on 640-899px: company picker and language switch go to the menu drawer (the profile button was off-screen at 660px).
+- Filament's light/dark/system switch in the profile menu is hidden: it did not follow the moon button, and pressing its stale "light" did nothing. The moon / sun button is the one switch.
+- Portal: Projects right after Home in the top menu and the left rail; on phones the bottom bar is Home · Projects · Investments · Profit · Profile (Feed moved into the Profile list; it stays in the top menu and rail).
+- Decided by the rules: two lines instead of hiding menu words (the owner is non-technical; icon-only office groups have no icons in Filament).
+
+Verified: browser (preview copy) office at 660, 768, 1024, 1280, 1700, 1800, 1900px and portal at 375, 1060, 1280, 1360, 1400px, light and dark, English and Bangla - every button on screen, profile menu opens inside the screen. `InvestorPortalTest` + `OfficeHomeTest` + `TranslationParityTest` pass; full suite 2875 passed, 1 skipped, 0 failed; `npm run build` passes.
+
+Commit status: committed to `feature/ims-header-and-projects-tab`; merged into `main` (see above).
+
+## 2026-10-21 - Plan 18 (phases A-E) merged into main
+
+Owner approval in chat (2026-10-21): "হ্যাঁ, main-এ merge করো".
+
+- `origin/main` had moved by one commit (the v2.94.0 release cut). Merged it into `feature/ims-all-companies` first; the auto-merge put the plan-18 CHANGELOG lines inside `[2.94.0]`, so they were moved back under `[Unreleased]` (the `[2.94.0]` section is now identical to main's).
+- After the merge: release tests, translation parity and `AllCompaniesImsTest` pass (the release cut changed only version strings).
+
+Commit status: `feature/ims-all-companies` merged into `main` and pushed on owner approval (2026-10-21).
+
+## 2026-10-21 - Plan 18 phase E: combined Statement, Payouts, Documents and Requests
+
+Reason - owner: "all phase done kro" (finish `18_IMS_ALL_COMPANIES_PLAN.md`).
+
+What changed:
+- Statement, Payouts, Documents and Requests list every company the person invests in, newest first, each line with its company name (only when more than one company) and its own currency; one Project select (empty = all) on each.
+- Rows are read company by company (`InvestorPortfolio`) and shown as array tables; another company's download / report / screenshot links carry `?business=` and open after the account check.
+- New request: the group / project / payout choices come from every company, keyed "<company id>:<key>"; the request is created in that company as the person's own account there; a request mixing companies is refused. Cancel works in the request's own company.
+- Decided by the rules (not removed): the **Switch business** button and **My businesses** page stay. The plan says they go once the combined lists are live, but KYC, Profile, bank accounts, nominees, agreements, Support, the feed, the home chart/cards/calendar and the monthly PDFs are still one company's record each, and the switcher is the only way to reach another company's. They can go when those pages are combined.
+
+Verified: `AllCompaniesImsTest` 24 passed (5 new); portal-related tests pass after updating the portal-page lines of four test files to the new keys (rows "<company id>-<id>", choices "<company id>:g<id>"): InvestorPortalStaffEntryTest, InvestorPortalGroupViewTest, PayoutPaymentProofTest, InvestorGroupMoneyFlowsTest. The first full run found the last three (6 failures, all key changes); fixed. Browser (preview copy, Gadget Items open): Statement, Payouts list Main Company lines with the company name; the Project filter narrows the statement to one project (`?project=1:4`). A console message "Uncaught (in promise) {status: null...}" also appears on the unchanged Profile page, so it is not from this work. Full suite: 2874 passed, 1 skipped, 0 failed; `npm run build` passes.
+
+Commit status: committed and pushed to `feature/ims-all-companies`; not merged into `main`.
+
+## 2026-10-20 - Plan 18 phase D: investor projects from every company
+
+Reason - owner: "ok" after phase C (go on with phase D of `18_IMS_ALL_COMPANIES_PLAN.md`).
+
+What changed:
+- Projects page: every project the person put money in, from every company where the same phone has an active account, one list, each card with the company name (shown only when the person invests in more than one company). "Raising money now" lists every company's open groups and projects.
+- A card of another company links with `?business=<id>`; `OpenLinkedInvestorBusiness` switches the session to the person's own account in that company (the existing checked switch) and opens the page, so the project's photos, reports and forms work under that company. A company without an active account of theirs is ignored.
+- Home balance card: every company added up per currency ("All your companies together"); other currencies on their own line.
+- The phase A gap is closed: "Forgot password?" and the SMS-code sign-in on the shared domain also find an account in another company that runs there.
+- Decided by the rules: a project page opens under its own company (switching the session) instead of reading another company's project from the current one, because its files and buttons are checked per company. The rest of the home (chart, cards, calendar) and Statement / Payouts / Documents / Requests stay per company until phase E, and so does the Switch business button (plan: it goes once phase E is live).
+- Needs Bangla review: "All your companies together", "Also at work in :currency: :amount".
+
+Verified: `AllCompaniesImsTest` 19 passed (5 new). Browser (preview copy, an investor phone with accounts in Main Company and Gadget Items Company): Projects lists both companies' projects with the company names; the Gadget Items project opens under Gadget Items; the home shows "All your companies together" ৳ 6,00,000. Full suite: 2869 passed, 1 skipped, 0 failed; `npm run build` passes.
+
+Commit status: committed and pushed to `feature/ims-all-companies`; not merged into `main`.
+
+## 2026-10-20 - Plan 18 phase C: "All companies" page in the IMS office
+
+Reason - owner: "ok next phase start kro" (phase C of `18_IMS_ALL_COMPANIES_PLAN.md`).
+
+What changed:
+- New office page `/office/all-companies` ("All companies" at the top of the company button / phone menu; only for people who may open more than one company): total money invested and capital at work, profit to pay, waiting for a decision (the existing "What to do today" lines of every company, with the company name), one card per company, every open/running project, new investors this month.
+- Every figure is read company by company under its own context and added up per currency (`AllCompaniesFigures`); the page approves nothing - each line opens the company's own office page (`?office_company=`), where the existing buttons and permissions apply.
+- Decided by the rules: "Total money invested" = confirmed money (active + withdrawn deposits and ungrouped investments); "profit this cycle" on the company card is shown as "Profit paid this month" (no cycle-wide figure exists across groups and projects); the plan's short menu is a row of jump buttons on the page (Waiting, Companies, Projects, New investors), the full menu stays as it is.
+- Needs Bangla review: the 16 new strings (translations added).
+
+Verified: `AllCompaniesImsTest` 14 passed (3 new). Browser (preview copy of the demo data, 5 companies): every section shows real figures (৳ 25,00,000 invested, 6 investments waiting in Main Company, 2 running projects, 3 new investors); phone width one column, no sideways scroll; Bangla page checked. Full suite: 2864 passed, 1 skipped, 0 failed; `npm run build` passes.
+
+Commit status: committed and pushed to `feature/ims-all-companies`; not merged into `main`.
+
+## 2026-10-20 - Plan 18 phases A + B: every company on zamzaminv.app, office company picker
+
+Reason - owner: "start building - 18_IMS_ALL_COMPANIES_PLAN.md". Phases A (one domain for all) and B (office company picker + access rules) are built here; C (All companies home), D (investor projects) and E (combined lists) follow on this branch.
+
+What changed:
+- Phase A: `Company::imsHost()` - every active company uses the group IMS domain (the company with IMS on; lowest id). Invites, join, partner sign-up and staff links carry `?business=<id>`; the link page checks its token against that company. Old per-company investor-portal hosts redirect to the IMS domain. The daily IMS jobs run for every company. The KYC-before-new-money rule and the ERP's Investments redirect now apply to every company (plan §2 "effect to know").
+- Phase B: office company picker (top bar; menu drawer on phones), choice kept in the session and re-checked against the user on every request. Super Admins and roles with the new `ims.all_companies` permission ("office admin", decided: a permission, not a new role, per plan answer 2) open every company; others their own companies. ERP links open the office with that company (`?office_company=`).
+- Decided by the rules (no question): "office admin" is a permission a Super Admin gives a role, because roles are already managed in Settings → Roles; the picker hides itself when the person has one company only.
+
+Known gap (for phase D): on `zamzaminv.app`, "Forgot password?" and the SMS-code sign-in still look only at the domain's own company. An investor whose only account is in another company signs in with phone + password, which works.
+
+Deploy note: nothing to migrate. Once live, every company's investors use `zamzaminv.app`; the KYC rule then applies to new money in every company.
+
+Verified: `AllCompaniesImsTest` 11 passed; IMS + investor portal tests 148 passed. Browser (preview copy of the demo data, 5 companies): office picker lists all five, switching opens the chosen company with its own figures, the choice stays; on a phone the list sits in the menu drawer and the top bar fits (359 px). Full suite: 2861 passed, 1 skipped, 0 failed. `npm run build` passes.
+
+Commit status: committed and pushed to `feature/ims-all-companies`; not merged into `main`.
+
+## 2026-10-20 - Plan: every company in one IMS on zamzaminv.app
+
+Reason - owner (in Bangla): every ERP company comes into the IMS; all IMS work on `zamzaminv.app`, no subdomain; office admins and ERP Super Admins have full access and grant role-based access; very simple UI; investors see projects (with the company name) and a project filter. Plan only, no code.
+
+What changed: new `18_IMS_ALL_COMPANIES_PLAN.md` (phases A–E, answers in §6).
+
+Commit status: committed and pushed to `feature/ims-all-companies`; not merged into `main`.
+
+## 2026-10-20 - The IMS domain signs in to every business
+
+Reason - owner brief: investors only know `zamzaminv.app` (the IMS domain); the multi-business sign-in worked only on the central address `ims.zamzaminv.app`. Settings could not fix it (the central address may not be the IMS domain, and the IMS domain may not be blank while IMS is on). Do not turn IMS off or change settings; `/office` must keep working.
+
+What changed:
+- On an IMS domain the investor sign-in (password mode) uses the central multi-business path when the phone has an active account in another business; the domain's own business is tried first. One-business investors sign in as before.
+- Switching business on an IMS domain stays in the same session on the same address (no token hop).
+- `ResolveCompanyFromCentralInvestorSession`: on an IMS domain, the chosen business opens only while the signed-in account belongs to it; business-only pages always use the domain's business.
+- No settings, migration or string change. `ims.zamzaminv.app` keeps working; once this is live it can be cleared from settings and redirected at DNS/Coolify level to `zamzaminv.app`.
+
+Verified: `InvestorBusinessSwitchTest` 21 passed (5 new: sign-in opens the other business, own business first, one-business sign-in unchanged, switch stays on the domain and `/office/login` still opens, stale choice ignored). Full suite: 2842 passed, 1 skipped, 0 failed; again after merging the Nuport work from `main`: 2845 passed, 1 skipped, 0 failed.
+
+Commit status: committed and pushed to `feature/ims-domain-multi-business-login`, merged into `main` on owner approval (2026-10-20).
+
+## 2026-10-20 - Nuport import: parcels are tracked here (Nuport is not used after the import)
+
+Reason - owner (in Bangla): the import is done once; the team stops working in Nuport and runs everything from the ERP.
+
+What changed:
+- The import saved Nuport's Delivery ID as the booking's tracking id. It is the courier's consignment id (a 9-digit number, so inferred - check one parcel in the Steadfast panel; the ERP keeps that in `provider_reference` and the alphanumeric tracking code in `tracking_id`). Fixed: it goes in `provider_reference` now.
+- Parcels still on the way (11 in transit and 4 approved with a parcel in the 2026-10-15 export) are recorded as active bookings, so the order says "Already booked" and cannot be booked twice, and Steadfast's callback updates them.
+- `ProcessCourierWebhook` looks a booking up by tracking code, tracking id and consignment id together.
+- Webhook receiver for Nuport: no longer needed, dropped from the to-do list.
+
+Owner decision (answered in chat): most of the 51 orders approved but never given to a courier (4,022 pieces, oldest 2025-12-29) are real and are shipped from the ERP, so they come in as live orders:
+- New source `nuport_open` ("Nuport (open order)"); import option `openAsLive` / dialog switch "Bring open orders in as live orders" (default on) / `--open-live`. Takes stock (may go negative; a colour stops at 0), can be booked, tracked, texted; no "New order received" alert and no risk check at import time; a later file never refreshes it.
+- The preview lists open orders, pieces, orders older than 30 days and the products that are short. The dialog opened with "Preview only" off before, because `fillForm()` replaced the field defaults; the defaults are repeated now.
+- Bangla to review: the 9 new open-order strings.
+
+Still open: cut-over day: stop Nuport, take a fresh export, recount the stock, then import once. The 2026-10-15 export is older than the 2026-10-16 stock count and misses everything after it.
+- Bangla to review: ":count টি পার্সেল এখনো পথে আছে; ERP এগুলোর ট্র্যাকিং চালিয়ে যাবে।"
+
+Commit status: committed and pushed to `main` on the owner's approval (2026-10-20). Tests: `NuportOrderImportTest` 30 passed; order / stock / courier / webhook / notification / risk / customer / translation groups 1,034 passed, 0 failed (the whole suite was not rerun for this change; the last full run was green).
+
+## 2026-10-20 - Nuport import: sales channel, returned pieces, courier bookings
+
+Reason - owner (in Bangla): is there anything else to import from Nuport that helps our reports? Told: Order Source, the returned pieces and the courier parcels were in the file but not kept; owner said do it before the real import.
+
+What changed:
+- New columns `orders.sales_channel` and `order_items.returned_quantity` (one migration); `Order::SALES_CHANNELS`, `Order::salesChannelLabel()`.
+- `NuportOrderImportService`: stores the channel and the returned pieces; records a `CourierBooking` for a parcel with a consignment number whose delivery is over (delivered / partly delivered / returned / cancelled); parcels still on the way stay in the note; creates an inactive manual courier when the ERP has none of that name; report and summary list channels, bookings, new couriers, open parcels.
+- Orders list: Sales channel column (hidden by default) and filter; order page: channel badge and a Returned badge on a line.
+- Not kept on purpose: Entry By (one name on all 1,340 orders), Customer Tag (Nuport's label), website / campaign fields (mostly empty).
+- Checked on the real file (1,340 invoices): channels WhatsApp 865, Website 284, Other 120, Offline 50, Live chat 19, Messenger 2; 914 invoices have a consignment number, 1 is Pathao, the rest Steadfast.
+- Bangla to review: the 10 new strings ("Sales channel" = "বিক্রয় চ্যানেল", the courier / parcel summary lines).
+- Side effect to tell the owner: imported bookings count in a customer's delivered / returned / cancelled ratio (customer risk score), which is real history but can lower a score.
+
+Commit status: committed and pushed to `main` on the owner's approval (2026-10-20). Tests: `NuportOrderImportTest` 26 passed; full suite 2,821 passed, 1 skipped, 0 failed (29 investor / IMS tests first failed only because this worktree's `public/build` was old, and passed after `npm run build`).
+
+## 2026-10-20 - Phase M: one login for all businesses (all of plan §5)
+
+Reason - owner (in Bangla): implement `17_IMS_IN_PORTAL_PLAN.md`, and "file a ja ache sob follow koro". Build everything §5 describes; the plan's own proposals answer Q1–Q3.
+
+What changed:
+- **Central sign-in address** (Q1). Set by a Super Admin in Investor Portal Settings → "One sign-in for all businesses" (`app_settings.ims_central_domain`; blank = off). On that host only the investor portal is served: phone + password, and the password of any of the person's active accounts opens the first business it belongs to. The chosen business is kept in the session (`ResolveCompanyFromCentralInvestorSession` sets `CompanyContext` from it, or `none()` when nothing is chosen). Partner sign-up, invites, password reset, SMS code sign-in and staff links are not offered there; they stay on each business's own address, which keeps working.
+- **Same person** (Q2) = the same phone number with an active account (with a password, linked to an investor or an active channel partner) in each business whose portal is on.
+- **Switch business** in the top bar: on the central host it re-signs the same session to the account in the chosen business; on a business's own host it moves the person to the other business's own address with a one-time token (60 s, used once, only valid on that portal).
+- **My businesses** page (Q3): one card per business with its figures, plus totals per currency; the figures are worked out under each business's own context.
+- A staff preview and an applicant cannot switch. Every switch is audited and counts as a sign-in.
+- Plan §3 / §8 and the code map are updated.
+
+Verified: `InvestorBusinessSwitchTest` 16 passed. Full suite: 2833 passed, 1 skipped, 0 failed. The commit was also tested alone (without other uncommitted work in the folder): 149 related tests passed.
+
+Not in this commit: another agent's uncommitted IMS dark-mode work in the same folder (`theme.css`, `theme-toggle`, `auth-tools`, `auth-hero`, `ImsOfficePanelProvider`, the dark-mode lines in `InvestorPanelProvider`, one line in the portal dashboard). It was left as it is.
+
+Deploy: point the central domain to the server (Cloudflare + Coolify), then enter it in the settings. No migration.
+
+Needs Bangla review: the 14 new strings — "ব্যবসা বদলান", "আমার সব ব্যবসা", "যে লাভ এখনো পাওয়া বাকি", "এখন খোলা", "এই ব্যবসাটি খুলুন", "সব ব্যবসার জন্য একটাই সাইন-ইন", "কেন্দ্রীয় সাইন-ইন ঠিকানা" and the settings help text and error messages.
+
+Commit status: committed and pushed to `feature/ims-multi-business`, merged into `main` on owner approval (2026-10-20).
+## 2026-10-20 - IMS dark mode and the new sign-in page
+
+Reason - owner (in Bangla): the IMS portal is light only; add dark and light mode with light as the default. The sign-in page looks beginner-level; rebuild it like the reference image the owner sent (another site's "Join Us" page), with our colours and our information, fully responsive on mobile and desktop.
+
+What changed:
+- Investor portal and IMS office: light/dark mode, light by default; a moon/sun button in the top bar and on the sign-in page (Filament's theme store, kept in the browser).
+- Theme colours are tokens with dark values (`:root.dark`); checked in the browser on the dashboard, projects and statement pages (desktop and phone).
+- Sign-in pages rebuilt to the reference layout: frame, green gradient panel with badge, heading, three step cards; form with grey fields, full-width button, "Or" line before the SMS-code button. Phones: panel on top, steps in a row, form sheet below. Checked at 1440, 1280 and 375 px, light and dark, English and Bangla; no horizontal scroll.
+- Left out of the reference on purpose: the Google button and the terms line (no such feature or page here), the emoji.
+
+Verified: `ThemeAndSignInTest` 3 passed; IMS/portal/translation/ModuleGuard tests 173 passed; full suite 2837 passed, 1 skipped, 0 failed; `npm run build` OK.
+
+Needs Bangla review: "আইএমএস অফিস", "আপনার স্টাফ অ্যাকাউন্ট দিয়ে সাইন ইন করুন", "নতুন টাকা ও KYC দেখুন", "লাভ ও পেমেন্ট অনুমোদন করুন", "আপনার অ্যাকাউন্টে সাইন ইন করুন", "আপনার টাকা ও লাভ দেখুন", "প্রতিটি পেমেন্টের খবর রাখুন", "অথবা".
+
+Commit status: committed and pushed to `feature/ims-dark-mode-login`, merged into `main` on owner approval (2026-10-20).
+
+## 2026-10-19 (media storage) - WhatsApp Web files lost on every redeploy
+
+Reason - after v2.87.2 the Inbox bubble itself explained the broken picture: "Server answer: 404 (application/json). The file is not in the server storage". Owner ran my read-only check in the ERP terminal.
+
+Cause (confirmed with the owner's output): `disk: local`, 1,037 messages with a saved file, of the latest 300 only 7 files exist (the ones saved since the last deploy), and `df -h /app/storage` shows `overlay` - `/app/storage` is part of the container, not a persistent volume, so every redeploy deletes the private files while the database keeps the paths. This also affects anything else on the local disks (voucher attachments, expense scans, backups, local public uploads) unless R2 is used for them - not checked.
+
+What changed in the repo:
+- `attachMedia()` stores the bytes again when the saved file is gone (it used to return early whenever `media_path` was filled), so a re-sent history (relink) can restore files that WhatsApp still serves. 2 tests.
+- `docs/deployment.md`: how to verify and fix persistence.
+
+The real fix is in Coolify (not in the repo): Persistent Storage -> Volume Mount `/app/storage` on the ERP app (and the same volume on the queue-worker app). Lost files can only come back through a relink + history re-sync, and only those WhatsApp still serves (old media expires); the ERP keeps no media keys.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; merged into `main` on owner approval (2026-10-21).
+
+## 2026-10-20 - Code map for AI agents
+
+Reason - owner: new sessions and other agents should not re-scan the whole codebase every time (token cost); a map should say where everything is, and be kept up to date.
+
+What changed:
+- New `CODEBASE_MAP.md` (root index) and `docs/codebase-map/*.md` (11 module files). Written by Gemini from a brief, then checked here with scripts: all file paths exist; all routes match `php artisan route:list`; all table columns appear in migrations. Fixed in the check: 26 wrong route URIs and 15 wrong route names (first pass), many invented column names (first pass), 110 invented migration file names and 40 migration name patterns that matched nothing, wrong Android printing and WhatsApp outbox descriptions, cluster folders that are files, `file:///` links made relative.
+- `CLAUDE.md` (new "Code map" section) and `AGENTS.md`: read the map first; update it in the same commit as a structural change.
+- No code, migration or language change.
+
+Not checked line by line: the wording of every "Rules that matter" item (samples were correct). The code wins when the map disagrees.
+
+Commit status: committed and pushed to `feature/codebase-map`, merged into `main` on owner approval (2026-10-20).
+
+## 2026-10-19 - IMS becomes the investor portal; phase R: exchange rates and foreign-currency costs
+
+Owner (in Bangla): IMS will not be a separate stack; the built-in investor portal is converted into the IMS, and everything set up for IMS must be integrated into the portal. Asked which IMS parts the portal lacks, the owner chose all three — one login across businesses, profit worked out from ERP data, USD/RMB rates and foreign-currency costs — and chose "keep the feed code, never create the keys".
+
+What changed:
+- **Plan:** new `17_IMS_IN_PORTAL_PLAN.md` — what each IMS setup becomes, the design of the three pieces, six owner questions. The "IMS reports a payout" intake (task 13) is cancelled: the portal and the ERP are one system.
+- **Phase R (built):** **Investments → Exchange Rates** (USD, RMB; BDT for one unit; one per currency per day; typed by staff, nothing fetched). Project cost items can be entered in BDT, USD or RMB with cost date, original amount and rate; the rate is filled from the newest one on or before the date and can be changed; the BDT amount is `round(original × rate, 2)`, set by the model, so the settlement and all reports are unchanged. Old costs are BDT and untouched.
+- `docs/api/ims-sync-api.md` carries a "not in use" banner. The private handover page (artifact) is out of date; do not share it.
+
+Not built (waiting for the owner): phase M (one login, many businesses — Q1–Q3); see §7 of the plan. Phase P (profit helper) is covered by IMS v2's *Profit proposals* on `main`.
+
+**Merge with `main` (2026-10-20, IMS v2 / v2.89.0):** conflicts only in `UPDATE_NOTES.md`, `docs/api/ims-sync-api.md` (took `main`'s "turned off" version), `lang/en.json` and `lang/bn.json` (both sides kept, no duplicate key); no code conflict. `main` deleted the sync feeds, so the plan no longer says the feed code stays. After the merge the exchange-rate page was added to the IMS office panel and menu (Tools), because with IMS on the ERP's Investments pages redirect to the office. `npm run build` is needed for the IMS theme (28 IMS tests fail on a stale local build, not because of the merge).
+
+Verified: `ExchangeRateTest` 13 and `ExchangeRatesInOfficeTest` 2 passed; mutations (form amount kept; rate from the next day; office registration removed) each made them fail. Full suite on the merged state: 2817 passed, 2 skipped, 0 failed.
+
+Deploy: `php artisan migrate --force` (new table `exchange_rates`; new columns on `project_cost_items`).
+
+Decisions I made that you may want to change: (1) the currencies are USD and RMB (shown as CNY) only; adding one is a line in `ExchangeRate::CURRENCIES` plus its label; (2) rates are typed by staff, per company; (3) only project cost items take a foreign currency — purchases and shipment costs are still BDT.
+
+Needs Bangla review: the 19 new strings in `lang/bn.json` — "এক্সচেঞ্জ রেট", "রেট (১ ইউনিটের জন্য টাকা)", "টাকায় অঙ্ক (হিসাব করা)", "মূল অঙ্ক", "খরচের তারিখ", "রেটের তারিখ", the currency names and the rate-on-file messages.
+
+Commit status: committed and pushed to `claude/nifty-carson-r2vpby` (not `main`).
+
+## 2026-10-20 - IMS v2: `main` (v2.88.1) merged into `feature/ims-v2`
+
+Reason - GitHub showed the branch in conflict with `main` (CHANGELOG.md, UPDATE_NOTES.md, lang/en.json, lang/bn.json).
+
+What changed: both sides kept. CHANGELOG keeps IMS v2 under [Unreleased] above the released 2.87.1–2.88.1 entries; UPDATE_NOTES keeps both sets of entries; the language files keep both blocks of new keys, with the one key added on both sides ("Question", same wording) kept once. No code conflicts.
+
+Commit status: merge committed and pushed to `feature/ims-v2`; not on `main`.
+
+## 2026-10-20 - IMS v2: brief for the VPS AI agent, and the first push
+
+Reason - owner: push the IMS v2 work now, and before that explain to the owner's AI agent (which has the VPS access) everything it has to do to put IMS on its separate domain — the owner will not do the VPS work themselves.
+
+What changed:
+- New `IMS-V2/VPS-AGENT-BRIEF.md` (English, for the agent, with a one-line Bangla note for the owner); `IMS-V2/GO-LIVE.md` step 3 points to it.
+- All IMS v2 work of 2026-10-19 (entries below) is committed and pushed in this commit.
+
+Left out of the commit on purpose: `.claude/launch.json` (local preview path in a temp folder) and `setup-github-access.ps1` (local one-time git helper).
+
+Commit status: committed and pushed to `feature/ims-v2` (owner said "push", 2026-10-20); not on `main` — merging needs the owner's approval, after the database backup in the brief.
+
+## 2026-10-19 - IMS v2: old sync API off, e-mail password reset, go-live checklist
+
+Reason - owner, after asking what is left of the investment work: "আগে পুরনো sync API বন্ধ, ইমেইলে পাসওয়ার্ড রিসেট আর চালু করার চেকলিস্ট করে দাও।"
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+- `/api/v1/sync/*` and `/api/v1/sync/investor/*` removed (404); no new sync keys; old keys listed as "turned off".
+- Investor portal "Forgot password?": choose SMS or e-mail; the e-mail code lives 10 minutes.
+- `IMS-V2/GO-LIVE.md`: the step-by-step list for switching IMS v2 on.
+
+Decisions you may want to change:
+1. The sync code was **deleted**, not just hidden (old IMS is gone, Q10). It is in git history if ever needed.
+2. E-mail reset sends a **code**, not a link, so the page stays the same for SMS and e-mail. The old IMS used a 1-hour link; here the code lives 10 minutes.
+3. If two investors share one e-mail address, neither gets a code by e-mail (they can use SMS).
+4. Channel partners have no e-mail on their record, so they reset by SMS only.
+
+Needs Bangla review: the 11 new keys ("SMS-এ", "ইমেইলে", "কোডটা কীভাবে পাঠাব?", the reset e-mail lines, "ডেটা সিংক (পুরনো IMS, বন্ধ)").
+
+Commit status: committed and pushed to `feature/ims-v2` with the 2026-10-20 entry above; not on `main`.
+
+## 2026-10-19 - IMS v2: the look redone to match the reference pictures
+
+Reason - owner, after seeing the first IMS v2 build: the UI did not match the reference images; the office "still looks like the ERP" and the sign-in pages were plain. The first build had only recoloured Filament (and its top-bar rule targeted a Filament 3 class name, so the round header never appeared).
+
+What changed (details in `CHANGELOG.md` [Unreleased] → Changed, "New IMS look"):
+- Both IMS panels: round white top bar with the menu as pills (`topNavigation()`), round search / bell / avatar, icon rail on the left (`filament/ims/icon-rail.blade.php`, items from `OfficeNavigation::rail()` / `PortalNavigation::rail()`).
+- Office home rebuilt as the reference card dashboard (six guarded widgets in a CSS grid, new bar chart, latest money in, payouts + KYC avatars, groups as cards). `OfficeStats` removed.
+- Portal home rebuilt phone-first like the reference phone screens (greeting, green balance card, quick buttons, chart, next payout, projects, recent transactions). Portal menu: Home · Investments · Profit · Statement · Feed · More ▾ (+ Channel partner ▾). `ProfitTrend` widget removed.
+- Sign-in / invite / password pages: green welcome panel + form card (split on wide screens, stacked on phones).
+- Checked in the browser on a throwaway copy of the database (not the demo database): desktop 1280px and phones 360/375px, English and Bangla, no sideways scroll.
+
+Follow-up (owner: icons alone are not beginner-friendly): the rail now **opens with the page names when the mouse is over it**, and a button at its top (**Keep the menu open** / **Close the menu**) pins it open; the page moves aside and the home cards use two columns on laptops. The choice is remembered in the browser. Phones already show names (portal bottom tabs, office menu drawer). Also fixed: the theme did not scan `resources/views/components/ims`, so a hidden "Open settlements" label showed under the chart.
+Follow-up 2 (owner 2026-10-19: top navigation was washed out/unclear, left rail overlapped content):
+- Top navigation buttons restyled with prominent contrast, group icons (`heroicon-o-users`, `heroicon-o-briefcase`, `heroicon-o-banknotes`, `heroicon-o-chat-bubble-left-right`, `heroicon-o-wrench-screwdriver`), and an eye-catching Emerald Green active state (`#16834F`) with white text and glow shadow.
+- Left rail sidebar dynamically expands on mouseover (`mouseenter`) into a comprehensive menu showing full labels alongside icons, and automatically collapses back (`mouseleave`, with 180ms smooth debounce) to the compact icon rail. Both hover-expansion and pinned mode smoothly expand the page container padding (`padding-inline-start: 18.25rem`) alongside the menu with zero overlap on page content. Clicking the top button pins/unpins the menu permanently.
+
+Decisions you may want to change:
+1. The icon rail shows the most used pages only (office: Home, Investors, KYC, Money to confirm · Settlements, Payout Batches, Capital returns · Support, Feed · IMS settings; portal: Home, Investments, Profit, Statement · Feed, Support, Notifications · Profile). Every page is still in the top menu.
+2. On phones under 640px the language switch is on Profile (portal) / in the menu drawer (office), and the office search is hidden there, so the top bar fits.
+3. "Add money" on the portal home opens the Requests page (where "New request" → top-up is).
+4. Sign-in panel wording is interface text (Bangla + English), not admin-managed: "Your investment, clear and simple" / "Run investors, profit and payouts from one place".
+
+Needs Bangla review: the 46 new keys (incl. "মেনু খোলা রাখুন" / "মেনু বন্ধ করুন") at the end of `lang/bn.json` (e.g. "স্বাগতম,", "সর্বশেষ জমা টাকা", "পাঠানো বাকি লভ্যাংশ", "আপনার বিনিয়োগ, সহজ ও পরিষ্কার", "ইনভেস্টর, লাভ আর টাকা পাঠানো — সব এক জায়গা থেকে", the six to-do lines).
+
+Commit status: committed and pushed to `feature/ims-v2` with the 2026-10-20 entry above; not on `main`.
+
+## 2026-10-19 - IMS v2, phases 1–6 (investor system on its own domain)
+
+Reason - owner: "Business-Dashboard\IMS-V2 all implement now." The plan in `IMS-V2/` (PLAN, PRD, TRD, ARCHITECTURE, DESIGN, ROLES, AGENT) is built, phases 1–6. Phase 7 (bringing in the old IMS's data, switching the domain on) waits for the owner (Q10).
+
+What changed (details in `CHANGELOG.md` [Unreleased] and `PROJECT_GUIDE.md` → Investor / Mudarabah Module → IMS v2):
+- Phase 1 — IMS domain (`companies.ims_enabled` / `ims_domain`, set by a Super Admin on Investor Portal Settings), the new **IMS office** panel at `/office`, the green IMS theme for both panels, 14 `ims.*` permissions and the ROLES.md defaults, the office home (to-do list, four numbers, groups now), IMS settings, the ERP's investor menu moving to the office when IMS is on.
+- Phase 2 — invites + 6-digit codes, one to five nominees, KYC (pictures, OCR checklist, review), "waiting for the money" and its confirmation, KYC required for new money while IMS is on, portal password rule (10+, letters and numbers).
+- Phase 3 — project updates, milestones, linked ERP purchases, the investor-safe project summary (three visibility levels), shipments, published reports (frozen, PDF), portal Projects pages.
+- Phase 4 — loss × investor % from capital (also in groups, the next project carries the smaller capital), the capital calculator, optional tenor + maturity, capital returns, profit proposals, frozen cycles, void Super Admin only.
+- Phase 5 — notifier (portal bell always, SMS / e-mail per event), feed, support threads, monthly statement PDF, maturity reminders, morning to-do digest, late-shipment alerts.
+- Phase 6 — bKash / Nagad / Rocket / bank statement matching.
+
+Decisions I made that you may want to change:
+1. **Portal address:** opening the IMS domain goes to the portal at `<domain>/investor` (Filament cannot put a panel at `/` next to the storefront's `/` on the same app). The office is exactly `<domain>/office`. Existing `/investor/...` links keep working.
+2. **The office reuses the ERP's investor screens** (same code, so no double work); their addresses there are `/office/investments/...`. The menu is IMS's own, grouped in plain words.
+3. **IMS rules apply once IMS is switched on for a company** (KYC needed for new money, the KYC banner, the ERP menu moving). Before that, the ERP and the current portal behave as now — except the owner's new **loss rule**, **void = Super Admin only** and the **role defaults**, which apply everywhere at once.
+4. **Same product in two projects' purchases (TRD §4.4, still the owner's open question):** such sales are left out of the automatic figures and the office is told to enter that profit by hand. Nothing is guessed.
+5. **"Accept the figures"** on a profit proposal writes each linked purchase's landed cost as one cost line of the project (so the settlement's cost matches the proposal), then runs the normal Calculate & Settle with the worked-out sales.
+6. A deposit can be confirmed only while its group is Open, and a group cannot start while a deposit is still waiting for money.
+7. "Freeze" stops changes to the frozen project's own cost lines and linked purchases; ERP sales and purchases themselves are not locked (the settled figures never change anyway).
+8. The ERP's Investments menu shows two links when IMS is on: the IMS office, and IMS domain settings (that page stays in the ERP so IMS can be switched off again).
+
+Also fixed during verification: `Company::imsColumnsExist()` cached its answer for the whole process, so a request without the `companies` table crashed (seen in `SecurityHardeningTest` in the full run); it now checks the table every time. `InvestorPortalOnboardingTest` and `InvestorPortalStaffEntryTest` use an Accountant as the "no permission" user (a Manager now has `investments.settle` / `portal_manage`).
+
+Completed work from `IMS-V2/HANDOFF.md` (Antigravity, 2026-10-19):
+- **Task 1 (Screen check & responsive styling):**
+  - Updated `resources/css/filament/ims/theme.css`: language switcher buttons (`.fi-investor-language a`, `.fi-ims-language a`) increased from 2.5rem to 2.75rem (44px) to fulfill touch target requirements (≥ 44px).
+  - Added text wrapping rules (`overflow-wrap: anywhere; word-break: break-word;`) for cards, balance cards, todo items, timelines, definition lists, and article paragraphs to prevent layout breakages on 360px screens with long Bangla text.
+  - Added horizontal overflow prevention (`max-width: 100vw; overflow-x: clip;`) across layout containers.
+  - Added `break-all` to feed URLs in `resources/views/filament/ims/portal/feed.blade.php` and `break-words` in `resources/views/filament/ims/portal/support.blade.php`.
+  - Rebuilt assets via `npm run build` cleanly (17.45s).
+- **Task 2 (Bangla translation refinement):**
+  - Reviewed and naturalized translations in `lang/bn.json` following `DESIGN.md` §2 rules (plain, jargon-free Bangla).
+  - Changed awkward phrases: e.g., "টাকা তোলা চলছে" → "তহবিল সংগ্রহ চলছে / বিনিয়োগ সংগ্রহ চলছে"; "সেটেলমেন্ট" → "লাভ-ক্ষতির হিসাব / লভ্যাংশ বণ্টন"; "payout" → "লভ্যাংশ পরিশোধ"; "রিসিভ ভাউচার বুক" → "জমা ভাউচার তৈরি"; "খাটতে থাকা মূলধন" → "সক্রিয় মূলধন"; "টাকা আসা-যাওয়া হয়নি" → "কোনো লেনদেন হয়নি"; "আজ আপনার জন্য কোনো কাজ অপেক্ষায় নেই" → "আজ আপনার জন্য কোনো কাজ বাকি নেই"; "পোর্টালে ইনভাইট" → "আমন্ত্রণ লিংক পাঠানো"; "একটা সেলফি (আপনার মুখ পরিষ্কার)" → "একটি সেলফি (যাতে আপনার মুখ পরিষ্কার দেখা যায়)"; "একটা শিপমেন্ট দেরি করছে" → "একটি শিপমেন্ট আসতে দেরি হচ্ছে".
+  - Verified `php artisan test tests/Unit/TranslationParityTest.php`: 2 tests, 11698 assertions passed with 100% parity.
+- **Task 3 (Tesseract OCR build configuration):**
+  - Updated `nixpacks.toml`: added `[phases.setup]` with `aptPkgs = ["...", "tesseract-ocr", "tesseract-ocr-ben"]`, keeping auto-detected packages intact and `[start]` untouched.
+  - Updated `docs/deployment.md`: added section `## IMS v2: KYC OCR (Tesseract)` explaining the Nixpacks apt configuration, Coolify redeployment instructions, container verification via `tesseract --list-langs`, and fallback behavior.
+
+Deploy: `php artisan migrate --force`; a queue worker must run; Nixpacks build automatically installs `tesseract-ocr` and `tesseract-ocr-ben` on deployment. Then: Cloudflare A records for the domain and `www`, add both to the app's Domains in Coolify, and set the domain in Investor Portal Settings (Super Admin). Turn on "Investors may join with an office invite" in the office's IMS settings when ready, and write the IMS SMS texts in SMS Templates → IMS news.
+
+Still open (owner's questions in `IMS-V2/AGENT.md` §7): sales of one product across two projects; the old IMS's data (phase 7 waits for owner Q10 answer); 2FA for office admins.
+
+
+## 2026-10-19 (mp-footer) - Marketplace Pro: unreadable footer and top bar
+
+Reason - owner's screenshot ("blade থিমের ui বাজে হয়েছে"): grey footer with near-invisible text, grey top bar, white header over a dark page. Cause: the top bar and footer used the admin secondary colour (mixed 72% with black) as background with fixed light text, so a light secondary gave low contrast.
+
+What changed: new `secondary_deep` palette colour (secondary if dark, else `#0F172A`) used for the top bar and footer. Hero banner (owner asked, same day): Marketplace Pro desktop no longer forces a 4:1 frame with `cover`; it takes the image's height (max 30rem) with `contain`, so no slide is cropped (CSS only, Marketplace Pro only). Not changed: the white header (follows the admin secondary colour on purpose). Verified: StorefrontThemeTest, SEO and Marketplace tests, `npm run build`.
+
+Commit status: committed and pushed to `claude/erpf-marketplace-pro-customization-5m95cn` with the owner's approval (2026-10-19); not on `main`.
+
+## 2026-10-19 (media) - WhatsApp Web: pictures and voice notes that do not open in the Inbox
+
+Reason - owner's new screenshots after the redeploy: the audio player shows but pressing play does nothing, and the image is still a broken picture ("অডিও প্লেয়ার আসছে কিন্তু অডিও প্লে করলে কাজ করে না। আর ইমেজ এখনো দেখাচ্ছে না।").
+
+What I found:
+- A message only gets a player or picture when `media_path` is set, so the file was saved; the failure happens when the browser fetches `conversation-messages.media`. I ran the real route locally with a real PNG and a real Ogg/Opus header: it answers 200 with `image/png` / `audio/ogg`, correct length. So the ERP route is fine on a normal setup and the cause on the owner's server is not visible from here (possible: the file is missing from the server's storage after a redeploy, or the server answers something else). I do not know which; the Inbox now tells.
+- Real defect found in the bridge: the media queue was strictly ordered, so one picture/voice note that WhatsApp can no longer serve (very old history media) blocked every file behind it for about 4 minutes (8 attempts with growing waits) - with thousands of history media this starves new media too.
+- `ConversationMediaController` had no byte-range support (Safari/iPhone, seeking), and the Content-Type came only from sniffing the bytes.
+
+What changed:
+- Inbox: when a picture / audio / video cannot be shown, the bubble now says why in plain words ("The browser could not show this file. Server answer: 404 (application/json). ..."): it asks the same URL with `Range: bytes=0-0` and prints the HTTP status, content type and the server's reason. Only on messages that have a saved file; nothing extra for text messages.
+- `ConversationMediaController`: answers `206`/`416` for byte ranges, sends `Accept-Ranges`, `Content-Length` and an exact `Content-Type` (the type WhatsApp declared wins for audio/video when sniffing says something else, e.g. `application/ogg`); for an authorized user a missing/unreadable file returns JSON with the reason (still 404/500). Unauthorized requests are still a plain 404.
+- Bridge `Outbox` has `independent: true` for the media queue: a failing file is retried later on its own schedule (2 s doubling, max 5 min, 8 attempts as before) and the next file is tried right away. The event queue stays strictly ordered.
+- 5 lang keys (en/bn).
+
+Not verified: that this fixes the owner's broken images; it needs the redeploy (ERP and Wa Bridge). After it, a broken file shows its reason in the bubble - send me that line (or a screenshot) if it still does not open.
+
+Needs Bangla review: the 5 new keys ("The browser could not show this file...", "...and the server did not answer.", "The stored file path is not valid...", "The file is not in the server storage...", "The server could not read the file: :error.").
+
+Tests: bridge `npm test` (20 passing, 2 new for the independent outbox); `WhatsAppWebArchiveTest` (32; 5 new: real PNG/Ogg types, audio type, byte ranges, missing-file reason, Inbox failure notice), `PrivateAttachmentStorageTest`, `InboxPageTest`, `TranslationParityTest`, Pint pass.
+
+Commit status: on `main` (v2.87.2, owner approved the push on 2026-10-19).
+
+## 2026-10-18 - Pay a cycle's profit without waiting for sales (manual-profit settlement)
+
+Owner (in Bangla), after I read the group code: some projects are outside any group and some groups are project-based, so keep that flexible; and do not tie a project's payout to sales, because a cycle is two months but sales can take longer. Answers to my three questions: group structure "stays as before" (nothing to change there); "the payout must also be possible without sales — our investment rule is that every two months investors are handed their profit, sales or not, so keep a manual option"; the amount is entered by staff.
+
+What I found first: grouped and ungrouped projects already coexist (a project with no group is a normal project; groups can run automatically or not), and the settlement never read sales, only a revenue figure staff type. What was missing was a way to say "pay this cycle's profit" without inventing a selling amount that would then print on the investor's report.
+
+What changed:
+- **Calculate & Settle** has a new first choice, *How is the amount decided?* — *From the sales revenue* (the old way, default) or *Profit entered by hand (no sales needed)*. By hand: staff type the net profit; the helper shows the investors' share of it. Same split, rate per lac and payouts as for a sale; a group project still pays profit only.
+- Hand-entered settlements skip the cost-proof tick-box (costs are not used), cannot be negative (a loss is settled from sales), and are labelled **Profit entered by hand** on the settlement page. The investor's printable report shows "Profit for this cycle (declared by the company, not worked out from sales)" and no selling amount, gross profit or cost tables.
+- Stored figures still add up: `total_revenue = total_cost + profit` for a hand-entered settlement; the new `basis` column says it is not a real selling amount.
+- Nothing about the investor groups, the cycle dates or auto-cycle changed.
+
+Verified: 9 new tests (`InvestmentSettlementTest` 8, `InvestorGroupExitTest` 1) pass; two mutations (cost check kept for manual; basis not recorded) each made them fail. The three settlement/group test files pass together (102). Full suite: 2533 passed, 2 skipped, 0 failed.
+
+Deploy: `php artisan migrate --force` (new column `project_settlements.basis`).
+
+Decisions I made that you may want to change: (1) staff enter the **net profit before the split** (the project's own investor/partner/company percentages are then applied), not the investors' pool or a rate per lac — say if you would rather type the rate per lac; (2) the hand-entered profit has no cost-proof check; (3) a project is still settled only after its cycle has closed (for a group with automatic cycles that happens by itself at the end date; with automatic cycles off, set the project to Closed first).
+
+Needs Bangla review: the 10 new strings in `lang/bn.json` — "অঙ্ক কীভাবে ঠিক হবে?", "সেলস রাজস্ব থেকে", "হাতে বসানো লাভ (সেলস লাগবে না)", "বণ্টনের নিট লাভ", "অঙ্ক ঠিক হয়েছে", "হাতে বসানো লাভ", the helper texts, and the report line "এই সাইকেলের লাভ (কোম্পানি ঘোষিত, সেলস থেকে হিসাব করা নয়)".
+
+Commit status: committed on `claude/nifty-carson-r2vpby`, merged with `main` (v2.86.4) and pushed to `main` with owner approval (2026-10-19).
+
+
+## 2026-10-19 (names and media) - WhatsApp Web chats: names, video/audio, refresh
+
+Reason - owner's screenshots of the Inbox after linking (4,057 chats already in): most chats read "নাম পাওয়া যায়নি", and image/video/audio do not show. Owner: "নামগুলো ঠিক করে দেও এবং ইমেজ/ভিডিও আর অডিও কিন্তু শো করে না। এটাও ঠিক করে দিবে।"
+
+What I found:
+- "নাম পাওয়া যায়নি" is `Conversation::profileDisplayName()` (hardcoded) for a chat with a blank or number-only `contact_name`; the phone number itself was fine (`8801859963681` shown).
+- Names reach the ERP through the bridge's `contacts` events, keyed by LID (WhatsApp's hidden id), while chats are saved under the phone number that comes from each message's `remoteJidAlt`. The bridge never learned LID -> phone from those message keys and normalized contacts BEFORE messages, so a LID-keyed name stayed LID-only and the ERP (which named chats by phone) never matched it.
+- The Inbox only renders images inline; video and audio were just an "Open attachment" link, and a media message without a saved file rendered an empty bubble.
+- ERP serving of a stored image works (new test fetches `conversation-messages.media` and gets the bytes back as image/jpeg), so the broken image in the screenshot is not the ERP's media route on the test disk.
+
+What changed:
+- Bridge: `lidPairsFromMessages`, `Session.learnLids()` (called in `onHistory` and `archiveMessages`, before contacts), `archiveContacts()` resolves unknown LIDs through `signalRepository.lidMapping`.
+- ERP: LID-aware `upsertContact()`, `nameConversations()`, `refreshNames()`, `RefreshWhatsAppWebNamesJob` (queued on the first complete history sync, with a 2-minute delay, and by the new **Fill missing names** button on the WhatsApp Web Login page).
+- Inbox: `<video controls>` and `<audio controls>`; a note for media that was not saved.
+- 4 lang keys (en/bn).
+
+Not verified (needs the owner's data): whether the owner's names were lost this way. I could not read the production database, so I gave the owner a read-only count command (contacts / names / chats without name or phone). After the deploy the owner should open WhatsApp Web Login and press **Fill missing names**; names only exist for chats where WhatsApp shared one (customers who are not saved and have no profile name stay nameless).
+
+Still open:
+- Broken image in the Inbox: cause not found. Asked the owner to right-click the broken image -> Open image in new tab and report what page or error it shows (404, 500, other). Possible causes: bytes that are not a valid image, a storage-disk or domain problem on production.
+- `ConversationMediaController` has no byte-range support, so seeking in long videos and Safari video playback may not work.
+- The `InvestorPortalStaffEntryTest` preview test fails when the random staff name contains an apostrophe (seen once on CI, passed on re-run); not touched.
+
+Needs Bangla review: "Fill missing names" -> "নামহীন চ্যাটে নাম বসান", "Looking up missing names" -> "নাম খোঁজা শুরু হয়েছে", the refresh explanation and "The file is not saved (yet)..." (4 keys), plus "Last error" -> "সর্বশেষ এরর" from the earlier entry.
+
+Tests: bridge `npm test` (17 passing); `WhatsAppWebArchiveTest` (22) and `TranslationParityTest` pass; the new name and media tests fail on the old code and pass on the new.
+
+Follow-up (owner: "যাদের নাম নেই তাদের ফোন নাম্বার দেখাবে এমন টা করে দেও"): the Inbox list and chat header now show the phone number for a WhatsApp chat without a name (`Conversation::inboxDisplayName()`, `+` plus the digits, or the local number as saved; avatar shows `#`). `profileDisplayName()` is deliberately unchanged: the Messenger profile lookups and the existing test "missing profile name never falls back to phone or id" depend on it, so Messenger keeps "নাম পাওয়া যায়নি". New `ConversationInboxNameTest` (6) and an Inbox test for an archived chat. Lesson: the "নাম পাওয়া যায়নি" literal in `Conversation.php` is stored with the precomposed য় (U+09DF); text typed afresh uses a different code sequence and does not compare equal, so copy it from the file, never retype it.
+
+Follow-up (owner: "আর রিয়েল টাইম সিংক লাগবে"): what already was real time: the bridge sends each live message to the ERP the moment WhatsApp delivers it. The delays were (1) the queue worker before the message was saved, (2) the Inbox only re-drew every 8 seconds, and (3) messages that arrived while the bridge was offline were filed as old history (no unread, no lead). Changed: live batches (<= 25) are saved inline, the Inbox polls a cheap change signature every 3 seconds (`Inbox::checkForChanges()`, `skipRender()` when unchanged, full refresh on change and every 30 seconds), and recent `append` upserts count as live (`splitLiveMessages`). New tests: inline vs queued, failure returns 500, Inbox notices a new message, bridge `splitLiveMessages`. Not done, needs an owner decision: true push (no polling) needs a websocket server (Laravel Reverb) as another Coolify service plus Echo in the frontend; polling every 3 seconds is the no-new-infrastructure version. Not verified: behaviour under many open Inbox tabs at once.
+
+Commit status: on `main` (v2.86.5, owner approved the push on 2026-10-19).
+
+## 2026-10-19 (later) - WhatsApp Web bridge: show why a connection fails, and a switchable device identity
+
+Reason - after the QR fix the QR appears, but scanning it ends on the phone with "Couldn't link device. Try again later." (owner's screenshot). The cause is not known: the bridge logged nothing about why a connection closes and the page only said "Reconnecting". Owner: "উন্নতি দুটো করে দাও" (do both improvements).
+
+What changed:
+- `whatsapp-bridge/src/browser.js` (new): `BRIDGE_BROWSER` (`<system>:<browser>`, default `ubuntu:Desktop`) picks the identity announced to WhatsApp; validated at start. `server.js` passes it to every `Session`; `GET /health` shows it. `session.js` no longer hardcodes the identity.
+- `session.js`: every closed connection is logged (`connection closed`, `code`, `reason`) and `last_error_code` is returned by `GET /sessions/{id}`.
+- `whats-app-web-login.blade.php`: "Last error: <message> (<code>)" under the status while the device is not connected.
+- `whatsapp-bridge/README.md`: `BRIDGE_BROWSER`, which identities WhatsApp refuses (Mac OS / Windows + Desktop), and what the close codes mean.
+- 1 lang key (en/bn).
+
+Verified from the cloud session: the real bridge reaches a QR with the default identity; with `windows:Desktop` it reports `last_error: Connection Terminated`, code 428 and logs it; a wrong `BRIDGE_BROWSER` stops it at start. The new page test fails on the old page and passes on the new one.
+
+Not verified: why the phone refuses the link. That needs the owner's phone. Next step for the owner after redeploying the bridge: scan again, read "Last error" on the page (or Coolify Runtime Logs), and if linking is refused try `BRIDGE_BROWSER=ubuntu:Chrome` or `baileys:Desktop` in Coolify and restart. A non-Desktop identity may give only recent chats, not the whole history.
+
+Needs Bangla review: "Last error" -> "সর্বশেষ এরর".
+
+Tests: bridge `npm test` (15 passing, 5 new); `WhatsAppWebArchiveTest` (14) and `TranslationParityTest` pass; Pint passes on the changed PHP file.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`, then merged with main (v2.86.3) and pushed to `main` on owner approval ("main এ পুশ কর", 2026-10-19).
+
+## 2026-10-19 - Report PDF / CSV buttons opened the file as text
+
+Owner report (screenshot of `app.zamzamint.com/admin/reports/supplier/4/pdf`): the Supplier Report PDF showed as raw text (`%PDF-1.7 1 0 obj ...`) in the browser, and the owner thought the template was missing.
+
+Cause: not the template (the PDF is built correctly: `reports.supplier-pdf`, dompdf headers `Content-Type: application/pdf` and `attachment`, checked locally on the existing report PDF route too). The admin panel is `->spa()`; Filament adds `wire:navigate` to a link button, Livewire fetches the URL and paints the response into the page, so the PDF bytes appeared as text. The older Reports page **CSV** and **PDF** buttons (`Reports::table()` header actions) have the same fault, so they show the file as text too.
+
+Fix: `AdminPanelProvider` `->spaUrlExceptions(["*/admin/reports/export/*", "*/admin/reports/supplier/*"])`. New `tests/Feature/ReportDownloadLinksTest.php` (3 tests); the two link tests fail without the fix and pass with it.
+
+Not checked: other file links in the panel (order PDF, product / customer / supplier CSV, backups, voucher and investment downloads) may behave the same where they are Filament link buttons; not changed because it was not reported and not verified. Not tried on the live site (the browser pane is not signed in).
+
+Commit status: committed on `feature/report-download-links` and pushed to `main` on the owner's explicit approval (2026-10-19).
+
+
+## 2026-10-19 - WhatsApp Web bridge: QR code never appeared
+
+Reason - owner deployed the bridge on Coolify; the ERP page showed "Reconnecting" and no QR code. The bridge reported `last_error: "Connection Terminated"`.
+
+What I found:
+- From the Coolify container a WebSocket to `wss://web.whatsapp.com/ws/chat` opened and stayed open, so the network is fine.
+- Baileys trace: the Noise handshake completes, then WhatsApp closes the socket about 2 seconds later (428 "Connection Terminated") before any QR is sent.
+- Reproduced from the cloud session with `7.0.0-rc14` and `6.7.24`, with the pinned and the live WhatsApp Web version. Only the browser identity mattered: Mac OS + Desktop and Windows + Desktop are closed; Ubuntu + Desktop, Baileys + Desktop, and Chrome/Safari identities get a QR in under a second.
+
+What changed:
+- `whatsapp-bridge/src/session.js`: `Browsers.macOS('Desktop')` -> `Browsers.ubuntu('Desktop')` (platform type stays Desktop, `syncFullHistory` and `shouldSyncHistoryMessage` unchanged).
+
+Not verified: a real phone was not linked from the cloud session. Whether the phone still sends the FULL history with the Ubuntu + Desktop identity can only be seen after the owner scans the QR: the "History sync" percentage and the chat/message counts on the WhatsApp Web Login page. If much less than the whole history arrives, tell me and I will try another identity (e.g. Baileys + Desktop).
+
+Still open (not built, owner has not asked): the page shows only "Reconnecting" and the bridge does not log why a connection closed. Logging the close code and showing `last_error` on the page would have made this visible without the Coolify terminal.
+
+Tests: `npm test` in `whatsapp-bridge/` (10 passing). No PHP, Blade or lang change, so the PHP suite is not affected.
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`, then pushed to `main` on owner approval ("কমিট এবং পুশ কর এবং মেইন এ পুশ কর", 2026-10-19); released as v2.86.2.
+
+
+## 2026-10-18 (later) - SMS templates follow the BulkSMSBD rules
+
+Owner feedback (Bangla): the SMS templates for the different jobs must follow BulkSMSBD's rules, and the first version did not.
+
+What the rules are (from the BulkSMSBD dashboard "Developers" page the owner shared, plus bulksmsbd.com's API and FAQ pages; BulkSMSBD publishes no other template policy and has no template-approval menu for a numeric sender ID):
+
+- OTP format: "Your {Brand/Company Name} OTP is XXXX" (dashboard: "OTP পাঠানোর জন্য এই ফরম্যাট টি ফলো করুন").
+- No single quotation mark in a message (API example code: "do not use single quotation (') in the message to avoid forbidden result").
+- Masking SMS must be Bangla (error 1012). The owner's sender ID `8809617643387` is numeric, so English is allowed.
+- Length: 160 / 153 per part in GSM-7, 70 / 67 per part with Bangla letters.
+
+What changed:
+
+- `BulkSmsBdPolicy` checks all of it. Code templates (customer sign-up / login / password reset, investor login / reset) must be exactly "Your {brand} OTP is :code" and the built-in text is that; any other saved wording is refused on save and ignored at send time. Order and project templates may not contain `'` or need more than 3 SMS parts. `'` is also dropped from names when the SMS goes out.
+- The investors' code SMS lost the reason ("login" / "password reset") and the "expires in 1 minute" sentence that the owner asked for on 2026-10-16: the BulkSMSBD OTP format has nothing after the code. The code still expires after 1 minute; the investor login page says so. Customers' codes lost "Use it to log in..." and the expiry sentence for the same reason. If BulkSMSBD confirms that text after the code is accepted, loosening `BulkSmsBdPolicy::isCodeFormat()` is a one-line change.
+- Investor code SMS is English only (the format is English), so the `:company Investment Portal` and the two `:portal ... OTP is :code` language keys are gone.
+- Page: a rules box, a masking-sender notice, a character / SMS-part counter on every box, and a "Use suggested wording" button for the order and project messages (suggestions are short English texts without a link or quote; the owner still has to save them, so nothing is sent by itself).
+
+Checked: `BulkSmsBdPolicyTest` (7), `SmsTemplatesTest` (16), `InvestorPortalTest`, customer and reseller OTP tests; Pint clean. No live data touched, no real SMS sent.
+
+Needs Bangla review: the 9 new keys in `lang/bn.json` (BulkSMSBD rules box, masking notice, the three policy messages, "Use suggested wording", the counter).
+
+Commit status: not committed yet; branch `feature/sms-bulksmsbd-policy`, waiting for the owner's approval.
+
+## 2026-10-18 - Fix: signed-out visit to an old admin link threw "Route [login] not defined"
+
+Trigger: Deploy Error Logs showed `module:page:admin.clusters.legacy` — `RouteNotFoundException: Route [login] not defined` at `UrlGenerator.php:542`, request `https://app.zamzamint.com/admin/users`, raised from `Authenticate::redirectTo()` via the default `redirectGuestsTo(fn () => route('login'))` that `ApplicationBuilder` installs.
+
+Cause: `/admin/users` (and every other old top-level admin path in `LegacyAdminClusterRedirectController::legacySegments()`) is served by a plain route inside `Route::middleware('auth')` in `routes/web.php`, not by the Filament panel, so a guest hits Laravel's `auth` middleware. The app defines no route named `login` (Filament's is `filament.admin.auth.login`), so the redirect itself crashed; `ModuleGuard` then reported it and showed the module error page instead of the sign-in page. The same crash applied to the other plain `auth` routes: order print, bulk print, report exports (CSV/PDF), supplier PDF, push-devices and app-upgrade endpoints.
+
+What changed: `bootstrap/app.php` — `$middleware->redirectGuestsTo(fn () => route('filament.admin.auth.login'))`. All plain `auth` routes are `/admin/*`, so one target is correct; the intended URL is kept so sign-in returns to the page. Nothing else touched. `tests/Feature/AdminGuestRedirectTest.php` (5 tests) covers four guest paths and the remembered intended URL.
+
+Not done / worth knowing: the 500 + Deploy Error Log rows already recorded stay there until a Super Admin clears them. A guest who opens `/admin/...` on a reseller/investor portal host is redirected to that portal by `RestrictPortalHosts` before the `auth` middleware runs, so the admin login target does not leak across portals.
+
+Environment note: the container had PHP 8.3; PHP 8.4 + imagick were installed from the ondrej/php PPA for this session only (not part of the commit).
+
+Verification: `php artisan test --filter=AdminGuestRedirectTest` 5 passed; with the `bootstrap/app.php` line removed the same tests fail with the exact production error (`Route [login] not defined`, `UrlGenerator.php:542`). Full plain `php artisan test` (after `npm run build`): 2,594 passed, 2 skipped, 0 failed. Pint reports only older style issues in `bootstrap/app.php` (`\Throwable`, `!` spacing), none on the new lines. Not tried in a real browser.
+
+Commit status: committed on `claude/inspiring-mendel-llkhz0`; `main` (v2.86.5) was merged in, the full suite re-run, and the branch pushed to `main` on the owner's explicit approval (2026-10-19).
+
+## 2026-10-18 - Supplier Report (Reports module)
+
+Owner request: the Reports module had no supplier-wise report. Wanted per supplier: supplier info; the dates the goods arrived; total cost after the goods reached the house; sales and average sale amount; damaged and short quantity; gross profit after all costs; the costs paid per product after arrival (ad, packaging, other); net profit = gross profit − those costs; for one product or all products of the supplier; PDF in one click.
+
+Owner decisions (asked 2026-10-18):
+
+- Damaged and short units are recorded on the purchase line (new **Short Qty** / **Damaged Qty**), not guessed from stock movements (those carry no supplier).
+- Costs after arrival are manual lines on the purchase (product, cost name, amount), plus Meta ad spend already linked to the product.
+- A product bought from several suppliers has its sales handed to the oldest units first (FIFO by purchase date).
+
+What changed:
+
+- Migration `2026_10_18_000100_add_loss_quantities_and_product_costs_to_purchases` (additive): `purchase_items.short_quantity`, `damaged_quantity`, `purchases.product_costs` (JSON).
+- `PurchaseItem`: validation (no negatives, short + damaged ≤ billed) and `sellableQuantity()`. `PurchaseWorkflowService` now books only sellable units into stock (identical result when short and damaged are 0). `PurchaseForm`: two columns on the items table and a **Costs After Arrival** section.
+- New `SupplierReportService` (rules in its class comment), page `SupplierReport` (Reports → Supplier Report, `reports.view`), `SupplierReportPdfController` + `reports.supplier.pdf` (`reports.export`, audit log), `resources/views/reports/supplier-pdf.blade.php`, 58 new keys in `lang/en.json` + `lang/bn.json`, `tests/Feature/SupplierReportTest.php` (9 tests).
+
+Figures follow these rules, which are my reading of the request and worth the owner's check against one real supplier:
+
+- Gross profit = sales − landed cost of units sold − landed cost of short and damaged units (the supplier's loss is deducted in gross profit).
+- Net profit = gross profit − costs after arrival − Meta ad spend. Both are counted in proportion to the units sold, the same way the cost of goods is, so a half-sold batch carries half of its packaging cost. Owner confirmed this on 2026-10-18.
+- Landed cost = item subtotal + the purchase's China-to-BD costs (the existing allocated cost). Purchase discount and VAT are not in it.
+- Date filter = purchase date; sales are counted up to today.
+- Meta ad spend is the ad's lifetime spend, only for ads created through this app (they carry the product); it is split between suppliers by units sold. Do not also enter ad cost as a manual line for the same spend.
+- The PDF is always English: dompdf cannot shape Bangla, so Bangla product or supplier names may not print correctly in it. The on-screen report follows the user's language.
+
+Not done / limits: no CSV export of this report; no separate page-level "print" view for Bangla; stock "damage" movements recorded in the warehouse are not tied to a supplier and are not in this report; sales returns are not netted out of the FIFO.
+
+Needs Bangla review: all 58 new keys, in particular "Total landed cost" (ল্যান্ডেড কস্ট), "Loss on short and damaged units", "Short Qty" / "Damaged Qty" and the long description of **Costs After Arrival**.
+
+Not visually checked in the browser (page and PDF render and download are covered by tests).
+
+Verification: `php artisan test --filter=SupplierReportTest` 9 passed; `TranslationParityTest` passes. Full plain `php artisan test`: 2,123 passed, 1 skipped, **8 failed** — the same 8 online-payment tests already listed under 2026-10-17 (`StorefrontApiCheckoutTest`, `StorefrontPaystationPaymentTest`: "The secure payment page could not be opened"); this change touches no payment file. Pint reports only older style issues in `PurchaseForm.php` and `routes/web.php`, none on the new lines.
+
+Commit status: committed on `feature/supplier-report` and pushed to `main` on the owner's explicit approval (2026-10-18), after the branch checks.
+
+## 2026-10-18 (later) - Login protection phase C: CAPTCHA (Cloudflare Turnstile) for a challenged sign-in
+
+Owner request ("CAPTCHA এর কাজটা শুরু কর"): the follow-up the login-protection plan left open. The plan's open question (provider) was not answered; Cloudflare Turnstile was the recommendation and is what is built. Same topic and branch as the earlier login-protection work (`ccr-4505e72d-hwaq92`), which is already on `main`.
+
+What changed:
+- `LoginCaptchaSettings` (global `AppSetting`, site key + secret key encrypted, on/off switch) and the super-admin page **Settings → Login Security** (`LoginSecuritySettings`). The secret is never sent back to the browser; a blank field keeps the saved key; switching on needs both keys.
+- `TurnstileVerifier`: Cloudflare `siteverify`; anything but a clean `success: true` (error answer, timeout, unreachable, over-long or empty token, not configured) means "not solved", so the challenge stays a plain wait.
+- `LoginGate`: at its two `CHALLENGE` conditions a solved token clears the challenge (checked at most once per attempt); `THROTTLE` (device wait, hash budget) and `DENY` (bot) are never lifted by a CAPTCHA. `LoginClient` carries the token (`cf-turnstile-response` / `captcha_token`).
+- UI: storefront login form (widget only after a challenge, via a flashed `captcha_required`), the admin / reseller / investor Filament sign-in pages (shared `HasLoginCaptcha` trait + `login-captcha` view), and the Next.js API (`429 captcha_required` + `captcha.site_key`; unchanged `too_many_attempts` when no CAPTCHA is set up).
+- Docs: `docs/login-protection.md` (setup steps, limits), `docs/api/storefront-api.md` §6.
+- Tests: `LoginCaptchaTest` (20), mutation-checked (a never-solving gate, an always-accepting verifier and an always-asking challenge each fail 3-8 tests). Also run end to end in headless Chromium against a scratch SQLite database (not the demo database) and Cloudflare's always-pass test keys: normal admin and storefront login pages have no widget; after a challenge the widget renders, its token reaches the Livewire component / form, and the sign-in succeeds; no console errors.
+
+Decisions made on the owner's behalf: Turnstile as the provider; the CAPTCHA never overrides `DENY` (a person denied as a "bot" waits out the 10-minute window or uses a one-time code where the sign-in has one); one global key pair for every sign-in page (the widget's allowed hostnames are set in Cloudflare).
+
+What the owner must do before it does anything: create a Turnstile widget at dash.cloudflare.com → Turnstile (add every sign-in domain, Managed mode), then paste the keys in Settings → Login Security and switch it on. Until then nothing changes (a challenge is a wait). Not tested against a real (non-test) Turnstile widget or a real attack.
+
+For the website repo (`zamzamint-new-website-theme`, not touched): on `429 captcha_required` show the Turnstile widget with `captcha.site_key`, then resend the sign-in with the response token as `captcha_token`. Until it does, those visitors see its generic error during an attack.
+
+Environment note: the headless browser needed the agent proxy for Cloudflare (`--proxy-server`) and a mapped hostname that bypasses it for the local app; scratch files lived only in the session scratchpad and `storage/framework` (gitignored), not in the commit.
+
+Needs Bangla review (16 keys, written by the agent): "Please complete the security check below to sign in." (সাইন ইন করতে নিচের নিরাপত্তা যাচাইটি সম্পূর্ণ করুন।), "Login Security", "Security check (CAPTCHA)", "Switch the security check on", "Cloudflare Turnstile keys", "Site key", "Secret key", the two "Enter the Turnstile … key to switch the security check on." messages, "Login security settings saved", and the longer help texts on the page.
+
+Verified: plain `php artisan test` (no `--env`) on PHP 8.4: 2600 passed, 2 skipped, 0 failed (25205 assertions); `LoginCaptchaTest` 20 passed; `LoginGateTest`, `StorefrontCustomerAuthTest`, `StorefrontApiAccountTest`, `ResellerPortalAccountTest`, `InvestorPortalTest` pass unchanged; `TranslationParityTest` passes; Pint clean on the changed files. No demo data touched (the browser check used a scratch SQLite file in the session scratchpad).
+
+Commit status: committed and pushed to `ccr-4505e72d-hwaq92`; merged into `main` on the owner's approval (2026-10-21).
+
+## 2026-10-18 - Login protection: sign-ins are judged before the password hash (bcrypt)
+
+Trigger: the owner shared a post about distributed credential-stuffing (50,000 guesses a minute from 30,000 IPs: no per-IP limit and no per-account lockout fires, but every guess costs a full bcrypt) and asked whether our login checks the request before bcrypt. The answer was "partly" (a per-identifier lockout and a per-IP throttle only); this is the fix, agreed as a plan (phases A and B) in the conversation. Phase C (CAPTCHA) is not done.
+
+What changed:
+- `App\Services\LoginGate` + `LoginClient`, `LoginAttempt`, `LoginThrottled`, `config/login_protection.php`: per device, per account, per client fingerprint and whole-surface counters (cache), a device-trust token (signed cookie / API `device_token`, bound to the password hash), a global budget of password hashes for unknown devices, fail-open through `ModuleGuard` (`module:login-gate`).
+- Wired into `CustomerAccountService::attemptLogin()` (Blade storefront, reseller portal, Next.js API), `InvestorPortalAccountService::attemptPasswordLogin()` and a new `App\Filament\Auth\AdminLogin` (admin panel `->login()`).
+- Fixed on the way: phone spellings (`+880…` / `880…` / `01…`) shared no lockout counter on the Blade and reseller paths; the counter was not per company; an unknown account skipped the hash (timing leak); the reseller login showed no usable message when locked; the investor login wrote one audit row per refused guess.
+- Docs: `docs/login-protection.md` (new), `docs/api/storefront-api.md` §6 (`device_token`, `challenge`, send `client_ip` + `client_user_agent`).
+- Tests: `LoginGateTest` (19: spellings, per-company counters, owner not locked out by a stranger, no hash for a refused attempt, bot denial and its office-network exception, trusted device, password change ends trust, token binding, hash budget, site-wide attack, fail-open, gate off, Blade cookie, Next.js API, investor, reseller, admin). Mutation-checked: breaking the phone normalisation, the dummy hash or the trusted-device bypass makes the matching tests fail.
+
+Decisions made on the owner's behalf (defaults, all changeable by environment variable): device 5 wrong/minute; account 20 wrong in 15 minutes; fingerprint 30 wrong and no success in 10 minutes; site 300 wrong/minute; 600 hashes/minute for unknown devices; trust 90 days. The plan's three open questions (thresholds, CAPTCHA provider, whether to do the CAPTCHA now) were not answered before work started: thresholds use the proposed defaults, and the CAPTCHA was left for a separate step.
+
+Known limits (also in the doc): until the CAPTCHA exists a *challenge* is a wait, so while an account is under attack its owner on a NEW device waits (owner on a trusted device is unaffected; this is still better than the old rule, where five wrong tries a minute from anyone locked everybody out). Counters need `CACHE_STORE=redis` to be shared between workers. TLS (JA3/JA4) fingerprints can only come from the proxy in front of PHP; the gate uses browser string + language + network block. Device trust is issued after password sign-ins only. Filament's own `rateLimit(5)` per IP on the staff login stays on top.
+
+For the website repo (`zamzamint-new-website-theme`, not touched): keep `data.device_token` from `POST /account/login` in an httpOnly cookie and send it back as `device_token`; always forward `client_ip` and `client_user_agent` on sign-in. It works unchanged without this.
+
+Needs Bangla review: "অনেকবার লগইনের চেষ্টা করা হয়েছে। অনুগ্রহ করে :seconds সেকেন্ড পরে আবার চেষ্টা করুন।" (key "Too many login attempts. Please try again in :seconds seconds.", written by the agent).
+
+Environment note for whoever reads this later: the container had PHP 8.3 and the project needs 8.4, so PHP 8.4 was installed from the ondrej/php PPA for this session only; `npm run build` was run so the page tests can render (`public/build` is gitignored). Neither is part of the commit.
+
+Verified: plain `php artisan test` (no `--env`) on PHP 8.4: 2567 passed, 2 skipped, 0 failed (24856 assertions); `LoginGateTest` 19 passed; the existing sign-in tests (`StorefrontCustomerAuthTest`, `StorefrontApiAccountTest`, `ResellerPortalAccountTest`, `InvestorPortalTest`) pass unchanged; `TranslationParityTest` passes; Pint clean. No real SMS or CAPTCHA involved; no demo data touched.
+
+Merge with `main` (v2.85.0): `main` had moved on with the SMS Templates work, which also adds a constructor argument (`SmsTemplateService`) to `CustomerAccountService` and `InvestorPortalAccountService`. Both arguments are kept (`LoginGate` after it), so tests that build the service by hand must use `app()->make(..., ['loginGate' => $gate])`, not positional arguments. The two language-file additions and the changelog sections were merged by hand (main had already cut its `[Unreleased]` into 2.84.0 / 2.85.0; this entry stays under `[Unreleased]`). Re-verified on the merged tree: see the status line.
+
+Commit status: committed on `ccr-4505e72d-hwaq92`, then merged into `main` on the owner's explicit approval (2026-10-18, "main এ merge করে দাও") after the full suite was green on the merged tree.
+
+## 2026-10-17 (night) - SMS Templates: order status, OTP, password reset and investor project messages
+
+Owner request (Bangla): add an SMS order-status template, an OTP template and a password-reset template, and make the space to write the investors' project-status message templates.
+
+What changed:
+
+- New admin page **Settings → SMS Templates** (`SmsTemplates`, three tabs: Order status / OTP & password reset / Investor projects). Table `sms_templates` (company, key, body); `SmsTemplateService` lists every message with its placeholders and built-in wording. A template is plain text with `:placeholders`, the same style as the older "Project completed message".
+- **Order status** (new sending): `OrderStatusTransition::created` calls `OrderStatusSmsService`, which queues `SendOrderStatusSmsJob` only when the company has written a message for that stage. Stage names are the order workflow stages, mapped with `StorefrontMetaTrackingService::statusEventStage()`. Not sent for imported past orders, reseller store orders, customers with no phone, or opted-out numbers. One SMS per status change (cache guard against a retried job).
+- **OTP / password reset**: customer sign-up, login and reset codes (`CustomerAccountService`) and investor login and reset codes (`InvestorPortalAccountService::sendCode()`) now use the company's wording when written, else the same built-in text as before. A message without `:code` cannot be saved.
+- **Investor project status**: messages for Project started, Project completed and Profit settled. Completed (group): the existing event listener, now through `InvestorProjectMessageService`; it also announces the next project as started. Projects outside a group: `InvestmentProject::updated` (status to running or closed). Profit settled: `SettlementService::confirmSettlement()`, with `:profit` and `:payout` from the investor's settlement payout row.
+- The old "Project completed message" box on Investor Portal Settings is gone; the migration copies any saved text into the new table (`investor_project.closed`). The column `companies.investor_project_completed_message` stays unused.
+- Everything is off until the owner writes it: order and project messages send nothing while empty, code messages keep their old wording while empty. Deploying this changes no SMS by itself.
+
+Decisions made without asking (tell me if wrong): reseller store orders are not texted (the buyer is the reseller's customer); opted-out numbers are skipped for order and project messages (not for codes); a template is one text per message, in the language the owner writes it (no separate Bangla copy yet); "Profit settled" goes out when the settlement is **confirmed**, not when it is first calculated (draft) or when the payout is paid.
+
+Checked: new `SmsTemplatesTest` (11), `ProjectCompletedMessageTest` (10), new case in `InvestorPortalTest`, `TranslationParityTest`, `MultiCompanyIsolationTest`, customer and reseller OTP tests; Pint clean. No live data touched, no real SMS sent. Full plain `php artisan test`: 2,562 passed, 1 skipped, 0 failed.
+
+Needs Bangla review: all 32 new keys in `lang/bn.json` (the template names, placeholder descriptions and the three tab descriptions).
+
+Commit status: not committed yet; branch `feature/sms-message-templates`, waiting for the owner's approval.
+
+## 2026-10-17 (evening) - Imported orders of zero-stock products: no stock popup, product name shown
+
+Owner question (Bangla): how will the orders of products whose stock is 0 show? Answer: the Orders list and the order page show them normally (the imported line keeps the product name and the Nuport price; stock stays 0 and never goes below, because an import takes no stock). Checking it found two problems on the Edit order page, fixed here:
+
+- Saving an imported Completed/Confirmed/Processing order whose product has stock 0 showed the "Not enough stock" popup and offered "Add stock and save order" (stock that never existed). `HandlesStockShortages::haltWhenStockIsShort()` now skips saved orders that are `isHistoricalImport()`, like WooCommerce orders.
+- The product box on the Edit page lists active products only, so a line whose product is inactive (what "Create missing products" creates) showed an empty name. `OrderForm` now also lists the product the line already has.
+
+Checked: the new test fails without either fix and passes with both; saving an imported order and moving it Confirmed to Completed creates no stock movement and stock stays 0. No new strings, no live data touched.
+
+Not changed (reachable only by hand): an imported order cannot move from a non-stock status to a stock status (the workflow table has no such step), so `OrderStatusWorkflowService::ensureStockFor()` needed no change.
+
+Verification: `php artisan test --filter=NuportOrderImportTest` 23 passed; full plain `php artisan test`: 2,549 passed, 1 skipped, 0 failed; Pint clean.
+
+Commit status: committed on branch `feature/nuport-sku-map` and pushed to main with the owner's approval (2026-10-17).
+
+## 2026-10-17 (later) - Nuport import: SKU mapping and "Create missing products"
+
+Owner request (Bangla): match the Nuport order products' SKUs to the ERP products' SKUs so no order is missed.
+
+Finding: the live ERP (read from the logged-in browser pane, nothing changed) has 35 products and 84 variant SKUs. Of the 91 distinct SKUs in the Nuport export, 79 match exactly; 12 do not. Without any fix 343 of 1,275 importable orders are skipped (ZMGLPN 188, ZMGRRLPWB-OLD 86, ZMGRRLP 49, ZMGWRP 26, ZMGLRLP 15, ZMGLPNK 5, ZMGSMS 2, ZMGLPS-1 1, Courier Poly, Bubble Poly). The 3 "-R" return invoices (SO-0443-R, SO-0444-R, SO-0445-R: quantity 0, sales 0) carry no sale and stay skipped.
+
+What changed (`NuportOrderImportService`, `ListOrders`, `ImportNuportOrders`, lang, tests):
+
+- **SKU mapping**: textarea in the import dialog (and `--map=<file>`), one `NUPORT-SKU = ERP-SKU` per line; wins over a direct match; ERP SKU must exist as a variant or product SKU, else the line is ignored and listed. Remembered per company in `app_settings` (`nuport_import_sku_map_<company id>`).
+- **Create missing products** toggle (and `--create-missing`), off by default: creates the product inactive, stock 0, cost price 0, selling price = last non-zero unit price in the file; SKU-less lines get `NUPORT-<NAME>`. Preview lists them. A second run creates nothing twice.
+- 9 new keys in `lang/en.json` + `lang/bn.json`.
+
+Checked on the real file against the live SKU list (in-memory test DB with a throwaway product per live SKU, nothing on live): no fix 929 new orders; mapping `ZMGRRLPWB-OLD = ZMGRRLPWB` and `ZMGLPN = ZMGLPNW` 1,178; mapping + create missing 1,272 (8 products to create, 0 errors, only the 65 test/fake and 3 return invoices skipped); create missing only 1,272 (10 products).
+
+Open points for the owner:
+
+- The two mappings above were my reading; the owner confirmed both (2026-10-17): `ZMGRRLPWB-OLD` is the Black box at 420 (the ERP's `ZMGRRLPWB` variant of `ZMGRRLPW`); `ZMGLPN` has the same Nuport name "Love Pearl Necklace" as the ERP's `ZMGLPNW` but sold at 950/450/380 against 200-240. (The line keeps its own Nuport unit price either way.)
+- Created products have cost price 0, so the imported lines show no cost and profit looks too high for them. Give each product its real cost; old lines keep 0.
+- Created products do not touch stock or the website (inactive, stock 0).
+
+Needs Bangla review: all 9 new keys.
+
+Verification: `php artisan test --filter=NuportOrderImportTest` 22 passed; full plain `php artisan test`: 2,548 passed, 1 skipped, 0 failed; Pint clean. No live data was written.
+
+Commit status: committed on branch `feature/nuport-sku-map` (cut from origin/main v2.82.0) and pushed to main with the owner's approval (2026-10-17).
+
+## 2026-10-17 - Import Nuport orders (customer purchases, payment, status)
+
+Owner request: the wholesale team sells through Nuport (app.nuport.io); only customers had been brought over. They asked how to bring in what each customer bought, the payment and the status. I downloaded the real export from Nuport (owner said yes: 1,340 invoices, 2,311 lines, SO-0001 21 Aug 2025 to SO-1309 15 Oct 2026) and built the import from it.
+
+Why a CSV import and not a live sync first: Nuport's webhook (23 events, none switched on) sends status changes only for new events, with no paid amount (only "Payment Due" / "Payment Collected"), and its REST API has one-order-by-invoice lookup but no list-all-orders call. Docs: nuport.readme.io. The webhook receiver is the planned second step (see Not done).
+
+Owner decisions applied (2026-10-17, "go with the assumptions above"):
+
+- Cancelled orders with reason "Test Order" or "Fake Order" are skipped (65 in the export); the other cancelled orders come in as Cancelled with no payment (5 of them had a payment in Nuport; it is not copied).
+- Status map: Delivered = Completed (Payment Due keeps its due), Approved = Confirmed, In-Transit and Processing = Processing, Flagged (returned and pending return) = Returned, Cancelled = Cancelled. Any other status is skipped and listed, never guessed.
+- Payments are history only: `account_id` NULL, so no account ledger row and no account balance moves.
+- The 66 orders still open in Nuport (Approved, In-Transit, Processing) also do not touch stock: the PDF stock entered on 2026-10-16 is the physical stock.
+
+What changed:
+
+- New `app/Services/NuportOrderImportService.php`; `Order::SOURCE_NUPORT_IMPORT` + `isHistoricalImport()`; `OrderWorkflowService::sync()`, `OrderNotificationObserver` and the `saved` fraud-check hook skip imported orders; header action **Import Nuport orders** on the Orders list (`ListOrders`, preview first, "Preview only" on by default); command `php artisan orders:import-nuport {file} {company-slug} [--apply]`; 29 new keys in `lang/en.json` + `lang/bn.json`; `tests/Feature/NuportOrderImportTest.php` (17 tests).
+- Rules: invoice = `order_number` = `external_reference`; customers matched by phone in any spelling, a new phone creates a customer (`regular`); lines at list price, discount = line total minus Sales Amount, shipping fee = Delivery Fee, so ERP total = Sales Amount + Delivery Fee; one account-less payment per order mirroring the paid amount; order skipped whole if a product is not found by SKU (variant SKU, then product SKU, then exact name for a line with no SKU).
+- Re-running a file (or a newer export) finds orders by invoice and refreshes only status, delivery status, delivery fee, discount and payment; lines, notes and customer are left alone.
+
+Checked on the real file (in-memory test database, never the live or demo DB, with a throwaway product per SKU): preview 0.4 s; import 20 s; 1,272 orders created (Completed 1,029, Confirmed 53, Processing 13, Returned 80, Cancelled 97), 893 payments, 711 customers; skipped 65 test/fake cancelled + 3 return invoices with quantity 0 (SO-0443-R, SO-0444-R, SO-0445-R); 0 errors; second run created 0 and changed 0. Sales, paid and per-status counts match the CSV; customer balances add up to the imported due of the accounted orders (6,609,815); stock movements, ledger rows and fraud checks created: 0.
+
+Open points for the owner:
+
+- **Before the real import:** the live ERP's product SKUs were not checked (the dashboard login in the browser pane had expired and passwords are not entered by the agent). Run the preview on the live Orders page first; any product it lists as "not found" (the export has retired SKUs such as `ZMGRRLPWB-OLD`, `ZMGRRLPW-DUP-…-DELETED`, and lines named Courier Poly / Bubble Poly with no SKU) must exist before those orders can come in.
+- **Opening balance:** if the customers brought over earlier already carry their Nuport due as an opening balance, importing the orders counts that due twice. The preview shows how many matched customers have an opening balance; check those before saving.
+- Nuport's screen shows 1,346 orders but the export has 1,340 (I exported with the default filters and no date range); the 6 missing were not looked for. Compare the live order count after the import.
+- 32 invoices have totals that disagree with their own lines in Nuport (edited by hand there); the file's Sales Amount, Delivery Fee and Paid are used and these invoices are listed in the preview.
+- Customer Tag (NEW / REGULAR / VIP), order source (WhatsApp, Website…), Steadfast status text and the Nuport "Entry By" are not imported as fields; the consignment ID and cancel reason are in the order note.
+
+Not done: the webhook receiver for new orders and status changes (needs a signed endpoint, `whsec_` secret as an admin setting; payment amount would need the per-invoice API call); the six variant products' per-colour stock from the 2026-10-16 PDF is still waiting for the owner's colour split.
+
+Needs Bangla review: all 29 new keys, in particular ":count customers already have an opening balance. Check it so their dues are not counted twice.", ":status: :orders orders, sales :sales, paid :paid, due :due", "Totals do not match the lines on :count orders (the file totals are used): :list".
+
+Verification: `php artisan test --filter=NuportOrderImportTest` 17 passed (138 assertions); Pint clean. The full suite on the working tree (before moving to main) had 8 online-payment failures from unrelated uncommitted PayStation work; the main-based copy was re-checked, see the result in the commit report.
+
+Commit status: committed on main (cherry-picked from d6a09df7 onto v2.81.1, without the AI inbox branch). Pushed with the owner's approval.
+
 ## 2026-10-16 - Investor portal SMS code: wording and 1-minute expiry
 
 Owner instruction (in Bangla): investor OTP SMS should read "Tasneem investment portal + [reason] + OTP code" and expire in 1 minute; later "commit, push, and push to main".
@@ -1112,6 +1923,74 @@ Verification:
 - Full `php artisan test` (plain, no `--env`): 2017 passed, 1 skipped, 0 failed. `npm run build` passes. Pint passes on the changed PHP files (`bootstrap/app.php` and one line in `LowStockProducts.php` were already failing Pint before this change and were left as they were).
 
 Commit status: committed and pushed to `ccr-59b8ca5b-4zc27z`, then to `main` once the branch's MySQL migrations check passed (owner approved 2026-10-09: "হ্যাঁ, কমিট করে পুশ করো এবং মেইন এ পুশ কর").
+
+## 2026-10-09 - AI inbox control plane, phase 1: AI or team, return to AI, activity log, neat replies
+
+Built from `16_AI_INBOX_CONTROL_PLANE_PLAN.md` after a read-only walk through AiPraktor's dashboard, home page and help page (119 answers). Owner instruction: "aipraktor এর মত করে বিল্ড কর" — so the AiPraktor behaviour is the rule: takeover time 6 hours by default (owner can change it), timer choices 30 min / 1 hour / 6 hours / no limit, return to the AI on its own when the time is up, "." from the page inbox switches the chat, AI hands over with a reason from a fixed list.
+
+- Inbox: "AI or team" panel replaces the AI on/off switch (Take over, timer, Back to AI, Claim; shows return time and handover reason).
+- AI handover records a reason and goes through `ConversationModeService`; optional customer notice ("বিষয়টা আমাদের একজন প্রতিনিধি এখনই দেখছেন, একটু অপেক্ষা করুন।"), off by default because the existing tests and earlier design said a handover sends nothing.
+- Staff reply / page-inbox reply: team keeps the chat for the takeover time (was a fixed 24 hours).
+- `crm:revert-conversations` every minute; CRM → AI / Team Activity page with CSV.
+- Settings: takeover minutes, wait before answering, handover notice, neat replies, address style.
+- Neat replies (opt-in) follow AiPraktor's reply layout: labelled lines for price, options in stock, stock, delivery, order link; optional "জ্বি স্যার," opening.
+- Phase 2 (same day, owner: "ওকে পরের কাজ কর"): CRM → Needs attention page (`attention_items`, `AttentionQueueService`, `NeedsAttention`) — one record per AI handover with first-reply time and outcome (answered / given back to the AI / never answered / closed without a reply); setting "Reply target for handed-over chats", default 0 = no target. Only AI handovers go in the queue for now (O3); payment proof, website leads and follow-up events are not added — they need the owner's list. The reply target number (O2) is the owner's to set; business hours are not applied.
+
+- Phase 3 (owner: "পরবর্তি কাজ কর"): CRM → AI Inbox Report (`AiInboxReportService`, `AiInboxReport` page).
+  - It shows the share of chats the AI handled alone, AI and team replies, handovers, takeovers and auto-returns.
+  - It shows average and median first reply, late share, never answered, waiting now, handover reasons, and a by-channel table.
+  - Nothing is stored; the numbers are worked out when the page opens. "Handled by the AI alone" means a chat with customer messages in the period and no switch to the team in the period.
+
+- Phase 4 (owner: "ধাপ ৪ শুরু কর"): CRM → Agent Desk (`AgentDesk`, `AiInstructionService`, `AiInstructionVersion`) and CRM → Unanswered questions (`UnansweredQuestions`).
+  - **Decision O6 not asked yet:** editing, publishing and testing need `canManageSettings()`, the same people who can already change these texts on Integrations. No new permission was added.
+  - **Plan changed on purpose:** the plan listed five blocks (about, delivery, voice, exact words, other). The agent never writes free text. The server renders every customer-visible fact from the catalog, FAQ and delivery tools, so a "delivery" or "exact words" box would have no effect. The Agent Desk has three boxes instead: about (new), voice and guidelines (the two existing settings). Facts like delivery time or warranty belong in FAQ answers, and the Unanswered questions page makes that quick.
+  - Migration `2026_10_10_000100_create_ai_instruction_versions_table` also adds `crm_ai_runs.is_test` and makes `crm_ai_runs.conversation_id` nullable (test runs have no conversation). Not yet run on the demo database.
+  - Plain-language change requests ("make the fee 25,000") are not built, as the plan said.
+  - Needs Bangla review: 55 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to `feature/ai-inbox-control-plane` (owner approved: "ওকে কমিট এবং পুশ কর"). Not merged to `main`. The migration has not been run on the demo DB.
+
+- Phase 5 (owner: "পরের ধাপের কাজ শুরু কর"): CRM → Knowledge base (`KnowledgeDocumentResource`, `KnowledgeBaseService`, `KnowledgeDocument`) and the AI tool `lookup_knowledge`.
+  - Documents are plain text or Markdown. Headings split them into passages of up to 700 characters. The agent looks passages up and selects `knowledge:<id>`; the server sends the stored passage as written (same rule as FAQ answers). Amounts written in a looked-up passage count as grounded. The tool is offered only when the company has an active document.
+  - **Plan changed on purpose:** search runs in PHP over the cached passages instead of MySQL FULLTEXT, because InnoDB's tokenizer breaks Bangla words at vowel signs. Matching drops a trailing "s" and, for words of 5+ characters, the last two characters (the Bangla ending ের), and needs at least half of the question's words to match. Embeddings are not built (the plan said only if quality proves insufficient).
+  - Who can edit: `crm.manage` (same as Broadcasts), because the text is sent to customers as written. Not asked of the owner.
+  - **Known limit (resolved 2026-10-19, see phase 6):** a customer message with a hand-over word used to go to the team before the FAQ or the knowledge base was checked.
+  - Test box: **Test a question** on the Knowledge base list runs the same search (no AI call). Unanswered questions has a new **Add to knowledge base** action. File import accepts .md/.txt up to 200 KB.
+  - Migration `2026_10_11_000100_create_knowledge_documents_table`. Not run on the demo DB.
+  - Needs Bangla review: 17 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+- Phase 8, checklist part (owner: "ওকে এখন পরবর্তি কাজ কর"): CRM → Setup checklist (`AiSetupChecklist`, `AiSetupChecklistService`). Phases 6 and 7 and the go-live switch need owner answers (O4, O5, O7, O8, O9), so only the part that needs no decision was built.
+  - Eight steps, all worked out from data, nothing stored (no "dismissed" state either): channel, AI key + switch on, business description (`business_about`), every active product has a photo, default courier has delivery charges, at least one FAQ or knowledge document, the signed-in user has a push device, a test chat run exists.
+  - Not built: the practice mode / go-live switch (`ai_live`, O7), so there is no "go live" step yet. The "alerts" step is per user, not per company.
+  - Needs Bangla review: 23 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+
+- Owner answers (2026-10-19, asked with `AskUserQuestion`): O2 = 30 minutes, all hours; O3 = add payment proof, website lead, call and booking requests, complaint words; O4 = reminders at 1, 6, 24, 48 hours then weekly for 4 weeks, nothing 22:00–08:00, only for customers who got a link or quotation and have not ordered, counted from the customer's last message; O4a = Messenger steps after 24 hours go to the Needs attention list; O5 = Messenger broadcast allowed, test to own chat first, CRM manage people send; O6 = same permission as Integrations; **O7 = no practice mode** (AI on = live); O8 = parcel count + total COD, per-parcel list, consignment/tracking number, no rider block; O9 = all four sources (days not answered); returns words look in saved answers first. Full table: plan §3.1.
+- Phase 6 (owner: "প্রশ্ন করে জেনে নাও" — then built from the answers above): the hand-over rules, follow-up schedule and Messenger broadcast.
+  - **Hand-over rules** (`AiReplyService::keywordHandover()`): returns/refund words look in FAQ and knowledge first; payment, call, booking and wider complaint wording go to the team with their own reason. An image-only payment screenshot is recognised only when the separate image model describes photos (Auto Messaging → image model); with the main model reading the photo directly, only the customer's caption is checked. New Needs attention kinds and reasons; website leads open an item (`attention_items.lead_id`).
+  - **Follow-ups:** my reading of "weekly" is 7 days after the previous reminder, i.e. hours 216, 384, 552, 720 from the base message. The schedule restarts from the customer's newest message (the first reminder still ahead, not an old one), a person's reply cancels it, a newer offer replaces it. Links expire after 7 days but reminders go on for 30: the weekly WhatsApp template does not carry the link; Messenger text with `{link}` only goes inside the 24-hour window, when the link is still valid. Companies with Messenger need to enter the reminder text on Integrations; until then those reminders go to the team.
+  - **Broadcast:** window is 23 hours (one hour margin). The test goes to a chat the sender picks; it must be a chat with the Page inside the window, so the sender writes to the Page from their phone first. "Who may send" = `crm.manage`, the permission the Broadcasts resource already needs; no new permission.
+  - **Not run on the demo DB:** migrations `2026_10_19_000100`, `000200`, `000300` (phase 6) and `000400` (phase 7).
+  - Needs Bangla review: 35 new keys in `lang/bn.json` (O3 5, O4 11, O5 19).
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+- Phase 7 (same day): Courier → Scan parcels, Courier → Handover sheet, CRM → To chase.
+  - **Not built, on purpose:** the invoice QR (the invoice already prints a scannable Code 128 barcode of the order number) and the **Offer tapped** source of To chase (nothing records who tapped an offer, so there is nobody to contact). **Checkout attempt** is read as "checkout stopped at the advance payment", because `StorefrontCheckoutAttempt` keeps only masked contacts.
+  - **Owner decision still needed:** look-back days for To chase were not answered; it offers 7 / 14 / 30, default 7. Scan parcels moves to a stage the user picks (default Shipping); stages that need a reason (cancelled, returned, refunded) are not offered.
+  - Camera scanning uses the browser's `BarcodeDetector` (Chrome/Edge on Android and desktop); it was not tried on a real device. The USB-scanner path (type + Enter) is covered by tests.
+  - Needs Bangla review: 44 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane (owner approved 2026-10-19). Not merged to main.
+- Phase 9 (2026-10-20, owner: "Meta Seen আর টাইপিং ইন্ডিকেটর, প্রোডাক্ট কার্ড / carousel, Practice mode সহ কর। এই কাজ গুলো শেষ কর।"): the three things left in the plan.
+  - **Practice mode reverses the 2026-10-19 answer O7 ("no practice mode") on the owner's new instruction.** `ai_live` is a per-company setting with no default on purpose: when nothing was saved it equals `enabled`, so every company already running stays live and the existing tests did not change. Only the Integrations form saves it explicitly (its switch starts off for a company that never turned the AI on). While not live, `AiReplyService::maybeReply()` writes a `skipped` run and answers only chats with `conversations.is_staff_test`; `SalesFollowUpService::process()` leaves reminders `pending`. Staff mark a chat from the Inbox header (**Use as test chat**); **Go live** / **Back to practice mode** are on the Setup checklist (ninth step **Go live**) and the switch is on Integrations → Auto Messaging.
+  - **Seen and typing** (`ConversationPresenceService`, setting `typing_indicator_enabled`, default on): sent just before each model round, never for an instant FAQ answer or a keyword handover. Messenger: `mark_seen` once per message, `typing_on` renewed at most every 12 s, `typing_off` when the AI hands over. WhatsApp: one call that marks the message read and shows typing. Failures are swallowed on purpose and are not recorded as a channel fault.
+  - **Product cards** (`ProductCardService`, setting `product_cards_enabled`, default off): only Messenger; up to 10 cards from the products behind the reply keys; price and stock come from the records; button = the order link in the answer, else the product page on the company's `domain`; no card for a product without a photo. A failed row is only logged and leaves no failed bubble. Not shown in the Agent Desk test chat.
+  - Not done / limits: the Messenger "Seen" is not sent when a person opens a chat in the Inbox (only when the AI works on a message). Meta's typing sign lasts about 20 s on Messenger and 25 s on WhatsApp, so a very slow model answer can show a gap. Practice mode and cards were tested with faked Meta calls only; nothing was tried against a real Page or number. Migration `2026_10_20_000100` was not run on the demo DB.
+  - Needs Bangla review: 18 new keys in `lang/bn.json`.
+  - Commit status: committed and pushed to branch feature/ai-inbox-control-plane, then merged into main (owner approved commit, push and merge to main on 2026-10-20).
+
+Not done yet (next phases of the plan): nothing. Plan 16 is built.
+
+Needs Bangla review: the new Inbox/Activity/settings strings in `lang/bn.json` (51 keys) the Needs attention strings (19 keys) and the AI Inbox Report strings (26 keys) were written by the agent.
+
+Commit status: committed and pushed on branch `feature/ai-inbox-control-plane` (owner approved 2026-10-10: "কমিট এবং পুশ কর ফিচার ব্রাঞ্ছে"). Phases 1-3 are in this one commit. Not merged to `main`; the 8 PayStation/Storefront checkout tests that fail on this working tree belong to other uncommitted work, not to this branch.
 
 ## 2026-10-09 - Lead CRM sales agent: 5 opt-in intelligence upgrades (proactive mode, objection handling, multi-product cart, cross-sell, personalization)
 
@@ -2877,6 +3756,16 @@ Needs Bangla review (new `lang/bn.json` values):
 
 Commit status: committed and pushed to `main`.
 
+## 2026-10-15 - Customers: address in the Customer box + address column in the list
+
+Reason — after importing the customer list, the owner asked: "কাস্টমার এড্রেস কে কাস্টমার বক্সে বসাও এবং কাস্টমার লিস্টেও কাস্টমার এড্রেস কলাম থাকবে wrapped হবে" (put the address in the Customer box, and add a wrapped Customer Address column to the list).
+
+What changed: `CustomerInfolist` shows the address inside the Customer section (full width, label "Customer Address"). `CustomersTable` has a new searchable Customer Address column that wraps (max 3 lines). New key "Customer Address" in `lang/en.json` and `lang/bn.json`.
+
+Needs Bangla review: "Customer Address" → "কাস্টমারের ঠিকানা".
+
+Commit status: Committed and pushed to `claude/order-management-features-nafks7` and `main` (owner approved: "কমিট করে পুশ কর").
+
 ## 2026-09-27 - CI: GitHub Actions on Node.js 24
 
 Reason — the owner saw "Node.js 20 is deprecated" and "setup-java v4 is deprecated" warnings on CI run #159 and approved the fix: "হ্যাঁ, ঠিক করে মেইন এ পুশ কর" (yes, fix it and push to main). These were only warnings: the run succeeded and the APK was built. The workflow file had not been changed by the previous push.
@@ -4089,6 +4978,67 @@ Verification:
 - Full `php artisan test` (plain, no `--env` flag, per CLAUDE.md): **1053 passed, 0 failed**.
 
 Commit status: Not committed yet — awaiting owner approval.
+
+## 2026-09-04 - Fix: "Add shipment plan" never created a shipment
+
+Reason — owner reported (Bengali): "add shipment plan এ ক্রিয়েট করলে লিস্ট তৈরি হয় না। কয়েকবার চেষ্টা করেছি কিন্তু কাজ হচ্ছে না।" (Creating via "add shipment plan" doesn't create the list entry — tried several times, doesn't work).
+
+Diagnosis: reproduced directly against the model (`$purchase->shipments()->create([...])`, the exact call `HasMany::create()`/Filament's `CreateAction` makes under the hood) — it threw `ValidationException: Purchase must belong to the same company.` on every attempt, even with nothing but the required tracking number filled in. Root cause in `app/Models/Shipment.php`'s `booted()`: the own-company consistency check (`$shipment->container?->company_id !== $shipment->company_id` / same for `purchase`) runs on the `saving` event. For a brand-new Eloquent model, `Model::save()`/`performInsert()` fires `saving` *before* `creating` — and it's `BelongsToCompany`'s `creating` hook that actually assigns `$model->company_id`. So at the point this check ran, `$shipment->company_id` was still null on every single creation, `(int) null` is `0`, and the real (non-zero) purchase/container company_id could never equal `0` — the check failed unconditionally, regardless of what the form actually contained. This is why the owner's repeated attempts all silently did nothing: the row was never inserted, Filament just kept showing the validation error.
+
+What changed:
+
+- `app/Models/Company.php` — new `resolveActiveCompanyId(): ?int`, factoring out the exact company-resolution logic `BelongsToCompany`'s `creating` hook already used (active `CompanyContext` company, else `defaultCompanyId()`), so another model's own validation can know what company_id a new record is about to get before that hook has actually run.
+- `app/Models/Shipment.php` (`booted()`) — the `saving` check now compares against `$shipment->company_id ?: Company::resolveActiveCompanyId()` instead of the possibly-still-blank `$shipment->company_id` directly. Cross-company rejection (a container or purchase genuinely belonging to a different company) still works exactly as before — confirmed by reverting the fix and re-running the new tests, which then fail with the same `ValidationException` the owner hit.
+
+Important changed files:
+
+- `app/Models/Shipment.php`, `app/Models/Company.php`
+- `tests/Feature/ShipmentTest.php` — new file: `test_a_shipment_plan_can_be_created_for_a_draft_purchase`, `test_a_shipment_plan_with_a_container_can_be_created`, `test_shipment_creation_is_still_rejected_for_a_container_from_another_company`, `test_shipment_creation_is_still_rejected_for_a_purchase_from_another_company`.
+
+Verification:
+
+- Targeted run — `ShipmentTest`: **4 passed**. Confirmed the fix is real by temporarily reverting `Shipment.php`/`Company.php` (`git stash`) and re-running: the two creation tests failed with the exact same `ValidationException` message the owner reported, then passed again once restored.
+- `MultiCompanyIsolationTest`, `PurchaseTest`, `PurchaseDocumentTest`, `ShipmentTest` together: **25 passed** (confirms the reused `resolveActiveCompanyId()` logic doesn't disturb existing company-scoping behavior).
+- Full `php artisan test` (plain, no `--env` flag, per CLAUDE.md): **1050 passed, 0 failed**.
+- No frontend assets touched — `npm run build` not required for this change.
+
+Commit status: Committed and pushed (`419d983`, owner approved: "হ্যাঁ কর শুধু এই সেশনের কাজ করবে").
+
+## 2026-09-03 - Feature: Purchase module automation — auto-generated PI/CI/Packing List
+
+Reason — owner asked (Bengali): "আমাদের পারচেস মডিউলটি অটোমেট করা যায় কীভাবে? আমি জাস্ট purchase info দিবো বাকি সব অটো ফিলাপ হয়ে যাবে। ci, pi, pl formate অনুযায়ী অটো জেনারেট হয়ে যাবে এবং সেগুলো প্রিন্টেবল হবে।" (How can we automate the Purchase module — I just give purchase info and the rest auto-fills; CI/PI/PL should auto-generate per format and be printable). Per CLAUDE.md ("never invent business rules"), asked the owner for the real format instead of guessing one; they uploaded their three actual Excel templates currently used with suppliers/bank (`MAMUN__PI.xlsx`, `Comarcial_Invoice.xlsx`, `Air_Fryer_PACKING_LISTF.xlsx`), inspected cell-by-cell with openpyxl. Wrote a plan (`EnterPlanMode`/`ExitPlanMode`) covering the field mapping, data model, and workflow before implementing; owner approved it.
+
+What changed:
+
+- Five additive migrations (`2026_09_03_09000{0..4}_*.php`) — new nullable fields: `companies` (bin/irc/tin number, signatory name/title/signature image), `suppliers` (country, fax, bank name/address/account name/account number/SWIFT/extra note, signature image), `products` (hs_code), `purchases` (pl_number, pl_date, delivery_terms, country_of_origin, port_of_loading, port_of_discharge, payment_method_summary, terms_conditions, pl_certification_note, freight_usd, exchange_rate), `purchase_items` (hs_code, spec_note, fob_unit_price_usd, net_weight_kg, gross_weight_kg). None of this touches the existing BDT landed-cost columns/engine — the new USD/trade fields are additive and purely for the printed documents.
+- `app/Models/{Company,Supplier,Product,Purchase,PurchaseItem}.php` — new fillable/cast columns; `Purchase` gains `fobTotalUsd()`, `cfrTotalUsd()`, `totalQuantity()`, `netWeightTotalKg()`, `grossWeightTotalKg()`, `cfrAmountInWords()`/`fobAmountInWords()`, `hasShippingDetailsForDocuments()`, `termsConditionsText()`/`paymentTermsText()`/`plCertificationNoteText()` (the last three fall back to a company-wide default from Company Settings when the purchase's own field is blank).
+- `app/Support/NumberToWords.php` (new) — plain English number-to-words, used for the PI "In Word" / CI "SAY USD ... ONLY" lines.
+- `app/Services/CompanySettingsService.php` — new `purchaseDocuments()`/`savePurchaseDocuments()` pair (mirrors the existing `invoice()`/`saveInvoice()`) storing the three documents' default boilerplate text in `companies.settings->purchase_documents`; new `documentImagePath()` (DomPDF-safe path resolver, reused for signature images).
+- `app/Services/PurchaseWorkflowService.php` — new `ensureDocumentNumber(Purchase, string $type)`: fills `{pi,ci,pl}_number`/`_date` from the purchase number only when blank, never overwrites an existing/manually-entered value.
+- `app/Http/Controllers/Admin/PurchaseDocumentController.php` (new) + `routes/web.php` (`purchases.documents`) — mirrors `OrderPdfController`'s single-action-controller pattern; streams (not downloads) one of `resources/views/purchases/documents/{pi,ci,pl}.blade.php` (new, laid out to match the owner's three real templates) so it opens as a print-preview in a new tab.
+- `app/Filament/Resources/Purchases/Support/PurchaseDocumentActions.php` (new) — the "Generate PI/CI/PL" action, wired into `ViewPurchase`/`EditPurchase` header actions and a `PurchasesTable` row action group. Per the owner's earlier decision (Q&A this session): PI is generatable once the purchase has a supplier + items; CI/PL unlock once Delivery Terms, Port of Loading, and Port of Discharge are filled in — no document is ever silently auto-created, each needs an explicit click, and a warning notification explains what's missing instead of opening a broken PDF.
+- `app/Filament/Resources/Purchases/Schemas/PurchaseForm.php` — new "Trade Documents" section (delivery terms, country of origin, ports, payment method, freight USD, exchange rate, terms/certification text) and new item-repeater columns (HS Code, spec note, FOB price USD, net/gross weight); picking a product now also defaults the item's HS Code from the product.
+- `app/Filament/Resources/Suppliers/Schemas/SupplierForm.php` — new "Trade & Banking Details" section (country, fax, bank fields, signature upload, `CompanyMedia` pattern).
+- `app/Filament/Resources/Companies/CompanyResource.php` — new "Import/Export Registration" section (BIN/IRC/TIN, signatory name/title, signature upload).
+- `app/Filament/Resources/Products/Schemas/ProductForm.php` — new HS Code field.
+- `app/Filament/Pages/CompanySettings.php` — new "Purchase Documents" section for the three admin-editable default texts.
+
+Important changed files:
+
+- `app/Http/Controllers/Admin/PurchaseDocumentController.php`, `app/Filament/Resources/Purchases/Support/PurchaseDocumentActions.php`, `app/Support/NumberToWords.php` (new)
+- `resources/views/purchases/documents/{pi,ci,pl}.blade.php`, `resources/views/purchases/documents/partials/styles.blade.php` (new)
+- `app/Models/Purchase.php`, `app/Services/PurchaseWorkflowService.php`, `app/Services/CompanySettingsService.php`
+- `routes/web.php` — new `purchases.documents` route (intentionally has no `whereIn` type constraint; the controller's own `abort_unless` gives a clean, predictable 404 for a bad `{type}` instead of letting the request silently fall through to some unrelated catch-all route)
+- `tests/Feature/PurchaseDocumentTest.php` (new) — PDF routes for all 3 document types, invalid-type 404, permission-denied 403, `ensureDocumentNumber()` fill/no-overwrite behavior, FOB/CFR/weight totals.
+
+Verification:
+
+- Targeted run — `PurchaseDocumentTest`: **6 passed**. `PurchaseTest`: **8 passed** (existing suite unaffected). `MultiCompanyIsolationTest`, `CompanySettingsTest`: **34 passed** (no new company-owned model, so `MultiCompanyIsolationTest`'s hardcoded model list needed no change). `SupplierCsvTest`, `ProductCsvTest`, `ProductStockCsvTest`, `ProductVariantTest`, and 5 other Product-related suites: **45 passed** (confirms the new `hs_code`/trade columns don't break CSV import/export or variant handling).
+- Full `php artisan test` (plain, no `--env` flag, per CLAUDE.md): **1046 passed, 0 failed**.
+- `npm run build`: succeeded (Vite build, no errors).
+- Debugged one real routing bug along the way (not a pre-existing issue): the route's `{purchase}` implicit binding failed for a test-created company because `SetCurrentCompany` middleware re-resolves the active company from session on every HTTP request, independent of any in-process `CompanyContext::set()` — fixed by having the test set session explicitly (matching `InvoiceDesignTest`'s existing convention) and by dropping the route-level `whereIn('type', ...)` constraint in favor of the controller's own `abort_unless()` check, so a mismatched `{type}` can't silently fall through to some other route.
+
+Commit status: Committed and pushed (`f040348`, owner approved: "হ্যাঁ, কমিট আর পুশ করে দাও").
 
 ## 2026-08-30 - Fix: WooCommerce orders that oversell ERP stock never synced
 

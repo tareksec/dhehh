@@ -196,9 +196,13 @@ class OrderForm
 
                         Select::make('courier_provider_id')
                             ->label('Courier')
-                            ->options(fn (): array => CourierProvider::query()
+                            // The order's own courier stays listed when it is switched off
+                            // (such as the courier an imported Nuport parcel was made with),
+                            // or saving the order would fail on "The selected courier is invalid".
+                            ->options(fn (?Order $record): array => CourierProvider::query()
                                 ->where('company_id', app(CompanyContext::class)->id())
-                                ->where('is_active', true)
+                                ->where(fn ($providers) => $providers->where('is_active', true)
+                                    ->when($record?->courier_provider_id, fn ($providers, $providerId) => $providers->orWhere('id', $providerId)))
                                 ->orderBy('name')
                                 ->get()
                                 ->mapWithKeys(fn (CourierProvider $provider): array => [
@@ -235,7 +239,15 @@ class OrderForm
                             ->schema([
                                 Select::make('product_id')
                                     ->label('Product')
-                                    ->relationship('product', 'name', fn ($query) => $query->where('is_active', true))
+                                    // Active products only, except the one this line already
+                                    // has: an old order's product may have been switched off
+                                    // (a Nuport import creates its missing products inactive),
+                                    // and its name must still show on the edit page.
+                                    ->relationship('product', 'name', fn ($query, ?OrderItem $record) => $query->where(
+                                        fn ($products) => $products
+                                            ->where('is_active', true)
+                                            ->when($record?->product_id, fn ($products, $productId) => $products->orWhere($products->getModel()->getQualifiedKeyName(), $productId)),
+                                    ))
                                     ->searchable()
                                     ->live()
                                     ->required()

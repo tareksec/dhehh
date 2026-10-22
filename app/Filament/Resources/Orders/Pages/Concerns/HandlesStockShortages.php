@@ -46,6 +46,13 @@ trait HandlesStockShortages
             return;
         }
 
+        // A Nuport import is history that never took stock (see
+        // OrderWorkflowService::sync()), so its lines are not "short" and the
+        // popup must not offer to add stock for it.
+        if ($this->isEditingSavedOrder() && $this->record->isHistoricalImport()) {
+            return;
+        }
+
         if ($this->stockShortages() === []) {
             return;
         }

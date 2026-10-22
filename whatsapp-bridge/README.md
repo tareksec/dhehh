@@ -48,7 +48,24 @@ docker run -d --restart unless-stopped -p 3100:3100 \
 | `DATA_DIR`       | `./data` | Credentials + outbox. **Must be persistent** or every redeploy needs a new QR scan. |
 | `PORT`           | `3100`   | HTTP port.                                                      |
 | `MAX_MEDIA_MB`   | `64`     | Larger attachments are archived as messages without the file.   |
+| `BRIDGE_BROWSER` | `ubuntu:Desktop` | Device identity shown in WhatsApp's Linked devices, as `<system>:<browser>` (systems: `ubuntu`, `macos`, `windows`, `baileys`). Change it and restart; it applies the next time a QR code is scanned. See below. |
 | `LOG_LEVEL`      | `info`   | pino log level.                                                 |
+
+**Device identity (`BRIDGE_BROWSER`).** The default `ubuntu:Desktop` asks the
+phone for the full chat history. WhatsApp closes "Desktop" logins that claim
+to be Mac OS or Windows right after the handshake (checked 2026-10-19: no QR
+code, error 428 "Connection Terminated"), so do not use `macos:Desktop` or
+`windows:Desktop`. If the phone says "Couldn't link device", try
+`ubuntu:Chrome` or `baileys:Desktop`; with a non-Desktop identity the phone may
+share only the recent chats instead of the whole history. `GET /health` shows
+the identity in use.
+
+**Why a connection fails.** Every time the WhatsApp connection closes, the
+bridge logs `connection closed` with the code and reason, and the ERP page
+shows the last error under the status. Codes: 401 logged out from the phone,
+403 banned, 408 QR not scanned in time, 428 WhatsApp closed the connection,
+440 replaced by another login with the same credentials, 515 restart needed
+(normal right after scanning).
 
 Run **one** bridge instance per data folder. The bridge must be able to reach
 the ERP's public URL (`APP_URL`), and the ERP must be able to reach the bridge.

@@ -1,5 +1,4 @@
 import makeWASocket, {
-  Browsers,
   BufferJSON,
   DisconnectReason,
   downloadMediaMessage,
@@ -9,7 +8,7 @@ import makeWASocket, {
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import QRCode from 'qrcode'
-import { chunk, isPersonalChat, normalizeContact, normalizeMessage, phoneFromJid } from './normalize.js'
+import { chunk, isPersonalChat, lidPairsFromMessages, normalizeContact, normalizeMessage, phoneFromJid, splitLiveMessages } from './normalize.js'
 import { Outbox, classifyResponse, sign } from './outbox.js'
 
 const MESSAGE_BATCH = 200
@@ -25,8 +24,9 @@ const REPORTED_STATUSES = ['qr', 'qr_expired', 'connected', 'logged_out', 'banne
  * messages, which keeps the linked number's ban risk as low as possible.
  */
 export class Session {
-  constructor ({ id, dataDir, logger, maxMediaBytes }) {
+  constructor ({ id, dataDir, logger, maxMediaBytes, browser }) {
     this.id = id
+    this.browser = browser
     this.dir = path.join(dataDir, id)
     this.logger = logger.child({ session: id })
     this.maxMediaBytes = maxMediaBytes
@@ -37,6 +37,7 @@ export class Session {
     this.phone = null
     this.name = null
     this.lastError = null
+    this.lastErrorCode = null
     this.historyProgress = null
     this.lidToPhone = new Map()
     this.stopping = false
@@ -52,6 +53,7 @@ export class Session {
       logger: this.logger,
       deliver: (entry) => this.uploadMedia(entry),
       maxAttempts: 8,
+      independent: true,
     })
   }
 
@@ -84,6 +86,7 @@ export class Session {
       name: this.name,
       history_progress: this.historyProgress,
       last_error: this.lastError,
+      last_error_code: this.lastErrorCode,
     }
   }
 
@@ -110,9 +113,10 @@ export class Session {
       auth: state,
       version,
       logger: this.logger.child({ module: 'baileys' }, { level: 'warn' }),
-      // A "Desktop" browser identity plus accepting every history sync type
-      // is what makes WhatsApp send the FULL chat history, not just ~3 months.
-      browser: Browsers.macOS('Desktop'),
+      // A "Desktop" identity plus accepting every history sync type is what
+      // makes WhatsApp send the FULL chat history, not just ~3 months. The
+      // identity comes from BRIDGE_BROWSER (see browser.js).
+      browser: this.browser,
       syncFullHistory: true,
       shouldSyncHistoryMessage: () => true,
       markOnlineOnConnect: false,
@@ -125,7 +129,17 @@ export class Session {
     sock.ev.on('connection.update', (update) => this.onConnectionUpdate(sock, update))
     sock.ev.on('lid-mapping.update', (mapping) => this.rememberLid(mapping?.lid, mapping?.pn))
     sock.ev.on('messaging-history.set', (data) => this.guard(() => this.onHistory(data)))
-    sock.ev.on('messages.upsert', ({ messages, type }) => this.guard(() => this.archiveMessages(messages, type !== 'notify')))
+    sock.ev.on('messages.upsert', ({ messages, type }) => this.guard(async () => {
+      const { live, old } = splitLiveMessages(messages, type)
+
+      if (live.length > 0) {
+        await this.archiveMessages(live, false)
+      }
+
+      if (old.length > 0) {
+        await this.archiveMessages(old, true)
+      }
+    }))
     sock.ev.on('contacts.upsert', (contacts) => this.guard(() => this.archiveContacts(contacts)))
     sock.ev.on('contacts.update', (contacts) => this.guard(() => this.archiveContacts(contacts)))
   }
@@ -159,6 +173,7 @@ export class Session {
     if (update.connection === 'open') {
       this.qr = null
       this.lastError = null
+      this.lastErrorCode = null
       this.phone = phoneFromJid(sock.user?.id?.replace(/:\d+@/, '@')) ?? this.phone
       this.name = sock.user?.name ?? sock.user?.verifiedName ?? this.name
       this.setStatus('connected')
@@ -167,6 +182,8 @@ export class Session {
     if (update.connection === 'close') {
       const code = update.lastDisconnect?.error?.output?.statusCode
       this.lastError = update.lastDisconnect?.error?.message ?? null
+      this.lastErrorCode = code ?? null
+      this.logger.warn({ code, reason: this.lastError, status: this.status }, 'connection closed')
       this.closeSocket()
 
       if (this.stopping) {
@@ -266,9 +283,15 @@ export class Session {
     }
   }
 
+  /** Learns LID -> phone pairs from message keys, before any contact is normalized. */
+  learnLids (messages) {
+    lidPairsFromMessages(messages).forEach(([lid, pn]) => this.rememberLid(lid, pn))
+  }
+
   async onHistory ({ contacts = [], messages = [], lidPnMappings = [], progress, isLatest }) {
     lidPnMappings.forEach((mapping) => this.rememberLid(mapping?.lid, mapping?.pn))
     contacts.forEach((contact) => this.rememberLid(contact.lid ?? (contact.id?.endsWith('@lid') ? contact.id : null), contact.phoneNumber))
+    this.learnLids(messages)
 
     await this.archiveContacts(contacts)
     await this.archiveMessages(messages, true)
@@ -279,6 +302,10 @@ export class Session {
   }
 
   async archiveContacts (contacts) {
+    // Push names and address-book names are keyed by LID; ask WhatsApp for the
+    // phone behind every LID we still do not know, so the name finds its chat.
+    await this.resolveLids([...new Set(contacts.flatMap((contact) => [contact?.id, contact?.lid]).filter((jid) => typeof jid === 'string' && jid.endsWith('@lid')))])
+
     const normalized = contacts.map((contact) => normalizeContact(contact, this.lidToPhone)).filter(Boolean)
 
     for (const batch of chunk(normalized, CONTACT_BATCH)) {
@@ -287,6 +314,7 @@ export class Session {
   }
 
   async archiveMessages (messages, history) {
+    this.learnLids(messages)
     await this.resolveLids([...new Set(messages.map((msg) => msg?.key?.remoteJid).filter((jid) => isPersonalChat(jid) && !msgAlt(messages, jid)))])
 
     const normalized = []

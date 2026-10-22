@@ -40,6 +40,7 @@ return Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping()
             ->onOneServer();
         $schedule->command('crm:process-sales-follow-ups')->everyFiveMinutes()->withoutOverlapping()->onOneServer();
+        $schedule->command('crm:revert-conversations')->everyMinute()->withoutOverlapping()->onOneServer();
         $schedule->command('storefront:retry-meta-events')
             ->everyTenMinutes()
             ->withoutOverlapping()
@@ -57,6 +58,13 @@ return Application::configure(basePath: dirname(__DIR__))
             ->hourly()
             ->withoutOverlapping()
             ->onOneServer();
+        // IMS v2 (IMS-V2/TRD.md §6): each loops the companies with IMS on, can be
+        // switched off in IMS settings, and never sends the same thing twice.
+        $schedule->command('ims:profit-proposals')->dailyAt('07:00')->withoutOverlapping()->onOneServer();
+        $schedule->command('ims:maturity-reminders')->dailyAt('08:00')->withoutOverlapping()->onOneServer();
+        $schedule->command('ims:owner-digest')->dailyAt('08:05')->withoutOverlapping()->onOneServer();
+        $schedule->command('ims:monthly-statements')->monthlyOn(1, '09:00')->withoutOverlapping()->onOneServer();
+        $schedule->command('ims:shipment-delays')->hourly()->withoutOverlapping()->onOneServer();
         $schedule->command('release:notify-deploy')
             ->everyFiveMinutes()
             ->withoutOverlapping()
@@ -70,6 +78,12 @@ return Application::configure(basePath: dirname(__DIR__))
             at: env('TRUSTED_PROXIES', '*'),
             headers: SymfonyRequest::HEADER_X_FORWARDED_TRAEFIK,
         );
+        // Every plain `auth` route (order print, report exports, the legacy
+        // /admin/* redirects) is an admin page. Laravel's default sends a guest
+        // to route('login'), a name this app never defines -- Filament names it
+        // filament.admin.auth.login -- so a logged-out visit to a bookmarked
+        // /admin/users threw "Route [login] not defined" instead of showing sign-in.
+        $middleware->redirectGuestsTo(fn () => route('filament.admin.auth.login'));
         $middleware->validateCsrfTokens(except: ['webhooks/couriers/*', 'webhooks/zinipay/*', 'webhooks/woocommerce/*', 'webhooks/meta', 'webhooks/whatsapp-web/*', 'webhooks/mobile-crash-reports']);
         // Must run before anything else in the group: on a reseller-portal
         // host it redirects every non-portal path to the portal, and on any
@@ -96,7 +110,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // server's real .env is wrong. Admin panel, Livewire, and API/webhook
         // requests are left completely alone — Filament and Laravel's own
         // JSON error handling for those must not be touched.
-        $exceptions->render(function (\Throwable $e, Request $request) {
+        $exceptions->render(function (Throwable $e, Request $request) {
             // A crashed admin / portal page: "this part has a problem, the rest
             // keeps working" with links back, instead of the bare 500 page.
             if (PanelErrorPages::appliesTo($request, $e)) {

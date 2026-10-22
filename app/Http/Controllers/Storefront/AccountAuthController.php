@@ -8,9 +8,11 @@ use App\Models\Customer;
 use App\Models\StorefrontCustomerActivity;
 use App\Services\CompanyContext;
 use App\Services\CustomerAccountService;
+use App\Services\LoginGate;
 use App\Services\StorefrontCustomerActivityService;
 use App\Services\StorefrontMetaTrackingService;
 use App\Services\StorefrontNotificationService;
+use App\Support\LoginThrottled;
 use App\Support\StorefrontThemeRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -168,7 +170,17 @@ class AccountAuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $customer = $this->accounts->attemptLogin($data['identifier'], $data['password']);
+        try {
+            $customer = $this->accounts->attemptLogin($data['identifier'], $data['password']);
+        } catch (LoginThrottled $exception) {
+            // An unknown device while the account or the site is under attack:
+            // the login form shows the CAPTCHA on the page it is sent back to.
+            if ($exception->captcha) {
+                session()->flash('captcha_required', true);
+            }
+
+            throw $exception;
+        }
 
         if (! $customer) {
             throw ValidationException::withMessages([
@@ -178,6 +190,9 @@ class AccountAuthController extends Controller
 
         Auth::guard('customer')->login($customer, $request->boolean('remember'));
         $request->session()->regenerate();
+
+        // This browser is now a device the account has signed in from.
+        app(LoginGate::class)->rememberDevice(LoginGate::SURFACE_CUSTOMER, app(CompanyContext::class)->id(), $customer);
 
         $this->activities->record(
             $customer,

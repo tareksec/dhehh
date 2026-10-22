@@ -73,6 +73,7 @@ class CompanySettings extends Page
             'date_format' => $profile['date_format'],
             'invoice_prefix' => $profile['invoice_prefix'],
             'invoice' => $settings->invoice($company),
+            'purchase_documents' => $settings->purchaseDocuments($company),
             'shipping' => [
                 'inside' => $profile['shipping_zones']['inside'] ?? [],
                 'outside' => $profile['shipping_zones']['outside'] ?? [],
@@ -217,6 +218,25 @@ class CompanySettings extends Page
                     ])
                     ->columns(2),
 
+                Section::make(__('Purchase Documents'))
+                    ->description(__('Default wording for the Purchase module\'s printed PI / CI / Packing List. A purchase can override these per document; when left blank there, these company-wide defaults print instead.'))
+                    ->schema([
+                        Textarea::make('purchase_documents.pi_payment_terms')
+                            ->label(__('PI — Payment Terms'))
+                            ->rows(3)
+                            ->columnSpanFull(),
+                        Textarea::make('purchase_documents.ci_terms_conditions')
+                            ->label(__('CI — Terms & Conditions'))
+                            ->rows(5)
+                            ->columnSpanFull(),
+                        Textarea::make('purchase_documents.pl_certification_note')
+                            ->label(__('Packing List — Certification Note'))
+                            ->helperText(__('Supports {country_of_origin}, {pi_number}, and {pi_date} placeholders, filled in from each purchase.'))
+                            ->rows(4)
+                            ->columnSpanFull(),
+                    ])
+                    ->columns(1),
+
                 Section::make('Shipping Zones')
                     ->description('Select the districts/areas used to match company-specific delivery fees. A customer address is matched against the selected names.')
                     ->schema([
@@ -252,6 +272,7 @@ class CompanySettings extends Page
             ],
         ], $company);
         $settings->saveInvoice((array) ($state['invoice'] ?? []), $company);
+        $settings->savePurchaseDocuments((array) ($state['purchase_documents'] ?? []), $company);
 
         Notification::make()
             ->title('Company settings saved')

@@ -5,6 +5,7 @@ namespace App\Filament\Investor\Pages;
 use App\Filament\Investor\Concerns\InvestorPortalPage;
 use App\Services\AuditLogService;
 use App\Services\InvestorPortalAccountService;
+use App\Support\ImsPassword;
 use BackedEnum;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\TextInput;
@@ -16,7 +17,6 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -107,7 +107,7 @@ class Profile extends Page
                             ->revealable()
                             ->autocomplete('new-password')
                             ->required()
-                            ->rule(Password::default())
+                            ->rule(ImsPassword::rule())
                             ->same('passwordConfirmation'),
                         TextInput::make('passwordConfirmation')
                             ->label(__('Confirm new password'))

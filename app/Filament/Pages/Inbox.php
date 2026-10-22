@@ -13,7 +13,9 @@ use App\Models\CrmAiRun;
 use App\Models\Product;
 use App\Models\QuickReply;
 use App\Services\CompanyContext;
+use App\Services\Crm\AiSettingsService;
 use App\Services\Crm\ConversationMessengerService;
+use App\Services\Crm\ConversationModeService;
 use App\Support\CompanyMedia;
 use App\Support\MoneyFormatter;
 use BackedEnum;
@@ -72,6 +74,12 @@ class Inbox extends Page
 
     /** Conversations shown before the "Load more conversations" action expands the list. */
     public int $conversationsPerPage = 30;
+
+    /** What the last poll saw (newest message time, newest message in the open chat); a different value means something new arrived. */
+    public ?string $inboxSignature = null;
+
+    /** microtime of the last full refresh; the list is also refreshed at least every 30 seconds for changes made by other staff. */
+    public ?float $lastFullRefreshAt = null;
 
     /** microtime of the last markHumanPresent() write — the poll renews the window at most once every 10 seconds. */
     public ?float $humanPresentMarkedAt = null;
@@ -160,6 +168,23 @@ class Inbox extends Page
                     $this->composerMode = 'reply';
                     $run->update(['status' => 'reviewed']);
                 }),
+            // Practice mode: the AI answers only chats marked as test chats until it goes live.
+            Action::make('markTestChat')
+                ->label(fn (): string => $this->selectedChatIsTest() ? __('Remove test mark') : __('Use as test chat'))
+                ->icon(Heroicon::OutlinedBeaker)
+                ->color('gray')
+                ->tooltip(__('Practice mode: the AI answers only test chats until you go live. Mark the chat you use to try the AI.'))
+                ->visible(fn () => $this->canManageConversations && $this->selectedConversationId !== null && ($this->selectedChatIsTest() || ! $this->aiIsLive()))
+                ->action(function (): void {
+                    $this->authorizeInboxManagement();
+                    $conversation = Conversation::query()->find($this->selectedConversationId);
+                    if (! $conversation) {
+                        return;
+                    }
+                    $conversation->forceFill(['is_staff_test' => ! $conversation->is_staff_test])->save();
+                    $this->forgetInboxComputedProperties();
+                    Notification::make()->title($conversation->is_staff_test ? __('This chat is a test chat. The AI will answer it.') : __('The test mark is removed.'))->success()->send();
+                }),
             ActionGroup::make($channelActions)
                 ->label(function () use ($channels): string {
                     if ($this->channelId === null) {
@@ -186,6 +211,19 @@ class Inbox extends Page
                     'class' => 'zz-inbox-channel-selector',
                 ]),
         ];
+    }
+
+    protected function selectedChatIsTest(): bool
+    {
+        return $this->selectedConversationId !== null
+            && (bool) Conversation::query()->whereKey($this->selectedConversationId)->value('is_staff_test');
+    }
+
+    protected function aiIsLive(): bool
+    {
+        $company = app(CompanyContext::class)->company();
+
+        return $company === null || app(AiSettingsService::class)->isLive($company);
     }
 
     public function getCanManageConversationsProperty(): bool
@@ -497,6 +535,47 @@ class Inbox extends Page
         $this->dispatch('inbox-list-focused');
     }
 
+    /**
+     * Polled every few seconds while the page is visible. It only asks the
+     * database whether anything new arrived; the page is re-rendered when it
+     * did (and at least every 30 seconds), so a new WhatsApp message appears
+     * within seconds without loading the server on every tick.
+     */
+    public function checkForChanges(): void
+    {
+        $this->markHumanPresentThrottled();
+
+        $signature = $this->inboxChangeSignature();
+        $fullRefreshDue = $this->lastFullRefreshAt === null || (microtime(true) - $this->lastFullRefreshAt) >= 30;
+
+        if ($signature === $this->inboxSignature && ! $fullRefreshDue) {
+            $this->skipRender();
+
+            return;
+        }
+
+        $this->inboxSignature = $signature;
+        $this->lastFullRefreshAt = microtime(true);
+        $this->refreshInbox();
+    }
+
+    protected function inboxChangeSignature(): string
+    {
+        $parts = [
+            (string) Conversation::query()->max('last_message_at'),
+            (string) Conversation::query()->max('id'),
+        ];
+
+        if ($this->selectedConversationId) {
+            $thread = ConversationMessage::query()->where('conversation_id', $this->selectedConversationId);
+
+            $parts[] = (string) (clone $thread)->max('id');
+            $parts[] = (string) (clone $thread)->max('updated_at');
+        }
+
+        return implode('|', $parts);
+    }
+
     public function refreshInbox(): void
     {
         $this->selectedConversation?->markRead();
@@ -583,19 +662,60 @@ class Inbox extends Page
         $this->deselectConversation();
     }
 
+    /** Switch: AI chat -> team with no time limit; team chat -> back to the AI. */
     public function toggleAi(): void
+    {
+        $conversation = $this->selectedConversation;
+
+        $conversation?->isHumanMode() ? $this->backToAi() : $this->takeOver(null, true);
+    }
+
+    /**
+     * Take the chat for the team. $minutes null = the company's takeover
+     * time; only the Inbox timer choices are accepted.
+     */
+    public function takeOver(?int $minutes = null, bool $permanent = false): void
     {
         $this->authorizeInboxManagement();
         $conversation = $this->selectedConversation;
 
-        if ($conversation) {
-            $enabled = ! $conversation->ai_enabled;
-            $conversation->update([
-                'ai_enabled' => $enabled,
-                ...($enabled ? ['human_handled_until' => null, 'status' => 'open'] : []),
-            ]);
-            $this->forgetInboxComputedProperties();
+        if (! $conversation) {
+            return;
         }
+
+        $minutes = in_array($minutes, [30, 60, 360], true) ? $minutes : null;
+        app(ConversationModeService::class)->toHuman($conversation, 'dashboard', auth()->user(), $minutes, $permanent);
+        $this->forgetInboxComputedProperties();
+    }
+
+    public function backToAi(): void
+    {
+        $this->authorizeInboxManagement();
+        $conversation = $this->selectedConversation;
+
+        if (! $conversation) {
+            return;
+        }
+
+        app(ConversationModeService::class)->toAi($conversation, 'dashboard', auth()->user());
+        $this->forgetInboxComputedProperties();
+    }
+
+    /** "I'll handle this one": assign the chat to me and keep it with the team. */
+    public function claimConversation(): void
+    {
+        $this->authorizeInboxManagement();
+        $conversation = $this->selectedConversation;
+
+        if (! $conversation) {
+            return;
+        }
+
+        $conversation->forceFill(['assigned_to' => auth()->id()])->saveQuietly();
+        if (! $conversation->isHumanMode()) {
+            app(ConversationModeService::class)->toHuman($conversation, 'dashboard', auth()->user());
+        }
+        $this->forgetInboxComputedProperties();
     }
 
     public function sendReply(): void

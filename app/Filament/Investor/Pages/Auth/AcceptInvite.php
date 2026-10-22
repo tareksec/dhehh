@@ -4,6 +4,7 @@ namespace App\Filament\Investor\Pages\Auth;
 
 use App\Models\InvestorPortalAccount;
 use App\Services\InvestorPortalAccountService;
+use App\Support\ImsPassword;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use DanHarrin\LivewireRateLimiting\WithRateLimiting;
 use Filament\Actions\Action;
@@ -18,7 +19,6 @@ use Filament\Schemas\Components\Form;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
-use Illuminate\Validation\Rules\Password;
 use Livewire\Attributes\Locked;
 use SensitiveParameter;
 
@@ -84,7 +84,7 @@ class AcceptInvite extends SimplePage
                 ->autocomplete('new-password')
                 ->revealable(filament()->arePasswordsRevealable())
                 ->required()
-                ->rule(Password::default())
+                ->rule(ImsPassword::rule())
                 ->same('passwordConfirmation'),
             TextInput::make('passwordConfirmation')
                 ->label(__('Confirm new password'))

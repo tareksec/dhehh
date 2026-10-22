@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\CompanyContext;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -67,6 +68,14 @@ class Company extends Model
         'investor_portal_enabled',
         'investor_portal_domain',
         'investor_project_completed_message',
+        'ims_enabled',
+        'ims_domain',
+        'bin_number',
+        'irc_number',
+        'tin_number',
+        'signatory_name',
+        'signatory_title',
+        'signature_path',
     ];
 
     protected $casts = [
@@ -76,6 +85,7 @@ class Company extends Model
         'reseller_subdomains_enabled' => 'boolean',
         'reseller_custom_domains_enabled' => 'boolean',
         'investor_portal_enabled' => 'boolean',
+        'ims_enabled' => 'boolean',
         'settings' => 'array',
     ];
 
@@ -101,6 +111,7 @@ class Company extends Model
             $company->domain = static::normalizeDomain($company->domain);
             $company->reseller_portal_domain = static::normalizeDomain($company->reseller_portal_domain);
             $company->investor_portal_domain = static::normalizeDomain($company->investor_portal_domain);
+            $company->ims_domain = static::normalizeDomain($company->ims_domain);
         });
 
         static::created(function (Company $company): void {
@@ -212,6 +223,11 @@ class Company extends Model
             return null;
         }
 
+        // IMS v2: the investor portal lives on the IMS domain once IMS is on.
+        if ($company = static::forImsHost($host)) {
+            return $company;
+        }
+
         $company = static::query()
             ->where('investor_portal_enabled', true)
             ->where('is_active', true)
@@ -234,9 +250,246 @@ class Company extends Model
             ->first();
     }
 
+    /**
+     * The company whose IMS v2 is on $host (IMS-V2/ARCHITECTURE.md §3): the
+     * exact ims_domain, with or without "www.", while IMS is switched on. There
+     * is no subdomain rule (owner, 2026-10-19: IMS has its own root domain).
+     */
+    public static function forImsHost(?string $host): ?self
+    {
+        $host = static::normalizeDomain($host);
+
+        if ($host === null || ! static::imsColumnsExist()) {
+            return null;
+        }
+
+        return static::query()
+            ->where('ims_enabled', true)
+            ->where('is_active', true)
+            ->where('ims_domain', $host)
+            ->first();
+    }
+
+    /**
+     * The company whose old investor-portal host this is, once its portal has
+     * moved to the IMS domain (IMS-V2/ARCHITECTURE.md §3): that host now only
+     * redirects to the IMS domain.
+     */
+    public static function forRetiredInvestorPortalHost(?string $host): ?self
+    {
+        $host = static::normalizeDomain($host);
+
+        if ($host === null || ! static::imsColumnsExist()) {
+            return null;
+        }
+
+        // Every company is on the group IMS domain (18_IMS_ALL_COMPANIES_PLAN.md §2), so any company's old portal host moves.
+        $company = static::query()->where('is_active', true)->where('investor_portal_domain', $host)->first();
+
+        if (! $company && str_starts_with($host, 'investor.')) {
+            $company = static::query()->where('is_active', true)->whereNull('investor_portal_domain')->where('domain', substr($host, strlen('investor.')))->first();
+        }
+
+        return $company?->imsIsLive() ? $company : null;
+    }
+
+    /**
+     * The company that carries the group's IMS domain (18_IMS_ALL_COMPANIES_PLAN.md
+     * §2): the active company with IMS switched on and a domain set; with more
+     * than one, the lowest id. Null while no company runs IMS.
+     */
+    public static function groupImsCompany(): ?self
+    {
+        if (! static::imsColumnsExist()) {
+            return null;
+        }
+
+        return static::query()
+            ->where('ims_enabled', true)
+            ->where('is_active', true)
+            ->whereNotNull('ims_domain')
+            ->where('ims_domain', '!=', '')
+            ->orderBy('id')
+            ->first();
+    }
+
+    /** AppSetting key of the one sign-in address for every business (17_IMS_IN_PORTAL_PLAN.md §5). */
+    public const IMS_CENTRAL_DOMAIN_SETTING = 'ims_central_domain';
+
+    /**
+     * The central investor sign-in host that is not tied to one company
+     * (17_IMS_IN_PORTAL_PLAN.md §5), set by a Super Admin in Investor Portal
+     * Settings; null while none is set.
+     */
+    public static function imsCentralHost(): ?string
+    {
+        if (! Schema::hasTable('app_settings')) {
+            return null;
+        }
+
+        return static::normalizeDomain((string) AppSetting::getValue(self::IMS_CENTRAL_DOMAIN_SETTING, ''));
+    }
+
+    /**
+     * Whether $host cannot be the central investor sign-in host because
+     * something already answers on it: a company domain, any portal host
+     * (custom or the "investor." / "reseller." default), an IMS domain, a
+     * Next.js storefront domain, or a reseller's own domain or store
+     * subdomain. Unlike hostIsTakenByThePlatform(), a new name under a
+     * company's own domain (for example "ims.<company domain>") is allowed.
+     */
+    public static function centralHostIsTaken(string $host): bool
+    {
+        $host = static::normalizeDomain($host) ?? '';
+
+        if ($host === '') {
+            return true;
+        }
+
+        if (static::query()->where('domain', $host)->orWhere('reseller_portal_domain', $host)->orWhere('investor_portal_domain', $host)
+            ->when(static::imsColumnsExist(), fn ($query) => $query->orWhere('ims_domain', $host))->exists()) {
+            return true;
+        }
+
+        if (StorefrontSetting::nextjsDomainTaken($host)
+            || static::forInvestorPortalHost($host)
+            || static::forResellerPortalHost($host)
+            || static::forRetiredInvestorPortalHost($host)
+            || static::forResellerCustomDomainHost($host)) {
+            return true;
+        }
+
+        $subdomain = static::forResellerSubdomainHost($host);
+
+        return $subdomain !== null && Customer::withoutGlobalScopes()
+            ->where('company_id', $subdomain[0]->getKey())
+            ->where('reseller_subdomain', $subdomain[1])
+            ->exists();
+    }
+
+    /** The store subdomain labels a reseller of this company may not take: the reserved ones and the central sign-in host's. */
+    public function reservedResellerSubdomains(): array
+    {
+        $reserved = self::RESERVED_RESELLER_SUBDOMAINS;
+        $central = static::imsCentralHost();
+
+        if ($central !== null && filled($this->domain) && str_ends_with($central, '.'.$this->domain)) {
+            $label = substr($central, 0, -strlen('.'.$this->domain));
+
+            if (! str_contains($label, '.')) {
+                $reserved[] = $label;
+            }
+        }
+
+        return $reserved;
+    }
+
+    /** Whether $host is the central investor sign-in host (with or without "www."). */
+    public static function isImsCentralHost(?string $host): bool
+    {
+        $central = static::imsCentralHost();
+        $host = static::normalizeDomain($host);
+
+        return $central !== null && $host !== null && $host === $central;
+    }
+
+    /** Whether this company has an IMS v2 domain of its own. */
+    public function ownsImsDomain(): bool
+    {
+        return (bool) $this->ims_enabled && filled($this->ims_domain) && (bool) $this->is_active;
+    }
+
+    /**
+     * The host this company's IMS runs on: its own IMS domain, else the group's
+     * (18_IMS_ALL_COMPANIES_PLAN.md §2: every active company uses the one IMS
+     * domain). Null while the company is inactive or no company runs IMS.
+     */
+    public function imsHost(): ?string
+    {
+        if (! $this->is_active) {
+            return null;
+        }
+
+        if ($this->ownsImsDomain()) {
+            return $this->ims_domain;
+        }
+
+        return static::groupImsCompany()?->ims_domain;
+    }
+
+    /** Whether this company runs IMS v2: on its own domain or on the group's. */
+    public function imsIsLive(): bool
+    {
+        return $this->imsHost() !== null;
+    }
+
+    /** An address on the IMS domain ("" = the investor portal's root), or null while IMS is off. */
+    public function imsUrl(string $path = ''): ?string
+    {
+        $host = $this->imsHost();
+
+        if ($host === null) {
+            return null;
+        }
+
+        return request()->getScheme().'://'.$host.($path === '' ? '' : '/'.ltrim($path, '/'));
+    }
+
+    /**
+     * A link to one of this company's own investor pages (invite, join,
+     * sign-up, staff link): on a shared IMS domain it says which company it is
+     * for (?business=<id>), so the page checks the token against that company
+     * (18_IMS_ALL_COMPANIES_PLAN.md §2). Null while the portal has no host.
+     */
+    public function investorLinkUrl(string $path): ?string
+    {
+        $url = $this->investorPortalUrl($path);
+
+        if ($url === null || $this->ownsImsDomain() || ! $this->imsIsLive()) {
+            return $url;
+        }
+
+        return $url.(str_contains($url, '?') ? '&' : '?').'business='.$this->getKey();
+    }
+
+    /** An office address that opens this company in the office (?office_company=<id>), or null while IMS is off. */
+    public function imsOfficeUrl(string $path = ''): ?string
+    {
+        $url = $this->imsUrl('office'.($path === '' ? '' : '/'.ltrim($path, '/')));
+
+        return $url === null ? null : $url.(str_contains($url, '?') ? '&' : '?').'office_company='.$this->getKey();
+    }
+
+    /** The investor portal is reachable: switched on itself, or carried by IMS v2. */
+    public function investorPortalIsOn(): bool
+    {
+        return (bool) $this->investor_portal_enabled || $this->imsIsLive();
+    }
+
+    protected static ?bool $imsColumnsExist = null;
+
+    protected static function imsColumnsExist(): bool
+    {
+        // The table is checked every time (as the other host lookups do); only the
+        // column check is remembered once it is true.
+        if (! Schema::hasTable('companies')) {
+            return false;
+        }
+
+        if (static::$imsColumnsExist !== true) {
+            static::$imsColumnsExist = Schema::hasColumn('companies', 'ims_domain');
+        }
+
+        return static::$imsColumnsExist;
+    }
+
     /** The host this company's investor portal opens on; the inverse of forInvestorPortalHost(). */
     public function investorPortalHost(): ?string
     {
+        if ($this->imsIsLive()) {
+            return $this->imsHost();
+        }
+
         if (! $this->investor_portal_enabled) {
             return null;
         }
@@ -277,7 +530,7 @@ class Company extends Model
     {
         $host = static::normalizeDomain($host);
 
-        if ($host === null || ! str_contains($host, '.') || ! Schema::hasTable('companies')) {
+        if ($host === null || ! str_contains($host, '.') || ! Schema::hasTable('companies') || static::isImsCentralHost($host)) {
             return null;
         }
 
@@ -341,11 +594,12 @@ class Company extends Model
     {
         $host = static::normalizeDomain($host) ?? '';
 
-        if ($host === '') {
+        if ($host === '' || static::isImsCentralHost($host)) {
             return true;
         }
 
-        if (static::query()->where('domain', $host)->orWhere('reseller_portal_domain', $host)->orWhere('investor_portal_domain', $host)->exists()) {
+        if (static::query()->where('domain', $host)->orWhere('reseller_portal_domain', $host)->orWhere('investor_portal_domain', $host)
+            ->when(static::imsColumnsExist(), fn ($query) => $query->orWhere('ims_domain', $host))->exists()) {
             return true;
         }
 
@@ -448,6 +702,25 @@ class Company extends Model
     public static function defaultCompanyId(): ?int
     {
         return static::defaultCompany()?->getKey();
+    }
+
+    /**
+     * The company_id a new company-owned model will end up with once
+     * `BelongsToCompany`'s `creating` hook runs: the active `CompanyContext`
+     * company, falling back to `defaultCompanyId()`. Exposed so a model's
+     * own `saving` hook (which fires *before* `creating` — see
+     * `Model::save()`/`performInsert()` — so `$model->company_id` is still
+     * blank there on a brand-new record) can validate against the
+     * company this record is actually about to get, instead of against a
+     * not-yet-set null.
+     */
+    public static function resolveActiveCompanyId(): ?int
+    {
+        if (app()->bound(CompanyContext::class) && app(CompanyContext::class)->hasCompany()) {
+            return app(CompanyContext::class)->id();
+        }
+
+        return static::defaultCompanyId();
     }
 
     public static function seedCoreCompanies(): void

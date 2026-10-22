@@ -29,7 +29,10 @@ class OrderWorkflowService
             ])->saveQuietly();
         }
 
-        if ($order->isAccounted()) {
+        if ($order->isHistoricalImport()) {
+            // A Nuport import is history: the current physical stock was
+            // entered after these sales, so replaying them would deduct twice.
+        } elseif ($order->isAccounted()) {
             $this->syncStockMovements($order, $items);
         } elseif (! $order->keepsStockOutUntilGoodsAreChecked()) {
             $this->deleteStockMovements($order);
@@ -105,7 +108,11 @@ class OrderWorkflowService
         // regardless of what this ledger currently shows — syncing it must
         // never fail the way a manually-entered ERP sale correctly would
         // when stock is insufficient (see StockMovementService::validate()).
-        $allowNegativeStock = $order->source === Order::SOURCE_WOOCOMMERCE;
+        //
+        // An open order brought in from Nuport is the same: its goods are on the
+        // shelf even if the stock count says otherwise, and the import lists
+        // every product that is short so the stock gets corrected.
+        $allowNegativeStock = in_array($order->source, [Order::SOURCE_WOOCOMMERCE, Order::SOURCE_NUPORT_OPEN], true);
 
         foreach ($grouped as $line) {
             $movement = StockMovement::query()->firstOrNew([

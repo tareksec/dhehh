@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Clusters\Crm;
+use App\Jobs\RefreshWhatsAppWebNamesJob;
 use App\Models\Company;
 use App\Models\ConversationChannel;
 use App\Models\ConversationMessage;
@@ -141,6 +142,20 @@ class WhatsAppWebLogin extends Page
         Notification::make()
             ->title(__('WhatsApp Web logged out'))
             ->body(__('All archived chats, messages and contacts are kept in the ERP.'))
+            ->success()
+            ->send();
+    }
+
+    /** Gives chats without a name the name WhatsApp shared for their contact (runs in the background). */
+    public function refreshNames(int $channelId): void
+    {
+        $channel = $this->findChannel($channelId);
+
+        RefreshWhatsAppWebNamesJob::dispatch($channel->getKey());
+
+        Notification::make()
+            ->title(__('Looking up missing names'))
+            ->body(__('Chats without a name get the name WhatsApp shares for that contact. This runs in the background and can take a few minutes.'))
             ->success()
             ->send();
     }

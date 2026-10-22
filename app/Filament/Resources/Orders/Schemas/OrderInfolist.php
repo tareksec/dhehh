@@ -49,6 +49,12 @@ class OrderInfolist
                         TextEntry::make('source')
                             ->badge()
                             ->formatStateUsing(fn (?string $state): string => Order::SOURCES[$state ?? Order::SOURCE_ADMIN] ?? str($state)->headline()->toString()),
+                        TextEntry::make('sales_channel')
+                            ->label(__('Sales channel'))
+                            ->badge()
+                            ->color('gray')
+                            ->formatStateUsing(fn (?string $state): string => Order::salesChannelLabel($state))
+                            ->visible(fn (Order $record): bool => filled($record->sales_channel)),
                         TextEntry::make('status')
                             ->badge()
                             ->formatStateUsing(fn (string $state): string => Order::STATUSES[$state] ?? str($state)->headline()->toString())
@@ -242,6 +248,13 @@ class OrderInfolist
 
                                 TextEntry::make('quantity')
                                     ->badge(),
+
+                                // Only imported history fills it (Nuport's returned / damaged pieces).
+                                TextEntry::make('returned_quantity')
+                                    ->label(__('Returned'))
+                                    ->badge()
+                                    ->color('danger')
+                                    ->visible(fn (?OrderItem $record): bool => (int) $record?->returned_quantity > 0),
 
                                 TextEntry::make('unit_weight')
                                     ->label('Weight (kg)')

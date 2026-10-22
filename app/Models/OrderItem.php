@@ -18,6 +18,7 @@ class OrderItem extends Model
         'product_variant_id',
         'variant_label',
         'quantity',
+        'returned_quantity',
         'unit_price',
         'unit_cost',
         'reseller_base_price',
@@ -28,6 +29,7 @@ class OrderItem extends Model
 
     protected $casts = [
         'quantity' => 'integer',
+        'returned_quantity' => 'integer',
         'unit_price' => 'decimal:2',
         'unit_cost' => 'decimal:2',
         'reseller_base_price' => 'decimal:2',

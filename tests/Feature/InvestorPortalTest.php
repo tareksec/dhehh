@@ -22,6 +22,7 @@ use App\Services\CompanyStorageService;
 use App\Services\Investment\SettlementService;
 use App\Services\InvestorPortalAccountService;
 use App\Services\InvestorPortalService;
+use App\Services\SmsTemplateService;
 use App\Support\StorefrontApi\Phone;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -275,7 +276,7 @@ class InvestorPortalTest extends TestCase
 
         $this->assertTrue($service->sendCode($account->fresh(), 'login'));
         $this->assertMatchesRegularExpression(
-            '/^'.preg_quote($company->name, '/').' Investment Portal login OTP is \d{6}\. It expires in 1 minute\.$/',
+            '/^Your '.preg_quote($company->name, '/').' Investment Portal OTP is \d{6}\.$/',
             $texts[0],
         );
         $this->assertEqualsWithDelta(60, now()->diffInSeconds($account->fresh()->otp_expires_at, false), 2);
@@ -283,7 +284,7 @@ class InvestorPortalTest extends TestCase
         $this->travel(2)->minutes();
         $this->assertTrue($service->sendCode($account->fresh(), 'reset'));
         $this->assertMatchesRegularExpression(
-            '/^'.preg_quote($company->name, '/').' Investment Portal password reset OTP is \d{6}\. It expires in 1 minute\.$/',
+            '/^Your '.preg_quote($company->name, '/').' Investment Portal OTP is \d{6}\.$/',
             $texts[1],
         );
 
@@ -291,6 +292,40 @@ class InvestorPortalTest extends TestCase
         preg_match('/(\d{6})/', $texts[1], $matches);
         $this->travel(61)->seconds();
         $this->assertFalse($service->verifyCode($account->fresh(), $matches[1]));
+    }
+
+    public function test_the_company_can_word_the_investor_code_sms_itself(): void
+    {
+        $company = $this->company('own-words.example.test', withSms: true);
+        $account = $this->activeAccount($company, $this->investor($company, 'Own Words', '01711000012'));
+        $service = app(InvestorPortalAccountService::class);
+        $templates = app(SmsTemplateService::class);
+        $texts = [];
+
+        Http::fake(['sms.example.test/*' => function ($request) use (&$texts) {
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+            $texts[] = $query['msg'];
+
+            return Http::response('OK', 200);
+        }]);
+
+        $templates->save($company->id, [
+            SmsTemplateService::OTP_INVESTOR_LOGIN => 'Your :company Investors OTP is :code',
+            SmsTemplateService::RESET_INVESTOR_PASSWORD => 'Your Tasneem Reset OTP is :code.',
+        ]);
+
+        $this->assertTrue($service->sendCode($account->fresh(), 'login'));
+        $this->assertMatchesRegularExpression('/^Your '.preg_quote($company->name, '/').' Investors OTP is \d{6}$/', $texts[0]);
+
+        $this->travel(2)->minutes();
+        $this->assertTrue($service->sendCode($account->fresh(), 'reset'));
+        $this->assertMatchesRegularExpression('/^Your Tasneem Reset OTP is \d{6}\.$/', $texts[1]);
+
+        // Blank wording goes back to the built-in text.
+        $templates->save($company->id, [SmsTemplateService::OTP_INVESTOR_LOGIN => '']);
+        $this->travel(2)->minutes();
+        $this->assertTrue($service->sendCode($account->fresh(), 'login'));
+        $this->assertMatchesRegularExpression('/^Your '.preg_quote($company->name, '/').' Investment Portal OTP is \d{6}\.$/', $texts[2]);
     }
 
     public function test_sms_code_sign_in_is_not_offered_without_an_sms_gateway(): void
@@ -356,17 +391,44 @@ class InvestorPortalTest extends TestCase
             ->assertSee('http://investor.menu.example.test/investor/profile', false);
     }
 
-    public function test_the_menu_is_grouped_and_phones_get_a_bottom_menu(): void
+    public function test_the_menu_has_the_main_pages_on_top_and_phones_get_a_bottom_menu(): void
     {
         $company = $this->company('groups.example.test');
         [$project, $investorA] = $this->settledProject($company, confirm: true);
         $this->actingAs($this->activeAccount($company, $investorA), 'investor');
 
+        // IMS v2 look (IMS-V2/DESIGN.md §6.1): the main pages as top-bar pills, the rest under "More".
         $this->get('http://investor.groups.example.test/investor/dashboard')
             ->assertOk()
-            ->assertSeeInOrder(['Overview', 'Dashboard', 'My investments', 'Statement', 'Money', 'Payouts', 'Requests', 'Account', 'Documents', 'Agreements', 'Profile'])
+            ->assertSeeInOrder(['Home', 'Projects', 'Investments', 'Profit', 'Statement', 'More', 'Requests', 'Documents', 'Agreements', 'Profile'])
+            ->assertSee('ims-rail', false)
             ->assertSee('fi-investor-mobile-nav', false)
             ->assertSee('Quick menu');
+    }
+
+    public function test_projects_sit_right_after_home_in_every_menu(): void
+    {
+        $company = $this->company('projects-menu.example.test');
+        [$project, $investorA] = $this->settledProject($company, confirm: true);
+        $this->actingAs($this->activeAccount($company, $investorA), 'investor');
+
+        // Owner request 2026-10-21: a project is what the person invests in, so it is a main page, not under "More".
+        $html = $this->get('http://investor.projects-menu.example.test/investor/dashboard')->assertOk()->getContent();
+        $section = function (string $start) use ($html): string {
+            $from = strpos($html, $start);
+            $this->assertNotFalse($from, $start);
+
+            return substr($html, $from, strpos($html, '</nav>', $from) - $from);
+        };
+
+        // The rail on the left of wide screens, and the bottom tab bar on phones.
+        foreach (['class="ims-rail"', 'class="fi-investor-mobile-nav"'] as $menu) {
+            $part = $section($menu);
+            $projects = strpos($part, '/investor/projects');
+            $this->assertNotFalse($projects, $menu);
+            $this->assertLessThan($projects, strpos($part, '/investor/dashboard'), $menu);
+            $this->assertGreaterThan($projects, strpos($part, '/investor/investments'), $menu);
+        }
     }
 
     public function test_the_language_switch_turns_the_portal_bangla_and_remembers_it_on_the_account(): void
@@ -526,7 +588,8 @@ class InvestorPortalTest extends TestCase
         $company = $this->company('no-permission.example.test');
         app(CompanyContext::class)->set($company);
         Filament::setCurrentPanel(Filament::getPanel('admin'));
-        $this->actingAs(User::factory()->create(['role' => 'manager']));
+        // An accountant has no investments.portal_manage (a manager now does, IMS-V2/ROLES.md §3.3).
+        $this->actingAs(User::factory()->create(['role' => 'accountant']));
 
         $this->assertFalse(InvestorPortalSettings::canAccess());
     }

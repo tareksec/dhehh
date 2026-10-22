@@ -20,10 +20,18 @@ class Shipment extends Model
     protected static function booted(): void
     {
         static::saving(function (Shipment $shipment): void {
-            if ($shipment->container_id && (int) $shipment->container?->company_id !== (int) $shipment->company_id) {
+            // On a brand-new record, `saving` fires before `creating` (see
+            // Model::save()/performInsert()), so BelongsToCompany hasn't
+            // filled in $shipment->company_id yet at this point — comparing
+            // against it directly would always read null/0 here and reject
+            // every single creation. Use the company_id this shipment is
+            // actually about to be saved with instead.
+            $companyId = $shipment->company_id ?: Company::resolveActiveCompanyId();
+
+            if ($shipment->container_id && (int) $shipment->container?->company_id !== (int) $companyId) {
                 throw ValidationException::withMessages(['container_id' => 'Container must belong to the same company.']);
             }
-            if ($shipment->purchase_id && (int) $shipment->purchase?->company_id !== (int) $shipment->company_id) {
+            if ($shipment->purchase_id && (int) $shipment->purchase?->company_id !== (int) $companyId) {
                 throw ValidationException::withMessages(['purchase_id' => 'Purchase must belong to the same company.']);
             }
         });

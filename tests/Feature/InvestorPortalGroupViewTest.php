@@ -171,8 +171,8 @@ class InvestorPortalGroupViewTest extends TestCase
 
         // The finished project is kept on the Payouts page.
         Livewire::test(Payouts::class)
-            ->assertCanSeeTableRecords([$payout])
-            ->assertTableActionVisible('paymentProof', $payout->fresh());
+            ->assertCanSeeTableRecords([$payout->company_id.'-'.$payout->id])
+            ->assertTableActionVisible('paymentProof', $payout->company_id.'-'.$payout->id);
 
         // The other member's payout, unpaid, stays on their own dashboard.
         $this->signIn($other);
@@ -187,7 +187,7 @@ class InvestorPortalGroupViewTest extends TestCase
         $this->signIn($me);
 
         Livewire::test(Dashboard::class)
-            ->assertSee('Welcome, '.$me->name)
+            ->assertSeeInOrder(['Welcome back,', $me->name])
             ->assertSee('Capital by group')
             ->assertSee('Project calendar 2026')
             ->assertSeeHtml('data-calendar-state="confirmed"')
@@ -405,7 +405,7 @@ class InvestorPortalGroupViewTest extends TestCase
         $this->signIn($me);
 
         Livewire::test(Payouts::class)
-            ->assertCanSeeTableRecords([$payout])
+            ->assertCanSeeTableRecords([$payout->company_id.'-'.$payout->id])
             ->assertSee('Stays invested')
             ->assertSee($group->name.' · Project 1');
     }

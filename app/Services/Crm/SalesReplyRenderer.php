@@ -43,9 +43,15 @@ class SalesReplyRenderer
      * $allowFollowUpPrompt opts into combining a verified answer with one
      * follow-up clarification prompt (proactive sales mode); off by default,
      * a prompt_key only renders when it is the sole thing being said.
+     *
+     * $style: 'rich' => true puts each product fact on its own labelled line
+     * (price, options, stock, delivery); 'address_style' => sir_maam |
+     * bhaiya_apu opens a Bangla reply with "জ্বি স্যার," etc. when the model
+     * set input['salutation'] to sir or maam.
      */
-    public function render(Conversation $conversation, array $input, array $trace, bool $allowFollowUpPrompt = false): string
+    public function render(Conversation $conversation, array $input, array $trace, bool $allowFollowUpPrompt = false, array $style = []): string
     {
+        $rich = (bool) ($style['rich'] ?? false);
         $language = $input['language'] ?? $this->detectLanguage($conversation);
         if (! in_array($language, ['bn', 'banglish', 'en'], true)) {
             throw ValidationException::withMessages(['language' => 'Unsupported reply language.']);
@@ -67,30 +73,43 @@ class SalesReplyRenderer
             [$type, $id] = array_pad(explode(':', $key, 2), 2, null);
             if ($type === 'product') {
                 $product = Product::query()->where('company_id', $conversation->company_id)->where('is_active', true)->findOrFail($id);
-                if ($product->has_variants) {
+                if ($product->has_variants && $rich) {
+                    $parts[] = $this->richVariantProduct($product, $language, $detail);
+                } elseif ($product->has_variants) {
                     $parts[] = $product->name.($bn ? ' — কোন সাইজ বা কালারটি চান?' : ($banglish ? ' — kon size ba color ta chan?' : ' — which size or colour would you like?'));
                 } else {
-                    $parts[] = $this->productLine($product->name, (float) $product->selling_price, $product->status === 'available' ? (int) $product->stock : 0, $language, $detail);
+                    $parts[] = $this->line($rich, $product->name, (float) $product->selling_price, $product->status === 'available' ? (int) $product->stock : 0, $language, $detail);
                 }
             } elseif ($type === 'variant') {
                 $variant = ProductVariant::query()->where('company_id', $conversation->company_id)->where('is_active', true)->findOrFail($id);
                 abort_unless($variant->product?->is_active, 422);
-                $parts[] = $this->productLine($variant->product->name.' / '.$variant->label(), $variant->effectiveSalePrice(), $variant->product->status === 'available' ? (int) $variant->stock : 0, $language, $detail);
+                $parts[] = $this->line($rich, $variant->product->name.' / '.$variant->label(), $variant->effectiveSalePrice(), $variant->product->status === 'available' ? (int) $variant->stock : 0, $language, $detail);
             } elseif ($type === 'faq') {
                 $parts[] = CompanyFaq::query()->where('company_id', $conversation->company_id)->where('is_active', true)->findOrFail($id)->answer;
+            } elseif ($type === 'knowledge') {
+                $text = app(KnowledgeBaseService::class)->passageText((int) $conversation->company_id, (string) $id);
+                if ($text === null) {
+                    throw ValidationException::withMessages(['reply_keys' => 'That knowledge entry is no longer available.']);
+                }
+                $parts[] = $text;
             } elseif ($type === 'link') {
                 $link = ChatOrderLink::query()->where('company_id', $conversation->company_id)->where('conversation_id', $conversation->getKey())->findOrFail($id);
                 abort_unless($link->isUsable(), 422);
-                $parts[] = ($bn ? 'অর্ডার করতে: ' : ($banglish ? 'Order korte: ' : 'Order here: ')).$link->publicUrl();
+                $parts[] = ($rich ? '🛒 ' : '').($bn ? 'অর্ডার করতে: ' : ($banglish ? 'Order korte: ' : 'Order here: ')).$link->publicUrl();
             } elseif ($type === 'delivery') {
                 $fees = (array) (app(ShippingFeeService::class)->defaultCourierProvider($conversation->company)?->settings['delivery_fees'] ?? []);
-                foreach ($fees as $zone => $fee) {
-                    $parts[] = $zone.': '.($bn ? 'ডেলিভারি ' : 'delivery ').$this->money((float) $fee, $bn, $banglish);
+                if ($rich && $fees !== []) {
+                    $parts[] = '🚚 '.($bn ? 'ডেলিভারি চার্জ:' : 'Delivery charge:')."\n"
+                        .collect($fees)->map(fn ($fee, $zone): string => '• '.$zone.': '.$this->money((float) $fee, $bn, $banglish))->implode("\n");
+                } else {
+                    foreach ($fees as $zone => $fee) {
+                        $parts[] = $zone.': '.($bn ? 'ডেলিভারি ' : 'delivery ').$this->money((float) $fee, $bn, $banglish);
+                    }
                 }
             } elseif ($type === 'related') {
                 $product = Product::query()->where('company_id', $conversation->company_id)->where('is_active', true)->findOrFail($id);
                 $framing = $bn ? 'সাথে এটাও দেখতে পারেন: ' : ($banglish ? 'Sathe eta o dekhte paren: ' : 'You might also like: ');
-                $parts[] = $framing.$this->productLine($product->name, (float) $product->selling_price, $product->status === 'available' ? (int) $product->stock : 0, $language, $detail);
+                $parts[] = $framing.$this->line($rich, $product->name, (float) $product->selling_price, $product->status === 'available' ? (int) $product->stock : 0, $language, $detail);
             }
         }
         $prompt = $input['prompt_key'] ?? null;
@@ -100,8 +119,95 @@ class SalesReplyRenderer
         if ($parts === []) {
             throw ValidationException::withMessages(['reply_keys' => 'Select verified reply keys or a supported clarification prompt.']);
         }
+        $parts = array_values(array_unique($parts));
+        if (($opening = $this->salutation($language, (string) ($style['address_style'] ?? 'none'), $input['salutation'] ?? null)) !== null) {
+            $parts[0] = $opening.$parts[0];
+        }
 
-        return implode("\n", array_unique($parts));
+        return implode("\n", $parts);
+    }
+
+    /** "জ্বি স্যার, " and the like: only for Bangla/Banglish replies, only when the model knows. */
+    private function salutation(string $language, string $addressStyle, mixed $salutation): ?string
+    {
+        if ($language === 'en' || ! in_array($salutation, ['sir', 'maam'], true)) {
+            return null;
+        }
+        $title = match ($addressStyle) {
+            'sir_maam' => $salutation === 'sir' ? ['স্যার', 'sir'] : ['ম্যাম', 'madam'],
+            'bhaiya_apu' => $salutation === 'sir' ? ['ভাইয়া', 'bhaiya'] : ['আপু', 'apu'],
+            default => null,
+        };
+
+        return $title === null ? null : ($language === 'bn' ? 'জ্বি '.$title[0].', ' : 'Ji '.$title[1].', ');
+    }
+
+    private function line(bool $rich, string $name, float $price, int $stock, string $language, string $detail): string
+    {
+        return $rich ? $this->richProductLine($name, $price, $stock, $language, $detail) : $this->productLine($name, $price, $stock, $language, $detail);
+    }
+
+    /** Name on its own line, then one labelled line per fact asked about. Stock is never a count. */
+    private function richProductLine(string $name, float $price, int $stock, string $language, string $detail): string
+    {
+        $bn = $language === 'bn';
+        $banglish = $language === 'banglish';
+        $lines = [$name];
+        if ($detail !== 'stock') {
+            $lines[] = '💰 '.($bn ? 'দাম: ' : ($banglish ? 'Dam: ' : 'Price: ')).$this->money($price, $bn, $banglish);
+        }
+        if ($detail !== 'price') {
+            $lines[] = $stock > 0
+                ? '✅ '.($bn ? 'স্টকে আছে' : ($banglish ? 'Stock e ache' : 'In stock'))
+                : '❌ '.($bn ? 'এখন স্টকে নেই' : ($banglish ? 'Ekhon stock e nei' : 'Currently out of stock'));
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /** A product with sizes/colours: its price (or price range), the options in stock, then which one. */
+    private function richVariantProduct(Product $product, string $language, string $detail): string
+    {
+        $bn = $language === 'bn';
+        $banglish = $language === 'banglish';
+        $variants = $product->activeVariants()->get();
+        $inStock = $product->status === 'available' ? $variants->filter(fn (ProductVariant $variant): bool => (int) $variant->stock > 0) : collect();
+        $lines = [$product->name];
+        if ($detail !== 'stock' && $variants->isNotEmpty()) {
+            $min = (float) $variants->min(fn (ProductVariant $variant): float => $variant->effectiveSalePrice());
+            $max = (float) $variants->max(fn (ProductVariant $variant): float => $variant->effectiveSalePrice());
+            $lines[] = '💰 '.($bn ? 'দাম: ' : ($banglish ? 'Dam: ' : 'Price: ')).$this->money($min, $bn, $banglish)
+                .($max > $min ? ' – '.$this->money($max, $bn, $banglish) : '');
+        }
+        if ($inStock->isNotEmpty()) {
+            // One option (e.g. size only): "Size: M, XL" instead of "Size: M, Size: XL".
+            $optionKeys = $inStock->flatMap(fn (ProductVariant $variant): array => array_keys((array) $variant->options))->unique();
+            $options = $optionKeys->count() === 1
+                ? $optionKeys->first().': '.$inStock->map(fn (ProductVariant $variant): string => (string) data_get($variant->options, $optionKeys->first()))->implode(', ')
+                : $inStock->map(fn (ProductVariant $variant): string => $variant->label())->implode(', ');
+            $lines[] = '📏 '.($bn ? 'স্টকে আছে: ' : ($banglish ? 'Stock e ache: ' : 'In stock: ')).$options;
+            $lines[] = $bn ? 'কোনটি নেবেন?' : ($banglish ? 'Konta niben?' : 'Which one would you like?');
+        } else {
+            $lines[] = '❌ '.($bn ? 'এখন স্টকে নেই' : ($banglish ? 'Ekhon stock e nei' : 'Currently out of stock'));
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /** The short message sent when the AI hands a chat to the team (never promises a time). */
+    public function handoverNotice(Conversation $conversation): string
+    {
+        return match ($this->detectLanguage($conversation)) {
+            'en' => 'A member of our team is looking into this now, please wait a moment.',
+            'banglish' => 'Bishoyta amader ekjon protinidhi ekhoni dekhchen, ektu opekkha korun.',
+            default => 'বিষয়টা আমাদের একজন প্রতিনিধি এখনই দেখছেন, একটু অপেক্ষা করুন।',
+        };
+    }
+
+    /** A price as the customer reads it: "BDT 420", "৪২০ টাকা" or "420 taka". */
+    public function formatMoney(float $price, string $language): string
+    {
+        return $this->money($price, $language === 'bn', $language === 'banglish');
     }
 
     private function money(float $price, bool $bn, bool $banglish = false): string
@@ -126,7 +232,13 @@ class SalesReplyRenderer
 
     private function detectLanguage(Conversation $conversation): string
     {
-        foreach ($conversation->messages()->where('direction', 'incoming')->latest('id')->limit(5)->pluck('body') as $body) {
+        return $this->languageOf($conversation->messages()->where('direction', 'incoming')->latest('id')->limit(5)->pluck('body'));
+    }
+
+    /** Language of the newest of these customer messages that shows one; Bangla when none does. */
+    public function languageOf(iterable $bodies): string
+    {
+        foreach ($bodies as $body) {
             if (preg_match('/[\x{0980}-\x{09FF}]/u', (string) $body)) {
                 return 'bn';
             }

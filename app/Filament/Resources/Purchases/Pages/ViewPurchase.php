@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Purchases\Pages;
 
 use App\Filament\Resources\Purchases\PurchaseResource;
+use App\Filament\Resources\Purchases\Support\PurchaseDocumentActions;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 
@@ -13,6 +14,9 @@ class ViewPurchase extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            PurchaseDocumentActions::make('pi'),
+            PurchaseDocumentActions::make('ci'),
+            PurchaseDocumentActions::make('pl'),
             EditAction::make(),
         ];
     }

@@ -2,9 +2,15 @@
 
 namespace App\Filament\Investor\Pages\Auth;
 
+use App\Filament\Concerns\HasLoginCaptcha;
+use App\Models\Company;
 use App\Models\InvestorPortalAccount;
 use App\Services\CompanyContext;
+use App\Services\InvestorBusinessSwitchService;
 use App\Services\InvestorPortalAccountService;
+use App\Services\LoginGate;
+use App\Support\ImsPanelSessions;
+use App\Support\LoginThrottled;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use Filament\Actions\Action;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
@@ -19,6 +25,7 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Locked;
 use SensitiveParameter;
 
 /**
@@ -30,11 +37,25 @@ use SensitiveParameter;
  */
 class Login extends BaseLogin
 {
+    use HasLoginCaptcha;
+
     /** "password" or "code". */
     public string $mode = 'password';
 
     /** The phone a sign-in code was sent to; null until one is sent. */
     public ?string $codePhone = null;
+
+    /** The company of the account the code went to, when it is not the open one (the shared IMS domain). */
+    #[Locked]
+    public ?int $codeCompanyId = null;
+
+    public function mount(): void
+    {
+        // Already signed in: go to the portal, never an office page left from before (ImsPanelSessions).
+        ImsPanelSessions::forgetForeignIntendedUrl(Filament::getCurrentPanel());
+
+        parent::mount();
+    }
 
     public function form(Schema $schema): Schema
     {
@@ -55,7 +76,8 @@ class Login extends BaseLogin
                 ->revealable(filament()->arePasswordsRevealable())
                 ->autocomplete('current-password')
                 ->required()
-                ->hint(filament()->hasPasswordReset()
+                // The central sign-in has no password reset: that is done on the business's own address.
+                ->hint(filament()->hasPasswordReset() && ! $this->onCentralHost()
                     ? new HtmlString(Blade::render('<x-filament::link :href="filament()->getRequestPasswordResetUrl()" tabindex="3">{{ __(\'Forgot your password?\') }}</x-filament::link>'))
                     : null)
                 ->visible(fn (): bool => $this->mode === 'password'),
@@ -68,6 +90,7 @@ class Login extends BaseLogin
                 ->visible(fn (): bool => $codeMode() && $this->codePhone !== null),
             Checkbox::make('remember')
                 ->label(__('filament-panels::auth/pages/login.form.remember.label')),
+            $this->captchaFormComponent(),
         ]);
     }
 
@@ -84,6 +107,20 @@ class Login extends BaseLogin
         $data = $this->form->getState();
         $accounts = app(InvestorPortalAccountService::class);
 
+        if ($this->onCentralHost()) {
+            return $this->authenticateOnCentralHost($data);
+        }
+
+        // An IMS domain (owner request 2026-10-20): a person who also invests in
+        // another business signs in to all of them here, by password.
+        $hostCompany = app(CompanyContext::class)->company();
+
+        if ($this->mode === 'password' && $hostCompany
+            && app(InvestorBusinessSwitchService::class)->imsHostCompany()
+            && app(InvestorBusinessSwitchService::class)->hasAccountsElsewhere((string) $data['phone'], $hostCompany)) {
+            return $this->authenticateOnCentralHost($data, $hostCompany);
+        }
+
         if ($this->mode === 'code' && $this->codePhone === null) {
             $this->sendCode((string) $data['phone']);
 
@@ -91,16 +128,28 @@ class Login extends BaseLogin
         }
 
         if ($this->mode === 'code') {
-            $account = $accounts->findByPhone((string) $this->codePhone);
-            $valid = $account && $this->isUserAllowedToAccessPanel($account) && $accounts->verifyCode($account, (string) $data['code']);
+            $account = null;
+            $valid = $this->inCodeCompany(function () use ($accounts, $data, &$account): bool {
+                $account = $accounts->findByPhone((string) $this->codePhone);
+
+                return $account && $this->isUserAllowedToAccessPanel($account) && $accounts->verifyCode($account, (string) $data['code']);
+            });
 
             if (! $valid) {
                 throw ValidationException::withMessages(['data.code' => __('That code is invalid or has expired. Please request a new one.')]);
             }
         } else {
-            $account = $accounts->attemptPasswordLogin((string) $data['phone'], (string) $data['password']);
+            try {
+                $account = $accounts->attemptPasswordLogin((string) $data['phone'], (string) $data['password'], $this->loginClient(LoginGate::SURFACE_INVESTOR));
+            } catch (LoginThrottled $exception) {
+                $this->showLoginChallenge($exception);
+
+                return null;
+            }
 
             if (! $account || ! $this->isUserAllowedToAccessPanel($account)) {
+                $this->resetCaptcha();
+
                 throw ValidationException::withMessages(['data.phone' => __('filament-panels::auth/pages/login.messages.failed')]);
             }
         }
@@ -108,8 +157,45 @@ class Login extends BaseLogin
         Filament::auth()->login($account, (bool) ($data['remember'] ?? false));
         session()->regenerate();
         $accounts->recordLogin($account, request()->ip(), $this->mode);
+        app(LoginGate::class)->rememberDevice(LoginGate::SURFACE_INVESTOR, (int) $account->company_id, $account);
 
         return app(LoginResponse::class);
+    }
+
+    /**
+     * The central sign-in for every business (17_IMS_IN_PORTAL_PLAN.md §5):
+     * phone + password only. It opens the first business the password belongs
+     * to; the top bar then switches between the person's businesses. On an
+     * IMS domain $prefer (that domain's business) is tried first.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function authenticateOnCentralHost(array $data, ?Company $prefer = null): ?LoginResponse
+    {
+        $switches = app(InvestorBusinessSwitchService::class);
+
+        try {
+            $match = $switches->attemptCentralLogin((string) $data['phone'], (string) ($data['password'] ?? ''), $prefer, $this->loginClient(LoginGate::SURFACE_INVESTOR));
+        } catch (LoginThrottled $exception) {
+            $this->showLoginChallenge($exception);
+
+            return null;
+        }
+
+        if ($match === null) {
+            $this->resetCaptcha();
+
+            throw ValidationException::withMessages(['data.phone' => __('filament-panels::auth/pages/login.messages.failed')]);
+        }
+
+        $switches->openOnCentralHost($match['account'], $match['company'], request(), 'central_password', (bool) ($data['remember'] ?? false));
+
+        return app(LoginResponse::class);
+    }
+
+    protected function onCentralHost(): bool
+    {
+        return app(InvestorBusinessSwitchService::class)->onCentralHost();
     }
 
     protected function sendCode(string $phone): void
@@ -123,9 +209,12 @@ class Login extends BaseLogin
             return;
         }
 
-        $account = $accounts->findByPhone($phone);
+        // On the shared IMS domain the account may be in another company that runs here (18_IMS_ALL_COMPANIES_PLAN.md §2).
+        $account = app(InvestorBusinessSwitchService::class)->locateOnImsDomain(fn () => $accounts->findByPhone($phone));
+        $open = app(CompanyContext::class)->id();
+        $this->codeCompanyId = $account && (int) $account->company_id !== (int) $open ? (int) $account->company_id : null;
 
-        if ($account && $this->isUserAllowedToAccessPanel($account)) {
+        if ($account) {
             $accounts->sendCode($account, 'login');
         }
 
@@ -138,10 +227,19 @@ class Login extends BaseLogin
             ->send();
     }
 
+    /** Runs $callback in the company of the account the sign-in code went to. */
+    protected function inCodeCompany(callable $callback): mixed
+    {
+        $company = $this->codeCompanyId === null ? null : Company::query()->whereKey($this->codeCompanyId)->where('is_active', true)->first();
+
+        return $company === null ? $callback() : app(CompanyContext::class)->within($company, $callback);
+    }
+
     public function useCode(): void
     {
         $this->mode = 'code';
         $this->codePhone = null;
+        $this->codeCompanyId = null;
         $this->resetErrorBag();
     }
 
@@ -149,6 +247,7 @@ class Login extends BaseLogin
     {
         $this->mode = 'password';
         $this->codePhone = null;
+        $this->codeCompanyId = null;
         $this->resetErrorBag();
     }
 
@@ -180,7 +279,7 @@ class Login extends BaseLogin
 
     protected function getFormActions(): array
     {
-        $smsAvailable = app(InvestorPortalAccountService::class)->smsAvailable(app(CompanyContext::class)->company());
+        $smsAvailable = ! $this->onCentralHost() && app(InvestorPortalAccountService::class)->smsAvailable(app(CompanyContext::class)->company());
 
         return array_values(array_filter([
             $this->getAuthenticateFormAction(),

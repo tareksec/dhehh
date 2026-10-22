@@ -11,6 +11,7 @@ use App\Models\WhatsAppContact;
 use App\Services\CompanyStorageService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 /**
  * Writes what the whatsapp-bridge syncs into the ERP: contacts, 1:1
@@ -34,6 +35,17 @@ class WhatsAppWebArchiveService
     public function upsertContact(ConversationChannel $channel, array $contact, ?Carbon $seenAt = null): ?WhatsAppContact
     {
         $phone = $this->digits($contact['phone'] ?? null);
+        $lid = $this->lidJid($contact);
+
+        // A name keyed only by LID: an earlier chat may already have told us the phone behind it.
+        if ($phone === null && $lid !== null) {
+            $phone = $this->digits(WhatsAppContact::query()
+                ->where('company_id', $channel->company_id)
+                ->where('lid', $lid)
+                ->whereNotNull('phone')
+                ->value('phone'));
+        }
+
         $jid = $phone !== null ? $phone.'@s.whatsapp.net' : trim((string) ($contact['jid'] ?? ''));
 
         if ($jid === '') {
@@ -47,7 +59,7 @@ class WhatsAppWebArchiveService
 
         $updates = array_filter([
             'channel_id' => $channel->getKey(),
-            'lid' => $this->clean($contact['lid'] ?? null),
+            'lid' => $lid,
             'phone' => $phone,
             'name' => $this->clean($contact['name'] ?? null),
             'push_name' => $this->clean($contact['push_name'] ?? null),
@@ -69,17 +81,136 @@ class WhatsAppWebArchiveService
             $updates['lead_id'] = $customerId ? null : $leadId;
         }
 
-        $record->forceFill(array_filter($updates, fn (mixed $value): bool => $value !== null))->save();
+        // Names that arrived keyed by the LID alone belong to this number once both are known.
+        if ($phone !== null && $lid !== null && $lid !== $jid) {
+            $orphan = WhatsAppContact::query()->where('company_id', $channel->company_id)->where('jid', $lid)->first();
 
-        if ($phone !== null && ($name = $record->displayName())) {
-            Conversation::query()
-                ->where('channel_id', $channel->getKey())
-                ->where('external_contact_id', $phone)
-                ->where(fn ($query) => $query->whereNull('contact_name')->orWhere('contact_name', '')->orWhere('contact_name', $phone))
-                ->update(['contact_name' => $name]);
+            foreach (['name', 'push_name', 'verified_name'] as $field) {
+                if ($orphan && filled($orphan->{$field}) && blank($record->{$field}) && blank($updates[$field] ?? null)) {
+                    $updates[$field] = $orphan->{$field};
+                }
+            }
         }
 
+        $record->forceFill(array_filter($updates, fn (mixed $value): bool => $value !== null))->save();
+
+        $this->nameConversations($channel, $record, array_filter([$phone, $lid]));
+
         return $record;
+    }
+
+    /**
+     * Gives every chat that still has no real name the name WhatsApp shares for
+     * its contact. Chats are keyed by phone, or by LID while the number is unknown.
+     *
+     * @param  array<int, string>  $externalIds
+     * @return int Chats that got a name.
+     */
+    protected function nameConversations(ConversationChannel $channel, WhatsAppContact $record, array $externalIds): int
+    {
+        $name = $record->displayName();
+
+        if ($name === null || $externalIds === []) {
+            return 0;
+        }
+
+        $named = 0;
+
+        Conversation::query()
+            ->where('channel_id', $channel->getKey())
+            ->whereIn('external_contact_id', array_values($externalIds))
+            ->get()
+            ->each(function (Conversation $conversation) use ($name, &$named): void {
+                if ($this->isPlaceholderName($conversation->contact_name)) {
+                    $conversation->forceFill(['contact_name' => $name])->saveQuietly();
+                    $named++;
+                }
+            });
+
+        return $named;
+    }
+
+    /**
+     * Re-applies the saved WhatsApp names to chats that were archived before
+     * their name was known, and learns LID -> phone links from the archived
+     * messages so names that arrived under a LID find their chat.
+     *
+     * @return array{linked: int, named: int}
+     */
+    public function refreshNames(ConversationChannel $channel): array
+    {
+        // Names saved under a LID whose phone no contact row knows yet.
+        $unresolved = WhatsAppContact::query()
+            ->where('company_id', $channel->company_id)
+            ->whereNull('phone')
+            ->where('jid', 'like', '%@lid')
+            ->whereNotIn('jid', WhatsAppContact::query()
+                ->where('company_id', $channel->company_id)
+                ->whereNotNull('phone')
+                ->whereNotNull('lid')
+                ->select('lid'))
+            ->pluck('jid')
+            ->flip();
+
+        $linked = 0;
+
+        if ($unresolved->isNotEmpty()) {
+            $found = [];
+
+            ConversationMessage::query()
+                ->whereIn('conversation_id', Conversation::query()->where('channel_id', $channel->getKey())->select('id'))
+                ->where('raw_payload->chat_jid', 'like', '%@lid')
+                ->select(['id', 'raw_payload'])
+                ->lazyById(1000)
+                ->each(function (ConversationMessage $message) use ($unresolved, &$found): void {
+                    $lid = (string) data_get($message->raw_payload, 'chat_jid');
+                    $phone = $this->digits(data_get($message->raw_payload, 'chat_phone'));
+
+                    if ($phone !== null && $unresolved->has($lid)) {
+                        $found[$lid] = $phone;
+                    }
+                });
+
+            foreach ($found as $lid => $phone) {
+                $this->upsertContact($channel, ['jid' => $lid, 'lid' => $lid, 'phone' => $phone]);
+                $linked++;
+            }
+        }
+
+        $named = 0;
+
+        WhatsAppContact::query()
+            ->where('company_id', $channel->company_id)
+            ->whereNotNull('phone')
+            ->where(fn ($query) => $query->whereNotNull('name')->orWhereNotNull('push_name')->orWhereNotNull('verified_name'))
+            ->lazyById(500)
+            ->each(function (WhatsAppContact $record) use ($channel, &$named): void {
+                $named += $this->nameConversations($channel, $record, array_filter([$record->phone, $record->lid]));
+            });
+
+        return ['linked' => $linked, 'named' => $named];
+    }
+
+    protected function isPlaceholderName(?string $name): bool
+    {
+        $name = trim((string) $name);
+
+        // Same rule as Conversation::profileDisplayName(): blank or just a number is not a name.
+        return $name === '' || preg_match('/^(?:(?:chat\s+)?contact\s+)?[\d+\s-]+$/i', $name) === 1;
+    }
+
+    /** @param array<string, mixed> $contact */
+    protected function lidJid(array $contact): ?string
+    {
+        foreach ([$contact['lid'] ?? null, $contact['jid'] ?? null] as $value) {
+            $value = $this->clean($value);
+
+            if ($value !== null && str_ends_with($value, '@lid')) {
+                return $value;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -119,6 +250,7 @@ class WhatsAppWebArchiveService
 
         $contact = $this->upsertContact($channel, [
             'jid' => $item['chat_jid'] ?? null,
+            'lid' => $item['chat_jid'] ?? null,
             'phone' => $phone,
             'push_name' => $pushName,
         ], $sentAt);
@@ -201,7 +333,9 @@ class WhatsAppWebArchiveService
             return false;
         }
 
-        if (filled($message->media_path)) {
+        // A message that points to a file the server no longer has (for example
+        // after a redeploy without persistent storage) takes the file again.
+        if (filled($message->media_path) && $this->storedFileExists($channel, (string) $message->media_path)) {
             return true;
         }
 
@@ -215,6 +349,15 @@ class WhatsAppWebArchiveService
         $message->forceFill(['media_path' => $path, 'media_mime' => $mime])->save();
 
         return true;
+    }
+
+    protected function storedFileExists(ConversationChannel $channel, string $path): bool
+    {
+        try {
+            return app(CompanyStorageService::class)->locatePrivate($path, $channel->company) !== null;
+        } catch (InvalidArgumentException) {
+            return false;
+        }
     }
 
     /** @return array<string, int> */

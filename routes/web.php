@@ -13,13 +13,17 @@ use App\Http\Controllers\Admin\InvestorPortalOpenController;
 use App\Http\Controllers\Admin\LegacyAdminClusterRedirectController;
 use App\Http\Controllers\Admin\OrderPdfController;
 use App\Http\Controllers\Admin\ProductCsvController;
+use App\Http\Controllers\Admin\PurchaseCsvController;
+use App\Http\Controllers\Admin\PurchaseDocumentController;
 use App\Http\Controllers\Admin\PushDeviceController;
 use App\Http\Controllers\Admin\ReportExportController;
 use App\Http\Controllers\Admin\ReportPdfController;
 use App\Http\Controllers\Admin\SupplierCsvController;
+use App\Http\Controllers\Admin\SupplierReportPdfController;
 use App\Http\Controllers\Admin\VoucherAttachmentDownloadController;
 use App\Http\Controllers\Admin\VoucherReceiptController;
 use App\Http\Controllers\ChatOrderController;
+use App\Http\Controllers\CourierHandoverSheetController;
 use App\Http\Controllers\CourierWebhookController;
 use App\Http\Controllers\DocumentationGuideController;
 use App\Http\Controllers\FirebaseServiceWorkerController;
@@ -636,6 +640,24 @@ Route::middleware('auth')
     ->get('/admin/orders/{order}/pdf', OrderPdfController::class)
     ->name('orders.pdf');
 
+// Printable courier handover sheet (parcels booked through one courier on one
+// day). CourierProvider is company-scoped, so another company's id is a 404.
+Route::middleware('auth')
+    ->get('/admin/courier-handover-sheet', CourierHandoverSheetController::class)
+    ->name('courier.handover-sheet');
+
+// Purchase trade documents: {type} is 'pi' (Proforma Invoice), 'ci'
+// (Commercial Invoice), or 'pl' (Packing List) — see
+// PurchaseDocumentController::TYPES, which validates it (a bad value 404s
+// cleanly from the controller itself rather than relying on a route regex,
+// so a mismatched {type} can't silently fall through to some unrelated
+// catch-all route). Streamed (not downloaded) so it opens inline in the new
+// tab the Filament "Generate ..." action opens, giving a print-preview the
+// browser's native print/save handles the "printable" requirement for.
+Route::middleware('auth')
+    ->get('/admin/purchases/{purchase}/documents/{type}', PurchaseDocumentController::class)
+    ->name('purchases.documents');
+
 Route::middleware('auth')
     ->get('/admin/reports/export/{type}', ReportExportController::class)
     ->name('reports.export');
@@ -643,6 +665,10 @@ Route::middleware('auth')
 Route::middleware('auth')
     ->get('/admin/reports/export/{type}/pdf', ReportPdfController::class)
     ->name('reports.export.pdf');
+
+Route::middleware('auth')
+    ->get('/admin/reports/supplier/{supplier}/pdf', SupplierReportPdfController::class)
+    ->name('reports.supplier.pdf');
 
 Route::middleware('auth')->group(function (): void {
     Route::post('/admin/push-devices', [PushDeviceController::class, 'store'])
@@ -690,6 +716,9 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('/admin/suppliers/import/sample', [SupplierCsvController::class, 'sample'])
         ->name('suppliers.import.sample');
+
+    Route::get('/admin/purchases/import/sample', [PurchaseCsvController::class, 'sample'])
+        ->name('purchases.import.sample');
 
     Route::get('/admin/backups/download/{filename}', BackupDownloadController::class)
         ->where('filename', '[A-Za-z0-9._-]+')

@@ -4,8 +4,10 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\GeneratesSequentialNumber;
+use App\Services\CompanySettingsService;
 use App\Services\PurchaseWorkflowService;
 use App\Support\MoneyFormatter;
+use App\Support\NumberToWords;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -30,6 +32,13 @@ class Purchase extends Model
         'cylinder' => 'Cylinder',
     ];
 
+    /** Suggested names for the costs paid after the goods reached the house (free text is allowed too). */
+    public const PRODUCT_COST_SUGGESTIONS = [
+        'Packaging cost',
+        'Ad cost',
+        'Other cost',
+    ];
+
     public const STATUSES = [
         'draft' => 'Draft',
         'received' => 'Received',
@@ -47,6 +56,17 @@ class Purchase extends Model
         'pi_date',
         'ci_number',
         'ci_date',
+        'pl_number',
+        'pl_date',
+        'delivery_terms',
+        'country_of_origin',
+        'port_of_loading',
+        'port_of_discharge',
+        'payment_method_summary',
+        'terms_conditions',
+        'pl_certification_note',
+        'freight_usd',
+        'exchange_rate',
         'subtotal',
         'discount',
         'vat',
@@ -63,6 +83,7 @@ class Purchase extends Model
         'positive_feeder',
         'cylinder',
         'custom_costs',
+        'product_costs',
         'funding_sources',
         'total_amount',
         'paid_amount',
@@ -77,6 +98,9 @@ class Purchase extends Model
         'lc_date' => 'date',
         'pi_date' => 'date',
         'ci_date' => 'date',
+        'pl_date' => 'date',
+        'freight_usd' => 'decimal:2',
+        'exchange_rate' => 'decimal:4',
         'subtotal' => 'decimal:2',
         'discount' => 'decimal:2',
         'vat' => 'decimal:2',
@@ -93,6 +117,7 @@ class Purchase extends Model
         'positive_feeder' => 'decimal:2',
         'cylinder' => 'decimal:2',
         'custom_costs' => 'array',
+        'product_costs' => 'array',
         'funding_sources' => 'array',
         'total_amount' => 'decimal:2',
         'paid_amount' => 'decimal:2',
@@ -201,6 +226,108 @@ class Purchase extends Model
             ->get()
             ->map(fn (PurchaseItem $item): string => ($item->product?->name ?? 'Product').': '.MoneyFormatter::currency((float) $item->landed_unit_cost))
             ->implode('; ') ?: '-';
+    }
+
+    /**
+     * FOB value of the goods themselves in USD (quantity × per-unit FOB
+     * price), as printed on the PI/CI item tables. Purely informational for
+     * these trade documents — does not feed the BDT landed-cost engine.
+     */
+    public function fobTotalUsd(): float
+    {
+        return (float) $this->items->sum(
+            fn (PurchaseItem $item): float => (int) $item->quantity * (float) ($item->fob_unit_price_usd ?? 0)
+        );
+    }
+
+    /**
+     * FOB value plus the international freight (USD), i.e. the CFR/CNF
+     * total shown on the Commercial Invoice cost breakdown.
+     */
+    public function cfrTotalUsd(): float
+    {
+        return $this->fobTotalUsd() + (float) ($this->freight_usd ?? 0);
+    }
+
+    public function totalQuantity(): int
+    {
+        return (int) $this->items->sum('quantity');
+    }
+
+    public function netWeightTotalKg(): float
+    {
+        return (float) $this->items->sum('net_weight_kg');
+    }
+
+    public function grossWeightTotalKg(): float
+    {
+        return (float) $this->items->sum('gross_weight_kg');
+    }
+
+    public function cfrAmountInWords(): string
+    {
+        return NumberToWords::amountInWords($this->cfrTotalUsd());
+    }
+
+    public function fobAmountInWords(): string
+    {
+        return NumberToWords::amountInWords($this->fobTotalUsd());
+    }
+
+    /**
+     * Whether the purchase has the shipping/trade details (ports, delivery
+     * terms) needed to generate the Commercial Invoice and Packing List —
+     * the "shipping details added" gate for those two Generate actions.
+     * The Proforma Invoice does not require this, since it is generated at
+     * order time, before shipping is arranged.
+     */
+    public function hasShippingDetailsForDocuments(): bool
+    {
+        return filled($this->delivery_terms) && filled($this->port_of_loading) && filled($this->port_of_discharge);
+    }
+
+    /**
+     * PI's "Payment Terms" / CI's "Terms & Conditions" text. Uses this
+     * purchase's own override when set, otherwise falls back to the
+     * company-wide default from Company Settings (Purchase Documents).
+     */
+    public function termsConditionsText(): string
+    {
+        if (filled($this->terms_conditions)) {
+            return $this->terms_conditions;
+        }
+
+        return app(CompanySettingsService::class)->purchaseDocuments($this->company)['ci_terms_conditions'] ?? '';
+    }
+
+    public function paymentTermsText(): string
+    {
+        if (filled($this->terms_conditions)) {
+            return $this->terms_conditions;
+        }
+
+        return app(CompanySettingsService::class)->purchaseDocuments($this->company)['pi_payment_terms'] ?? '';
+    }
+
+    /**
+     * PL's certification paragraph. Uses this purchase's own override when
+     * set, otherwise the company default template with {country_of_origin},
+     * {pi_number}, and {pi_date} tokens substituted from this purchase's
+     * own data.
+     */
+    public function plCertificationNoteText(): string
+    {
+        if (filled($this->pl_certification_note)) {
+            return $this->pl_certification_note;
+        }
+
+        $template = app(CompanySettingsService::class)->purchaseDocuments($this->company)['pl_certification_note'] ?? '';
+
+        return strtr($template, [
+            '{country_of_origin}' => $this->country_of_origin ?: '-',
+            '{pi_number}' => $this->pi_number ?: '-',
+            '{pi_date}' => $this->pi_date?->format('d M Y') ?: '-',
+        ]);
     }
 
     public function syncSupplierBalance(): void

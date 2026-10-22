@@ -136,6 +136,55 @@ class CompanyResource extends Resource
                 ])
                 ->columns(2),
 
+            Section::make(__('Import/Export Registration'))
+                ->description(__('Printed as the Buyer/Applicant block on this company\'s Purchase PI/CI/Packing List documents.'))
+                ->columnSpanFull()
+                ->schema([
+                    TextInput::make('bin_number')
+                        ->label(__('BIN Number'))
+                        ->maxLength(255),
+                    TextInput::make('irc_number')
+                        ->label(__('IRC Number'))
+                        ->maxLength(255),
+                    TextInput::make('tin_number')
+                        ->label(__('TIN Number'))
+                        ->maxLength(255),
+                    TextInput::make('signatory_name')
+                        ->label(__('Authorized Signatory Name'))
+                        ->maxLength(255),
+                    TextInput::make('signatory_title')
+                        ->label(__('Signatory Title'))
+                        ->placeholder(__('e.g. Proprietor, Managing Director'))
+                        ->maxLength(255),
+                    FileUpload::make('signature_path')
+                        ->label(__('Authorized Signature / Stamp'))
+                        ->helperText(__('Save the company first, then upload. Printed on the PI/Packing List signature block.'))
+                        ->image()
+                        ->tap(static::browserCompactImagePrecompression())
+                        ->disk(fn (): string => CompanyMedia::publicDiskName())
+                        ->directory(function (?Company $record): string {
+                            if (! $record?->exists) {
+                                throw ValidationException::withMessages([
+                                    'signature_path' => __('Save the company before uploading its signature.'),
+                                ]);
+                            }
+
+                            return CompanyMedia::publicDirectory('company', $record);
+                        })
+                        ->fetchFileInformation(false)
+                        ->getUploadedFileUsing(CompanyMedia::publicFileMetadataCallback())
+                        ->getOpenableFileUrlUsing(CompanyMedia::publicFileUrlCallback())
+                        ->getDownloadableFileUrlUsing(CompanyMedia::publicFileUrlCallback())
+                        ->disabled(fn (?Company $record): bool => ! $record?->exists || ! CompanyMedia::canResolve($record))
+                        ->imageEditor()
+                        ->saveUploadedFileUsing(static::optimizeCompactImageUpload())
+                        ->hintAction(static::selectFromMediaHubAction())
+                        ->downloadable()
+                        ->openable(),
+                ])
+                ->columns(2)
+                ->collapsible(),
+
             Section::make('Localization')
                 ->columnSpanFull()
                 ->schema([

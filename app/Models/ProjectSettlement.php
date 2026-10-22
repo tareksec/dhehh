@@ -18,9 +18,15 @@ class ProjectSettlement extends Model
         'loss_manager_borne' => 'Loss — borne by company',
     ];
 
-    protected $fillable = ['company_id', 'project_id', 'total_revenue', 'total_cost', 'net_profit', 'investor_pool_amount', 'channel_partner_amount', 'company_net_amount', 'annualized_return_percent', 'rate_per_lac', 'outcome', 'loss_reason', 'status', 'settled_by', 'settled_at'];
+    /** Settled from the sales revenue staff entered (the original way). */
+    public const BASIS_SALES = 'sales';
 
-    protected $casts = ['total_revenue' => 'decimal:2', 'total_cost' => 'decimal:2', 'net_profit' => 'decimal:2', 'investor_pool_amount' => 'decimal:2', 'channel_partner_amount' => 'decimal:2', 'company_net_amount' => 'decimal:2', 'annualized_return_percent' => 'decimal:2', 'rate_per_lac' => 'decimal:2', 'settled_at' => 'datetime'];
+    /** Settled from a profit staff entered by hand, with no sales needed. */
+    public const BASIS_MANUAL = 'manual';
+
+    protected $fillable = ['company_id', 'project_id', 'total_revenue', 'total_cost', 'net_profit', 'investor_pool_amount', 'channel_partner_amount', 'company_net_amount', 'annualized_return_percent', 'rate_per_lac', 'outcome', 'investor_loss_percent', 'basis', 'loss_reason', 'status', 'settled_by', 'settled_at'];
+
+    protected $casts = ['investor_loss_percent' => 'decimal:2', 'locked_at' => 'datetime', 'total_revenue' => 'decimal:2', 'total_cost' => 'decimal:2', 'net_profit' => 'decimal:2', 'investor_pool_amount' => 'decimal:2', 'channel_partner_amount' => 'decimal:2', 'company_net_amount' => 'decimal:2', 'annualized_return_percent' => 'decimal:2', 'rate_per_lac' => 'decimal:2', 'settled_at' => 'datetime'];
 
     protected static function booted(): void
     {
@@ -28,7 +34,7 @@ class ProjectSettlement extends Model
             // Computed figures are never hand-edited — in draft or confirmed.
             // A wrong settlement is corrected by voiding it and settling again,
             // not by editing the numbers in place.
-            $immutable = ['project_id', 'total_revenue', 'total_cost', 'net_profit', 'investor_pool_amount', 'channel_partner_amount', 'company_net_amount', 'annualized_return_percent', 'rate_per_lac', 'outcome', 'loss_reason', 'settled_by', 'settled_at'];
+            $immutable = ['project_id', 'total_revenue', 'total_cost', 'net_profit', 'investor_pool_amount', 'channel_partner_amount', 'company_net_amount', 'annualized_return_percent', 'rate_per_lac', 'outcome', 'investor_loss_percent', 'basis', 'loss_reason', 'settled_by', 'settled_at'];
 
             if ($settlement->isDirty($immutable)) {
                 throw ValidationException::withMessages(['settlement' => 'Settlement figures are immutable. Void the settlement and recalculate instead.']);
@@ -52,13 +58,30 @@ class ProjectSettlement extends Model
                 if (! $payoutUnpaidAgain && ! in_array($settlement->status, $allowed[$from] ?? [], true)) {
                     throw ValidationException::withMessages(['status' => "A settlement cannot move from {$from} to {$settlement->status}."]);
                 }
+
+                // IMS v2 (PRD FR-47): once every payout is paid the cycle's
+                // figures are frozen; a payout that becomes unpaid again
+                // (its voucher went to Trash) opens them again.
+                $settlement->locked_at = $settlement->status === 'paid_out' ? ($settlement->locked_at ?? now()) : null;
             }
         });
+    }
+
+    /** True once every payout is paid: the cycle's costs and sales may not change (PRD FR-47). */
+    public function isLocked(): bool
+    {
+        return $this->locked_at !== null;
     }
 
     public function isDraft(): bool
     {
         return $this->status === 'draft';
+    }
+
+    /** True when the profit was entered by hand, not worked out from sales. */
+    public function isManualBasis(): bool
+    {
+        return $this->basis === self::BASIS_MANUAL;
     }
 
     public function hasPaidPayouts(): bool

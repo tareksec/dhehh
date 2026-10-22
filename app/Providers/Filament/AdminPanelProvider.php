@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Auth\AdminLogin;
 use App\Filament\Resources\Investors\InvestorResource;
 use App\Filament\Resources\Investors\Pages\ListInvestors;
 use App\Filament\Widgets\BusinessOverview;
@@ -12,6 +13,7 @@ use App\Filament\Widgets\LowStockProducts;
 use App\Filament\Widgets\SalesPurchaseTrend;
 use App\Filament\Widgets\TopBusinessPerformers;
 use App\Http\Middleware\PreventAdminPageCaching;
+use App\Http\Middleware\RedirectInvestmentsToImsOffice;
 use App\Http\Middleware\RestrictPortalHosts;
 use App\Http\Middleware\SetCurrentCompany;
 use App\Http\Middleware\SyncAppUpdates;
@@ -52,9 +54,17 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login()
+            ->login(AdminLogin::class)
             ->profile(isSimple: false)
             ->spa()
+            // A link to a file (report PDF / CSV) must be a normal browser
+            // request. In SPA mode Filament adds `wire:navigate`, Livewire
+            // fetches the URL and paints the response into the page, so the
+            // owner saw the raw bytes of the PDF as text instead of a download.
+            ->spaUrlExceptions([
+                '*/admin/reports/export/*',
+                '*/admin/reports/supplier/*',
+            ])
             ->sidebarCollapsibleOnDesktop()
             ->sidebarWidth('18rem')
             ->collapsedSidebarWidth('4.5rem')
@@ -509,6 +519,8 @@ class AdminPanelProvider extends PanelProvider
                 PreventRequestForgery::class,
                 SubstituteBindings::class,
                 SetCurrentCompany::class,
+                // IMS v2: a company on IMS runs its investor pages in the IMS office.
+                RedirectInvestmentsToImsOffice::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])

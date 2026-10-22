@@ -121,6 +121,7 @@ class PurchaseForm
 
                         TextInput::make('pi_number')
                             ->label('PI Number')
+                            ->helperText(__('Leave empty — filled automatically the first time you click "Generate PI".'))
                             ->maxLength(255),
 
                         DatePicker::make('pi_date')
@@ -128,12 +129,78 @@ class PurchaseForm
 
                         TextInput::make('ci_number')
                             ->label('CI Number')
+                            ->helperText(__('Leave empty — filled automatically the first time you click "Generate CI".'))
                             ->maxLength(255),
 
                         DatePicker::make('ci_date')
                             ->label('CI Date'),
+
+                        TextInput::make('pl_number')
+                            ->label(__('PL Number'))
+                            ->helperText(__('Leave empty — filled automatically the first time you click "Generate PL".'))
+                            ->maxLength(255),
+
+                        DatePicker::make('pl_date')
+                            ->label(__('PL Date')),
                     ])
                     ->columns(3)
+                    ->collapsible(),
+
+                Section::make(__('Trade Documents'))
+                    ->description(__('Feeds the printable PI / CI / PL documents (Purchase > Generate PI/CI/PL). CI and PL also need Delivery Terms, Port of Loading, and Port of Discharge filled in below before they can be generated.'))
+                    ->columnSpanFull()
+                    ->schema([
+                        TextInput::make('delivery_terms')
+                            ->label(__('Delivery Terms'))
+                            ->placeholder(__('e.g. FOB Ningbo, CFR Chattogram by Sea'))
+                            ->maxLength(255),
+
+                        TextInput::make('country_of_origin')
+                            ->label(__('Country of Origin'))
+                            ->maxLength(255),
+
+                        TextInput::make('port_of_loading')
+                            ->label(__('Port of Loading'))
+                            ->placeholder(__('e.g. Any Port From China'))
+                            ->maxLength(255),
+
+                        TextInput::make('port_of_discharge')
+                            ->label(__('Port of Discharge'))
+                            ->placeholder(__('e.g. Chattogram, Bangladesh'))
+                            ->maxLength(255),
+
+                        TextInput::make('payment_method_summary')
+                            ->label(__('Payment Method'))
+                            ->placeholder(__('e.g. 100% TT in advance, 100% LC at Sight'))
+                            ->maxLength(255),
+
+                        TextInput::make('freight_usd')
+                            ->label(__('Freight (USD)'))
+                            ->numeric()
+                            ->prefix('$')
+                            ->minValue(0)
+                            ->helperText(__('International freight only, in USD — separate from the "Freight to Ctg" BDT cost below, which may include additional inland charges.')),
+
+                        TextInput::make('exchange_rate')
+                            ->label(__('Exchange Rate (BDT per USD)'))
+                            ->numeric()
+                            ->minValue(0)
+                            ->step('0.0001')
+                            ->helperText(__('Informational only — does not change the BDT costs above.')),
+
+                        Textarea::make('terms_conditions')
+                            ->label(__('Payment Terms / Terms & Conditions'))
+                            ->rows(4)
+                            ->placeholder(__('Leave empty to use the default from Company Settings > Purchase Documents.'))
+                            ->columnSpanFull(),
+
+                        Textarea::make('pl_certification_note')
+                            ->label(__('Packing List Certification Note'))
+                            ->rows(3)
+                            ->placeholder(__('Leave empty to use the default from Company Settings > Purchase Documents.'))
+                            ->columnSpanFull(),
+                    ])
+                    ->columns(2)
                     ->collapsible(),
 
                 Section::make('Items')
@@ -141,16 +208,9 @@ class PurchaseForm
                     ->schema([
                         Repeater::make('items')
                             ->relationship()
-                            ->table([
-                                TableColumn::make('Product'),
-                                TableColumn::make('Quantity'),
-                                TableColumn::make('Unit Cost'),
-                                TableColumn::make('Subtotal'),
-                                TableColumn::make('Allocated Cost'),
-                                TableColumn::make('Landed Unit Cost'),
-                            ])
                             ->schema([
                                 Select::make('product_id')
+                                    ->columnSpan(self::itemSpan(6))
                                     ->label('Product')
                                     ->relationship('product', 'name', fn ($query) => $query->where('is_active', true))
                                     ->searchable(['name', 'sku', 'barcode', 'brand'])
@@ -221,6 +281,10 @@ class PurchaseForm
                                             ->required()
                                             ->maxLength(50),
 
+                                        TextInput::make('hs_code')
+                                            ->label(__('HS Code'))
+                                            ->maxLength(50),
+
                                         TextInput::make('cost_price')
                                             ->label('Cost Price')
                                             ->numeric()
@@ -254,6 +318,7 @@ class PurchaseForm
                                             'barcode' => $data['barcode'] ?? null,
                                             'brand' => $data['brand'] ?? null,
                                             'unit' => $data['unit'] ?? 'pcs',
+                                            'hs_code' => $data['hs_code'] ?? null,
                                             'cost_price' => $data['cost_price'] ?? 0,
                                             'sale_price' => $data['sale_price'] ?? 0,
                                             'price' => $data['sale_price'] ?? 0,
@@ -281,10 +346,12 @@ class PurchaseForm
 
                                         $set('unit_cost', $unitCost);
                                         $set('subtotal', (int) ($get('quantity') ?? 0) * $unitCost);
+                                        $set('hs_code', $product->hs_code);
                                         self::setPurchaseTotalsFromRepeater($get, $set);
                                     }),
 
                                 TextInput::make('quantity')
+                                    ->columnSpan(self::itemSpan(2))
                                     ->integer()
                                     ->minValue(1)
                                     ->default(1)
@@ -295,7 +362,24 @@ class PurchaseForm
                                         self::setPurchaseTotalsFromRepeater($get, $set);
                                     }),
 
+                                TextInput::make('short_quantity')
+                                    ->columnSpan(self::itemSpan(2))
+                                    ->label(__('Short Qty'))
+                                    ->integer()
+                                    ->minValue(0)
+                                    ->default(0)
+                                    ->helperText(__('Billed but not delivered.')),
+
+                                TextInput::make('damaged_quantity')
+                                    ->columnSpan(self::itemSpan(2))
+                                    ->label(__('Damaged Qty'))
+                                    ->integer()
+                                    ->minValue(0)
+                                    ->default(0)
+                                    ->helperText(__('Delivered but not sellable.')),
+
                                 TextInput::make('unit_cost')
+                                    ->columnSpan(self::itemSpan(3))
                                     ->numeric()
                                     ->prefix('৳')
                                     ->minValue(0)
@@ -307,11 +391,13 @@ class PurchaseForm
                                     }),
 
                                 TextInput::make('subtotal')
+                                    ->columnSpan(self::itemSpan(3))
                                     ->numeric()
                                     ->prefix('৳')
                                     ->readOnly(),
 
                                 TextInput::make('allocated_cost')
+                                    ->columnSpan(self::itemSpan(3))
                                     ->label('Allocated Cost')
                                     ->numeric()
                                     ->prefix('৳')
@@ -319,13 +405,47 @@ class PurchaseForm
                                     ->dehydrated(false),
 
                                 TextInput::make('landed_unit_cost')
+                                    ->columnSpan(self::itemSpan(3))
                                     ->label('Landed Unit Cost')
                                     ->numeric()
                                     ->prefix('৳')
                                     ->readOnly()
                                     ->dehydrated(false),
+
+                                TextInput::make('hs_code')
+                                    ->columnSpan(self::itemSpan(2))
+                                    ->label(__('HS Code'))
+                                    ->helperText(__('Defaults from the product; override per purchase if needed.'))
+                                    ->maxLength(50),
+
+                                TextInput::make('spec_note')
+                                    ->columnSpan(self::itemSpan(4))
+                                    ->label(__('Spec / Model Note'))
+                                    ->placeholder(__('e.g. 7.5L 220V 1850W'))
+                                    ->maxLength(255),
+
+                                TextInput::make('fob_unit_price_usd')
+                                    ->columnSpan(self::itemSpan(2))
+                                    ->label(__('FOB Price (USD)'))
+                                    ->numeric()
+                                    ->prefix('$')
+                                    ->minValue(0),
+
+                                TextInput::make('net_weight_kg')
+                                    ->columnSpan(self::itemSpan(2))
+                                    ->label(__('Net Weight (kg)'))
+                                    ->numeric()
+                                    ->minValue(0)
+                                    ->step('0.001'),
+
+                                TextInput::make('gross_weight_kg')
+                                    ->columnSpan(self::itemSpan(2))
+                                    ->label(__('Gross Weight (kg)'))
+                                    ->numeric()
+                                    ->minValue(0)
+                                    ->step('0.001'),
                             ])
-                            ->columns(6)
+                            ->columns(['default' => 1, 'md' => 12])
                             ->defaultItems(1)
                             ->addActionLabel('Add item')
                             ->reorderable(false)
@@ -375,6 +495,58 @@ class PurchaseForm
                             ->columnSpanFull(),
                     ])
                     ->columns(3)
+                    ->collapsible(),
+
+                Section::make(__('Costs After Arrival'))
+                    ->description(__('Packaging, ad and other costs paid per product after the goods reached the house. They feed the Supplier Report and do not change the purchase total.'))
+                    ->columnSpanFull()
+                    ->schema([
+                        Repeater::make('product_costs')
+                            ->label(__('Product cost lines'))
+                            ->table([
+                                TableColumn::make(__('Product')),
+                                TableColumn::make(__('Cost name')),
+                                TableColumn::make(__('Amount')),
+                            ])
+                            ->schema([
+                                Select::make('product_id')
+                                    ->label(__('Product'))
+                                    ->options(function (Get $get): array {
+                                        $productIds = collect($get('../../items') ?? [])
+                                            ->pluck('product_id')
+                                            ->filter()
+                                            ->unique()
+                                            ->all();
+
+                                        return Product::query()
+                                            ->whereIn('id', $productIds)
+                                            ->orderBy('name')
+                                            ->pluck('name', 'id')
+                                            ->all();
+                                    })
+                                    ->searchable()
+                                    ->required(),
+
+                                TextInput::make('label')
+                                    ->label(__('Cost name'))
+                                    ->datalist(array_map(fn (string $label): string => __($label), Purchase::PRODUCT_COST_SUGGESTIONS))
+                                    ->required()
+                                    ->maxLength(255),
+
+                                TextInput::make('amount')
+                                    ->label(__('Amount'))
+                                    ->numeric()
+                                    ->prefix('৳')
+                                    ->minValue(0)
+                                    ->default(0)
+                                    ->required(),
+                            ])
+                            ->columns(3)
+                            ->defaultItems(0)
+                            ->addActionLabel(__('Add cost line'))
+                            ->reorderable(false)
+                            ->columnSpanFull(),
+                    ])
                     ->collapsible(),
 
                 Section::make('Totals')
@@ -444,6 +616,17 @@ class PurchaseForm
                     ])
                     ->collapsible(),
             ]);
+    }
+
+    /**
+     * Column span of one field of a purchase line: full width on a phone, a
+     * share of a 12-column row from the md breakpoint up.
+     *
+     * @return array<string, int|string>
+     */
+    protected static function itemSpan(int $columns): array
+    {
+        return ['default' => 'full', 'md' => $columns];
     }
 
     protected static function setItemSubtotal(Get $get, Set $set): void

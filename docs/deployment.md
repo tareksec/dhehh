@@ -47,9 +47,9 @@ APP_DEBUG=false
 APP_URL=https://your-domain.com
 ASSET_URL=https://your-domain.com
 TRUSTED_PROXIES=*
-APP_VERSION=2.81.1
-APP_RELEASE_TYPE=patch
-APP_RELEASE_DATE=2026-10-16
+APP_VERSION=2.98.0
+APP_RELEASE_TYPE=minor
+APP_RELEASE_DATE=2026-10-22
 
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
@@ -117,6 +117,19 @@ Nginx request limit from 1 MB to 16 MB and applies PHP-FPM upload limits of
 and the 10 MB voucher attachment field. The persistent volume must cover all of
 `/app/storage` (not only `storage/app/public`), and both `storage/` and
 `bootstrap/cache/` must be writable by the running PHP user.
+
+**Check that `/app/storage` really is persistent (found 2026-10-19).** In the
+app's Coolify terminal run `df -h /app/storage | tail -1`. If the first column
+says `overlay`, the folder is part of the container and every redeploy deletes
+what is in it: WhatsApp Web pictures/voice notes/videos, voucher attachments,
+expense scans, backups and anything on the local public disk. The messages
+keep pointing to the files, so the Inbox shows "The file is not in the server
+storage". Fix: Coolify -> the app -> **Persistent Storage** -> **Add** ->
+**Volume Mount** (a named volume, not a host directory: a named volume starts
+with the image's `storage/` folders, an empty host directory does not), name
+`erp-storage`, destination path `/app/storage`; mount the same volume in the
+queue-worker app if there is one; redeploy. Afterwards `df` must show a
+device other than `overlay`.
 
 A successful **Test public bucket** result validates a server-side R2
 write/read/public-domain probe, but deliberately does not enable R2. In Cloud
@@ -441,6 +454,22 @@ Add this cron entry:
 * * * * * cd /path/to/project && php artisan schedule:run >> /dev/null 2>&1
 ```
 
+**On Coolify** nothing in the container runs the scheduler (Nixpacks starts only
+the web server), so add it as a scheduled task of the ERP application, once:
+Coolify → the app → **Scheduled Tasks** → **Add**: name `laravel-scheduler`,
+command `php artisan schedule:run`, frequency `* * * * *`, container = the app
+itself. Check first that no such task exists (two would run every job twice
+per minute's check; `onOneServer()` stops a double run only while the cache
+lock works). This one task runs every job in `bootstrap/app.php` for every
+company: backups, courier status sync, cart and CRM reminders, and the IMS
+jobs (profit proposals, maturity reminders, owner digest, monthly statements,
+late shipments).
+
+Starting the scheduler after a long stop does not message old customers at
+once: abandoned carts older than 3 days (on top of the company's delay) get no
+reminder, a lead follow-up due more than 3 days ago reaches only the staff
+member, and a sales follow-up due more than 3 days ago is cancelled.
+
 ## Queue Worker
 
 If `QUEUE_CONNECTION=sync`, no queue worker is required — but see the
@@ -573,6 +602,41 @@ https:// {
 ```
 
 It needs no account (Let's Encrypt certificates are free and automatic). It has to receive the traffic for reseller domains on ports 80/443, which Coolify's own Traefik already uses, so how to place it (in front of Traefik, or on its own IP for custom domains) depends on the live server and has to be decided there. Until then, leave **Reseller custom domains enabled** off. The DNS check compares the reseller's domain IPs with the company domain's IPs, so the company domain must resolve to this server.
+
+## IMS v2: KYC OCR (Tesseract)
+
+IMS v2 provides on-server Optical Character Recognition (OCR) for Bangladeshi National Identity (NID) cards during investor onboarding (`App\Ims\Kyc\NidOcr`, `IMS-V2/TRD.md` §7). This allows extracting NID numbers, dates of birth, and names locally without sending sensitive identity documents to third-party APIs.
+
+### 1. Coolify / Nixpacks Build Configuration
+The repository includes `tesseract-ocr` and `tesseract-ocr-ben` in `nixpacks.toml`:
+
+```toml
+[phases.setup]
+aptPkgs = ["...", "tesseract-ocr", "tesseract-ocr-ben"]
+```
+
+When building with Nixpacks on Coolify:
+- Nixpacks runs on Debian and automatically executes `apt-get install -y tesseract-ocr tesseract-ocr-ben` during the setup phase.
+- The binary `/usr/bin/tesseract` and trained models (`eng`, `ben`, `osd`) are placed in standard system paths (`/usr/share/tesseract-ocr/5/tessdata` or `/usr/share/tessdata`).
+- No modifications to `[start]` or custom container wrappers are required.
+
+### 2. Coolify Owner Action
+To apply this on the Coolify production instance:
+1. Navigate to the Application in Coolify dashboard.
+2. Trigger a normal **Deploy / Redeploy** (with cache clear if needed) after pushing these changes.
+3. Once the build finishes and the container is healthy, verify Tesseract from Coolify terminal or command execution:
+   ```bash
+   tesseract --version
+   tesseract --list-langs
+   ```
+   Confirm that output lists `ben` along with `eng` and `osd`.
+4. (Optional) In application environment variables, `IMS_TESSERACT_PATH` defaults to `tesseract` and does not need to be set unless installed in a non-standard binary path.
+
+### 3. Graceful Fallback
+If Tesseract is not installed or temporarily fails:
+- `NidOcr::available()` catches errors and returns `false`.
+- KYC document submission is never blocked for investors.
+- Staff members can view the uploaded images and verify the NID manually in the IMS office (`/office/kyc`).
 
 ## Production Checklist
 

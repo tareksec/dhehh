@@ -7,6 +7,7 @@ use App\Filament\Resources\ProjectSettlements\ProjectSettlementResource;
 use App\Models\InvestmentProject;
 use App\Models\ProjectSettlement;
 use App\Services\Investment\SettlementService;
+use App\Support\ImsPanelLinks;
 use App\Support\MoneyFormatter;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -58,7 +59,7 @@ class ViewInvestmentProject extends ViewRecord
                 ->label('Investor Register')
                 ->icon('heroicon-o-table-cells')
                 ->color('gray')
-                ->url(fn (): string => route('investments.reports.project-register', $this->record))
+                ->url(fn (): string => ImsPanelLinks::route('investments.reports.project-register', $this->record))
                 ->openUrlInNewTab(),
             Action::make('settle')
                 ->label('Calculate & Settle')
@@ -73,35 +74,62 @@ class ViewInvestmentProject extends ViewRecord
                         ->status('warning')
                         ->visible(fn (): bool => $this->record->capitalBaseGap() !== null)
                         ->columnSpanFull(),
-                    TextInput::make('total_revenue')->numeric()->prefix('৳')->minValue(0)->required()->live(debounce: 500)
+                    Select::make('basis')
+                        ->label(__('How is the amount decided?'))
+                        ->options([
+                            ProjectSettlement::BASIS_SALES => __('From the sales revenue'),
+                            ProjectSettlement::BASIS_MANUAL => __('Profit entered by hand (no sales needed)'),
+                        ])
+                        ->default(ProjectSettlement::BASIS_SALES)
+                        ->required()
+                        ->live()
+                        ->helperText(__('Investors are paid their profit share every cycle, sales or not. Choose "Profit entered by hand" to pay the cycle without waiting for sales.')),
+                    TextInput::make('total_revenue')->numeric()->prefix('৳')->minValue(0)->live(debounce: 500)
+                        ->required(fn (Get $get): bool => $get('basis') !== ProjectSettlement::BASIS_MANUAL)
+                        ->visible(fn (Get $get): bool => $get('basis') !== ProjectSettlement::BASIS_MANUAL)
                         ->helperText(fn (Get $get): string => 'বাস্তব বিক্রয় মূল্য (Selling Amount)। Direct cost: '
                             .MoneyFormatter::currency($this->record->totalCostItems())
                             .' → Net: '.MoneyFormatter::currency((float) ($get('total_revenue') ?? 0) - $this->record->totalCostItems())),
+                    TextInput::make('manual_net_profit')
+                        ->label(__('Net profit to distribute'))
+                        ->numeric()->prefix('৳')->minValue(0)->live(debounce: 500)
+                        ->required(fn (Get $get): bool => $get('basis') === ProjectSettlement::BASIS_MANUAL)
+                        ->visible(fn (Get $get): bool => $get('basis') === ProjectSettlement::BASIS_MANUAL)
+                        ->helperText(fn (Get $get): string => __('The profit before the split. Investors get :percent% of it, shared by capital: :pool.', [
+                            'percent' => rtrim(rtrim(number_format((float) $this->record->investor_share_percent, 2), '0'), '.'),
+                            'pool' => MoneyFormatter::currency(round((float) ($get('manual_net_profit') ?? 0) * (float) $this->record->investor_share_percent / 100, 2)),
+                        ])),
                     Select::make('outcome')
-                        // A group's principal stays invested, so a loss that eats into it waits for the owner's rule.
-                        ->options(fn (): array => $this->record->isGrouped() ? array_diff_key(ProjectSettlement::OUTCOMES, ['loss_investor_borne' => true]) : ProjectSettlement::OUTCOMES)
+                        ->options(ProjectSettlement::OUTCOMES)
                         ->default('profit')
                         ->required()
                         ->live()
-                        ->helperText('Net profit নেগেটিভ হলে চুক্তির ধারা ৪ অনুযায়ী লোকসান কে বহন করবে বেছে নিন।'),
+                        ->visible(fn (Get $get): bool => $get('basis') !== ProjectSettlement::BASIS_MANUAL)
+                        ->helperText(fn (): string => 'Net profit নেগেটিভ হলে চুক্তির ধারা ৪ অনুযায়ী লোকসান কে বহন করবে বেছে নিন। '
+                            .__('Borne by investors: they bear :percent% of the loss, shared by capital and taken from their capital; the company bears the rest.', [
+                                'percent' => rtrim(rtrim(number_format((float) $this->record->investor_share_percent, 2), '0'), '.'),
+                            ])),
                     Textarea::make('loss_reason')
                         ->rows(2)
-                        ->required(fn (Get $get): bool => $get('outcome') !== 'profit')
-                        ->visible(fn (Get $get): bool => $get('outcome') !== 'profit')
+                        ->required(fn (Get $get): bool => $get('basis') !== ProjectSettlement::BASIS_MANUAL && $get('outcome') !== 'profit')
+                        ->visible(fn (Get $get): bool => $get('basis') !== ProjectSettlement::BASIS_MANUAL && $get('outcome') !== 'profit')
                         ->helperText('কেন লোকসান হলো — সংক্ষিপ্ত বিবরণ (audit-এ থাকবে)।'),
                     Checkbox::make('acknowledge_unproven_costs')
                         ->label('Some cost items have no purchase link or receipt — settle anyway')
-                        ->visible(fn (): bool => $this->unprovenCostLabels() !== [])
+                        ->visible(fn (Get $get): bool => $get('basis') !== ProjectSettlement::BASIS_MANUAL && $this->unprovenCostLabels() !== [])
                         ->helperText(fn (): string => 'প্রমাণ ছাড়া cost item: '.implode(', ', $this->unprovenCostLabels())),
                 ])
                 ->action(function (array $data): void {
+                    $isManual = ($data['basis'] ?? ProjectSettlement::BASIS_SALES) === ProjectSettlement::BASIS_MANUAL;
+
                     $settlement = app(SettlementService::class)->calculateAndSettle(
                         $this->record,
-                        (float) $data['total_revenue'],
+                        (float) ($data['total_revenue'] ?? 0),
                         (int) auth()->id(),
                         (bool) ($data['acknowledge_unproven_costs'] ?? false),
                         (string) ($data['outcome'] ?? 'profit'),
                         $data['loss_reason'] ?? null,
+                        $isManual ? (float) ($data['manual_net_profit'] ?? 0) : null,
                     );
                     Notification::make()->success()->title('Draft settlement created')->body('Net profit: '.MoneyFormatter::currency((float) $settlement->net_profit).' — review and confirm.')->send();
                     $this->redirect(ProjectSettlementResource::getUrl('view', ['record' => $settlement]));

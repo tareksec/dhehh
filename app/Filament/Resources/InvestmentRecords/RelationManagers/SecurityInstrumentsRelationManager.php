@@ -5,6 +5,7 @@ namespace App\Filament\Resources\InvestmentRecords\RelationManagers;
 use App\Models\InvestorSecurityInstrument;
 use App\Services\CompanyStorageService;
 use App\Support\CompanyMedia;
+use App\Support\ImsPanelLinks;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -98,7 +99,7 @@ class SecurityInstrumentsRelationManager extends RelationManager
                 Action::make('downloadContract')
                     ->label('Download Contract')
                     ->icon('heroicon-o-arrow-down-tray')
-                    ->url(fn (InvestorSecurityInstrument $record): string => route('investor-security-instruments.contract', $record))
+                    ->url(fn (InvestorSecurityInstrument $record): string => ImsPanelLinks::route('investor-security-instruments.contract', $record))
                     ->openUrlInNewTab()
                     ->visible(fn (InvestorSecurityInstrument $record): bool => filled($record->contract_document_path)),
                 EditAction::make(),

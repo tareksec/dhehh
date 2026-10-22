@@ -205,7 +205,7 @@ body[data-storefront-theme='marketplace_pro'] .mp-brand-name {
 }
 
 .mp-utility-bar {
-    background: color-mix(in srgb, var(--storefront-secondary) 72%, black);
+    background: color-mix(in srgb, var(--storefront-secondary-deep, var(--storefront-secondary)) 72%, black);
     color: rgb(255 255 255 / 0.72);
 }
 
@@ -365,7 +365,7 @@ body[data-storefront-theme='marketplace_pro'] .mp-brand-name {
 }
 
 .mp-footer {
-    background: color-mix(in srgb, var(--storefront-secondary) 72%, black);
+    background: color-mix(in srgb, var(--storefront-secondary-deep, var(--storefront-secondary)) 72%, black);
     color: rgb(255 255 255 / 0.82);
 }
 
@@ -810,14 +810,22 @@ body[data-storefront-theme='marketplace_pro'] .mp-brand-name {
      * Marketplace Pro keeps the desktop banner shorter than the Built-in
      * theme's full 3:1 so the "Shop by category" row directly beneath it
      * stays in view without scrolling on large screens (owner request,
-     * screenshot 2026-09-08). Its Hero Slides upload editor locks to this
-     * same 4:1 ratio (StorefrontThemeRegistry::BANNER_SPECS), and
-     * max-height keeps the banner in check on ultra-wide monitors. The
-     * shared mobile rule above is unchanged.
+     * screenshot 2026-09-08). The banner now takes the height of the
+     * uploaded artwork (capped at 30rem) and always shows the whole image:
+     * a fixed 4:1 frame with `cover` cut off the top and bottom of any slide
+     * that was not exactly 4:1 (owner screenshot 2026-10-19). The Hero Slides
+     * upload editor still guides uploads to 4:1
+     * (StorefrontThemeRegistry::BANNER_SPECS), which then fills the frame.
      */
     body[data-storefront-theme='marketplace_pro'] .storefront-image-banner {
-        aspect-ratio: 4 / 1;
+        aspect-ratio: auto;
         max-height: 30rem;
+    }
+
+    body[data-storefront-theme='marketplace_pro'] .storefront-image-banner img {
+        height: auto;
+        max-height: 30rem;
+        object-fit: contain;
     }
 
     .storefront-image-banner img {
@@ -2333,7 +2341,7 @@ body[data-storefront-theme='noor_solar'] .storefront-footer a:hover {
 
 .storefront-shell .storefront-footer.mp-footer,
 .dark .storefront-shell .storefront-footer.mp-footer {
-    background-color: color-mix(in srgb, var(--storefront-secondary) 72%, black);
+    background-color: color-mix(in srgb, var(--storefront-secondary-deep, var(--storefront-secondary)) 72%, black);
 }
 
 .storefront-shell :where(h1, h2, h3, h4, h5, h6) {

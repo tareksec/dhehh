@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Ims\Capital\CapitalCalculator;
+use App\Models\CapitalReturn;
 use App\Models\ChannelPartner;
 use App\Models\ChannelPartnerPayout;
 use App\Models\Investment;
@@ -109,23 +111,29 @@ class InvestorPortalService
      */
     protected function workingCapital(Closure $forInvestors): float
     {
+        // IMS v2 (TRD §4.3): capital is always the CapitalCalculator's — after any
+        // loss taken from it and any capital already paid back.
+        $capital = app(CapitalCalculator::class);
+
         $staying = (float) $forInvestors(InvestorGroupMember::query())
             ->where('status', InvestorGroupMember::STATUS_ACTIVE)
             ->whereHas('group', fn (Builder $query) => $query->where('status', InvestorGroup::STATUS_RUNNING))
-            ->sum('amount');
+            ->get()
+            ->sum(fn (InvestorGroupMember $member): float => $capital->forMember($member)['outstanding']);
 
         $leaving = (float) $forInvestors(InvestorGroupMember::query())
             ->where('status', InvestorGroupMember::STATUS_WITHDRAWN)
             ->whereNotNull('leaves_after_sequence')
             ->get()
             ->filter(fn (InvestorGroupMember $member): bool => $this->lastPayoutStillOpen($member))
-            ->sum(fn (InvestorGroupMember $member): float => (float) $member->amount);
+            ->sum(fn (InvestorGroupMember $member): float => $capital->forMember($member)['returnable']);
 
         $outsideGroups = (float) $forInvestors(Investment::query())
             ->whereNull('group_member_id')
             ->where('status', Investment::STATUS_ACTIVE)
             ->whereHas('project', fn (Builder $query) => $query->where('status', '!=', 'settled'))
-            ->sum('amount');
+            ->get()
+            ->sum(fn (Investment $investment): float => $capital->forInvestment($investment)['outstanding']);
 
         return round($staying + $leaving + $outsideGroups, 2);
     }
@@ -148,9 +156,10 @@ class InvestorPortalService
     /** Everything the person has ever put in: one deposit per group membership, plus investments outside any group. */
     public function totalInvested(InvestorPortalAccount $account): float
     {
+        // Money still waiting to be confirmed (IMS v2 "pending") is not counted.
         return round(
-            (float) InvestorGroupMember::query()->where('investor_id', $account->investor_id ?? 0)->sum('amount')
-            + (float) $this->investments($account)->whereNull('group_member_id')->sum('amount'),
+            (float) InvestorGroupMember::query()->where('investor_id', $account->investor_id ?? 0)->where('status', '!=', InvestorGroupMember::STATUS_PENDING)->sum('amount')
+            + (float) $this->investments($account)->whereNull('group_member_id')->where('status', '!=', Investment::STATUS_PENDING)->sum('amount'),
             2,
         );
     }
@@ -197,7 +206,7 @@ class InvestorPortalService
         // Money in a group is ONE deposit however many projects it has been through
         // (each project holds a copy of it); only investments outside any group are
         // listed row by row.
-        $members = InvestorGroupMember::query()->where('investor_id', $account->investor_id ?? 0)->with('group:id,group_code,name')->get();
+        $members = InvestorGroupMember::query()->where('investor_id', $account->investor_id ?? 0)->where('status', '!=', InvestorGroupMember::STATUS_PENDING)->with('group:id,group_code,name')->get();
 
         foreach ($members as $member) {
             $about = trim($member->group?->group_code.' — '.$member->group?->name);
@@ -210,7 +219,7 @@ class InvestorPortalService
             }
         }
 
-        $investments = $this->investments($account)->whereNull('group_member_id')->with('project:id,project_code,name')->get();
+        $investments = $this->investments($account)->whereNull('group_member_id')->where('status', '!=', Investment::STATUS_PENDING)->with('project:id,project_code,name')->get();
 
         foreach ($investments as $investment) {
             $entries->push($this->entry($investment->invested_at ?? $investment->created_at, 'deposit', __('Investment'), $investment->project, (float) $investment->amount));
@@ -236,6 +245,11 @@ class InvestorPortalService
                 ));
             }
 
+            // IMS v2 (TRD §4.2): a loss share is taken from the capital.
+            if ((float) $payout->capital_loss_amount > 0) {
+                $entries->push($this->entry($settlement->settled_at, 'loss', __('Loss taken from capital'), $settlement->project, -(float) $payout->capital_loss_amount));
+            }
+
             if ($payout->payment_status === 'paid') {
                 $entries->push($this->entry($payout->paid_at ?? $payout->updated_at, 'payout', __('Paid to you'), $settlement->project, -(float) $payout->total_payout));
             }
@@ -252,6 +266,12 @@ class InvestorPortalService
                     (float) $election->reinvest_amount,
                 ));
             }
+        }
+
+        // IMS v2 (PRD FR-53): capital paid back at maturity or on exit.
+        foreach (CapitalReturn::query()->paid()->where('investor_id', $account->investor_id ?? 0)->with(['investment.project:id,project_code,name', 'groupMember.group:id,group_code,name'])->get() as $return) {
+            $about = $return->groupMember?->group ? trim($return->groupMember->group->group_code.' — '.$return->groupMember->group->name) : $return->investment?->project;
+            $entries->push($this->entry($return->returned_on, 'capital_return', __('Capital paid back'), $about, -(float) $return->amount));
         }
 
         return $entries
@@ -279,7 +299,8 @@ class InvestorPortalService
                 $key = $payout->settlement?->settled_at?->format('Y-m');
 
                 if ($key !== null && array_key_exists($key, $series)) {
-                    $series[$key] = round($series[$key] + (float) $payout->profit_share_amount, 2);
+                    // A loss month shows below zero (IMS v2: the loss is taken from capital).
+                    $series[$key] = round($series[$key] + (float) $payout->profit_share_amount - (float) $payout->capital_loss_amount, 2);
                 }
             });
 
@@ -295,16 +316,17 @@ class InvestorPortalService
         return trim(($project->project_code ? $project->project_code.' — ' : '').$project->name);
     }
 
-    /** @return array{date: Carbon, type: string, label: string, project: string, amount: float, info_amount: ?float, order: int} */
+    /** @return array{date: Carbon, type: string, label: string, project: string, project_id: ?int, amount: float, info_amount: ?float, order: int} */
     protected function entry(mixed $date, string $type, string $label, InvestmentProject|string|null $project, float $amount, ?float $infoAmount = null): array
     {
-        $order = ['deposit' => 1, 'profit' => 2, 'loss' => 2, 'payout' => 3, 'reinvest' => 4, 'withdrawal' => 5][$type] ?? 9;
+        $order = ['deposit' => 1, 'profit' => 2, 'loss' => 2, 'payout' => 3, 'reinvest' => 4, 'withdrawal' => 5, 'capital_return' => 5][$type] ?? 9;
 
         return [
             'date' => Carbon::parse($date ?? now()),
             'type' => $type,
             'label' => $label,
             'project' => is_string($project) ? $project : $this->projectLabel($project),
+            'project_id' => $project instanceof InvestmentProject ? (int) $project->getKey() : null,
             'amount' => round($amount, 2),
             'info_amount' => $infoAmount === null ? null : round($infoAmount, 2),
             'order' => $order,

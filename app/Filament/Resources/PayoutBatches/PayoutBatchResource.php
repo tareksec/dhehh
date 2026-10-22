@@ -7,8 +7,8 @@ use App\Filament\Concerns\HasGuardedNavigationBadge;
 use App\Filament\Resources\PayoutBatches\Pages\ListPayoutBatches;
 use App\Filament\Resources\PayoutBatches\Pages\ViewPayoutBatch;
 use App\Filament\Resources\PayoutBatches\RelationManagers\ItemsRelationManager;
-use App\Filament\Resources\Vouchers\VoucherResource;
 use App\Models\PayoutBatch;
+use App\Support\ImsPanelLinks;
 use App\Support\MoneyFormatter;
 use BackedEnum;
 use Filament\Actions\ViewAction;
@@ -112,7 +112,7 @@ class PayoutBatchResource extends Resource
                 TextEntry::make('bank_reference')->label(__('Bank reference'))->placeholder('-'),
                 TextEntry::make('completer.name')->label(__('Recorded paid by'))->placeholder('-'),
                 TextEntry::make('voucher.voucher_number')->label(__('Voucher'))->placeholder('-')
-                    ->url(fn (PayoutBatch $record): ?string => $record->voucher_id ? VoucherResource::getUrl('view', ['record' => $record->voucher_id]) : null),
+                    ->url(fn (PayoutBatch $record): ?string => $record->voucher_id ? ImsPanelLinks::voucher($record->voucher_id) : null),
                 TextEntry::make('cancel_reason')->label(__('Cancelled because'))->visible(fn (PayoutBatch $record): bool => $record->status === PayoutBatch::STATUS_CANCELLED),
                 TextEntry::make('notes')->label(__('Notes'))->placeholder('-')->columnSpanFull(),
             ])->columns(2),

@@ -222,14 +222,15 @@ class PayoutPaymentProofTest extends TestCase
 
         $this->portalSessionOf($mine);
 
+        // The portal's lists are keyed "<company id>-<id>" (18_IMS_ALL_COMPANIES_PLAN.md phase E).
         Livewire::test(Payouts::class)
-            ->assertCanSeeTableRecords([$payout])
-            ->assertCanNotSeeTableRecords([$other])
-            ->assertTableActionVisible('paymentProof', $payout->fresh());
+            ->assertCanSeeTableRecords([$payout->company_id.'-'.$payout->id])
+            ->assertCanNotSeeTableRecords([$other->company_id.'-'.$other->id])
+            ->assertTableActionVisible('paymentProof', $payout->company_id.'-'.$payout->id);
 
         Livewire::test(Documents::class)
-            ->assertCanSeeTableRecords([$mineProof])
-            ->assertCanNotSeeTableRecords([$theirProof]);
+            ->assertCanSeeTableRecords([$mineProof->company_id.'-'.$mineProof->id])
+            ->assertCanNotSeeTableRecords([$theirProof->company_id.'-'.$theirProof->id]);
 
         $base = 'http://investor.proof.example.test/investor';
         $this->get("{$base}/documents/{$mineProof->getKey()}/download")->assertOk();
@@ -247,7 +248,7 @@ class PayoutPaymentProofTest extends TestCase
         $stranger = Investor::query()->create(['company_id' => $other->id, 'name' => 'Stranger', 'phone' => '01850000099']);
         $this->portalSessionOf($stranger, $other);
 
-        Livewire::test(Documents::class)->assertCanNotSeeTableRecords(InvestmentDocument::withoutGlobalScopes()->get());
+        Livewire::test(Documents::class)->assertCanNotSeeTableRecords(InvestmentDocument::withoutGlobalScopes()->get()->map(fn (InvestmentDocument $document): string => $document->company_id.'-'.$document->id)->all());
     }
 
     public function test_a_partner_sees_the_screenshot_of_their_own_commission(): void
@@ -261,7 +262,7 @@ class PayoutPaymentProofTest extends TestCase
         $this->portalSessionOfPartner($partner);
 
         Livewire::test(Commissions::class)->assertTableActionVisible('paymentProof', $partnerPayout->fresh());
-        Livewire::test(Documents::class)->assertCanSeeTableRecords([$proof]);
+        Livewire::test(Documents::class)->assertCanSeeTableRecords([$proof->company_id.'-'.$proof->id]);
         $this->get("http://investor.proof.example.test/investor/documents/{$proof->getKey()}/download")->assertOk();
     }
 

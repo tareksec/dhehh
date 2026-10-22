@@ -8,13 +8,20 @@ import path from 'node:path'
  * so a bridge restart or an ERP outage never loses a synced message.
  *
  * deliver(entry) resolves to 'done' | 'retry' | 'drop'.
+ *
+ * By default a retry stops the whole queue so order is kept. With
+ * `independent: true` (entries that do not depend on each other, like media
+ * downloads) a failing entry is only put back for later and the next one is
+ * tried, so one expired file cannot hold up every file behind it.
  */
 export class Outbox {
-  constructor ({ dir, logger, deliver, maxAttempts = Infinity }) {
+  constructor ({ dir, logger, deliver, maxAttempts = Infinity, independent = false }) {
     this.dir = dir
     this.logger = logger
     this.deliver = deliver
     this.maxAttempts = maxAttempts
+    this.independent = independent
+    this.deferred = new Map()
     this.sequence = 0
     this.running = false
     this.timer = null
@@ -66,10 +73,19 @@ export class Outbox {
           return
         }
 
-        const [next] = await this.pending()
+        const pending = await this.pending()
+        const now = Date.now()
+        const next = pending.find((name) => (this.deferred.get(name) ?? 0) <= now)
 
         if (!next) {
           this.failures = 0
+
+          if (pending.length > 0) {
+            // Everything left is waiting for its own retry time.
+            const earliest = Math.min(...pending.map((name) => this.deferred.get(name) ?? now))
+            this.running = false
+            this.kick(Math.max(earliest - now, 0))
+          }
 
           return
         }
@@ -97,6 +113,13 @@ export class Outbox {
         if (result === 'retry' && record.attempts + 1 < this.maxAttempts) {
           record.attempts += 1
           await writeFile(file, JSON.stringify(record))
+
+          if (this.independent) {
+            // 2s, 4s, 8s ... capped at 5 minutes, per entry; keep working.
+            this.deferred.set(next, Date.now() + Math.min(2000 * 2 ** Math.min(record.attempts - 1, 10), 300_000))
+            continue
+          }
+
           this.failures += 1
           // 2s, 4s, 8s ... capped at 5 minutes.
           this.running = false
@@ -110,6 +133,7 @@ export class Outbox {
         }
 
         this.failures = 0
+        this.deferred.delete(next)
         await unlink(file).catch(() => {})
       }
     } finally {

@@ -436,20 +436,25 @@ class CrmSalesAutomationTest extends TestCase
         $this->assertArrayNotHasKey('budget', $lead->fresh()->qualification);
     }
 
-    public function test_follow_up_is_cancelled_after_new_inbound(): void
+    public function test_follow_up_starts_over_after_a_new_inbound_message(): void
     {
+        $this->travelTo(now('Asia/Dhaka')->setTime(12, 0));
         $this->settings(['sales_follow_ups_enabled' => true, 'follow_up_template' => 'sales_followup']);
         $service = app(SalesFollowUpService::class);
         $followUp = $service->schedule($this->conversation, $this->link());
-        $followUp->update(['due_at' => now()->subMinute()]);
+        $followUp->update(['due_at' => now()->subMinute(), 'step' => 2]);
         $this->incoming('আর লাগবে না');
         $service->process($followUp);
-        $this->assertSame('cancelled', $followUp->fresh()->status);
-        $this->assertStringContainsString('replied', $followUp->fresh()->reason);
+        $followUp = $followUp->fresh();
+        $this->assertSame('pending', $followUp->status);
+        $this->assertSame(0, $followUp->step);
+        $this->assertStringContainsString('wrote again', $followUp->reason);
+        $this->assertEqualsWithDelta(now()->addHour()->timestamp, $followUp->due_at->timestamp, 5);
     }
 
     public function test_follow_up_rechecks_opt_out_using_normalized_phone(): void
     {
+        $this->travelTo(now('Asia/Dhaka')->setTime(12, 0));
         $this->settings(['sales_follow_ups_enabled' => true, 'follow_up_template' => 'sales_followup']);
         $service = app(SalesFollowUpService::class);
         $followUp = $service->schedule($this->conversation, $this->link());
@@ -462,6 +467,7 @@ class CrmSalesAutomationTest extends TestCase
 
     public function test_follow_up_template_is_sent_once_and_archived(): void
     {
+        $this->travelTo(now('Asia/Dhaka')->setTime(12, 0));
         Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'follow-up-1']]])]);
         $this->settings(['sales_follow_ups_enabled' => true, 'follow_up_template' => 'sales_followup']);
         $service = app(SalesFollowUpService::class);
@@ -472,7 +478,8 @@ class CrmSalesAutomationTest extends TestCase
         $service->process($followUp);
         $service->process($followUp);
         Http::assertSentCount(1);
-        $this->assertSame('sent', $followUp->fresh()->status);
+        // The first of the scheduled reminders went; the next one waits for its time.
+        $this->assertSame(['pending', 1], [$followUp->fresh()->status, $followUp->fresh()->step]);
         $this->assertSame('follow-up-1', $this->conversation->messages()->where('direction', 'outgoing')->sole()->external_message_id);
     }
 

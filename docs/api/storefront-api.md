@@ -303,7 +303,7 @@ per visitor, not per website server.
 | Call | Body | Success | Errors |
 |---|---|---|---|
 | `POST /account/register` | `name, phone, email?, address?, password (min 8), password_confirmation, remember?, code?` | `201 {data:{customer, token, expires_at}}`, or `202 {verification_required:true, masked_identifier, expires_in_minutes}` when the phone must be proven first (see below) | `409 account_exists`, `409 email_taken`, `422 otp_invalid`, `422 verification_unavailable`, `422` |
-| `POST /account/login` | `identifier` (phone or email), `password, remember?` | `200` same shape | `422 invalid_credentials`, `429 too_many_attempts` (+`retry_after`), `403 account_disabled` |
+| `POST /account/login` | `identifier` (phone or email), `password, remember?, device_token?, captcha_token?` | `200` same shape plus `device_token` (see below) | `422 invalid_credentials`, `429 too_many_attempts` (+`retry_after`, `challenge`), `429 captcha_required` (+`captcha`, see below), `403 account_disabled` |
 | `POST /account/otp` | `identifier` | `202 {ok, masked_identifier}` — the same answer whether or not an account exists | `422 otp_unavailable` (phone code but no SMS gateway) |
 | `POST /account/otp/verify` | `identifier, code (6 digits), remember?` | `200` token | `422 otp_invalid` |
 | `POST /account/password/forgot` | `phone` | `202 {ok}` (generic) | `422 sms_unavailable` |
@@ -321,6 +321,31 @@ record answers `422 verification_unavailable` (also when the SMS could not be se
 Phones are accepted as typed (`+880 1712-345678`, `8801712345678`, `01712345678`) and stored in the local
 `01XXXXXXXXX` form checkout already uses. Five wrong reset codes lock that account's reset until the
 15-minute window ends.
+
+**Sign-in protection (`LoginGate`, `docs/login-protection.md`).** The password hash is slow on purpose, so
+`POST /account/login` is judged *before* it is computed. The ERP counts wrong passwords per account **and
+device** (the visitor's `client_ip` + `client_user_agent` — send both on this call), per account from every
+device, and for the whole site. `429 too_many_attempts` carries `retry_after` (seconds) and `challenge`
+(`true` while the account or the site is under attack and this device is not one the account has signed in
+from). A client that only ever fails is answered `422 invalid_credentials` like a wrong password, without the
+password being checked.
+
+**CAPTCHA step (Cloudflare Turnstile).** When the owner has switched it on (Settings → Login Security) and a
+sign-in is *challenged*, the answer is `429 captcha_required` instead of `too_many_attempts`:
+`{ok:false, error:"captcha_required", challenge:true, retry_after, captcha:{provider:"turnstile", site_key}}`.
+The website shows the Turnstile widget with that **public** `site_key` (or, when it knows its own site key, any
+time it likes), then sends the same sign-in again with the widget's response token as `captcha_token`. A normal
+sign-in never needs it, a token works once, and a token Cloudflare does not accept (or Cloudflare being
+unreachable) leaves the challenge in place. A website that does not know `captcha_required` shows its generic
+error: nothing breaks, the visitor just cannot get past the challenge until the attack stops. With no CAPTCHA
+set up the answer stays `429 too_many_attempts` with `challenge:true` — a wait.
+
+**Device trust.** A successful `POST /account/login` also answers `data.device_token`. The website keeps it in
+**its own httpOnly cookie** (never visible to browser scripts, like the customer token) and sends it back as
+`device_token` (or the header `X-Device-Token`) on that visitor's later sign-ins. A device the account has
+signed in from is not judged by other people's guessing at the account. The token is bound to the account and
+company and stops working when the password changes or after 90 days; the website needs no change to keep
+working — without it every visitor is simply treated as a new device.
 
 ### The account (needs `X-Customer-Token`)
 * `POST /account/logout` — ends only this login.

@@ -36,6 +36,14 @@ class RestrictPortalHosts
     ];
 
     /**
+     * The panel paths an IMS v2 domain serves: the investor portal and the
+     * IMS office. Anything else on that domain goes to the portal.
+     *
+     * @var list<string>
+     */
+    public const IMS_PATHS = ['investor', 'office'];
+
+    /**
      * Always allowed regardless of host: framework/infra routes no page can
      * function without.
      */
@@ -47,6 +55,28 @@ class RestrictPortalHosts
 
         if ($this->isPassthrough($path)) {
             return $next($request);
+        }
+
+        // The central investor sign-in for every business (17_IMS_IN_PORTAL_PLAN.md §5): the investor portal only.
+        if (Company::isImsCentralHost($request->getHost())) {
+            return $this->isUnder($path, 'investor') ? $next($request) : redirect()->to('/investor');
+        }
+
+        // IMS v2 (IMS-V2/ARCHITECTURE.md §2): its own domain carries two panels,
+        // the investor portal (the domain's root) and the office at /office.
+        if (Company::forImsHost($request->getHost())) {
+            foreach (self::IMS_PATHS as $panelPath) {
+                if ($this->isUnder($path, $panelPath)) {
+                    return $next($request);
+                }
+            }
+
+            return redirect()->to('/investor');
+        }
+
+        // The old investor-portal host of a company that moved to IMS v2.
+        if ($company = Company::forRetiredInvestorPortalHost($request->getHost())) {
+            return redirect()->away($company->imsUrl($this->isUnder($path, 'investor') ? $request->getRequestUri() : 'investor'));
         }
 
         // The portal that owns this host, if any: every other path redirects to it.
@@ -71,7 +101,7 @@ class RestrictPortalHosts
         }
 
         // Not a portal host: no portal path is served here.
-        foreach (array_keys(self::PORTALS) as $panelPath) {
+        foreach ([...array_keys(self::PORTALS), ...self::IMS_PATHS] as $panelPath) {
             if ($this->isUnder($path, $panelPath)) {
                 abort(404);
             }

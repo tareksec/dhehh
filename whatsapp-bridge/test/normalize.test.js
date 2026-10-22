@@ -3,7 +3,7 @@ import { mkdtemp, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
-import { isPersonalChat, normalizeContact, normalizeMessage, phoneFromJid } from '../src/normalize.js'
+import { isPersonalChat, lidPairsFromMessages, normalizeContact, normalizeMessage, phoneFromJid, splitLiveMessages } from '../src/normalize.js'
 import { Outbox, classifyResponse, sign } from '../src/outbox.js'
 
 const silent = { error () {}, warn () {}, info () {} }
@@ -98,6 +98,46 @@ test('contacts are normalized with phone and names', () => {
   assert.equal(normalizeContact({ id: '1@g.us' }), null)
 })
 
+test('lid and phone pairs are read from message keys in both directions', () => {
+  const pairs = lidPairsFromMessages([
+    { key: { remoteJid: '111@lid', remoteJidAlt: '8801711000001@s.whatsapp.net' } },
+    { key: { remoteJid: '8801711000002@s.whatsapp.net', remoteJidAlt: '222@lid' } },
+    { key: { remoteJid: '333@lid' } },
+    { key: { remoteJid: '120363@g.us', remoteJidAlt: '444@lid' } },
+    null,
+  ])
+
+  assert.deepEqual(pairs, [
+    ['111@lid', '8801711000001@s.whatsapp.net'],
+    ['222@lid', '8801711000002@s.whatsapp.net'],
+  ])
+  assert.deepEqual(lidPairsFromMessages(undefined), [])
+})
+
+test('a push name keyed by lid reaches the phone once the pair is learned', () => {
+  const entry = { id: '111@lid', notify: 'Karim Uddin' }
+
+  assert.equal(normalizeContact(entry, new Map()).phone, null)
+
+  const lidToPhone = new Map(lidPairsFromMessages([{ key: { remoteJid: '111@lid', remoteJidAlt: '8801711000001@s.whatsapp.net' } }]).map(([lid, jid]) => [lid, phoneFromJid(jid)]))
+  const contact = normalizeContact(entry, lidToPhone)
+
+  assert.equal(contact.phone, '8801711000001')
+  assert.equal(contact.jid, '8801711000001@s.whatsapp.net')
+  assert.equal(contact.push_name, 'Karim Uddin')
+})
+
+test('live upserts are live; offline ones are live only when recent', () => {
+  const now = 1_700_000_000
+  const fresh = { key: { id: 'A' }, messageTimestamp: now - 3600 }
+  const stale = { key: { id: 'B' }, messageTimestamp: now - 3 * 86_400 }
+  const undated = { key: { id: 'C' } }
+
+  assert.deepEqual(splitLiveMessages([fresh, stale], 'notify', now), { live: [fresh, stale], old: [] })
+  assert.deepEqual(splitLiveMessages([fresh, stale, undated], 'append', now), { live: [fresh], old: [stale, undated] })
+  assert.deepEqual(splitLiveMessages(undefined, 'append', now), { live: [], old: [] })
+})
+
 test('only permanent failures drop queued events', () => {
   assert.equal(classifyResponse(200), 'done')
   assert.equal(classifyResponse(401), 'retry')
@@ -146,4 +186,61 @@ test('outbox delivers in order and keeps entries until delivered', async () => {
   await outbox.run()
   assert.deepEqual(delivered, [1, 2])
   assert.equal((await outbox.pending()).length, 0)
+})
+
+test('an independent outbox keeps going when one entry keeps failing', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'outbox-'))
+  const delivered = []
+  const outbox = new Outbox({
+    dir,
+    logger: silent,
+    independent: true,
+    maxAttempts: 3,
+    deliver: async (entry) => {
+      if (entry.n === 1) {
+        return 'retry'
+      }
+
+      delivered.push(entry.n)
+
+      return 'done'
+    },
+  })
+
+  outbox.stopped = true
+  await outbox.push({ n: 1 })
+  await outbox.push({ n: 2 })
+  await outbox.push({ n: 3 })
+
+  outbox.stopped = false
+  await outbox.run()
+
+  // Entry 1 failed and waits for its own retry; 2 and 3 were not held up.
+  assert.deepEqual(delivered, [2, 3])
+  assert.equal((await outbox.pending()).length, 1)
+  assert.ok(outbox.deferred.size === 1)
+  assert.ok(outbox.timer, 'a retry is scheduled for the failed entry')
+
+  clearTimeout(outbox.timer)
+  outbox.timer = null
+  outbox.stopped = true
+})
+
+test('an independent outbox drops an entry after its last attempt', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'outbox-'))
+  const outbox = new Outbox({ dir, logger: silent, independent: true, maxAttempts: 2, deliver: async () => 'retry' })
+
+  outbox.stopped = true
+  await outbox.push({ n: 1 })
+  outbox.stopped = false
+
+  await outbox.run()
+  assert.equal((await outbox.pending()).length, 1)
+
+  outbox.deferred.clear()
+  clearTimeout(outbox.timer)
+  outbox.timer = null
+  await outbox.run()
+  assert.equal((await outbox.pending()).length, 0)
+  outbox.stopped = true
 })

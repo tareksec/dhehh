@@ -4,10 +4,10 @@ namespace App\Filament\Resources\ProjectSettlements\RelationManagers;
 
 use App\Filament\Actions\PayoutProofAction;
 use App\Filament\Resources\ChannelPartners\ChannelPartnerResource;
-use App\Filament\Resources\Vouchers\VoucherResource;
 use App\Models\ChannelPartnerPayout;
 use App\Services\Investment\PayoutCompletionService;
 use App\Support\CompanyMedia;
+use App\Support\ImsPanelLinks;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -43,7 +43,7 @@ class ChannelPartnerPayoutsRelationManager extends RelationManager
                 ->label('Voucher')
                 ->badge()
                 ->placeholder('-')
-                ->url(fn (ChannelPartnerPayout $record): ?string => $record->voucher_id ? VoucherResource::getUrl('view', ['record' => $record->voucher_id]) : null),
+                ->url(fn (ChannelPartnerPayout $record): ?string => $record->voucher_id ? ImsPanelLinks::voucher($record->voucher_id) : null),
             PayoutProofAction::column(),
         ])->recordActions([
             Action::make('markPaid')->label('Mark as Paid')->icon('heroicon-o-check-circle')->color('success')

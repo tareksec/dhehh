@@ -298,12 +298,16 @@ class InvestmentSettlementTest extends TestCase
 
         $this->assertEquals(-50000, $settlement->net_profit);
         $this->assertSame('loss_investor_borne', $settlement->outcome);
-        // 50k loss over 100k capital: A bears 30k, B bears 20k.
-        $this->assertEquals(-30000, $settlement->payouts()->where('investor_id', $investorA->id)->value('profit_share_amount'));
-        $this->assertEquals(30000, $settlement->payouts()->where('investor_id', $investorA->id)->value('total_payout'));
-        $this->assertEquals(20000, $settlement->payouts()->where('investor_id', $investorB->id)->value('total_payout'));
+        // Owner (2026-10-19): investors bear loss × the project's investor % (40%):
+        // 20k of the 50k, by capital — A 12k, B 8k — taken from the capital.
+        $this->assertEquals(40, $settlement->investor_loss_percent);
+        $this->assertEquals(0, $settlement->payouts()->where('investor_id', $investorA->id)->value('profit_share_amount'));
+        $this->assertEquals(12000, $settlement->payouts()->where('investor_id', $investorA->id)->value('capital_loss_amount'));
+        $this->assertEquals(48000, $settlement->payouts()->where('investor_id', $investorA->id)->value('total_payout'));
+        $this->assertEquals(32000, $settlement->payouts()->where('investor_id', $investorB->id)->value('total_payout'));
+        $this->assertEquals(-20000, $settlement->investor_pool_amount);
         $this->assertEquals(0, $settlement->channel_partner_amount);
-        $this->assertEquals(0, $settlement->company_net_amount); // no company contribution
+        $this->assertEquals(-30000, $settlement->company_net_amount); // the company bears the other 60%
     }
 
     public function test_loss_borne_by_company_returns_full_principal_to_investors(): void
@@ -978,6 +982,123 @@ class InvestmentSettlementTest extends TestCase
         $this->assertEquals(200000.0, (float) $settlement->total_revenue);
     }
 
+    // --- Owner 2026-10-18: profit is paid every cycle, sales or not -----
+
+    public function test_a_cycle_can_be_settled_from_a_profit_entered_by_hand_without_sales(): void
+    {
+        // profitableProject() has ৳100k of costs and no receipt on any of them:
+        // a hand-entered profit does not use the costs, so they do not block it.
+        [$project, $investorA, $investorB] = $this->profitableProject();
+
+        $settlement = app(SettlementService::class)->calculateAndSettle($project, 0, $this->user->id, manualNetProfit: 50000);
+
+        $this->assertSame(ProjectSettlement::BASIS_MANUAL, $settlement->basis);
+        $this->assertTrue($settlement->isManualBasis());
+        $this->assertSame('profit', $settlement->outcome);
+        $this->assertEquals(50000, $settlement->net_profit);
+        $this->assertEquals(100000, $settlement->total_cost);
+        $this->assertEquals(150000, $settlement->total_revenue); // cost + profit, so the figures add up
+        $this->assertEquals(20000, $settlement->investor_pool_amount); // 40% of 50k
+        $this->assertEquals(30000, $settlement->company_net_amount); // 50k − 20k; the unallocated 10% channel share falls to the company
+        // 60k / 40k of the 100k capital.
+        $this->assertEquals(12000, $settlement->payouts()->where('investor_id', $investorA->id)->value('profit_share_amount'));
+        $this->assertEquals(8000, $settlement->payouts()->where('investor_id', $investorB->id)->value('profit_share_amount'));
+        $this->assertSame('settled', $project->fresh()->status);
+    }
+
+    public function test_a_sales_settlement_is_marked_as_made_from_sales(): void
+    {
+        [$project] = $this->profitableProject();
+
+        $settlement = app(SettlementService::class)->calculateAndSettle($project, 200000, $this->user->id, acknowledgeUnprovenCosts: true);
+
+        $this->assertSame(ProjectSettlement::BASIS_SALES, $settlement->basis);
+        $this->assertFalse($settlement->isManualBasis());
+    }
+
+    public function test_a_profit_entered_by_hand_cannot_be_negative(): void
+    {
+        [$project] = $this->profitableProject();
+
+        try {
+            app(SettlementService::class)->calculateAndSettle($project, 0, $this->user->id, manualNetProfit: -1);
+            $this->fail('A negative hand-entered profit was accepted.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('cannot be negative', $e->getMessage());
+        }
+
+        $this->assertSame(0, ProjectSettlement::query()->where('project_id', $project->id)->count());
+    }
+
+    public function test_settle_action_accepts_a_profit_entered_by_hand_through_the_ui_form(): void
+    {
+        [$project] = $this->profitableProject();
+
+        Livewire::test(ViewInvestmentProject::class, ['record' => $project->getRouteKey()])
+            ->mountAction('settle')
+            ->setActionData(['basis' => ProjectSettlement::BASIS_MANUAL, 'manual_net_profit' => 50000])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $settlement = ProjectSettlement::query()->where('project_id', $project->id)->sole();
+        $this->assertSame(ProjectSettlement::BASIS_MANUAL, $settlement->basis);
+        $this->assertEquals(50000, $settlement->net_profit);
+    }
+
+    public function test_settle_action_asks_for_the_profit_when_entering_by_hand(): void
+    {
+        [$project] = $this->profitableProject();
+
+        Livewire::test(ViewInvestmentProject::class, ['record' => $project->getRouteKey()])
+            ->mountAction('settle')
+            ->setActionData(['basis' => ProjectSettlement::BASIS_MANUAL])
+            ->callMountedAction()
+            ->assertHasActionErrors(['manual_net_profit' => 'required']);
+
+        $this->assertSame(0, ProjectSettlement::query()->where('project_id', $project->id)->count());
+    }
+
+    public function test_investor_report_of_a_hand_entered_settlement_shows_no_selling_amount(): void
+    {
+        [$project, $investorA] = $this->profitableProject();
+        $settlement = app(SettlementService::class)->calculateAndSettle($project, 0, $this->user->id, manualNetProfit: 50000);
+        $payout = $settlement->payouts()->where('investor_id', $investorA->id)->first();
+
+        $this->actingAs($this->user)->withSession(['current_company_id' => $this->company->id]);
+
+        $this->get(route('investments.reports.investor-payout', $payout))
+            ->assertOk()
+            ->assertSee('declared by the company')
+            ->assertDontSee('Selling Amount')
+            ->assertDontSee('Gross Profit')
+            ->assertDontSee('Total Direct Cost');
+    }
+
+    public function test_investor_report_of_a_sales_settlement_still_shows_the_selling_amount(): void
+    {
+        [$project, $investorA] = $this->profitableProject();
+        $settlement = app(SettlementService::class)->calculateAndSettle($project, 200000, $this->user->id, acknowledgeUnprovenCosts: true);
+        $payout = $settlement->payouts()->where('investor_id', $investorA->id)->first();
+
+        $this->actingAs($this->user)->withSession(['current_company_id' => $this->company->id]);
+
+        $this->get(route('investments.reports.investor-payout', $payout))
+            ->assertOk()
+            ->assertSee('Selling Amount')
+            ->assertSee('Total Direct Cost')
+            ->assertDontSee('declared by the company');
+    }
+
+    public function test_settlement_page_marks_a_hand_entered_settlement_and_hides_the_selling_amount(): void
+    {
+        [$project] = $this->profitableProject();
+        $settlement = app(SettlementService::class)->calculateAndSettle($project, 0, $this->user->id, manualNetProfit: 50000);
+
+        Livewire::test(ViewProjectSettlement::class, ['record' => $settlement->getRouteKey()])
+            ->assertSee('Profit entered by hand')
+            ->assertDontSee('Gross Profit (Selling');
+    }
+
     public function test_investor_payout_can_be_marked_paid_through_the_relation_manager_ui(): void
     {
         [$project] = $this->profitableProject();
@@ -1047,11 +1168,10 @@ class InvestmentSettlementTest extends TestCase
         $service->confirmSettlement($settlement, $this->user->id);
         $payout = $settlement->payouts()->first();
 
-        // 'manager' has investments.manage + investments.view but not the
-        // separately-granted investments.settle permission (v3 P3 gap: this
-        // permission-denied path had no UI-level test coverage).
-        $manager = User::factory()->create(['role' => 'manager']);
-        Auth::login($manager);
+        // An accountant views investments but does not hold investments.settle
+        // (IMS-V2/ROLES.md §3.3; a manager now does by default).
+        $accountant = User::factory()->create(['role' => 'accountant']);
+        Auth::login($accountant);
 
         Livewire::test(ViewInvestmentProject::class, ['record' => $project->getRouteKey()])
             ->assertActionHidden('settle');

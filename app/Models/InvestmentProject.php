@@ -2,10 +2,15 @@
 
 namespace App\Models;
 
+use App\Jobs\SendInvestorProjectStatusSmsJob;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\GeneratesSequentialNumber;
+use App\Services\InvestorProjectMessageService;
+use App\Services\SmsTemplateService;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class InvestmentProject extends Model
 {
@@ -47,6 +52,29 @@ class InvestmentProject extends Model
 
         static::creating(function (self $project): void {
             $project->project_code ??= static::groupProjectCode($project) ?? static::nextProjectCode((int) $project->company_id);
+        });
+
+        // The investors' status SMS (SMS Templates) for a project outside a group; a group's projects
+        // are texted by the group cycle, and "settled" by the settlement's confirmation.
+        static::updated(function (self $project): void {
+            $key = match ($project->status) {
+                'running' => SmsTemplateService::PROJECT_RUNNING,
+                'closed' => SmsTemplateService::PROJECT_CLOSED,
+                default => null,
+            };
+
+            if ($key === null || filled($project->group_id) || ! $project->wasChanged('status') || ! Schema::hasTable('sms_templates')) {
+                return;
+            }
+
+            try {
+                if (app(InvestorProjectMessageService::class)->configured($project, $key)) {
+                    SendInvestorProjectStatusSmsJob::dispatch($project->getKey(), $key)->afterCommit();
+                }
+            } catch (Throwable $exception) {
+                // A problem with the SMS set-up never blocks a status change.
+                report($exception);
+            }
         });
     }
 
@@ -102,6 +130,56 @@ class InvestmentProject extends Model
         return $this->hasMany(Investment::class, 'project_id');
     }
 
+    /**
+     * ERP purchases whose goods this project paid for (IMS-V2/PRD.md FR-44 a):
+     * their sales and costs are worked out for the profit proposal. The
+     * older single `purchase_id` stays as it is.
+     */
+    public function linkedPurchases()
+    {
+        return $this->belongsToMany(Purchase::class, 'investment_project_purchases', 'project_id', 'purchase_id')
+            ->withPivot('company_id')
+            ->withTimestamps();
+    }
+
+    public function updates()
+    {
+        return $this->hasMany(ProjectUpdate::class, 'project_id');
+    }
+
+    public function milestones()
+    {
+        return $this->hasMany(ProjectMilestone::class, 'project_id')->orderBy('sort')->orderBy('id');
+    }
+
+    public function reports()
+    {
+        return $this->hasMany(ProjectReport::class, 'project_id');
+    }
+
+    public function profitProposals()
+    {
+        return $this->hasMany(ProfitProposal::class, 'project_id');
+    }
+
+    /** Every purchase tied to the project: the linked ones and the older single one. */
+    public function allPurchaseIds(): array
+    {
+        return collect($this->linkedPurchases()->pluck('purchases.id')->all())
+            ->push($this->purchase_id)
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /** True once the project's settlement is fully paid: its costs are frozen (PRD FR-47). */
+    public function isFrozen(): bool
+    {
+        return (bool) $this->settlement()->whereNotNull('locked_at')->exists();
+    }
+
     public function costItems()
     {
         return $this->hasMany(ProjectCostItem::class, 'project_id');
@@ -131,7 +209,8 @@ class InvestmentProject extends Model
 
     public function totalInvested(): float
     {
-        return (float) $this->investments()->sum('amount');
+        // Money still waiting to be confirmed (IMS v2 "pending") is not invested yet.
+        return (float) $this->investments()->where('status', '!=', Investment::STATUS_PENDING)->sum('amount');
     }
 
     /**

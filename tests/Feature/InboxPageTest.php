@@ -364,8 +364,8 @@ class InboxPageTest extends TestCase
             ->assertSeeHtml('aria-live="polite"')
             ->assertSeeHtml('role="separator"')
             ->assertSeeHtml('aria-label="Messages from')
-            ->assertSeeHtml('mobile-ai-toggle-'.$this->conversation->getKey())
-            ->assertSeeHtml('desktop-ai-toggle-'.$this->conversation->getKey())
+            ->assertSeeHtml('ai-mode-mobile-'.$this->conversation->getKey())
+            ->assertSeeHtml('ai-mode-desktop-'.$this->conversation->getKey())
             ->assertSeeHtml('<time');
     }
 

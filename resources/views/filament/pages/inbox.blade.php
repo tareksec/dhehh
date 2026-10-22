@@ -21,7 +21,7 @@
         'internal' => 'Internal note',
     ];
     $displayName = $conversation
-        ? $conversation->profileDisplayName()
+        ? $conversation->inboxDisplayName()
         : null;
     $canManage = $this->canManageConversations;
     $isSuperAdmin = auth()->user()?->isSuperAdmin() ?? false;
@@ -49,6 +49,9 @@
         if ($name === '') {
             return '?';
         }
+        if (preg_match('/^\+?[\d\s-]+$/', $name)) {
+            return '#'; // a phone number has no initials
+        }
         $parts = preg_split('/\s+/', $name) ?: [];
         $letters = mb_substr($parts[0], 0, 1).(isset($parts[1]) ? mb_substr($parts[1], 0, 1) : '');
 
@@ -66,7 +69,7 @@
 <x-filament-panels::page class="zz-inbox-page">
     <div
         data-zz-no-reload
-        wire:poll.visible.8s="refreshInbox"
+        wire:poll.visible.3s="checkForChanges"
         class="zz-inbox"
         x-data="{
             observer: null,
@@ -387,7 +390,7 @@
                             <ul class="space-y-[5px]" aria-label="Conversation list">
                                 @forelse ($conversations as $item)
                                     @php
-                                        $itemName = $item->profileDisplayName();
+                                        $itemName = $item->inboxDisplayName();
                                         $preview = $item->latestMessage
                                             ? \Illuminate\Support\Str::limit((string) ($item->latestMessage->body ?: ucfirst($item->latestMessage->type)), 72)
                                             : 'No messages yet';
@@ -612,20 +615,9 @@
                                         </div>
                                     </div>
 
-                                    <div class="flex items-center justify-between gap-3">
-                                        <div>
-                                            <h3 class="text-sm font-semibold">AI Assistant</h3>
-                                            <p class="text-xs text-gray-500 dark:text-gray-400">
-                                                {{ $conversation->ai_enabled ? 'Enabled' : 'Paused' }}
-                                            </p>
-                                        </div>
-                                        <x-filament::toggle
-                                            wire:key="mobile-ai-toggle-{{ $conversation->getKey() }}"
-                                            :state="$conversation->ai_enabled ? 'true' : 'false'"
-                                            wire:click="toggleAi"
-                                            aria-label="Toggle AI assistant"
-                                            on-icon="heroicon-m-check"
-                                        />
+                                    <div class="space-y-2">
+                                        <h3 class="text-sm font-semibold">{{ __('AI or team') }}</h3>
+                                        @include('filament.pages.partials.inbox-ai-mode', ['conversation' => $conversation, 'keyPrefix' => 'mobile'])
                                     </div>
                                 @endif
 
@@ -758,7 +750,31 @@
                                             </p>
                                         @endif
 
-                                        <div class="min-w-0 space-y-2 overflow-hidden">
+                                        <div
+                                            class="min-w-0 space-y-2 overflow-hidden"
+                                            @if (filled($message->media_path))
+                                                x-data="{ failure: null }"
+                                                x-on:error.capture="
+                                                    if (! failure && $event.target.matches('img, audio, video')) {
+                                                        const media = $event.target;
+                                                        fetch(media.currentSrc || media.src, { credentials: 'same-origin', headers: { Range: 'bytes=0-0' } })
+                                                            .then(async (response) => {
+                                                                const reason = response.ok ? '' : ((await response.json().catch(() => ({}))).message || '');
+                                                                failure = @js(__('The browser could not show this file. Server answer: :status (:type). :reason'))
+                                                                    .replace(':status', response.status)
+                                                                    .replace(':type', response.headers.get('content-type') || '-')
+                                                                    .replace(':reason', reason)
+                                                                    .trim();
+                                                            })
+                                                            .catch(() => failure = @js(__('The browser could not show this file, and the server did not answer.')));
+                                                    }
+                                                "
+                                            @endif
+                                        >
+                                            @if (filled($message->media_path))
+                                                <p x-show="failure" x-cloak x-text="failure" class="text-xs italic text-danger-600 dark:text-danger-400"></p>
+                                            @endif
+
                                             @if ($imageUrl = $message->mediaImageUrl())
                                                 <a
                                                     href="{{ $imageUrl }}"
@@ -786,14 +802,35 @@
                                                     >
                                                 </a>
                                             @elseif ($mediaUrl = $message->mediaDownloadUrl())
-                                                <x-filament::link
-                                                    :href="$mediaUrl"
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    icon="heroicon-o-paper-clip"
-                                                >
-                                                    Open attachment
-                                                </x-filament::link>
+                                                @if ($message->type === 'video' || str_starts_with((string) $message->media_mime, 'video/'))
+                                                    <video
+                                                        controls
+                                                        playsinline
+                                                        preload="metadata"
+                                                        src="{{ $mediaUrl }}"
+                                                        class="h-auto max-h-72 w-full max-w-full rounded-lg"
+                                                        aria-label="Video attached to this message"
+                                                    ></video>
+                                                @elseif ($message->type === 'audio' || str_starts_with((string) $message->media_mime, 'audio/'))
+                                                    <audio
+                                                        controls
+                                                        preload="none"
+                                                        src="{{ $mediaUrl }}"
+                                                        class="w-64 max-w-full"
+                                                        aria-label="Audio attached to this message"
+                                                    ></audio>
+                                                @else
+                                                    <x-filament::link
+                                                        :href="$mediaUrl"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        icon="heroicon-o-paper-clip"
+                                                    >
+                                                        Open attachment
+                                                    </x-filament::link>
+                                                @endif
+                                            @elseif (in_array($message->type, ['image', 'video', 'audio', 'document', 'sticker'], true) && data_get($message->raw_payload, 'source') === 'whatsapp_web')
+                                                <p class="text-xs italic opacity-70">{{ __('The file is not saved (yet). WhatsApp may no longer share very old media.') }}</p>
                                             @endif
 
                                             @if (filled($message->body))
@@ -1198,19 +1235,10 @@
                             <x-filament::section
                                 compact
                                 icon="heroicon-o-sparkles"
-                                heading="AI assistant"
-                                description="Pause automation whenever a human takes over."
+                                :heading="__('AI or team')"
+                                :description="__('Take the chat when a person should answer. It goes back to the AI when the time is up.')"
                             >
-                                <div class="flex items-center justify-between gap-3">
-                                    <span class="text-sm font-medium">{{ $conversation->ai_enabled ? 'Enabled' : 'Paused' }}</span>
-                                    <x-filament::toggle
-                                        wire:key="desktop-ai-toggle-{{ $conversation->getKey() }}"
-                                        :state="$conversation->ai_enabled ? 'true' : 'false'"
-                                        wire:click="toggleAi"
-                                        aria-label="Toggle AI assistant"
-                                        on-icon="heroicon-m-check"
-                                    />
-                                </div>
+                                @include('filament.pages.partials.inbox-ai-mode', ['conversation' => $conversation, 'keyPrefix' => 'desktop'])
                             </x-filament::section>
                         @endif
 

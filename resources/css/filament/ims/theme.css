@@ -1,0 +1,3372 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+/*
+ * IMS v2's own Filament theme, shared by the investor portal and the IMS
+ * office (IMS-V2/DESIGN.md §3–6). The look follows the owner's reference
+ * images (IMS-V2/design-references/, 2026-10-19): a light grey ground, white
+ * cards with large round corners and almost no shadow, a deep green primary
+ * with soft green tints, pill-shaped menu items and buttons. Light mode is the
+ * default; dark mode (owner request 2026-10-20) redefines the same tokens
+ * under html.dark at the end of this file, so colours come from tokens.
+ *
+ * The portal's Blade views were drawn with the --portal-* tokens of the old
+ * investor theme; they are mapped onto the IMS tokens here, so the balance
+ * tile turns green, the highlight soft green.
+ */
+@source '../../../../app/Filament/Investor/**/*';
+@source '../../../../app/Filament/Ims/**/*';
+@source '../../../../resources/views/filament/investor/**/*';
+@source '../../../../resources/views/filament/ims/**/*';
+@source '../../../../resources/views/ims/**/*';
+@source '../../../../resources/views/components/ims/**/*';
+
+:root {
+    --ims-page: #eef0f2;
+    --ims-card: #ffffff;
+    --ims-line: #e6e8eb;
+    --ims-primary: #16834f;
+    --ims-primary-deep: #0e6b3e;
+    --ims-primary-soft: #dcefe4;
+    --ims-primary-tint: #8fc7a7;
+    /* Green as text: links and labels (primary-text), text on a soft green ground (primary-ink). */
+    --ims-primary-text: #16834f;
+    --ims-primary-ink: #0e6b3e;
+    --ims-ink: #111418;
+    --ims-muted: #6b7280;
+    --ims-success: #16a34a;
+    --ims-warning: #d97706;
+    --ims-danger: #dc2626;
+    --ims-radius-card: 24px;
+    --ims-radius-pill: 999px;
+    --ims-shadow: 0 1px 2px rgb(17 20 24 / 0.04);
+    --ims-shadow-pop: 0 12px 32px -4px rgb(17 24 39 / 0.14), 0 4px 12px -2px rgb(17 24 39 / 0.08);
+
+    /* Text on the green surfaces (balance card, chart tip, sign-in panel): the same in both modes. */
+    --ims-on-primary: #ffffff;
+    --ims-on-primary-muted: #dcefe4;
+    --ims-on-primary-faint: #8fc7a7;
+
+    /* Raised surfaces: menu pill on hover, dropdowns. */
+    --ims-raised: #ffffff;
+    --ims-nav-track: #f1f5f9;
+    --ims-nav-track-line: #e2e8f0;
+    --ims-nav-text: #334155;
+    --ims-nav-icon: #64748b;
+    --ims-toggle-hover: #cde9d8;
+
+    /* Soft tones for counts, banners, icons. */
+    --ims-warning-soft: #fdf0d8;
+    --ims-warning-ink: #8a4b05;
+    --ims-warning-banner: #fdf3e1;
+    --ims-warning-icon: #fbe3b8;
+    --ims-danger-soft: #fde2e2;
+    --ims-danger-ink: #a51d1d;
+    --ims-danger-tint: #f0a8a8;
+    --ims-info-soft: #e8eefb;
+    --ims-info-ink: #24406e;
+
+    /* Sign-in page: input fill and the welcome panel's gradient. */
+    --ims-field: #f4f5f7;
+    --ims-auth-from: #0b5a34;
+    --ims-auth-via: #16834f;
+    --ims-auth-to: #4fc98a;
+
+    /* The old portal tokens, now IMS colours. */
+    --portal-ink: var(--ims-primary);
+    --portal-ink-2: var(--ims-primary-deep);
+    --portal-ink-3: #0b5a34;
+    --portal-accent: var(--ims-primary-soft);
+    --portal-ground: var(--ims-page);
+    --portal-muted: var(--ims-muted);
+    --portal-tile-shadow: var(--ims-shadow);
+}
+
+/*
+ * Hind Siliguri (SIL OFL 1.1, see resources/fonts/hind-siliguri/OFL.txt),
+ * self-hosted; both IMS panels name it with ->font('Hind Siliguri'). The
+ * Bangla file loads only for Bangla text.
+ */
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-bengali-400-normal.woff2') format('woff2');
+    unicode-range: U+0951-0952,U+0964-0965,U+0980-09FE,U+1CD0,U+1CD2,U+1CD5-1CD6,U+1CD8,U+1CE1,U+1CEA,U+1CED,U+1CF2,U+1CF5-1CF7,U+200C-200D,U+20B9,U+25CC,U+A8F1;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-latin-400-normal.woff2') format('woff2');
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-bengali-500-normal.woff2') format('woff2');
+    unicode-range: U+0951-0952,U+0964-0965,U+0980-09FE,U+1CD0,U+1CD2,U+1CD5-1CD6,U+1CD8,U+1CE1,U+1CEA,U+1CED,U+1CF2,U+1CF5-1CF7,U+200C-200D,U+20B9,U+25CC,U+A8F1;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-latin-500-normal.woff2') format('woff2');
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-bengali-600-normal.woff2') format('woff2');
+    unicode-range: U+0951-0952,U+0964-0965,U+0980-09FE,U+1CD0,U+1CD2,U+1CD5-1CD6,U+1CD8,U+1CE1,U+1CEA,U+1CED,U+1CF2,U+1CF5-1CF7,U+200C-200D,U+20B9,U+25CC,U+A8F1;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-latin-600-normal.woff2') format('woff2');
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-bengali-700-normal.woff2') format('woff2');
+    unicode-range: U+0951-0952,U+0964-0965,U+0980-09FE,U+1CD0,U+1CD2,U+1CD5-1CD6,U+1CD8,U+1CE1,U+1CEA,U+1CED,U+1CF2,U+1CF5-1CF7,U+200C-200D,U+20B9,U+25CC,U+A8F1;
+}
+
+@font-face {
+    font-family: 'Hind Siliguri';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('../../../fonts/hind-siliguri/hind-siliguri-latin-700-normal.woff2') format('woff2');
+    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+/* ---------- Ground and cards ---------- */
+
+.fi-body {
+    background-color: var(--ims-page);
+    color: var(--ims-ink);
+    line-height: 1.6;
+}
+
+.fi-section:not(.fi-section-not-contained),
+.fi-ta-ctn,
+.fi-wi-stats-overview-stat,
+.fi-wi-chart .fi-section {
+    border-radius: var(--ims-radius-card);
+    box-shadow: var(--ims-shadow);
+    --tw-ring-color: var(--ims-line);
+}
+
+.fi-wi-stats-overview-stat-value {
+    font-size: 1.875rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.fi-wi-stats-overview-stat-label {
+    color: var(--ims-muted);
+    font-size: 0.8125rem;
+}
+
+.fi-header-heading {
+    letter-spacing: -0.01em;
+}
+
+/* Buttons and badges are pills (DESIGN.md §3 --ims-radius-pill). */
+.fi-btn,
+.fi-badge,
+.fi-tabs-item,
+.fi-dropdown-list-item {
+    border-radius: var(--ims-radius-pill);
+}
+
+.fi-btn {
+    min-height: 2.75rem;
+}
+
+/* The main button is the deep IMS green with white text (DESIGN.md §3), not a light tint. */
+.fi-btn.fi-color-primary:not(.fi-outlined) {
+    background-color: var(--ims-primary);
+    color: #ffffff;
+}
+
+.fi-btn.fi-color-primary:not(.fi-outlined):hover {
+    background-color: var(--ims-primary-deep);
+}
+
+.fi-btn.fi-color-primary:not(.fi-outlined) .fi-icon,
+.fi-btn.fi-color-primary:not(.fi-outlined) .fi-btn-label {
+    color: #ffffff;
+}
+
+/* Long Bangla labels and text wrap instead of overflowing (DESIGN.md §4, §6). */
+.fi-wi-stats-overview-stat-label,
+.fi-section-header-heading,
+.fi-btn-label,
+.ims-card,
+.ims-balance-card,
+.ims-todo-item,
+.ims-timeline,
+dt,
+dd,
+article p {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* Prevent accidental horizontal scrollbars on 360px mobile viewports */
+html,
+body,
+.fi-body,
+.fi-layout,
+.fi-main {
+    max-width: 100vw;
+    overflow-x: clip;
+}
+
+/* ---------- Top bar: a round white header with the menu as pills (DESIGN.md §6.1) ---------- */
+
+.fi-body {
+    --topbar-height: 4.5rem;
+}
+
+.fi-topbar-ctn {
+    padding: 0.75rem 0.75rem 0;
+    background-color: var(--ims-page);
+}
+
+.fi-topbar {
+    gap: 0.5rem;
+    min-height: var(--topbar-height);
+    padding-inline: 0.75rem;
+    border-radius: 1.75rem;
+    background-color: var(--ims-card);
+    box-shadow: var(--ims-shadow);
+    --tw-ring-color: transparent;
+}
+
+/* The logo shows on phones too (Filament hides the whole start block there). */
+.fi-topbar-start {
+    display: flex;
+    flex-shrink: 0;
+    margin-inline-end: 0.5rem;
+}
+
+.fi-topbar-start .fi-logo {
+    margin-inline-start: 0.25rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--ims-primary-text);
+    white-space: nowrap;
+}
+
+.fi-topbar-collapse-sidebar-btn-ctn {
+    display: none;
+}
+
+/* The menu: modern highlighted pill container */
+.fi-topbar-nav-groups {
+    margin-inline: auto;
+    padding: 0.3125rem 0.375rem;
+    gap: 0.375rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-nav-track);
+    border: 1px solid var(--ims-nav-track-line);
+    flex-wrap: nowrap;
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.04);
+}
+
+.fi-topbar-nav-groups .fi-topbar-item-btn {
+    min-height: 2.625rem;
+    padding: 0.4375rem 0.9375rem;
+    border-radius: var(--ims-radius-pill);
+    white-space: nowrap;
+    gap: 0.4375rem;
+    transition: all 150ms ease;
+}
+
+.fi-topbar-nav-groups .fi-topbar-item-btn:hover {
+    background-color: var(--ims-raised);
+    box-shadow: 0 2px 5px rgb(0 0 0 / 0.06);
+}
+
+.fi-topbar-nav-groups .fi-topbar-item-icon {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 1.125rem;
+    height: 1.125rem;
+    color: var(--ims-nav-icon);
+    flex-shrink: 0;
+    transition: color 150ms ease;
+}
+
+.fi-topbar-nav-groups .fi-topbar-item-btn:hover .fi-topbar-item-icon {
+    color: var(--ims-primary-text);
+}
+
+.fi-topbar-nav-groups .fi-topbar-item-label {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--ims-nav-text);
+    transition: color 150ms ease;
+}
+
+.fi-topbar-nav-groups .fi-topbar-item-btn:hover .fi-topbar-item-label {
+    color: var(--ims-primary-ink);
+}
+
+/* Active item: strongly highlighted in Emerald Green */
+.fi-topbar-nav-groups .fi-topbar-item.fi-active .fi-topbar-item-btn {
+    background-color: var(--ims-primary);
+    box-shadow: 0 4px 14px -2px rgb(22 131 79 / 0.45);
+}
+
+.fi-topbar-nav-groups .fi-topbar-item.fi-active .fi-topbar-item-label {
+    color: #ffffff !important;
+    font-weight: 700;
+}
+
+.fi-topbar-nav-groups .fi-topbar-item.fi-active .fi-topbar-item-icon {
+    color: #ffffff !important;
+}
+
+.fi-topbar-nav-groups .fi-topbar-group-toggle-icon {
+    width: 0.875rem;
+    height: 0.875rem;
+    color: var(--ims-nav-icon);
+    margin-inline-start: 0.125rem;
+    transition: color 150ms ease, transform 150ms ease;
+}
+
+.fi-topbar-nav-groups .fi-topbar-item.fi-active .fi-topbar-group-toggle-icon {
+    color: #ffffff !important;
+}
+
+.fi-topbar-nav-groups .fi-topbar-item-btn:hover .fi-topbar-group-toggle-icon {
+    color: var(--ims-primary-text);
+}
+
+.fi-topbar-end {
+    gap: 0.5rem;
+}
+
+/* Round icon buttons on the right: search, bell, the person. */
+.fi-topbar-end .fi-icon-btn,
+.ims-round-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--ims-radius-pill);
+    border: 1px solid var(--ims-line);
+    background-color: var(--ims-card);
+    color: var(--ims-ink);
+}
+
+.fi-topbar-end .fi-user-menu-trigger .fi-avatar,
+.fi-topbar-end .fi-avatar {
+    width: 2.75rem;
+    height: 2.75rem;
+}
+
+.fi-topbar .fi-global-search-field .fi-input-wrp {
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-page);
+    --tw-ring-color: transparent;
+}
+
+.fi-topbar .fi-global-search-field {
+    max-width: 14rem;
+}
+
+@media (max-width: 1535.98px) {
+    /* Room for the menu on laptops: the search is a round button that opens when tapped, the pills are tighter. */
+    .fi-topbar .fi-global-search-field {
+        width: 2.75rem;
+        transition: width 150ms;
+    }
+
+    .fi-topbar .fi-global-search-field:focus-within {
+        width: 14rem;
+    }
+
+    .fi-topbar .fi-global-search-field .fi-input-wrp {
+        min-height: 2.75rem;
+    }
+
+    .fi-topbar-nav-groups .fi-topbar-item-btn {
+        padding-inline: 0.75rem;
+    }
+
+    .fi-topbar-nav-groups .fi-topbar-item-label {
+        font-size: 0.875rem;
+    }
+}
+
+/*
+ * The buttons on the right (company, language, light/dark, bell, the person)
+ * keep their size; they were squeezed and pushed off the screen when the menu
+ * was long (owner report 2026-10-21).
+ */
+.fi-topbar-end > * {
+    flex-shrink: 0;
+}
+
+/*
+ * Laptops: when the menu and those buttons do not fit on one line, the menu
+ * gets its own line under them. The office menu is long (much longer in
+ * Bangla), so it does this up to 1800px; the portal's up to 1360px.
+ */
+@media (min-width: 1024px) and (max-width: 1799.98px) {
+    .fi-panel-office {
+        --topbar-height: 7.75rem;
+    }
+
+    .fi-panel-office .fi-topbar {
+        flex-wrap: wrap;
+        row-gap: 0.375rem;
+        padding-block: 0.5rem;
+    }
+
+    .fi-panel-office .fi-topbar::after {
+        content: '';
+        order: 2;
+        flex-basis: 100%;
+    }
+
+    .fi-panel-office .fi-topbar-end {
+        order: 1;
+        margin-inline-start: auto;
+    }
+
+    .fi-panel-office .fi-topbar-nav-groups {
+        order: 3;
+        flex-wrap: wrap;
+        justify-content: center;
+        max-width: 100%;
+        margin-block: 0;
+    }
+}
+
+@media (min-width: 1024px) and (max-width: 1359.98px) {
+    .fi-panel-investor {
+        --topbar-height: 7.75rem;
+    }
+
+    .fi-panel-investor .fi-topbar {
+        flex-wrap: wrap;
+        row-gap: 0.375rem;
+        padding-block: 0.5rem;
+    }
+
+    .fi-panel-investor .fi-topbar::after {
+        content: '';
+        order: 2;
+        flex-basis: 100%;
+    }
+
+    .fi-panel-investor .fi-topbar-end {
+        order: 1;
+        margin-inline-start: auto;
+    }
+
+    .fi-panel-investor .fi-topbar-nav-groups {
+        order: 3;
+        flex-wrap: wrap;
+        justify-content: center;
+        max-width: 100%;
+        margin-block: 0;
+    }
+}
+
+/* Dropdowns of the top menu: round, roomy rows. */
+.fi-dropdown-panel {
+    border-radius: 1.25rem;
+    padding: 0.375rem;
+    background-color: var(--ims-raised);
+    border: 1px solid var(--ims-line);
+    box-shadow: var(--ims-shadow-pop);
+}
+
+.fi-dropdown-list-item {
+    min-height: 2.75rem;
+    border-radius: 0.75rem;
+    padding-inline: 0.875rem;
+    font-weight: 500;
+    color: var(--ims-ink);
+    transition: all 120ms ease;
+}
+
+.fi-dropdown-list-item:hover {
+    background-color: var(--ims-primary-soft);
+    color: var(--ims-primary-ink);
+    font-weight: 600;
+}
+
+.fi-dropdown-list-item.fi-active {
+    background-color: var(--ims-primary);
+    color: #ffffff;
+    font-weight: 600;
+}
+
+/* ---------- The side panel / rail on the left (DESIGN.md §6.1) ---------- */
+
+.ims-rail {
+    display: none;
+}
+
+@media (min-width: 1024px) {
+    .fi-body.fi-body-has-top-navigation .ims-rail {
+        position: fixed;
+        z-index: 25;
+        inset-inline-start: 1rem;
+        top: calc(var(--topbar-height) + 1.25rem);
+        bottom: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        width: 4.25rem;
+        padding: 0.5rem;
+        border-radius: 1.5rem;
+        background-color: var(--ims-card);
+        border: 1px solid var(--ims-line);
+        box-shadow: 0 4px 20px -2px rgb(17 20 24 / 0.06);
+        overflow-x: hidden;
+        overflow-y: auto;
+        scrollbar-width: none;
+        transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Pinned or hover open state: expands into a full side panel alongside the page */
+    html.ims-rail-pinned .fi-body.fi-body-has-top-navigation .ims-rail,
+    html.ims-rail-hovered .fi-body.fi-body-has-top-navigation .ims-rail,
+    .fi-body.fi-body-has-top-navigation .ims-rail:hover {
+        width: 16.5rem;
+        box-shadow: var(--ims-shadow-pop);
+    }
+
+    /* Smooth padding on the main content container: perfectly aligned, ZERO OVERLAP */
+    .fi-body.fi-body-has-top-navigation .fi-main-ctn {
+        padding-inline-start: 6rem;
+        transition: padding 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    html.ims-rail-pinned .fi-body.fi-body-has-top-navigation .fi-main-ctn,
+    html.ims-rail-hovered .fi-body.fi-body-has-top-navigation .fi-main-ctn {
+        padding-inline-start: 18.25rem;
+    }
+}
+
+/* Pinned or hovered menu on a laptop: the home cards use two columns so nothing gets cramped. */
+@media (min-width: 1280px) and (max-width: 1599.98px) {
+    html.ims-rail-pinned .ims-office-grid,
+    html.ims-rail-hovered .ims-office-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+            'money todo'
+            'chart chart'
+            'latest latest'
+            'payouts groups';
+    }
+
+    html.ims-rail-pinned .ims-portal-grid,
+    html.ims-rail-hovered .ims-portal-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+            'balance side'
+            'chart chart'
+            'projects projects'
+            'latest calendar';
+    }
+}
+
+.ims-rail-top {
+    flex-shrink: 0;
+    padding-bottom: 0.375rem;
+    border-bottom: 1px solid var(--ims-line);
+    margin-bottom: 0.25rem;
+}
+
+.ims-rail-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    flex: 1 1 auto;
+}
+
+.ims-rail-group {
+    display: flex;
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding-block: 0.25rem;
+}
+
+.ims-rail-group + .ims-rail-group {
+    border-top: 1px solid var(--ims-line);
+    padding-top: 0.375rem;
+}
+
+.ims-rail-bottom {
+    margin-top: auto;
+    flex-shrink: 0;
+    border-top: 1px solid var(--ims-line);
+    padding-top: 0.375rem;
+}
+
+.ims-rail-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: 2.75rem;
+    border-radius: var(--ims-radius-pill);
+    color: var(--ims-ink);
+    text-align: start;
+    white-space: nowrap;
+    transition: all 120ms ease;
+    cursor: pointer;
+}
+
+/* When collapsed (not pinned and not hovered), center the icon in the pill button */
+html:not(.ims-rail-pinned):not(.ims-rail-hovered) .ims-rail:not(:hover) .ims-rail-btn {
+    justify-content: center;
+    padding-inline: 0;
+}
+
+/* When pinned or hovered, left align with icon + label */
+html.ims-rail-pinned .ims-rail-btn,
+html.ims-rail-hovered .ims-rail-btn,
+.ims-rail:hover .ims-rail-btn {
+    justify-content: flex-start;
+    padding-inline: 0.75rem;
+}
+
+.ims-rail-icon {
+    flex-shrink: 0;
+    width: 1.375rem;
+    height: 1.375rem;
+}
+
+/* Labels: hidden in collapsed mode, smoothly displayed in pinned or hovered mode */
+.ims-rail-label {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0;
+    display: none;
+    transition: opacity 150ms ease;
+}
+
+html.ims-rail-pinned .ims-rail-label,
+html.ims-rail-hovered .ims-rail-label,
+.ims-rail:hover .ims-rail-label {
+    display: inline-block;
+    opacity: 1;
+}
+
+.ims-rail-btn-active .ims-rail-label {
+    font-weight: 700;
+}
+
+.ims-rail-toggle {
+    color: var(--ims-primary-text);
+    background-color: var(--ims-primary-soft);
+    font-weight: 600;
+}
+
+.ims-rail-toggle:hover {
+    background-color: var(--ims-toggle-hover);
+    color: var(--ims-primary-ink);
+}
+
+.ims-rail-btn:hover {
+    background-color: var(--ims-page);
+    color: var(--ims-primary-ink);
+}
+
+.ims-rail-btn-active,
+.ims-rail-btn-active:hover {
+    background-color: var(--ims-primary);
+    color: #ffffff;
+    box-shadow: 0 2px 8px -1px rgb(22 131 79 / 0.4);
+}
+
+.ims-rail-btn:focus-visible {
+    outline: 3px solid var(--ims-primary-tint);
+    outline-offset: 2px;
+}
+
+.ims-rail-icon {
+    width: 1.375rem;
+    height: 1.375rem;
+}
+
+/* ---------- Sidebar: light, with green pill items ---------- */
+
+.fi-sidebar.fi-main-sidebar {
+    background-color: var(--ims-page);
+}
+
+.fi-sidebar .fi-sidebar-header {
+    background-color: transparent;
+}
+
+.fi-sidebar .fi-sidebar-group-label {
+    color: var(--ims-muted);
+    font-weight: 600;
+}
+
+.fi-sidebar .fi-sidebar-item-btn {
+    min-height: 2.75rem;
+    border-radius: var(--ims-radius-pill);
+    padding-inline: 0.875rem;
+}
+
+.fi-sidebar .fi-sidebar-item-label {
+    color: var(--ims-ink);
+    font-size: 0.9375rem;
+}
+
+.fi-sidebar .fi-sidebar-item.fi-sidebar-item-has-url > .fi-sidebar-item-btn:hover {
+    background-color: var(--ims-card);
+}
+
+.fi-sidebar .fi-sidebar-item.fi-active > .fi-sidebar-item-btn,
+.fi-sidebar .fi-sidebar-item.fi-active > .fi-sidebar-item-btn:hover {
+    background-color: var(--ims-primary);
+}
+
+.fi-sidebar .fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-icon,
+.fi-sidebar .fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-sidebar-item-label {
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.fi-sidebar .fi-sidebar-item-btn:focus-visible {
+    outline: 3px solid var(--ims-primary-tint);
+    outline-offset: 2px;
+}
+
+.fi-sidebar .fi-user-menu-trigger {
+    background-color: var(--ims-card);
+    border-radius: var(--ims-radius-pill);
+    padding: 0.5rem 0.75rem;
+}
+
+/* ---------- Language switch (portal: sidebar and sign-in pages; office: top bar) ---------- */
+
+.fi-investor-language,
+.fi-ims-language {
+    display: flex;
+    gap: 0.125rem;
+    padding: 0.25rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-card);
+}
+
+.fi-investor-language a,
+.fi-ims-language a {
+    flex: 1 1 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    padding-inline: 0.875rem;
+    border-radius: var(--ims-radius-pill);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ims-ink);
+    text-decoration: none;
+}
+
+.fi-investor-language a[aria-current],
+.fi-ims-language a[aria-current] {
+    background-color: var(--ims-primary);
+    color: #ffffff;
+}
+
+.fi-investor-language a:focus-visible,
+.fi-ims-language a:focus-visible {
+    outline: 3px solid var(--ims-primary-tint);
+    outline-offset: 2px;
+}
+
+.fi-investor-language-simple {
+    align-self: flex-end;
+    width: max-content;
+    margin: 0 0 1rem auto;
+    background-color: var(--ims-page);
+}
+
+/* ---------- Phones: the bottom tab bar ---------- */
+
+.fi-investor-mobile-nav {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 25;
+    display: flex;
+    gap: 0.125rem;
+    padding: 0.5rem 0.5rem calc(0.75rem + env(safe-area-inset-bottom));
+    background-color: var(--ims-card);
+    border-radius: 1.5rem 1.5rem 0 0;
+    box-shadow: 0 -1px 0 var(--ims-line), 0 -8px 24px -16px rgb(17 20 24 / 0.18);
+}
+
+.fi-investor-mobile-nav a,
+.fi-investor-mobile-nav button {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.125rem;
+    min-height: 3.5rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--ims-muted);
+    text-decoration: none;
+    text-align: center;
+}
+
+.fi-investor-mobile-nav a[aria-current] {
+    color: var(--ims-primary-text);
+    font-weight: 700;
+}
+
+.fi-investor-mobile-nav a[aria-current] .fi-investor-mobile-nav-icon {
+    color: #ffffff;
+    background-color: var(--ims-primary);
+    border-radius: var(--ims-radius-pill);
+    padding: 0.25rem;
+    box-sizing: content-box;
+}
+
+.fi-investor-mobile-nav-icon {
+    width: 1.375rem;
+    height: 1.375rem;
+}
+
+@media (min-width: 1024px) {
+    .fi-investor-mobile-nav {
+        display: none;
+    }
+}
+
+@media (max-width: 1023.98px) {
+    /* Keep the last lines of a page above the bottom menu. */
+    .fi-main {
+        padding-bottom: 6.5rem;
+    }
+}
+
+/* ---------- Office on phones and tablets: the bottom tab bar and its sheets (DESIGN.md §6.2, owner request 2026-10-22) ---------- */
+
+.ims-mobile [x-cloak] {
+    display: none !important;
+}
+
+.ims-tabbar {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 30;
+    display: flex;
+    align-items: flex-end;
+    padding: 0.375rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom));
+    background-color: var(--ims-card);
+    border-radius: 1.5rem 1.5rem 0 0;
+    box-shadow: 0 -1px 0 var(--ims-line), 0 -10px 30px -18px rgb(17 20 24 / 0.25);
+}
+
+.ims-tabbar-item {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.1875rem;
+    min-height: 3.5rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--ims-muted);
+    text-align: center;
+    text-decoration: none;
+    touch-action: manipulation;
+}
+
+.ims-tabbar-item > span:last-child {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ims-tabbar-icon-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.ims-tabbar-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0.25rem 0.875rem;
+    box-sizing: content-box;
+    border-radius: var(--ims-radius-pill);
+    transition: background-color 120ms, color 120ms;
+}
+
+.ims-tabbar-item[aria-current],
+.ims-tabbar-item[aria-expanded='true'] {
+    color: var(--ims-primary-text);
+    font-weight: 700;
+}
+
+.ims-tabbar-item[aria-current] .ims-tabbar-icon,
+.ims-tabbar-item[aria-expanded='true'] .ims-tabbar-icon {
+    background-color: var(--ims-primary-soft);
+    color: var(--ims-primary-ink);
+}
+
+.ims-tabbar-item:focus-visible,
+.ims-tabbar-fab:focus-visible,
+.ims-sheet-tile:focus-visible {
+    outline: 3px solid var(--ims-primary-tint);
+    outline-offset: 2px;
+}
+
+/* The round green "+" in the middle, raised above the bar. */
+.ims-tabbar-fab-slot {
+    flex: 1 1 0;
+    display: flex;
+    justify-content: center;
+}
+
+.ims-tabbar-fab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.75rem;
+    height: 3.75rem;
+    margin-top: -1.75rem;
+    margin-bottom: 0.25rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-primary);
+    color: #ffffff;
+    border: 4px solid var(--ims-card);
+    box-shadow: 0 8px 20px -6px rgb(22 131 79 / 0.6);
+    transition: background-color 120ms, transform 120ms;
+}
+
+.ims-tabbar-fab:hover,
+.ims-tabbar-fab[aria-expanded='true'] {
+    background-color: var(--ims-primary-deep);
+}
+
+.ims-tabbar-fab[aria-expanded='true'] {
+    transform: rotate(45deg);
+}
+
+/* A small red count on an icon (to-do total, menu badges, quick buttons). */
+.ims-tabbar-count {
+    position: absolute;
+    top: -0.375rem;
+    inset-inline-end: -0.375rem;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding-inline: 0.3125rem;
+    border-radius: var(--ims-radius-pill);
+    border: 2px solid var(--ims-card);
+    box-sizing: content-box;
+    background-color: var(--ims-danger);
+    color: #ffffff;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1.25rem;
+    text-align: center;
+}
+
+.ims-tabbar-icon-wrap .ims-tabbar-count {
+    top: -0.25rem;
+    inset-inline-end: 0.25rem;
+}
+
+/* The sheets. */
+.ims-sheet-veil {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    background-color: rgb(10 14 18 / 0.45);
+    /* The page behind does not scroll while a sheet is open (no overflow lock on the page, which makes phones jump). */
+    touch-action: none;
+}
+
+.ims-sheet {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-height: 85dvh;
+    padding: 0.75rem 1rem calc(1.25rem + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 1.75rem 1.75rem 0 0;
+    background-color: var(--ims-card);
+    box-shadow: var(--ims-shadow-pop);
+}
+
+.ims-sheet-tall {
+    height: 92dvh;
+    max-height: 92dvh;
+}
+
+/* The grab handle at the top. */
+.ims-sheet::before {
+    content: '';
+    flex-shrink: 0;
+    align-self: center;
+    width: 2.75rem;
+    height: 0.3125rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-line);
+}
+
+.ims-sheet-move {
+    transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.ims-sheet-off {
+    transform: translateY(100%);
+}
+
+.ims-sheet-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.ims-sheet-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--ims-ink);
+}
+
+.ims-sheet-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.ims-sheet-group {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--ims-muted);
+}
+
+.ims-sheet-settings {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ims-sheet-settings .fi-ims-language {
+    flex: 1 1 auto;
+    margin: 0;
+}
+
+/* In the sheet the company and language lists always show (the drawer versions hide them on wider screens). */
+.ims-sheet .fi-ims-company-drawer,
+.ims-sheet .fi-ims-language-drawer {
+    display: flex;
+    margin-bottom: 0;
+}
+
+.ims-sheet-tiles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+    .ims-sheet-tiles {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+}
+
+.ims-sheet-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    padding: 0.75rem 0.25rem;
+    border-radius: 1.25rem;
+    background-color: var(--ims-page);
+    color: var(--ims-ink);
+    text-align: center;
+    text-decoration: none;
+}
+
+.ims-sheet-tile:hover {
+    background-color: var(--ims-primary-soft);
+}
+
+.ims-sheet-tile-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 1rem;
+    background-color: var(--ims-card);
+    color: var(--ims-primary-text);
+}
+
+.ims-sheet-tile-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+.ims-sheet-tile-on {
+    background-color: var(--ims-primary-soft);
+}
+
+.ims-sheet-tile-on .ims-sheet-tile-icon {
+    background-color: var(--ims-primary);
+    color: #ffffff;
+}
+
+/* "+" sheet: two columns of wider tiles, icon beside the words. */
+.ims-sheet-tiles-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ims-sheet-tiles-2 .ims-sheet-tile {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    min-height: 4.5rem;
+    padding: 0.75rem;
+    text-align: start;
+}
+
+.ims-sheet-tiles-2 .ims-sheet-tile-icon {
+    flex-shrink: 0;
+    background-color: var(--ims-primary-soft);
+    color: var(--ims-primary-ink);
+}
+
+.ims-sheet-signout {
+    margin-top: 0.25rem;
+}
+
+.ims-sheet .fi-ims-company-drawer {
+    margin-top: 0.75rem;
+}
+
+/* The bar replaces the menu button in the top bar. */
+.fi-body:has(.ims-tabbar) .fi-topbar-open-sidebar-btn,
+.fi-body:has(.ims-tabbar) .fi-topbar-close-sidebar-btn {
+    display: none !important;
+}
+
+@media (min-width: 1024px) {
+    .ims-mobile {
+        display: none;
+    }
+}
+
+/*
+ * Lists on phones (stackedOnMobile, AppServiceProvider): each row is a soft
+ * card — the first column as its title, then "label … value" lines, the
+ * buttons at the bottom — instead of a table that scrolls sideways.
+ */
+@media (max-width: 639.98px) {
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody {
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+        padding: 0.75rem;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr {
+        padding-block: 0.625rem;
+        border-width: 0;
+        border-radius: 1.25rem;
+        background-color: var(--ims-page);
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr.fi-ta-group-header-row,
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr.fi-ta-summary-row {
+        background-color: transparent;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:not(.fi-ta-selection-cell):has(> .fi-ta-cell-label) {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-block: 0.1875rem;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell > .fi-ta-cell-label {
+        flex-shrink: 0;
+        max-width: 45%;
+        padding-top: 0;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--ims-muted);
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell > .fi-ta-cell-content {
+        min-width: 0;
+        text-align: end;
+        font-weight: 600;
+        color: var(--ims-ink);
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell > .fi-ta-cell-content .fi-ta-text {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell > .fi-ta-cell-content .fi-ta-text-has-badges > * {
+        flex-shrink: 0;
+        max-width: 100%;
+    }
+
+    /* The first column is the card's title. */
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-selection-cell + .fi-ta-cell,
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:first-child:not(.fi-ta-selection-cell) {
+        display: block !important;
+        padding-inline-end: 3rem;
+        padding-bottom: 0.375rem;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-selection-cell + .fi-ta-cell > .fi-ta-cell-label,
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:first-child:not(.fi-ta-selection-cell) > .fi-ta-cell-label {
+        display: none;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-selection-cell + .fi-ta-cell > .fi-ta-cell-content,
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:first-child:not(.fi-ta-selection-cell) > .fi-ta-cell-content {
+        text-align: start;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-selection-cell + .fi-ta-cell .fi-ta-text,
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:first-child:not(.fi-ta-selection-cell) .fi-ta-text {
+        justify-content: flex-start;
+        font-size: 1rem;
+        font-weight: 700;
+    }
+
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-selection-cell {
+        top: 0.625rem;
+    }
+
+    /* Row buttons: a line of their own at the bottom of the card. */
+    .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:has(.fi-ta-actions) {
+        margin-top: 0.375rem;
+        padding-top: 0.625rem;
+        border-top: 1px solid var(--ims-line);
+    }
+}
+
+/* Office home on phones and tablets: round quick buttons under the green card. */
+.ims-area-quick {
+    grid-area: quick;
+}
+
+.ims-quick-actions-office {
+    padding: 1rem 0.5rem;
+    border-radius: var(--ims-radius-card);
+    background-color: var(--ims-card);
+}
+
+.ims-quick-actions-office .ims-quick-icon {
+    position: relative;
+    border-radius: var(--ims-radius-pill);
+}
+
+@media (min-width: 1024px) {
+    .ims-home-grid .ims-quick-actions-office {
+        display: none;
+    }
+}
+
+/* ---------- The home heading: "Welcome back, name" (DESIGN.md §6.1) ---------- */
+
+.ims-welcome {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-top: 0.5rem;
+}
+
+.ims-welcome-greeting {
+    color: var(--ims-muted);
+    font-size: 0.9375rem;
+}
+
+.ims-welcome-heading {
+    font-size: clamp(1.625rem, 1.1rem + 1.6vw, 2.5rem);
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    color: var(--ims-ink);
+}
+
+.ims-welcome-name {
+    color: var(--ims-muted);
+    font-weight: 500;
+}
+
+.ims-welcome-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.ims-welcome .ims-welcome-avatar {
+    display: none;
+}
+
+/* Office on phones and tablets: initials, "Good morning!" and the name, like an app (DESIGN.md §6.2). */
+@media (max-width: 1023.98px) {
+    .ims-welcome-app {
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        gap: 0.75rem;
+        padding-top: 0;
+    }
+
+    .ims-welcome-app .ims-welcome-avatar {
+        display: inline-flex;
+    }
+
+    .ims-welcome-app .ims-welcome-text {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .ims-welcome-app .ims-welcome-greeting {
+        font-size: 0.875rem;
+        line-height: 1.3;
+    }
+
+    .ims-welcome-app .ims-welcome-heading {
+        font-size: 1.25rem;
+        font-weight: 700;
+        line-height: 1.3;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .ims-welcome-app .ims-welcome-lead {
+        display: none;
+    }
+
+    .ims-welcome-app .ims-welcome-name {
+        color: var(--ims-ink);
+        font-weight: 700;
+    }
+
+    /* The main button is the "+" in the bottom bar; the date is a small pill. */
+    .ims-welcome-app .ims-welcome-actions .ims-btn {
+        display: none;
+    }
+
+    .ims-welcome-app .ims-date-pill {
+        min-height: 2.5rem;
+        padding: 0.375rem 0.875rem;
+        font-size: 0.875rem;
+        white-space: nowrap;
+    }
+}
+
+@media (max-width: 419.98px) {
+    .ims-welcome-app .ims-date-pill {
+        display: none;
+    }
+}
+
+.ims-date-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 1.125rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-card);
+    font-weight: 500;
+    color: var(--ims-ink);
+}
+
+/* ---------- Buttons ---------- */
+
+.ims-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 1.25rem;
+    border-radius: var(--ims-radius-pill);
+    font-weight: 600;
+    font-size: 0.9375rem;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background-color 75ms;
+}
+
+.ims-btn-primary {
+    background-color: var(--ims-primary);
+    color: #ffffff;
+}
+
+.ims-btn-primary:hover {
+    background-color: var(--ims-primary-deep);
+}
+
+.ims-btn-white {
+    background-color: var(--ims-card);
+    color: var(--ims-ink);
+}
+
+.ims-btn-white:hover,
+.ims-btn-ghost:hover {
+    background-color: var(--ims-primary-soft);
+}
+
+.ims-btn-ghost {
+    background-color: var(--ims-page);
+    color: var(--ims-ink);
+}
+
+.ims-btn:focus-visible,
+.ims-arrow-btn:focus-visible,
+.ims-segment button:focus-visible {
+    outline: 3px solid var(--ims-primary-tint);
+    outline-offset: 2px;
+}
+
+.ims-button-pair {
+    display: flex;
+    gap: 0.375rem;
+    padding: 0.375rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-page);
+}
+
+.ims-button-pair .ims-btn {
+    flex: 1 1 0;
+}
+
+.ims-button-pair .ims-btn-ghost {
+    background-color: transparent;
+}
+
+/* The ↗ "open the details" button in a card's corner (DESIGN.md §2). */
+.ims-arrow-btn {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    margin-inline-start: auto;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-page);
+    color: var(--ims-ink);
+}
+
+.ims-arrow-btn:hover {
+    background-color: var(--ims-primary-soft);
+}
+
+.ims-arrow-btn-on-green {
+    background-color: rgb(255 255 255 / 0.16);
+    color: #ffffff;
+}
+
+.ims-arrow-btn-on-green:hover {
+    background-color: rgb(255 255 255 / 0.28);
+}
+
+/* ---------- Cards ---------- */
+
+.ims-widget {
+    height: 100%;
+}
+
+.ims-widget > .fi-section,
+.ims-widget > div {
+    height: 100%;
+}
+
+.ims-card {
+    border-radius: var(--ims-radius-card);
+    background-color: var(--ims-card);
+    box-shadow: var(--ims-shadow);
+    padding: 1.25rem;
+}
+
+@media (min-width: 640px) {
+    .ims-card {
+        padding: 1.5rem;
+    }
+}
+
+.ims-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    height: 100%;
+}
+
+.ims-card.ims-stack {
+    gap: 0.875rem;
+}
+
+.ims-card-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.ims-card-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-page);
+    color: var(--ims-ink);
+}
+
+.ims-card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ims-ink);
+    line-height: 1.4;
+}
+
+.ims-card-head .ims-card-title {
+    padding-top: 0.125rem;
+}
+
+.ims-subcard {
+    margin-top: auto;
+    padding: 1rem;
+    border-radius: 1.25rem;
+    background-color: var(--ims-page);
+}
+
+.ims-subcard .ims-arrow-btn {
+    background-color: var(--ims-card);
+}
+
+.ims-muted {
+    color: var(--ims-muted);
+}
+
+.ims-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1.5rem 0.5rem;
+    text-align: center;
+    color: var(--ims-muted);
+}
+
+/* The big green card (DESIGN.md §7 BalanceCard). */
+.ims-balance-card {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    border-radius: var(--ims-radius-card);
+    background-color: var(--ims-primary);
+    background-image:
+        radial-gradient(circle at 110% -10%, rgb(255 255 255 / 0.18) 0 7rem, transparent 7.05rem),
+        radial-gradient(circle at 115% 120%, rgb(0 0 0 / 0.12) 0 9rem, transparent 9.05rem);
+    color: #ffffff;
+    padding: 1.5rem;
+}
+
+.ims-balance-card .ims-card-title {
+    color: #ffffff;
+}
+
+.ims-balance-card .ims-label {
+    color: var(--ims-on-primary-muted);
+    font-size: 0.8125rem;
+}
+
+.ims-balance-figure {
+    font-size: clamp(2rem, 1.5rem + 1.5vw, 2.5rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+}
+
+.ims-balance-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--ims-on-primary-muted);
+}
+
+.ims-balance-split {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.ims-balance-split > div {
+    padding: 0.75rem 1rem;
+    border-radius: 1.125rem;
+    background-color: rgb(255 255 255 / 0.12);
+}
+
+.ims-balance-split dt {
+    font-size: 0.8125rem;
+    color: var(--ims-on-primary-muted);
+}
+
+.ims-balance-split dd {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.ims-amount-minor {
+    color: var(--ims-muted);
+    font-weight: 500;
+}
+
+.ims-balance-card .ims-amount-minor {
+    color: var(--ims-on-primary-faint);
+}
+
+/* KPI cards (DESIGN.md §7 KpiCard, PillBadge). */
+.ims-kpi-label {
+    font-size: 0.875rem;
+    color: var(--ims-muted);
+    font-weight: 500;
+}
+
+.ims-kpi-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+}
+
+.ims-kpi-value {
+    font-size: clamp(1.5rem, 1.2rem + 1vw, 1.875rem);
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: var(--ims-ink);
+    line-height: 1.2;
+}
+
+.ims-kpi-value-lg {
+    font-size: clamp(1.75rem, 1.3rem + 1.4vw, 2.375rem);
+}
+
+.ims-kpi-note {
+    font-size: 0.8125rem;
+    color: var(--ims-muted);
+}
+
+.ims-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.625rem;
+    border-radius: var(--ims-radius-pill);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    background-color: var(--ims-page);
+    color: var(--ims-ink);
+}
+
+.ims-pill-up {
+    background-color: var(--ims-success);
+    color: #ffffff;
+}
+
+.ims-pill-down {
+    background-color: var(--ims-danger);
+    color: #ffffff;
+}
+
+/* Count bubbles in the to-do list. */
+.ims-count {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.25rem;
+    height: 2.25rem;
+    padding-inline: 0.5rem;
+    border-radius: var(--ims-radius-pill);
+    font-weight: 700;
+    font-size: 0.9375rem;
+    background-color: var(--ims-page);
+}
+
+.ims-count-warning {
+    background-color: var(--ims-warning-soft);
+    color: var(--ims-warning-ink);
+}
+
+.ims-count-danger {
+    background-color: var(--ims-danger-soft);
+    color: var(--ims-danger-ink);
+}
+
+.ims-count-info {
+    background-color: var(--ims-primary-soft);
+    color: var(--ims-primary-ink);
+}
+
+.ims-todo {
+    margin-top: 0.5rem;
+}
+
+.ims-todo-link {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 3rem;
+    color: var(--ims-ink);
+    text-decoration: none;
+}
+
+a.ims-todo-link:hover .ims-todo-label {
+    color: var(--ims-primary-ink);
+}
+
+.ims-todo-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-weight: 500;
+}
+
+.ims-todo-chevron {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: var(--ims-muted);
+}
+
+/* Status: a dot and a word, never colour alone (DESIGN.md §2). */
+.ims-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--ims-radius-pill);
+    font-size: 0.875rem;
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--ims-ink);
+    text-decoration: none;
+}
+
+.ims-status-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: currentColor;
+}
+
+.ims-status-success .ims-status-dot {
+    background-color: var(--ims-success);
+}
+
+.ims-status-warning {
+    background-color: var(--ims-warning-soft);
+}
+
+.ims-status-warning .ims-status-dot {
+    background-color: var(--ims-warning);
+}
+
+/* Avatars with initials (DESIGN.md §7 AvatarStack). */
+.ims-avatar {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--ims-radius-pill);
+    font-weight: 700;
+    border: 2px solid var(--ims-card);
+}
+
+.ims-avatar-sm {
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: 0.8125rem;
+}
+
+.ims-avatar-md {
+    width: 3rem;
+    height: 3rem;
+    font-size: 0.9375rem;
+}
+
+.ims-avatar-lg {
+    width: 3.5rem;
+    height: 3.5rem;
+    font-size: 1.125rem;
+}
+
+.ims-avatar-tone-0 { background-color: #fde7c8; color: #7a4a06; }
+.ims-avatar-tone-1 { background-color: #dbe7fb; color: var(--ims-info-ink); }
+.ims-avatar-tone-2 { background-color: #f6dcdc; color: #7c2121; }
+.ims-avatar-tone-3 { background-color: var(--ims-primary-soft); color: var(--ims-primary-ink); }
+
+.ims-avatar-more {
+    background-color: var(--ims-primary);
+    color: #ffffff;
+}
+
+.ims-avatar-stack {
+    display: flex;
+    align-items: center;
+    margin-top: 0.75rem;
+}
+
+.ims-avatar-stack > * + * {
+    margin-inline-start: -0.625rem;
+}
+
+.ims-person {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.ims-person-name {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.ims-table .ims-nowrap {
+    white-space: nowrap;
+}
+
+/* Tables (DESIGN.md §7 HistoryTable): rows on wide screens, cards on phones. */
+.ims-table {
+    width: 100%;
+    margin-top: 1rem;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.9375rem;
+}
+
+.ims-table th {
+    padding: 0.5rem 0.75rem;
+    text-align: start;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ims-muted);
+}
+
+.ims-table td {
+    padding: 0.75rem;
+    vertical-align: middle;
+}
+
+.ims-table tbody tr:nth-child(even) td {
+    background-color: var(--ims-page);
+}
+
+.ims-table tbody tr td:first-child {
+    border-start-start-radius: 1rem;
+    border-end-start-radius: 1rem;
+}
+
+.ims-table tbody tr td:last-child {
+    border-start-end-radius: 1rem;
+    border-end-end-radius: 1rem;
+}
+
+.ims-table .ims-num {
+    text-align: end;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+@media (max-width: 767.98px) {
+    .ims-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+    }
+
+    .ims-table,
+    .ims-table tbody,
+    .ims-table tr,
+    .ims-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .ims-table tr {
+        padding: 0.75rem 0;
+        border-bottom: 1px solid var(--ims-line);
+    }
+
+    .ims-table tbody tr:nth-child(even) td {
+        background-color: transparent;
+    }
+
+    .ims-table td {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.25rem 0;
+        text-align: end;
+    }
+
+    .ims-table td::before {
+        content: attr(data-label);
+        font-size: 0.8125rem;
+        color: var(--ims-muted);
+        text-align: start;
+    }
+
+    .ims-table td:first-child::before {
+        content: none;
+    }
+}
+
+/* Segment switch (DESIGN.md §7 SegmentToggle). */
+.ims-segment {
+    display: inline-flex;
+    flex-shrink: 0;
+    gap: 0.125rem;
+    margin-inline-start: auto;
+    padding: 0.25rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-page);
+}
+
+.ims-segment button {
+    min-height: 2.5rem;
+    padding: 0.25rem 0.875rem;
+    border-radius: var(--ims-radius-pill);
+    font-size: 0.875rem;
+    color: var(--ims-muted);
+    white-space: nowrap;
+}
+
+.ims-segment button.ims-segment-on {
+    background-color: var(--ims-primary);
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.ims-segment + .ims-arrow-btn {
+    margin-inline-start: 0;
+}
+
+/* The bar chart (DESIGN.md §7 BarChart). */
+.ims-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.ims-chart.h-full .ims-chart-plot {
+    flex: 1 1 auto;
+}
+
+.ims-money {
+    white-space: nowrap;
+}
+
+.ims-chart .ims-card-head {
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.ims-chart-plot {
+    display: flex;
+    align-items: stretch;
+    gap: clamp(0.25rem, 1vw, 0.875rem);
+    height: 15rem;
+    padding-top: 2.75rem;
+    background-image: repeating-linear-gradient(to bottom, transparent 0 calc(25% - 1px), var(--ims-line) calc(25% - 1px) 25%);
+    background-size: 100% calc(100% - 4.5rem);
+    background-position: 0 2.75rem;
+    background-repeat: no-repeat;
+}
+
+.ims-chart-col {
+    display: flex;
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.ims-chart-track {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    align-items: flex-end;
+    width: 100%;
+    max-width: 4.5rem;
+}
+
+.ims-chart-bar {
+    position: relative;
+    width: 100%;
+    border-radius: 999px;
+    background-color: var(--ims-primary-tint);
+    background-image: repeating-linear-gradient(135deg, rgb(255 255 255 / 0.22) 0 2px, transparent 2px 8px);
+    opacity: 0.85;
+    transition: background-color 120ms, opacity 120ms;
+}
+
+.ims-chart-col:hover .ims-chart-bar {
+    opacity: 1;
+}
+
+.ims-chart-bar-on {
+    background-color: var(--ims-primary-deep);
+    opacity: 1;
+}
+
+.ims-chart-bar-loss {
+    background-color: var(--ims-danger-tint);
+}
+
+.ims-chart-bar-loss.ims-chart-bar-on {
+    background-color: var(--ims-danger);
+}
+
+.ims-chart-tip {
+    position: absolute;
+    bottom: calc(100% + 0.5rem);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-primary);
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+    z-index: 1;
+}
+
+.ims-chart-tip .ims-amount-minor {
+    color: var(--ims-on-primary-muted);
+}
+
+.ims-chart-tip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    width: 0.625rem;
+    height: 0.625rem;
+    margin-top: 0.25rem;
+    transform: translateX(-50%);
+    border: 2px solid var(--ims-card);
+    border-radius: 999px;
+    background-color: var(--ims-primary);
+}
+
+.ims-chart-label {
+    font-size: 0.75rem;
+    color: var(--ims-muted);
+    white-space: nowrap;
+}
+
+.ims-chart-readout {
+    font-size: 0.9375rem;
+    color: var(--ims-muted);
+}
+
+.ims-chart-readout strong {
+    color: var(--ims-ink);
+}
+
+.ims-chart-empty {
+    font-size: 0.875rem;
+    color: var(--ims-muted);
+}
+
+/* Group tiles on the office home. */
+.ims-group-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.ims-group-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem 1.125rem;
+    border-radius: 1.25rem;
+    background-color: var(--ims-page);
+    color: var(--ims-ink);
+    text-decoration: none;
+}
+
+a.ims-group-tile[href]:hover {
+    background-color: var(--ims-primary-soft);
+}
+
+/* ---------- Home grids (DESIGN.md §6) ---------- */
+
+.ims-home-grid {
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.ims-home-grid > * {
+    min-width: 0;
+}
+
+.ims-office-grid {
+    grid-template-areas: 'money' 'quick' 'todo' 'chart' 'payouts' 'latest' 'groups';
+}
+
+@media (min-width: 768px) {
+    .ims-office-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+            'money todo'
+            'chart chart'
+            'latest latest'
+            'payouts groups';
+    }
+}
+
+/* Tablets: the quick buttons sit under the money and to-do cards. */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+    .ims-office-grid {
+        grid-template-areas:
+            'money todo'
+            'quick quick'
+            'chart chart'
+            'latest latest'
+            'payouts groups';
+    }
+}
+
+@media (min-width: 1280px) {
+    .ims-office-grid {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1fr);
+        grid-template-areas:
+            'money chart todo'
+            'latest latest payouts'
+            'groups groups groups';
+    }
+}
+
+.ims-portal-grid {
+    grid-template-areas: 'balance' 'side' 'projects' 'chart' 'latest' 'calendar';
+}
+
+@media (min-width: 768px) {
+    .ims-portal-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+            'balance side'
+            'chart chart'
+            'projects projects'
+            'latest calendar';
+    }
+}
+
+@media (min-width: 1280px) {
+    .ims-portal-grid {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1fr);
+        grid-template-areas:
+            'balance chart side'
+            'projects projects latest'
+            'calendar calendar latest';
+        align-items: start;
+    }
+
+    .ims-portal-grid .ims-area-chart {
+        align-self: stretch;
+    }
+}
+
+.ims-area-balance { grid-area: balance; }
+.ims-area-side { grid-area: side; }
+.ims-area-projects { grid-area: projects; }
+.ims-area-calendar { grid-area: calendar; }
+
+.ims-area-calendar > section {
+    flex: 1 1 auto;
+}
+
+.ims-area-money { grid-area: money; }
+.ims-area-chart { grid-area: chart; }
+.ims-area-todo { grid-area: todo; }
+.ims-area-latest { grid-area: latest; }
+.ims-area-payouts { grid-area: payouts; }
+.ims-area-groups { grid-area: groups; }
+
+/* The default Filament page heading, on every other page. */
+.fi-header-heading {
+    font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+    font-weight: 600;
+}
+
+/* Filament tables and sections in IMS: round and light. */
+.fi-ta-ctn {
+    border-radius: var(--ims-radius-card);
+    --tw-ring-color: transparent;
+}
+
+.fi-section:not(.fi-section-not-contained) {
+    --tw-ring-color: transparent;
+}
+
+.ims-status-dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: currentColor;
+}
+
+.ims-quick-actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.ims-quick-actions a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.3;
+    text-align: center;
+    color: var(--ims-ink);
+    text-decoration: none;
+}
+
+.ims-quick-actions .ims-quick-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.25rem;
+    height: 3.25rem;
+    border-radius: 1.125rem;
+    background-color: var(--ims-primary-soft);
+    color: var(--ims-primary-ink);
+    transition: background-color 75ms;
+}
+
+.ims-quick-actions a:hover .ims-quick-icon {
+    background-color: var(--ims-primary);
+    color: #ffffff;
+}
+
+.ims-quick-actions a:focus-visible {
+    outline: 3px solid var(--ims-primary-tint);
+    outline-offset: 2px;
+    border-radius: 1rem;
+}
+
+/* Section headings with "See all" (DESIGN.md §8.1). */
+.ims-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.ims-section-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--ims-ink);
+}
+
+.ims-see-all {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ims-primary-text);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.ims-see-all:hover {
+    text-decoration: underline;
+}
+
+/* Banners: KYC, agreements (DESIGN.md §8.1 "KYC banner on top"). */
+.ims-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    padding: 1rem 1.25rem;
+    border-radius: var(--ims-radius-card);
+    background-color: var(--ims-card);
+}
+
+.ims-banner-warning {
+    background-color: var(--ims-warning-banner);
+}
+
+.ims-banner-warning .ims-card-icon {
+    background-color: var(--ims-warning-icon);
+    color: var(--ims-warning-ink);
+}
+
+.ims-banner-text {
+    flex: 1 1 14rem;
+    min-width: 0;
+    font-weight: 500;
+}
+
+.ims-pill-on-green {
+    background-color: rgb(255 255 255 / 0.18);
+    color: #ffffff;
+}
+
+.ims-pill-on-green .ims-amount-minor {
+    color: var(--ims-on-primary-muted);
+}
+
+/* Transaction list (DESIGN.md §7 TransactionList). */
+.ims-tx-list {
+    display: flex;
+    flex-direction: column;
+    margin-top: 0.5rem;
+}
+
+.ims-tx {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--ims-line);
+}
+
+.ims-tx:last-child {
+    border-bottom: 0;
+}
+
+.ims-tx-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.875rem;
+}
+
+.ims-tx-icon-in {
+    background-color: var(--ims-primary-soft);
+    color: var(--ims-primary-ink);
+}
+
+.ims-tx-icon-out {
+    background-color: var(--ims-info-soft);
+    color: var(--ims-info-ink);
+}
+
+.ims-tx-icon-loss {
+    background-color: var(--ims-danger-soft);
+    color: var(--ims-danger-ink);
+}
+
+.ims-tx-icon-neutral {
+    background-color: var(--ims-page);
+    color: var(--ims-ink);
+}
+
+.ims-tx-text,
+.ims-tx-side {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.ims-tx-text {
+    flex: 1 1 auto;
+}
+
+.ims-tx-side {
+    align-items: flex-end;
+    text-align: end;
+}
+
+.ims-tx-label {
+    font-weight: 600;
+    color: var(--ims-ink);
+}
+
+.ims-tx-meta {
+    font-size: 0.8125rem;
+    color: var(--ims-muted);
+}
+
+.ims-tx-text .ims-tx-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ims-tx-side .ims-tx-meta {
+    white-space: nowrap;
+}
+
+.ims-tx-amount {
+    font-weight: 700;
+    white-space: nowrap;
+    color: var(--ims-ink);
+}
+
+.ims-tx-amount-in {
+    color: var(--ims-success);
+}
+
+.ims-tx-amount-loss {
+    color: var(--ims-danger);
+}
+
+/* The bell in the portal's top bar. */
+.ims-bell {
+    position: relative;
+}
+
+.ims-bell-count {
+    position: absolute;
+    top: -0.25rem;
+    inset-inline-end: -0.25rem;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding-inline: 0.25rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-danger);
+    color: #ffffff;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1.25rem;
+    text-align: center;
+}
+
+/* ---------- Phones: the top bar ---------- */
+
+@media (max-width: 1023.98px) {
+    .fi-topbar-ctn {
+        padding: 0.5rem 0.5rem 0;
+    }
+
+    .fi-topbar {
+        min-height: 3.75rem;
+        border-radius: 1.5rem;
+        padding-inline: 0.5rem;
+    }
+
+    /* The portal has the bottom tab bar and the Profile list, so no menu button. */
+    .fi-panel-investor .fi-topbar-open-sidebar-btn,
+    .fi-panel-investor .fi-topbar-close-sidebar-btn {
+        display: none !important;
+    }
+
+    .fi-topbar-start .fi-logo {
+        font-size: 1.0625rem;
+    }
+
+    .fi-topbar-start .fi-logo img {
+        max-height: 2.25rem;
+    }
+}
+
+.fi-ims-language-simple {
+    width: max-content;
+    margin: 0 0 1rem auto;
+    background-color: var(--ims-page);
+}
+
+.fi-ims-language-drawer {
+    display: none;
+    margin-bottom: 1rem;
+    background-color: var(--ims-page);
+}
+
+/* The office's company picker (18_IMS_ALL_COMPANIES_PLAN.md §3.2): the open company's name in a pill. */
+.fi-ims-company-picker-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    max-width: 16rem;
+    padding-inline: 0.875rem;
+    border-radius: var(--ims-radius-pill);
+    border: 1px solid var(--ims-line);
+    background-color: var(--ims-card);
+    color: var(--ims-ink);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.fi-ims-company-picker-name {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.fi-ims-company-picker-btn:focus-visible {
+    outline: 3px solid var(--ims-primary-tint);
+    outline-offset: 2px;
+}
+
+/* "All companies" in the office (18_IMS_ALL_COMPANIES_PLAN.md §3.3): one column on phones, two on wide screens. */
+.ims-all-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.ims-all-nav a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding-inline: 1rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-card);
+    color: var(--ims-ink);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.ims-all-nav a:focus-visible {
+    outline: 3px solid var(--ims-primary-tint);
+    outline-offset: 2px;
+}
+
+.ims-all-nav-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5rem;
+    height: 1.5rem;
+    padding-inline: 0.375rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-primary);
+    color: #ffffff;
+    font-size: 0.8125rem;
+}
+
+.ims-all-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+    margin-top: 1.25rem;
+}
+
+@media (min-width: 1024px) {
+    .ims-all-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ims-all-wide {
+        grid-column: 1 / -1;
+    }
+}
+
+.ims-all-grid > section {
+    scroll-margin-top: 6rem;
+}
+
+.ims-all-company {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ims-muted);
+}
+
+.ims-all-facts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    font-size: 0.875rem;
+    color: var(--ims-ink);
+}
+
+/* Investor portal: the company a project belongs to, as plain text on its card (18_IMS_ALL_COMPANIES_PLAN.md §4). */
+.ims-portal-company {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ims-muted);
+}
+
+/* Small phones: the picker is a list in the menu drawer instead, so the top bar fits. */
+.fi-ims-company-drawer {
+    display: none;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    border-radius: var(--ims-radius-card, 1rem);
+    background-color: var(--ims-page);
+}
+
+.fi-ims-company-drawer-title {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--ims-muted, var(--ims-ink));
+}
+
+.fi-ims-company-drawer a {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-height: 2.75rem;
+    padding-inline: 0.75rem;
+    border-radius: var(--ims-radius-pill);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--ims-ink);
+    text-decoration: none;
+}
+
+.fi-ims-company-drawer a[aria-current] {
+    background-color: var(--ims-primary);
+    color: #ffffff;
+}
+
+.fi-ims-company-drawer a:focus-visible {
+    outline: 3px solid var(--ims-primary-tint);
+    outline-offset: 2px;
+}
+
+@media (max-width: 639.98px) {
+    .fi-topbar .fi-ims-company-picker {
+        display: none;
+    }
+
+    .fi-ims-company-drawer {
+        display: flex;
+    }
+}
+
+/* Office on large phones and small tablets: the picker and the language switch move to the drawer too, so the profile button stays on screen. */
+@media (max-width: 899.98px) {
+    .fi-panel-office .fi-topbar .fi-ims-company-picker,
+    .fi-panel-office .fi-topbar .fi-ims-language {
+        display: none;
+    }
+
+    .fi-panel-office .fi-ims-company-drawer,
+    .fi-panel-office .fi-ims-language-drawer {
+        display: flex;
+    }
+}
+
+/* A long company name never pushes the buttons beside it off a laptop's top bar. */
+@media (max-width: 1279.98px) {
+    .fi-ims-company-picker-btn {
+        max-width: 12rem;
+    }
+}
+
+@media (max-width: 639.98px) {
+    /* Small phones: the language switch moves to the Profile page (portal) or the
+       menu drawer (office), and the office search to the desktop, so the bar fits. */
+    .fi-topbar .fi-investor-language,
+    .fi-topbar .fi-ims-language,
+    .fi-topbar .fi-global-search-field {
+        display: none;
+    }
+
+    .fi-ims-language-drawer {
+        display: flex;
+    }
+
+    .fi-topbar-start .fi-logo {
+        max-width: 9rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+.ims-progress {
+    height: 0.5rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-primary-soft);
+    overflow: hidden;
+}
+
+.ims-progress > span {
+    display: block;
+    height: 100%;
+    border-radius: var(--ims-radius-pill);
+    background-color: var(--ims-primary);
+}
+
+.ims-todo-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 44px;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--ims-line);
+}
+
+.ims-todo-item:last-child {
+    border-bottom: 0;
+}
+
+.ims-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.ims-timeline li {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+}
+
+.ims-timeline .ims-timeline-mark {
+    flex-shrink: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-top: 0.125rem;
+    border-radius: var(--ims-radius-pill);
+    border: 2px solid var(--ims-primary-tint);
+    background-color: var(--ims-card);
+}
+
+.ims-timeline .ims-timeline-done .ims-timeline-mark {
+    border-color: var(--ims-primary);
+    background-color: var(--ims-primary);
+}
+
+/* ---------- Sign-in pages (owner's reference sign-in page, 2026-10-20) ----------
+ * Wide screens: one big round frame on the page ground; inside it the coloured
+ * welcome panel on the left (logo, badge, heading, three step cards) and the
+ * form on the right with soft grey fields and a full-width green button.
+ * Phones and tablets: the welcome panel is a short block on top, the form sheet
+ * overlaps its lower edge.
+ */
+
+.fi-simple-layout {
+    background-color: var(--ims-page);
+}
+
+/* The welcome panel already shows the logo and name. */
+.fi-simple-layout:has(.ims-auth-hero) .fi-simple-main .fi-logo {
+    display: none;
+}
+
+.fi-simple-main-ctn {
+    position: relative;
+    z-index: 1;
+}
+
+.fi-simple-main {
+    border-radius: 2rem;
+    background-color: var(--ims-card);
+    box-shadow: 0 12px 40px -24px rgb(17 20 24 / 0.25);
+    --tw-ring-color: transparent;
+}
+
+.fi-simple-page {
+    position: relative;
+}
+
+/* Theme + language switches in the form's top corner. */
+.ims-auth-tools {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.ims-auth-tools .fi-investor-language-simple,
+.ims-auth-tools .fi-ims-language-simple {
+    align-self: auto;
+    margin: 0;
+    background-color: var(--ims-field);
+}
+
+.ims-auth-tools .ims-theme-toggle {
+    border-color: transparent;
+    background-color: var(--ims-field);
+}
+
+/* The heading: big and centred, like "Join Us" in the reference. */
+.fi-simple-header {
+    align-items: center;
+    text-align: center;
+}
+
+.fi-simple-header-heading {
+    font-size: clamp(1.75rem, 1.4rem + 1.2vw, 2.25rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--ims-ink);
+}
+
+.fi-simple-header-subheading {
+    color: var(--ims-muted);
+}
+
+/* Labels above soft grey fields with no border. */
+.fi-simple-layout .fi-fo-field-label-content {
+    font-weight: 600;
+    color: var(--ims-ink);
+}
+
+.fi-simple-layout .fi-input-wrp {
+    min-height: 3.25rem;
+    border-radius: 0.875rem;
+    background-color: var(--ims-field);
+    --tw-ring-color: transparent;
+    box-shadow: none;
+    transition: box-shadow 120ms, background-color 120ms;
+}
+
+.fi-simple-layout .fi-input-wrp:focus-within {
+    background-color: var(--ims-card);
+    box-shadow: 0 0 0 2px var(--ims-primary);
+}
+
+.fi-simple-layout .fi-input-wrp .fi-input {
+    background-color: transparent;
+    color: var(--ims-ink);
+}
+
+.fi-simple-layout .fi-input-wrp.fi-invalid {
+    box-shadow: 0 0 0 2px var(--ims-danger);
+}
+
+/* The main button: full width, tall, a softer rounded rectangle as in the reference. */
+.fi-simple-layout .fi-btn {
+    width: 100%;
+    min-height: 3.25rem;
+    border-radius: 0.875rem;
+    font-size: 1rem;
+}
+
+/* A second way in ("Sign in with an SMS code instead"): "Or" line, then an outlined button. */
+.fi-simple-main .fi-sc-actions .fi-ac {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+}
+
+.fi-simple-main .fi-sc-actions .fi-ac > .fi-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 3.25rem;
+    margin-top: 2.25rem;
+    border: 1px solid var(--ims-line);
+    border-radius: 0.875rem;
+    background-color: var(--ims-card);
+    color: var(--ims-ink);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.fi-simple-main .fi-sc-actions .fi-ac > .fi-link:hover {
+    background-color: var(--ims-field);
+}
+
+.fi-simple-main .fi-sc-actions .fi-ac > .fi-link .fi-link-label,
+.fi-simple-main .fi-sc-actions .fi-ac > .fi-link .fi-icon {
+    color: var(--ims-ink);
+}
+
+.fi-simple-main .fi-sc-actions .fi-ac > .fi-link::before {
+    content: var(--ims-or-label, '');
+    position: absolute;
+    z-index: 1;
+    top: -2.25rem;
+    left: 50%;
+    transform: translateX(-50%);
+    padding-inline: 0.75rem;
+    background-color: var(--ims-card);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.5rem;
+    color: var(--ims-muted);
+    pointer-events: none;
+}
+
+/* The line behind "Or". */
+.fi-simple-main .fi-sc-actions .fi-ac > .fi-link::after {
+    content: '';
+    position: absolute;
+    top: calc(-2.25rem + 0.75rem);
+    left: 0;
+    right: 0;
+    height: 1px;
+    background-color: var(--ims-line);
+    pointer-events: none;
+}
+
+/* The welcome panel. */
+.ims-auth-hero {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    width: 100%;
+    padding: 1.25rem 1.25rem 3.5rem;
+    color: var(--ims-on-primary);
+    background-color: var(--ims-auth-via);
+    background-image:
+        radial-gradient(60% 55% at 30% 18%, rgb(255 255 255 / 0.28), transparent 70%),
+        radial-gradient(55% 60% at 85% 60%, var(--ims-auth-to), transparent 72%),
+        radial-gradient(70% 60% at 10% 100%, var(--ims-auth-to), transparent 70%),
+        linear-gradient(150deg, var(--ims-auth-from) 0%, var(--ims-auth-via) 45%, var(--ims-auth-from) 100%);
+}
+
+.ims-auth-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.ims-auth-logo {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    height: 2.75rem;
+    padding: 0.375rem 0.625rem;
+    border-radius: 0.875rem;
+    background-color: #ffffff;
+}
+
+.ims-auth-logo img {
+    max-height: 2rem;
+    width: auto;
+}
+
+.ims-auth-brand-name {
+    font-size: 1.125rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.ims-auth-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.ims-auth-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.ims-auth-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.875rem;
+    border-radius: var(--ims-radius-pill);
+    background-color: rgb(255 255 255 / 0.18);
+    border: 1px solid rgb(255 255 255 / 0.22);
+    backdrop-filter: blur(6px);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.ims-auth-heading {
+    font-size: clamp(1.625rem, 1.1rem + 2.4vw, 3.25rem);
+    font-weight: 600;
+    line-height: 1.12;
+    letter-spacing: -0.025em;
+}
+
+.ims-auth-text {
+    max-width: 32rem;
+    color: var(--ims-on-primary-muted);
+    font-size: 1rem;
+}
+
+/* Three numbered step cards; the first is white. */
+.ims-auth-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.ims-auth-step {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-width: 0;
+    padding: 0.75rem;
+    border-radius: 1rem;
+    background-color: rgb(255 255 255 / 0.14);
+    border: 1px solid rgb(255 255 255 / 0.16);
+    backdrop-filter: blur(6px);
+    color: rgb(255 255 255 / 0.82);
+}
+
+.ims-auth-step-on {
+    background-color: #ffffff;
+    border-color: #ffffff;
+    color: #111418;
+}
+
+.ims-auth-step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: var(--ims-radius-pill);
+    border: 1px solid rgb(255 255 255 / 0.5);
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.ims-auth-step-on .ims-auth-step-number {
+    border-color: var(--ims-auth-via);
+    background-color: var(--ims-auth-via);
+    color: #ffffff;
+}
+
+.ims-auth-step-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+/* Phones and tablets: the form sheet slides up over the green block. */
+@media (max-width: 1023.98px) {
+    .fi-simple-main-ctn {
+        margin-top: -2rem;
+        align-items: flex-start;
+    }
+
+    .fi-simple-main {
+        margin-top: 0;
+        margin-bottom: 2rem;
+    }
+}
+
+@media (max-width: 639.98px) {
+    .fi-simple-main-ctn {
+        padding-inline: 0.75rem;
+    }
+
+    .fi-simple-main {
+        padding: 1.5rem 1.125rem 2rem;
+    }
+
+    .ims-auth-hero {
+        gap: 1.25rem;
+        padding: 1rem 1rem 3.25rem;
+    }
+
+    .ims-auth-step {
+        padding: 0.625rem;
+        gap: 0.5rem;
+    }
+
+    .ims-auth-step-label {
+        font-size: 0.75rem;
+    }
+}
+
+/* Wide screens: one round frame, the welcome panel on the left, the form on the right. */
+@media (min-width: 1024px) {
+    .fi-simple-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+        align-items: stretch;
+        width: min(100% - 2.5rem, 80rem);
+        min-height: calc(100dvh - 2.5rem);
+        margin: 1.25rem auto;
+        padding: 0.625rem;
+        gap: 0;
+        border-radius: 2.25rem;
+        background-color: var(--ims-card);
+        box-shadow: 0 24px 60px -32px rgb(17 20 24 / 0.3);
+    }
+
+    .fi-body:has(.fi-simple-layout) {
+        background-color: var(--ims-page);
+    }
+
+    .ims-auth-hero {
+        grid-column: 1;
+        grid-row: 1 / span 3;
+        justify-content: space-between;
+        gap: 2rem;
+        padding: 2.5rem;
+        border-radius: 1.75rem;
+    }
+
+    .ims-auth-body {
+        gap: 2.25rem;
+    }
+
+    .ims-auth-steps {
+        gap: 0.875rem;
+    }
+
+    .ims-auth-step {
+        min-height: 8.5rem;
+        padding: 1rem;
+        border-radius: 1.25rem;
+    }
+
+    .ims-auth-step-label {
+        font-size: 0.9375rem;
+    }
+
+    .fi-simple-main-ctn {
+        grid-column: 2;
+        grid-row: 1 / span 3;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem clamp(1.5rem, 4vw, 4rem);
+    }
+
+    /* The form lives in the frame itself: no second card. */
+    .fi-simple-main {
+        width: 100%;
+        max-width: 26rem;
+        margin: 0;
+        padding: 0;
+        border-radius: 0;
+        background-color: transparent;
+        box-shadow: none;
+    }
+}
+
+/* ---------- Light / dark switch (top bar and sign-in page) ---------- */
+
+.ims-theme-toggle {
+    cursor: pointer;
+    transition: background-color 120ms, color 120ms;
+}
+
+.ims-theme-toggle:hover {
+    background-color: var(--ims-primary-soft);
+    color: var(--ims-primary-ink);
+}
+
+.ims-theme-toggle:focus-visible {
+    outline: 3px solid var(--ims-primary-tint);
+    outline-offset: 2px;
+}
+
+.ims-theme-toggle-sun,
+.dark .ims-theme-toggle-moon {
+    display: none;
+}
+
+/*
+ * The moon / sun button is the one light/dark switch. Filament's own switch in
+ * the profile menu did not follow it (it kept showing "light" after the button
+ * turned the page dark, and pressing "light" then did nothing), so it is hidden.
+ */
+.fi-dropdown-list:has(> .fi-theme-switcher) {
+    display: none;
+}
+
+.dark .ims-theme-toggle-sun {
+    display: inline-block;
+}
+
+/* ---------- Dark mode (owner request 2026-10-20) ----------
+ * The same tokens, dark values. Green surfaces (buttons, balance card, the
+ * sign-in panel) keep their colour and white text; green used as text gets a
+ * lighter shade so it reads on the dark cards.
+ */
+
+:root.dark {
+    color-scheme: dark;
+
+    --ims-page: #0b0f13;
+    --ims-card: #141a20;
+    --ims-line: #262e37;
+    --ims-primary: #16834f;
+    --ims-primary-deep: #11a05f;
+    --ims-primary-soft: #133a28;
+    --ims-primary-tint: #2f7d55;
+    --ims-primary-text: #4cc387;
+    --ims-primary-ink: #8be0b4;
+    --ims-ink: #e7eaee;
+    --ims-muted: #9aa4b1;
+    --ims-success: #22c55e;
+    --ims-warning: #f59e0b;
+    --ims-danger: #ef4444;
+    --ims-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+    --ims-shadow-pop: 0 16px 40px -8px rgb(0 0 0 / 0.6), 0 4px 12px -2px rgb(0 0 0 / 0.4);
+
+    --ims-raised: #1c242c;
+    --ims-nav-track: #0f1418;
+    --ims-nav-track-line: #262e37;
+    --ims-nav-text: #c9d0d8;
+    --ims-nav-icon: #8d97a3;
+    --ims-toggle-hover: #1a4a33;
+
+    --ims-warning-soft: #3a2a10;
+    --ims-warning-ink: #fcd38a;
+    --ims-warning-banner: #2b2112;
+    --ims-warning-icon: #4a3512;
+    --ims-danger-soft: #3d1a1a;
+    --ims-danger-ink: #fca5a5;
+    --ims-danger-tint: #8a3a3a;
+    --ims-info-soft: #18243b;
+    --ims-info-ink: #b7c9f0;
+
+    --ims-field: #1c242c;
+    --ims-auth-from: #06371f;
+    --ims-auth-via: #0f6b3f;
+    --ims-auth-to: #1f9d5f;
+}
+
+/* Filament's own cards, tables and top bar use the IMS dark card colour. */
+.dark .fi-section:not(.fi-section-not-contained),
+.dark .fi-ta-ctn,
+.dark .fi-wi-stats-overview-stat,
+.dark .fi-modal-window,
+.dark .fi-simple-main {
+    background-color: var(--ims-card);
+}
+
+.dark .fi-topbar-nav-groups .fi-topbar-item-btn:hover {
+    box-shadow: none;
+}
+
+.dark .fi-topbar-nav-groups .fi-topbar-item.fi-active .fi-topbar-item-btn {
+    box-shadow: 0 4px 14px -4px rgb(22 131 79 / 0.6);
+}
+
+/* Soft initials and status tones. */
+.dark .ims-avatar-tone-0 { background-color: #3a2a10; color: #fcd38a; }
+.dark .ims-avatar-tone-1 { background-color: #18243b; color: #b7c9f0; }
+.dark .ims-avatar-tone-2 { background-color: #3d1a1a; color: #fca5a5; }
+
+.dark .ims-chart-bar {
+    background-image: repeating-linear-gradient(135deg, rgb(255 255 255 / 0.08) 0 2px, transparent 2px 8px);
+}
+
+/* Older portal views drawn with grey utility classes and no dark variant. */
+.dark .fi-body .text-gray-500,
+.dark .fi-body .text-gray-600 {
+    color: var(--ims-muted);
+}
+
+.dark .fi-body .bg-gray-50,
+.dark .fi-body .bg-gray-100 {
+    background-color: var(--ims-raised);
+}
+
+.dark .fi-body .bg-primary-50 {
+    background-color: var(--ims-primary-soft);
+}
+
+/* The sign-in frame on a dark page. */
+@media (min-width: 1024px) {
+    .dark .fi-simple-layout {
+        box-shadow: 0 0 0 1px var(--ims-line), 0 24px 60px -32px rgb(0 0 0 / 0.8);
+    }
+
+    .dark .fi-simple-main {
+        background-color: transparent;
+    }
+}

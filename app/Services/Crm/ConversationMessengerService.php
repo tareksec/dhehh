@@ -23,6 +23,9 @@ use Throwable;
  */
 class ConversationMessengerService
 {
+    /** ai_meta['kind'] of the message that records a sent carousel. It is not an AI answer of its own. */
+    public const CARDS_KIND = 'product_cards';
+
     public function __construct(
         protected MetaGraphService $meta,
         protected StorefrontNotificationService $notifications,
@@ -36,6 +39,12 @@ class ConversationMessengerService
         ?string $mediaUrl = null,
         array $automation = [],
     ): ConversationMessage {
+        // The Agent Desk test chat uses an unsaved conversation; nothing it
+        // produces may ever reach a customer.
+        if (! $conversation->exists) {
+            throw new \LogicException('A message can only be sent in a saved conversation.');
+        }
+
         // WhatsApp Web (QR) channels are a read-only archive: the bridge
         // never sends, so the linked number is not put at extra ban risk.
         if ($conversation->channel()->withoutGlobalScopes()->first()?->isWeb()) {
@@ -68,6 +77,56 @@ class ConversationMessengerService
         }
 
         return $delivered;
+    }
+
+    /**
+     * A Messenger carousel of product cards, sent right after the written
+     * answer. Best effort: the answer already told the customer everything, so
+     * a failed carousel is only logged -- it leaves no failed bubble behind
+     * (a retry would have nothing to resend) and no channel fault.
+     *
+     * @param  array<int, array<string, mixed>>  $elements
+     */
+    public function sendCards(Conversation $conversation, array $elements, string $summary, array $meta = []): ?ConversationMessage
+    {
+        if (! $conversation->exists || $conversation->provider !== 'messenger' || $elements === []) {
+            return null;
+        }
+
+        try {
+            $conversation->loadMissing('channel');
+            $channel = $conversation->channel;
+            $this->validateDelivery($conversation, $channel);
+
+            $message = ConversationMessage::query()->create([
+                'conversation_id' => $conversation->getKey(),
+                'direction' => 'outgoing',
+                'type' => 'text',
+                'body' => $summary,
+                'delivery_status' => 'sending',
+                'generated_by' => 'ai',
+                'ai_meta' => [...$meta, 'kind' => self::CARDS_KIND],
+                'sent_at' => now(),
+            ]);
+
+            try {
+                $externalId = $this->meta->sendMessengerCards($channel, trim((string) $conversation->external_contact_id), $elements, 'crm-message:'.$message->getKey());
+            } catch (Throwable $exception) {
+                $message->delete();
+
+                throw $exception;
+            }
+
+            $message->forceFill(['external_message_id' => $externalId, 'delivery_status' => 'sent'])->save();
+            $conversation->forceFill(['last_message_at' => now()])->saveQuietly();
+            $channel->markOutboundSent();
+
+            return $message->refresh();
+        } catch (Throwable $exception) {
+            Log::info('Product cards were not sent.', ['conversation_id' => $conversation->getKey(), 'error' => $this->safeMessage($exception)]);
+
+            return null;
+        }
     }
 
     public function retry(ConversationMessage $message, ?User $sender = null): ConversationMessage
@@ -347,15 +406,16 @@ class ConversationMessengerService
     {
         $updates = ['last_message_at' => now()];
 
-        if ($sender !== null) {
-            $updates['human_handled_until'] = now()->addHours(24);
-
-            if ($conversation->status === 'pending') {
-                $updates['status'] = 'open';
-            }
+        if ($sender !== null && $conversation->status === 'pending') {
+            $updates['status'] = 'open';
         }
 
         $conversation->forceFill($updates)->saveQuietly();
+
+        // A staff reply keeps the chat with the team for the takeover time.
+        if ($sender !== null) {
+            app(ConversationModeService::class)->staffAnswered($conversation, 'staff_reply', $sender);
+        }
     }
 
     protected function safeMessage(Throwable $exception): string

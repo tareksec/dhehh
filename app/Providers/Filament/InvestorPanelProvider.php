@@ -2,6 +2,15 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Ims\Portal\Pages\Auth\JoinWithInvite;
+use App\Filament\Ims\Portal\PortalNavigation;
+use App\Filament\Ims\Portal\Pages\Feed;
+use App\Filament\Ims\Portal\Pages\Kyc;
+use App\Filament\Ims\Portal\Pages\Nominees;
+use App\Filament\Ims\Portal\Pages\Notifications;
+use App\Filament\Ims\Portal\Pages\ProjectDetail;
+use App\Filament\Ims\Portal\Pages\Projects;
+use App\Filament\Ims\Portal\Pages\Support;
 use App\Filament\Investor\Pages\Agreements;
 use App\Filament\Investor\Pages\Auth\AcceptInvite;
 use App\Filament\Investor\Pages\Auth\ForgotPassword;
@@ -12,16 +21,22 @@ use App\Filament\Investor\Pages\Commissions;
 use App\Filament\Investor\Pages\Dashboard;
 use App\Filament\Investor\Pages\Documents;
 use App\Filament\Investor\Pages\Invite;
+use App\Filament\Investor\Pages\MyBusinesses;
 use App\Filament\Investor\Pages\MyInvestments;
 use App\Filament\Investor\Pages\MyInvestors;
 use App\Filament\Investor\Pages\Payouts;
 use App\Filament\Investor\Pages\Profile;
 use App\Filament\Investor\Pages\Requests;
 use App\Filament\Investor\Pages\Statement;
+use App\Http\Controllers\Ims\ImsPortalFileController;
+use App\Http\Controllers\Ims\ImsPortalStatementController;
+use App\Http\Controllers\InvestorPortal\InvestorBusinessSwitchController;
 use App\Http\Controllers\InvestorPortal\InvestorPortalDocumentController;
 use App\Http\Controllers\InvestorPortal\InvestorPortalLocaleController;
 use App\Http\Controllers\InvestorPortal\InvestorPortalReportController;
 use App\Http\Controllers\InvestorPortal\InvestorPortalStaffEntryController;
+use App\Http\Middleware\OpenLinkedInvestorBusiness;
+use App\Http\Middleware\ResolveCompanyFromCentralInvestorSession;
 use App\Http\Middleware\ResolveCompanyFromInvestorPortalDomain;
 use App\Http\Middleware\RestrictPortalHosts;
 use App\Http\Middleware\SetInvestorPortalLocale;
@@ -29,15 +44,16 @@ use App\Models\Company;
 use App\Services\CompanyContext;
 use App\Services\CompanySettingsService;
 use Filament\Actions\Action;
-use Filament\Enums\UserMenuPosition;
+use Filament\Enums\ThemeMode;
 use Filament\FontProviders\LocalFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Navigation\NavigationGroup;
+use Filament\Navigation\NavigationBuilder;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\Support\Colors\Color;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -78,6 +94,9 @@ class InvestorPanelProvider extends PanelProvider
         950 => 'oklch(0.13 0.008 260)',
     ];
 
+    /** IMS v2's deep green (IMS-V2/DESIGN.md §3 --ims-primary); both IMS panels build their palette from it. */
+    public const IMS_PRIMARY = '#16834F';
+
     public function panel(Panel $panel): Panel
     {
         return $panel
@@ -97,6 +116,7 @@ class InvestorPanelProvider extends PanelProvider
             ->darkModeBrandLogo(fn (): ?string => app(CompanySettingsService::class)->darkLogoUrl(fallbackToLight: false, company: $this->portalCompany()))
             ->pages([
                 Dashboard::class,
+                MyBusinesses::class,
                 MyInvestments::class,
                 Statement::class,
                 Payouts::class,
@@ -108,19 +128,24 @@ class InvestorPanelProvider extends PanelProvider
                 Commissions::class,
                 Invite::class,
                 Profile::class,
+                // IMS v2 (app/Filament/Ims/Portal).
+                Kyc::class,
+                Nominees::class,
+                Projects::class,
+                ProjectDetail::class,
+                Notifications::class,
+                Feed::class,
+                Support::class,
             ])
-            // The menu in three groups, then the channel-partner pages (owner's pick, 2026-10-14).
-            ->navigationGroups([
-                NavigationGroup::make(fn (): string => __('Overview')),
-                NavigationGroup::make(fn (): string => __('Money')),
-                NavigationGroup::make(fn (): string => __('Account')),
-                NavigationGroup::make(fn (): string => __('Channel partner')),
-            ])
-            // Look (owner's pick "F" with "B"'s menu, 2026-10-14): no top bar; the logo,
-            // the menu, the language switch and the person sit in a dark sidebar.
-            ->topbar(false)
-            ->userMenu(position: UserMenuPosition::Sidebar)
-            ->colors(['primary' => self::INK])
+            // IMS v2 look (IMS-V2/DESIGN.md §6, the owner's reference images, 2026-10-19):
+            // a round top bar with the main pages as pills and "More", an icon rail on
+            // the left of wide screens, and the bottom tab bar on phones.
+            ->navigation(fn (NavigationBuilder $builder): NavigationBuilder => PortalNavigation::build($builder))
+            ->topNavigation()
+            ->colors(['primary' => Color::hex(self::IMS_PRIMARY)])
+            // Light and dark mode; light until the person picks dark (the moon button in the top bar and on the sign-in page).
+            ->darkMode()
+            ->defaultThemeMode(ThemeMode::Light)
             // Hind Siliguri, self-hosted: @font-face lives in the portal theme.
             ->font('Hind Siliguri', provider: LocalFontProvider::class)
             ->homeUrl(fn (): string => Dashboard::getUrl())
@@ -130,27 +155,48 @@ class InvestorPanelProvider extends PanelProvider
             ])
             ->routes(function (): void {
                 Route::get('invite/{token}', AcceptInvite::class)->name('invite');
+                // IMS v2: joining with an office invite + a one-time code.
+                Route::get('join/{token}', JoinWithInvite::class)->middleware('throttle:30,1')->name('join');
                 Route::get('language/{locale}', InvestorPortalLocaleController::class)->whereIn('locale', SetInvestorPortalLocale::LOCALES)->name('language');
                 // One-time link from the dashboard's "Open investor portal" button.
                 Route::get('staff-entry/{token}', InvestorPortalStaffEntryController::class)->middleware('throttle:20,1')->name('staff-entry');
+                // One person, many businesses (17_IMS_IN_PORTAL_PLAN.md §5): the other business's end of the switcher.
+                Route::get('business-entry/{token}', [InvestorBusinessSwitchController::class, 'enter'])->middleware('throttle:20,1')->name('business-entry');
             })
             ->authenticatedRoutes(function (): void {
                 Route::get('documents/{document}/download', InvestorPortalDocumentController::class)->name('documents.download');
                 Route::get('payouts/{payout}/report', [InvestorPortalReportController::class, 'payout'])->name('reports.payout');
                 Route::get('statement/print', [InvestorPortalReportController::class, 'statement'])->name('reports.statement');
+                Route::post('switch-business/{company}', [InvestorBusinessSwitchController::class, 'switch'])->whereNumber('company')->middleware('throttle:20,1')->name('switch-business');
+                // IMS v2 files, checked against what this investor may see.
+                Route::name('ims.')->prefix('ims')->group(function (): void {
+                    Route::get('kyc/{document}', [ImsPortalFileController::class, 'kyc'])->whereNumber('document')->name('kyc');
+                    Route::get('update-photos/{photo}', [ImsPortalFileController::class, 'updatePhoto'])->whereNumber('photo')->name('update-photo');
+                    Route::get('feed-images/{image}', [ImsPortalFileController::class, 'feedImage'])->whereNumber('image')->name('feed-image');
+                    Route::get('project-reports/{report}/pdf', [ImsPortalFileController::class, 'projectReport'])->whereNumber('report')->name('project-report');
+                    Route::get('statements/{period}/pdf', [ImsPortalStatementController::class, 'pdf'])->where('period', '\d{4}-\d{2}')->name('statement-pdf');
+                });
             })
             ->renderHook(PanelsRenderHook::CONTENT_BEFORE, fn (): View => view('filament.investor.staff-preview-banner'))
-            ->renderHook(PanelsRenderHook::SIDEBAR_FOOTER, fn (): View => view('filament.investor.language-switch'))
-            ->renderHook(PanelsRenderHook::SIMPLE_PAGE_START, fn (): View => view('filament.investor.language-switch', ['simple' => true]))
+            ->renderHook(PanelsRenderHook::BODY_START, fn (): View => view('filament.ims.icon-rail', ['rail' => PortalNavigation::rail()]))
+            ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn (): View => view('filament.investor.business-switch'))
+            ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_BEFORE, fn (): View => view('filament.investor.language-switch'))
+            ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_AFTER, fn (): View => view('filament.ims.theme-toggle'))
+            ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_AFTER, fn (): View => view('filament.ims.portal.bell'))
+            ->renderHook(PanelsRenderHook::SIMPLE_LAYOUT_START, fn (): View => view('filament.ims.auth-hero', ['panel' => 'investor']))
+            ->renderHook(PanelsRenderHook::SIMPLE_PAGE_START, fn (): View => view('filament.ims.auth-tools', ['panel' => 'investor']))
             // Phones: Home / Investments / Payouts / Menu along the bottom of the screen.
             ->renderHook(PanelsRenderHook::BODY_END, fn (): View => view('filament.investor.mobile-nav'))
-            ->viteTheme('resources/css/filament/investor/theme.css')
+            // IMS v2 look (IMS-V2/DESIGN.md): the shared green IMS theme.
+            ->viteTheme('resources/css/filament/ims/theme.css')
             ->middleware([
                 RestrictPortalHosts::class,
                 ResolveCompanyFromInvestorPortalDomain::class,
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
+                // The central sign-in host has no company until the session says which one (17_IMS_IN_PORTAL_PLAN.md §5).
+                ResolveCompanyFromCentralInvestorSession::class,
                 AuthenticateSession::class,
                 SetInvestorPortalLocale::class,
                 ShareErrorsFromSession::class,
@@ -164,10 +210,13 @@ class InvestorPanelProvider extends PanelProvider
             // company would not be resolved there (the reseller portal's bug).
             ->persistentMiddleware([
                 ResolveCompanyFromInvestorPortalDomain::class,
+                ResolveCompanyFromCentralInvestorSession::class,
                 SetInvestorPortalLocale::class,
             ])
             ->authMiddleware([
                 Authenticate::class,
+                // A combined list's link to another company's page (18_IMS_ALL_COMPANIES_PLAN.md §4).
+                OpenLinkedInvestorBusiness::class,
             ]);
     }
 

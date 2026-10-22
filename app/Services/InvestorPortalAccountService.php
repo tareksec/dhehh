@@ -2,12 +2,15 @@
 
 namespace App\Services;
 
+use App\Mail\ImsMessage;
 use App\Models\ChannelPartner;
 use App\Models\Company;
 use App\Models\Investor;
 use App\Models\InvestorPortalAccount;
 use App\Models\StorefrontSetting;
 use App\Models\User;
+use App\Support\LoginClient;
+use App\Support\LoginThrottled;
 use App\Support\StorefrontApi\Phone;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -32,9 +35,14 @@ class InvestorPortalAccountService
 
     public const CODE_MAX_ATTEMPTS = 5;
 
+    /** A reset code sent by e-mail lives longer than the SMS one, as e-mail can be slow. */
+    public const EMAIL_CODE_VALID_MINUTES = 10;
+
     public function __construct(
         protected StorefrontNotificationService $notifications,
         protected AuditLogService $audit,
+        protected SmsTemplateService $templates,
+        protected LoginGate $loginGate,
     ) {}
 
     /** The account of an investor or partner, if one was created. */
@@ -71,7 +79,7 @@ class InvestorPortalAccountService
             return $account;
         });
 
-        $link = $company->investorPortalUrl('invite/'.$token);
+        $link = $company->investorLinkUrl('invite/'.$token);
 
         $this->audit->record('investor_portal.invited', $account, null, ['phone' => $phone, 'role' => $column]);
 
@@ -116,7 +124,7 @@ class InvestorPortalAccountService
 
     protected function assertPortalIsOn(Company $company): void
     {
-        if (! $company->investor_portal_enabled || $company->investorPortalHost() === null) {
+        if (! $company->investorPortalIsOn() || $company->investorPortalHost() === null) {
             throw ValidationException::withMessages(['portal' => __('Turn the investor portal on in Investor Portal Settings first.')]);
         }
     }
@@ -216,15 +224,116 @@ class InvestorPortalAccountService
         return $phone === '' ? null : InvestorPortalAccount::query()->where('phone', $phone)->first();
     }
 
-    public function attemptPasswordLogin(string $phone, string $password): ?InvestorPortalAccount
+    /**
+     * A sign-in candidate by the e-mail address on the investor's record (case
+     * does not matter). Only when exactly one account in this company has it,
+     * so a shared address never resets the wrong person's password.
+     */
+    public function findByEmail(string $email): ?InvestorPortalAccount
+    {
+        $email = mb_strtolower(trim($email));
+
+        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return null;
+        }
+
+        $accounts = InvestorPortalAccount::query()
+            ->whereHas('investor', fn ($query) => $query->whereRaw('LOWER(email) = ?', [$email]))
+            ->limit(2)->get();
+
+        return $accounts->count() === 1 ? $accounts->first() : null;
+    }
+
+    /** Whether an e-mail for this company would really be sent (its SMTP, or the server's mailer). */
+    public function emailAvailable(?Company $company): bool
+    {
+        $setting = $company ? StorefrontSetting::primaryFor((int) $company->getKey()) : null;
+
+        return $setting !== null && $this->notifications->emailDeliveryAvailable($setting);
+    }
+
+    /**
+     * Sends a password-reset code by e-mail to the address on the investor's
+     * record (IMS-V2/PLAN.md §4ক "SMS + e-mail"). Same code store and rules as
+     * the SMS code, but it lives EMAIL_CODE_VALID_MINUTES because e-mail can
+     * take a while. Within a minute of the last send, the code already sent
+     * is kept, so a double tap never sends two e-mails.
+     */
+    public function sendResetCodeByEmail(InvestorPortalAccount $account): bool
+    {
+        if ($account->otp_sent_at?->isAfter(now()->subMinute()) && $account->otp_expires_at?->isFuture()) {
+            return true;
+        }
+
+        $company = Company::query()->find($account->company_id);
+        $email = trim((string) $account->investor?->email);
+        $setting = $company ? StorefrontSetting::primaryFor((int) $company->getKey()) : null;
+
+        if ($company === null || $setting === null || $email === '') {
+            return false;
+        }
+
+        $code = (string) random_int(100000, 999999);
+
+        $account->forceFill([
+            'otp_code_hash' => Hash::make($code),
+            'otp_expires_at' => now()->addMinutes(self::EMAIL_CODE_VALID_MINUTES),
+            'otp_sent_at' => now(),
+            'otp_attempts' => 0,
+        ])->save();
+
+        $sent = $this->notifications->sendMailable($setting, $email, new ImsMessage(
+            (string) $company->name,
+            __('Reset your password'),
+            [
+                __('Your password reset code is :code. It works for :minutes minutes and only once.', ['code' => $code, 'minutes' => self::EMAIL_CODE_VALID_MINUTES]),
+                __('If you did not ask for this, you can ignore this e-mail. Your password stays the same.'),
+            ],
+        ));
+
+        if (! $sent) {
+            $this->clearCode($account);
+        }
+
+        $this->audit->record('investor_portal.code_sent', $account, null, ['purpose' => 'reset', 'channel' => 'email', 'sent' => $sent]);
+
+        return $sent;
+    }
+
+    /**
+     * @throws LoginThrottled when LoginGate stops the attempt before the password is checked
+     */
+    public function attemptPasswordLogin(string $phone, string $password, ?LoginClient $client = null): ?InvestorPortalAccount
     {
         $account = $this->findByPhone($phone);
+        $client ??= LoginClient::fromRequest(request(), LoginGate::SURFACE_INVESTOR);
+
+        $attempt = $this->loginGate->begin(LoginGate::SURFACE_INVESTOR, app(CompanyContext::class)->id(), Phone::normalize($phone), $account, $client);
+
+        if ($attempt->isDenied()) {
+            // Not audited: a flood of refused guesses must not become a flood of rows.
+            $this->loginGate->failed($attempt);
+
+            return null;
+        }
+
+        if ($attempt->isBlocked()) {
+            throw LoginThrottled::for($attempt, 'data.phone');
+        }
+
+        if ($account === null || blank($account->password)) {
+            // Costs the same time as a wrong password, so timing can't show who invests.
+            $this->loginGate->spendHashTime($password);
+        }
 
         if (! $account || blank($account->password) || ! Hash::check($password, $account->password)) {
+            $this->loginGate->failed($attempt);
             $this->audit->record('investor_portal.login_failed', $account ?? InvestorPortalAccount::class, null, ['method' => 'password']);
 
             return null;
         }
+
+        $this->loginGate->succeeded($attempt);
 
         return $account;
     }
@@ -257,12 +366,23 @@ class InvestorPortalAccountService
             'otp_attempts' => 0,
         ])->save();
 
-        $portal = __(':company Investment Portal', ['company' => (string) $company?->name], $account->locale);
-        $message = $purpose === 'reset'
-            ? __(':portal password reset OTP is :code. It expires in 1 minute.', ['portal' => $portal, 'code' => $code], $account->locale)
-            : __(':portal login OTP is :code. It expires in 1 minute.', ['portal' => $portal, 'code' => $code], $account->locale);
+        $sent = false;
 
-        $sent = $company !== null && $this->sendSms($company, $account, $message);
+        if ($company !== null) {
+            // BulkSMSBD's OTP format: "Your {Brand/Company Name} OTP is XXXX". The owner can only choose the
+            // brand (SMS Templates); the text is English whatever the investor's language, as the format is.
+            $message = (string) $this->templates->render(
+                (int) $company->getKey(),
+                $purpose === 'reset' ? SmsTemplateService::RESET_INVESTOR_PASSWORD : SmsTemplateService::OTP_INVESTOR_LOGIN,
+                [
+                    'company' => (string) $company->name,
+                    'portal' => $company->name.' Investment Portal',
+                    'code' => $code,
+                ],
+            );
+
+            $sent = $this->sendSms($company, $account, $message);
+        }
 
         if (! $sent) {
             $this->clearCode($account);

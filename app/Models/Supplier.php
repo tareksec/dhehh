@@ -21,6 +21,15 @@ class Supplier extends Model
         'opening_balance',
         'current_balance',
         'is_active',
+        'country',
+        'fax',
+        'bank_name',
+        'bank_address',
+        'bank_account_name',
+        'bank_account_number',
+        'bank_swift_code',
+        'bank_extra_note',
+        'signature_path',
     ];
 
     protected $casts = [

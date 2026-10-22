@@ -1,11 +1,15 @@
 {{--
-    Phones only (hidden from lg up, where the sidebar is always open): the
-    most used pages along the bottom of the screen, and "Menu" for the rest.
+    Phones only (hidden from lg up, where the sidebar is always open): the five
+    tabs of IMS v2 (IMS-V2/PRD.md FR-73) — Home · Projects · Investments · Profit ·
+    Profile (Projects took Feed's place, owner request 2026-10-21). The Profile
+    page lists every other page.
 --}}
 @php
+    use App\Filament\Ims\Portal\Pages\Projects;
     use App\Filament\Investor\Pages\Dashboard;
     use App\Filament\Investor\Pages\MyInvestments;
     use App\Filament\Investor\Pages\Payouts;
+    use App\Filament\Investor\Pages\Profile;
     use App\Models\InvestorPortalAccount;
     use Filament\Facades\Filament;
 
@@ -13,7 +17,13 @@
     $items = [];
 
     if ($account instanceof InvestorPortalAccount) {
-        foreach ([[Dashboard::class, __('Home'), 'heroicon-o-home'], [MyInvestments::class, __('Investments'), 'heroicon-o-briefcase'], [Payouts::class, __('Payouts'), 'heroicon-o-banknotes']] as [$page, $label, $icon]) {
+        foreach ([
+            [Dashboard::class, __('Home'), 'heroicon-o-home'],
+            [Projects::class, __('Projects'), 'heroicon-o-rectangle-stack'],
+            [MyInvestments::class, __('Investments'), 'heroicon-o-briefcase'],
+            [Payouts::class, __('Profit'), 'heroicon-o-banknotes'],
+            [Profile::class, __('Profile'), 'heroicon-o-user-circle'],
+        ] as [$page, $label, $icon]) {
             if ($page::canAccess()) {
                 $items[] = ['url' => $page::getUrl(), 'label' => $label, 'icon' => $icon, 'active' => request()->routeIs($page::getRouteName())];
             }
@@ -29,14 +39,5 @@
                 <span>{{ $item['label'] }}</span>
             </a>
         @endforeach
-        <button
-            type="button"
-            x-data="{}"
-            x-on:click="$store.sidebar.open()"
-            aria-controls="fi-main-sidebar"
-        >
-            <x-filament::icon icon="heroicon-o-bars-3" class="fi-investor-mobile-nav-icon" />
-            <span>{{ __('Menu') }}</span>
-        </button>
     </nav>
 @endif

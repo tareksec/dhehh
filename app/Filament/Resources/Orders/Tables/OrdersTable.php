@@ -101,6 +101,15 @@ class OrdersTable
                     ->sortable()
                     ->toggleable(),
 
+                TextColumn::make('sales_channel')
+                    ->label(__('Sales channel'))
+                    ->badge()
+                    ->color('gray')
+                    ->formatStateUsing(fn (?string $state): string => Order::salesChannelLabel($state))
+                    ->placeholder('-')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('total_amount')
                     ->label('Total Amount')
                     ->moneyWithoutTrailingZeroes('BDT')
@@ -180,6 +189,12 @@ class OrdersTable
 
                 SelectFilter::make('source')
                     ->options(Order::SOURCES),
+
+                SelectFilter::make('sales_channel')
+                    ->label(__('Sales channel'))
+                    ->options(fn (): array => collect(Order::SALES_CHANNELS)
+                        ->mapWithKeys(fn (string $label, string $channel): array => [$channel => Order::salesChannelLabel($channel)])
+                        ->all()),
 
                 TernaryFilter::make('reseller_own_courier')
                     ->label(__('Reseller\'s own courier')),

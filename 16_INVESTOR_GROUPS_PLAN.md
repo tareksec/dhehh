@@ -202,6 +202,8 @@ New admin and portal strings go through `__()` in both language files; uncertain
 
 - The sender is the existing SMS gateway through a listener on `InvestorGroupProjectCompleted` (no separate Phase 6 sender exists yet). The message text is a company setting that starts empty (the owner's wording, Q7); nothing is sent until the owner writes it. WhatsApp is not used.
 
+**Owner's decision 2026-10-18 — profit is paid every cycle, sales or not.** Groups stay as built (automatic 2-month groups and projects outside any group coexist; nothing to change). A project's payout is never tied to sales: investors in a group receive their profit share every two months whether or not the goods have sold, so **Calculate & Settle** has a second way to decide the amount, *Profit entered by hand (no sales needed)*, next to *From the sales revenue*. Staff type the net profit; the split, rate per lac and payouts are the same engine (`SettlementService`, optional `$manualNetProfit`), and `project_settlements.basis` (`sales` / `manual`) records which way it was made. Open: staff enter the net profit before the split; if the owner would rather type the investors' pool or a rate per lac, that is a small change to the same form.
+
 ## 11. Open questions for the owner (collected at the end of the build)
 
 1. **What a group project pays (decided by me, please confirm):** members who stay get the **profit only** (the principal carries on into the next project); a member who leaves gets principal + profit. See G3.
