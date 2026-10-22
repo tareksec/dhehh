@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.99.0] - 2026-10-22
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -16,7 +18,6 @@ All notable production changes to Business Dashboard are documented here.
 
 - Reseller landing page: `RestrictPortalHosts` lets the reseller host's `/` through while `Company::resellerLandingEnabled()` (the guide switch) is on and remembers the portal company on the request (`reseller_portal_company`); `ResolveCompanyFromDomain` in `optional` mode leaves such a host alone; `HomeController` sets the company and hands the request to `ResellerGuideController`. `Company::resellerJoinUrl()` returns the host root while the landing page is on (the application form otherwise). The footer is `StorefrontSiteConfigService::footer()` (blocks grouped into columns, links made absolute on the website's domain, colour darkness like the website's `isDarkColor`) drawn by `resources/views/reseller/partials/footer.blade.php`, built inside `ModuleGuard` so a footer problem only costs the page its footer. Banner: migration `2026_10_22_100000_add_reseller_banner_image_to_storefront_settings` (`storefront_settings.reseller_banner_image`, nullable, on the Blade row), `StorefrontSiteConfigService::resellerBannerUrl()`, the standard picture at `public/images/reseller-program-banner.png`. Tests: `ResellerLandingPageTest` (9); `StorefrontApiTest` and `ResellerGuidePageTest` updated for the new address. **Deploy: `php artisan migrate`, `npm run build` (new Tailwind classes in the footer partial), and deploy the website branch for the button.**
 - Neo-brutalist landing page: new Vite entry `resources/css/reseller-landing.css` (the `.nb-*` component classes and the self-hosted Hind Siliguri faces; Unbounded comes from `app.css`), loaded after `app.css` by `resources/views/reseller/guide.blade.php`. Those rules are not in a cascade layer, so they beat Tailwind's utilities: do not put a conflicting utility (display, background, border) on the same element, wrap it. `ResellerGuideController` also passes `onBrandColor` (`StorefrontSiteConfigService::isDarkColor()`, now public static, decides white or near-black text on the brand colour). No migration, no new text (no lang keys). Test: `ResellerLandingPageTest` (+1). **Deploy: `npm run build` (a new CSS entry); a deploy without it fails on `@vite` until the manifest has `reseller-landing.css`.**
-
 ## [2.98.0] - 2026-10-22
 
 **Release type:** Minor Feature Update
