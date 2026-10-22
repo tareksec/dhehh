@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.100.0] - 2026-10-22
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -32,7 +34,6 @@ All notable production changes to Business Dashboard are documented here.
   - **The order summary card on WhatsApp, by itself.** New page **Settings → Order WhatsApp card**. When switched on, the customer is sent the card as a picture on WhatsApp when the order is created and each time it reaches a new stage (confirmed, processing, shipping, delivered, completed, cancelled, returned, refunded). It goes only through the official WhatsApp Cloud API (a Cloud API or Coexistence channel) with an approved template that has an **Image** header and exactly five body variables in this order: customer name, order number, status, total, amount due. The page lists only templates like that. A QR-linked WhatsApp Web channel is never used for automatic messages (`docs/whatsapp-web-rules.md`, rule 4). WhatsApp cannot be asked beforehand who has an account, so every customer with a phone is tried and a number without WhatsApp is simply skipped; the SMS is separate. Reseller orders, imported past orders and opted-out customers are never sent. The page also says whether this server can draw the card picture.
 
 **Technical Notes (automatic messages):** `OrderStatusSmsService::dispatchForOrderPlaced()` / `sendPlaced()` and `SendOrderPlacedSmsJob` (delay `PLACED_DELAY_SECONDS`, one send per order via a cache lock); `SmsTemplateService::ORDER_PLACED` (`order.placed`) and the `items` placeholder. `OrderWhatsAppCardService` (queued by `Order::created` and `OrderStatusTransition::created`, both wrapped so a failure never undoes the order or status change) renders the card with the new `OrderSummaryCardImageService` and sends it through `MetaGraphService::uploadWhatsAppMedia()` (picture upload, no public link needed) and `sendWhatsAppTemplate()` (new `$headerImageId`). `listMessageTemplates()` now also returns `has_image_header` and `body_variables`. Settings live in `companies.settings['order_whatsapp']` (`OrderWhatsAppSettings`); no migration. **Server requirement:** the card is drawn with Imagick through ImageMagick's Pango coder, which joins Bangla letters correctly (GD and Imagick's own text drawing do not); on Debian/Ubuntu this is the package `libmagickcore-6.q16-6-extra`. `OrderSummaryCardImageService::canRender()` checks the coder and a Bangla shaping probe; without them no card is sent and the reason is recorded on the channel and shown on the settings page. The bundled Hind Siliguri font is registered through a private fontconfig file in `storage/app/order-card-fonts`. Tests: `OrderWhatsAppCardTest` (8), two new cases in `SmsTemplatesTest`. Failed WhatsApp sends are logged and shown as the channel's last error, never retried automatically.
-
 ## [2.99.0] - 2026-10-22
 
 **Release type:** Minor Feature Update
