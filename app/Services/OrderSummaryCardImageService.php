@@ -132,9 +132,14 @@ class OrderSummaryCardImageService
         // Measures a text block without drawing it.
         $height = fn (string $value, float $size, bool $bold, ?int $maxWidth = null): float => $this->textBlock($value, $size, $bold, '#000000', $maxWidth)['h'];
 
-        // 1. Header: logo (or the company name) on the left, contact on the right.
+        // 1. Header: logo (or the company name) on the left, the company's contact details (phone,
+        // e-mail, website, address) on the right - the only place they appear.
         $top = 44;
-        $headerH = 132;
+        $contact = array_slice((array) ($card['contact'] ?? []), 0, 3);
+        $address = trim((string) ($card['address'] ?? ''));
+        $contactH = array_sum(array_map(fn (string $line): float => $height($line, 26, false) + 2, $contact))
+            + ($address !== '' ? $height($address, 24, false, 430) : 0);
+        $headerH = max(132, $contactH + 8);
         $logo = $this->dataUriImage($card['logo'] ?? null);
 
         if ($logo) {
@@ -148,13 +153,15 @@ class OrderSummaryCardImageService
             $text((string) $card['company'], 46, true, self::NAVY, $pad, $top + ($headerH - $nameH) / 2, 'left', 540);
         }
 
-        $contact = array_slice((array) ($card['contact'] ?? []), 0, 3);
-        $contactH = array_sum(array_map(fn (string $line): float => $height($line, 26, false) + 2, $contact));
         $cy = $top + ($headerH - $contactH) / 2;
 
         foreach ($contact as $line) {
             $block = $text($line, 26, false, self::MUTED, $w - $pad, $cy, 'right');
             $cy += $block['h'] + 2;
+        }
+
+        if ($address !== '') {
+            $text($address, 24, false, self::MUTED, $w - $pad, $cy, 'right', 430);
         }
 
         // 2. Title band with the invoice number.
@@ -275,7 +282,7 @@ class OrderSummaryCardImageService
             $y += 30;
         }
 
-        // 5. Note and contact on the left, totals on the right.
+        // 5. Order note on the left, totals on the right.
         $totalsW = 440;
         $totalsX = $w - $pad - $totalsW;
         $sideW = (int) ($totalsX - $pad - 28);
@@ -283,10 +290,6 @@ class OrderSummaryCardImageService
 
         if (filled($card['note'] ?? null)) {
             $sideCards[] = [(string) $card['labels']['note'], (string) $card['note']];
-        }
-
-        if (filled($card['address'] ?? null)) {
-            $sideCards[] = [(string) $card['labels']['contact'], (string) $card['address']];
         }
 
         $sy = $y;
@@ -339,21 +342,11 @@ class OrderSummaryCardImageService
 
         $y += max($sideH, $ty - $y) + 44;
 
-        // 6. Footer: thank you, company name and contact.
+        // 6. Footer: thank you.
         $rect($pad, $y, $inner, 2, self::LINE);
         $y += 26;
         $block = $text((string) $card['labels']['thanks'], 31, true, self::NAVY, $w / 2, $y, 'center');
-        $y += $block['h'] + 14;
-
-        if (($card['contact'] ?? []) !== [] || filled($card['address'] ?? null)) {
-            $block = $text((string) $card['company'], 26, true, self::INK, $w / 2, $y, 'center');
-            $y += $block['h'] + 4;
-
-            if (($card['contact'] ?? []) !== []) {
-                $block = $text(implode('   ·   ', $card['contact']), 24, false, self::MUTED, $w / 2, $y, 'center', $inner);
-                $y += $block['h'];
-            }
-        }
+        $y += $block['h'];
 
         $y += 36;
         $rect(0, $y, $w, 14, self::NAVY);

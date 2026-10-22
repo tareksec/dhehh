@@ -3523,7 +3523,6 @@
     "Paid in full": "Paid in full",
     "Partially paid": "Partially paid",
     "Payment due": "Payment due",
-    "Contact": "Contact",
     "Payment": "Payment",
     "Order WhatsApp card": "Order WhatsApp card",
     "The customer is sent the order summary card as a picture on WhatsApp when the order is created and every time it reaches a new stage (confirmed, processing, shipping, delivered, completed, cancelled, returned, refunded). It goes through the official WhatsApp Cloud API only: a QR-linked WhatsApp Web channel is never used for automatic messages. A number without WhatsApp is skipped. Orders of resellers and imported past orders are never sent, nor customers who opted out.": "The customer is sent the order summary card as a picture on WhatsApp when the order is created and every time it reaches a new stage (confirmed, processing, shipping, delivered, completed, cancelled, returned, refunded). It goes through the official WhatsApp Cloud API only: a QR-linked WhatsApp Web channel is never used for automatic messages. A number without WhatsApp is skipped. Orders of resellers and imported past orders are never sent, nor customers who opted out.",

@@ -147,7 +147,6 @@ class OrderSummaryCardService
                 'invoice' => __('Invoice'),
                 'payment' => __('Payment'),
                 'address' => __('Address'),
-                'contact' => __('Contact'),
                 'order_details' => __('Order details'),
                 'customer_details' => __('Customer details'),
                 'item' => __('Item'),

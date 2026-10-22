@@ -3523,7 +3523,6 @@
     "Paid in full": "সম্পূর্ণ পরিশোধিত",
     "Partially paid": "আংশিক পরিশোধিত",
     "Payment due": "পেমেন্ট বাকি",
-    "Contact": "যোগাযোগ",
     "Payment": "পেমেন্ট",
     "Order WhatsApp card": "অর্ডার WhatsApp কার্ড",
     "The customer is sent the order summary card as a picture on WhatsApp when the order is created and every time it reaches a new stage (confirmed, processing, shipping, delivered, completed, cancelled, returned, refunded). It goes through the official WhatsApp Cloud API only: a QR-linked WhatsApp Web channel is never used for automatic messages. A number without WhatsApp is skipped. Orders of resellers and imported past orders are never sent, nor customers who opted out.": "অর্ডার তৈরি হলে এবং প্রতিবার নতুন ধাপে (কনফার্মড, প্রসেসিং, শিপিং, ডেলিভারড, কমপ্লিটেড, ক্যানসেলড, রিটার্নড, রিফান্ডেড) পৌঁছালে কাস্টমারকে অর্ডার সামারি কার্ড ছবি হিসেবে WhatsApp-এ পাঠানো হয়। এটি শুধু অফিসিয়াল WhatsApp Cloud API দিয়ে যায়: QR দিয়ে লিংক করা WhatsApp Web চ্যানেল অটোমেটিক মেসেজে কখনো ব্যবহার হয় না। যে নম্বরে WhatsApp নেই সেটি বাদ যায়। রিসেলারের অর্ডার, ইমপোর্ট করা পুরোনো অর্ডার এবং অপ্ট-আউট করা কাস্টমারকে কখনো পাঠানো হয় না।",

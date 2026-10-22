@@ -15,15 +15,15 @@ All notable production changes to Business Dashboard are documented here.
 ### Changed
 
 - **The order summary card has a corporate, enterprise-style layout.** Owner request 2026-10-22: the card looked generic. It is now laid out like a business document:
-  - **Header:** the company logo on the left (the company name in large type when there is no logo) and the phone, e-mail and website on the right.
+  - **Header:** the company logo on the left (the company name in large type when there is no logo) and the company's phone, e-mail, website and address on the right. The company details appear only here, not again in the footer.
   - **Title band:** "Order summary" with the invoice number, under a dark navy band with an orange line.
   - **Two detail boxes side by side:** **Order details** (invoice, date, status, courier, tracking, and a coloured payment badge: Paid in full, Partially paid or Payment due) and **Customer details** (name, phone, address).
   - **Items table** with a dark header row (Item, Price, Qty, Amount), the product picture, the unit price and striped rows.
-  - **Note and contact boxes** on the left (the order note and the company address) and **totals** on the right, ending in a large **Due** band: orange when something is owed, green when the order is paid in full.
-  - **Footer:** thank-you line, company name and contact line, and a navy strip.
+  - **Note box** on the left (the order note, when there is one) and **totals** on the right, ending in a large **Due** band: orange when something is owed, green when the order is paid in full.
+  - **Footer:** the thank-you line and a navy strip.
   - A reseller's order still shows only the reseller's store name and logo, retail prices and no company contact details, as on the invoice.
 
-**Technical Notes (layout):** `OrderSummaryCardService::build()` now returns `logo` (PNG data URI, shrunk to fit 520x160, transparency kept), `contact` (hotline from the invoice settings else company phone, e-mail, website), `address`, `invoice`, `order_rows` / `customer_rows` (each with a `key`), `payment` (`paid` / `partial` / `unpaid`), `note`, per-item `price`, and `labels`; it no longer returns `meta` or `company_phone`. Reseller orders return no contact or address. `summary-card.blade.php` draws the whole card on the canvas from this data (new `loadImages()` also loads the logo). New strings (Customer details, Paid in full, Partially paid, Payment due, Contact, Payment) are in `lang/en.json` and `lang/bn.json`. Tests: two new cases in `OrderManagementFeaturesTest`; the reseller tests now check `contact` / `address` instead of `company_phone`. No migrations.
+**Technical Notes (layout):** `OrderSummaryCardService::build()` now returns `logo` (PNG data URI, shrunk to fit 520x160, transparency kept), `contact` (hotline from the invoice settings else company phone, e-mail, website), `address`, `invoice`, `order_rows` / `customer_rows` (each with a `key`), `payment` (`paid` / `partial` / `unpaid`), `note`, per-item `price`, and `labels`; it no longer returns `meta` or `company_phone`. Reseller orders return no contact or address. `summary-card.blade.php` draws the whole card on the canvas from this data (new `loadImages()` also loads the logo). New strings (Customer details, Paid in full, Partially paid, Payment due, Payment) are in `lang/en.json` and `lang/bn.json`. Tests: two new cases in `OrderManagementFeaturesTest`; the reseller tests now check `contact` / `address` instead of `company_phone`. No migrations.
 
 ### Added
 

@@ -22,11 +22,13 @@ Commit status: Committed and pushed to `claude/order-management-features-nafks7`
 
 Owner (Bangla): "সামারি কার্ডকে আরো প্রফেশনাল ডিজাইন করা লাগবে এটা একদম জেনেরিক ডিজাইন হয়ে গেছে। কম্পানী লোগো, কন্টাক্ট ইনফো, অর্ডার ইনফো, কাস্টমার ইনফো, সব আরো গুছানো কর্পোরেট এন্টারপ্রাইজ লেভেলের হতে হবে।" (make the summary card more professional — company logo, contact info, order info, customer info, all organised at corporate enterprise level).
 
-What changed: the card is redrawn with a logo + contact header, a navy title band with the invoice number, Order details and Customer details boxes side by side (payment badge in the order box), a striped items table with picture, unit price, qty and amount, note / address boxes, totals ending in a big Due band (orange, green when paid), and a footer. `OrderSummaryCardService` supplies the logo (data URI), contact lines, address, note, payment state and unit prices. Reseller orders keep the reseller's name/logo and show no company contact details.
+What changed: the card is redrawn with a logo + contact header, a navy title band with the invoice number, Order details and Customer details boxes side by side (payment badge in the order box), a striped items table with picture, unit price, qty and amount, a note box, totals ending in a big Due band (orange, green when paid), and a footer with just the thank-you line.
+
+Follow-up (owner, with a screenshot): "কম্পানি ইনফো দুই জায়গায় দেখাচ্ছে হেডারে ফুটারে, যে কোন এক জায়গায় দেও" — the company's phone, e-mail, website and address now show only in the header (browser card and the server-drawn WhatsApp card); the footer company line and the Contact box are gone, and the unused "Contact" key was removed. `OrderSummaryCardService` supplies the logo (data URI), contact lines, address, note, payment state and unit prices. Reseller orders keep the reseller's name/logo and show no company contact details.
 
 Checked in headless Chromium with a logo, three items (two pictures, one without), a Bangla customer name and address, and the reseller variant (no logo, no contact). Not tested on a phone — the sending path is unchanged.
 
-Needs Bangla review (new keys): "Customer details" → "কাস্টমারের তথ্য", "Paid in full" → "সম্পূর্ণ পরিশোধিত", "Partially paid" → "আংশিক পরিশোধিত", "Payment due" → "পেমেন্ট বাকি", "Contact" → "যোগাযোগ", "Payment" → "পেমেন্ট".
+Needs Bangla review (new keys): "Customer details" → "কাস্টমারের তথ্য", "Paid in full" → "সম্পূর্ণ পরিশোধিত", "Partially paid" → "আংশিক পরিশোধিত", "Payment due" → "পেমেন্ট বাকি", "Payment" → "পেমেন্ট".
 
 Commit status: Committed and pushed to `claude/order-management-features-nafks7` only. Not pushed to `main` (needs the owner's approval).
 

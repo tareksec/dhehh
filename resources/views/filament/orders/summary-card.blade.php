@@ -175,8 +175,14 @@
             };
             const card = this.card;
 
-            // 1. Header: logo (or the company name) on the left, contact on the right.
-            const top = 44, headerH = 132;
+            // 1. Header: logo (or the company name) on the left, the company's contact details
+            // (phone, e-mail, website, address) on the right - the only place they appear.
+            const top = 44;
+            const headerLines = [
+                ...card.contact.slice(0, 3).map((part) => ({ value: part, size: 26 })),
+                ...(card.address ? lines(card.address, 24, 500, 430).map((part) => ({ value: part, size: 24 })) : []),
+            ];
+            const headerH = Math.max(132, headerLines.length * 36 + 8);
             const logo = this.logoImage;
             if (logo) {
                 const s = Math.min(460 / logo.naturalWidth, 120 / logo.naturalHeight, 4);
@@ -187,9 +193,8 @@
                 const nameTop = top + (headerH - nameLines.length * 58) / 2;
                 nameLines.forEach((part, i) => text(part, 46, 800, navy, pad, nameTop + 44 + i * 58));
             }
-            const contact = card.contact.slice(0, 3);
-            const contactTop = top + (headerH - contact.length * 38) / 2;
-            contact.forEach((part, i) => text(part, 26, 500, muted, W - pad, contactTop + 27 + i * 38, 'right'));
+            const headerTop = top + (headerH - headerLines.length * 36) / 2;
+            headerLines.forEach((part, i) => text(part.value, part.size, 500, muted, W - pad, headerTop + 27 + i * 36, 'right'));
 
             // 2. Title band with the invoice number.
             const bandY = top + headerH + 14;
@@ -272,12 +277,11 @@
                 y += 30;
             }
 
-            // 5. Contact / note on the left, totals on the right.
+            // 5. Order note on the left, totals on the right.
             const totalsW = 440, totalsX = W - pad - totalsW;
             const sideW = totalsX - pad - 28;
             const sideCards = [];
             if (card.note) sideCards.push({ title: card.labels.note, value: card.note });
-            if (card.address) sideCards.push({ title: card.labels.contact, value: card.address });
             const sideHeight = (part) => 62 + lines(part.value, 25, 500, sideW - cardPad * 2).length * 34 + 22;
             let sideH = sideCards.reduce((h, part, i) => h + sideHeight(part) + (i ? 18 : 0), 0);
             let sy = y;
@@ -314,18 +318,11 @@
             }
             y += Math.max(sideH, ty - y) + 44;
 
-            // 6. Footer: thank you, company name and contact.
+            // 6. Footer: thank you.
             rect(pad, y, inner, 2, line);
             y += 26;
             text(card.labels.thanks, 31, 800, navy, W / 2, y + 31, 'center');
             y += 54;
-            if (card.contact.length || card.address) {
-                text(card.company, 26, 700, ink, W / 2, y + 26, 'center');
-                y += 40;
-                if (card.contact.length) {
-                    y += para(card.contact.join('   ·   '), 24, 500, muted, W / 2, y, inner, 32, 'center');
-                }
-            }
             y += 36;
             rect(0, y, W, 14, navy);
             y += 14;
