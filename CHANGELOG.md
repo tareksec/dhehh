@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.100.1] - 2026-10-22
+
 **Release type:** Security Update
 
 ### Security
@@ -17,7 +19,6 @@ All notable production changes to Business Dashboard are documented here.
 - `entrypoint.sh` fixes the owner of the persistent `/app/storage` volume once (files from the Nixpacks image belong to another user), links `public/storage`, then starts nginx + PHP-FPM, or the queue worker when `CONTAINER_ROLE=worker` (the worker app uses the same image).
 - `PHP_VERSION` in the `Dockerfile` is pinned to `8.4.27` and must be raised on each PHP security release.
 - New workflow `.github/workflows/docker-image.yml` builds the image and checks: PHP >= 8.4.27, required extensions, nginx + FPM serving the app from a root-owned empty volume (`/health.html`, Laravel `/up`, container environment visible to PHP, storage writable by the web user), and the worker role running as `www-data`.
-
 ## [2.100.0] - 2026-10-22
 
 **Release type:** Minor Feature Update
