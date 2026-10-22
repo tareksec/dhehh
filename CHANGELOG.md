@@ -4,6 +4,14 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **The order summary card now shows each product's picture.** On the order page, **Order summary card** draws a small picture beside every item, so the customer sees the very product they ordered. It uses the variant's own photo when the ordered variant has one, otherwise the product's main image. An item with no picture (or one that cannot be read) gets a plain grey box so the rows stay lined up. The pictures are part of the image sent to WhatsApp, WeChat, Messenger and Telegram, and of the downloaded image. "Copy text" is unchanged.
+
+**Technical Notes:** `OrderSummaryCardService` adds `image` to each item: the picture is read through `CompanyStorageService::readPublic()`, cropped to a square, shrunk to 160 px and returned as a JPEG data URI (needs PHP GD; without it the card has no pictures). It is embedded so the browser canvas stays untainted and can still be exported. `summary-card.blade.php` decodes the pictures before drawing (`loadImages()`) and draws rounded thumbnails in the items table. New tests in `OrderManagementFeaturesTest` (picture present and 160x160; none when the product has no picture or the file is gone). No migrations, no new lang keys.
+
 ## [2.98.0] - 2026-10-22
 
 **Release type:** Minor Feature Update

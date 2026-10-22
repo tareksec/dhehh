@@ -15,13 +15,16 @@ use App\Support\PhoneLinks;
  */
 class OrderSummaryCardService
 {
+    /** Side of the square product picture drawn on the card, in pixels. */
+    protected const IMAGE_SIZE = 160;
+
     /**
      * @return array{
      *     company: string,
      *     company_phone: ?string,
      *     title: string,
      *     meta: list<array{label: string, value: string}>,
-     *     items: list<array{name: string, quantity: int, amount: string}>,
+     *     items: list<array{name: string, quantity: int, amount: string, image: ?string}>,
      *     totals: list<array{key: string, label: string, value: string, strong: bool}>,
      *     labels: array<string, string>,
      *     text: string,
@@ -51,6 +54,7 @@ class OrderSummaryCardService
             ->map(fn (OrderItem $item): array => [
                 'name' => trim(($item->product?->name ?? __('Item')).($item->variant_label ? ' ('.$item->variant_label.')' : '')),
                 'quantity' => (int) $item->quantity,
+                'image' => $this->itemImage($item, $order),
                 'amount' => $money($order->showsResellerPricesToBuyer()
                     ? $item->buyerSubtotal()
                     : ((float) $item->subtotal ?: (int) $item->quantity * (float) $item->unit_price)),
@@ -111,6 +115,57 @@ class OrderSummaryCardService
             'customer_phone' => PhoneLinks::internationalDigits($order->customer?->phone),
             'file_name' => 'order-'.str($order->order_number)->slug().'.png',
         ];
+    }
+
+    /**
+     * The picture of the product the customer ordered (the variant's own
+     * first photo when it has one, else the product's main image), shrunk to
+     * a small square JPEG and returned as a data URI. It is embedded so the
+     * browser can draw it on the card canvas without a cross-origin request,
+     * which would block exporting the card as an image. Null when the product
+     * has no picture or it cannot be read: the card then shows a plain box.
+     */
+    protected function itemImage(OrderItem $item, Order $order): ?string
+    {
+        $path = collect($item->productVariant?->images ?? [])->first(fn ($image): bool => is_string($image) && $image !== '')
+            ?: $item->product?->image;
+
+        if (! is_string($path) || $path === '' || ! function_exists('imagecreatefromstring')) {
+            return null;
+        }
+
+        try {
+            $bytes = app(CompanyStorageService::class)->readPublic($path, $order->company);
+            $source = $bytes ? @imagecreatefromstring($bytes) : false;
+
+            if (! $source) {
+                return null;
+            }
+
+            $width = imagesx($source);
+            $height = imagesy($source);
+            $side = min($width, $height);
+
+            if ($side < 1) {
+                return null;
+            }
+
+            $thumb = imagecreatetruecolor(self::IMAGE_SIZE, self::IMAGE_SIZE);
+            imagefill($thumb, 0, 0, imagecolorallocate($thumb, 255, 255, 255));
+            imagecopyresampled(
+                $thumb, $source, 0, 0,
+                intdiv($width - $side, 2), intdiv($height - $side, 2),
+                self::IMAGE_SIZE, self::IMAGE_SIZE, $side, $side,
+            );
+
+            ob_start();
+            imagejpeg($thumb, null, 82);
+            $jpeg = (string) ob_get_clean();
+
+            return $jpeg === '' ? null : 'data:image/jpeg;base64,'.base64_encode($jpeg);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

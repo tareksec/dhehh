@@ -2,6 +2,14 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-22 - Order summary card: product pictures
+
+Owner (Bangla): "অর্ডার সামারি কার্ড এ প্রডাক্ট ইমেজ এড করতে। তাহলে কাস্টমার বুঝবে যে তাকে তার অর্ডার করা প্রডাক্ট ই দেয়া হচ্ছে।" (add the product image to the order summary card so the customer knows they get the product they ordered).
+
+What changed: `OrderSummaryCardService` gives each item a 160 px square JPEG data URI of the ordered variant's first photo, else the product's main image (null when none or unreadable). `summary-card.blade.php` preloads the pictures and draws a rounded thumbnail beside each item; items without a picture get a plain box; rows are taller when pictures are shown. No new lang keys. Checked in headless Chromium: card with two pictures and one picture-less item draws correctly. Not tested on a phone — the sending path is unchanged.
+
+Commit status: Committed and pushed to `claude/order-management-features-nafks7` only. Not pushed to `main` (needs the owner's approval).
+
 ## 2026-10-22 - IMS office: phone layout like an app
 
 Owner (Bangla): the IMS dashboard for admin / super admin was to be highly mobile friendly, non-tech friendly and very easy, but nothing like that was done for phones; three mobile reference designs given as inspiration (a green fitness app, a green finance app, a green marketplace app) — bottom tab bar with a raised round centre button, greeting with avatar, round quick buttons, big cards.

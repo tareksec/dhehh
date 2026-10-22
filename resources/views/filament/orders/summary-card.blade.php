@@ -22,6 +22,7 @@
         ]),
         notice: '',
         previewUrl: '',
+        images: [],
         canShareFiles: false,
         init() {
             try {
@@ -30,13 +31,25 @@
             } catch (e) {
                 this.canShareFiles = false;
             }
-            this.$nextTick(() => {
+            this.$nextTick(async () => {
                 try {
+                    await this.loadImages();
                     this.previewUrl = this.draw().toDataURL('image/png');
                 } catch (e) {
                     this.say(this.messages.failed);
                 }
             });
+        },
+        // Product pictures arrive as small data URIs; they must be decoded
+        // before the canvas is drawn. A picture that fails is simply skipped.
+        loadImages() {
+            return Promise.all(this.card.items.map((item, index) => new Promise((resolve) => {
+                if (! item.image) return resolve();
+                const img = new Image();
+                img.onload = () => { this.images[index] = img; resolve(); };
+                img.onerror = () => resolve();
+                img.src = item.image;
+            })));
         },
         bridge() {
             const bridge = window.ZzShareBridge;
@@ -175,11 +188,24 @@
                 put(this.card.labels.quantity, 26, 700, muted, W - pad - 280, y + 41, 'center');
                 put(this.card.labels.amount, 26, 700, muted, W - pad - 24, y + 41, 'right');
                 y += 62 + 18;
+                // Rows with a product picture: the customer sees the very
+                // product they ordered. Items without a picture get a plain box.
+                const thumb = 104;
+                const hasThumbs = this.card.items.some((item) => item.image);
+                const textX = pad + 24 + (hasThumbs ? thumb + 24 : 0);
+                const textW = inner - 400 - (textX - (pad + 24));
                 this.card.items.forEach((item, i) => {
-                    const h = block((i + 1) + '. ' + item.name, 30, 500, ink, pad + 24, y, inner - 400, 10);
-                    put(String(item.quantity), 30, 600, ink, W - pad - 280, y + 30, 'center');
-                    put(item.amount, 30, 700, ink, W - pad - 24, y + 30, 'right');
-                    y += h + 12;
+                    const label = (i + 1) + '. ' + item.name;
+                    ctx0.font = font(30, 500);
+                    const textH = this.wrap(ctx0, label, textW).length * 40;
+                    const rowH = hasThumbs ? Math.max(textH, thumb) : textH;
+                    if (hasThumbs) {
+                        ops.push({ t: 'img', img: this.images[i] || null, x: pad + 24, y: y + (rowH - thumb) / 2, size: thumb });
+                    }
+                    block(label, 30, 500, ink, textX, y + (rowH - textH) / 2, textW, 10);
+                    put(String(item.quantity), 30, 600, ink, W - pad - 280, y + rowH / 2 + 10, 'center');
+                    put(item.amount, 30, 700, ink, W - pad - 24, y + rowH / 2 + 10, 'right');
+                    y += rowH + 14;
                     ops.push({ t: 'rect', x: pad, y: y, w: inner, h: 2, color: line });
                     y += 16;
                 });
@@ -216,6 +242,21 @@
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             for (const op of ops) {
+                if (op.t === 'img') {
+                    ctx.save();
+                    ctx.beginPath();
+                    if (ctx.roundRect) {
+                        ctx.roundRect(op.x, op.y, op.size, op.size, 12);
+                    } else {
+                        ctx.rect(op.x, op.y, op.size, op.size);
+                    }
+                    ctx.clip();
+                    ctx.fillStyle = soft;
+                    ctx.fillRect(op.x, op.y, op.size, op.size);
+                    if (op.img) ctx.drawImage(op.img, op.x, op.y, op.size, op.size);
+                    ctx.restore();
+                    continue;
+                }
                 if (op.t === 'rect') {
                     ctx.fillStyle = op.color;
                     ctx.beginPath();

@@ -20,6 +20,7 @@ use App\Models\User;
 use App\Services\CompanyContext;
 use App\Services\OrderSummaryCardService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -221,6 +222,40 @@ class OrderManagementFeaturesTest extends TestCase
         $this->assertStringContainsString($order->order_number, $card['text']);
         $this->assertStringContainsString('Summary Product × 1', $card['text']);
         $this->assertSame('8801711111111', $card['customer_phone']);
+    }
+
+    public function test_order_summary_card_carries_the_ordered_products_picture(): void
+    {
+        [$company] = $this->signIn();
+        Storage::fake('public');
+        $picture = imagecreatetruecolor(400, 300);
+        imagefill($picture, 0, 0, imagecolorallocate($picture, 200, 30, 30));
+        ob_start();
+        imagepng($picture);
+        Storage::disk('public')->put('products/summary-product.png', (string) ob_get_clean());
+
+        $order = $this->order($company);
+        $order->items->first()->product->update(['image' => 'products/summary-product.png']);
+
+        $item = app(OrderSummaryCardService::class)->build($order->fresh())['items'][0];
+
+        $this->assertStringStartsWith('data:image/jpeg;base64,', $item['image']);
+        [$width, $height] = getimagesizefromstring(base64_decode(substr($item['image'], strlen('data:image/jpeg;base64,'))));
+        $this->assertSame(160, $width);
+        $this->assertSame(160, $height);
+    }
+
+    public function test_order_summary_card_has_no_picture_when_the_product_has_none_or_it_is_missing(): void
+    {
+        [$company] = $this->signIn();
+        Storage::fake('public');
+        $order = $this->order($company);
+
+        $this->assertNull(app(OrderSummaryCardService::class)->build($order)['items'][0]['image']);
+
+        $order->items->first()->product->update(['image' => 'products/gone.png']);
+
+        $this->assertNull(app(OrderSummaryCardService::class)->build($order->fresh())['items'][0]['image']);
     }
 
     public function test_order_view_page_opens_the_order_summary_card(): void
