@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
 use App\Services\OrderStatusSmsService;
+use App\Services\OrderWhatsAppCardService;
 use App\Services\StorefrontMetaDispatchService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,6 +36,13 @@ class OrderStatusTransition extends Model
                 if (Schema::hasTable('sms_templates')) {
                     app(OrderStatusSmsService::class)->dispatchForTransition($transition);
                 }
+            } catch (Throwable $exception) {
+                report($exception);
+            }
+
+            // The summary card on WhatsApp (Settings → Order WhatsApp card); same rule: never undo the change.
+            try {
+                app(OrderWhatsAppCardService::class)->dispatchForTransition($transition);
             } catch (Throwable $exception) {
                 report($exception);
             }

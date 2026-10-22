@@ -123,9 +123,9 @@ class ResellerGuidePageTest extends TestCase
 
     public function test_storefront_and_apply_page_link_to_the_guide_while_it_is_on(): void
     {
-        $this->assertStringEndsWith('://reseller.guide-co.example.test/portal/guide', (string) $this->company->fresh()->resellerJoinUrl());
+        $this->assertStringEndsWith('://reseller.guide-co.example.test/', (string) $this->company->fresh()->resellerJoinUrl());
         $this->get($this->portal.'/portal/register')->assertOk()->assertSee('Read the reseller guide');
-        $this->get('https://guide-co.example.test/')->assertOk()->assertSee('reseller.guide-co.example.test/portal/guide', false);
+        $this->get('https://guide-co.example.test/')->assertOk()->assertSee('reseller.guide-co.example.test/', false);
 
         $this->setting->forceFill(['reseller_guide_enabled' => false])->save();
 
@@ -141,7 +141,7 @@ class ResellerGuidePageTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         Livewire::test(ResellerSettings::class)
-            ->assertSee('/portal/guide')
+            ->assertSee('reseller.guide-co.example.test/')
             ->fillForm([
                 'reseller_guide_enabled' => true,
                 'reseller_guide_show_figures' => true,

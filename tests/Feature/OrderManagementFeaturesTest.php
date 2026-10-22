@@ -20,6 +20,7 @@ use App\Models\User;
 use App\Services\CompanyContext;
 use App\Services\OrderSummaryCardService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -221,6 +222,90 @@ class OrderManagementFeaturesTest extends TestCase
         $this->assertStringContainsString($order->order_number, $card['text']);
         $this->assertStringContainsString('Summary Product × 1', $card['text']);
         $this->assertSame('8801711111111', $card['customer_phone']);
+    }
+
+    public function test_order_summary_card_carries_the_ordered_products_picture(): void
+    {
+        [$company] = $this->signIn();
+        Storage::fake('public');
+        $picture = imagecreatetruecolor(400, 300);
+        imagefill($picture, 0, 0, imagecolorallocate($picture, 200, 30, 30));
+        ob_start();
+        imagepng($picture);
+        Storage::disk('public')->put('products/summary-product.png', (string) ob_get_clean());
+
+        $order = $this->order($company);
+        $order->items->first()->product->update(['image' => 'products/summary-product.png']);
+
+        $item = app(OrderSummaryCardService::class)->build($order->fresh())['items'][0];
+
+        $this->assertStringStartsWith('data:image/jpeg;base64,', $item['image']);
+        [$width, $height] = getimagesizefromstring(base64_decode(substr($item['image'], strlen('data:image/jpeg;base64,'))));
+        $this->assertSame(160, $width);
+        $this->assertSame(160, $height);
+    }
+
+    public function test_order_summary_card_has_no_picture_when_the_product_has_none_or_it_is_missing(): void
+    {
+        [$company] = $this->signIn();
+        Storage::fake('public');
+        $order = $this->order($company);
+
+        $this->assertNull(app(OrderSummaryCardService::class)->build($order)['items'][0]['image']);
+
+        $order->items->first()->product->update(['image' => 'products/gone.png']);
+
+        $this->assertNull(app(OrderSummaryCardService::class)->build($order->fresh())['items'][0]['image']);
+    }
+
+    public function test_order_summary_card_is_laid_out_like_a_corporate_document(): void
+    {
+        [$company] = $this->signIn();
+        Storage::fake('public');
+        $logo = imagecreatetruecolor(800, 200);
+        ob_start();
+        imagepng($logo);
+        Storage::disk('public')->put('company/logo.png', (string) ob_get_clean());
+        $company->update(['logo' => 'company/logo.png', 'phone' => '01700000000', 'email' => 'info@zamzamint.com', 'address' => 'Uttara, Dhaka']);
+
+        $order = $this->order($company);
+        $order->forceFill(['note' => 'Call before delivery'])->save();
+
+        $card = app(OrderSummaryCardService::class)->build($order->fresh());
+
+        // Logo is shrunk to fit and embedded; contact comes from the company.
+        $this->assertStringStartsWith('data:image/png;base64,', $card['logo']);
+        [$width, $height] = getimagesizefromstring(base64_decode(substr($card['logo'], strlen('data:image/png;base64,'))));
+        $this->assertLessThanOrEqual(520, $width);
+        $this->assertLessThanOrEqual(160, $height);
+        $this->assertSame(['01700000000', 'info@zamzamint.com'], $card['contact']);
+        $this->assertSame('Uttara, Dhaka', $card['address']);
+        $this->assertSame('Call before delivery', $card['note']);
+        $this->assertSame($order->order_number, $card['invoice']);
+
+        // Order and customer details are separate blocks; an unpaid order says so.
+        $this->assertSame(['invoice', 'date', 'status'], array_column($card['order_rows'], 'key'));
+        $this->assertSame(['customer', 'phone', 'address'], array_column($card['customer_rows'], 'key'));
+        $this->assertSame('unpaid', $card['payment']['key']);
+        $this->assertSame('500', preg_replace('/\D/', '', $card['items'][0]['price']));
+
+        $order->payments()->create(['method' => 'cash', 'amount' => 200, 'paid_at' => now()->toDateString()]);
+        $this->assertSame('partial', app(OrderSummaryCardService::class)->build($order->fresh())['payment']['key']);
+
+        $order->payments()->create(['method' => 'cash', 'amount' => 300, 'paid_at' => now()->toDateString()]);
+        $this->assertSame('paid', app(OrderSummaryCardService::class)->build($order->fresh())['payment']['key']);
+    }
+
+    public function test_order_summary_card_without_a_logo_has_none_and_still_builds(): void
+    {
+        [$company] = $this->signIn();
+        $order = $this->order($company);
+
+        $card = app(OrderSummaryCardService::class)->build($order);
+
+        $this->assertNull($card['logo']);
+        $this->assertSame([], $card['contact']);
+        $this->assertNull($card['note']);
     }
 
     public function test_order_view_page_opens_the_order_summary_card(): void

@@ -1,5 +1,5 @@
 # Investments & IMS v2
-> Last checked: 2026-10-20, feature/ims-all-companies (plan 18 phases A-E: every company on the one IMS domain, office company picker, All companies page, investor projects and lists from every company)
+> Last checked: 2026-10-22, feature/ims-office-mobile (office phone layout: bottom tab bar and sheets, home quick buttons, lists stacked as cards on phones in both IMS panels)
 
 ## What it does
 The Investments & IMS v2 module manages Islamic Mudarabah investment partnerships, syndicated investor pools, commercial project funding, and comprehensive investor relations. Built natively into the application following the retirement of the legacy external IMS, it provides two dedicated Filament 5 panels: the IMS Office back-office panel (`/office`) for investment managers, and the Investor Portal (`/investor`) for self-service investor access. It automates investor onboarding with NID OCR verification, digital agreement acceptance, syndicated investor group lifecycles, and automated daily profit proposals. Additionally, it features an investor transparency feed, scheduled monthly statement generation, capital return queues, bank statement reconciliation, and channel partner commission settlements.
@@ -149,6 +149,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `resources/views/ims/pdf/project-report.blade.php` | Printable PDF view for project settlement and financial audit reports. |
 | `resources/views/ims/pdf/statement.blade.php` | Printable monthly investor statement layout. |
 | `resources/css/filament/ims/theme.css` | The shared IMS theme of both panels; colours are tokens, `:root.dark` holds the dark values (light is the default). |
+| `resources/views/filament/ims/office/mobile-nav.blade.php` | Office on phones/tablets: bottom tab bar (Home · Investors · + · To do · Menu) and its slide-up sheets, from `OfficeNavigation::mobile()`, guarded by `ModuleGuard`. |
 | `resources/views/filament/ims/office/company-picker.blade.php` | The office's company picker: a dropdown in the top bar, a list at the top of the menu drawer on small phones. |
 | `resources/views/filament/ims/auth-hero.blade.php` | Green welcome panel with three steps beside the IMS sign-in forms. |
 | `resources/views/filament/ims/theme-toggle.blade.php` | Light / dark button (top bar and sign-in page), via Filament's theme store. |

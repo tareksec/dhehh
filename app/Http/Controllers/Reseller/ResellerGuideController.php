@@ -4,17 +4,21 @@ namespace App\Http\Controllers\Reseller;
 
 use App\Http\Controllers\Controller;
 use App\Models\Company;
+use App\Models\StorefrontSetting;
 use App\Services\CompanySettingsService;
 use App\Services\ResellerOwnCourierService;
+use App\Services\StorefrontSiteConfigService;
+use App\Support\ModuleGuard;
 use Filament\Facades\Filament;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
- * The public reseller guide on the portal host ("/portal/guide", owner
- * request 2026-10-07): what the program is and the rules a reseller works
- * under, read before applying, with buttons to apply or sign in. The
- * how-it-works sections describe what the system actually enforces; the
+ * The public reseller landing page: the portal host's front page, and still
+ * "/portal/guide" (owner requests 2026-10-07 and 2026-10-22). What the program
+ * is and the rules a reseller works under, read before applying, with buttons
+ * to apply or sign in, ending with the footer of the company's Next.js website.
+ * The how-it-works sections describe what the system actually enforces; the
  * intro, the store's own rules and whether money figures are shown are
  * admin-managed on Resellers → Reseller Settings.
  */
@@ -31,6 +35,7 @@ class ResellerGuideController extends Controller
         abort_if($setting !== null && ! $setting->reseller_guide_enabled, 404);
 
         $panel = Filament::getPanel('reseller');
+        $brandColor = preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $setting?->theme_color) ? $setting->theme_color : '#0F766E';
         $paymentMethods = app(ResellerOwnCourierService::class)->paymentMethods($company);
         $showFigures = (bool) ($setting?->reseller_guide_show_figures ?? false);
 
@@ -38,7 +43,9 @@ class ResellerGuideController extends Controller
             'company' => $company,
             'companyName' => app(CompanySettingsService::class)->name($company),
             'logoUrl' => app(CompanySettingsService::class)->logoUrl($company),
-            'brandColor' => preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $setting?->theme_color) ? $setting->theme_color : '#0F766E',
+            'brandColor' => $brandColor,
+            // Text on the brand colour: white on a dark brand, near-black on a light one.
+            'onBrandColor' => StorefrontSiteConfigService::isDarkColor($brandColor) ? '#FFFFFF' : '#111111',
             'currency' => $company->currency ?: 'BDT',
             'intro' => $setting?->reseller_guide_intro,
             'rules' => collect($setting?->reseller_guide_rules ?? [])
@@ -57,6 +64,23 @@ class ResellerGuideController extends Controller
             'subdomainExample' => filled($company->domain) ? 'your-shop.'.$company->domain : null,
             'applyUrl' => $panel->getRegistrationUrl(),
             'loginUrl' => $panel->getLoginUrl(),
+            'footer' => $this->footer($request, $company),
         ]);
+    }
+
+    /**
+     * The footer of the company's Next.js website, so the landing page ends like the website does
+     * (owner request 2026-10-22). Null when the company has no Next.js site row; a problem building it
+     * only costs the page its footer, never the page.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function footer(Request $request, Company $company): ?array
+    {
+        return ModuleGuard::run('reseller-landing.footer', function () use ($request, $company): ?array {
+            $site = StorefrontSetting::nextjsFor($company->getKey());
+
+            return $site ? (new StorefrontSiteConfigService($company, $site))->footer($request->getScheme()) : null;
+        }, null);
     }
 }

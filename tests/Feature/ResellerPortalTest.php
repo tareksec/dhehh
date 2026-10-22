@@ -40,12 +40,14 @@ class ResellerPortalTest extends TestCase
             ->assertRedirect('/portal');
     }
 
-    public function test_visiting_the_portal_host_root_redirects_to_the_portal(): void
+    public function test_visiting_the_portal_host_root_shows_the_reseller_landing_page(): void
     {
         [$company] = $this->setUpCompany('root-redirect.example.test');
 
+        // Owner request 2026-10-22: the address itself is the landing page (ResellerLandingPageTest has the details).
         $this->get('http://reseller.root-redirect.example.test/')
-            ->assertRedirect('/portal');
+            ->assertOk()
+            ->assertSee('data-reseller-guide', false);
     }
 
     public function test_the_portal_host_404s_when_the_reseller_module_is_disabled(): void

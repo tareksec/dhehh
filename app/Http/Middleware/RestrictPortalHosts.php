@@ -20,7 +20,8 @@ use Symfony\Component\HttpFoundation\Response;
  * custom portal domain". This middleware does that matching itself, using
  * the exact same Company::for*PortalHost() rule the company-resolving
  * middleware of each panel uses, so the two always agree on which host is a
- * portal host.
+ * portal host. The one exception is the reseller host's front page ("/"),
+ * which shows the public reseller landing page while that is switched on.
  */
 class RestrictPortalHosts
 {
@@ -80,9 +81,23 @@ class RestrictPortalHosts
 
         // The portal that owns this host, if any: every other path redirects to it.
         foreach (self::PORTALS as $panelPath => $resolver) {
-            if (Company::{$resolver}($request->getHost())) {
-                return $this->isUnder($path, $panelPath) ? $next($request) : redirect()->to('/'.$panelPath);
+            $company = Company::{$resolver}($request->getHost());
+
+            if (! $company) {
+                continue;
             }
+
+            if ($panelPath === 'portal') {
+                // Remembered so the storefront's own domain lookup leaves this host alone.
+                $request->attributes->set('reseller_portal_company', $company);
+
+                // The reseller host's front page is the public landing page (HomeController), unless it is switched off.
+                if ($path === '' && $company->resellerLandingEnabled()) {
+                    return $next($request);
+                }
+            }
+
+            return $this->isUnder($path, $panelPath) ? $next($request) : redirect()->to('/'.$panelPath);
         }
 
         // Not a portal host: no portal path is served here.

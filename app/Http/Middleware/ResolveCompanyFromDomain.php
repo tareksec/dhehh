@@ -16,6 +16,12 @@ class ResolveCompanyFromDomain
 
     public function handle(Request $request, Closure $next, string $mode = 'required'): Response
     {
+        // A reseller portal host has no storefront of its own; its front page is the reseller landing
+        // page (RestrictPortalHosts has already worked out whose portal it is).
+        if ($mode === 'optional' && $request->attributes->get('reseller_portal_company') instanceof Company) {
+            return $next($request);
+        }
+
         $host = Company::normalizeDomain($request->getHost());
 
         $company = $host

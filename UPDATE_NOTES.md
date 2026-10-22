@@ -21,6 +21,63 @@ Open for the owner: switch the Build Pack (steps in the docs), update Coolify, c
 
 Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
 
+## 2026-10-22 - Automatic order messages: SMS on creation + WhatsApp summary card
+
+Owner (Bangla): "আর কোন অর্ডার তৈরি হলে সাথে সাথে কাস্টমারের ফোন নাম্বারে অর্ডার ডিটেইলস এবং অর্ডার স্ট্যাটাস সহ চলে যাবে। প্রতিটা অর্ডার স্ট্যাটাস পরিবর্তন হলে কাস্টমারে ফোন নাম্বারে অর্ডার ইনফো সহ মেসেজ চলে যাবে, এবং তার যদি whatsapp থাকে তাহলে তাকে অর্ডার সামারি কার্ড অটো পাঠানো হবে।" Owner's answers to my two questions: WhatsApp through the **official Cloud API** (Recommended) and **try every customer** (a number without WhatsApp just fails).
+
+What already existed: a status SMS at every stage, using the owner's wording on SMS Templates (empty wording = nothing sent, owner decision 2026-10-17). I kept that rule, so **nothing is sent until the owner saves the wording** for "Order placed" and for each stage (one click: "Use suggested wording"). If the owner wants the SMS to go before any wording is saved, that is a separate decision.
+
+What changed: SMS "Order placed" (+ `:items`), the WhatsApp card (new page Settings → Order WhatsApp card; server-drawn card picture; Cloud API template with Image header and five body variables), see CHANGELOG. Rules kept: never web (QR) channels (whatsapp-web-rules rule 4), never reseller / imported / opted-out, one send per event.
+
+**What the owner must do before the WhatsApp card works:** (1) have a Cloud API or Coexistence channel in Chat Channels; (2) create and get approved a Meta template with an Image header and a body using {{1}} name, {{2}} order number, {{3}} status, {{4}} total, {{5}} due; (3) pick channel and template on Settings → Order WhatsApp card and switch it on; (4) make sure the server can draw the picture — the page says so; if not, install ImageMagick's Pango support (`libmagickcore-6.q16-6-extra` on Debian/Ubuntu). WhatsApp's business-initiated messages are charged by Meta per template message.
+
+Checked: the card picture was drawn on this machine (Imagick 6.9 with Pango; Bangla names, addresses and product names join correctly) for a company with a logo and for a reseller; Meta calls are tested with faked responses only — **not tested against the real Meta API or a real phone**. Not run on the production server, whose ImageMagick build is unknown.
+
+Needs Bangla review (new keys): all new keys of the Order WhatsApp card page and "Items ordered (product names with quantities)" → "অর্ডার করা পণ্য (নামসহ পরিমাণ)".
+
+Commit status: Committed and pushed to `claude/order-management-features-nafks7` and to `main` (owner approved: "মেইন এ পুশ কর"). Full test run after merging main v2.99.0: 2982 passed, 2 skipped.
+
+## 2026-10-22 - Order summary card: corporate layout
+
+Owner (Bangla): "সামারি কার্ডকে আরো প্রফেশনাল ডিজাইন করা লাগবে এটা একদম জেনেরিক ডিজাইন হয়ে গেছে। কম্পানী লোগো, কন্টাক্ট ইনফো, অর্ডার ইনফো, কাস্টমার ইনফো, সব আরো গুছানো কর্পোরেট এন্টারপ্রাইজ লেভেলের হতে হবে।" (make the summary card more professional — company logo, contact info, order info, customer info, all organised at corporate enterprise level).
+
+What changed: the card is redrawn with a logo + contact header, a navy title band with the invoice number, Order details and Customer details boxes side by side (payment badge in the order box), a striped items table with picture, unit price, qty and amount, a note box, totals ending in a big Due band (orange, green when paid), and a footer with just the thank-you line.
+
+Follow-up (owner, with a screenshot): "কম্পানি ইনফো দুই জায়গায় দেখাচ্ছে হেডারে ফুটারে, যে কোন এক জায়গায় দেও" — the company's phone, e-mail, website and address now show only in the header (browser card and the server-drawn WhatsApp card); the footer company line and the Contact box are gone, and the unused "Contact" key was removed. `OrderSummaryCardService` supplies the logo (data URI), contact lines, address, note, payment state and unit prices. Reseller orders keep the reseller's name/logo and show no company contact details.
+
+Checked in headless Chromium with a logo, three items (two pictures, one without), a Bangla customer name and address, and the reseller variant (no logo, no contact). Not tested on a phone — the sending path is unchanged.
+
+Needs Bangla review (new keys): "Customer details" → "কাস্টমারের তথ্য", "Paid in full" → "সম্পূর্ণ পরিশোধিত", "Partially paid" → "আংশিক পরিশোধিত", "Payment due" → "পেমেন্ট বাকি", "Payment" → "পেমেন্ট".
+
+Commit status: Committed and pushed to `claude/order-management-features-nafks7` and to `main` (owner approved: "মেইন এ পুশ কর"). Full test run after merging main v2.99.0: 2982 passed, 2 skipped.
+
+## 2026-10-22 - Order summary card: product pictures
+
+Owner (Bangla): "অর্ডার সামারি কার্ড এ প্রডাক্ট ইমেজ এড করতে। তাহলে কাস্টমার বুঝবে যে তাকে তার অর্ডার করা প্রডাক্ট ই দেয়া হচ্ছে।" (add the product image to the order summary card so the customer knows they get the product they ordered).
+
+What changed: `OrderSummaryCardService` gives each item a 160 px square JPEG data URI of the ordered variant's first photo, else the product's main image (null when none or unreadable). `summary-card.blade.php` preloads the pictures and draws a rounded thumbnail beside each item; items without a picture get a plain box; rows are taller when pictures are shown. No new lang keys. Checked in headless Chromium: card with two pictures and one picture-less item draws correctly. Not tested on a phone — the sending path is unchanged.
+
+Commit status: Committed and pushed to `claude/order-management-features-nafks7` and to `main` (owner approved: "মেইন এ পুশ কর"). Full test run after merging main v2.99.0: 2982 passed, 2 skipped.
+
+## 2026-10-22 - IMS office: phone layout like an app
+
+Owner (Bangla): the IMS dashboard for admin / super admin was to be highly mobile friendly, non-tech friendly and very easy, but nothing like that was done for phones; three mobile reference designs given as inspiration (a green fitness app, a green finance app, a green marketplace app) — bottom tab bar with a raised round centre button, greeting with avatar, round quick buttons, big cards.
+
+What changed (office `/office`, phones and tablets below 1024px; desktop unchanged): bottom tab bar Home · Investors · + · To do · Menu with sheets that slide up; Menu = page tiles by group + language + light/dark + company list + Sign out; home greeting with initials, four round quick buttons with waiting counts; every Filament list in the office and the investor portal becomes stacked cards below 640px (`stackedOnMobile()`).
+
+Decided without asking (by the design rules in `IMS-V2/DESIGN.md` §6.2): the five tabs and the four quick buttons are the daily jobs from "What to do today"; "+" lists only resources that have a create page and that the person may create (Investments, Invites, Project updates and the Feed have no create page or are not creatable by this user on the test data, so they show only when they qualify).
+
+Checked in the browser on a throwaway copy of the demo database (never the demo DB): 375px and 360px, English and Bangla, light and dark, the three sheets, the Investors and Settlements lists as cards; 1366px desktop looks as before. Tablet (768–1023px) lists still scroll sideways — Filament stacks only below 640px.
+
+Needs Bangla review: "Add new" (নতুন যোগ করুন), "To do" (করণীয়), "Confirm money" (টাকা নিশ্চিত), "Good morning!/afternoon!/evening!" (শুভ সকাল/দুপুর/সন্ধ্যা), "Record an investment", "New project", "Post a project update", "Write a feed post".
+
+Not done: the office's other pages (forms, detail pages) are Filament's own one-column layout on phones and were not redesigned; some list column titles are still English in Bangla (existing keys, not part of this change).
+
+Full plain `php artisan test` on the branch (assets built from this tree): 2,959 passed, 1 skipped, 0 failed.
+
+Commit status: committed and pushed to `feature/ims-office-mobile`; not on `main` (waits for the owner's approval).
+
+
 ## 2026-10-21 - Purchases: import from CSV, and the Items layout
 
 Owner request (Bangla): add an option on Purchases so that uploading a CSV creates all the purchases, the same idea as the investor-list import; and fix the Items section, where every field was in one row. The owner shared the Stock History sheet (columns Date, Product Name, Quantity, merged date cells, mixed day/month and month/day dates).
@@ -1118,6 +1175,57 @@ Needs Bangla review (new keys): Reseller levels (রিসেলার লেভ
 Tests: `ResellerLevelsTest` (10). Verified: full suite 2543 passed, 1 skipped, 0 failed.
 
 Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16). Not pushed to `main`.
+
+## 2026-10-22 (later) - Landing page redesigned in neo-brutalism
+
+The owner (in Bangla) said the landing page was not beautiful and asked for names of trending UI styles; I listed eight and recommended Bento + gradient; the owner chose **Neo-brutalism**.
+
+What changed (details in `CHANGELOG.md` [Unreleased]): only the look of `resources/views/reseller/guide.blade.php`; every text, number, link, `data-reseller-guide` / `data-guide-cta` hook and admin-managed content is unchanged, and there are **no new lang keys**.
+
+- New stylesheet `resources/css/reseller-landing.css` (new Vite entry in `vite.config.js`): thick ink borders, flat colour blocks, hard shadows with lift-on-hover and press-on-click, dot-grid hero, yellow ticker of the four step titles (repeats existing text, hidden from screen readers), numbered colour step cards, accordion rules, bold closing banner. Fonts: Hind Siliguri (self-hosted, same as the portal) and Unbounded (already in `app.css`).
+- Colours: cream / yellow / pink / mint / sky / orange are fixed style colours; the store's own `theme_color` is used for the main buttons and the closing banner, with white or near-black text chosen for readability. Dark mode (OS setting) flips paper, cards and outlines and keeps the colour blocks.
+- I rendered it in Chromium at desktop, 390 px phone and dark mode, found and fixed three things (colour blocks showing white, an unreadable chip in dark mode, a header chip squeezing the name on phones), and re-checked.
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- I kept the cream background and bright pastel blocks (classic neo-brutalism) with the brand colour as the button colour, instead of making the whole page the brand colour.
+- The first-screen card shows "price − cost = profit" using only the words the page already had; I added no promises or numbers.
+- The footer under the page is still the website's dark footer.
+
+**Deploy: `npm run build`** — the page now needs the new CSS entry in the build, or it fails to load its stylesheet.
+
+Tests: `ResellerLandingPageTest` (+1: the page loads its own stylesheet and brand colours). Focused files pass (`ResellerLandingPageTest`, `ResellerGuidePageTest`, `ResellerPortalTest`, `StorefrontApiTest`: 51 passed); full suite: 2564 passed, 1 skipped, 0 failed.
+
+Commit status: committed to the work branch `claude/reseller-module-status-v9tobe`, `origin/main` (v2.98.0) merged in, full suite on the merged tree 2969 passed, 1 skipped, 0 failed; pushed to `main` on the owner's explicit approval ("main এ পুশ কর", 2026-10-22).
+
+## 2026-10-22 - Reseller landing page at reseller.<domain> with the website's footer; "Become a reseller" banner button on the website
+
+The owner (in Bangla), with the "Reselling Program — Start Your Online Business Without Investment" banner attached: make `reseller.zamzamint.com` the landing page, with login / registration buttons and call-to-action buttons on the page; take the footer from the Next.js site built for zamzamint; and in the Next.js site's footer replace "Become a reseller" with a call-to-action button, using the attached image itself as the button so it looks interactive.
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+
+1. **The landing page already existed** (`/portal/guide`: header with *Sign in* / *Apply now*, hero, how it works, money, store, orders, rules, closing banner with two buttons). `reseller.<domain>` now **opens it directly** instead of redirecting to the sign-in page. `/portal/guide` still works. The existing *Show the reseller guide* switch controls it; off, the address redirects to `/portal` (sign-in) as before.
+2. **Its footer is the Next.js website's footer**: same Footer Builder blocks, footer menu, social links and background colour (the *Next.js* row's), laid out like `Footer.tsx`. Links to the website's pages (shop, categories, pages, track, account, legal links) are built on the row's **website domain**. If the company has no website domain, only absolute links stay (links to website pages cannot be built, so they are left out). A menu link that points at the reseller program is left out of this footer, since it sits on that page. No Next.js row: the old plain copyright line stays.
+3. **Website: the footer's "Become a reseller" item is a banner button.** The ERP now sends `image_url` on *Become a reseller* menu items; the website's footer pulls those items out of the link lists and shows the picture once, above the columns, as the button (hover lift + zoom, a light sweep every few seconds, both off for `prefers-reduced-motion`; keyboard focus ring; the menu label is its alt text). The header and mobile menu keep the text link. I rendered it in Chromium (desktop, hover, 390 px phone) and checked the Tailwind build output.
+4. **The picture is admin-managed**: **Reseller Settings → Website banner button** (upload; cleared = standard). The owner's attached banner ships with the ERP as the standard one (`public/images/reseller-program-banner.png`, 1080 × 360), so nothing needs uploading for it to appear.
+5. The storefront's *Become a reseller* links (account menu, footer, API menu item) now point at the portal address itself (`https://reseller.<domain>/`), not `/portal/guide`.
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- The footer comes from the **Next.js row only**. A company with only a Blade row gets the simple footer; I did not fall back to the Blade footer because the owner asked for the website's footer.
+- The banner sits **above the footer columns**, centred, up to 672 px wide. A 1080 × 360 banner inside a narrow link column would make its small line unreadable.
+- The banner is shown for every *Become a reseller* item the admin placed in the footer menu or in a footer link column (once, even if two items point to the same address); the header keeps the text link. To remove the button, remove the item from the footer menu.
+- The banner picture has English text. It ships as the standard picture for every company until that company uploads its own.
+
+Needs Bangla review (new keys, all in `lang/bn.json`): *Website banner button* (ওয়েবসাইটের ব্যানার বাটন), its helper line (it keeps the English names "Become a reseller" and "Reselling Program" because the menu label and the banner text are English), the new *Show the reseller guide* helper line (front page of the portal address), *Contact* (যোগাযোগ), *Social link* (সোশ্যাল লিংক). The old helper line for the guide switch was replaced.
+
+Deploy: `php artisan migrate` (new column `storefront_settings.reseller_banner_image`), `npm run build`, and deploy the website branch `feature/reseller-menu-link` for the button (the ERP part alone only changes the landing page and sends the extra field).
+
+Tests: `ResellerLandingPageTest` (9: front page, guide off, other hosts untouched, module off, footer from the website, no domain, no website, banner upload and clear through the settings page, standard banner ships); `StorefrontApiTest` and `ResellerGuidePageTest` updated for the new address. `ModuleGuard` wraps the footer, but isolation is off in tests, so no test covers a failing footer. `ResellerPortalTest` had one test that expected the old redirect from the portal host's `/`; it now expects the landing page (`test_visiting_the_portal_host_root_shows_the_reseller_landing_page`).
+
+Verified: asset build passes (`npm run build`), the website builds and typechecks, and the landing page and the banner button were rendered in Chromium (desktop, phone, hover). Full suite: 2562 passed, 1 skipped, 1 failed — the failure was that old redirect test; after updating it, it passes on its own and the other files were not changed, so the full suite was not run a second time.
+
+Commit status: committed to the work branch `claude/reseller-module-status-v9tobe` and the website's `feature/reseller-menu-link`; both pushed to `main` on the owner's explicit approval ("main এ পুশ কর", 2026-10-22), ERP first, then the website.
 
 ## 2026-10-15 - Admin: reset a reseller's password / email a reset link; portal ↔ admin audit
 
