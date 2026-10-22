@@ -2,7 +2,12 @@
 
 namespace App\Filament\Trade\Pages;
 
+use App\Filament\Trade\Resources\DeliveryChallans\DeliveryChallanResource;
+use App\Filament\Trade\Resources\Dues\DueResource;
+use App\Filament\Trade\Resources\GoodsIn\GoodsInResource;
+use App\Filament\Trade\Resources\StockItems\StockItemResource;
 use App\Services\TradePortalHome;
+use App\Support\ModuleGuard;
 use BackedEnum;
 use Filament\Pages\Dashboard;
 use Filament\Support\Icons\Heroicon;
@@ -49,6 +54,39 @@ class Home extends Dashboard
             'dues' => $home->dues(),
             'lowStock' => $home->lowStock(),
             'lcs' => $home->openLcs(),
+            'quick' => $this->quickActions(),
+            'links' => [
+                'sales' => DeliveryChallanResource::canAccess() ? DeliveryChallanResource::getUrl(panel: 'trade') : null,
+                'dues' => DueResource::canAccess() ? DueResource::getUrl(panel: 'trade') : null,
+                'stock' => StockItemResource::canAccess() ? StockItemResource::getUrl(panel: 'trade') : null,
+                'lcs' => GoodsInResource::canAccess() ? GoodsInResource::getUrl(panel: 'trade') : null,
+            ],
         ];
+    }
+
+    /**
+     * The big buttons at the top: the shop's daily jobs, each shown only to
+     * people allowed to do it.
+     *
+     * @return list<array{label: string, icon: string, url: string}>
+     */
+    public function quickActions(): array
+    {
+        return ModuleGuard::run('trade-home-quick-actions', function (): array {
+            $actions = [];
+
+            foreach ([
+                [DeliveryChallanResource::class, 'create', 'New challan', 'heroicon-o-document-plus'],
+                [DueResource::class, 'index', 'Receive money', 'heroicon-o-banknotes'],
+                [GoodsInResource::class, 'create', 'Goods in', 'heroicon-o-truck'],
+                [StockItemResource::class, 'create', 'New item', 'heroicon-o-archive-box'],
+            ] as [$class, $page, $label, $icon]) {
+                if ($class::canAccess()) {
+                    $actions[] = ['label' => __($label), 'icon' => $icon, 'url' => $class::getUrl($page, panel: 'trade')];
+                }
+            }
+
+            return $actions;
+        }, []);
     }
 }

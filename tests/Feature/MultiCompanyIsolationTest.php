@@ -35,6 +35,8 @@ use App\Models\CustomerPayment;
 use App\Models\CustomerRiskEvent;
 use App\Models\CustomerRiskProfile;
 use App\Models\CustomerRiskReview;
+use App\Models\DeliveryChallan;
+use App\Models\DeliveryChallanItem;
 use App\Models\ExchangeRate;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
@@ -147,6 +149,7 @@ class MultiCompanyIsolationTest extends TestCase
             Customer::class, CustomerPayment::class, Expense::class, ExpenseCategory::class,
             CustomerRiskProfile::class, CustomerRiskEvent::class, CustomerRiskReview::class, FraudCheck::class,
             Order::class, OrderItem::class, OrderPayment::class, OrderCost::class,
+            DeliveryChallan::class, DeliveryChallanItem::class,
             Product::class, Purchase::class, PurchaseItem::class,
             StockMovement::class, Supplier::class, SupplierPayment::class, TransactionLedger::class,
             Container::class, Shipment::class, StorefrontPage::class, StorefrontSetting::class,

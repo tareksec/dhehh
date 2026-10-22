@@ -73,7 +73,8 @@ class OrderStatusSmsService
         $stage = $this->stageFor($transition);
         $order = Order::withoutGlobalScopes()->with(['customer', 'company', 'storefrontSetting', 'latestCourierBooking'])->find($transition->order_id);
 
-        if ($stage === null || $order === null || $order->isHistoricalImport() || filled($order->reseller_customer_id)) {
+        // A Delivery Challan sale was handed over in the shop: the order-status texts (shipped, delivered…) do not fit it.
+        if ($stage === null || $order === null || $order->isHistoricalImport() || filled($order->reseller_customer_id) || $order->source === Order::SOURCE_TRADE_CHALLAN) {
             return false;
         }
 

@@ -1,6 +1,6 @@
 # Tasneem Knitting Industry — Trade Portal Plan
 
-Status (2026-10-22): phase 1 (foundation) built on `feature/trade-portal-foundation`; phases 2–6 not started. Source: `SUMMARY.md` (9 import documents), the handwritten Delivery Challan photo, and the owner's voice answers.
+Status (2026-10-22): phase 1 (foundation) built on `feature/trade-portal-foundation`; phase 2 (shop work) on `feature/trade-portal-shop-work` (branched from phase 1); phases 3–6 not started. Source: `SUMMARY.md` (9 import documents), the handwritten Delivery Challan photo, and the owner's voice answers.
 
 ## 1. Decisions
 

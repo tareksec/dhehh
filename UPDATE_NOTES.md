@@ -2,6 +2,35 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-22 - Trade Portal phase 2 (shop work)
+
+Owner request: start Phase 2 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-shop-work`. The branch starts from `feature/trade-portal-foundation` (phase 1 is not on `main` yet and phase 2 needs it), so merging phase 2 brings phase 1 with it.
+
+What changed: Delivery Challan (write, view, print, receive money, cancel), Goods in (short purchase entry, "Goods arrived"), Stock (list, new item with opening stock, correct count), Dues (who owes, receive money against a challan or the old due), Bring in old data (buyers with old dues, items with stock, CSV or Excel), home quick buttons, phone tab bar Home · Sales · Stock · Dues · Menu, challan print text on the Business profile. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief, PLAN.md §4 and the owner's challan photo):
+
+- The challan is backed by an ERP order (`source = trade_challan`), so stock, the customer's due, the due alerts, the home card and payments all use the ERP's own order rules (brief: reuse `Order`/`Customer`). The order is created completed and delivered (the goods leave the shop with the challan) — so it shows in the ERP's Orders list as a completed sale. Customer SMS on status changes are not sent for these orders (those texts are about shipped/delivered parcels).
+- The total is quantity × price over the priced lines only, as on the pad (the machine set has the price; the stand, feeders and CAMs on the same challan have none but still leave the stock). A price needs an item from stock, because only order lines count in the ERP total; a text-only line (e.g. "MC 2 pcs + extra 2 pcs") is printed but takes no stock.
+- The advance and the cash paid are payments of the sale; the cheque on the paper is kept as information (cheque no. and bank) — it is money only when it is received with "Receive money".
+- Cancelling a challan cancels its order: the goods return to stock and the due goes; money already received stays recorded, to be given back by hand.
+- Paying the "old due" makes a customer payment, which the ERP posts to a money account, so an account is required there (the challan payments may leave it empty). If the company has no cash/bank account yet the form says to ask the admin.
+- The challan prints in English like the pad, whatever language the portal is in; the text under it (the bilingual disclaimer) is the owner's own, entered on the Business profile, never hardcoded.
+- Items brought in from a file without a SKU get `TRD-<NAME>`, so bringing the same file in again updates instead of duplicating.
+- The ERP's "coming soon" cost placeholders (C&F, Duty, Misc…) are hidden from portal stock and the challan item list, and no longer counted in the home low-stock card (they were counted as 12 low items in phase 1).
+
+Found and fixed on the way: a payment recorded on an order did not update the customer's total due until the order itself was saved again (`Order::recalculatePaidAmount()` now syncs the customer).
+
+Checked in the browser at 390px on a throwaway copy of the dev database (scratchpad, never the real DB): home with the quick buttons and the new tab bar, new item with opening stock, writing the challan of the photo (total ১৫,০০,০০০ and due ৬,০০,০০০ shown while typing; picking the item filled description and unit), the challan page with Print / Receive money / Cancel, the print page (money block 15,00,000 / 1,00,000 / 8,00,000 / 6,00,000, cheque, due terms), Dues as stacked cards and its Receive-money form, Bring in old data, the Menu sheet tiles; no sideways scroll. The panel's blue buttons were pale (Filament made a light palette from the hex colour) — switched to Filament's Blue.
+
+Needs Bangla review: the 131 new keys, especially "Goods in" (মাল এলো), "Bring in old data" (পুরোনো হিসাব আনুন), "Correct count" (গণনা ঠিক করুন), "Warn when stock is at or below", the long help text of the Goods section, and the import column notes.
+
+Not done: aging of dues and reports (phase 6), cash book (phase 3), LC file (phase 4), landed cost and machine serials (phase 5); editing a saved challan (cancel and write it again); items with variations on a challan; the Delivery Challan does not produce a VAT challan (Mushak 6.3).
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 2,988 passed, 1 skipped, 0 failed. New: `DeliveryChallanServiceTest` (7), `TradePortalShopWorkTest` (8).
+
+Commit status: committed and pushed to `feature/trade-portal-shop-work`; not on `main` (waits for the owner's approval; it contains phase 1 too).
+
 ## 2026-10-22 - Trade Portal phase 1 (foundation)
 
 Owner request: build the Tasneem Knitting Industry Trade Portal from `docs/tasneem-samples/BUILD-BRIEF.md`, Phase 1 only, on `feature/trade-portal-foundation`, nothing to `main`.

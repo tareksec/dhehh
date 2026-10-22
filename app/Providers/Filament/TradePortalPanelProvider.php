@@ -5,6 +5,7 @@ namespace App\Providers\Filament;
 use App\Filament\Auth\AdminLogin;
 use App\Filament\Trade\Pages\Home;
 use App\Filament\Trade\TradeNavigation;
+use App\Http\Controllers\Trade\TradeChallanPrintController;
 use App\Http\Controllers\Trade\TradePortalLocaleController;
 use App\Http\Middleware\PreventAdminPageCaching;
 use App\Http\Middleware\ResolveTradePortalCompany;
@@ -56,7 +57,8 @@ class TradePortalPanelProvider extends PanelProvider
             ->brandName(fn (): string => app(CompanySettingsService::class)->name(app(CompanyContext::class)->company()))
             ->brandLogo(fn (): ?string => app(CompanySettingsService::class)->logoUrl(app(CompanyContext::class)->company()))
             ->brandLogoHeight('2.25rem')
-            ->colors(['primary' => Color::hex('#1d4ed8')])
+            // Tailwind blue (its 700 is the theme's --trade-primary): buttons get a strong blue with white text.
+            ->colors(['primary' => Color::Blue])
             ->font('Hind Siliguri', provider: LocalFontProvider::class)
             // Light only: the owner works in daylight in the shop (BUILD-BRIEF.md "light theme").
             ->darkMode(false)
@@ -69,8 +71,12 @@ class TradePortalPanelProvider extends PanelProvider
                 Home::class,
             ])
             ->discoverPages(in: app_path('Filament/Trade/Pages'), for: 'App\Filament\Trade\Pages')
+            ->discoverResources(in: app_path('Filament/Trade/Resources'), for: 'App\Filament\Trade\Resources')
             ->routes(function (): void {
                 Route::get('language/{locale}', TradePortalLocaleController::class)->whereIn('locale', SetTradePortalLocale::LOCALES)->name('language');
+            })
+            ->authenticatedRoutes(function (): void {
+                Route::get('challans/{challan}/print', TradeChallanPrintController::class)->whereNumber('challan')->name('challans.print');
             })
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn (): View => view('filament.trade.language-switch'))
             // Phones: the bottom tab bar with its menu sheet.

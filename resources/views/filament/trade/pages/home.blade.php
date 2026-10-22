@@ -11,12 +11,24 @@
 <x-filament-panels::page>
     <p class="trade-date">{{ ImsNumbers::date(CarbonImmutable::now()) }}</p>
 
+    @if ($quick !== [])
+        <nav class="trade-quick" aria-label="{{ __('Quick menu') }}">
+            @foreach ($quick as $action)
+                <a href="{{ $action['url'] }}" class="trade-quick-btn">
+                    <span class="trade-tile-icon"><x-filament::icon :icon="$action['icon']" class="h-6 w-6" /></span>
+                    <span>{{ $action['label'] }}</span>
+                </a>
+            @endforeach
+        </nav>
+    @endif
+
     <div class="trade-cards">
         {{-- Today's sales --}}
         <section class="trade-card" aria-labelledby="trade-card-sales">
             <div class="trade-card-head">
                 <span class="trade-card-icon trade-tone-blue"><x-filament::icon icon="heroicon-o-banknotes" class="h-6 w-6" /></span>
                 <h2 id="trade-card-sales" class="trade-card-title">{{ __("Today's sales") }}</h2>
+                @if ($links['sales'])<a href="{{ $links['sales'] }}" class="trade-card-link">{{ __('See all') }}</a>@endif
             </div>
             @if ($sales === null)
                 <p class="trade-card-error">{{ __('This card could not be loaded. Please try again later.') }}</p>
@@ -34,6 +46,7 @@
             <div class="trade-card-head">
                 <span class="trade-card-icon trade-tone-amber"><x-filament::icon icon="heroicon-o-clock" class="h-6 w-6" /></span>
                 <h2 id="trade-card-dues" class="trade-card-title">{{ __('Dues (to collect)') }}</h2>
+                @if ($links['dues'])<a href="{{ $links['dues'] }}" class="trade-card-link">{{ __('See all') }}</a>@endif
             </div>
             @if ($dues === null)
                 <p class="trade-card-error">{{ __('This card could not be loaded. Please try again later.') }}</p>
@@ -56,6 +69,7 @@
             <div class="trade-card-head">
                 <span class="trade-card-icon trade-tone-red"><x-filament::icon icon="heroicon-o-archive-box-x-mark" class="h-6 w-6" /></span>
                 <h2 id="trade-card-stock" class="trade-card-title">{{ __('Low stock') }}</h2>
+                @if ($links['stock'])<a href="{{ $links['stock'] }}" class="trade-card-link">{{ __('See all') }}</a>@endif
             </div>
             @if ($lowStock === null)
                 <p class="trade-card-error">{{ __('This card could not be loaded. Please try again later.') }}</p>
@@ -77,6 +91,7 @@
             <div class="trade-card-head">
                 <span class="trade-card-icon trade-tone-green"><x-filament::icon icon="heroicon-o-truck" class="h-6 w-6" /></span>
                 <h2 id="trade-card-lc" class="trade-card-title">{{ __('LC files') }}</h2>
+                @if ($links['lcs'])<a href="{{ $links['lcs'] }}" class="trade-card-link">{{ __('See all') }}</a>@endif
             </div>
             @if ($lcs === null)
                 <p class="trade-card-error">{{ __('This card could not be loaded. Please try again later.') }}</p>

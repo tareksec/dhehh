@@ -179,6 +179,13 @@ class Order extends Model
      */
     public const SOURCE_NUPORT_OPEN = 'nuport_open';
 
+    /**
+     * A sale written as a Delivery Challan in the Trade Portal
+     * (DeliveryChallanService): the goods were handed over in the shop, so the
+     * order is made completed and delivered at once; payments come later.
+     */
+    public const SOURCE_TRADE_CHALLAN = 'trade_challan';
+
     public const SOURCES = [
         self::SOURCE_ADMIN => 'Admin',
         self::SOURCE_STOREFRONT => 'Storefront',
@@ -190,6 +197,7 @@ class Order extends Model
         self::SOURCE_RESELLER_PORTAL => 'Reseller portal',
         self::SOURCE_NUPORT_IMPORT => 'Nuport (imported)',
         self::SOURCE_NUPORT_OPEN => 'Nuport (open order)',
+        self::SOURCE_TRADE_CHALLAN => 'Delivery Challan (Trade Portal)',
     ];
 
     /**
@@ -649,6 +657,9 @@ class Order extends Model
                 'paid_amount' => $paid,
                 'due_amount' => $due,
             ])->saveQuietly();
+
+            // The customer's due is the sum of their orders' dues: it moves with every payment, not only on the next order save.
+            $this->syncCustomerBalance();
         }
     }
 

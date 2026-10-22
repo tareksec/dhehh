@@ -178,6 +178,105 @@
     font-size: 0.8125rem;
 }
 
+.trade-card-link {
+    margin-inline-start: auto;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--trade-primary);
+    text-decoration: none;
+}
+
+.trade-due {
+    color: var(--trade-amber-ink);
+}
+
+.trade-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+/* Label / value pairs on a challan's page. */
+.trade-facts {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+}
+
+@media (min-width: 768px) {
+    .trade-facts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.trade-facts dt {
+    color: var(--trade-muted);
+    font-size: 0.875rem;
+}
+
+.trade-facts dd {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+/* Home: the big buttons for the daily jobs, and the tiles in the Menu sheet. */
+.trade-quick,
+.trade-tiles {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+@media (min-width: 768px) {
+    .trade-quick {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+.trade-quick-btn,
+.trade-tile {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 4rem;
+    padding: 0.75rem;
+    border-radius: 1rem;
+    border: 1px solid var(--trade-line);
+    background-color: var(--trade-card);
+    font-weight: 700;
+    text-decoration: none;
+    touch-action: manipulation;
+}
+
+.trade-tile {
+    background-color: var(--trade-page);
+    border-color: transparent;
+}
+
+.trade-tile-on {
+    background-color: var(--trade-primary-soft);
+    color: var(--trade-primary);
+}
+
+.trade-tile-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.875rem;
+    background-color: var(--trade-primary-soft);
+    color: var(--trade-primary);
+}
+
+.trade-quick-btn:focus-visible,
+.trade-tile:focus-visible {
+    outline: 3px solid var(--trade-primary);
+    outline-offset: 2px;
+}
+
 /* ---------- Language switch ---------- */
 
 .trade-language {

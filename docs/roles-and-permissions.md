@@ -134,10 +134,15 @@ them to any custom role from the role editor.
 ```text
 trade.access               open the Trade Portal (a company with the portal switched on)
 trade.profile.manage       edit the Business profile there (addresses, TIN/BIN/IRC, banks, letterhead)
+trade.sales                Delivery Challans: sell, receive money, print, cancel
+trade.purchases            Goods in: enter purchases, mark goods arrived
+trade.stock                Stock: add items, correct counts
+trade.dues                 Dues: see who owes, receive money
+trade.import               Bring in old data (buyers with old dues, items with stock)
 ```
 
 The **Trade Owner** role (`trade_owner`, made by a migration, editable in
-Users → Roles) holds only these two. A role whose permissions are all
+Users → Roles) holds all of these. A role whose permissions are all
 `trade.*` opens `/trade` only: `/admin` refuses it (`User::isTradePortalOnly()`).
 A role with any other permission, or none, keeps `/admin` as before. Staff
 accounts open no panel other than `/admin`, `/office` and `/trade`.

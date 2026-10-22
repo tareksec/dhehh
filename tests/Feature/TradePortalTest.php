@@ -56,7 +56,9 @@ class TradePortalTest extends TestCase
 
         $this->assertNotNull($role);
         $this->assertTrue($role->is_active);
-        $this->assertSame(['trade.access', 'trade.profile.manage'], $role->permissions);
+        $this->assertContains('trade.access', $role->permissions);
+        $this->assertContains('trade.profile.manage', $role->permissions);
+        $this->assertSame([], array_values(array_filter($role->permissions, fn (string $permission): bool => ! str_starts_with($permission, 'trade.'))));
         $this->assertArrayNotHasKey('trade_owner', User::ROLE_PERMISSIONS, 'A built-in role could not be edited in Users → Roles.');
         $this->assertArrayHasKey('trade.access', User::CUSTOM_PERMISSION_OPTIONS);
         $this->assertArrayHasKey('trade.profile.manage', User::CUSTOM_PERMISSION_OPTIONS);

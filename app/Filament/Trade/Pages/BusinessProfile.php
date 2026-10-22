@@ -66,9 +66,15 @@ class BusinessProfile extends Page
         return app(CompanyContext::class)->company();
     }
 
+    /** companies.settings key of the text printed under a Delivery Challan (TradeChallanPrintController). */
+    public const CHALLAN_TERMS_SETTING = 'trade_challan_terms';
+
     public function mount(): void
     {
-        $this->form->fill($this->company()->only(self::FIELDS));
+        $this->form->fill([
+            ...$this->company()->only(self::FIELDS),
+            'challan_terms' => data_get($this->company()->settings, self::CHALLAN_TERMS_SETTING),
+        ]);
     }
 
     public function form(Schema $schema): Schema
@@ -123,6 +129,14 @@ class BusinessProfile extends Page
                     ->schema([
                         static::letterheadUpload(),
                     ]),
+                Section::make(__('Delivery Challan'))
+                    ->schema([
+                        Textarea::make('challan_terms')
+                            ->label(__('Text printed under the challan'))
+                            ->helperText(__('For example your disclaimer and assurance lines, in Bangla and English, as on your pad.'))
+                            ->rows(5)
+                            ->maxLength(2000),
+                    ]),
             ]);
     }
 
@@ -171,9 +185,13 @@ class BusinessProfile extends Page
         $data = $this->form->getState();
         $before = $company->only(self::FIELDS);
 
+        $settings = $company->settings ?? [];
+        $settings[self::CHALLAN_TERMS_SETTING] = trim((string) ($data['challan_terms'] ?? ''));
+
         $company->forceFill([
             ...array_intersect_key($data, array_flip(self::FIELDS)),
             'bank_accounts' => array_values($data['bank_accounts'] ?? []),
+            'settings' => $settings,
         ])->save();
 
         app(AuditLogService::class)->record('trade.profile_saved', $company, $before, $company->refresh()->only(self::FIELDS));

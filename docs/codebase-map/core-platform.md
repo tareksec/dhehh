@@ -1,5 +1,5 @@
 # Core Platform
-> Last checked: 2026-10-22, branch `feature/trade-portal-foundation` (Trade Portal phase 1)
+> Last checked: 2026-10-22, branch `feature/trade-portal-shop-work` (Trade Portal phase 2)
 
 ## What it does
 The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and five distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal, Trade Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated backups to Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
@@ -91,6 +91,13 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Filament/Trade/Pages/BusinessProfile.php` | Trade Portal business profile (addresses, TIN/BIN/IRC, bank accounts, signatory, letterhead); needs `trade.profile.manage`. |
 | `app/Services/TradePortalCompanies.php` | Which companies a user may open in `/trade` (`trade.access` + `companies.trade_portal_enabled`), the chosen one, `mayEnter()`. |
 | `app/Services/TradePortalHome.php` | The Trade Portal home figures, each card inside `ModuleGuard::run()`. |
+| `app/Filament/Trade/Resources/DeliveryChallans/DeliveryChallanResource.php` | Trade Portal sales: Delivery Challan list, create (the sale), view with Print / Receive money / Cancel (`trade.sales`). Work done by `DeliveryChallanService` (sales-orders-couriers.md). |
+| `app/Filament/Trade/Resources/GoodsIn/GoodsInResource.php` | Trade Portal "Goods in": short purchase entry and "Goods arrived" over `Purchase` (`trade.purchases`). |
+| `app/Filament/Trade/Resources/StockItems/StockItemResource.php` | Trade Portal stock: items with stock (coming-soon cost placeholders hidden), new item with opening stock, "Correct count" (`trade.stock`). |
+| `app/Filament/Trade/Resources/Dues/DueResource.php` | Trade Portal dues: customers with `current_balance > 0`, "Receive money" against a challan or the old due (`trade.dues`). |
+| `app/Filament/Trade/Pages/ImportOldData.php` | Trade Portal "Bring in old data": buyers with opening dues and items with stock from CSV/Excel via `TradeImportService` (`trade.import`). |
+| `app/Services/TradeImportService.php` | Runs `CustomerCsvService` / `ProductCsvService` on a CSV or Excel file (`App\Support\SpreadsheetCsv`); items without SKU get `TRD-<name>`. |
+| `app/Http/Controllers/Trade/TradeChallanPrintController.php` | `GET trade/challans/{challan}/print` (name `filament.trade.challans.print`): the challan on A4 like the owner's pad, view `resources/views/trade/challan-print.blade.php`. |
 | `app/Filament/Clusters/CompanyManagement.php` | Navigation cluster grouping tenant company resources and settings. |
 | `app/Filament/Clusters/Settings.php` | Navigation cluster grouping system-wide configuration pages. |
 | `app/Filament/Resources/Companies/CompanyResource.php` | CRUD interface for managing companies, domains, and branding. |
@@ -200,6 +207,8 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `tests/Feature/ReleaseCutterTest.php` | Tests semantic release creation script. |
 | `tests/Feature/ReleaseNotificationTest.php` | Tests notification dispatching when updates complete. |
 | `tests/Feature/TradePortalTest.php` | Trade Portal access both ways (`/trade` vs `/admin`), host rule, company isolation, home cards, business profile. |
+| `tests/Feature/TradePortalShopWorkTest.php` | Trade Portal pages: challan form + print, receive money, goods in, stock, dues, CSV/Excel import, permissions. |
+| `tests/Feature/DeliveryChallanServiceTest.php` | Delivery Challan rules against the owner's paper (totals, stock, due, payments, cancel, numbering). |
 | `tests/Feature/UserManagementEscalationTest.php` | Ensures non-super admins cannot elevate privileges or modify protected users. |
 
 ## Routes and panels
@@ -207,7 +216,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 - **IMS Office Panel**: URL prefix `office`, provider: `App\Providers\Filament\ImsOfficePanelProvider`, panel ID `office`. Dedicated investment back-office.
 - **Investor Portal**: URL prefix `investor`, provider: `App\Providers\Filament\InvestorPanelProvider`, panel ID `investor`. Public investor self-service portal.
 - **Reseller Portal**: URL prefix `portal`, provider: `App\Providers\Filament\ResellerPanelProvider`, panel ID `reseller`. Reseller management portal.
-- **Trade Portal**: URL prefix `trade`, provider: `App\Providers\Filament\TradePortalPanelProvider`, panel ID `trade`. Shop portal for a company with `trade_portal_enabled`; guard `web`; route `GET trade/language/{locale}` (name `filament.trade.language`).
+- **Trade Portal**: URL prefix `trade`, provider: `App\Providers\Filament\TradePortalPanelProvider`, panel ID `trade`. Shop portal for a company with `trade_portal_enabled`; guard `web`; routes `GET trade/language/{locale}` (name `filament.trade.language`) and `GET trade/challans/{challan}/print` (name `filament.trade.challans.print`); resources at `trade/challans`, `trade/goods-in`, `trade/stock`, `trade/dues`; pages `trade/import`, `trade/business-profile`.
 - **Core HTTP Routes**:
   - `POST admin/company/switch` (name `admin.company.switch`) -> `App\Http\Controllers\Admin\CompanySwitchController`
   - `POST admin/app-updates/sync` (name `admin.app-updates.sync`) -> `App\Http\Controllers\Admin\AppUpgradeController@synchronize`

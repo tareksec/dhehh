@@ -50,11 +50,12 @@ class TradePortalHome
     public function lowStock(): ?array
     {
         return ModuleGuard::run('trade-home-low-stock', function (): array {
-            $stock = app(LowStockAlertService::class);
+            // The ERP's "coming soon" purchase-cost placeholders (C&F, Duty…) are not goods on the shelf.
+            $query = fn () => app(LowStockAlertService::class)->query()->where('status', '!=', Product::STATUS_COMING_SOON);
 
             return [
-                'count' => $stock->count(),
-                'products' => $stock->products(self::LIST_LIMIT)
+                'count' => (int) $query()->count(),
+                'products' => $query()->orderBy('stock')->orderBy('name')->limit(self::LIST_LIMIT)->get()
                     ->map(fn (Product $product): array => ['name' => (string) $product->name, 'stock' => (float) $product->stock, 'reorder' => (float) $product->reorder_level])
                     ->values()
                     ->all(),

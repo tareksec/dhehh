@@ -1,7 +1,8 @@
 {{--
     The Trade Portal on phones: a tab bar at the bottom with big icons and
-    names (every page of TradeNavigation, then "Menu"). "Menu" opens a sheet
-    from the bottom with the language switch, the company list and Sign out.
+    names (the daily pages of TradeNavigation, then "Menu"). "Menu" opens a
+    sheet from the bottom with the other pages as tiles, the language switch,
+    the company list and Sign out.
     Hidden from lg up, where the top menu is. If building it fails, nothing is
     drawn and Filament's own menu button stays.
 --}}
@@ -10,8 +11,17 @@
     use App\Support\ModuleGuard;
 
     $nav = filament()->auth()->check()
-        ? ModuleGuard::run('trade-mobile-nav', fn (): array => ['tabs' => TradeNavigation::items(), 'companies' => TradeNavigation::companies()])
+        ? ModuleGuard::run('trade-mobile-nav', function (): array {
+            $items = collect(TradeNavigation::items());
+
+            return [
+                'tabs' => $items->where('tab', true)->values()->all(),
+                'more' => $items->where('tab', false)->values()->all(),
+                'companies' => TradeNavigation::companies(),
+            ];
+        })
         : null;
+    $moreActive = $nav ? collect($nav['more'])->contains('active', true) : false;
 @endphp
 
 @if ($nav)
@@ -24,7 +34,7 @@
                 </a>
             @endforeach
 
-            <button type="button" class="trade-tabbar-item" x-on:click="sheet = true" x-bind:aria-expanded="sheet">
+            <button type="button" class="trade-tabbar-item" x-on:click="sheet = true" x-bind:aria-expanded="sheet" @if ($moreActive) aria-current="page" @endif>
                 <x-filament::icon icon="heroicon-o-squares-2x2" class="trade-tabbar-icon" />
                 <span>{{ __('Menu') }}</span>
             </button>
@@ -37,6 +47,17 @@
                 <h2 id="trade-sheet-title" class="trade-sheet-title">{{ __('Menu') }}</h2>
                 <button type="button" class="trade-round-btn" x-on:click="sheet = false" aria-label="{{ __('Close') }}"><x-filament::icon icon="heroicon-m-x-mark" class="h-5 w-5" /></button>
             </div>
+
+            @if ($nav['more'] !== [])
+                <div class="trade-tiles">
+                    @foreach ($nav['more'] as $item)
+                        <a href="{{ $item['url'] }}" @class(['trade-tile', 'trade-tile-on' => $item['active']]) @if ($item['active']) aria-current="page" @endif>
+                            <span class="trade-tile-icon"><x-filament::icon :icon="$item['icon']" class="h-6 w-6" /></span>
+                            <span>{{ $item['label'] }}</span>
+                        </a>
+                    @endforeach
+                </div>
+            @endif
 
             @include('filament.trade.language-switch', ['sheet' => true])
 
