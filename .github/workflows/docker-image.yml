@@ -1,0 +1,106 @@
+name: Docker image
+
+# Builds the production Dockerfile (the one Coolify uses once the ERP app's
+# Build Pack is switched from Nixpacks to Dockerfile) and starts it, so a
+# broken image is caught on its branch and not during a live deploy.
+# Created 2026-10-22 for the PHP security update: Nixpacks' PHP was 8.4.2.
+
+on:
+  push:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'docker/**'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/docker-image.yml'
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'docker/**'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/docker-image.yml'
+  workflow_dispatch:
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: erp-image:test
+          build-args: SOURCE_COMMIT=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: PHP is the patched version and has every extension the app needs
+        run: |
+          docker run --rm --entrypoint php erp-image:test -v
+          docker run --rm --entrypoint php erp-image:test -r '
+            if (version_compare(PHP_VERSION, "8.4.27", "<")) { fwrite(STDERR, "PHP is older than 8.4.27\n"); exit(1); }
+            foreach (["bcmath","exif","gd","imagick","intl","mbstring","pcntl","pdo_mysql","sodium","zip","Zend OPcache"] as $e) {
+                if (!extension_loaded($e)) { fwrite(STDERR, "missing extension $e\n"); exit(1); }
+            }
+            echo "extensions ok\n";'
+          docker run --rm --entrypoint php erp-image:test -r 'echo json_encode(json_decode(file_get_contents("/app/public/build/deployment.json"))), "\n";'
+
+      - name: The web container serves the app from a root-owned empty volume
+        run: |
+          docker volume create erp-storage-test
+          docker run --rm -v erp-storage-test:/s alpine sh -c 'chown -R 0:0 /s && chmod 700 /s'
+          docker run -d --name erp -p 8080:80 -v erp-storage-test:/app/storage \
+            -e APP_ENV=production -e APP_DEBUG=false \
+            -e APP_KEY=base64:$(openssl rand -base64 32) \
+            -e DB_CONNECTION=sqlite -e DB_DATABASE=/tmp/test.sqlite \
+            -e CACHE_STORE=array -e SESSION_DRIVER=array -e QUEUE_CONNECTION=sync \
+            erp-image:test
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8080/health.html && break
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8080/health.html
+          echo
+          curl -fsS -o /dev/null -w 'laravel /up -> %{http_code}\n' http://127.0.0.1:8080/up
+          docker exec erp sh -c "echo '<?php echo getenv(\"APP_ENV\"), \"|\", ini_get(\"session.upload_progress.enabled\"), \"|\", PHP_VERSION;' > /app/public/probe.php"
+          probe=$(curl -fsS http://127.0.0.1:8080/probe.php)
+          echo "probe: $probe"
+          docker exec erp rm /app/public/probe.php
+          case "$probe" in production\|0\|8.4.*) ;; *) echo "FPM does not see the container environment or the ini overrides"; exit 1;; esac
+          docker exec erp gosu www-data sh -c 'touch /app/storage/logs/probe.log && echo "storage is writable by the web user"'
+          docker exec erp sh -c 'ps -eo user,args | grep -E "php-fpm|nginx" | grep -v grep'
+
+      - name: The worker role runs the queue worker as the web user
+        run: |
+          docker volume create erp-data-test
+          docker run --rm --entrypoint sh -v erp-data-test:/data \
+            -e APP_KEY=base64:$(openssl rand -base64 32) -e DB_CONNECTION=sqlite -e DB_DATABASE=/data/app.sqlite \
+            erp-image:test -c 'touch /data/app.sqlite && php artisan migrate --force --no-interaction >/dev/null && chmod -R a+rwX /data'
+          docker run -d --name erp-worker -v erp-data-test:/data \
+            -e CONTAINER_ROLE=worker -e APP_ENV=production \
+            -e APP_KEY=base64:$(openssl rand -base64 32) \
+            -e DB_CONNECTION=sqlite -e DB_DATABASE=/data/app.sqlite -e QUEUE_CONNECTION=database \
+            erp-image:test
+          sleep 10
+          docker exec erp-worker ps -eo user,args | grep "queue:work" | grep -v grep
+          docker exec erp-worker ps -eo user,args | grep "queue:work" | grep -v grep | grep -q '^www-data'
+
+      - name: Container logs
+        if: always()
+        run: |
+          docker logs erp 2>&1 | tail -40 || true
+          docker logs erp-worker 2>&1 | tail -20 || true

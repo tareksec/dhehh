@@ -540,6 +540,48 @@ get the FAQ/delivery-charge caching speed-up (that one is Redis-only; the
 storefront listing cache above works on any `CACHE_STORE`), and sessions add
 one extra database read/write per request instead of hitting Redis.
 
+## Dockerfile build and PHP security updates (added 2026-10-22)
+
+Coolify's **Nixpacks** build takes PHP from an old package snapshot: the ERP
+container ran PHP **8.4.2** (December 2024) when PHP 8.4.27 fixed two critical
+remote-code-execution bugs (CVE-2026-109618 / CVE-2026-109619, advisory
+<https://www.php.net/archive/2026.php#2026-10-21-5>). A redeploy alone cannot
+fix that, so the repository has a `Dockerfile` on the official
+`php:8.4.x-fpm` image. Check the running version any time with `php -v` in
+the app's Coolify terminal.
+
+**Switch the ERP app (owner, in Coolify)**
+
+1. Take a Contabo snapshot and an ERP backup first.
+2. ERP app -> **Configuration** -> **General** -> **Build Pack**: `Dockerfile`
+   (location `/Dockerfile`). **Ports Exposes** must be `80`. Switching is
+   what starts using the new image; merging the files to `main` changes
+   nothing by itself.
+3. **Health Check**: enable it, path `/health.html`, port `80`, so a broken
+   new container never replaces the working one.
+4. Keep everything else: environment variables, the **Post-deployment
+   Command** (`php artisan deploy:migrate`), the `laravel-scheduler`
+   **Scheduled Task** and the `/app/storage` persistent volume.
+5. **Deploy**, then check: `php -v` shows 8.4.27 or higher; open the Inbox and
+   an older uploaded file; `https://<domain>/health/version` answers.
+
+**Queue worker app (if it is a separate app):** same repository and branch,
+Build Pack `Dockerfile`, add the environment variable `CONTAINER_ROLE=worker`,
+mount the same `/app/storage` volume, no port and no health check.
+
+**Roll back:** switch the Build Pack back to Nixpacks and redeploy. Data lives
+in the database and the volume, not in the image.
+
+**Every PHP security release:** raise `ARG PHP_VERSION` at the top of the
+`Dockerfile` (the tag must exist on <https://hub.docker.com/_/php>), push, and
+redeploy. The tag is pinned on purpose so a cached old layer can never be
+reused. The GitHub workflow **Docker image** builds the image and starts it
+on every change to these files.
+
+The container runs PHP-FPM and nginx under `supervisord`; PHP settings are in
+`docker/php.ini` and `docker/php-fpm-pool.conf`, nginx in `docker/nginx.conf`
+(the same rules as `nginx.template.conf`, which only Nixpacks can render).
+
 ## Reseller Portal Domain
 
 Each company that uses the reseller module (**Company Management → Reseller module**) gets its own reseller dashboard at `https://reseller.<company-domain>/portal` (for example `reseller.zamzamint.com`), or at a fully custom domain set in **Company Management → Reseller portal domain**. The portal has its own login, separate from the shop and the admin panel (`SESSION_DOMAIN` stays empty, so the sessions never mix). No new environment variables.

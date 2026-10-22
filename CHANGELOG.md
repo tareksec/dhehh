@@ -4,6 +4,20 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Security Update
+
+### Security
+
+- **PHP update path for the critical PHP vulnerabilities of 2026-10-21 (CVE-2026-109618 and CVE-2026-109619, remote code execution without logging in).** The ERP container's PHP was 8.4.2 (December 2024): Coolify's Nixpacks builder keeps an old package snapshot, so a plain redeploy would never bring the fixed version. The repository now has a production `Dockerfile` on the official `php:8.4.27-fpm` image (PHP 8.4.27 is the fixed version). Nothing changes on the live server until the owner switches the ERP app's Build Pack in Coolify from Nixpacks to Dockerfile (steps in `docs/deployment.md`). The old Nixpacks setup is untouched and stays the rollback.
+- The image also turns off PHP's upload-progress feature (`session.upload_progress.enabled=0`), one of the ways the second vulnerability is reached, and recycles PHP-FPM workers every 500 requests.
+
+### Technical Notes
+
+- New: `Dockerfile` (stages: PHP runtime + extensions `bcmath exif gd imagick intl opcache pcntl pdo_mysql zip`, Composer, Vite assets, final image), `.dockerignore`, `docker/` (`nginx.conf` = the Nixpacks template as plain nginx, `php.ini`, `php-fpm-pool.conf` with `clear_env = no`, `supervisord.conf`, `entrypoint.sh`).
+- `entrypoint.sh` fixes the owner of the persistent `/app/storage` volume once (files from the Nixpacks image belong to another user), links `public/storage`, then starts nginx + PHP-FPM, or the queue worker when `CONTAINER_ROLE=worker` (the worker app uses the same image).
+- `PHP_VERSION` in the `Dockerfile` is pinned to `8.4.27` and must be raised on each PHP security release.
+- New workflow `.github/workflows/docker-image.yml` builds the image and checks: PHP >= 8.4.27, required extensions, nginx + FPM serving the app from a root-owned empty volume (`/health.html`, Laravel `/up`, container environment visible to PHP, storage writable by the web user), and the worker role running as `www-data`.
+
 ## [2.97.0] - 2026-10-21
 
 **Release type:** Minor Feature Update

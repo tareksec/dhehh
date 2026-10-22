@@ -2,6 +2,25 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-22 - PHP security update: production Dockerfile
+
+Reason - owner forwarded Contabo's email about the PHP RCE vulnerabilities CVE-2026-109618 / CVE-2026-109619 and asked whether the server needs an update. I checked the claims on php.net (advisory 2026-10-21; fixed in 8.4.27 / 8.5.12 / 8.3.36 / 8.2.35; PHP-FPM is affected). The owner's ERP container reports `PHP 8.4.2 (built Dec 17 2024)`, so it is vulnerable, and 25 patch releases behind.
+
+Cause - Coolify's Nixpacks builds PHP from a frozen old nixpkgs snapshot, so redeploying (even with "force rebuild") cannot reach 8.4.27.
+
+What changed (repo only; nothing is live until the owner switches the Build Pack in Coolify):
+- `Dockerfile` on `php:8.4.27-fpm-bookworm` (version pinned), multi-stage: PHP + extensions, Composer, Vite assets, final image with nginx + PHP-FPM under supervisord; `CONTAINER_ROLE=worker` runs `queue:work` instead.
+- `docker/` config (nginx = plain version of `nginx.template.conf`, `clear_env = no` so Coolify's environment reaches PHP, `session.upload_progress.enabled=0`, `pm.max_requests=500`), `.dockerignore`.
+- Entry point fixes the owner of the existing `/app/storage` volume once (the Nixpacks files belong to another user).
+- `.github/workflows/docker-image.yml` builds and starts the image (web from a root-owned empty volume, worker role) on every change to these files.
+- `docs/deployment.md`: switch / rollback / "raise PHP_VERSION on each PHP security release".
+
+Not verified: the sandbox has no Docker daemon, so the image is tested only by the GitHub workflow. Memory settings (`memory_limit=256M`, `pm.max_children=16`) are my choice, not measured on the owner's server. I did not run `php -v` on the VPS host or check Coolify's own PHP (Coolify is itself a Laravel app and needs its own update). Intentionally not done: the advisory's interim `memory_limit=-1` (can exhaust the server's RAM).
+
+Open for the owner: switch the Build Pack (steps in the docs), update Coolify, check the VPS for other PHP sites, and look for signs of compromise (the advisory says exploitation is active).
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
+
 ## 2026-10-21 - Purchases: import from CSV, and the Items layout
 
 Owner request (Bangla): add an option on Purchases so that uploading a CSV creates all the purchases, the same idea as the investor-list import; and fix the Items section, where every field was in one row. The owner shared the Stock History sheet (columns Date, Product Name, Quantity, merged date cells, mixed day/month and month/day dates).
