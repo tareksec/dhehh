@@ -22,6 +22,7 @@ use App\Http\Controllers\Admin\SupplierCsvController;
 use App\Http\Controllers\Admin\SupplierReportPdfController;
 use App\Http\Controllers\Admin\VoucherAttachmentDownloadController;
 use App\Http\Controllers\Admin\VoucherReceiptController;
+use App\Http\Controllers\BackupHealthController;
 use App\Http\Controllers\ChatOrderController;
 use App\Http\Controllers\CourierHandoverSheetController;
 use App\Http\Controllers\CourierWebhookController;
@@ -35,6 +36,7 @@ use App\Http\Controllers\QuotationPublicController;
 use App\Http\Controllers\Reseller\ResellerGuideController;
 use App\Http\Controllers\Reseller\ResellerOnlinePaymentReturnController;
 use App\Http\Controllers\Reseller\ResellerProductPhotosController;
+use App\Http\Controllers\SesWebhookController;
 use App\Http\Controllers\Storefront\AccountAuthController as StorefrontAccountAuthController;
 use App\Http\Controllers\Storefront\AccountController as StorefrontAccountController;
 use App\Http\Controllers\Storefront\AccountOrdersController as StorefrontAccountOrdersController;
@@ -543,6 +545,11 @@ Route::get('/health/version', function () {
         ]);
 })->name('health.version');
 
+// Backup freshness for an outside uptime monitor; needs BACKUP_HEALTH_TOKEN, otherwise 404.
+Route::get('/health/backups', BackupHealthController::class)
+    ->middleware('throttle:30,1')
+    ->name('health.backups');
+
 Route::get('/install', [InstallController::class, 'create'])->name('install.create');
 Route::post('/install', [InstallController::class, 'store'])->name('install.store');
 
@@ -557,6 +564,12 @@ Route::post('/webhooks/zinipay/{payment}', ZiniPayWebhookController::class)
 Route::post('/webhooks/paystation/{payment}', PayStationWebhookController::class)
     ->middleware('throttle:120,1')
     ->name('paystation.webhook');
+
+// Amazon SES delivery / bounce / complaint reports, relayed by Amazon SNS (see SesWebhookController).
+Route::post('/webhooks/ses/{setting}/{token}', SesWebhookController::class)
+    ->whereNumber('setting')
+    ->middleware('throttle:600,1')
+    ->name('webhooks.ses');
 
 Route::post('/webhooks/woocommerce/{company}', WooCommerceWebhookController::class)
     ->middleware('throttle:120,1')

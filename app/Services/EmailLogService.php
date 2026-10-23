@@ -31,6 +31,20 @@ class EmailLogService
 
     public const REASON_SEND_ERROR = 'send_error';
 
+    public const REASON_TRACKING_BROKEN = 'tracking_broken';
+
+    public const REASON_BOUNCE_PERMANENT = 'bounce_permanent';
+
+    public const REASON_BOUNCE_TRANSIENT = 'bounce_transient';
+
+    public const REASON_BOUNCE_UNDETERMINED = 'bounce_undetermined';
+
+    public const REASON_BOUNCE_SUPPRESSED = 'bounce_suppressed';
+
+    public const REASON_COMPLAINT = 'complaint';
+
+    public const REASON_SES_REJECTED = 'ses_rejected';
+
     /** @return array<string, string> reason key => what it means for the owner */
     public static function reasonLabels(): array
     {
@@ -43,6 +57,13 @@ class EmailLogService
             self::REASON_UNREACHABLE => __('The mail server could not be reached.'),
             self::REASON_INVALID_ADDRESS => __('The email address is not valid.'),
             self::REASON_SEND_ERROR => __('The mail server could not send the message.'),
+            self::REASON_TRACKING_BROKEN => __('The email tracking set in Amazon SES is missing. Open Settings → Amazon SES and turn tracking off and on again.'),
+            self::REASON_BOUNCE_PERMANENT => __('The address does not exist or refuses mail (hard bounce). Amazon SES stops sending to it.'),
+            self::REASON_BOUNCE_TRANSIENT => __('The recipient\'s mailbox could not take it for now (soft bounce): a full mailbox or a mail server that is down.'),
+            self::REASON_BOUNCE_UNDETERMINED => __('The message bounced and Amazon SES could not tell why.'),
+            self::REASON_BOUNCE_SUPPRESSED => __('Amazon SES did not try: the address is on its suppression list after an earlier bounce or complaint.'),
+            self::REASON_COMPLAINT => __('The recipient marked the message as spam.'),
+            self::REASON_SES_REJECTED => __('Amazon SES rejected the message before sending it.'),
         ];
     }
 
@@ -54,10 +75,10 @@ class EmailLogService
             : 'server:'.(string) config('mail.default');
     }
 
-    /** The mail server accepted the message. */
-    public function sent(StorefrontSetting $setting, string $kind, string $recipient, string $via): void
+    /** The mail server accepted the message; $messageId is the ID Amazon SES answered with, when there is one. */
+    public function sent(StorefrontSetting $setting, string $kind, string $recipient, string $via, ?string $messageId = null): void
     {
-        $this->write((int) $setting->company_id, $kind, $recipient, EmailLog::STATUS_SENT, null, $via, null);
+        $this->write((int) $setting->company_id, $kind, $recipient, EmailLog::STATUS_SENT, null, $via, null, $messageId);
     }
 
     /** The send failed; $message is the mail server's (or the transport's) own error text. */
@@ -78,6 +99,7 @@ class EmailLogService
         $text = mb_strtolower($message);
 
         return match (true) {
+            str_contains($text, 'configuration set') => self::REASON_TRACKING_BROKEN,
             str_contains($text, 'authenticat') || str_contains($text, 'credentials') || preg_match('/\b535\b/', $text) === 1 => self::REASON_AUTH_FAILED,
             str_contains($text, 'not verified') || str_contains($text, 'messagerejected') => self::REASON_ADDRESS_NOT_VERIFIED,
             str_contains($text, 'throttl') || str_contains($text, 'quota') || str_contains($text, 'rate exceeded') || str_contains($text, 'sending limit') => self::REASON_LIMIT_REACHED,
@@ -89,7 +111,7 @@ class EmailLogService
         };
     }
 
-    protected function write(int $companyId, string $kind, string $recipient, string $status, ?string $reason, ?string $via, ?string $detail): void
+    protected function write(int $companyId, string $kind, string $recipient, string $status, ?string $reason, ?string $via, ?string $detail, ?string $messageId = null): void
     {
         try {
             EmailLog::withoutGlobalScopes()->create([
@@ -97,6 +119,7 @@ class EmailLogService
                 'kind' => $kind,
                 'recipient' => mb_substr($recipient, 0, 254),
                 'via' => $via,
+                'message_id' => $messageId === null ? null : mb_substr($messageId, 0, 100),
                 'status' => $status,
                 'reason' => $reason,
                 'detail' => $detail === null ? null : mb_substr($detail, 0, 500),

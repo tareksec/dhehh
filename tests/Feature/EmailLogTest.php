@@ -144,7 +144,7 @@ class EmailLogTest extends TestCase
 
         Livewire::test(ListEmailLogs::class)
             ->assertSee('Email Log')
-            ->assertSee('bounces and spam-folder delivery are not tracked yet')
+            ->assertSee('bounces and spam-folder delivery are not tracked')
             ->assertSee('owner@example.test')
             ->assertSee('Owner daily digest')
             ->assertSee('buyer@example.test')
@@ -210,7 +210,38 @@ class EmailLogTest extends TestCase
             ->assertOk()
             ->assertSee('buyer@example.test')
             ->assertSee('refused the SMTP user name or password')
-            ->assertSee('bounces and spam-folder delivery are not tracked yet');
+            ->assertSee('bounces and spam-folder delivery are not tracked');
+    }
+
+    public function test_what_amazon_reported_shows_as_delivered_bounced_or_marked_as_spam_with_the_reason(): void
+    {
+        $setting = $this->site(['mail_host' => 'smtp.example.test']);
+        $logs = app(EmailLogService::class);
+        $logs->sent($setting, EmailLog::KIND_LOGIN_CODE, 'a@example.test', 'smtp:smtp.example.test', '0100-message-id');
+        $this->assertSame('0100-message-id', EmailLog::query()->sole()->message_id);
+
+        EmailLog::query()->update(['status' => EmailLog::STATUS_BOUNCED, 'reason' => EmailLogService::REASON_BOUNCE_PERMANENT, 'detail' => 'General - 550 5.1.1 user unknown']);
+        EmailLog::query()->create(['company_id' => $this->company->getKey(), 'kind' => EmailLog::KIND_LOGIN_CODE, 'recipient' => 'b@example.test', 'status' => EmailLog::STATUS_DELIVERED]);
+        EmailLog::query()->create(['company_id' => $this->company->getKey(), 'kind' => EmailLog::KIND_LOGIN_CODE, 'recipient' => 'c@example.test', 'status' => EmailLog::STATUS_COMPLAINED, 'reason' => EmailLogService::REASON_COMPLAINT]);
+
+        Livewire::test(LogTable::class, ['log' => 'email'])
+            ->assertSee('Bounced')
+            ->assertSee('does not exist or refuses mail')
+            ->assertSee('550 5.1.1 user unknown')
+            ->assertSee('Delivered')
+            ->assertSee('Marked as spam')
+            ->assertSee('marked the message as spam')
+            ->filterTable('status', EmailLog::STATUS_BOUNCED)
+            ->assertSee('a@example.test')
+            ->assertDontSee('b@example.test');
+    }
+
+    public function test_a_server_error_about_a_missing_configuration_set_points_to_the_tracking_switch(): void
+    {
+        $this->assertSame(
+            EmailLogService::REASON_TRACKING_BROKEN,
+            app(EmailLogService::class)->classify('Expected response code "250" but got code "554", with message "554 Configuration Set does not exist".'),
+        );
     }
 
     public function test_the_email_tab_is_not_shown_to_staff_without_settings_access(): void

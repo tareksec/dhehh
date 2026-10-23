@@ -28,7 +28,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Models/WhatsAppContact.php` | Cached WhatsApp address book records and profile pictures synced from the phone. |
 | `app/Models/SmsTemplate.php` | Dynamic SMS templates with variable placeholders for order updates and verification. |
 | `app/Models/SmsLog.php` | One row per SMS: queued, sent, refused by the gateway, or skipped, with the reason and the SMS parts used. Order SMS keep their text; every other SMS (login/recovery codes, reminders, broadcasts) is a `kind = other` row with phone, result and parts only, never the text. |
-| `app/Models/EmailLog.php` | One row per email: sent, failed or not sent, with the reason and the mail server's own answer (never the message text or a code). |
+| `app/Models/EmailLog.php` | One row per email: sent, failed or not sent, with the reason and the mail server's own answer (never the message text or a code); with Amazon SES tracking on, a sent row becomes delivered, bounced or complained. |
 | `app/Models/Broadcast.php` | Marketing broadcast campaign entity targeting filtered customer segments. |
 | `app/Models/BroadcastRecipient.php` | Individual recipient delivery status tracker for a broadcast campaign. |
 | `app/Models/QuickReply.php` | Pre-saved response shortcuts for common customer inquiries. |
@@ -69,6 +69,11 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Services/SmsUsageService.php` | The SMS dashboard's numbers from the SMS log: counts by result, by kind and by day, SMS parts used and the estimated cost. |
 | `app/Services/SmsBalanceService.php` | Reads the BulkSMSBD balance (`/api/getBalanceApi`, host taken from the saved gateway URL), caches it five minutes, and gives the gateway's own site as the recharge link (the gateway has no recharge, report or price API). |
 | `app/Support/SmsSegments.php` | Counts the SMS parts of a text (GSM 7-bit 160/153, Unicode and Bangla 70/67). |
+| `app/Services/Ses/SesApiService.php` | Amazon SES API: account, identities (DKIM records), suppression list; errors become plain messages. |
+| `app/Services/Ses/SesTrackingService.php` | Switches SES event tracking on/off (SNS topic, configuration set, https subscription) and builds the webhook address. |
+| `app/Services/Ses/SesEventService.php` | Applies an SES delivery/bounce/complaint event to the Email Log row of that message. |
+| `app/Services/Ses/SnsMessageValidator.php` | Verifies the signature of an Amazon SNS message. |
+| `app/Services/Ses/AwsClientFactory.php` | Builds the AWS SDK clients (SES v2, SNS, STS); tests swap it for a mock. |
 | `app/Services/EmailLogService.php` | Writes the email log and turns a mail server's error text into a plain reason (wrong login, unverified address, limit, unreachable). |
 | `app/Services/TelegramComplaintService.php` | Posts urgent customer complaints to private internal Telegram staff groups. |
 | `app/Services/FirebaseHttpV1Sender.php` | Dispatches push notifications via Firebase Cloud Messaging (FCM) HTTP v1 API. |
@@ -97,6 +102,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Filament/Pages/Logs.php` | Settings → Logs: one page, one tab per log (SMS, audit, courier status/webhooks, Meta events, deploy errors, mobile crashes), each shown only to people who may open that log. |
 | `app/Livewire/LogTable.php` | Embeds one log resource's own table inside a Logs tab (View buttons become links to the resource's page). |
 | `app/Support/LogCatalog.php` | The list of logs on the Logs page and who may see each (the log resource's `canViewAny()`). |
+| `app/Filament/Pages/AmazonSes.php` | Settings → Amazon SES: the AWS key, account state, domains with DNS records, suppression list and the bounce/complaint tracking switch (`resources/views/filament/pages/amazon-ses.blade.php`). |
 | `app/Filament/Resources/EmailLogs/EmailLogResource.php` | Email log table (a tab on Settings → Logs, no sidebar entry of its own): every email and whether it was sent, failed or not sent, and why. |
 | `app/Filament/Pages/OrderWhatsAppCard.php` | Settings → Order WhatsApp card: switch on the automatic order card, pick the official channel and approved template. |
 | `app/Filament/Pages/PushNotificationSettings.php` | Configures Firebase Cloud Messaging credentials and web push permissions. |
@@ -104,6 +110,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 ### Controllers
 | Path | What it does |
 | --- | --- |
+| `app/Http/Controllers/SesWebhookController.php` | Receives Amazon SES delivery / bounce / complaint reports relayed by SNS (signature, token and topic checked) and writes them to the Email Log. |
 | `app/Http/Controllers/MetaWebhookController.php` | Receives inbound WhatsApp Cloud and Messenger webhook events from Meta. |
 | `app/Http/Controllers/WhatsAppWebWebhookController.php` | Ingests message and sync events pushed by the local `whatsapp-bridge` service. |
 | `app/Http/Controllers/Admin/ConversationMediaController.php` | Securely serves downloaded voice notes, images, and documents to admin users. |
@@ -145,6 +152,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 - `database/migrations/*create_sms_templates_table.php`
 - `database/migrations/*create_sms_logs_table.php`
 - `database/migrations/*create_email_logs_table.php`
+- `database/migrations/*add_message_id_to_email_logs_table.php`
 
 ### Tests
 | Path | What it does |
@@ -155,6 +163,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `tests/Feature/CrmSalesAutomationTest.php` | Tests automated sales follow-up cadences and cart link generation. |
 | `tests/Feature/BroadcastTest.php` | Tests marketing campaign creation, audience filtering, and throttled sending. |
 | `tests/Feature/LeadConversionTest.php` | Tests converting leads into customer accounts and sales orders. |
+| `tests/Feature/SesApiServiceTest.php`, `SesTrackingTest.php`, `AmazonSesPageTest.php` | Amazon SES API service, tracking set-up and events (signed SNS messages), the webhook and the Amazon SES page, with Amazon faked (`tests/Feature/Concerns/FakesAws.php`). |
 | `tests/Feature/EmailLogTest.php` | Tests the email log: sent / failed / not sent rows, reason mapping, no code stored, company isolation and the page. |
 | `tests/Feature/LeadFollowUpReminderTest.php` | Tests scheduled staff notification alerts for pending lead activities. |
 | `tests/Feature/WhatsAppWebArchiveTest.php` | Tests message archiving and media downloading from the Baileys bridge. |
@@ -182,7 +191,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 - `conversation_messages`: Chat messages. Key columns: `id`, `conversation_id`, `direction`, `type`, `body`, `media_path`, `media_mime`, `external_message_id`, `delivery_status`, `sent_by`, `raw_payload`, `sent_at`, `generated_by`, `ai_confidence`, `ai_meta` (JSON), `delivery_channel`, `revoked_at`, `created_at`, `updated_at`.
 - `whatsapp_contacts`: Synced WhatsApp directory. Key columns: `id`, `company_id`, `channel_id`, `jid`, `lid`, `phone`, `name`, `push_name`, `verified_name`, `customer_id`, `lead_id`, `first_seen_at`, `last_seen_at`, `created_at`, `updated_at`.
 - `broadcasts`: Campaign broadcasts. Key columns: `id`, `company_id`, `name`, `audience_type`, `lead_status_filter`, `lead_source_filter`, `channel`, `whatsapp_channel_id`, `whatsapp_template_name`, `whatsapp_template_language`, `sms_body`, `status`, `recipients_count`, `sent_count`, `failed_count`, `created_by`, `queued_at`, `completed_at`, `messenger_channel_id`, `messenger_text`, `tested_hash`, `tested_at`, `created_at`, `updated_at`.
-- `email_logs`: One row per email the system tries to send. Key columns: `id`, `company_id`, `kind`, `recipient`, `via` (`smtp:<host>` or `server:<mailer>`), `status` (`sent`, `failed`, `skipped`), `reason`, `detail` (the mail server's own answer), `created_at`, `updated_at`. The message text is never stored.
+- `email_logs`: One row per email the system tries to send. Key columns: `id`, `company_id`, `kind`, `recipient`, `via` (`smtp:<host>` or `server:<mailer>`), `message_id` (SES message ID), `status` (`sent`, `failed`, `skipped`, `delivered`, `bounced`, `complained`), `reason`, `detail` (the mail server's own answer), `created_at`, `updated_at`. The message text is never stored.
 
 ## Rules that matter
 - **SMS counting and the dashboard**: every SMS that leaves through `StorefrontNotificationService` is counted. Order SMS and the test SMS go through `sendSmsDetailed()` and write their own row (with text); everything else goes through `sendSms()`, which adds a `kind = other` row without the text, so a login code is never stored. "Sent" means the gateway accepted it: BulkSMSBD sends no delivery reports. The cost on the dashboard is parts × the owner's `sms_price_per_sms` (stored with the other SMS keys in `notification_credentials`; blank means no cost is shown), an estimate. Gateway errors that name the request URL are passed through `StorefrontNotificationService::scrubUrls()` before they are logged or shown, because the URL carries the API key. A gateway URL template must contain `{phone}` and `{message}` (`StorefrontNotificationService::smsTemplateMissing()`): the Integrations URL box refuses to save one without them, `deliverSms()` does not call the gateway for one saved earlier (reason `bad_gateway_url`) and the dashboard warns. A URL copied from the gateway's example (`number=Receiver&message=TestSMS`) otherwise sends every SMS to a number called "Receiver" and the gateway answers 1001. The Integrations form builds that address from the API key and sender ID boxes (`App\Support\SmsGatewayUrl`: the standard BulkSMSBD address, `tidy()` of a pasted one, `preview()` for the live line). A site whose saved address cannot work (no `{phone}` / `{message}`) sends through the company's other working site (`StorefrontNotificationService::workingGateway()`, used by `sendSmsDetailed()` unless `ownGatewayOnly`, which the Integrations test button sets), and `SmsTemplateService::gatewayFor()` prefers a usable site: login codes on one site are not lost because the other site was fixed. Covered by `SmsDashboardTest` and `SmsGatewayUrlTest`.

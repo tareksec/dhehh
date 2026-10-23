@@ -38,11 +38,14 @@ class ResellerGuideController extends Controller
         $brandColor = preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $setting?->theme_color) ? $setting->theme_color : '#0F766E';
         $paymentMethods = app(ResellerOwnCourierService::class)->paymentMethods($company);
         $showFigures = (bool) ($setting?->reseller_guide_show_figures ?? false);
+        $site = $this->website($company);
+        $logos = $this->logos($company, $site);
 
         return view('reseller.guide', [
             'company' => $company,
             'companyName' => app(CompanySettingsService::class)->name($company),
-            'logoUrl' => app(CompanySettingsService::class)->logoUrl($company),
+            'logoUrl' => $logos['light'],
+            'logoDarkUrl' => $logos['dark'],
             'brandColor' => $brandColor,
             // Text on the brand colour: white on a dark brand, near-black on a light one.
             'onBrandColor' => StorefrontSiteConfigService::isDarkColor($brandColor) ? '#FFFFFF' : '#111111',
@@ -64,8 +67,35 @@ class ResellerGuideController extends Controller
             'subdomainExample' => filled($company->domain) ? 'your-shop.'.$company->domain : null,
             'applyUrl' => $panel->getRegistrationUrl(),
             'loginUrl' => $panel->getLoginUrl(),
-            'footer' => $this->footer($request, $company),
+            'footer' => $this->footer($request, $company, $site),
         ]);
+    }
+
+    /** The company's Next.js site row, null when it has none (or the lookup failed: the page still opens). */
+    protected function website(Company $company): ?StorefrontSetting
+    {
+        return ModuleGuard::run('reseller-landing.website', fn (): ?StorefrontSetting => StorefrontSetting::nextjsFor($company->getKey()), null);
+    }
+
+    /**
+     * The header logo (owner request 2026-10-23): the Next.js website's own logo pair, so the page wears the
+     * same logo as the website, the dark-background one in dark mode. The company's own logos are the
+     * fallback when the website has no logo; without a dark logo the light one shows in both modes,
+     * as it does on the website.
+     *
+     * @return array{light: ?string, dark: ?string}
+     */
+    protected function logos(Company $company, ?StorefrontSetting $site): array
+    {
+        return ModuleGuard::run('reseller-landing.logo', function () use ($company, $site): array {
+            $branding = $site ? (new StorefrontSiteConfigService($company, $site))->branding() : ['logo_url' => null, 'logo_dark_url' => null];
+            $settings = app(CompanySettingsService::class);
+
+            return [
+                'light' => $branding['logo_url'] ?: $settings->logoUrl($company),
+                'dark' => $branding['logo_dark_url'] ?: ($branding['logo_url'] ? null : $settings->darkLogoUrl(false, $company)),
+            ];
+        }, ['light' => null, 'dark' => null]);
     }
 
     /**
@@ -75,12 +105,8 @@ class ResellerGuideController extends Controller
      *
      * @return array<string, mixed>|null
      */
-    protected function footer(Request $request, Company $company): ?array
+    protected function footer(Request $request, Company $company, ?StorefrontSetting $site): ?array
     {
-        return ModuleGuard::run('reseller-landing.footer', function () use ($request, $company): ?array {
-            $site = StorefrontSetting::nextjsFor($company->getKey());
-
-            return $site ? (new StorefrontSiteConfigService($company, $site))->footer($request->getScheme()) : null;
-        }, null);
+        return ModuleGuard::run('reseller-landing.footer', fn (): ?array => $site ? (new StorefrontSiteConfigService($company, $site))->footer($request->getScheme()) : null, null);
     }
 }

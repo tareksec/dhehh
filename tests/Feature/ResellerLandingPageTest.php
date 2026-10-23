@@ -354,6 +354,72 @@ class ResellerLandingPageTest extends TestCase
         }
     }
 
+    public function test_the_header_wears_the_websites_logo_pair_so_each_background_gets_its_own_logo(): void
+    {
+        // Owner request 2026-10-23: the header logo is the Next.js website's, the white-background logo
+        // in light mode and the dark-background one in dark mode.
+        $this->company->forceFill(['logo' => 'logos/company-own.png'])->save();
+        $this->website(['logo' => 'logos/site-light.png', 'logo_dark' => 'logos/site-dark.png']);
+
+        $page = $this->get($this->portal.'/')->assertOk();
+        $html = $page->getContent();
+
+        $page->assertSee('site-light.png', false)
+            ->assertSee('site-dark.png', false)
+            ->assertSee('nb-logo--light', false)
+            ->assertSee('nb-logo--dark', false)
+            // The website's logo replaces the company's own one.
+            ->assertDontSee('company-own.png', false);
+
+        // The light logo comes first in the header, the dark one right after it.
+        $this->assertLessThan(strpos($html, 'site-dark.png'), strpos($html, 'site-light.png'));
+
+        $css = (string) file_get_contents(resource_path('css/reseller-landing.css'));
+        $this->assertStringContainsString('.dark .nb-logo--dark { display: block; }', $css);
+        $this->assertStringContainsString('.dark .nb-logo--light { display: none; }', $css);
+    }
+
+    public function test_a_website_logo_without_a_dark_version_shows_in_both_modes(): void
+    {
+        $this->website(['logo' => 'logos/site-light.png']);
+
+        $this->get($this->portal.'/')
+            ->assertOk()
+            ->assertSee('site-light.png', false)
+            ->assertDontSee('nb-logo--light', false)
+            ->assertDontSee('nb-logo--dark', false);
+    }
+
+    public function test_the_company_logo_is_the_fallback_when_the_website_has_none(): void
+    {
+        $this->company->forceFill(['logo' => 'logos/company-own.png'])->save();
+
+        // No website row at all.
+        $this->get($this->portal.'/')->assertOk()->assertSee('company-own.png', false);
+
+        // A website row without a logo.
+        $this->website();
+
+        $this->get($this->portal.'/')->assertOk()->assertSee('company-own.png', false);
+    }
+
+    public function test_the_header_has_a_dark_mode_toggle_that_remembers_the_visitors_choice(): void
+    {
+        $page = $this->get($this->portal.'/')->assertOk();
+
+        $page->assertSee('data-theme-toggle', false)
+            ->assertSee('data-light-label="'.__('Switch to light mode').'"', false)
+            ->assertSee('data-dark-label="'.__('Switch to dark mode').'"', false)
+            ->assertSee('nb-theme-icon--moon', false)
+            ->assertSee('nb-theme-icon--sun', false)
+            // The choice is read before the page paints (no flash) and written on every press.
+            ->assertSee("localStorage.getItem('resellerLandingTheme')", false)
+            ->assertSee("localStorage.setItem('resellerLandingTheme'", false);
+
+        // Without a saved choice the visitor's device setting decides, as before.
+        $page->assertSee('prefers-color-scheme: dark', false);
+    }
+
     public function test_the_standard_banner_ships_with_the_erp(): void
     {
         $this->assertFileExists(public_path('images/reseller-program-banner.png'));

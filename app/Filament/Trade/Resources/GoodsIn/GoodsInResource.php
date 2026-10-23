@@ -25,6 +25,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -63,6 +64,16 @@ class GoodsInResource extends Resource
     public static function canCreate(): bool
     {
         return static::canAccess();
+    }
+
+    /**
+     * The "New purchase" button asks this, not canCreate(); without it the
+     * Gate's module check (the ERP's purchase permissions) hid the button
+     * from a Trade Owner while the create page itself opened.
+     */
+    public static function getCreateAuthorizationResponse(): Response
+    {
+        return static::canCreate() ? Response::allow() : Response::deny();
     }
 
     public static function canEdit($record): bool

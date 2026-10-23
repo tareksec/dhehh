@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * What happened to one email (see App\Services\EmailLogService): accepted by
  * the mail server, failed with the server's own answer, or not sent (and why).
+ * With Amazon SES event tracking on, a sent row later becomes delivered, bounced
+ * or complained (App\Services\Ses\SesEventService).
  * The message text is never kept.
  */
 class EmailLog extends Model
@@ -19,6 +21,15 @@ class EmailLog extends Model
     public const STATUS_FAILED = 'failed';
 
     public const STATUS_SKIPPED = 'skipped';
+
+    /** Amazon SES reported the message reached the recipient's mail server (needs bounce tracking on). */
+    public const STATUS_DELIVERED = 'delivered';
+
+    /** Amazon SES reported that the recipient's mail server refused the message. */
+    public const STATUS_BOUNCED = 'bounced';
+
+    /** The recipient marked the message as spam. */
+    public const STATUS_COMPLAINED = 'complained';
 
     public const KIND_LOGIN_CODE = 'login_code';
 
@@ -36,5 +47,5 @@ class EmailLog extends Model
 
     public const KIND_OTHER = 'other';
 
-    protected $fillable = ['company_id', 'kind', 'recipient', 'via', 'status', 'reason', 'detail'];
+    protected $fillable = ['company_id', 'kind', 'recipient', 'via', 'message_id', 'status', 'reason', 'detail'];
 }

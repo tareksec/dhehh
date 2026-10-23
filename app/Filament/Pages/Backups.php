@@ -3,10 +3,14 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Clusters\Settings;
+use App\Models\BackupRun;
 use App\Services\AppBackupService;
+use App\Services\BackupEncryptor;
 use App\Services\BackupSettingsService;
 use App\Services\DatabaseBackupService;
 use App\Services\GoogleDriveBackupService;
+use App\Services\OffsiteBackupService;
+use App\Services\R2BackupService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
@@ -22,6 +26,8 @@ use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema as DatabaseSchema;
+use Illuminate\Support\Number;
 use Throwable;
 
 class Backups extends Page
@@ -92,7 +98,8 @@ class Backups extends Page
                                 Toggle::make('googleDriveEnabled')
                                     ->label('Enable Google Drive backup'),
                                 Toggle::make('googleDriveAutoUpload')
-                                    ->label('Auto upload daily'),
+                                    ->label(__('Auto upload to Drive'))
+                                    ->helperText(__('Sends the hourly and daily database backups and the daily full app backup to Google Drive, encrypted, and deletes older copies there.')),
                                 TextInput::make('googleDriveFolderId')
                                     ->label('Google Drive Folder ID')
                                     ->placeholder('1AbCdEfGhIjKlMnOpQrStUvWxYz...')
@@ -122,6 +129,34 @@ class Backups extends Page
                             ->state(fn (): string => $this->googleDriveConfigured() ? 'Configured' : 'Not configured')
                             ->badge()
                             ->color(fn (): string => $this->googleDriveConfigured() ? 'success' : 'warning'),
+                        TextEntry::make('offsiteEncryptionStatus')
+                            ->label(__('Off-site encryption'))
+                            ->state(fn (): string => $this->offsiteEncryptionState()[0])
+                            ->badge()
+                            ->color(fn (): string => $this->offsiteEncryptionState()[1]),
+                    ]),
+
+                Section::make(__('Cloudflare R2'))
+                    ->description(__('An off-site copy that needs no Google Workspace. Set up, test, see the stored copies and the estimated bill on the R2 Backups page.'))
+                    ->icon(Heroicon::OutlinedCloud)
+                    ->headerActions([
+                        Action::make('openR2Backups')
+                            ->label(__('Open R2 Backups'))
+                            ->icon(Heroicon::OutlinedArrowTopRightOnSquare)
+                            ->color('gray')
+                            ->url(fn (): string => R2Backups::getUrl()),
+                    ])
+                    ->schema([
+                        TextEntry::make('r2Status')
+                            ->label(__('Status'))
+                            ->state(fn (): string => $this->r2State()[0])
+                            ->badge()
+                            ->color(fn (): string => $this->r2State()[1]),
+                        TextEntry::make('r2AutoUpload')
+                            ->label(__('Auto upload'))
+                            ->state(fn (): string => app(R2BackupService::class)->autoUploadEnabled() ? __('On') : __('Off'))
+                            ->badge()
+                            ->color(fn (): string => app(R2BackupService::class)->autoUploadEnabled() ? 'success' : 'gray'),
                     ]),
 
                 Section::make('Full App Backups')
@@ -133,13 +168,13 @@ class Backups extends Page
                             ->icon(Heroicon::OutlinedArchiveBoxArrowDown)
                             ->action(fn (AppBackupService $backups) => $this->createAppBackup($backups)),
                         Action::make('uploadFullAppBackup')
-                            ->label('Upload to Drive')
+                            ->label(__('Upload off-site'))
                             ->icon(Heroicon::OutlinedCloudArrowUp)
                             ->color('gray')
-                            ->disabled(fn (): bool => ! $this->googleDriveConfigured())
-                            ->tooltip(fn (): ?string => $this->googleDriveConfigured()
+                            ->disabled(fn (): bool => ! $this->offsiteConfigured())
+                            ->tooltip(fn (): ?string => $this->offsiteConfigured()
                                 ? null
-                                : 'Configure Google Drive before uploading a backup.')
+                                : __('Set up Google Drive or Cloudflare R2 before uploading a backup.'))
                             ->action(fn (AppBackupService $backups) => $this->createAndUploadAppBackup($backups)),
                     ])
                     ->schema([
@@ -147,11 +182,12 @@ class Backups extends Page
                             'appBackupFiles',
                             fn (): array => $this->appBackupFiles(),
                             'No full app backups created yet.',
+                            showKind: true,
                         ),
                     ]),
 
                 Section::make('Database Backups')
-                    ->description('Manual database backups are stored privately. The latest 10 backups are kept automatically.')
+                    ->description(__('Database backups are stored privately. Each type (hourly, daily, before deploy, manual) keeps its own latest files, so one type never pushes out another.'))
                     ->icon(Heroicon::OutlinedCircleStack)
                     ->headerActions([
                         Action::make('createDatabaseBackup')
@@ -164,7 +200,40 @@ class Backups extends Page
                             'databaseBackupFiles',
                             fn (): array => $this->backupFiles(),
                             'No database backups created yet.',
+                            showKind: true,
                         ),
+                    ]),
+
+                Section::make(__('Backup history'))
+                    ->description(__('The last 20 backup attempts, newest first. A failed attempt shows the reason.'))
+                    ->icon(Heroicon::OutlinedClock)
+                    ->schema([
+                        RepeatableEntry::make('backupRunRows')
+                            ->hiddenLabel()
+                            ->state(fn (): array => $this->backupRuns())
+                            ->placeholder(__('No backups have been recorded yet.'))
+                            ->table([
+                                TableColumn::make(__('Status')),
+                                TableColumn::make(__('Type')),
+                                TableColumn::make('File'),
+                                TableColumn::make('Size'),
+                                TableColumn::make(__('Started')),
+                                TableColumn::make(__('Note')),
+                            ])
+                            ->schema([
+                                TextEntry::make('status_label')
+                                    ->badge()
+                                    ->color(fn (string $state): string => match ($state) {
+                                        __('Success') => 'success',
+                                        __('Failed') => 'danger',
+                                        default => 'warning',
+                                    }),
+                                TextEntry::make('type_label'),
+                                TextEntry::make('filename')->placeholder('—'),
+                                TextEntry::make('size_human')->placeholder('—'),
+                                TextEntry::make('started_label'),
+                                TextEntry::make('note')->placeholder('—'),
+                            ]),
                     ]),
             ]);
     }
@@ -196,7 +265,7 @@ class Backups extends Page
     public function createAppBackup(AppBackupService $backups): void
     {
         try {
-            $backup = $backups->create(uploadToGoogleDrive: false);
+            $backup = $backups->create(upload: false);
 
             Notification::make()
                 ->title('Full app backup created')
@@ -215,16 +284,19 @@ class Backups extends Page
     public function createAndUploadAppBackup(AppBackupService $backups): void
     {
         try {
-            $backup = $backups->create(uploadToGoogleDrive: true);
+            $backup = $backups->create(upload: true);
+            $failed = array_keys((array) ($backup['offsite']['failed'] ?? []));
 
             Notification::make()
-                ->title('Full app backup uploaded')
-                ->body("Created {$backup['name']} and uploaded it to Google Drive.")
-                ->success()
+                ->title(__('Full app backup uploaded'))
+                ->body($failed === []
+                    ? __('Created :name and sent it off-site.', ['name' => $backup['name']])
+                    : __('Created :name. It did not reach: :places', ['name' => $backup['name'], 'places' => implode(', ', $failed)]))
+                ->color($failed === [] ? 'success' : 'warning')
                 ->send();
         } catch (Throwable $exception) {
             Notification::make()
-                ->title('Google Drive backup failed')
+                ->title(__('Off-site backup failed'))
                 ->body($exception->getMessage())
                 ->danger()
                 ->send();
@@ -278,17 +350,113 @@ class Backups extends Page
 
     public function backupFiles(): array
     {
-        return app(DatabaseBackupService::class)->all();
+        return collect(app(DatabaseBackupService::class)->all())
+            ->map(fn (array $file): array => [...$file, 'kind_label' => $this->kindLabel($file['kind'])])
+            ->all();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function backupRuns(): array
+    {
+        if (! DatabaseSchema::hasTable('backup_runs')) {
+            return [];
+        }
+
+        return BackupRun::query()
+            ->latest('id')
+            ->limit(20)
+            ->get()
+            ->map(fn (BackupRun $run): array => [
+                'status_label' => match ($run->status) {
+                    BackupRun::STATUS_SUCCESS => __('Success'),
+                    BackupRun::STATUS_FAILED => __('Failed'),
+                    default => __('Running'),
+                },
+                'type_label' => match ($run->scope) {
+                    BackupRun::SCOPE_DRILL => __('Restore test').' · '.match ($run->kind) {
+                        BackupRun::DRILL_DRIVE => __('Google Drive copy'),
+                        BackupRun::DRILL_R2 => __('Cloudflare R2 copy'),
+                        default => __('This server'),
+                    },
+                    BackupRun::SCOPE_RESTORE => __('Restore').' · '.match ($run->kind) {
+                        BackupRun::RESTORED_FILES => __('Files'),
+                        BackupRun::RESTORED_BOTH => __('Database and files'),
+                        default => __('Database'),
+                    },
+                    default => $this->kindLabel($run->kind).' · '.($run->scope === BackupRun::SCOPE_APP ? __('Full app') : __('Database')),
+                },
+                'filename' => $run->filename,
+                'size_human' => $run->size_bytes === null ? null : Number::fileSize($run->size_bytes, precision: 1),
+                'started_label' => $run->started_at->format('d M Y, h:i A'),
+                'note' => $run->error ?: (collect([
+                    $run->offsite_at ? __('Sent to :places', ['places' => $this->offsiteNames($run)]) : null,
+                    $run->note,
+                    $run->sha256 ? 'SHA-256 '.substr($run->sha256, 0, 12).'…' : null,
+                ])->filter()->implode(' · ') ?: null),
+            ])
+            ->all();
+    }
+
+    protected function kindLabel(string $kind): string
+    {
+        return match ($kind) {
+            BackupRun::KIND_HOURLY => __('Hourly'),
+            BackupRun::KIND_DAILY => __('Daily'),
+            BackupRun::KIND_PREDEPLOY => __('Before deploy'),
+            BackupRun::KIND_PRERESTORE => __('Before restore'),
+            default => __('Manual'),
+        };
     }
 
     public function appBackupFiles(): array
     {
-        return app(AppBackupService::class)->all();
+        return collect(app(AppBackupService::class)->all())
+            ->map(fn (array $file): array => [...$file, 'kind_label' => $this->kindLabel($file['kind'])])
+            ->all();
+    }
+
+    /** @return array{0: string, 1: string} the label and badge colour for the encryption line */
+    public function offsiteEncryptionState(): array
+    {
+        if (app(BackupEncryptor::class)->isConfigured()) {
+            return [__('On: copies are encrypted before they are uploaded'), 'success'];
+        }
+
+        return config('backup.offsite.require_encryption', true)
+            ? [__('Off: nothing is uploaded until BACKUP_ENCRYPTION_KEY is set'), 'warning']
+            : [__('Off: copies are uploaded without encryption'), 'danger'];
     }
 
     public function googleDriveConfigured(): bool
     {
         return app(GoogleDriveBackupService::class)->isConfigured();
+    }
+
+    /** Is some off-site place switched on and complete? */
+    public function offsiteConfigured(): bool
+    {
+        return collect(app(OffsiteBackupService::class)->all())->contains(fn ($place): bool => $place->isConfigured());
+    }
+
+    /** @return array{0: string, 1: string} the label and badge colour for the R2 line */
+    public function r2State(): array
+    {
+        $r2 = app(R2BackupService::class);
+
+        return match (true) {
+            $r2->missingSettings() !== [] => [__('Not configured'), 'warning'],
+            ! $r2->isEnabled() => [__('Switched off'), 'warning'],
+            default => [__('Configured'), 'success'],
+        };
+    }
+
+    /** "Cloudflare R2, Google Drive" - the places that got this run's copy (Drive for runs from before places were recorded). */
+    protected function offsiteNames(BackupRun $run): string
+    {
+        $labels = ['r2' => 'Cloudflare R2', 'drive' => 'Google Drive'];
+        $places = $run->offsitePlaces() ?: ['drive'];
+
+        return implode(', ', array_map(fn (string $key): string => $labels[$key] ?? $key, $places));
     }
 
     public function hasStoredServiceAccountJson(): bool
@@ -299,7 +467,7 @@ class Backups extends Page
     /**
      * @param  callable(): array<int, array<string, mixed>>  $state
      */
-    protected function backupList(string $name, callable $state, string $emptyMessage): RepeatableEntry
+    protected function backupList(string $name, callable $state, string $emptyMessage, bool $showKind = false): RepeatableEntry
     {
         return RepeatableEntry::make($name)
             ->hiddenLabel()
@@ -307,6 +475,7 @@ class Backups extends Page
             ->placeholder($emptyMessage)
             ->table([
                 TableColumn::make('File'),
+                ...($showKind ? [TableColumn::make(__('Type'))] : []),
                 TableColumn::make('Size'),
                 TableColumn::make('Created'),
             ])
@@ -314,6 +483,7 @@ class Backups extends Page
                 TextEntry::make('name')
                     ->icon(Heroicon::OutlinedArrowDownTray)
                     ->url(fn (string $state): string => route('backups.download', $state)),
+                ...($showKind ? [TextEntry::make('kind_label')] : []),
                 TextEntry::make('size_human'),
                 TextEntry::make('modified_label'),
             ]);

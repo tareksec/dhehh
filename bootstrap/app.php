@@ -6,6 +6,10 @@ use App\Http\Middleware\RestrictPortalHosts;
 use App\Http\Middleware\SetResellerPortalLocale;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetCurrentCompany;
+use App\Models\BackupRun;
+use App\Services\GoogleDriveBackupService;
+use App\Services\OffsiteBackupService;
+use App\Services\R2BackupService;
 use App\Support\ModuleGuard;
 use App\Support\PanelErrorPages;
 use App\Support\StorefrontErrorPages;
@@ -17,6 +21,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
 
@@ -28,9 +33,69 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withSchedule(function (Schedule $schedule): void {
-        $schedule->command('backup:database')
-            ->dailyAt((string) config('backup.schedule_time', '02:00'))
-            ->withoutOverlapping()
+        // Backups. The overlap locks expire (an hour for a dump, which stops at
+        // 15 minutes, see backup.database.timeout, plus its upload; 2 hours for
+        // the archive). The default lock lasts 24 hours, so one run killed by a
+        // container restart would block every backup for a day. Every run is
+        // recorded in backup_runs. --auto-upload sends the copy, encrypted, to
+        // Cloudflare R2 and/or Google Drive for each place switched on with "Auto
+        // upload" (R2 Backups page, Backups page) when the kind is in backup.offsite;
+        // the upload runs in the background with the dump so a slow upload never
+        // holds up the other scheduled jobs.
+        if (config('backup.hourly.enabled', true)) {
+            // At five past, so it never starts together with the daily job.
+            $schedule->command('backup:database --kind=hourly --auto-upload')
+                ->hourlyAt(5)
+                ->withoutOverlapping(60)
+                ->runInBackground()
+                ->onOneServer();
+        }
+
+        if (config('backup.daily.full_app', true)) {
+            // Files + a database backup of the same kind. In the background
+            // because zipping the uploads can take a while.
+            $schedule->command('backup:app --kind=daily --auto-upload')
+                ->dailyAt((string) config('backup.schedule_time', '02:00'))
+                ->withoutOverlapping(120)
+                ->runInBackground()
+                ->onOneServer();
+        } else {
+            $schedule->command('backup:database --kind=daily --auto-upload')
+                ->dailyAt((string) config('backup.schedule_time', '02:00'))
+                ->withoutOverlapping(60)
+                ->runInBackground()
+                ->onOneServer();
+        }
+
+        // Restore test: every Sunday, the newest dump is loaded into a scratch database and
+        // dropped again; for each off-site place with "Auto upload" on, later the newest copy
+        // there is downloaded, decrypted and loaded the same way (proves the key and the copy).
+        // Only when BACKUP_DRILL_DB_USERNAME is set (config backup.drill).
+        if (config('backup.drill.enabled')) {
+            $drillTime = (string) config('backup.drill.schedule_time', '03:30');
+            $schedule->command('backup:drill')
+                ->weeklyOn(0, $drillTime)
+                ->withoutOverlapping(120)
+                ->runInBackground()
+                ->onOneServer();
+
+            foreach ([R2BackupService::KEY => 20, GoogleDriveBackupService::KEY => 40] as $place => $minutes) {
+                $schedule->command("backup:drill --{$place}")
+                    ->weeklyOn(0, Carbon::createFromFormat('H:i', $drillTime)->addMinutes($minutes)->format('H:i'))
+                    ->when(fn (): bool => isset(app(OffsiteBackupService::class)->autoDestinations()[$place])
+                        && (app(OffsiteBackupService::class)->shouldAutoUpload(BackupRun::SCOPE_DATABASE, BackupRun::KIND_HOURLY)
+                            || app(OffsiteBackupService::class)->shouldAutoUpload(BackupRun::SCOPE_DATABASE, BackupRun::KIND_DAILY)))
+                    ->withoutOverlapping(120)
+                    ->runInBackground()
+                    ->onOneServer();
+            }
+        }
+
+        // A backup that is overdue tells the Super Admins (once, then a reminder every 12 hours).
+        // It runs on the scheduler, so it cannot notice a stopped scheduler: /health/backups can.
+        $schedule->command('backup:check')
+            ->everyThirtyMinutes()
+            ->withoutOverlapping(10)
             ->onOneServer();
         $schedule->command('storefront:send-abandoned-cart-reminders')
             ->hourly()
@@ -85,7 +150,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // filament.admin.auth.login -- so a logged-out visit to a bookmarked
         // /admin/users threw "Route [login] not defined" instead of showing sign-in.
         $middleware->redirectGuestsTo(fn () => route('filament.admin.auth.login'));
-        $middleware->validateCsrfTokens(except: ['webhooks/couriers/*', 'webhooks/zinipay/*', 'webhooks/woocommerce/*', 'webhooks/meta', 'webhooks/whatsapp-web/*', 'webhooks/mobile-crash-reports']);
+        $middleware->validateCsrfTokens(except: ['webhooks/couriers/*', 'webhooks/zinipay/*', 'webhooks/woocommerce/*', 'webhooks/ses/*', 'webhooks/meta', 'webhooks/whatsapp-web/*', 'webhooks/mobile-crash-reports']);
         // Must run before anything else in the group: on a reseller-portal
         // host it redirects every non-portal path to the portal, and on any
         // other host it 404s the portal path -- see 13_RESELLER_PORTAL_PLAN.md

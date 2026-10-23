@@ -47,7 +47,7 @@ APP_DEBUG=false
 APP_URL=https://your-domain.com
 ASSET_URL=https://your-domain.com
 TRUSTED_PROXIES=*
-APP_VERSION=2.108.0
+APP_VERSION=2.112.0
 APP_RELEASE_TYPE=minor
 APP_RELEASE_DATE=2026-10-23
 
@@ -213,7 +213,7 @@ In production, a failing sidebar badge, widget, render hook or page does not tak
 ```bash
 cd /path/to/project
 php artisan down --retry=60
-php artisan backup:database
+php artisan backup:database --kind=predeploy
 git pull origin main
 composer install --no-dev --prefer-dist --no-interaction --no-progress
 npm ci
@@ -420,7 +420,10 @@ it drops the push ledgers and acknowledged release metadata and may roll back a
 different migration when batches contain other changes.
 
 If a release includes an incompatible or destructive migration, restore the
-matching pre-deploy database backup under a separately reviewed rollback plan.
+matching pre-deploy database backup under a separately reviewed rollback plan
+(`php artisan backup:restore <file>`: it asks for the database name, copies the
+current database first, and puts it back if the load fails; see
+`docs/backup-restore.md`).
 Rolling the single container back still does not create per-user old/new
 version retention; that requires the blue/green routing architecture described
 above.
@@ -441,7 +444,7 @@ php artisan db:wipe
 Before every production update:
 
 1. Confirm the current code version and the target `APP_VERSION`.
-2. Create a database backup with `php artisan backup:database`.
+2. Create a database backup with `php artisan backup:database --kind=predeploy`.
 3. Run only reviewed migrations with `php artisan migrate --force`.
 4. Verify admin login, dashboard totals, recent orders, purchases, payments, and stock after deploy.
 5. Update `CHANGELOG.md` and GitHub release notes for the deployed version.
@@ -464,6 +467,22 @@ lock works). This one task runs every job in `bootstrap/app.php` for every
 company: backups, courier status sync, cart and CRM reminders, and the IMS
 jobs (profit proposals, maturity reminders, owner digest, monthly statements,
 late shipments).
+
+The backups (`docs/backup-restore.md`) are among those jobs: a database backup
+every hour at five past and a full app backup every day at `BACKUP_SCHEDULE_TIME`.
+**Without this scheduled task none of them run.** Separately, the **Post-deployment
+Command** `php artisan deploy:migrate` takes a `predeploy` database backup right
+before migrations that are pending (nothing pending, nothing backed up); if that
+backup fails the Super Admins are told and the migrations still run. With Cloudflare R2
+(Settings → R2 Backups) and/or Google Drive switched on with **Auto upload**, each backup is
+also sent, encrypted, to those places (`BACKUP_ENCRYPTION_KEY` must be set, and kept safe
+outside the server).
+The scheduler also runs `backup:check` every 30 minutes (alerts when a backup is
+overdue) and, when `BACKUP_DRILL_DB_USERNAME` is set, the Sunday restore test.
+**Because all of that depends on this one Coolify task, add an outside uptime monitor
+on `/health/backups?token=…` (`BACKUP_HEALTH_TOKEN`)**: it is the only thing that notices
+the scheduler stopping (`docs/backup-restore.md`, *Backup health*). The same document has
+the restore command and the steps for rebuilding after the server is lost.
 
 Starting the scheduler after a long stop does not message old customers at
 once: abandoned carts older than 3 days (on top of the company's delay) get no

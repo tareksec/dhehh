@@ -65,8 +65,11 @@ class TradePortalHome
     }
 
     /**
-     * Purchases that carry an LC number and are not received or cancelled yet,
-     * newest LC first, each with how far its papers have come.
+     * Purchases that carry an LC number and are still open, newest LC first,
+     * each with how far its papers have come. With an LC file the LC is open
+     * until its stage is "Cleared" (as the reports count it), even when the
+     * goods are already in; without one, until the goods are received.
+     * Cancelled purchases never count.
      *
      * @return array{count: int, files: list<array{lc: string, supplier: string|null, date: string|null, stage: string}>}|null
      */
@@ -76,7 +79,10 @@ class TradePortalHome
             $query = Purchase::query()
                 ->whereNotNull('lc_number')
                 ->where('lc_number', '!=', '')
-                ->whereNotIn('status', ['received', 'cancelled']);
+                ->where('status', '!=', 'cancelled')
+                ->where(fn ($query) => $query
+                    ->whereHas('lcFile', fn ($file) => $file->where('stage', '!=', 'cleared'))
+                    ->orWhere(fn ($query) => $query->whereDoesntHave('lcFile')->where('status', '!=', 'received')));
 
             return [
                 'count' => (int) (clone $query)->count(),

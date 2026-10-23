@@ -125,8 +125,12 @@ class LandedCost extends Page
                 ->icon('heroicon-o-check-badge')
                 ->color('success')
                 ->requiresConfirmation()
-                ->modalDescription(fn (): string => __('Each item\'s buying price becomes its landed cost per unit (:per_unit for one unit). The stock value and the profit then use it. You can apply again after adding costs.', [
-                    'per_unit' => ImsNumbers::money(app(LandedCostService::class)->worksheet($this->file())['per_unit']),
+                // Each item gets its own share, not the blended cost per unit, so the window names each new price.
+                ->modalDescription(fn (): string => __('Each item\'s buying price becomes its own landed cost per unit: :items. The stock value and the profit then use it. You can apply again after adding costs.', [
+                    'items' => collect(app(LandedCostService::class)->worksheet($this->file())['items'])
+                        ->filter(fn (array $item): bool => $item['landed_unit'] > 0)
+                        ->map(fn (array $item): string => $item['product'].' '.ImsNumbers::money($item['landed_unit']))
+                        ->implode('; '),
                 ]))
                 ->action(function (Action $action): void {
                     $changed = 0;
