@@ -7,7 +7,9 @@ use App\Models\DeploymentError;
 use App\Models\User;
 use App\Services\AppBackupService;
 use App\Services\BackupRunRecorder;
+use App\Services\BackupSettingsService;
 use App\Services\DatabaseBackupService;
+use App\Services\GoogleDriveBackupService;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
@@ -99,9 +101,9 @@ class BackupRunsTest extends TestCase
 
         $this->assertMatchesRegularExpression('/^database-backup-\d{8}-\d{6}-backup-test-hourly\.sqlite$/', $backup['name']);
         $this->assertSame('hourly', $backup['kind']);
-        $this->assertSame('hourly', DatabaseBackupService::kindOf($backup['name']));
-        $this->assertSame('manual', DatabaseBackupService::kindOf('database-backup-20260613-120000-testing.sqlite'));
-        $this->assertSame('daily', DatabaseBackupService::kindOf('database-backup-20261023-020000-mysql-daily.sql.gz'));
+        $this->assertSame('hourly', BackupRun::kindOfFile($backup['name']));
+        $this->assertSame('manual', BackupRun::kindOfFile('database-backup-20260613-120000-testing.sqlite'));
+        $this->assertSame('daily', BackupRun::kindOfFile('database-backup-20261023-020000-mysql-daily.sql.gz'));
     }
 
     public function test_unknown_backup_kind_is_refused(): void
@@ -439,18 +441,49 @@ class BackupRunsTest extends TestCase
         );
     }
 
-    public function test_daily_backup_is_scheduled_with_an_overlap_lock_that_expires(): void
+    private function scheduledEvent(string $needle): ?object
+    {
+        return collect(app(Schedule::class)->events())
+            ->first(fn ($event): bool => str_contains((string) $event->command, $needle));
+    }
+
+    public function test_hourly_database_and_daily_full_app_backups_are_scheduled_with_expiring_locks(): void
     {
         // The schedule is defined when the console kernel boots.
+        $this->artisan('schedule:list')->expectsOutputToContain('backup:app')->assertSuccessful();
+
+        $hourly = $this->scheduledEvent('backup:database --kind=hourly');
+        $daily = $this->scheduledEvent('backup:app --kind=daily --auto-upload');
+
+        $this->assertNotNull($hourly, 'the hourly database backup must be on the scheduler');
+        $this->assertSame('5 * * * *', $hourly->expression);
+        $this->assertTrue($hourly->withoutOverlapping);
+        $this->assertSame(30, $hourly->expiresAt);
+        $this->assertTrue($hourly->onOneServer);
+
+        $this->assertNotNull($daily, 'the daily full app backup must be on the scheduler');
+        $this->assertSame('0 2 * * *', $daily->expression);
+        $this->assertTrue($daily->withoutOverlapping);
+        $this->assertSame(120, $daily->expiresAt);
+        $this->assertTrue($daily->runInBackground);
+        $this->assertTrue($daily->onOneServer);
+
+        // The daily database dump comes from the full backup, not from a second job.
+        $this->assertNull($this->scheduledEvent('backup:database --kind=daily'));
+    }
+
+    public function test_the_schedules_can_be_switched_off_or_back_to_a_database_only_daily_backup(): void
+    {
+        Config::set('backup.hourly.enabled', false);
+        Config::set('backup.daily.full_app', false);
+
         $this->artisan('schedule:list')->expectsOutputToContain('backup:database')->assertSuccessful();
 
-        $event = collect(app(Schedule::class)->events())
-            ->first(fn ($event): bool => str_contains((string) $event->command, 'backup:database'));
-
-        $this->assertNotNull($event);
-        $this->assertStringContainsString('--kind=daily', $event->command);
-        $this->assertTrue($event->withoutOverlapping);
-        $this->assertSame(30, $event->expiresAt);
+        $this->assertNull($this->scheduledEvent('--kind=hourly'));
+        $this->assertNull($this->scheduledEvent('backup:app'));
+        $daily = $this->scheduledEvent('backup:database --kind=daily');
+        $this->assertNotNull($daily);
+        $this->assertSame(30, $daily->expiresAt);
     }
 
     public function test_production_image_installs_the_mysql_client_that_provides_mysqldump(): void
@@ -488,5 +521,167 @@ class BackupRunsTest extends TestCase
             ->assertSee('Failed')
             ->assertSee('app-backup-20261023-020000.zip')
             ->assertSee('SHA-256 abababababab');
+    }
+
+    private function appBackupSetup(): void
+    {
+        Storage::fake('local');
+        $this->sqliteConnection('app_backup_runs');
+        Config::set('backup.app.database_connection', 'app_backup_runs');
+        Config::set('backup.app.include_paths', []);
+    }
+
+    /** A Google Drive stand-in that records the uploads it is asked for. */
+    private function fakeDrive(): GoogleDriveBackupService
+    {
+        $drive = new class extends GoogleDriveBackupService
+        {
+            /** @var array<int, string> */
+            public array $uploads = [];
+
+            public function upload(string $absolutePath, ?string $filename = null): array
+            {
+                $this->uploads[] = $filename ?? basename($absolutePath);
+
+                return ['id' => 'drive-file-id'];
+            }
+        };
+        $this->app->instance(GoogleDriveBackupService::class, $drive);
+
+        return $drive;
+    }
+
+    public function test_app_backup_name_carries_its_kind_and_no_partial_file_is_left(): void
+    {
+        $this->appBackupSetup();
+
+        $backup = app(AppBackupService::class)->create(kind: BackupRun::KIND_DAILY);
+
+        $this->assertMatchesRegularExpression('/^app-backup-\d{8}-\d{6}-daily\.zip$/', $backup['name']);
+        $this->assertSame('daily', $backup['kind']);
+        $this->assertSame([$backup['relative_path']], Storage::disk('local')->files('backups/app'));
+    }
+
+    public function test_app_archives_are_pruned_per_kind_so_a_manual_backup_never_pushes_out_a_daily_one(): void
+    {
+        Storage::fake('local');
+        Config::set('backup.app.keep', ['hourly' => 10, 'daily' => 2, 'predeploy' => 1, 'manual' => 1]);
+        $disk = Storage::disk('local');
+
+        foreach ([['daily', 1], ['daily', 2], ['daily', 3], ['daily', 4], ['manual', 5], ['manual', 6], ['manual', 7]] as [$kind, $i]) {
+            $path = "backups/app/app-backup-20261023-10{$i}000-{$kind}.zip";
+            $disk->put($path, "{$kind} {$i}");
+            touch($disk->path($path), now()->subMinutes(100 - $i)->timestamp);
+        }
+
+        app(AppBackupService::class)->prune();
+
+        $this->assertEqualsCanonicalizing([
+            'app-backup-20261023-103000-daily.zip',
+            'app-backup-20261023-104000-daily.zip',
+            'app-backup-20261023-107000-manual.zip',
+        ], collect($disk->files('backups/app'))->map(fn (string $path): string => basename($path))->all());
+    }
+
+    public function test_only_stale_partial_files_are_removed(): void
+    {
+        Storage::fake('local');
+        $disk = Storage::disk('local');
+        $stale = DatabaseBackupService::DIRECTORY.'/database-backup-20261023-010000-mysql-daily.sql.gz.part';
+        $fresh = DatabaseBackupService::DIRECTORY.'/database-backup-20261023-020000-mysql-daily.sql.gz.part';
+        $disk->put($stale, 'x');
+        $disk->put($fresh, 'x');
+        touch($disk->path($stale), now()->subHours(7)->timestamp);
+        touch($disk->path($fresh), now()->subMinutes(10)->timestamp);
+
+        app(DatabaseBackupService::class)->prune();
+
+        $disk->assertMissing($stale);
+        $disk->assertExists($fresh);
+    }
+
+    public function test_the_database_dump_survives_when_the_archive_step_fails(): void
+    {
+        $this->appBackupSetup();
+        Config::set('backup.app.include_paths', ['app']);
+        $service = new class(app(DatabaseBackupService::class), app(GoogleDriveBackupService::class), app(BackupRunRecorder::class)) extends AppBackupService
+        {
+            protected function addPath(\ZipArchive $zip, string $absolutePath, string $relativePath): void
+            {
+                throw new RuntimeException('disk full');
+            }
+        };
+
+        try {
+            $service->create(kind: BackupRun::KIND_DAILY);
+            $this->fail('The archive failure should have been thrown.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('disk full', $exception->getMessage());
+        }
+
+        $this->assertCount(1, app(DatabaseBackupService::class)->all());
+        $this->assertSame([], Storage::disk('local')->files('backups/app'));
+        $this->assertEqualsCanonicalizing(
+            ['app:daily:failed', 'database:daily:success'],
+            BackupRun::query()->get()->map(fn (BackupRun $run): string => "{$run->scope}:{$run->kind}:{$run->status}")->all(),
+        );
+    }
+
+    public function test_backup_app_command_validates_the_kind(): void
+    {
+        $this->artisan('backup:app', ['--kind' => 'weekly'])
+            ->expectsOutputToContain('--kind must be one of')
+            ->assertExitCode(1);
+    }
+
+    public function test_auto_upload_follows_the_switches_on_the_backups_page(): void
+    {
+        $this->appBackupSetup();
+        $drive = $this->fakeDrive();
+        $settings = app(BackupSettingsService::class);
+        $save = fn (bool $enabled, bool $auto) => $settings->saveGoogleDrive([
+            'enabled' => $enabled, 'auto_upload' => $auto, 'folder_id' => 'folder', 'service_account_path' => '', 'service_account_json' => '',
+        ]);
+
+        // Nothing asked for: no upload.
+        $this->artisan('backup:app', ['--kind' => 'daily'])->assertExitCode(0);
+        // --auto-upload with the switch off, or with Drive itself off: no upload.
+        $save(true, false);
+        $this->artisan('backup:app', ['--kind' => 'daily', '--auto-upload' => true])->assertExitCode(0);
+        $save(false, true);
+        $this->artisan('backup:app', ['--kind' => 'daily', '--auto-upload' => true])->assertExitCode(0);
+        $this->assertSame([], $drive->uploads);
+
+        // --auto-upload with both on: uploaded. --upload always uploads.
+        $save(true, true);
+        $this->artisan('backup:app', ['--kind' => 'daily', '--auto-upload' => true])
+            ->expectsOutputToContain('uploaded to Google Drive')
+            ->assertExitCode(0);
+        $this->assertCount(1, $drive->uploads);
+        $this->assertMatchesRegularExpression('/^app-backup-.*-daily\.zip$/', $drive->uploads[0]);
+
+        $save(false, false);
+        $this->artisan('backup:app', ['--upload' => true])->assertExitCode(0);
+        $this->assertCount(2, $drive->uploads);
+    }
+
+    public function test_auto_upload_switched_on_without_a_drive_folder_fails_the_run_loudly(): void
+    {
+        $this->appBackupSetup();
+        app(BackupSettingsService::class)->saveGoogleDrive([
+            'enabled' => true, 'auto_upload' => true, 'folder_id' => '', 'service_account_path' => '', 'service_account_json' => '',
+        ]);
+
+        $this->artisan('backup:app', ['--kind' => 'daily', '--auto-upload' => true])
+            ->expectsOutputToContain('Google Drive backup folder ID is required')
+            ->assertExitCode(1);
+
+        $run = BackupRun::query()->where('scope', 'app')->sole();
+
+        $this->assertSame('failed', $run->status);
+        $this->assertStringContainsString('folder ID is required', $run->error);
+        // The local archive is still there, and the failure was reported once.
+        $this->assertCount(1, Storage::disk('local')->files('backups/app'));
+        $this->assertSame(1, DeploymentError::query()->where('source', 'backup:app:daily')->count());
     }
 }

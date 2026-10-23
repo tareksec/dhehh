@@ -1,5 +1,5 @@
 # Core Platform
-> Last checked: 2026-10-23, advanced backups Phase 1 on `ccr-4c1eb24d-2dzxxt` (backup kinds, `backup_runs`, streamed gzip MySQL dump)
+> Last checked: 2026-10-23, advanced backups Phase 2 on `ccr-4c1eb24d-2dzxxt` (hourly + daily schedules, `backup:app`, auto upload, backup before migrating)
 
 ## What it does
 The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and four distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated backups to Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
@@ -49,8 +49,9 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Services/BackupSettingsService.php` | Google Drive backup settings (admin-configurable, service account JSON encrypted). |
 | `app/Services/DatabaseBackupService.php` | Database backups by kind: SQLite copy or MySQL `mysqldump` streamed through gzip (`.sql.gz`, atomic rename, SHA-256), per-kind `prune()`, `verifyRestore()` for SQLite and `.sql.gz`. |
 | `app/Services/BackupRunRecorder.php` | Wraps a backup in a `backup_runs` row; recording errors never stop a backup; first failure of a scheduled kind alerts Super Admins via `DeploymentErrorReporter`. |
-| `app/Services/GoogleDriveBackupService.php` | Uploads compressed database backups to Google Drive storage. |
-| `app/Services/AppBackupService.php` | Full app zip (files + a database backup of the same kind), count-based cleanup, optional Google Drive upload; records an app run. |
+| `app/Services/GoogleDriveBackupService.php` | Google Drive service-account uploads: `upload()` (backup zips) and `uploadStream()` (any file into a named folder) both use the streamed resumable upload. |
+| `app/Services/AppBackupService.php` | Full app zip `app-backup-{date}-{kind}.zip` (files + a database backup of the same kind, made first), written to `.part` then renamed, per-kind `prune()`, optional Google Drive upload; records an app run. |
+| `app/Services/BackupFiles.php` | Deletes stale `.part` leftovers of killed backups from a backup folder. |
 | `app/Services/AppReleaseStateService.php` | Tracks release versions, deployment tags, and migration readiness. |
 | `app/Services/AppUpdateService.php` | Manages application update checks, Git pulls, and cache refreshing. |
 | `app/Services/AppUpdatePushService.php` | Dispatches deployment update notifications to administrators. |
@@ -129,14 +130,15 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 ### Console Commands & Schedules
 | Path | What it does |
 | --- | --- |
-| `app/Console/Commands/DeployMigrate.php` | Runs pending database migrations safely during automated deployment pipelines. |
+| `app/Console/Commands/DeployMigrate.php` | Runs pending migrations on deploy (never fails the deploy); takes a `predeploy` database backup first when migrations are pending, a failed backup is reported and does not block. |
+| `app/Console/Commands/BackupApp.php` | `backup:app --kind= --upload --auto-upload`: full app backup; `--auto-upload` uploads only when Drive and "Auto upload daily" are both on. |
 | `app/Console/Commands/BackupDatabase.php` | `backup:database --connection= --kind=hourly|daily|predeploy|manual`; exit code 1 on failure. |
 | `app/Console/Commands/VerifyDatabaseBackup.php` | `backup:verify`: SQLite restore drill in a disposable file, or completeness + checksum check of a `.sql.gz` dump. |
 | `app/Console/Commands/CutRelease.php` | Automates release tagging, manifest updates, and git commit creation. |
 | `app/Console/Commands/NotifyLatestRelease.php` | Alerts super admins of newly installed application updates. |
 | `app/Console/Commands/MigrateCompanyData.php` | CLI tool to migrate data records across companies. |
 | `app/Console/Commands/MigrateCompanyStorage.php` | CLI tool to transfer physical media between storage disks. |
-| `bootstrap/app.php` | Defines scheduled cron jobs (daily `backup:database --kind=daily` with a 30-minute overlap lock, release notifications, cleanups). |
+| `bootstrap/app.php` | Defines scheduled cron jobs (hourly `backup:database --kind=hourly` at :05, daily `backup:app --kind=daily --auto-upload` in the background, expiring overlap locks, release notifications, cleanups). |
 
 ### Notifications & Observers
 | Path | What it does |
@@ -160,7 +162,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | --- | --- |
 | `config/app.php` | Core Laravel settings, default timezone, application name, error isolation flags. |
 | `config/auth.php` | Authentication guards and password reset providers for admin, customer, and portal users. |
-| `config/backup.php` | Daily schedule time, per-kind retention (`database.keep`), `mysqldump` binary and timeout, app-backup paths, Google Drive. |
+| `config/backup.php` | Daily schedule time, `hourly.enabled` / `daily.full_app` switches, per-kind retention (`database.keep`, `app.keep`), `mysqldump` binary and timeout, app-backup paths, Google Drive. |
 | `config/filesystems.php` | Disks definition (`local`, `public`, `company_media`, `s3`). |
 | `config/login_protection.php` | Rates, budgets, device cookie tokens, and lockout thresholds for `LoginGate`. |
 | `config/release.php` | Current release version metadata and update check endpoints. |
@@ -188,11 +190,11 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `tests/Feature/CoolifyDeploymentServiceTest.php` | Tests webhook payloads and signature verification for Coolify deployments. |
 | `tests/Feature/CoolifyDeploymentSettingsTest.php` | Tests the Coolify deployment configuration page. |
 | `tests/Feature/DeploymentErrorReporterTest.php` | Tests deduplication and logging of deployment errors. |
-| `tests/Feature/DeployMigrateCommandTest.php` | Tests safe execution of migrations during automated deployment. |
+| `tests/Feature/DeployMigrateCommandTest.php` | Tests safe execution of migrations during automated deployment, including the `predeploy` backup (taken when pending, never blocks). |
 | `tests/Feature/LoginGateTest.php` | Verifies pre-hash rate limiting, device cookies, and lockout rules. |
 | `tests/Feature/ModuleGuardTest.php` | Asserts that caught component exceptions return fallbacks and avoid 500 status codes. |
 | `tests/Feature/BackupSystemTest.php` | Tests database dump generation and cloud upload workflows. |
-| `tests/Feature/BackupRunsTest.php` | Tests backup kinds and per-kind pruning, `backup_runs` recording and failure alerts, the streamed gzip MySQL dump (fake dumper + a real process), `.sql.gz` verification, the commands, the schedule lock and the history on the Backups page. |
+| `tests/Feature/BackupRunsTest.php` | Tests backup kinds and per-kind pruning (database and app archives), `backup_runs` recording and failure alerts, the streamed gzip MySQL dump (fake dumper + a real process), `.sql.gz` verification, `backup:database` / `backup:app` / `backup:verify`, auto-upload switches, the hourly and daily schedules and their switches, and the history on the Backups page. |
 | `tests/Feature/ReleaseNotesTest.php` | Tests release notes rendering and version display. |
 | `tests/Feature/ReleaseCutterTest.php` | Tests semantic release creation script. |
 | `tests/Feature/ReleaseNotificationTest.php` | Tests notification dispatching when updates complete. |
@@ -230,7 +232,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 - **Login Gate Protection**: All authentication attempts must be evaluated by `LoginGate::begin` prior to invoking bcrypt hashes to thwart DDoS credential stuffing. Enforced by `app/Services/LoginGate.php` and `app/Filament/Auth/AdminLogin.php`.
 - **Software License Key Format**: License keys must match the regex `^ZZERP-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$`. Enforced by `app/Services/LicenseActivationService.php`.
 - **Documentation Discrepancy (Filament Version)**: Legacy documents (e.g. `PROJECT_GUIDE.md`) refer to Filament 4; the actual codebase runs Filament 5 (`app/Providers/Filament/AdminPanelProvider.php`).
-- **Backups**: a database backup's kind is the last part of its file name; each kind is pruned on its own (`config/backup.php` `database.keep`), and a file with no kind counts as `manual`. A backup is only listed once complete (streamed to `.part`, renamed after mysqldump's "Dump completed" line). Recording in `backup_runs` must never stop a backup (the table may not exist yet before `migrate`). Enforced by `DatabaseBackupService` and `BackupRunRecorder`.
+- **Backups**: a backup's kind is the last part of its file name (`BackupRun::kindOfFile()`); each kind is pruned on its own (`config/backup.php` `database.keep` / `app.keep`), and a file with no kind counts as `manual`. The daily database dump is the one inside the daily full app backup. A backup is only listed once complete (streamed to `.part`, renamed after mysqldump's "Dump completed" line). Recording in `backup_runs` must never stop a backup (the table may not exist yet before `migrate`). Enforced by `DatabaseBackupService` and `BackupRunRecorder`.
 
 ## Links to other modules
 - **catalog-inventory.md**: All catalog and inventory models rely on `BelongsToCompany` and `CompanyScope`.

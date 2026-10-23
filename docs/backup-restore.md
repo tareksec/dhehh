@@ -7,7 +7,7 @@ Business Dashboard includes database backups, full app backups, backup downloads
 | Type | Contents | Location |
 |---|---|---|
 | Database backup | MySQL/MariaDB dump (`.sql.gz`, compressed) or SQLite file (`.sqlite`) | `storage/app/private/backups/database` |
-| Full app backup | App files plus database backup | `storage/app/private/backups/app` |
+| Full app backup | App files plus a database backup of the same kind (`app-backup-20261023-020000-daily.zip`) | `storage/app/private/backups/app` |
 | Google Drive backup | Uploaded full app backup | Configured Drive folder |
 
 Every backup runs under one **kind**, which is the last part of the file name
@@ -15,13 +15,29 @@ Every backup runs under one **kind**, which is the last part of the file name
 
 | Kind | Made by | Kept (default) |
 |---|---|---|
-| `hourly` | the hourly schedule (not switched on yet) | latest 48 |
-| `daily` | the daily schedule at `BACKUP_SCHEDULE_TIME` | latest 30 |
-| `predeploy` | `php artisan backup:database --kind=predeploy`, before an update | latest 10 |
-| `manual` | the **Create Backup** button, or `backup:database` with no kind. Files from before kinds existed count as `manual` | latest 10 |
+| `hourly` | the hourly schedule: a database backup at five past every hour | latest 48 |
+| `daily` | the daily schedule at `BACKUP_SCHEDULE_TIME`: a full app backup, which holds that day's database backup | database latest 30; full app archives latest 10 |
+| `predeploy` | `deploy:migrate` right before migrations that are pending, or `php artisan backup:database --kind=predeploy` by hand | database latest 10; archives latest 3 |
+| `manual` | the **Create Backup** / **Create App Backup** buttons, or the commands with no kind. Files from before kinds existed count as `manual` | latest 10 |
 
 Each kind is pruned on its own, so a stream of hourly files can never push out
-a daily or pre-deploy backup.
+a daily or pre-deploy backup, and a manual backup never pushes out a daily one.
+
+## Schedules
+
+All of these run only while the scheduler runs (`php artisan schedule:run` every
+minute, see `docs/deployment.md`):
+
+| When | What |
+|---|---|
+| every hour at :05 | `backup:database --kind=hourly` (switch off with `BACKUP_HOURLY_ENABLED=false`) |
+| every day at `BACKUP_SCHEDULE_TIME` (02:00) | `backup:app --kind=daily --auto-upload`: files + that day's database backup in one zip. With `BACKUP_DAILY_FULL_APP=false` it is `backup:database --kind=daily` (database only) instead |
+
+Each job has an overlap lock that expires (30 minutes, 2 hours for the full
+backup), and every run is recorded under **Backup history**. Before migrations
+that are pending, `deploy:migrate` takes a `predeploy` database backup; if that
+backup fails the failure is reported to the Super Admins and the migrations
+**still run** (the deploy command never stops the app from starting).
 
 ## Create Database Backup
 
@@ -76,20 +92,38 @@ Use the Backups page in the admin panel:
 /admin/settings/backups
 ```
 
-Full app backups require PHP Zip extension.
+Or from the CLI:
+
+```bash
+php artisan backup:app                       # manual
+php artisan backup:app --kind=predeploy
+php artisan backup:app --kind=daily --upload # also upload to Google Drive
+```
+
+Full app backups require PHP Zip extension. The archive is written to a `.part`
+file and renamed when complete; the database backup is made first, so it exists
+even if the archive step fails (for example a full disk). The archive holds the
+folders listed in `config/backup.php` (`app.include_paths`), **including `.env`
+with every secret, unencrypted** - treat the archive, and the Drive folder it
+is uploaded to, as secret (encryption is a later step of the backup plan).
 
 ## Retention
 
 Configure retention in `.env`:
 
 ```env
+# database backups
 BACKUP_KEEP_HOURLY=48
 BACKUP_KEEP_DAILY=30
 BACKUP_KEEP_PREDEPLOY=10
-BACKUP_RETAIN_FILES=10     # manual backups, and full app backups of every kind
+# full app archives (they hold the uploaded files, so they are the big ones)
+BACKUP_APP_KEEP_DAILY=10
+BACKUP_APP_KEEP_PREDEPLOY=3
+# manual backups, database and full app
+BACKUP_RETAIN_FILES=10
 ```
 
-Old backups beyond the retention count of their kind are cleaned automatically by the backup services. At least one file of each kind is always kept.
+Old backups beyond the retention count of their kind are cleaned automatically by the backup services, and so are half-written `.part` files older than 6 hours. At least one file of each kind is always kept. Only the copies on this server are pruned; files already uploaded to Google Drive are not deleted yet.
 
 Other settings: `BACKUP_MYSQLDUMP_BINARY` (default `mysqldump`) and `BACKUP_DUMP_TIMEOUT` (seconds, default 900).
 
@@ -106,6 +140,15 @@ GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON=
 ```
 
 Use either service account JSON content or a path to a service account JSON file.
+
+The upload is streamed, so a large archive is never loaded into memory. With
+**Enable Google Drive backup** and **Auto upload daily** both on, the daily full
+app backup is uploaded after it is made; if Drive is not set up properly, or the
+upload fails, the run is recorded as failed with the reason and reported to the
+Super Admins (the archive stays on the server). Use a folder in a **Shared
+Drive**: a service account has no storage quota of its own, and Google may refuse
+uploads into a normal "My Drive" folder with "Service Accounts do not have
+storage quota".
 
 ## Download Permissions
 

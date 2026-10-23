@@ -150,6 +150,7 @@ class Backups extends Page
                             'appBackupFiles',
                             fn (): array => $this->appBackupFiles(),
                             'No full app backups created yet.',
+                            showKind: true,
                         ),
                     ]),
 
@@ -357,7 +358,9 @@ class Backups extends Page
 
     public function appBackupFiles(): array
     {
-        return app(AppBackupService::class)->all();
+        return collect(app(AppBackupService::class)->all())
+            ->map(fn (array $file): array => [...$file, 'kind_label' => $this->kindLabel($file['kind'])])
+            ->all();
     }
 
     public function googleDriveConfigured(): bool

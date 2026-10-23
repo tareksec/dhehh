@@ -2,6 +2,28 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - Advanced backups, Phase 2: hourly + daily schedules, auto upload, backup before migrating
+
+Reason - owner (Bangla) "ওকে পরবর্তী কাজ কর" after Phase 1. The owner still has **not** answered the six open questions or the pre-deploy question from the Phase 1 report, so the choices below are my defaults, each easy to change; please confirm or correct.
+
+What changed:
+- **Hourly:** `backup:database --kind=hourly` at five past every hour (off with `BACKUP_HOURLY_ENABLED=false`). A new file each hour, kept 48 (my reading of "প্রতি ঘণ্টায় আপডেট"; an overwritten single file would lose the good copy if the data went bad).
+- **Daily:** `backup:app --kind=daily --auto-upload` at `BACKUP_SCHEDULE_TIME` (02:00), in the background. The zip holds that day's database backup, so the separate daily database-only job was dropped (two daily dumps would have halved the 30-day history). `BACKUP_DAILY_FULL_APP=false` goes back to the database-only daily job.
+- **"Auto upload daily" works** (it read nothing before): uploads when Drive is enabled and the switch is on; if Drive is not set up the run fails loudly and alerts, the zip stays on the server. `GoogleDriveBackupService::upload()` is now the streamed resumable upload (the old one read the whole zip into memory).
+- **Before migrating:** `deploy:migrate` takes a `predeploy` database backup when migrations are pending. **Decision taken for the owner:** a failed backup is reported to the Super Admins and the migrations still run - the command's rule is that it never stops the app from starting. If the owner wants a failed backup to block the migration, that is a small change here (`DeployMigrate::backupBeforeMigrating`). Until the image has `mysqldump`, every deploy with pending migrations will report this backup as failed - that alert is correct, it is the reminder that backups are not working yet.
+- Full app archives: kind in the name, `.part` + rename, per-kind retention (`BACKUP_APP_KEEP_DAILY` 10, `BACKUP_APP_KEEP_PREDEPLOY` 3, manual `BACKUP_RETAIN_FILES` 10 - my numbers, chosen to keep today's disk use), the database dump is made first, stale `.part` files are cleaned.
+- Bug found and fixed by a test on the way: when adding files to the zip failed, the still-open `ZipArchive` was written later by PHP's garbage collection and left a `.part` file behind; the archive is now discarded (`unchangeAll()`) on failure.
+
+Verified here: backup, deploy-migrate, parity and related tests (45 in the three backup/deploy files) pass; the real `backup:database --kind=hourly` and `backup:app --kind=daily` commands were run against a local MySQL 8.0.46 (a 6.8 MB zip with the daily dump inside, `backup:verify` passed, and it worked although that database had no `backup_runs` table); `schedule:list` shows `5 * * * * backup:database --kind=hourly` and `0 2 * * * backup:app --kind=daily --auto-upload`. Full suite: 3010 passed, 6 skipped, 0 failed (32,053 assertions).
+
+Not verified: a real Google Drive upload (no credentials here; the two-step request flow is tested with a fake); the schedule actually firing on Coolify (needs the `schedule:run` task, see the Phase 1 notes); MySQL 8.4; how big the daily zip is on the live server.
+
+**Warning for the owner before switching "Auto upload daily" on:** the full app zip still contains `.env` (every password and key, `APP_KEY`) **unencrypted**, and it leaves out `storage/app/private`. With the switch on, that zip goes to Drive every day. Encryption (Phase 3) is not built yet. Also: files already on Drive are never deleted yet (no Drive retention), and the Drive folder should be on a Shared Drive (service accounts have no storage quota of their own).
+
+Still open for the owner (unchanged): the off-site place for hourly dumps, retention numbers, the encryption key, the alert channel (Telegram/email), whether R2 media needs its own backup, and the Phase 0 checks on the live server (`which mysqldump`, `df -h /app/storage`, the `schedule:run` Coolify task, database size).
+
+Commit status: committed and pushed to the feature branch `ccr-4c1eb24d-2dzxxt` on top of the Phase 1 commit; not on `main` (needs the owner's approval).
+
 ## 2026-10-23 - Advanced backups, Phase 1: a dump that can be trusted every hour
 
 Reason - owner (Bangla): the whole app and the database should be backed up every day, and the database every hour (it holds no images, videos or files, so it is light); asked for a plan building on the early backup work. I read the code and wrote a five-phase plan in the chat (owner approved it: "ঠিক আছে শুরু কর"); this is Phase 1. The owner has **not** answered the plan's six open questions yet (off-site place, retention, "hourly" = a new file each hour, encryption key, alert channel, R2 media), so nothing here depends on them.

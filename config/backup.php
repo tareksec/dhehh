@@ -1,8 +1,6 @@
 <?php
 
 return [
-    'retention' => env('BACKUP_RETAIN_FILES', 10),
-
     'schedule_time' => env('BACKUP_SCHEDULE_TIME', '02:00'),
 
     'database' => [
@@ -24,8 +22,30 @@ return [
         'timeout' => (int) env('BACKUP_DUMP_TIMEOUT', 900),
     ],
 
+    // Switches for the schedules in bootstrap/app.php.
+    'hourly' => [
+        // A database backup every hour, at five past (kind "hourly").
+        'enabled' => (bool) env('BACKUP_HOURLY_ENABLED', true),
+    ],
+
+    'daily' => [
+        // A full app backup (files + database) every day at schedule_time
+        // (kind "daily"). Off = a database-only backup at that time instead.
+        'full_app' => (bool) env('BACKUP_DAILY_FULL_APP', true),
+    ],
+
     'app' => [
         'database_connection' => env('BACKUP_DB_CONNECTION'),
+
+        // Archives kept per kind, like database.keep. A daily archive holds the
+        // uploaded files too, so it is the one that fills the disk.
+        'keep' => [
+            'hourly' => 10,
+            'daily' => (int) env('BACKUP_APP_KEEP_DAILY', 10),
+            'predeploy' => (int) env('BACKUP_APP_KEEP_PREDEPLOY', 3),
+            'manual' => (int) env('BACKUP_RETAIN_FILES', 10),
+        ],
+
         'directory' => 'backups/app',
         'include_paths' => [
             'app',

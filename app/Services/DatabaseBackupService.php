@@ -61,16 +61,10 @@ class DatabaseBackupService
         return $this->fileDetails($path);
     }
 
-    /** The kind in a backup's file name; files from before kinds existed count as manual. */
-    public static function kindOf(string $filename): string
-    {
-        $base = preg_replace('/\.(sqlite|sql\.gz|sql)$/', '', basename($filename));
-        $last = substr((string) strrchr('-'.$base, '-'), 1);
-
-        return in_array($last, BackupRun::KINDS, true) ? $last : BackupRun::KIND_MANUAL;
-    }
-
-    /** Keep the newest files of each kind (see config/backup.php) and delete the rest. */
+    /**
+     * Keep the newest files of each kind (see config/backup.php) and delete the
+     * rest, plus any half-written `.part` file a killed process left behind.
+     */
     public function prune(): void
     {
         $byKind = collect($this->all())->groupBy('kind');
@@ -82,6 +76,8 @@ class DatabaseBackupService
                 ->skip($keep)
                 ->each(fn (array $file): bool => Storage::disk('local')->delete($file['relative_path']));
         }
+
+        BackupFiles::deleteStalePartials(self::DIRECTORY);
     }
 
     /**
@@ -374,7 +370,7 @@ class DatabaseBackupService
 
         return [
             'name' => basename($relativePath),
-            'kind' => self::kindOf($relativePath),
+            'kind' => BackupRun::kindOfFile($relativePath),
             'relative_path' => $relativePath,
             'path' => $disk->path($relativePath),
             'size' => $disk->size($relativePath),

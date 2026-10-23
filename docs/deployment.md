@@ -465,6 +465,13 @@ company: backups, courier status sync, cart and CRM reminders, and the IMS
 jobs (profit proposals, maturity reminders, owner digest, monthly statements,
 late shipments).
 
+The backups (`docs/backup-restore.md`) are among those jobs: a database backup
+every hour at five past and a full app backup every day at `BACKUP_SCHEDULE_TIME`.
+**Without this scheduled task none of them run.** Separately, the **Post-deployment
+Command** `php artisan deploy:migrate` takes a `predeploy` database backup right
+before migrations that are pending (nothing pending, nothing backed up); if that
+backup fails the Super Admins are told and the migrations still run.
+
 Starting the scheduler after a long stop does not message old customers at
 once: abandoned carts older than 3 days (on top of the company's delay) get no
 reminder, a lead follow-up due more than 3 days ago reaches only the staff

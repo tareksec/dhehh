@@ -27,13 +27,33 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withSchedule(function (Schedule $schedule): void {
-        // The overlap lock expires after 30 minutes (a dump stops at 15, see
-        // backup.database.timeout). The default lock lasts 24 hours, so one run
-        // killed by a container restart would block every backup for a day.
-        $schedule->command('backup:database --kind=daily')
-            ->dailyAt((string) config('backup.schedule_time', '02:00'))
-            ->withoutOverlapping(30)
-            ->onOneServer();
+        // Backups. The overlap locks expire (30 minutes for a dump, which stops at
+        // 15, see backup.database.timeout; 2 hours for the archive). The default
+        // lock lasts 24 hours, so one run killed by a container restart would
+        // block every backup for a day. Every run is recorded in backup_runs.
+        if (config('backup.hourly.enabled', true)) {
+            // At five past, so it never starts together with the daily job.
+            $schedule->command('backup:database --kind=hourly')
+                ->hourlyAt(5)
+                ->withoutOverlapping(30)
+                ->onOneServer();
+        }
+
+        if (config('backup.daily.full_app', true)) {
+            // Files + a database backup of the same kind; uploaded to Google Drive
+            // when "Auto upload daily" is on (Backups page). In the background
+            // because zipping the uploads can take a while.
+            $schedule->command('backup:app --kind=daily --auto-upload')
+                ->dailyAt((string) config('backup.schedule_time', '02:00'))
+                ->withoutOverlapping(120)
+                ->runInBackground()
+                ->onOneServer();
+        } else {
+            $schedule->command('backup:database --kind=daily')
+                ->dailyAt((string) config('backup.schedule_time', '02:00'))
+                ->withoutOverlapping(30)
+                ->onOneServer();
+        }
         $schedule->command('storefront:send-abandoned-cart-reminders')
             ->hourly()
             ->withoutOverlapping()

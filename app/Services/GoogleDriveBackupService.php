@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Psr\Http\Message\StreamInterface;
@@ -16,8 +17,6 @@ use RuntimeException;
 class GoogleDriveBackupService
 {
     private const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-
-    private const UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink';
 
     /** Resumable upload: any size, streamed; supportsAllDrives lets the target be a Shared Drive folder. */
     private const RESUMABLE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,webViewLink';
@@ -44,30 +43,21 @@ class GoogleDriveBackupService
             throw new RuntimeException('Google Drive backup folder ID is required.');
         }
 
-        $token = $this->accessToken();
-        $boundary = 'backup_' . bin2hex(random_bytes(12));
-        $metadata = json_encode([
-            'name' => $filename,
-            'parents' => [$folderId],
-        ]);
+        // Streamed (resumable) upload: a backup of hundreds of megabytes is never
+        // loaded into memory, and there is no 5 MB multipart ceiling.
+        $handle = fopen($absolutePath, 'rb');
 
-        $body = "--{$boundary}\r\n"
-            . "Content-Type: application/json; charset=UTF-8\r\n\r\n"
-            . "{$metadata}\r\n"
-            . "--{$boundary}\r\n"
-            . "Content-Type: application/zip\r\n\r\n"
-            . File::get($absolutePath) . "\r\n"
-            . "--{$boundary}--";
-
-        $response = Http::withToken($token)
-            ->withHeaders(['Content-Type' => "multipart/related; boundary={$boundary}"])
-            ->send('POST', self::UPLOAD_URL, ['body' => $body]);
-
-        if (! $response->successful()) {
-            throw new RuntimeException($response->json('error.message') ?: 'Google Drive upload failed.');
+        if ($handle === false) {
+            throw new RuntimeException('Backup file could not be opened for Google Drive upload.');
         }
 
-        return $response->json();
+        try {
+            return $this->uploadStream(Utils::streamFor($handle), $filename, 'application/zip', $folderId);
+        } finally {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+        }
     }
 
     /** True when service account credentials are saved, whether or not backup uploads are switched on. */

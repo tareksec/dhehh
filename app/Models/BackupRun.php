@@ -54,4 +54,16 @@ class BackupRun extends Model
         'started_at' => 'datetime',
         'finished_at' => 'datetime',
     ];
+
+    /**
+     * The kind in a backup file's name (the last part before the extension).
+     * A file from before kinds existed counts as manual.
+     */
+    public static function kindOfFile(string $filename): string
+    {
+        $base = preg_replace('/\.(sqlite|sql\.gz|sql|zip)$/', '', basename($filename));
+        $last = substr((string) strrchr('-'.$base, '-'), 1);
+
+        return in_array($last, self::KINDS, true) ? $last : self::KIND_MANUAL;
+    }
 }
