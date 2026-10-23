@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\ResellerSettings;
+use App\Http\Middleware\SetResellerPortalLocale;
 use App\Models\Company;
 use App\Models\StorefrontPage;
 use App\Models\StorefrontSetting;
@@ -193,6 +194,230 @@ class ResellerLandingPageTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertNull($this->blade->fresh()->reseller_banner_image);
+    }
+
+    public function test_the_landing_page_answers_the_questions_new_resellers_ask(): void
+    {
+        $page = $this->get($this->portal.'/')->assertOk();
+
+        $page->assertSee('id="faq"', false)
+            ->assertSeeInOrder([
+                'Can I just market and sell while you pack and deliver?',
+                'Can I list your products on my Facebook page and website with photos, details and prices?',
+                'A customer confirmed an order. What do I send you?',
+                'How is the parcel sent, and who collects the money?',
+                'What is deducted from the money collected, and how much is my profit?',
+                'When and how do I get my profit? How do payment and profit settlement work?',
+            ])
+            // The answers state what the system does: the profit rule, cash on delivery, the withdrawal route.
+            ->assertSee('Your profit is your selling price minus your cost, for every piece.')
+            ->assertSee('there is no separate packaging charge on orders the store delivers')
+            // The parcel answer names the company and its couriers (owner wording, 2026-10-23).
+            ->assertSee('Landing Co sends the parcel to your customer by courier (Steadfast, Pathao, RedX) on cash on delivery, so your customer pays when it arrives and you pay nothing in advance')
+            ->assertSee('Open Withdrawals in the portal and request any amount up to your available balance, to bKash, Nagad, Rocket or a bank account.');
+
+        $this->assertSame(6, substr_count($page->getContent(), 'data-reseller-faq'));
+    }
+
+    public function test_figures_in_the_answers_follow_the_settings(): void
+    {
+        $this->blade->forceFill(['reseller_min_withdrawal' => 500, 'reseller_return_charge' => 50])->save();
+
+        $hidden = $this->get($this->portal.'/')->assertOk()->getContent();
+        $this->assertStringNotContainsString('The smallest withdrawal is', $hidden);
+        $this->assertStringNotContainsString('The return charge is', $hidden);
+        // The charge itself is told without its amount.
+        $this->assertStringContainsString('a return charge is taken from your deposit', $hidden);
+
+        $this->blade->forceFill(['reseller_guide_show_figures' => true])->save();
+
+        $shown = $this->get($this->portal.'/')->assertOk()->getContent();
+        // Once in the money section and once in the answer to the last question.
+        $this->assertSame(2, substr_count($shown, 'The smallest withdrawal is'));
+        $this->assertSame(2, substr_count($shown, 'The return charge is'));
+    }
+
+    public function test_the_landing_page_has_a_bangla_version_that_the_visitor_chooses(): void
+    {
+        $bangla = $this->get($this->portal.'/?lang=bn')->assertOk();
+
+        $bangla->assertSee('<html lang="bn"', false)
+            ->assertSee(__('What is deducted from the money collected, and how much is my profit?', [], 'bn'))
+            ->assertSee(__('Apply now', [], 'bn'))
+            ->assertDontSee('What is deducted from the money collected')
+            ->assertCookie(SetResellerPortalLocale::COOKIE, 'bn');
+
+        // The switch is on the page, with each language named in itself.
+        // In Bangla the same answer carries the company's name and the same three couriers.
+        $bangla->assertSee('Landing Co কুরিয়ারের (Steadfast, Pathao, RedX) মাধ্যমে ক্যাশ অন ডেলিভারিতে');
+
+        $bangla->assertSee('data-reseller-language-switch', false)->assertSee('?lang=en', false)->assertSee('?lang=bn', false)
+            ->assertSee(__('Language name: Bangla', [], 'bn'))
+            ->assertSee('English');
+
+        $this->get($this->portal.'/?lang=en')->assertOk()
+            ->assertSee('<html lang="en"', false)
+            ->assertSee('What is deducted from the money collected')
+            ->assertCookie(SetResellerPortalLocale::COOKIE, 'en');
+    }
+
+    public function test_the_chosen_language_is_kept_on_the_landing_and_application_pages(): void
+    {
+        // Back on the page later, without "?lang", the stored choice still applies.
+        $this->withCookie(SetResellerPortalLocale::COOKIE, 'bn')->get($this->portal.'/')
+            ->assertOk()
+            ->assertSee('<html lang="bn"', false)
+            ->assertSee(__('Questions resellers ask', [], 'bn'));
+
+        // The same on the portal's application page.
+        $this->withCookie(SetResellerPortalLocale::COOKIE, 'bn')->get($this->portal.'/portal/register')
+            ->assertOk()
+            ->assertSee('data-reseller-language-switch', false)
+            ->assertSee(__('Read the reseller guide', [], 'bn'));
+
+    }
+
+    public function test_a_language_the_page_does_not_have_is_ignored(): void
+    {
+        $this->get($this->portal.'/?lang=fr')->assertOk()
+            ->assertSee('<html lang="en"', false)
+            ->assertCookieMissing(SetResellerPortalLocale::COOKIE);
+    }
+
+    public function test_the_language_choice_never_reaches_the_shop(): void
+    {
+        $this->withCookie(SetResellerPortalLocale::COOKIE, 'bn')->get('https://landing-co.example.test/?lang=bn')
+            ->assertOk()
+            ->assertSee('<html lang="en"', false)
+            ->assertCookieMissing(SetResellerPortalLocale::COOKIE);
+    }
+
+    public function test_the_landing_page_is_set_in_anek_bangla_which_ships_with_the_erp(): void
+    {
+        foreach (['bengali', 'latin', 'latin-ext'] as $subset) {
+            $this->assertFileExists(resource_path("fonts/anek-bangla/anek-bangla-{$subset}-wght-normal.woff2"));
+        }
+
+        $this->assertFileExists(resource_path('fonts/anek-bangla/OFL.txt'));
+        $this->assertStringContainsString("font-family: 'Anek Bangla'", (string) file_get_contents(resource_path('css/reseller-landing.css')));
+    }
+
+    public function test_the_landing_page_carries_its_own_stylesheet_and_does_not_depend_on_the_global_app_css(): void
+    {
+        // Owner report 2026-10-23: on a phone the page came up with no layout because the global
+        // app.css (a new file name on every deploy) did not load while the landing stylesheet did.
+        $this->get($this->portal.'/')
+            ->assertOk()
+            ->assertSee('/build/assets/reseller-landing-', false)
+            ->assertDontSee('/build/assets/app-', false);
+
+        $css = (string) file_get_contents(resource_path('css/reseller-landing.css'));
+        $this->assertStringContainsString("@import 'tailwindcss' source(none);", $css);
+
+        // Every view the page is made of is scanned for utility classes.
+        $this->assertStringContainsString("@source '../views/reseller/guide.blade.php';", $css);
+        $this->assertStringContainsString("@source '../views/reseller/partials/*.blade.php';", $css);
+        $this->assertStringContainsString("@source '../views/storefront/partials/social-icon.blade.php';", $css);
+
+        foreach (array_merge(['guide'], array_map(fn ($file) => 'partials/'.basename($file, '.blade.php'), glob(resource_path('views/reseller/partials/*.blade.php')))) as $view) {
+            preg_match_all("/@include\\('([a-z.\\-]+)'/", (string) file_get_contents(resource_path('views/reseller/'.$view.'.blade.php')), $included);
+
+            foreach ($included[1] as $name) {
+                $this->assertTrue(
+                    str_starts_with($name, 'reseller.partials.') || $name === 'storefront.partials.social-icon',
+                    "reseller/{$view} includes [{$name}], which the landing stylesheet does not scan for classes: add it to the @source lines of resources/css/reseller-landing.css.",
+                );
+            }
+        }
+    }
+
+    public function test_every_grid_on_the_landing_page_starts_as_one_column_so_long_text_cannot_widen_a_phone(): void
+    {
+        // A grid column is 1fr = minmax(auto, 1fr): a long unbroken line (a store link, a long Bangla
+        // word) stretches it, and the whole page scrolls sideways on a phone. grid-cols-1 is
+        // minmax(0, 1fr), which lets the text truncate or wrap instead.
+        foreach (['guide.blade.php', 'partials/footer.blade.php'] as $view) {
+            preg_match_all('/class="([^"]*)"/', (string) file_get_contents(resource_path('views/reseller/'.$view)), $matches);
+
+            foreach ($matches[1] as $classes) {
+                $tokens = preg_split('/\s+/', trim($classes));
+
+                if (! in_array('grid', $tokens, true)) {
+                    continue;
+                }
+
+                $this->assertTrue(
+                    count(array_filter($tokens, fn ($token) => str_starts_with($token, 'grid-cols-'))) > 0,
+                    "A grid in reseller/{$view} has no base column count: [{$classes}]. Add grid-cols-1.",
+                );
+            }
+        }
+    }
+
+    public function test_the_header_wears_the_websites_logo_pair_so_each_background_gets_its_own_logo(): void
+    {
+        // Owner request 2026-10-23: the header logo is the Next.js website's, the white-background logo
+        // in light mode and the dark-background one in dark mode.
+        $this->company->forceFill(['logo' => 'logos/company-own.png'])->save();
+        $this->website(['logo' => 'logos/site-light.png', 'logo_dark' => 'logos/site-dark.png']);
+
+        $page = $this->get($this->portal.'/')->assertOk();
+        $html = $page->getContent();
+
+        $page->assertSee('site-light.png', false)
+            ->assertSee('site-dark.png', false)
+            ->assertSee('nb-logo--light', false)
+            ->assertSee('nb-logo--dark', false)
+            // The website's logo replaces the company's own one.
+            ->assertDontSee('company-own.png', false);
+
+        // The light logo comes first in the header, the dark one right after it.
+        $this->assertLessThan(strpos($html, 'site-dark.png'), strpos($html, 'site-light.png'));
+
+        $css = (string) file_get_contents(resource_path('css/reseller-landing.css'));
+        $this->assertStringContainsString('.dark .nb-logo--dark { display: block; }', $css);
+        $this->assertStringContainsString('.dark .nb-logo--light { display: none; }', $css);
+    }
+
+    public function test_a_website_logo_without_a_dark_version_shows_in_both_modes(): void
+    {
+        $this->website(['logo' => 'logos/site-light.png']);
+
+        $this->get($this->portal.'/')
+            ->assertOk()
+            ->assertSee('site-light.png', false)
+            ->assertDontSee('nb-logo--light', false)
+            ->assertDontSee('nb-logo--dark', false);
+    }
+
+    public function test_the_company_logo_is_the_fallback_when_the_website_has_none(): void
+    {
+        $this->company->forceFill(['logo' => 'logos/company-own.png'])->save();
+
+        // No website row at all.
+        $this->get($this->portal.'/')->assertOk()->assertSee('company-own.png', false);
+
+        // A website row without a logo.
+        $this->website();
+
+        $this->get($this->portal.'/')->assertOk()->assertSee('company-own.png', false);
+    }
+
+    public function test_the_header_has_a_dark_mode_toggle_that_remembers_the_visitors_choice(): void
+    {
+        $page = $this->get($this->portal.'/')->assertOk();
+
+        $page->assertSee('data-theme-toggle', false)
+            ->assertSee('data-light-label="'.__('Switch to light mode').'"', false)
+            ->assertSee('data-dark-label="'.__('Switch to dark mode').'"', false)
+            ->assertSee('nb-theme-icon--moon', false)
+            ->assertSee('nb-theme-icon--sun', false)
+            // The choice is read before the page paints (no flash) and written on every press.
+            ->assertSee("localStorage.getItem('resellerLandingTheme')", false)
+            ->assertSee("localStorage.setItem('resellerLandingTheme'", false);
+
+        // Without a saved choice the visitor's device setting decides, as before.
+        $page->assertSee('prefers-color-scheme: dark', false);
     }
 
     public function test_the_standard_banner_ships_with_the_erp(): void

@@ -1,5 +1,5 @@
 # Sales, Orders & Couriers
-> Last checked: 2026-10-22
+> Last checked: 2026-10-23 (main merged with the Trade Portal's Delivery Challan)
 
 ## What it does
 The Sales, Orders & Couriers module orchestrates customer acquisition, order fulfillment, multi-carrier parcel delivery, and delivery fraud prevention. It manages the full lifecycle of orders from draft quotations to confirmed, processing, delivered, or returned states, while tracking payments and stock reservations. It integrates with major Bangladeshi courier logistics APIs (Steadfast, Pathao, RedX, eCourier, and manual delivery), automating airway bill booking, webhook tracking, parcel barcode scanning, and driver handover sheets. For fraud mitigation, it runs an intelligent customer risk scoring engine that evaluates historical courier return ratios, first-time high COD thresholds, phone number reuse, and a dual-tier (global and tenant-scoped) customer blacklist.
@@ -37,6 +37,8 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Models/CourierReturn.php` | Tracks returned parcels received back from couriers and reason for return. |
 | `app/Models/CourierStatusLog.php` | Historical timeline of status events received from courier webhooks or polls. |
 | `app/Models/CourierWebhookLog.php` | Raw HTTP payload log of incoming webhook events from logistics carriers. |
+| `app/Models/DeliveryChallan.php` | The Trade Portal's sale paper (pad SL no., buyer as written, advance / cash / cheque / due terms, signer); the sale itself is its `order` (`Order::SOURCE_TRADE_CHALLAN`). |
+| `app/Models/DeliveryChallanItem.php` | A challan line: description, quantity, unit, optional price and product, remarks. |
 | `app/Models/ChatOrderLink.php` | Secure one-time links sent to customers via chat to complete checkout. |
 
 ### Services
@@ -60,6 +62,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Services/CourierManager.php` | Factory resolving carrier adapter instances based on provider configurations. |
 | `app/Services/CourierService.php` | Business service executing consignment creation, cancellation, and fee balance syncing. |
 | `app/Services/CourierAlertService.php` | Raises alerts for stuck shipments, delayed deliveries, and abnormal return rates. |
+| `app/Services/DeliveryChallanService.php` | Trade Portal Delivery Challan: one transaction makes the `DeliveryChallan` (+ items), an order with `source = trade_challan` (completed, delivered, no shipping fee), order lines for product lines (stock leaves; short stock refused by item name) and the advance / cash paid as `OrderPayment`s; `receivePayment()`, `receiveOldDue()` (a `CustomerPayment`), `cancel()` (order cancelled, stock back), `nextNumber()` (pad SL no.). Order-status SMS skip `trade_challan` orders. |
 | `app/Services/NuportOrderImportService.php` | Copies past orders out of a Nuport CSV export (orders, lines, payments, status, sales channel, returned pieces, finished courier bookings) without touching stock or accounts; run from the Orders list or `orders:import-nuport`. Orders still open in Nuport can come in as live orders (`Order::SOURCE_NUPORT_OPEN`) that take stock. |
 | `app/Services/CourierReportService.php` | Aggregates courier delivery performance, success rates, and COD settlement totals. |
 | `app/Services/CourierHandoverSheetService.php` | Generates printable handover manifests with barcodes for carrier pickup. |
@@ -172,6 +175,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `tests/Feature/SalesOrderTest.php` | Tests order creation, total calculations, and line item persistence. |
 | `tests/Feature/OrderStatusWorkflowTest.php` | Tests order stage progression, transitions, and stock reservation. |
 | `tests/Feature/CourierIntegrationTest.php` | Tests courier booking creation, airway bill generation, and webhooks. |
+| `tests/Feature/DeliveryChallanServiceTest.php` | Tests the Delivery Challan against the owner's paper: totals, stock, due, later payments, cancel, numbering, old due. |
 | `tests/Feature/NuportOrderImportTest.php` | Tests the Nuport order import: mapping, statuses, SKU mapping, sales channel, returned pieces, courier bookings. |
 | `tests/Feature/CourierHandoverSheetTest.php` | Tests handover sheet manifest filtering and printable output. |
 | `tests/Feature/CustomerRiskTest.php` | Tests risk scoring algorithm, return ratio deduction, and blacklist matching. |
@@ -198,7 +202,9 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
   - `GET|HEAD admin/customers/import/sample` (name `customers.import.sample`) -> `App\Http\Controllers\Admin\CustomerCsvController@sample`
 
 ## Data
-- `orders`: Core sales order records. Key columns: `id`, `company_id`, `customer_id`, `order_number`, `status` (`pending`, `processing`, `completed`, `cancelled`), `delivery_status`, `order_date`, `subtotal`, `shipping_fee`, `shipping_zone`, `discount`, `vat`, `total_amount`, `paid_amount`, `due_amount`, `source`, `sales_channel`, `courier_provider_id`, `packaging_fee`, `external_reference`, `deleted_at`, `created_at`, `updated_at`.
+- `orders`: Core sales order records. Key columns: `id`, `company_id`, `customer_id`, `order_number`, `status` (`pending`, `processing`, `completed`, `cancelled`), `delivery_status`, `order_date`, `subtotal`, `shipping_fee`, `shipping_zone`, `discount`, `vat`, `total_amount`, `paid_amount`, `due_amount`, `source`, `sales_channel`, `courier_provider_id`, `packaging_fee`, `external_reference`, `deleted_at`, `created_at`, `updated_at`. Adding, changing or deleting an `OrderPayment` re-syncs the order's paid/due and the customer's `current_balance` (`Order::recalculatePaidAmount()`).
+- `delivery_challans`: Trade Portal challans. Key columns: `id`, `company_id`, `order_id`, `customer_id`, `challan_number` (unique per company), `challan_date`, `buyer_name`, `buyer_phone`, `buyer_address`, `total`, `advance_amount`, `advance_date`, `advance_note`, `cash_amount`, `cash_date`, `payment_account_id`, `cheque_number`, `cheque_bank`, `due_terms`, `authorised_name`, `authorised_designation`, `authorised_phone`, `note`, `status` (`confirmed`, `cancelled`), `cancelled_at`, `cancel_reason`, `created_by`.
+- `delivery_challan_items`: `id`, `company_id`, `delivery_challan_id`, `product_id`, `description`, `quantity`, `unit`, `unit_price`, `remarks`, `sort_order`.
 - `order_items`: Order line items. Key columns: `id`, `company_id`, `order_id`, `product_id`, `product_variant_id`, `variant_label`, `quantity`, `returned_quantity`, `unit_price`, `subtotal`, `unit_cost`, `reseller_base_price`, `reseller_retail_price`, `is_upsell`, `created_at`, `updated_at`.
 - `customers`: Customer registry. Key columns: `id`, `company_id`, `name`, `phone`, `email`, `address`, `opening_balance`, `current_balance`, `is_active`, `customer_type`, `customer_source`, `reseller_status`, `business_name`, `created_at`, `updated_at`.
 - `customer_blacklists`: Dual-tier blacklist. Key columns: `id`, `company_id` (NULL for global across all companies), `phone`, `email`, `ip_address`, `address`, `reason`, `is_active`, `created_by`, `created_at`, `updated_at`.
@@ -209,6 +215,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 
 ## Rules that matter
 - **Stock Reservation on Accounted Statuses**: Only orders in `confirmed`, `processing`, or `completed` reserve inventory and count towards customer dues. Moving an order to `cancelled` or `returned` releases stock reservations. Enforced by `app/Models/Order.php` and `app/Services/OrderWorkflowService.php`.
+- **Courier COD = the due amount**: every booking (popup, bulk action, API) asks the courier to collect `Order::courierCodAmount()` = grand total (`courierInvoiceTotal()`: `total_amount`, plus the customer's zone delivery fee when the order has no shipping fee of its own) minus `paid_amount` (the Payments History ledger), never below 0; an advance of ৳200 on a ৳560 order sends ৳360, a fully paid order sends 0. The booking popups show the sum under the COD field (`CourierService::codHelperText()`); the field stays editable. The order form (`OrderForm`) and view page (`OrderInfolist`) keep the advance / paid amount, payment method and due amount in their own **Payment** section, apart from **Totals**. Covered by `CourierIntegrationTest` and `OrderFormTest`.
 - **Global vs Company-Scoped Blacklist**: `CustomerBlacklist` explicitly does NOT use `BelongsToCompany` or `CompanyScope` (deliberate carve-out from `MultiCompanyIsolationTest`). A record with `company_id = NULL` is global across all companies, while a record with a company ID applies only to that company. `CustomerRiskService::blacklistMatch` queries both `whereNull('company_id')->orWhere('company_id', $companyId)`. Enforced by `app/Models/CustomerBlacklist.php` and `app/Services/CustomerRiskService.php`.
 - **Fraud Risk Score Calculation**: Every customer has an evaluated risk score (0–100). Points are deducted for high courier return ratios (> threshold), low delivery success ratios, incomplete addresses (< 10 characters), recent duplicate orders within 24 hours, high COD amounts on first orders, and active blacklist hits. Enforced by `app/Services/CustomerRiskService.php`.
 - **Returned Goods Restocking Separation**: Parcels returned by couriers are NOT automatically put back into available stock. Restocking requires explicit physical verification by warehouse staff using `PutReturnedGoodsBackInStockAction`, which generates a `return` stock movement. Enforced by `app/Filament/Resources/Orders/Actions/PutReturnedGoodsBackInStockAction.php`.

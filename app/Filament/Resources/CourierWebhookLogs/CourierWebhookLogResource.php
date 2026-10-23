@@ -94,6 +94,22 @@ class CourierWebhookLogResource extends Resource
             ->count();
     }
 
+    /**
+     * A callback is saved first and processed by the queue worker. When callbacks sit in Pending, the worker is
+     * not running and no courier status reaches the orders; say so where staff look.
+     */
+    public static function logNotice(): ?string
+    {
+        $stuck = self::stuckCount();
+
+        return $stuck > 0
+            ? __(':count courier callback(s) have waited more than :minutes minutes. The queue worker does not seem to be running (see docs/deployment.md) — start it, or press Process now on each one.', [
+                'count' => $stuck,
+                'minutes' => self::STUCK_AFTER_MINUTES,
+            ])
+            : null;
+    }
+
     public static function canViewAny(): bool
     {
         return Auth::user()?->isSuperAdmin() ?? false;

@@ -36,6 +36,7 @@ use App\Http\Controllers\QuotationPublicController;
 use App\Http\Controllers\Reseller\ResellerGuideController;
 use App\Http\Controllers\Reseller\ResellerOnlinePaymentReturnController;
 use App\Http\Controllers\Reseller\ResellerProductPhotosController;
+use App\Http\Controllers\SesWebhookController;
 use App\Http\Controllers\Storefront\AccountAuthController as StorefrontAccountAuthController;
 use App\Http\Controllers\Storefront\AccountController as StorefrontAccountController;
 use App\Http\Controllers\Storefront\AccountOrdersController as StorefrontAccountOrdersController;
@@ -563,6 +564,12 @@ Route::post('/webhooks/zinipay/{payment}', ZiniPayWebhookController::class)
 Route::post('/webhooks/paystation/{payment}', PayStationWebhookController::class)
     ->middleware('throttle:120,1')
     ->name('paystation.webhook');
+
+// Amazon SES delivery / bounce / complaint reports, relayed by Amazon SNS (see SesWebhookController).
+Route::post('/webhooks/ses/{setting}/{token}', SesWebhookController::class)
+    ->whereNumber('setting')
+    ->middleware('throttle:600,1')
+    ->name('webhooks.ses');
 
 Route::post('/webhooks/woocommerce/{company}', WooCommerceWebhookController::class)
     ->middleware('throttle:120,1')

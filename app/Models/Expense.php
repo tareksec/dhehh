@@ -59,7 +59,7 @@ class Expense extends Model
 
             if ($expense->account?->projectedBalanceAfterOutflow((float) $expense->amount, $ledger?->id) < 0) {
                 throw ValidationException::withMessages([
-                    'amount' => 'This expense would make the account balance negative.',
+                    'amount' => __('This expense would make the account balance negative.'),
                 ]);
             }
         });

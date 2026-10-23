@@ -160,6 +160,436 @@ Owner / agent still to do (Phase 0, on the live server, in the app's Coolify ter
 
 Commit status: committed and pushed to the feature branch `ccr-4c1eb24d-2dzxxt` (the branch this session was told to use); not on `main` (needs the owner's approval).
 
+## 2026-10-23 (navbar) - IMS top bar logo size and per-company logo
+
+Owner (Bangla): the logo makes the IMS navbar too tall; and picking another company still shows the same logo. Fixed: logo capped in size, top bar compacted, logo/name follow the chosen company. Not browser-verified (no preview DB); tests not run. Status: uncommitted.
+
+## 2026-10-23 - Amazon SES controlled from the dashboard, and bounce / complaint tracking
+
+Owner (Bangla): "ওকে বানাও" (build the bounce / spam tracking) "আর ses এর api দিয়ে আমাদের ড্যাশবোর্ড থেকেই ses এর সার্ভিস কন্ট্রোল করতে চাই সেটা করা যাবে কিনা" (and can we control SES from our dashboard through its API?). Answer: yes, and it is built.
+
+What it is: **Settings → Amazon SES** (one AWS key per site, encrypted): checklist, account state, domains / addresses with the DNS records to publish, the suppression list, and a switch that sets up bounce / complaint / delivery reporting in the AWS account. The Email Log then shows Delivered / Bounced / Marked as spam. See CHANGELOG for the full list.
+
+Decisions (mine, say if you want them different):
+- **Emails still go out over SMTP.** The API is used to control and watch the account, not to send. Moving the sending itself to the SES API would change every email flow for no gain the owner asked for.
+- **A separate AWS key for the dashboard**, not the SMTP login: the SMTP password is derived from the secret key and cannot be turned back. The page prints the IAM policy to paste. The policy is written from the AWS documentation; I could not test it with a real key, so if a call is refused the page names the missing permission in words.
+- **Tracking works through a header, not by editing the SES identities.** Mail names the configuration set (`X-SES-CONFIGURATION-SET`) only while tracking is on, per site. Consequence: if someone deletes that set in the AWS console, SES refuses every mail from that site until tracking is turned off and on again (the Email Log says so in words).
+- **One site, one topic and one set** (names carry company and site), so several companies can share an AWS account without clashing.
+- The page lets any user who can manage settings remove a verified domain or an address in the AWS account the key belongs to. Two companies that paste the same key can therefore remove each other's domains; the confirmation warns when the domain is the one the site sends from. Say if removal should be limited to the super admin.
+
+Verified: the API service, the tracking set-up (the exact calls and the SNS topic policy), the events, and the webhook (SNS signatures made with a certificate generated in the test, tampered / foreign / http certificate, wrong token, foreign topic) are tested with Amazon faked. I also looked at the page in a real browser at 1280 and 390 px with Amazon faked (no sideways scroll; the Add dialog opens), and once against the real AWS endpoint with a made-up key, which returned the real "key not recognised" refusal that the page shows in words. **Not tested with a real AWS key, a real SNS delivery or real bounce.**
+
+First real run for the owner: Settings → Amazon SES → paste the key → Save and check → fix the red items → Turn tracking on → press Refresh after a minute (it must say "On and connected") → send a test email to a bad address like `bounce@simulator.amazonses.com` and a good one `success@simulator.amazonses.com` (Amazon's own mailbox simulator) and watch the Email Log turn Bounced / Delivered.
+
+Not built: asking Amazon for production access (it needs a written use case, done once in the AWS console), pausing all sending, dedicated IPs and SES templates, stopping our own sends to an address that bounced (Amazon's suppression list already does), reputation graphs, and pruning old log rows.
+
+Needs Bangla review (lang/bn.json): the whole Amazon SES page (118 new keys: headings 1-5, the checklist lines, the account labels, the dialogs and notifications, the AWS refusal messages), the Email Log result names "Delivered", "Bounced", "Marked as spam" (Bounced → বাউন্স হয়েছে, Marked as spam → স্প্যাম চিহ্নিত) and their reason texts, and the rewritten note above the Email Log.
+
+**Follow-up (owner: four domains approved on one AWS account, four companies — how to connect company by company):** the design already keeps everything per company except what Amazon itself shares, so the answer is a procedure (`docs/email-ses-setup.md` section 5) plus one change: the domain list now separates this company's own domains (the From address's domain and the company's site domains, including parents such as `zamzamint.com` for `offer.zamzamint.com`) from the other companies' on the same account, and company staff cannot remove the others' (a super admin can). Shared by all four, by Amazon's design: sending limit and sandbox state, the account health rating, the suppression list. If one company must be fully isolated, it needs its own AWS account. Owner decision still open: whether to allow removal of domains only for super admins altogether.
+
+Needs Bangla review (follow-up): the four new keys on the Amazon SES page (other companies' domains heading, shared-limits note, own-domains-first note, "not one of this company's domains").
+
+Commit status: committed on `ccr-3799b463-p4pv7n` (`e554020`, `e3de290`), merged with `origin/main` (v2.110.0, SMS dashboard work) and pushed to `main` on the owner's approval ("মেইনে পুশ কর"). Full test run on the merged result: see the final report.
+
+## 2026-10-23 (latest) - Landing page header: dark / night mode button and the Next.js website's logo pair
+
+Owner (Bangla): add an icon in the header for dark and night mode; and make the header logo render the Next.js theme's logo, so that the white-background and black-background logos render.
+
+**What I did:** (1) A moon / sun button in the landing page header (next to Sign in and Apply). It switches the page between light and dark, remembers the choice on the device (`localStorage` `resellerLandingTheme`, applied before the first paint) and, until pressed, follows the device setting as before. (2) The header logo is now the Next.js website's logo pair (Site → Storefront Settings, Next.js row): the white-background logo in light mode, the black-background logo in dark mode. One logo only = shown in both modes (as on the website); no website logo = the company's own logos (so a store without a website looks as before). `StorefrontSiteConfigService::branding()` is now the single place for that pair (also used by `/site`).
+
+**Found while checking on phone widths:** with the extra button, the Bangla header (logo + Sign in + "এখনই আবেদন করুন") did not fit on a 360-390 px phone and squeezed the logo out. Fixed: on a phone the header's button reads "Apply" (আবেদন করুন), the language switch and the "Reseller guide" tag appear from 768 px (the hero already has the language switch on a phone), the buttons are a little tighter under 430 px, and the logo can shrink instead of sliding under the buttons. Measured in Chromium (English and Bangla, light and dark, 320-1280 px): no sideways scroll and the logo never overlaps the buttons. **Known limit:** at 320 px in Bangla the logo is only about 33 px wide (three buttons plus a logo do not fit); 360 px shows about 73 px, 390 px about 103 px.
+
+**No new strings** ("Apply", "Switch to dark mode", "Switch to light mode" already exist in both languages).
+
+**Not changed:** the footer's logo (it is the website's light logo in the footer's own colour, as on the website). The website itself already has its toggle and logo pair.
+
+**Verified:** `ResellerLandingPageTest` (4 new tests), `StorefrontApiTest`, `TranslationParityTest`; `npm run build`; Chromium screenshots of the toggle (click, reload, device-dark and a saved choice) and of the header at 320 / 360 / 375 / 390 / 414 / 640 / 768 / 1280 px. Full `php artisan test` before the commit.
+
+Commit status: committed on `claude/reseller-module-status-v9tobe` and pushed to `main` on the owner's approval ("ওকে মেইনে পুশ কর"), after merging main at v2.109.0.
+
+## 2026-10-23 (later still) - The SMS gateway address follows the API key and sender ID boxes
+
+Owner (Bangla): set it up so that typing the API key and the sender ID in their boxes updates the URL, the way the phone number and the message are filled in.
+
+**What it does:** the placeholders `{api_key}` and `{sender_id}` already existed, but the owner had typed real values into the URL box. Now the box is managed for them: typing a key or sender ID while the box is empty puts in the BulkSMSBD address; a live line shows the address that will be called (key partly hidden); a sparkle button puts the BulkSMSBD address back; and a BulkSMSBD address pasted with real or sample values is turned back into placeholders (key and sender ID move to their own boxes when empty; sample words such as Receiver and TestSMS are dropped). This runs when the box is left and again at the start of Save, before the `{phone}` / `{message}` check. Other gateways' addresses are never rewritten. **Decision for the owner:** when a box and the pasted address hold different keys, the box wins.
+
+**Browser check:** typed key and sender ID: the live line reads `...api_key=abcd***&type=text&number={phone}&senderid=8809617643387&message={message}`; pasting `api_key=ZZZ999realkey ... senderid=NEWSENDER` left the address in placeholder form and put the key and sender ID in their boxes.
+
+**Needs Bangla review (lang/bn.json):** "এটি আপনাকে বদলাতে হবে না…", "BulkSMSBD-র ঠিকানা বসান", "এতে এখনকার ঠিকানা মুছে BulkSMSBD-র ঠিকানা বসবে।", "গেটওয়ে ঠিকানা ঠিক করে দেওয়া হয়েছে", "সিস্টেম যে ঠিকানায় ডাকবে", and the two short lines under the live address.
+
+**Verified:** `SmsGatewayUrlTest` (new, 10), `SmsDashboardTest`, `IntegrationsPageTest`, `SmsLogTest`, `TranslationParityTest`; full `php artisan test` before the push.
+
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
+
+## 2026-10-23 (later) - The gateway URL had "Receiver" instead of {phone}
+
+Owner sent a screenshot of the failure notice after the `88{phone}` fix. Its "What was sent" line reads `...number=Receiver&senderid=8809617643387&message=TestSM`: the saved URL template has the sample words of BulkSMSBD's example where `{phone}` and `{message}` belong (the preview shows `[message]` for a real `{message}`, so `TestSM...` is literal text in the template). That is the real cause of 1001, so the `88{phone}` guess below was not it; that protection stays, harmless. The same template would have sent every order SMS to "Receiver" with a fixed text.
+
+**Fix:** (1) the URL box on Integrations → SMS Gateway refuses to save a URL without `{phone}` and `{message}` and shows the correct example, its help text says so; (2) a template like that already saved is not sent at all: reason `bad_gateway_url` in the SMS Log and in the test SMS notice; (3) the SMS Dashboard shows a red warning with a link. The owner must edit the URL box to `http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}`, keep the key in **SMS API key** and the sender ID in **SMS sender ID**, save and send the test again. If the real API key was typed into the URL itself, it is now in a visible box: put it in the SMS API key field and use `{api_key}`.
+
+**Needs Bangla review (lang/bn.json):** "SMS গেটওয়ে URL-এ {phone} বা {message} নেই…", "URL-এ :missing নেই…", "SMS গেটওয়ে URL-এ :missing নেই, তাই কোনো SMS যেতে পারবে না…", "ইন্টিগ্রেশনস → SMS Gateway-তে ঠিক করুন।", and the changed help text of the URL box and the 1001 advice.
+
+**Verified:** `SmsDashboardTest` (+3: the exact URL from the screenshot is not sent and logged, saving it is refused, the dashboard warns). Full `php artisan test` before the push.
+
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
+
+## 2026-10-23 - Trade Portal: second LC blanked the supplier's details
+
+While writing the owner's plain-words guide from the code, found that the new-LC form did not prefill the supplier's saved details and wrote empty values back, wiping them. Fixed by filling the boxes when the purchase is chosen; regression test added. Facts for the guide that the code confirms: the challan's item price is NOT filled from the item's sale price (typed each time); a new buyer typed on a challan is always created as a new customer (pick from the list to reuse); money received must name a cash/bank/mobile-banking account; there is no bKash/bank gateway, accounts are named by the owner.
+
+Commit status: committed and pushed to `feature/trade-portal-reports`; not on `main` (waits for the owner's approval).
+
+## 2026-10-23 - Trade Portal fixes from the live QA report
+
+Owner request: the live QA report of the Trade Portal (app.zamzamint.com/trade, Tasneem Knitting Industry, TEST- data, deploy 41e6212) — fix what it found.
+
+What changed: Trade Portal crashes get the module error page and reach Deploy Error Logs; Goods in shows its New purchase button; the Apply-landed-cost confirmation lists each item's new price; Home's LC card counts LCs until Cleared; English report PDFs write "Tk". Details in `CHANGELOG.md`.
+
+The five server errors of the report (first LC edit save, DRL without its date, first open of Serial numbers, report 8 on screen, report 9 PDF) and the red "Error while loading page" notices after adding a landed cost / applying it / saving serials were **not reproduced**: the same steps with the same data pass on SQLite and on a throwaway MariaDB 11.4 (strict SQL mode), in Bangla and English (`TradePortalQaRegressionTest`). The live server logs could not be read (the Trade Portal's errors were not sent to Deploy Error Logs — fixed here — and signing in to the live admin is the owner's). Still open: once this is live, repeat those steps and read Settings → Deploy Error Logs for the cause.
+
+Decided without asking: an LC with an LC file is "open" until its stage is Cleared (the reports' rule); the English PDF uses "Tk" (the Bangla print page keeps ৳); "TEST-SN-001TEST-SN-002" is not a bug — the form splits on new lines, commas and semicolons, and that text had no break.
+
+The QA follow-up run (18:52) passed J (old data import: samples, a correct file, a file with one wrong row refused whole), N (the Trade Owner gets 403 on /admin) and report 9's Excel and Print — nothing to fix there. Still unchecked by QA: K (360px phone), M (font), the three supplier papers (no TIN / BIN / IRC in the live business details).
+
+Main (v2.110.0) merged into the branch first; no conflicts.
+
+Full plain `php artisan test` (PHP 8.4): 3,152 passed, 5 skipped, 0 failed. No frontend assets changed.
+
+Commit status: committed (0ff1bf6f), pushed to `feature/trade-portal-reports` and merged into `main` with the owner's approval in the conversation (2026-10-23). The merge kept main's v2.111.0 (Amazon SES) notes; the only conflict was `CHANGELOG.md`.
+
+## 2026-10-23 - Trade Portal: Tiro Bangla, desktop menu, sign-in page; merge to main
+
+Owner request: use Tiro Bangla (Google Fonts link given) for Bangla; check the desktop dashboard (the top menu was broken); make the sign-in page professional; then push and merge into main (owner's explicit approval in the conversation, 2026-10-23).
+
+What changed: Bangla in Tiro Bangla (self-hosted, SIL OFL), desktop top menu on one line with three dropdown groups, a navy-panel sign-in page. Details in `CHANGELOG.md`.
+
+Checked in the browser on the throwaway preview DB: desktop 1366px and 1024px (menu on one line, dropdown opens over the page, no sideways scroll), sign-in at 1366px and 375px, signing in, phone pages after the font change (a clipped vowel sign in the bottom bar fixed). The preview copy's admin password was set to the `.env` one so the owner can sign in to the preview; nothing else in it changed.
+
+Needs Bangla review: the sign-in page's five lines ("আপনার ব্যবসা এক জায়গায়" and the three points).
+
+Main (v2.107.0, 56 commits) merged into the branch first; conflicts kept both sides (lang files: every key of both; `OrderStatusSmsService`: main's skip-log flow plus the Delivery Challan exclusion; the Trade Portal CHANGELOG notes moved back under [Unreleased] after git put them in [2.98.0]). Full plain `php artisan test` after the merge (PHP 8.4, assets built): 3,128 passed, 5 skipped, 0 failed. (One run before the merge had 1 failure whose name was cut from the output; it did not come back.)
+
+Commit status: committed, pushed to `feature/trade-portal-reports` and merged into `main` with the owner's approval (2026-10-23).
+
+## 2026-10-23 - Trade Portal phone look (owner's reference design)
+
+Owner request: the portal's phone screens were not clear enough; make them like the owner's reference image (a clean app: navy hero card, soft-blue overview, round quick buttons, navy page header with a back button, floating bottom bar) so a person can see at once where each thing is. The owner said the desktop look is not the topic now.
+
+What changed: Home (greeting, today's sales on a navy card, At a glance, Quick jobs, short lists), a navy header with a back button on every other page, every list as cards, a floating tab bar, the Menu sheet in three groups, Reports as rows, navy buttons. Details in `CHANGELOG.md`.
+
+Decided without asking: the sale list's card title is the buyer (not the pad number); the "View" / "Edit" link on a list card is hidden on phones because tapping the card does the same; the hero shows today's sales because it is the shop's main daily figure; Menu groups are Accounts and reports / Import and goods / Setup.
+
+Checked in the browser at 390px and 360px on the throwaway preview copy of the database (sample buyers, items and three challans added there only): Home, Sales list + search, a challan, the challan form, Stock, Dues, Cash book, Reports, a report, Menu sheet; goods in (list, form), LC files, serial numbers, accounts, balance sheet, business profile, import, new item — no page scrolls sideways; back links checked (list → Home, form → its list, report → Reports, and the same after a Livewire search). Desktop (1280px) still shows the top menu; Home cards sit side by side.
+
+Needs Bangla review: "এক নজরে", "দ্রুত কাজ", "হিসাব ও রিপোর্ট", "আমদানি ও মাল", "সেটআপ".
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 3,025 passed, 1 skipped, 0 failed. New: `TradePortalShopWorkTest` (+1, back button and menu groups).
+
+Commit status: committed and pushed to `feature/trade-portal-reports`; not on `main` (waits for the owner's approval).
+
+## 2026-10-26 - Trade Portal phase 6 (reports + phone testing)
+
+Owner request: start Phase 6 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-reports`. The branch starts from `feature/trade-portal-landed-cost`, so it carries all six phases; none is on `main`.
+
+What changed: Menu → Reports with nine reports (daily sales, monthly sales, dues by age, stock ledger, owed to suppliers, cash and bank, LC status, landed cost per shipment, shipment advice and insurance register), each on screen with Print, PDF and Excel; permission `trade.reports`; the period inputs wrap on small phones. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief "reports as screen + PDF + Excel" and SUMMARY.md §4):
+
+- **PDF language:** DomPDF cannot shape Bangla — checked by rendering a Bangla report and reading it back (ক্রেতা came out as "করতো", vowel signs in the wrong place). So the **PDF file is English**, and **Print** opens the same report in Bangla in the browser, which draws Bangla correctly and can "Save as PDF". The project's investor reports chose the browser print page for the same reason.
+- Dues by age count days from the sale date (challans have due terms in words, not due dates); the opening due from the old books is its own column.
+- Sales reports include every counted sale of the company (Delivery Challans and any ERP order), with the challan number when there is one.
+- The stock ledger counts stock moves on the day they were entered (stock moves have no date of their own), and values stock at the current buying price.
+- Cash and bank lists each account's own in/out (moves between accounts show in both); the LC margins held by the bank are a note under it (from the LC files not yet cleared).
+
+Phone testing: all 30 portal pages (every list, form, detail page, the cash book, balance sheet, the nine reports) opened in a 360px frame on a throwaway copy of the dev database — no page scrolls sideways after the date-input fix; no console errors on the portal pages. A report checked as cards at 360px; the Bangla print page checked on screen; the English PDF read back.
+
+Needs Bangla review: the 34 new keys, especially the report names ("বাকি — কত দিনের", "স্টকের খাতা", "শিপমেন্ট অ্যাডভাইস ও বীমার খাতা") and the notes under the reports.
+
+Not done: a Bangla PDF file (needs a PDF engine with Bangla shaping, e.g. a headless browser on the server — not set up); e-mailing or scheduling reports; profit report (not in the brief's list).
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 3,024 passed, 1 skipped, 0 failed. New: `TradeReportsTest` (9).
+
+Commit status: committed and pushed to `feature/trade-portal-reports`; not on `main` (waits for the owner's approval; it contains all six phases).
+
+## 2026-10-25 - Trade Portal phase 5 (landed cost + machine serials)
+
+Owner request: start Phase 5 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-landed-cost`. The branch starts from `feature/trade-portal-lc-file` (phases 1–4 are not on `main` yet), so it carries all five.
+
+What changed: a landed cost worksheet on each LC file (bank rate, cost lines with their source, total, per unit, per item, "Apply to stock buying price"), machine serial numbers (written on the LC file, ticked on the challan, shown on the challan and its print, a searchable list), permission `trade.landed_cost`. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief "manual cost lines per LC file: duty/insurance/C&F from the C&F agent, truck and loading from the owner", PLAN.md §2 and SUMMARY.md §4 report 3):
+
+- The ERP already has landed-cost fields on purchases, but it adds them to the purchase total and so to the supplier's due. Duty, C&F, truck fare and the rest are not owed to the Chinese supplier, so the worksheet keeps its own cost lines per LC file and leaves the purchase total and the supplier's due as they are.
+- Goods value = LC value (CFR, USD) × the bank's settlement rate; with no rate yet, the purchase lines' buying price. The cost kinds are the lines of report 3 plus the owner's truck fare and loading; any other cost can be named. No amounts or rates are filled in by the system.
+- Several kinds of goods on one LC share the total by value (FOB USD, else buying price, else quantity) — the same way the ERP's purchase shares costs.
+- The landed cost changes the items' buying price only when the owner presses "Apply" (it then feeds the balance sheet's stock value and the profit).
+- Serial numbers are optional and only for machines that have one: never more than the quantity on the purchase or on the challan; one serial number per item; cancelling a challan frees them.
+
+Still open (from the brief): the real duty / insurance / C&F figures of one old shipment, to check the result against the owner's own calculation.
+
+Checked in the browser at 390px on a throwaway copy of the dev database (never the real DB): the worksheet with rate 122 and four costs (44,45,632 total, 5,55,704 per machine), three serial numbers written on the LC file, both pages without sideways scroll. Fixed on the way: the "Remove" link under a cost was centred instead of on the left.
+
+Needs Bangla review: the 53 new keys, especially the cost kinds ("কাস্টমস ডিউটি, AIT, ATV, RD", "C&F এজেন্টের কমিশন ও খালাস খরচ"), "Figure from" (হিসাবটা কার কাছ থেকে) and "Apply to stock buying price". The page title uses the ERP's existing Bangla for "Landed cost" (ল্যান্ডেড কস্ট).
+
+Not done: reports as PDF / Excel (phase 6: landed cost per shipment, stock ledger, etc.), selling price suggestions from the landed cost, warranty records per serial number.
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 3,015 passed, 1 skipped, 0 failed. New: `TradeLandedCostTest` (8).
+
+Commit status: committed and pushed to `feature/trade-portal-landed-cost`; not on `main` (waits for the owner's approval; it contains phases 1–4 too).
+
+## 2026-10-24 - Trade Portal phase 4 (LC file + import papers)
+
+Owner request: start Phase 4 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-lc-file`. The branch starts from `feature/trade-portal-cash-book` (phases 1–3 are not on `main` yet), so it carries all four.
+
+What changed: LC files (list, one form, a page per file with stages and papers), five PDF papers (LC Opening Letter, DRL, Beneficiary's Certificate, Detail Packing List, Shipment Advice), the Home LC card showing each file's stage, permission `trade.lc`. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief, PLAN.md §3.2, SUMMARY.md):
+
+- The LC file is a new record attached to a purchase (one each). What the purchase already has (LC / PI / CI numbers and dates, ports, delivery terms, country of origin) stays on the purchase, and the supplier's address stays on the supplier, so the ERP's own PI / CI / PL print the same numbers. The PI is entered as a purchase in Goods in first.
+- Stages and document statuses are the ones in SUMMARY.md §4 (report 2), with "PI received" as the first stage; they move only when the owner presses "Move to" (no automatic stage changes).
+- Wording: the samples' text, word for word, with the numbers filled in. Where two samples differ, the newer full version was used: Beneficiary's Certificate = document 8 (clauses A–E; E only when "used machines" is ticked), Shipment Advice = document 9 plus the vessel / B/L lines of document 7, Detail Packing List = document 7 sheet DP. Dates are written as each sample writes them (06.09.2026 on the letter, 07-September-2026 in the DRL, 24th Sep 2026 on the certificate). "Chattogram" spelling is whatever the owner types.
+- A paper prints only when every field it uses is filled; the page lists what is missing (brief: cover note no. + date mandatory before a Shipment Advice — the same rule is used for every paper so none prints with blanks). The DRL and Shipment Advice dates are optional because the samples have none.
+- The papers are in English like the samples, whatever language the portal is in. Supplier-issued papers carry the supplier's name and seal (the owner prepares them himself, PLAN.md §2).
+- The ERP's PI / CI / PL are not linked from the portal (they are admin pages and need admin permission); a later phase can add them if the owner wants.
+
+Checked in the browser at 390px on a throwaway copy of the dev database (never the real DB): the LC file form in Bangla, saving the sample LC (163026010167, USD 35,600, 30%), the page with the six stages and the papers (four ready, the Shipment Advice "still needs" the cover note), and three PDFs rendered and read back (LC Opening Letter, Shipment Advice, Detail Packing List). Fixed on the way: the "Not ready" badge was squeezed by the long missing-fields text.
+
+Needs Bangla review: the 99 new keys, especially the stage names ("PI পাওয়া গেছে", "পরিদর্শন চলছে", "বন্দরে খালাস"), "Discrepancy pending" (গরমিল মেটানো বাকি) and the paper titles.
+
+Not done: landed cost and machine serials (phase 5), LC status / shipment-advice registers as reports (phase 6), PSI Inspection Order Form (document 3, filled by the exporter), e-mailing papers, the LC margin in the cash book and balance sheet.
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 3,007 passed, 1 skipped, 0 failed. New: `TradeLcFileTest` (9).
+
+Commit status: committed and pushed to `feature/trade-portal-lc-file`; not on `main` (waits for the owner's approval; it contains phases 1–3 too).
+
+## 2026-10-23 - Trade Portal phase 3 (cash book + balance sheet)
+
+Owner request: start Phase 3 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-cash-book`. The branch starts from `feature/trade-portal-shop-work` (phases 1 and 2 are not on `main` yet), so it carries all three.
+
+What changed: Cash and bank accounts page, Cash book (day and month), Balance sheet, the buttons Bank deposit / move money, Pay a supplier, Other cost, Receive money, a "Cash and bank now" card on Home. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief: "Cash book + simple balance sheet over the existing accounts/vouchers, no new ledger", and PLAN.md §5):
+
+- The book is the ERP's account ledger (`TransactionLedger`) of the company's cash, bank and mobile-banking accounts. Nothing new is stored; entries made from the portal are the ERP's own records (fund transfer, supplier payment, expense), so they also show in the ERP's Finance pages.
+- A bank deposit is a fund transfer that is approved at once (the owner records what already happened); it is dated the day chosen, not the day it was typed.
+- Moves between own accounts are shown but not counted as money in or out; a bank charge on a move counts as a cost.
+- An account's opening money counts from the start of the book, also on days before the account was added (simple; correct once the accounts are added on the first day).
+- Balance sheet: cash, bank + mobile banking, stock at buying price (`AccountBalanceService::inventoryValue`), buyers' dues; less supplier payables. Bank loans, LC margin and owner's drawings are not in the system yet, so they are not shown — the page says so.
+- Money received must now name its account (with a challan, on a challan's page, in Dues), or it would be missing from the cash book. Phase 2 allowed it to be empty.
+- Portal refusals: every button and form now shows the ERP's reason in a red notice (found in the browser: a cost bigger than the cash box saved nothing and said nothing).
+
+Checked in the browser at 390px on a throwaway copy of the dev database (never the real DB): the empty cash book, adding a bank account, a move bank → cash and a "Truck fare" cost (both in the day's book, the move not counted as in/out), a cost bigger than the account refused with the Bangla reason and the form kept, the month view, the balance sheet (8,48,500 = 18,500 + 2,30,000 + 6,00,000).
+
+Needs Bangla review: the 70 new keys, especially "Bank deposit / move money", "What is left (your capital)", "Money in it when you started", and the four ERP refusal messages.
+
+Not done: PDF / Excel of the cash book and balance sheet (phase 6), other income (only buyers' money comes in), owner's drawings, bank loans, editing or deleting a cash-book entry from the portal (the ERP's Finance pages still can).
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 2,998 passed, 1 skipped, 0 failed. New: `TradeCashBookServiceTest` (5), `TradePortalCashBookTest` (4).
+
+Commit status: committed and pushed to `feature/trade-portal-cash-book`; not on `main` (waits for the owner's approval; it contains phases 1 and 2 too).
+
+## 2026-10-22 - Trade Portal phase 2 (shop work)
+
+Owner request: start Phase 2 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-shop-work`. The branch starts from `feature/trade-portal-foundation` (phase 1 is not on `main` yet and phase 2 needs it), so merging phase 2 brings phase 1 with it.
+
+What changed: Delivery Challan (write, view, print, receive money, cancel), Goods in (short purchase entry, "Goods arrived"), Stock (list, new item with opening stock, correct count), Dues (who owes, receive money against a challan or the old due), Bring in old data (buyers with old dues, items with stock, CSV or Excel), home quick buttons, phone tab bar Home · Sales · Stock · Dues · Menu, challan print text on the Business profile. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief, PLAN.md §4 and the owner's challan photo):
+
+- The challan is backed by an ERP order (`source = trade_challan`), so stock, the customer's due, the due alerts, the home card and payments all use the ERP's own order rules (brief: reuse `Order`/`Customer`). The order is created completed and delivered (the goods leave the shop with the challan) — so it shows in the ERP's Orders list as a completed sale. Customer SMS on status changes are not sent for these orders (those texts are about shipped/delivered parcels).
+- The total is quantity × price over the priced lines only, as on the pad (the machine set has the price; the stand, feeders and CAMs on the same challan have none but still leave the stock). A price needs an item from stock, because only order lines count in the ERP total; a text-only line (e.g. "MC 2 pcs + extra 2 pcs") is printed but takes no stock.
+- The advance and the cash paid are payments of the sale; the cheque on the paper is kept as information (cheque no. and bank) — it is money only when it is received with "Receive money".
+- Cancelling a challan cancels its order: the goods return to stock and the due goes; money already received stays recorded, to be given back by hand.
+- Paying the "old due" makes a customer payment, which the ERP posts to a money account, so an account is required there (the challan payments may leave it empty). If the company has no cash/bank account yet the form says to ask the admin.
+- The challan prints in English like the pad, whatever language the portal is in; the text under it (the bilingual disclaimer) is the owner's own, entered on the Business profile, never hardcoded.
+- Items brought in from a file without a SKU get `TRD-<NAME>`, so bringing the same file in again updates instead of duplicating.
+- The ERP's "coming soon" cost placeholders (C&F, Duty, Misc…) are hidden from portal stock and the challan item list, and no longer counted in the home low-stock card (they were counted as 12 low items in phase 1).
+
+Found and fixed on the way: a payment recorded on an order did not update the customer's total due until the order itself was saved again (`Order::recalculatePaidAmount()` now syncs the customer).
+
+Checked in the browser at 390px on a throwaway copy of the dev database (scratchpad, never the real DB): home with the quick buttons and the new tab bar, new item with opening stock, writing the challan of the photo (total ১৫,০০,০০০ and due ৬,০০,০০০ shown while typing; picking the item filled description and unit), the challan page with Print / Receive money / Cancel, the print page (money block 15,00,000 / 1,00,000 / 8,00,000 / 6,00,000, cheque, due terms), Dues as stacked cards and its Receive-money form, Bring in old data, the Menu sheet tiles; no sideways scroll. The panel's blue buttons were pale (Filament made a light palette from the hex colour) — switched to Filament's Blue.
+
+Needs Bangla review: the 131 new keys, especially "Goods in" (মাল এলো), "Bring in old data" (পুরোনো হিসাব আনুন), "Correct count" (গণনা ঠিক করুন), "Warn when stock is at or below", the long help text of the Goods section, and the import column notes.
+
+Not done: aging of dues and reports (phase 6), cash book (phase 3), LC file (phase 4), landed cost and machine serials (phase 5); editing a saved challan (cancel and write it again); items with variations on a challan; the Delivery Challan does not produce a VAT challan (Mushak 6.3).
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 2,988 passed, 1 skipped, 0 failed. New: `DeliveryChallanServiceTest` (7), `TradePortalShopWorkTest` (8).
+
+Commit status: committed and pushed to `feature/trade-portal-shop-work`; not on `main` (waits for the owner's approval; it contains phase 1 too).
+
+## 2026-10-22 - Trade Portal phase 1 (foundation)
+
+Owner request: build the Tasneem Knitting Industry Trade Portal from `docs/tasneem-samples/BUILD-BRIEF.md`, Phase 1 only, on `feature/trade-portal-foundation`, nothing to `main`.
+
+What changed: new panel `/trade` (`TradePortalPanelProvider`, Bangla first, phone tab bar, light theme), home with four cards (today's sales, dues, low stock, open LCs), Business profile page, company switch "Trade Portal" on Companies → edit (Super Admin only) with the new profile fields, the editable **Trade Owner** role and permissions `trade.access` / `trade.profile.manage`, the `canAccessPanel` security fix (trade-only roles are kept out of `/admin`; staff accounts are refused by unknown panels), `RestrictPortalHosts` serving `/trade` on the main domain. Migration adds 6 columns to `companies` and the `trade_owner` role row. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief and the rules):
+
+- "Only the trade role" = a role whose permissions are all `trade.*`. Every existing role, any custom role with another permission and a role with no permissions keep `/admin` as before.
+- The open company in `/trade` is the person's default company with the portal on, else the first; a Super Admin sees every company with the portal on. A company list appears in the Menu only with two or more.
+- BIN: the existing `bin_number` stays the import-paper BIN (it is already printed on PI/CI/PL); the new `challan_bin_number` is for the Delivery Challan and falls back to `bin_number` when empty. **Which BIN goes on which paper is still to be confirmed with the owner** (challan sample `006673859-0403`, import papers `006673859-0112`).
+- The existing `address` column is left as the general contact address; the two new address fields are separate.
+- LC stage on the home card is read only from what is filled in: an LC number → "LC opened", plus a Commercial Invoice number → "Shipped (invoice received)"; received or cancelled purchases are not listed. The real LC file with its stages comes in phase 4.
+- Tasneem's company was not created or switched on by code (no data seeded): a Super Admin switches **Trade Portal** on for "Garments Machinery Company" / Tasneem in Companies → edit and gives the owner's user the Trade Owner role.
+
+Found and fixed on the way: saving a company from a non-admin panel crashed in `CompanyNotificationObserver` (link built for the current panel); the trade sign-in could land on a leftover `/admin` or `/investor` address.
+
+Checked in the browser on a throwaway copy of the dev database (scratchpad, never the real DB): `/trade/login` and home at 375px and 390px in Bangla, the Menu sheet, the Business profile page (no sideways scroll), `/admin` returns 403 for the Trade Owner; a quick look at 800px. In that copy `localhost` is the IMS domain, so `/trade` correctly redirected to `/investor` there until the copy's IMS domain was moved.
+
+Needs Bangla review: all 42 new keys, especially "Dues (to collect)" (বাকি (পাওনা)), "Low stock" (মাল কম), "Shipped (invoice received)", "Letterhead" (প্যাড (লেটারহেড)), "items at or below their reorder level".
+
+Not done (later phases): Delivery Challan, purchases, stock, receivables, cash book, LC file and papers, landed cost, reports. The home's sales card counts ERP orders until the Delivery Challan exists.
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 2,973 passed, 1 skipped, 0 failed. `TradePortalTest`: 14 passed.
+
+Not committed on purpose: the owner's original sample files in `docs/tasneem-samples/` (the .docx / .xlsx documents and the challan photo) — business papers, kept local; only `PLAN.md`, `SUMMARY.md` and `BUILD-BRIEF.md` are in the commit.
+
+Commit status: committed and pushed to `feature/trade-portal-foundation`; not on `main` (waits for the owner's approval).
+
+## 2026-10-23 - Test SMS "1001 Invalid Number" with the new API key
+
+Owner (Bangla, with a phone screenshot of the SMS Log): after connecting the new API, the Send test SMS button with their own number says the number is invalid.
+
+**What the log shows:** 10:17 code 1032 (IP not whitelisted), so the key is now accepted (the earlier 1011 is gone); 10:19, after the whitelist change, code 1001 Invalid Number for both `01728714614` and `8801728714614`. The system turns both into `8801728714614`, so the number itself is sent in the right form. Both forms failing the same way points at the saved URL template. My best guess (I cannot see the owner's URL): BulkSMSBD's example reads `number=88017XXXXXXXX`; replacing only `017XXXXXXXX` with `{phone}` leaves `number=88{phone}`, i.e. `888801...`.
+
+**Fix:** an `88` or `880` right before `{phone}` in the template is no longer repeated. **Send test SMS** now shows the gateway address that was called (number and sender ID visible, API key and text hidden) when the gateway refuses, so a wrong template is visible at once. If the owner's URL is something else and 1001 stays, that preview will show what is wrong (or the number really is not valid for that operator on that account; then ask BulkSMSBD support).
+
+**Needs Bangla review (lang/bn.json):** the new 1001 advice and "যা পাঠানো হয়েছিল (key ও লেখা লুকানো)".
+
+**Verified:** `SmsDashboardTest` (+2, all nine number/template combinations send `number=8801728714614`), `SmsLogTest`, `IntegrationsPageTest`, `TranslationParityTest`. Full `php artisan test` before the push.
+
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
+
+## 2026-10-23 - SMS Dashboard (counts, cost, BulkSMSBD balance)
+
+Owner (Bangla): can a dashboard be made for the SMS gateway, with how many SMS came and went, what it cost, and recharge from the dashboard, so nobody has to log in to BulkSMSBD and everything is controlled from here?
+
+**What BulkSMSBD allows (checked on its developer page):** only three things by API: send, send many-to-many, and read the balance (`/api/getBalanceApi?api_key=`). There is **no API to recharge**, none for delivery reports or history, and none for prices. So: counts and cost come from our own SMS log; the balance is live; **a recharge cannot be done from here**, the dashboard has a button that opens their site (a login there is still needed); "sent" means the gateway accepted it, not that the phone got it; the cost is parts x the owner's own price per SMS, an estimate. Ask BulkSMSBD support whether they offer a reseller / payment API if the owner wants more.
+
+**What was built:** Settings → SMS Dashboard (period picker, balance card with refresh and recharge link and a low-balance warning, sent / parts / estimated cost / refused / skipped cards, by-kind table, day-by-day bars). Settings → Integrations → SMS Gateway has **Price per SMS** and **Warn me when the balance is below**. Every SMS is now counted, not only order SMS: login/recovery codes, reminders, broadcasts and investor messages leave a `kind = other` row (phone, result, parts, never the text).
+
+**Found on the way, fixed:** a gateway connection error carried the full request URL, API key included, into the SMS Log detail, the application log and (on the dashboard) the page. URLs are now stripped (`StorefrontNotificationService::scrubUrls()`), the migration cleans old rows. The owner may want to replace the BulkSMSBD API key if a connection error ever appeared in the SMS Log.
+
+**Not verified:** the balance reply for a VALID key (I only have a dummy key: BulkSMSBD answered the dummy with `{"response_code":1011,...}`, which the page shows with the fix advice). The reader accepts a `balance` field or a bare number and shows anything else as it came; if the owner's page shows "no balance could be read" with the raw reply, send me that reply and I will adjust the reader.
+
+**Needs Bangla review (lang/bn.json):** the 41 new keys, mainly "ফিরিয়ে দিয়েছে" (Refused), "আমাদের নিয়মেই পাঠানো হয়নি" (Not sent by our own rules), "পার্ট" (Parts) and the balance and price helper texts.
+
+**Verified:** `SmsDashboardTest` (13), `SmsLogTest`, `IntegrationsPageTest`, `TranslationParityTest`, `MultiCompanyIsolationTest`, `ModuleGuardTest`, Pint on my files; browser check on a scratch SQLite database (desktop and 390px phone, no sideways scroll, real call to BulkSMSBD with a dummy key shows the 1011 advice). Full `php artisan test` before the push.
+
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
+
+## 2026-10-23 - Courier COD is the due amount, and the order page has a Payment section
+
+Owner (Bangla): when an order is booked with a courier the grand total is sent as the COD amount; with an advance payment the due amount shows on the order but the courier still gets the grand total, and it should be the due amount. Also: separate the payment section on the order page, a new person cannot tell where the payment / advance payment goes.
+
+**COD:** the 2026-10 rule ("COD = full invoice total, never reduced by an advance", `UPDATE_NOTES` entry for `courierCodAmount()`) is replaced on the owner's word. `Order::courierCodAmount()` is now the grand total (with the zone delivery fee added when the order has no shipping fee of its own, unchanged) minus `paid_amount`, never below 0. Every booking path already read `courierCodAmount()`, so the popup on the order page, the row action in the orders list and the bulk action all send the due amount. The popup shows "Grand total ৳560 − advance paid ৳200 = ৳360" under the COD field; the field is still editable. Not covered: a payment recorded AFTER the booking does not change the COD already sent to the courier.
+
+**Payment section:** `OrderForm` (create and edit) ends **Totals** at "Grand total" and adds a non-collapsible **Payment** section: Advance / paid amount, Payment Method (create only), Due amount, each with a helper line; on edit the helper points to the Payments History table. `OrderInfolist` (view page) gets a **Payment** block (advance / paid amount, due amount) after **Totals**.
+
+**Needs Bangla review (lang/bn.json):** "Grand total", "Advance / paid amount", "Due amount" (বাকি (ডিউ) টাকা), the Payment section description and the five helper lines, and the COD sum line ("মোট :total − অগ্রিম পরিশোধিত :paid = :due").
+
+**Verified:** `CourierIntegrationTest` (COD rule with advance, later payments, fully paid = 0, popup end to end), `OrderFormTest` (Payment section), `TranslationParityTest`, Pint on my files; browser check on a scratch SQLite database (create form and view page show the Payment section; the Book courier popup on a ৳560 order with ৳200 advance shows COD 360 and the sum line). Full `php artisan test` before the push.
+
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("ওকে মেইন এ পুশ কর").
+
+## 2026-10-23 (later) - Reseller landing page broken on a phone
+
+Owner (Bangla), with a phone screenshot of reseller.zamzamint.com: why is everything messed up, is the mobile layout not responsive, and it looks wrong on desktop too?
+
+**What the screenshot was:** the page's colours, borders, fonts and buttons were there but none of its layout (huge logo, the language switch twice, no padding, buttons stacked). I reproduced that exactly by removing `app.css` from the page: the layout classes (Tailwind utilities) came only from the site-wide `app.css`, and the neo-brutalist rules from `reseller-landing.css`. So at that moment the phone had loaded the second file and not the first. I could not find out why that one load failed: the live site serves both files correctly now (checked the real HTML and files from reseller.zamzamint.com, rendered at 412 px and 1280 px, the layout is right). The most likely cause is the moment of a deploy: `app.css` changes its file name on every deploy (its content changes whenever any Blade view changes), `reseller-landing.css` almost never does, and the screenshot was taken at 9:20 BD time, minutes before the new build's files were written (03:22 UTC). That is a guess, not something I could prove.
+
+**What I changed (so it cannot happen again, whatever the cause):** the landing page now has its own Tailwind build (`@import 'tailwindcss' source(none)` plus `@source` lines for the landing views) and does not load `app.css`. It is 24 KB instead of 252 KB, which also helps on a slow phone connection. Not fully immune: if the landing's own file changes in a deploy, someone who opens the page during that deploy could still get an old page with a new file name, but that now happens only when the landing itself changes, not on every deploy.
+
+**A second, real problem found on the way:** a sideways scroll at phone widths (the page was 444 px wide on a 390 px screen; the long store address in the "Your own store" picture widened a grid column). Fixed with `grid-cols-1` on every grid and `minmax(0, …)` on the hero's columns. Measured with Chromium at 280 / 320 / 360 / 375 / 390 / 412 / 600 / 768 / 1024 / 1280 px, English and Bangla (with the real Anek Bangla font served over HTTP): page width = screen width at all of them. Looked at the phone, tablet, desktop and dark-mode screenshots, with and without the website footer.
+
+**Verified:** `ResellerLandingPageTest` (2 new tests; I checked the grid test fails on the old markup), `ResellerGuidePageTest`, `ResellerPortalTest`, `TranslationParityTest`; `npm run build`. No new strings. **Needs the owner:** after deploy, open reseller.zamzamint.com on the phone once with a normal reload; if it ever shows the broken layout again, tell me roughly when and I will look at the deploy logs.
+
+Commit status: committed on `claude/reseller-module-status-v9tobe` and pushed to `main` on the owner's approval ("মেনে পুস কর", read as "main-এ পুশ কর").
+
+## 2026-10-23 - Email Log (sent / failed / not sent, and why)
+
+Owner (Bangla): "ইমেইলের লগ পেজ তৈরি করেছ? ইমেইল পাঠানো হইছে ফেল হইছে সফল হইছে ফেল হইলে কেন হয় নাই" (did you build an email log page? email sent, failed, succeeded, and if it failed, why). I had not: only the SMS Log existed (another session). I answered that and built it the same way as the SMS Log.
+
+What it does: a tab on Settings → Logs (the one Logs page main gained today), read-only, one row per email through `StorefrontNotificationService` (login code, reseller password reset link, investor code / invitation / message, owner digest, test email). Result: Sent / Failed / Not sent. A failure shows a plain reason plus the mail server's own answer; "Not sent" covers no email account for the site and a server mailer that only logs (the send still returns true as before, so local development and tests that read the log mailer keep working, but the log does not call it "sent").
+
+Decisions (mine, say if you want them different):
+- **No message text, no subject.** Only recipient, kind, result, and the server's answer, so a login or reset code can never be read from the log (the SMS Log also skips code messages; here the row exists but carries no code).
+- **"Sent" means the mail server accepted it.** The page says so. SES bounce / complaint tracking (SNS) is still not built, so an address that bounces later still shows "Sent". This is the main gap against "did it reach the customer".
+- **No clean-up of old rows yet** (the SMS Log has none either). Every customer login code is a row; add a pruning job if the table grows.
+- The reason mapping reads the error text (`classify()`), tested against typical SES answers (535 login, 554 not verified, 454 throttling, quota, connect/time-out). A message that matches none shows "The mail server could not send the message" with the raw answer next to it.
+
+Not logged: emails that do not go through this service (none found; the panels' password resets are custom and use it). Not tested against real SES.
+
+Needs Bangla review (new keys): "Email Log" → "ইমেইল লগ", the kind labels ("Customer login code", "Reseller password reset link", "Investor code/invitation/message", "Owner daily digest", "Test email", "Other email"), "Sent through", "SMTP :host", "Server mailer (:mailer)", the page note and the eight reason texts.
+
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` on the owner's approval ("মেনে পুস করো"). Merged `main` (v2.104.0) first and moved the Email Log into the new Settings → Logs page as an "Email" tab (own sidebar entry removed, one-column phone layout). Full test run after the merge: 3042 passed, 6 skipped, 0 failed.
+
+## 2026-10-23 - One Logs page, and the "User Id not found" SMS error
+
+Owner (Bangla): put all the log pages on one page, with a single "Logs" menu entry and the logs as tabs, like Integrations; and the first SMS Log row says the gateway refused with 1011 "User Id not found" — can it be fixed?
+
+**Logs page:** Settings → Logs, tabs SMS, Audit, Courier status, Courier webhooks, Meta events, Deploy errors, Mobile crashes (each only for people who could already open it; see CHANGELOG). Left where they were because they are business data, not system logs: Storefront → Checkout Attempts and Courier → Risk Events (the owner can say if they should move too). Checked in a real browser on a scratch SQLite database (not the demo DB): login, all 7 tabs, tab kept in the address, the sidebar shows only "Logs", 0px horizontal overflow at 1280 and 390 px.
+
+**1011:** that is BulkSMSBD saying it does not know the API key. I cannot see or test the owner's key, so I did not "fix" the gateway; the code now tells the owner exactly what to do (see CHANGELOG), catches an empty key, trims spaces, and stops the browser from autofilling the login password into the API key box (a plausible cause: the box is a password field). **Next step for the owner:** re-copy the API key from the BulkSMSBD Developers page into Integrations → SMS Gateway, Save changes, press Send test SMS.
+
+**Needs Bangla review (lang/bn.json):** the tab names (Audit, Courier status, Courier webhooks, Meta events, Deploy errors, Mobile crashes), "Logs", "Nothing logged yet", and the nine gateway-hint sentences.
+
+**Verified:** `LogsPageTest` (8), `SmsLogTest`, `SmsTemplatesTest`, `AdminNavigationClustersTest`, `ModuleGuardTest`, `TranslationParityTest`. Full `php artisan test` (plain, no `--env`): 3006 passed, 2 skipped.
+
+## 2026-10-23 - Amazon SES setup for the ERP's email
+
+Owner (Bangla): "আমরা email সার্ভার হিসেবে aws ses সার্ভিস নিয়েছি। সেখানে আমাদের ডোমেইনগুলো এপ্রুভ হয়েছে। এখন সেটা সেটআপ করা বাকি erp তে। এর জন্য কোন কাজ করা লাগলে সেটাও কর" (we took AWS SES as the email server, our domains are approved there; setting it up in the ERP remains; do whatever work is needed).
+
+Decision (mine, not asked): SES through its **SMTP interface**, not the SES API. Every email flow already goes through the per-site SMTP account (`StorefrontNotificationService`: storefront login codes, reseller password reset, investor/IMS mail, owner digest), so no new dependency, no new credential store, and each company/site keeps its own From domain. The API route (`aws/aws-sdk-php` is installed) would need new per-site key/secret/region fields and a new transport; say so if the owner wants it.
+
+What changed: Email Setup tab gets an **Amazon SES region** quick fill (host, 587, TLS), a **Send test email** button (shows the mail server's own error), and a warning on save when no usable From address exists. Guide: `docs/email-ses-setup.md`.
+
+Two bugs found on the way, both fixed:
+- **Wrong company's SMTP/sender in a long-running queue worker.** `Mail::mailer('storefront_dynamic')` is cached by the mail manager for the process; the second company's mail went out through the first company's SMTP host and From. With several verified SES domains that means mail sent under the wrong company's address, with no error. Now purged before each build; `CompanyEmailSetupTest` fails without it (checked by removing the line).
+- **SES user names are not email addresses.** The sender defaulted to the SMTP user name (`AKIA…`), which is not a valid sender. Now From address, else an email-shaped user name, else the server default.
+
+Found, not changed: Laravel 13's SMTP transport ignores the `encryption` setting (port 465 = SSL, other ports = STARTTLS when offered). The encryption box is therefore cosmetic; I added a help line saying so rather than rewiring it. `Config::set('mail.from')` in `companyMailer()` is still a process-wide side effect (the server-default mailer could pick up a company's From if it is first built afterwards); only the SES-relevant leak above was fixed.
+
+**What the owner must do outside the ERP:** (1) SES must be out of the **sandbox** — verified domains do not lift it; in the sandbox customers would receive nothing. (2) In SES → SMTP settings → Create SMTP credentials (user name `AKIA…`, long password; region-specific; one pair works for all domains in that region). (3) In the ERP, per site: region, user name, password, a **From address on that site's verified domain**, Save, then Send test email. (4) Optional: `MAIL_*` in Coolify for the server-wide fallback. Not built: SES bounce/complaint handling (SNS webhook) — SES can restrict an account with many bounces; offer if wanted.
+
+Checked: full `php artisan test` with PHP 8.4.27: 2990 passed, 6 skipped, 0 failed. Not tested against real SES (no credentials here) — the transport is built and the sender/host/port are asserted, and sending is covered with a fake mailer and an unreachable host only.
+
+Needs Bangla review (new keys): "Amazon SES region (quick setup)", its long help text, "Send test email", "Send to", "Test email sent/failed", "Email needs a From address" and its body, "Port 465 connects over SSL…", the new From address help text, the test email's subject and body.
+
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` on the owner's approval ("কমিট এবং পুশ কর করে মেইন এ পুশ কর"). Merged `main` three times on the way (SMS Log, v2.101.0, v2.102.0); full test run after the last code merge: 3010 passed, 6 skipped, 0 failed.
+
+## 2026-10-23 - Email (SMTP) settings moved to Integrations → Email Setup
+
+Owner (Bangla): "ইমেইল ইন্টিগ্রেশন এর জন্য যে সেটিংস গুলো আছে সেগুলো ইন্টিগ্রেশন পেজে ইমেইল সেটআপ ট্যাব এ নিয়ে যাও।" (move the settings that exist for email integration to the Email Setup tab on the Integrations page). There was no Email Setup tab yet, so I added it next to SMS Gateway, the same way the SMS gateway was moved on 2026-10-10.
+
+What changed: the seven SMTP fields (host, port, encryption, username, password, From address, From name) are removed from Storefront Settings → Customer Notifications & Reminders and live on Settings → Integrations → Email Setup, per site (Site picker). Same storage (`notification_credentials`), no migration, saved values keep working. Each page merges only the keys it owns, so neither can wipe the other's (or the WhatsApp reminder) keys. The "Email is not set up…" message for the reseller password-reset action and the Customer Notifications section note now point to the new tab.
+
+Left as is: the WhatsApp reminder fields stay on Storefront Settings (the owner asked only for email). `BroadcastForm` still says the SMS gateway is "under Storefront Settings → Customer Notifications" — stale since the SMS move of 2026-10-10, not touched here.
+
+Needs Bangla review (new keys): "Email Setup" → "ইমেইল সেটআপ", the tab note, "SMTP host/port/encryption/username/password", "From address" → "প্রেরকের ঠিকানা", "From name" → "প্রেরকের নাম".
+
+Found while testing: choosing "None" for encryption was saved as null, which the mail code reads as TLS (the old Storefront Settings select had the same flaw). The new tab now saves "None" as an empty string and shows a saved null as TLS, so nothing changes for existing sites.
+
+Checked: full `php artisan test` (PHP 8.4.27): 2982 passed, 6 skipped, 0 failed. No real SMTP server or browser was used — the tab is covered by Livewire tests only, and I did not look at it rendered.
+
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` on the owner's approval ("কমিট এবং পুশ কর করে মেইন এ পুশ কর"). Merged `main` three times on the way (SMS Log, v2.101.0, v2.102.0); full test run after the last code merge: 3010 passed, 6 skipped, 0 failed.
+
+## 2026-10-23 - SMS Log and "Send test SMS" (why did no SMS arrive?)
+
+Owner (Bangla): "আমি এইমাত্র এই অর্ডার টা করলাম কিন্তু কোন এসএমএস আমার ফোন নাম্বারে আসে নাই, তাহলে বুঝা গেল যে sms gateway ঠিকমতো কাজ করছে না।" Also asked earlier whether each message (order, login OTP, password reset, reseller) has its own template, because the SMS Gateway tab shows a single URL.
+
+**What I found:** there was no way to see why an SMS did not go. Every skip was silent (no wording saved, no phone, opted out, no gateway, duplicate) and a gateway refusal went only to the server log file. The gateway is not proven broken by one missing SMS: the most likely causes are (1) the "Order placed" / status wording is not saved on SMS Templates (blank = nothing is sent, owner decision 2026-10-17), (2) no queue worker is running in production (the "placed" SMS waits 45 seconds in the queue), (3) the gateway refuses the text (masking sender ID needs Bangla text, error 1012; balance; IP whitelist).
+
+**What changed:** Settings → SMS Log (one row per order SMS with result and reason, stuck-queue warning), Settings → Integrations → SMS Gateway → **Send test SMS** (real SMS, shows the gateway's answer), and a note that the URL only delivers messages. See CHANGELOG. Code messages are never logged.
+
+**Not changed (asked of the owner):** reseller sign-up/login/password-reset codes still share the shop customers' three code templates, and the reseller's three messages (approved, profit payable, payout paid) are still written on Reseller Settings, not on SMS Templates. The owner has been asked whether to split/move them.
+
+**Needs Bangla review (lang/bn.json):** SMS Log, Order status change, Test SMS, Waiting in the queue, Not sent: gateway, Not sent: skipped, Message, Send test SMS, the reason sentences (no wording / no phone / opt-out / no gateway / duplicate / excluded / gateway refused / unreachable), the test-SMS texts (including the Bangla test message sent for masking sender IDs: ":company থেকে টেস্ট SMS। আপনার SMS গেটওয়ে ঠিকমতো কাজ করছে।") and the stuck-queue sentence.
+
+**Verified:** `SmsLogTest` (13), `SmsTemplatesTest`, `MultiCompanyIsolationTest`, `TranslationParityTest`. Full `php artisan test` (plain, no `--env`): 2995 passed, 2 skipped.
+
+**Commit status:** committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("টেস্ট শেষ হলে মেন এ ও পুশ করে দিও").
+
 ## 2026-10-22 - PHP security update: production Dockerfile
 
 Reason - owner forwarded Contabo's email about the PHP RCE vulnerabilities CVE-2026-109618 / CVE-2026-109619 and asked whether the server needs an update. I checked the claims on php.net (advisory 2026-10-21; fixed in 8.4.27 / 8.5.12 / 8.3.36 / 8.2.35; PHP-FPM is affected). The owner's ERP container reports `PHP 8.4.2 (built Dec 17 2024)`, so it is vulnerable, and 25 patch releases behind.
@@ -1333,6 +1763,35 @@ Needs Bangla review (new keys): Reseller levels (রিসেলার লেভ
 Tests: `ResellerLevelsTest` (10). Verified: full suite 2543 passed, 1 skipped, 0 failed.
 
 Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16). Not pushed to `main`.
+
+## 2026-10-22 (last) - Landing page: the reseller's questions answered, Bangla version, Anek Bangla font
+
+The owner (in Bangla) passed on the questions of a prospective reseller (list products on Facebook/website with photos, details, prices; send customer name/address/phone/bill; the store sends by Steadfast on cash on delivery and deducts the product price, packaging and other charges before sending the profit; how payment and profit settlement work) and asked that **the answers are written on the landing page**, that the page **has a Bangla version**, and that it **uses the Anek Bangla font**.
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+
+1. A **Questions resellers ask** section with six answers, written only from what the code does (checked in `ResellerOrderPlacementService::quote()`, `ResellerCommissionService`, the portal's Products / Earnings / Withdrawals pages): cash on delivery with nothing in advance; customer bill = the reseller's prices + the store's delivery charge + VAT where it applies; profit = selling price − cost per piece; **no packaging charge on store-delivered orders** (packaging is charged only on own-courier orders, as the guide already says); profit payable after delivery; withdrawal to bKash / Nagad / Rocket / bank, reviewed and paid by the store.
+2. A **Bangla / English switch** on the landing page (cookie, `?lang=bn`), followed by the portal's sign-in and application pages. Default stays the app's language for anyone who did not use the switch.
+3. **Anek Bangla** (variable, self-hosted, OFL) for the whole landing page; Hind Siliguri and Unbounded are no longer loaded there. The admin portal itself is unchanged (still Hind Siliguri).
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- **Courier names (decided by the owner, 2026-10-23):** I first left the courier out because the code does not say which courier the store uses for reseller orders. The owner gave the wording: "<company name> sends the parcel by courier (Steadfast, Pathao, RedX) on cash on delivery …". It is now in the page (English and Bangla), with the company name filled in from the company's settings. The three courier names are written in the page's text, not an admin setting, so a change of couriers needs a text change.
+- **No promise about how fast the store pays.** The system has no payout deadline, so the answer gives none.
+- **The prospective reseller's "packaging and other charges are deducted from the delivery money" is answered with what the system does:** the reseller's cost (shown on each product) is what the store keeps; delivery charge and VAT are added to the customer's bill; no separate packaging charge on store-delivered orders; the return charge only if the order comes back (and only if the store set one). If the owner's real practice is different (for example a packaging deduction), the system itself would have to change first.
+- **The answers are part of the page's code, not an admin-edited list**, like the other "how it works" sections (so they are in Bangla and English from the language files). The guide's introduction and rules are still admin-written, and appear in whatever language the admin typed them. If the owner wants the questions editable from Reseller Settings too, that is a small follow-up.
+- Language default: I did **not** make Bangla the default; only a visitor's own choice changes it. Setting `APP_LOCALE=bn` would make Bangla the default for the whole app, not just this page.
+- Two language-name keys hold the language's own name ("English", "বাংলা") and are read in their own language, so the switch is always readable; the Bangla word lives only in `lang/bn.json`.
+
+Needs Bangla review (new keys, all in `lang/bn.json`): the six questions and their answers (long sentences; I wrote them in the same plain style as the guide, using "আয়" for profit, "খরচ" for cost and "উইথড্র" as the guide does), *Questions resellers ask*, *Questions and answers*, the short line under the heading, *Change language*.
+
+**Deploy: `npm run build`** (new font files and CSS).
+
+Verified: `npm run build`, the English and Bangla pages rendered in Chromium (desktop and 390 px phone), and the full suite on the tree with `origin/main` (v2.100.0) merged in: 2986 passed, 5 skipped, 0 failed.
+
+Commit status: committed to the work branch `claude/reseller-module-status-v9tobe`, `origin/main` (v2.100.1) merged in, full suite on the merged tree green (result below); pushed to `main` on the owner's explicit approval ("ওকে এটা মেইনে পুশ কর", 2026-10-23).
+
+Follow-up (2026-10-23): the parcel answer now names the company and its couriers (Steadfast, Pathao, RedX) in the owner's wording; full suite 2999 passed, 5 skipped, 0 failed; pushed to `main` on the owner's explicit approval ("টেস্ট শেষ হলে মেইনেও পুশ করে দিও", 2026-10-23).
 
 ## 2026-10-22 (later) - Landing page redesigned in neo-brutalism
 

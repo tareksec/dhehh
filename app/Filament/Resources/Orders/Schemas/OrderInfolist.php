@@ -205,9 +205,9 @@ class OrderInfolist
                             ->label(__('Packaging charge'))
                             ->moneyWithoutTrailingZeroes('BDT')
                             ->visible(fn (Order $record): bool => (float) $record->packaging_fee > 0),
-                        TextEntry::make('total_amount')->moneyWithoutTrailingZeroes('BDT'),
-                        TextEntry::make('paid_amount')->moneyWithoutTrailingZeroes('BDT'),
-                        TextEntry::make('due_amount')->moneyWithoutTrailingZeroes('BDT'),
+                        TextEntry::make('total_amount')
+                            ->label(__('Grand total'))
+                            ->moneyWithoutTrailingZeroes('BDT'),
                         TextEntry::make('total_weight')
                             ->label('Total Weight')
                             ->state(fn (Order $record): string => number_format(
@@ -227,6 +227,24 @@ class OrderInfolist
                             ->color(fn (Order $record): string => $record->profit() >= 0 ? 'success' : 'danger'),
                     ])
                     ->columns(4),
+
+                // Its own block so the advance / payment is easy to find
+                // (owner request 2026-10-23); the Payments History table
+                // below is where a payment is added.
+                Section::make(__('Payment'))
+                    ->description(__('Add or change payments in the Payments History table below. The courier is asked to collect only the due amount.'))
+                    ->icon('heroicon-o-banknotes')
+                    ->columnSpanFull()
+                    ->schema([
+                        TextEntry::make('paid_amount')
+                            ->label(__('Advance / paid amount'))
+                            ->moneyWithoutTrailingZeroes('BDT'),
+                        TextEntry::make('due_amount')
+                            ->label(__('Due amount'))
+                            ->moneyWithoutTrailingZeroes('BDT')
+                            ->weight('bold'),
+                    ])
+                    ->columns(2),
 
                 Section::make('Items')
                     ->columnSpanFull()

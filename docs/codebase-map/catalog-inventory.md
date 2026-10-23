@@ -1,5 +1,5 @@
 # Catalog & Inventory
-> Last checked: 2026-10-21, merge of `claude/purchase-module-automation` into main (PI / CI / Packing List, trade document columns on companies, suppliers, products, purchases and purchase items)
+> Last checked: 2026-10-25, branch `feature/trade-portal-landed-cost` (Trade Portal landed cost and machine serials)
 
 ## What it does
 The Catalog & Inventory module manages products, variants, categories, digital media assets, and stock lifecycle across warehouses and companies. It implements an immutable stock movement ledger where on-hand quantities are strictly computed from transactional movements (opening, purchase, sale, return, damage, adjustment, and internal transfers). It provides multi-company physical inventory sharing through Stock Pools, allowing different companies to sell from the same physical stock without inventory drift. For purchasing and supply chain operations, it tracks suppliers, import purchase orders with detailed China-to-BD landed costs, shipping containers, and customs tracking. Additionally, it provides batch operations for bulk stock updates, product setup onboarding, and CSV import/export capabilities.
@@ -41,6 +41,12 @@ The Catalog & Inventory module manages products, variants, categories, digital m
 | `app/Services/OrderStockCheckService.php` | Validates inventory availability during checkout and order status transitions. |
 | `app/Services/LowStockAlertService.php` | Generates system notifications when inventory dips below configured reorder levels. |
 | `app/Services/PurchaseWorkflowService.php` | Handles purchase receipt status transitions and automatic stock movement creation. |
+| `app/Models/LcFile.php` | The Trade Portal's LC file of a purchase (`Purchase::lcFile()`, one per purchase): opening bank, margin, bank trade office + BIN, insurer and cover note, PSI, goods description, used-machine flag, this shipment's weights / packages / CBM, carrier, vessel, B/L, container, seal, paper dates, `stage` (`STAGES`) and `doc_status` (`DOC_STATUSES`); `missingFor($document)` lists the empty fields of each paper (`DOCUMENTS`). |
+| `app/Models/LandedCostLine.php` | A cost of an import beyond the goods on the LC file's worksheet (`KINDS` with default `SOURCES`: C&F agent, owner, bank, other). Kept apart from the purchase's own cost fields, which the ERP adds to the purchase total and the supplier's due. |
+| `app/Services/LandedCostService.php` | Landed cost worksheet: goods = LC value × `lc_files.exchange_rate` (else the purchase lines' buying price) + cost lines = total; shared over the purchase lines by FOB USD, else buying price, else quantity (last line takes the rounding); `applyToStock()` writes each landed unit cost to the product's `cost_price` and stamps `landed_cost_applied_at`. Never changes the purchase total or supplier due. |
+| `app/Models/MachineSerial.php` | A machine serial number: product, the purchase it came with, the Delivery Challan it left on (null = in the shop). |
+| `app/Services/MachineSerialService.php` | Adds serials to a purchase (not more than its quantity of the item, unique per item), sets a challan's serials (not more than the challan's quantity), frees them when the challan is cancelled (`DeliveryChallanService::cancel()`). |
+| `app/Services/LcFileService.php` | Saves the LC file form: LC / PI / CI numbers and dates, ports, delivery terms and country of origin to the purchase, address and contacts to the supplier, the rest to the `LcFile`; `nextStage()`, `formData()`. |
 | `app/Services/ProductCsvService.php` | Parses product import spreadsheets and streams CSV catalog exports. |
 | `app/Services/SupplierCsvService.php` | Manages CSV import and export for supplier contact and balance data. |
 | `app/Services/SupplierReportService.php` | Aggregates purchase totals, payments, and outstanding balances for supplier PDF reports. |
@@ -145,6 +151,9 @@ The Catalog & Inventory module manages products, variants, categories, digital m
 - `stock_movements`: Immutable inventory movement ledger. Key columns: `id`, `company_id`, `product_id`, `product_variant_id`, `type`, `quantity`, `reference_type`, `reference_id`, `note`, `reason`, `damage_source`, `created_at`, `updated_at`.
 - `stock_pools`: Cross-tenant inventory pool. Key columns: `id`, `source_product_id`, `created_at`, `updated_at`.
 - `suppliers`: Vendor registry. Key columns: `id`, `company_id`, `name`, `phone`, `email`, `address`, `company_name`, `opening_balance`, `current_balance`, `is_active`, `created_at`, `updated_at`.
+- `lc_files`: Trade Portal LC file per purchase (unique `company_id, purchase_id`); columns as in `LcFile::$fillable` (incl. `exchange_rate`, `landed_cost_applied_at`).
+- `landed_cost_lines`: `id`, `company_id`, `lc_file_id`, `kind`, `label`, `source`, `amount`, `paid_on`, `note`.
+- `machine_serials`: `id`, `company_id`, `product_id`, `purchase_id`, `delivery_challan_id`, `serial_number` (unique per company + product), `note`.
 - `purchases`: Purchase orders and shipments. Key columns: `id`, `company_id`, `supplier_id`, `purchase_number`, `purchase_date`, `subtotal`, `discount`, `vat`, `total_amount`, `paid_amount`, `due_amount`, `status`, `update_cost_price`, `note`, `custom_costs` (JSON), `funding_sources` (JSON), `product_costs` (JSON), `created_at`, `updated_at`.
 - `purchase_items`: Purchase line items. Key columns: `id`, `company_id`, `purchase_id`, `product_id`, `quantity`, `unit_cost`, `subtotal`, `allocated_cost`, `landed_unit_cost`, `short_quantity`, `damaged_quantity`, `created_at`, `updated_at`.
 - `containers`: Shipping containers. Key columns: `id`, `company_id`, `container_number`, `shipping_line`, `origin`, `destination`, `status`, `estimated_departure`, `actual_departure`, `estimated_arrival`, `actual_arrival`, `notes`, `created_at`, `updated_at`.

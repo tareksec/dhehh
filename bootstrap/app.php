@@ -3,6 +3,7 @@
 use App\Http\Middleware\InvalidateStaleCustomerSession;
 use App\Http\Middleware\PreventDemoModeWrites;
 use App\Http\Middleware\RestrictPortalHosts;
+use App\Http\Middleware\SetResellerPortalLocale;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetCurrentCompany;
 use App\Models\BackupRun;
@@ -149,13 +150,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // filament.admin.auth.login -- so a logged-out visit to a bookmarked
         // /admin/users threw "Route [login] not defined" instead of showing sign-in.
         $middleware->redirectGuestsTo(fn () => route('filament.admin.auth.login'));
-        $middleware->validateCsrfTokens(except: ['webhooks/couriers/*', 'webhooks/zinipay/*', 'webhooks/woocommerce/*', 'webhooks/meta', 'webhooks/whatsapp-web/*', 'webhooks/mobile-crash-reports']);
+        $middleware->validateCsrfTokens(except: ['webhooks/couriers/*', 'webhooks/zinipay/*', 'webhooks/woocommerce/*', 'webhooks/ses/*', 'webhooks/meta', 'webhooks/whatsapp-web/*', 'webhooks/mobile-crash-reports']);
         // Must run before anything else in the group: on a reseller-portal
         // host it redirects every non-portal path to the portal, and on any
         // other host it 404s the portal path -- see 13_RESELLER_PORTAL_PLAN.md
         // §6. Also appended to the admin panel's own middleware stack (it
         // doesn't route through the "web" group) in AdminPanelProvider.
         $middleware->appendToGroup('web', RestrictPortalHosts::class);
+        // The language switch of the reseller portal's public pages; needs RestrictPortalHosts to have run.
+        $middleware->appendToGroup('web', SetResellerPortalLocale::class);
         $middleware->appendToGroup('web', PreventDemoModeWrites::class);
         $middleware->appendToGroup('web', SetCurrentCompany::class);
         $middleware->appendToGroup('web', SecurityHeaders::class);

@@ -5,6 +5,7 @@ namespace App\Ims\Onboarding;
 use App\Ims\Settings\ImsSettings;
 use App\Mail\ImsMessage;
 use App\Models\Company;
+use App\Models\EmailLog;
 use App\Models\Investor;
 use App\Models\InvestorInvite;
 use App\Models\InvestorPortalAccount;
@@ -209,6 +210,6 @@ class InviteService
 
         $setting = StorefrontSetting::primaryFor((int) $company->getKey());
 
-        return $setting !== null && $this->notifications->sendMailable($setting, $invite->contact, new ImsMessage($company->name, __('Your invitation'), [$text], $link));
+        return $setting !== null && $this->notifications->sendMailable($setting, $invite->contact, new ImsMessage($company->name, __('Your invitation'), [$text], $link), EmailLog::KIND_IMS_INVITATION);
     }
 }

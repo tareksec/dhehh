@@ -9,6 +9,7 @@ use App\Filament\Resources\Companies\Pages\CreateCompany;
 use App\Filament\Resources\Companies\Pages\EditCompany;
 use App\Filament\Resources\Companies\Pages\ListCompanies;
 use App\Filament\Resources\Companies\Pages\ViewCompany;
+use App\Filament\Trade\Pages\BusinessProfile;
 use App\Models\Company;
 use App\Services\CompanyDeletionService;
 use App\Support\CompanyMedia;
@@ -184,6 +185,37 @@ class CompanyResource extends Resource
                 ])
                 ->columns(2)
                 ->collapsible(),
+
+            Section::make(__('Trade Portal'))
+                ->description(__('A simple phone-first portal at /trade for shop work (sales, stock, LC files). People with the "Trade Portal" permissions open it with their usual sign-in.'))
+                ->columnSpanFull()
+                ->schema([
+                    Toggle::make('trade_portal_enabled')
+                        ->label(__('Trade Portal is on for this company'))
+                        ->helperText(__('Only a Super Admin can switch it on or off.'))
+                        ->disabled(fn (): bool => ! (Auth::user()?->isSuperAdmin() ?? false))
+                        ->columnSpanFull(),
+                    Textarea::make('registered_address')
+                        ->label(__('Registered trade address'))
+                        ->helperText(__('As written on the trade licence and the import papers.'))
+                        ->rows(3),
+                    Textarea::make('factory_address')
+                        ->label(__('Factory / letterhead address'))
+                        ->helperText(__('Printed on the letterhead and the Delivery Challan.'))
+                        ->rows(3),
+                    TextInput::make('challan_bin_number')
+                        ->label(__('BIN for the Delivery Challan'))
+                        ->helperText(__('Leave empty when it is the same as the BIN Number above.'))
+                        ->maxLength(255),
+                    BusinessProfile::letterheadUpload(),
+                    BusinessProfile::bankAccountsRepeater()
+                        ->label(__('Bank accounts'))
+                        ->hiddenLabel(false)
+                        ->columnSpanFull(),
+                ])
+                ->columns(2)
+                ->collapsible()
+                ->visible(fn (): bool => SchemaFacade::hasColumn('companies', 'trade_portal_enabled')),
 
             Section::make('Localization')
                 ->columnSpanFull()

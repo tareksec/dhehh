@@ -2,51 +2,54 @@
  * The public reseller landing page (resources/views/reseller/guide.blade.php),
  * drawn in the neo-brutalist style the owner chose on 2026-10-22: flat bright
  * colours, thick ink borders, hard offset shadows that "press" on click, big
- * heavy headlines. It loads after app.css, whose utility classes it builds on.
+ * heavy headlines, on top of Tailwind's utility classes. These rules are not in a
+ * cascade layer, so they win over Tailwind's utilities (which are): never put a
+ * utility that fights a .nb-* rule (display, background, border) on the same
+ * element; wrap it instead.
  *
- * These rules are not in a cascade layer, so they win over Tailwind's utilities
- * (which are): never put a utility that fights a .nb-* rule (display, background,
- * border) on the same element; wrap it instead.
+ * The page carries its own Tailwind build, scanning only the landing views, and does
+ * not load app.css (owner report 2026-10-23: on a phone the page came up with no layout
+ * at all, because the global app.css - rebuilt, with a new file name, on every deploy -
+ * did not load while this file did). It is a small public page, so a smaller file also
+ * helps on a slow mobile connection. A class used in a new landing view needs that view
+ * listed in the @source lines below.
  *
- * Text face: Hind Siliguri (SIL OFL 1.1, resources/fonts/hind-siliguri/OFL.txt),
- * the same self-hosted face as the reseller portal, so Bangla and English match.
- * Headlines: Unbounded (declared in app.css, Latin only); Bangla glyphs fall
- * through to Hind Siliguri. Both are only fetched by pages that use them.
+ * The whole page is set in Anek Bangla (owner request 2026-10-22), for Bangla and
+ * English text alike: a variable font (weights 100-800, SIL OFL 1.1, see
+ * resources/fonts/anek-bangla/OFL.txt), self-hosted so no third-party request
+ * blocks rendering. The browser fetches only the Bengali or Latin file the page
+ * actually needs.
  */
 
+@import 'tailwindcss' source(none);
+@source '../views/reseller/guide.blade.php';
+@source '../views/reseller/partials/*.blade.php';
+@source '../views/storefront/partials/social-icon.blade.php';
+
 @font-face {
-    font-family: 'Hind Siliguri';
+    font-family: 'Anek Bangla';
     font-style: normal;
-    font-weight: 500;
+    font-weight: 100 800;
     font-display: swap;
-    src: url('../fonts/hind-siliguri/hind-siliguri-bengali-500-normal.woff2') format('woff2');
+    src: url('../fonts/anek-bangla/anek-bangla-bengali-wght-normal.woff2') format('woff2-variations');
     unicode-range: U+0951-0952,U+0964-0965,U+0980-09FE,U+1CD0,U+1CD2,U+1CD5-1CD6,U+1CD8,U+1CE1,U+1CEA,U+1CED,U+1CF2,U+1CF5-1CF7,U+200C-200D,U+20B9,U+25CC,U+A8F1;
 }
 
 @font-face {
-    font-family: 'Hind Siliguri';
+    font-family: 'Anek Bangla';
     font-style: normal;
-    font-weight: 500;
+    font-weight: 100 800;
     font-display: swap;
-    src: url('../fonts/hind-siliguri/hind-siliguri-latin-500-normal.woff2') format('woff2');
-    unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+    src: url('../fonts/anek-bangla/anek-bangla-latin-ext-wght-normal.woff2') format('woff2-variations');
+    unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
 }
 
 @font-face {
-    font-family: 'Hind Siliguri';
+    font-family: 'Anek Bangla';
     font-style: normal;
-    font-weight: 700;
+    font-weight: 100 800;
     font-display: swap;
-    src: url('../fonts/hind-siliguri/hind-siliguri-bengali-700-normal.woff2') format('woff2');
-    unicode-range: U+0951-0952,U+0964-0965,U+0980-09FE,U+1CD0,U+1CD2,U+1CD5-1CD6,U+1CD8,U+1CE1,U+1CEA,U+1CED,U+1CF2,U+1CF5-1CF7,U+200C-200D,U+20B9,U+25CC,U+A8F1;
-}
-
-@font-face {
-    font-family: 'Hind Siliguri';
-    font-style: normal;
-    font-weight: 700;
-    font-display: swap;
-    src: url('../fonts/hind-siliguri/hind-siliguri-latin-700-normal.woff2') format('woff2');
+    src: url('../fonts/anek-bangla/anek-bangla-latin-wght-normal.woff2') format('woff2-variations');
     unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
 
@@ -65,7 +68,7 @@
 
     background: var(--nb-paper);
     color: var(--nb-ink);
-    font-family: 'Hind Siliguri', ui-sans-serif, system-ui, sans-serif;
+    font-family: 'Anek Bangla', ui-sans-serif, system-ui, sans-serif;
     font-weight: 500;
 }
 
@@ -91,19 +94,22 @@
 .nb-paper { background: var(--nb-paper); }
 
 .nb-display {
-    font-family: 'Unbounded', 'Hind Siliguri', ui-sans-serif, system-ui, sans-serif;
+    font-family: 'Anek Bangla', ui-sans-serif, system-ui, sans-serif;
     font-weight: 800;
-    letter-spacing: -0.03em;
-    line-height: 1.08;
+    letter-spacing: -0.01em;
+    /* Bengali marks above and below the line need more room than Latin capitals. */
+    line-height: 1.22;
 }
 
 .nb-h2 {
-    font-family: 'Unbounded', 'Hind Siliguri', ui-sans-serif, system-ui, sans-serif;
+    font-family: 'Anek Bangla', ui-sans-serif, system-ui, sans-serif;
     font-weight: 800;
-    font-size: clamp(1.5rem, 3.6vw, 2.35rem);
-    letter-spacing: -0.03em;
-    line-height: 1.12;
+    font-size: clamp(1.7rem, 3.8vw, 2.5rem);
+    letter-spacing: -0.01em;
+    line-height: 1.22;
 }
+
+.nb p, .nb li { line-height: 1.7; }
 
 .nb-border { border: 3px solid var(--nb-ink); }
 .nb-border-y { border-top: 3px solid var(--nb-ink); border-bottom: 3px solid var(--nb-ink); }
@@ -150,6 +156,7 @@
     font-weight: 700;
     line-height: 1;
     text-decoration: none;
+    cursor: pointer;
     transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
@@ -166,6 +173,25 @@
 .nb-btn--light { background: var(--nb-card); color: var(--nb-ink); }
 .nb-btn--yellow { background: var(--nb-yellow); color: #111111; }
 .nb-btn--small { min-height: 2.5rem; padding: 0 1rem; font-size: 0.9rem; box-shadow: 3px 3px 0 var(--nb-ink); }
+.nb-btn--icon { width: 2.5rem; padding: 0; }
+
+/* The header holds the logo, the sign-in and apply buttons and the dark-mode toggle: on a phone
+   (Bangla labels are the widest) the buttons give up a little padding and size so the logo keeps some room. */
+@media (max-width: 430px) {
+    .nb-btn--small { padding: 0 0.7rem; font-size: 0.85rem; }
+    .nb-btn--icon { padding: 0; }
+}
+
+/* The dark-mode toggle shows the moon in light mode and the sun in dark mode. */
+.nb-theme-icon--sun { display: none; }
+.dark .nb-theme-icon--sun { display: block; }
+.dark .nb-theme-icon--moon { display: none; }
+
+/* The website's logo pair: the light-background logo, swapped for the dark-background one in dark
+   mode. Only drawn as a pair when a dark logo exists (the view adds --light then). */
+.nb-logo--dark { display: none; }
+.dark .nb-logo--dark { display: block; }
+.dark .nb-logo--light { display: none; }
 
 .nb-chip {
     display: inline-flex;
@@ -202,7 +228,7 @@ a.nb-chip:hover {
     border-radius: 999px;
     background: var(--nb-ink);
     color: var(--nb-paper);
-    font-family: 'Unbounded', 'Hind Siliguri', sans-serif;
+    font-family: 'Anek Bangla', sans-serif;
     font-size: 1.1rem;
     font-weight: 800;
 }
@@ -234,7 +260,7 @@ a.nb-chip:hover {
 
 .nb-marquee__item {
     padding: 0.7rem 0;
-    font-family: 'Unbounded', 'Hind Siliguri', sans-serif;
+    font-family: 'Anek Bangla', sans-serif;
     font-size: 0.95rem;
     font-weight: 800;
     letter-spacing: -0.01em;
@@ -249,6 +275,28 @@ a.nb-chip:hover {
 @keyframes nb-scroll {
     to { transform: translateX(-50%); }
 }
+
+.nb-lang {
+    display: inline-flex;
+    overflow: hidden;
+    border: 3px solid var(--nb-ink);
+    border-radius: 12px;
+    background: var(--nb-card);
+    box-shadow: 3px 3px 0 var(--nb-ink);
+}
+
+.nb-lang__item {
+    padding: 0.3rem 0.8rem;
+    color: var(--nb-ink);
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1.4;
+    text-decoration: none;
+}
+
+.nb-lang__item + .nb-lang__item { border-left: 3px solid var(--nb-ink); }
+.nb-lang__item:hover { background: var(--nb-yellow); color: #111111; }
+.nb-lang__item.is-active { background: var(--nb-ink); color: var(--nb-paper); }
 
 .nb a:focus-visible,
 .nb summary:focus-visible {

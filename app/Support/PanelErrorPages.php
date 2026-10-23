@@ -26,6 +26,8 @@ class PanelErrorPages
         'admin' => '/admin',
         'investor' => '/investor',
         'portal' => '/portal',
+        // Without it a Trade Portal crash got the storefront's bare 500 page and reached no Super Admin (QA 2026-10-23).
+        'trade' => '/trade',
     ];
 
     public static function appliesTo(Request $request, Throwable $e): bool

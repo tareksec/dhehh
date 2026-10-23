@@ -48,7 +48,21 @@ final class ImsPanelSessions
     /** Drops an "after sign-in" address that belongs to the other IMS panel. */
     public static function forgetForeignIntendedUrl(?Panel $panel): void
     {
-        if (! self::isImsPanel($panel) || ! app()->bound('session.store')) {
+        if (! self::isImsPanel($panel)) {
+            return;
+        }
+
+        self::forgetIntendedUrlOutside($panel);
+    }
+
+    /**
+     * Drops an "after sign-in" address that is not under $panel's own path.
+     * Also used by the Trade Portal, which shares the main domain's session
+     * with /admin: a Trade Owner must never land on an /admin page.
+     */
+    public static function forgetIntendedUrlOutside(Panel $panel): void
+    {
+        if (! app()->bound('session.store')) {
             return;
         }
 

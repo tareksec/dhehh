@@ -215,6 +215,7 @@ class ModuleGuardTest extends TestCase
         // Portals are only served on their own host, so their mapping is checked directly.
         $this->assertSame('/portal', PanelErrorPages::panelHome(Request::create('/portal/orders')));
         $this->assertSame('/investor', PanelErrorPages::panelHome(Request::create('/investor')));
+        $this->assertSame('/trade', PanelErrorPages::panelHome(Request::create('/trade/report')));
         $this->assertNull(PanelErrorPages::panelHome(Request::create('/products/phone')));
 
         $this->assertTrue(DeploymentError::query()->where('source', 'module:page:admin/module-guard-crash')->exists());

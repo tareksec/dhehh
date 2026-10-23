@@ -35,6 +35,9 @@ use App\Models\CustomerPayment;
 use App\Models\CustomerRiskEvent;
 use App\Models\CustomerRiskProfile;
 use App\Models\CustomerRiskReview;
+use App\Models\DeliveryChallan;
+use App\Models\DeliveryChallanItem;
+use App\Models\EmailLog;
 use App\Models\ExchangeRate;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
@@ -69,7 +72,10 @@ use App\Models\InvestorPortalAccount;
 use App\Models\InvestorRequest;
 use App\Models\InvestorSecurityInstrument;
 use App\Models\KnowledgeDocument;
+use App\Models\LandedCostLine;
+use App\Models\LcFile;
 use App\Models\Lead;
+use App\Models\MachineSerial;
 use App\Models\Media;
 use App\Models\MetaAd;
 use App\Models\MetaAdAccount;
@@ -107,6 +113,7 @@ use App\Models\ResellerPayoutAccount;
 use App\Models\ResellerPayoutRequest;
 use App\Models\SettlementPayout;
 use App\Models\Shipment;
+use App\Models\SmsLog;
 use App\Models\SmsTemplate;
 use App\Models\StatementDispatch;
 use App\Models\StockMovement;
@@ -147,6 +154,7 @@ class MultiCompanyIsolationTest extends TestCase
             Customer::class, CustomerPayment::class, Expense::class, ExpenseCategory::class,
             CustomerRiskProfile::class, CustomerRiskEvent::class, CustomerRiskReview::class, FraudCheck::class,
             Order::class, OrderItem::class, OrderPayment::class, OrderCost::class,
+            DeliveryChallan::class, DeliveryChallanItem::class, LcFile::class, LandedCostLine::class, MachineSerial::class,
             Product::class, Purchase::class, PurchaseItem::class,
             StockMovement::class, Supplier::class, SupplierPayment::class, TransactionLedger::class,
             Container::class, Shipment::class, StorefrontPage::class, StorefrontSetting::class,
@@ -156,7 +164,7 @@ class MultiCompanyIsolationTest extends TestCase
             StorefrontMetaAttribution::class, StorefrontMetaEvent::class,
             FundSource::class, Voucher::class,
             VoucherAttachment::class, FundTransfer::class,
-            StorefrontSlide::class, SmsTemplate::class,
+            StorefrontSlide::class, SmsTemplate::class, SmsLog::class, EmailLog::class,
             Lead::class, Quotation::class, QuotationItem::class,
             AiInstructionVersion::class, AttentionItem::class, Conversation::class, ConversationChannel::class, ConversationModeEvent::class,
             ChaseMark::class, ChatOrderLink::class, CompanyFaq::class, KnowledgeDocument::class, QuickReply::class,

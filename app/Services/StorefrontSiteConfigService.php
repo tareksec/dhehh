@@ -26,6 +26,21 @@ class StorefrontSiteConfigService
 
     public function __construct(protected Company $company, protected StorefrontSetting $setting) {}
 
+    /**
+     * The site's logo pair: the one for a light background and, when uploaded, the one for a dark
+     * background (the Next.js header shows one or the other by mode). Also what the reseller landing
+     * page's header draws, so both show the same logo.
+     *
+     * @return array{logo_url: ?string, logo_dark_url: ?string}
+     */
+    public function branding(): array
+    {
+        return [
+            'logo_url' => Media::url($this->setting->logo, $this->company),
+            'logo_dark_url' => Media::url($this->setting->logo_dark, $this->company),
+        ];
+    }
+
     /** @return array<string, mixed> */
     public function build(): array
     {
@@ -43,10 +58,7 @@ class StorefrontSiteConfigService
                 'nextjs_domain' => $setting->nextjs_site_domain,
                 'is_published' => (bool) $setting->is_published,
             ],
-            'branding' => [
-                'logo_url' => Media::url($setting->logo, $this->company),
-                'logo_dark_url' => Media::url($setting->logo_dark, $this->company),
-            ],
+            'branding' => $this->branding(),
             'theme' => [
                 'mode' => $setting->theme_mode,
                 'colors' => $setting->themePalette(),

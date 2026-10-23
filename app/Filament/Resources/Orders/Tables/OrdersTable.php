@@ -654,7 +654,8 @@ class OrdersTable
             TextInput::make('cod_amount')
                 ->numeric()
                 ->prefix('৳')
-                ->minValue(0),
+                ->minValue(0)
+                ->helperText(fn (): string => app(CourierService::class)->codHelperText($record)),
             Textarea::make('note')
                 ->rows(2),
 
