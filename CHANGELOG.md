@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.106.0] - 2026-10-23
+
 **Release type:** Minor Feature Update
 
 ### Changed
@@ -20,7 +22,6 @@ All notable production changes to Business Dashboard are documented here.
 
 - `Order::courierInvoiceTotal()` (grand total incl. the zone-fee fallback, the old `courierCodAmount()` body) and `Order::courierCodAmount()` = that minus `paid_amount`, floored at 0. `CourierService::codHelperText()` feeds the helper text of `cod_amount` in `ViewOrder` and `OrdersTable`. `OrderForm` / `OrderInfolist` split Totals and Payment. Tests: `CourierIntegrationTest` (due-amount rule, advance + later payments, popup end to end), `OrderFormTest` (Payment section holds `paid_amount`, `payment_account_id`, `due_amount`, Totals does not). Lang: 10 new keys.
 - `resources/css/reseller-landing.css` starts with `@import 'tailwindcss' source(none);` and three `@source` lines (the guide view, `reseller/partials/*.blade.php` and the shared social icon partial); `guide.blade.php` loads only this file through `@vite`. A new class in another view that the landing includes needs that view added to those lines. The grids use `grid-cols-1` as the base and `minmax(0, …)` for the hero's two columns. Tests (`ResellerLandingPageTest`): the page links its own stylesheet and not `app.css`, every view it includes is scanned, and every grid has a base column count.
-
 ## [2.105.0] - 2026-10-23
 
 **Release type:** Minor Feature Update
