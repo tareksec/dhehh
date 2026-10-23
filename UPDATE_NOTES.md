@@ -22,7 +22,7 @@ Checked: full `php artisan test` with PHP 8.4.27: 2990 passed, 6 skipped, 0 fail
 
 Needs Bangla review (new keys): "Amazon SES region (quick setup)", its long help text, "Send test email", "Send to", "Test email sent/failed", "Email needs a From address" and its body, "Port 465 connects over SSL…", the new From address help text, the test email's subject and body.
 
-Commit status: committed and pushed to `ccr-3799b463-p4pv7n`; not on `main` (needs the owner's approval).
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` on the owner's approval ("কমিট এবং পুশ কর করে মেইন এ পুশ কর"). Merged `main` three times on the way (SMS Log, v2.101.0, v2.102.0); full test run after the last code merge: 3010 passed, 6 skipped, 0 failed.
 
 ## 2026-10-23 - Email (SMTP) settings moved to Integrations → Email Setup
 
@@ -38,7 +38,7 @@ Found while testing: choosing "None" for encryption was saved as null, which the
 
 Checked: full `php artisan test` (PHP 8.4.27): 2982 passed, 6 skipped, 0 failed. No real SMTP server or browser was used — the tab is covered by Livewire tests only, and I did not look at it rendered.
 
-Commit status: committed and pushed to `ccr-3799b463-p4pv7n`; not on `main` (needs the owner's approval).
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` on the owner's approval ("কমিট এবং পুশ কর করে মেইন এ পুশ কর"). Merged `main` three times on the way (SMS Log, v2.101.0, v2.102.0); full test run after the last code merge: 3010 passed, 6 skipped, 0 failed.
 
 ## 2026-10-23 - SMS Log and "Send test SMS" (why did no SMS arrive?)
 
