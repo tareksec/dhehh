@@ -1,6 +1,8 @@
 ## [Unreleased]
 
-**Release type:** Patch Update
+## [2.112.1] - 2026-10-23
+
+**Release type:** Patch/Fix Update
 
 ### Fixed
 
@@ -9,7 +11,6 @@
 ### Technical Notes
 
 - `StorefrontNotificationService::smsUsable()` (address saved and has `{phone}` and `{message}`) and `workingGateway()` (the site itself, else the company's primary / Blade / Next.js site that is usable); `sendSmsDetailed()` takes `ownGatewayOnly` (the test button passes it) and sends through `workingGateway()` otherwise. `SmsTemplateService::gatewayFor()` prefers a usable site and falls back to a configured-but-broken one only when none works, so the log can still say what is wrong. The `bad_gateway_url` detail now starts with the site's label. Tests in `SmsDashboardTest`. No migrations.
-
 ## [2.112.0] - 2026-10-23
 
 **Release type:** Minor Feature Update
