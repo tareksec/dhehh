@@ -756,13 +756,12 @@ class Order extends Model
     }
 
     /**
-     * What a courier should collect on delivery: the full invoice total
-     * (products − discount + VAT + shipping), never reduced by an advance
-     * already paid. If the order carries no shipping fee of its own, the zone
-     * delivery charge for the customer's address is added on top so the COD
-     * always includes delivery (owner rule).
+     * The grand total the customer owes for this order, delivery included
+     * (products − discount + VAT + shipping). If the order carries no shipping
+     * fee of its own, the zone delivery charge for the customer's address is
+     * added on top so the parcel always pays for delivery (owner rule).
      */
-    public function courierCodAmount(): float
+    public function courierInvoiceTotal(): float
     {
         $this->loadMissing('customer');
 
@@ -774,6 +773,18 @@ class Order extends Model
         }
 
         return round(max($total, 0), 2);
+    }
+
+    /**
+     * What a courier should collect on delivery: the grand total minus the
+     * advance / payments already received, so a customer who paid ৳200 up
+     * front on a ৳560 order is asked for ৳360, and a fully paid order for
+     * nothing (owner decision 2026-10-23; it had been the full grand total
+     * since 2026-10, which made the courier collect the advance twice).
+     */
+    public function courierCodAmount(): float
+    {
+        return round(max($this->courierInvoiceTotal() - (float) $this->paid_amount, 0), 2);
     }
 
     /**

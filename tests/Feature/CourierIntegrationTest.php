@@ -1010,7 +1010,7 @@ class CourierIntegrationTest extends TestCase
         Http::assertSent(fn ($request): bool => str_ends_with((string) $request->url(), '/create_order'));
     }
 
-    public function test_courier_cod_amount_is_the_full_invoice_total_with_a_zone_fee_fallback(): void
+    public function test_courier_cod_amount_is_the_due_amount_with_a_zone_fee_fallback(): void
     {
         $company = Company::query()->create([
             'name' => 'COD Co', 'slug' => 'cod-co', 'invoice_prefix' => 'CODC',
@@ -1049,17 +1049,30 @@ class CourierIntegrationTest extends TestCase
         $order->refresh();
 
         // The order auto-picked up the ৳60 "inside" zone fee on creation, so
-        // total_amount is 560. COD is that full total, NOT the ৳300 still due
-        // after the ৳200 advance.
+        // the grand total is 560. The customer already paid ৳200 up front, so
+        // the courier collects the ৳360 still due, not the whole 560.
         $this->assertSame('560.00', $order->total_amount);
-        $this->assertSame(560.0, $order->courierCodAmount());
+        $this->assertSame(560.0, $order->courierInvoiceTotal());
+        $this->assertSame(360.0, $order->courierCodAmount());
 
         // Order with no shipping fee of its own (staff zeroed it, or no zone
-        // config): the zone delivery charge is added back on top of the total.
+        // config): the zone delivery charge is added back on top of the total,
+        // and the advance still comes off.
         $order->update(['shipping_fee' => 0]);
         $order->refresh();
         $this->assertSame('500.00', $order->total_amount);
-        $this->assertSame(560.0, $order->courierCodAmount());
+        $this->assertSame(560.0, $order->courierInvoiceTotal());
+        $this->assertSame(360.0, $order->courierCodAmount());
+
+        // A payment recorded later in Payments History lowers it again, and a
+        // fully paid order has nothing for the courier to collect.
+        $order->payments()->create(['type' => 'partial', 'method' => 'cash', 'amount' => 100, 'paid_at' => now()->toDateString()]);
+        $order->refresh();
+        $this->assertSame(260.0, $order->courierCodAmount());
+
+        $order->payments()->create(['type' => 'final', 'method' => 'cash', 'amount' => 400, 'paid_at' => now()->toDateString()]);
+        $order->refresh();
+        $this->assertSame(0.0, $order->courierCodAmount());
     }
 
     public function test_book_courier_popup_prefills_recipient_from_the_order_customer_and_the_full_cod(): void
@@ -1084,6 +1097,39 @@ class CourierIntegrationTest extends TestCase
                 'recipient_address' => 'Dhaka',
                 'cod_amount' => $order->courierCodAmount(),
             ]);
+    }
+
+    public function test_book_courier_popup_asks_the_courier_to_collect_only_the_due_amount_after_an_advance(): void
+    {
+        $company = Company::defaultCompany();
+        $user = User::factory()->create(['role' => 'sales_staff', 'is_active' => true]);
+        $user->companies()->sync([$company->getKey() => ['role' => 'sales_staff', 'is_default' => true]]);
+        app(CompanyContext::class)->set($company);
+        CourierProvider::query()->create([
+            'company_id' => $company->getKey(), 'name' => 'Rider', 'slug' => 'rider',
+            'driver' => CourierProvider::DRIVER_MANUAL, 'is_active' => true, 'is_default' => true,
+        ]);
+
+        $order = $this->orderForCompany($company);
+        $order->payments()->create(['type' => 'advance', 'method' => 'mobile_banking', 'amount' => 200, 'paid_at' => now()->toDateString()]);
+        $order->refresh();
+        $due = round($order->courierInvoiceTotal() - 200, 2);
+        $this->assertSame(200.0, (float) $order->paid_amount);
+        $this->assertLessThan($order->courierInvoiceTotal(), $due);
+        $this->actingAs($user);
+
+        Livewire::test(ListOrders::class)
+            ->mountTableAction('bookCourier', $order)
+            ->assertTableActionDataSet(['cod_amount' => $due])
+            ->callMountedTableAction()
+            ->assertHasNoTableActionErrors();
+
+        $this->assertEquals($due, (float) CourierBooking::where('order_id', $order->getKey())->firstOrFail()->cod_amount);
+
+        // The line under the COD field spells the arithmetic out for staff.
+        $hint = app(CourierService::class)->codHelperText($order);
+        $this->assertStringContainsString('৳ 200', $hint);
+        $this->assertStringContainsString('৳ '.rtrim(rtrim(number_format($due, 2, '.', ''), '0'), '.'), $hint);
     }
 
     public function test_courier_payment_history_view_details_action_fetches_the_payment_via_the_corrected_endpoint(): void

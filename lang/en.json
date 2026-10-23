@@ -3628,5 +3628,15 @@
     "Courier webhooks": "Courier webhooks",
     "Meta events": "Meta events",
     "Deploy errors": "Deploy errors",
-    "Mobile crashes": "Mobile crashes"
+    "Mobile crashes": "Mobile crashes",
+    "Grand total": "Grand total",
+    "Products − discount + VAT + shipping. This is what the customer owes in all.": "Products − discount + VAT + shipping. This is what the customer owes in all.",
+    "Enter the advance or payment the customer has already paid. The courier is asked to collect only the due amount.": "Enter the advance or payment the customer has already paid. The courier is asked to collect only the due amount.",
+    "Advance / paid amount": "Advance / paid amount",
+    "To add an advance or any other payment, use the Payments History table below this form (add, edit or delete a payment there).": "To add an advance or any other payment, use the Payments History table below this form (add, edit or delete a payment there).",
+    "Money received so far. Leave 0 if nothing is paid yet; you can add more payments later from the order.": "Money received so far. Leave 0 if nothing is paid yet; you can add more payments later from the order.",
+    "Due amount": "Due amount",
+    "Grand total minus the payment received. The courier collects this.": "Grand total minus the payment received. The courier collects this.",
+    "Add or change payments in the Payments History table below. The courier is asked to collect only the due amount.": "Add or change payments in the Payments History table below. The courier is asked to collect only the due amount.",
+    "Grand total :total − advance paid :paid = :due. This is what the courier collects from the customer.": "Grand total :total − advance paid :paid = :due. This is what the courier collects from the customer."
 }

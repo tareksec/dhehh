@@ -402,11 +402,26 @@ class OrderForm
                             ->visible(fn (Get $get): bool => (float) ($get('packaging_fee') ?? 0) > 0),
 
                         TextInput::make('total_amount')
+                            ->label(__('Grand total'))
+                            ->helperText(__('Products − discount + VAT + shipping. This is what the customer owes in all.'))
                             ->numeric()
                             ->prefix('৳')
                             ->readOnly(),
+                    ])
+                    ->columns(3)
+                    ->collapsible()
+                    ->persistCollapsed(),
 
+                // Its own section so a new person sees where the advance /
+                // payment goes (owner request 2026-10-23): it used to sit
+                // among the totals as a plain "Paid Amount".
+                Section::make(__('Payment'))
+                    ->description(__('Enter the advance or payment the customer has already paid. The courier is asked to collect only the due amount.'))
+                    ->icon('heroicon-o-banknotes')
+                    ->columnSpanFull()
+                    ->schema([
                         TextInput::make('paid_amount')
+                            ->label(__('Advance / paid amount'))
                             ->numeric()
                             ->prefix('৳')
                             ->default(0)
@@ -428,9 +443,9 @@ class OrderForm
                             // the first ledger row (see Order::booted()'s `created` hook).
                             ->readOnly(fn (string $operation): bool => $operation === 'edit')
                             ->dehydrated(fn (string $operation): bool => $operation !== 'edit')
-                            ->helperText(fn (string $operation): ?string => $operation === 'edit'
-                                ? 'Managed from Payments History below — add, edit, or delete a payment there.'
-                                : null),
+                            ->helperText(fn (string $operation): string => $operation === 'edit'
+                                ? __('To add an advance or any other payment, use the Payments History table below this form (add, edit or delete a payment there).')
+                                : __('Money received so far. Leave 0 if nothing is paid yet; you can add more payments later from the order.')),
 
                         // Which account the customer paid into (Cash, bKash,
                         // bank…). Not an order column: CreateOrder hands it to
@@ -447,6 +462,8 @@ class OrderForm
                             ->helperText(__('The account the paid amount was received into. Its balance updates automatically.')),
 
                         TextInput::make('due_amount')
+                            ->label(__('Due amount'))
+                            ->helperText(__('Grand total minus the payment received. The courier collects this.'))
                             ->numeric()
                             ->prefix('৳')
                             ->readOnly()
@@ -458,9 +475,8 @@ class OrderForm
                             // above.
                             ->dehydrated(false),
                     ])
-                    ->columns(3)
-                    ->collapsible()
-                    ->persistCollapsed(),
+                    // Never collapsible: the whole point is that it is always in view.
+                    ->columns(3),
 
                 Section::make('Note')
                     ->columnSpanFull()

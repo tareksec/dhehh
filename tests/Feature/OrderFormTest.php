@@ -15,6 +15,7 @@ use App\Models\OrderPayment;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\CompanyContext;
+use Filament\Schemas\Components\Section;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -352,6 +353,38 @@ class OrderFormTest extends TestCase
                 "{$name} must recalculate the totals shortly after typing stops.",
             );
         }
+    }
+
+    /**
+     * Owner request 2026-10-23: a new person could not tell where the advance
+     * payment goes because the paid amount sat among the totals. It now has a
+     * section of its own, next to the payment method and the due amount.
+     */
+    public function test_the_advance_payment_has_its_own_section_apart_from_the_totals(): void
+    {
+        $company = Company::query()->create([
+            'name' => 'Payment Section Co',
+            'slug' => 'payment-section-co',
+            'invoice_prefix' => 'PSC',
+            'currency' => 'BDT',
+            'timezone' => 'Asia/Dhaka',
+            'is_active' => true,
+        ]);
+        app(CompanyContext::class)->set($company);
+
+        $user = User::factory()->create(['role' => 'super_admin', 'is_active' => true]);
+        $this->actingAs($user)->withSession(['current_company_id' => $company->id]);
+
+        $sections = collect(Livewire::test(CreateOrder::class)->instance()->getSchema('form')->getComponents())
+            ->filter(fn ($component): bool => $component instanceof Section)
+            ->mapWithKeys(fn (Section $section): array => [
+                (string) $section->getHeading() => array_keys($section->getChildSchema()->getFlatFields()),
+            ]);
+
+        $this->assertEqualsCanonicalizing(['paid_amount', 'payment_account_id', 'due_amount'], $sections->get(__('Payment')));
+        $this->assertContains('total_amount', $sections->get('Totals'));
+        $this->assertNotContains('paid_amount', $sections->get('Totals'));
+        $this->assertNotContains('due_amount', $sections->get('Totals'));
     }
 
     /**

@@ -3628,5 +3628,15 @@
     "Courier webhooks": "কুরিয়ার ওয়েবহুক",
     "Meta events": "মেটা ইভেন্ট",
     "Deploy errors": "ডিপ্লয় এরর",
-    "Mobile crashes": "মোবাইল ক্র্যাশ"
+    "Mobile crashes": "মোবাইল ক্র্যাশ",
+    "Grand total": "মোট (গ্র্যান্ড টোটাল)",
+    "Products − discount + VAT + shipping. This is what the customer owes in all.": "পণ্য − ডিসকাউন্ট + ভ্যাট + ডেলিভারি চার্জ। কাস্টমারের মোট যত টাকা দেওয়ার কথা, সেটাই এটা।",
+    "Enter the advance or payment the customer has already paid. The courier is asked to collect only the due amount.": "কাস্টমার আগেই যে অগ্রিম বা পেমেন্ট দিয়েছে তা এখানে লিখুন। কুরিয়ার শুধু বাকি (ডিউ) টাকাটা আদায় করবে।",
+    "Advance / paid amount": "অগ্রিম / পরিশোধিত টাকা",
+    "To add an advance or any other payment, use the Payments History table below this form (add, edit or delete a payment there).": "অগ্রিম বা অন্য কোনো পেমেন্ট যোগ করতে ফর্মের নিচের Payments History টেবিল ব্যবহার করুন (সেখানেই পেমেন্ট যোগ, এডিট বা মুছুন)।",
+    "Money received so far. Leave 0 if nothing is paid yet; you can add more payments later from the order.": "এখন পর্যন্ত যত টাকা পাওয়া গেছে। কিছু না দিয়ে থাকলে ০ রাখুন; পরে অর্ডার থেকে আরও পেমেন্ট যোগ করা যাবে।",
+    "Due amount": "বাকি (ডিউ) টাকা",
+    "Grand total minus the payment received. The courier collects this.": "মোট টাকা থেকে প্রাপ্ত পেমেন্ট বাদ দিলে যা থাকে। কুরিয়ার এটাই আদায় করবে।",
+    "Add or change payments in the Payments History table below. The courier is asked to collect only the due amount.": "নিচের Payments History টেবিলে পেমেন্ট যোগ বা পরিবর্তন করুন। কুরিয়ার শুধু বাকি (ডিউ) টাকাটা আদায় করবে।",
+    "Grand total :total − advance paid :paid = :due. This is what the courier collects from the customer.": "মোট :total − অগ্রিম পরিশোধিত :paid = :due। কুরিয়ার কাস্টমারের কাছ থেকে এটাই আদায় করবে।"
 }

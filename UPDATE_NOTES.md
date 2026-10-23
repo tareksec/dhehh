@@ -2,6 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - Courier COD is the due amount, and the order page has a Payment section
+
+Owner (Bangla): when an order is booked with a courier the grand total is sent as the COD amount; with an advance payment the due amount shows on the order but the courier still gets the grand total, and it should be the due amount. Also: separate the payment section on the order page, a new person cannot tell where the payment / advance payment goes.
+
+**COD:** the 2026-10 rule ("COD = full invoice total, never reduced by an advance", `UPDATE_NOTES` entry for `courierCodAmount()`) is replaced on the owner's word. `Order::courierCodAmount()` is now the grand total (with the zone delivery fee added when the order has no shipping fee of its own, unchanged) minus `paid_amount`, never below 0. Every booking path already read `courierCodAmount()`, so the popup on the order page, the row action in the orders list and the bulk action all send the due amount. The popup shows "Grand total ৳560 − advance paid ৳200 = ৳360" under the COD field; the field is still editable. Not covered: a payment recorded AFTER the booking does not change the COD already sent to the courier.
+
+**Payment section:** `OrderForm` (create and edit) ends **Totals** at "Grand total" and adds a non-collapsible **Payment** section: Advance / paid amount, Payment Method (create only), Due amount, each with a helper line; on edit the helper points to the Payments History table. `OrderInfolist` (view page) gets a **Payment** block (advance / paid amount, due amount) after **Totals**.
+
+**Needs Bangla review (lang/bn.json):** "Grand total", "Advance / paid amount", "Due amount" (বাকি (ডিউ) টাকা), the Payment section description and the five helper lines, and the COD sum line ("মোট :total − অগ্রিম পরিশোধিত :paid = :due").
+
+**Verified:** `CourierIntegrationTest` (COD rule with advance, later payments, fully paid = 0, popup end to end), `OrderFormTest` (Payment section), `TranslationParityTest`, Pint on my files; browser check on a scratch SQLite database (create form and view page show the Payment section; the Book courier popup on a ৳560 order with ৳200 advance shows COD 360 and the sum line). Full `php artisan test` before the push.
+
+Commit status: committed to `claude/order-management-features-nafks7` only; not on `main` until the owner says so.
+
 ## 2026-10-23 - One Logs page, and the "User Id not found" SMS error
 
 Owner (Bangla): put all the log pages on one page, with a single "Logs" menu entry and the logs as tabs, like Integrations; and the first SMS Log row says the gateway refused with 1011 "User Id not found" — can it be fixed?
