@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.103.0] - 2026-10-23
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -32,7 +34,6 @@ All notable production changes to Business Dashboard are documented here.
 - Lang: new keys for the tab, the SES quick setup, the test email and the From address warning; the Storefront Settings section note, the From address help text and the "Email is not set up…" message changed text in `lang/en.json` and `lang/bn.json`.
 - `.env.example` points to `docs/email-ses-setup.md` for the server-wide fallback mailer (`MAIL_*`); nothing else in the environment changes.
 - Tests: new `CompanyEmailSetupTest` (5: sender rules, per-company mailer isolation — fails without the `purge` — and the test email); `IntegrationsPageTest` (+7, one rewritten); `ResellerPasswordResetByStaffTest` expects the new message.
-
 ## [2.102.0] - 2026-10-23
 
 **Release type:** Minor Feature Update
