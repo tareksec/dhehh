@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.111.0] - 2026-10-23
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -35,7 +37,6 @@ All notable production changes to Business Dashboard are documented here.
 - Migration `2026_10_23_210000_add_message_id_to_email_logs_table.php` (`message_id`, named index). `EmailLog` gains the statuses `delivered`, `bounced`, `complained`.
 - New page `App\Filament\Pages\AmazonSes` (Settings cluster, `canManageSettings()`, never fills the secret back into the form) and its view; `docs/email-ses-setup.md` and `docs/codebase-map/crm-messaging.md` updated.
 - Tests: `SesApiServiceTest` (8), `SesTrackingTest` (18, including SNS messages signed with a certificate generated in the test), `AmazonSesPageTest` (13), new cases in `EmailLogTest`; `tests/Feature/Concerns/FakesAws.php` is the shared Amazon stand-in. Checked in a real browser (desktop and 390 px, no sideways scroll, the add-domain dialog opens) with Amazon faked.
-
 ## [2.110.0] - 2026-10-23
 
 **Release type:** Minor Feature Update
