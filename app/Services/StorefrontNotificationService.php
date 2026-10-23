@@ -5,9 +5,11 @@ namespace App\Services;
 use App\Mail\ResellerPasswordResetLink;
 use App\Mail\StorefrontLoginOtp;
 use App\Models\ConversationChannel;
+use App\Models\EmailLog;
 use App\Models\StorefrontSetting;
 use App\Services\Meta\MetaGraphService;
 use App\Support\PhoneLinks;
+use App\Support\SmsSegments;
 use Illuminate\Contracts\Mail\Mailer;
 use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\Config;
@@ -33,7 +35,10 @@ use Illuminate\Support\Facades\Mail;
 class StorefrontNotificationService
 {
     /** notification_credentials keys edited on Settings → Integrations → SMS Gateway (not on Storefront Settings). */
-    public const SMS_CREDENTIAL_KEYS = ['sms_api_url', 'sms_api_key', 'sms_sender_id'];
+    public const SMS_CREDENTIAL_KEYS = ['sms_api_url', 'sms_api_key', 'sms_sender_id', 'sms_price_per_sms', 'sms_low_balance_alert'];
+
+    /** notification_credentials keys edited on Settings → Integrations → Email Setup (not on Storefront Settings). */
+    public const MAIL_CREDENTIAL_KEYS = ['mail_host', 'mail_port', 'mail_encryption', 'mail_username', 'mail_password', 'mail_from_address', 'mail_from_name'];
 
     /** Reply code BulkSMSBD-style gateways send (inside an HTTP 200) when the SMS was accepted. */
     public const SMS_GATEWAY_SUCCESS_CODE = 202;
@@ -69,35 +74,142 @@ class StorefrontNotificationService
         return filled(data_get($setting->notification_credentials, 'sms_api_url'));
     }
 
+    /**
+     * Sends one SMS for a caller that keeps no SMS log of its own (a login or recovery code, a reminder, a
+     * broadcast message) and counts it for the SMS dashboard.
+     */
     public function sendSms(StorefrontSetting $setting, string $phone, string $message): bool
     {
-        $credentials = $setting->notification_credentials ?? [];
-        $urlTemplate = (string) ($credentials['sms_api_url'] ?? '');
+        $result = $this->sendSmsDetailed($setting, $phone, $message);
 
-        if ($urlTemplate === '') {
-            return false;
-        }
+        app(SmsLogService::class)->other($setting, $phone, $result);
 
-        $url = strtr($urlTemplate, [
-            '{api_key}' => rawurlencode((string) ($credentials['sms_api_key'] ?? '')),
-            '{sender_id}' => rawurlencode((string) ($credentials['sms_sender_id'] ?? '')),
-            // Country-code form (8801XXXXXXXXX), the format the gateway's own docs show.
-            '{phone}' => rawurlencode(PhoneLinks::internationalDigits($phone) ?? $phone),
+        return $result['ok'];
+    }
+
+    /**
+     * An error message with its web addresses taken out. A failed request names the full gateway URL in its message,
+     * and that URL carries the API key and the message text, which must not reach a log or a page.
+     */
+    public static function scrubUrls(string $text): string
+    {
+        return trim((string) preg_replace('~https?://[^\s)]+~i', '[gateway URL]', $text));
+    }
+
+    /**
+     * What to do about a gateway reply code, in the owner's words; null when the code needs no action or is unknown.
+     * Shown in the SMS Log and after "Send test SMS", next to the gateway's own wording.
+     */
+    public static function smsGatewayHint(?int $code): ?string
+    {
+        return match ($code) {
+            1011 => __('BulkSMSBD does not recognise this API key. Copy the API key again from the BulkSMSBD dashboard (Developers page) into Integrations → SMS Gateway → SMS API key, with no spaces, press Save changes, then press Send test SMS.'),
+            1002, 1013, 1014, 1015 => __('The sender ID is wrong, switched off or does not belong to this API key. Use a sender ID that is approved on your BulkSMSBD account.'),
+            1006, 1007 => __('The BulkSMSBD balance is empty or expired. Top it up.'),
+            1012 => __('A masking sender ID sends Bangla text only. Write this message in Bangla on SMS Templates, or use a numeric sender ID.'),
+            1032 => __('Add this server\'s IP address to the BulkSMSBD whitelist, or switch the IP whitelist off.'),
+            1018, 1031 => __('Your BulkSMSBD account needs attention. Contact BulkSMSBD support.'),
+            1001 => __('The gateway says the phone number is not valid. The system sends it as 8801XXXXXXXXX, so in the gateway URL write number={phone} with nothing in front of {phone}. Check the number itself too.'),
+            1003 => __('A required value is missing in the gateway URL. Use the template shown in the URL box.'),
+            default => null,
+        };
+    }
+
+    /**
+     * Sends one SMS and says what the gateway answered, so the SMS log and the "Send test SMS" button can
+     * show why a message did not leave (no balance, wrong sender ID, IP not whitelisted ...), not only that it did not.
+     * `reason` is null when the SMS was accepted, else no_gateway, no_api_key, gateway_unreachable or gateway_refused.
+     * `segments` is how many SMS parts the text is billed as.
+     *
+     * `request` is the gateway address that was called with the API key and the text hidden, so a refused number or
+     * sender ID can be checked against what was really sent.
+     *
+     * @return array{ok: bool, reason: ?string, code: ?int, meaning: ?string, detail: ?string, segments: int, request: ?string}
+     */
+    public function sendSmsDetailed(StorefrontSetting $setting, string $phone, string $message): array
+    {
+        return [
+            ...$this->deliverSms($setting, $phone, $message),
+            'segments' => SmsSegments::count($message),
+            'request' => $this->smsRequestPreview($setting, $phone),
+        ];
+    }
+
+    /**
+     * The gateway address for one SMS, filled in from the saved URL template. The number goes in the country-code
+     * form (8801XXXXXXXXX), the format the gateway's own docs show. A template copied from the gateway's example
+     * may already have the country code in front of {phone} (number=88{phone}); it then gets the rest of the number,
+     * so the code is not sent twice.
+     *
+     * @param  array<string, mixed>  $credentials
+     */
+    protected function smsRequestUrl(string $template, array $credentials, string $phone, string $message): string
+    {
+        $digits = PhoneLinks::internationalDigits($phone) ?? $phone;
+        $template = (string) preg_replace(['/(?<=[=,&])880\{phone\}/', '/(?<=[=,&])88\{phone\}/'], ['880{phone_after_880}', '88{phone_after_88}'], $template);
+
+        return strtr($template, [
+            '{api_key}' => rawurlencode(trim((string) ($credentials['sms_api_key'] ?? ''))),
+            '{sender_id}' => rawurlencode(trim((string) ($credentials['sms_sender_id'] ?? ''))),
+            '{phone}' => rawurlencode($digits),
+            '{phone_after_88}' => rawurlencode((string) preg_replace('/^88/', '', $digits)),
+            '{phone_after_880}' => rawurlencode((string) preg_replace('/^880/', '', $digits)),
             '{message}' => rawurlencode($message),
         ]);
+    }
+
+    /** What would be called for this phone, with the key and the text hidden; null when no gateway is saved. */
+    protected function smsRequestPreview(StorefrontSetting $setting, string $phone): ?string
+    {
+        $credentials = $setting->notification_credentials ?? [];
+        $template = trim((string) ($credentials['sms_api_url'] ?? ''));
+
+        if ($template === '') {
+            return null;
+        }
+
+        $url = rawurldecode($this->smsRequestUrl($template, $credentials, $phone, '[message]'));
+        $apiKey = trim((string) ($credentials['sms_api_key'] ?? ''));
+
+        if ($apiKey !== '') {
+            $url = str_replace([$apiKey, rawurlencode($apiKey)], '***', $url);
+        }
+
+        // A key typed into the template itself, not through {api_key}.
+        return (string) preg_replace('/((?:api_?key|key|token|secret|pass(?:word)?)=)[^&]*/i', '${1}***', $url);
+    }
+
+    /** @return array{ok: bool, reason: ?string, code: ?int, meaning: ?string, detail: ?string} */
+    protected function deliverSms(StorefrontSetting $setting, string $phone, string $message): array
+    {
+        $credentials = $setting->notification_credentials ?? [];
+        $urlTemplate = trim((string) ($credentials['sms_api_url'] ?? ''));
+        $apiKey = trim((string) ($credentials['sms_api_key'] ?? ''));
+
+        if ($urlTemplate === '') {
+            return ['ok' => false, 'reason' => 'no_gateway', 'code' => null, 'meaning' => null, 'detail' => null];
+        }
+
+        // The gateway would answer "User Id not found" for an empty key; say what is really wrong.
+        if ($apiKey === '' && str_contains($urlTemplate, '{api_key}')) {
+            return ['ok' => false, 'reason' => 'no_api_key', 'code' => null, 'meaning' => null, 'detail' => null];
+        }
+
+        $url = $this->smsRequestUrl($urlTemplate, $credentials, $phone, $message);
 
         try {
             $response = Http::timeout(20)->get($url);
         } catch (\Throwable $exception) {
-            Log::warning('Storefront SMS send failed', ['error' => $exception->getMessage()]);
+            $error = self::scrubUrls($exception->getMessage());
+            Log::warning('Storefront SMS send failed', ['error' => $error]);
 
-            return false;
+            return ['ok' => false, 'reason' => 'gateway_unreachable', 'code' => null, 'meaning' => null, 'detail' => 'unreachable: '.str($error)->limit(180)];
         }
 
         if (! $response->successful()) {
             Log::warning('Storefront SMS rejected by gateway', ['company_id' => $setting->company_id, 'http_status' => $response->status()]);
 
-            return false;
+            return ['ok' => false, 'reason' => 'gateway_unreachable', 'code' => null, 'meaning' => null, 'detail' => 'http_'.$response->status()];
         }
 
         // These gateways answer HTTP 200 even when they refuse the SMS (no balance, wrong sender ID, IP not
@@ -111,10 +223,10 @@ class StorefrontNotificationService
                 'meaning' => self::SMS_GATEWAY_CODES[$code] ?? null,
             ]);
 
-            return false;
+            return ['ok' => false, 'reason' => 'gateway_refused', 'code' => $code, 'meaning' => self::SMS_GATEWAY_CODES[$code] ?? null, 'detail' => null];
         }
 
-        return true;
+        return ['ok' => true, 'reason' => null, 'code' => $code, 'meaning' => $code !== null ? (self::SMS_GATEWAY_CODES[$code] ?? null) : null, 'detail' => null];
     }
 
     /**
@@ -143,6 +255,24 @@ class StorefrontNotificationService
             && filled(data_get($setting->notification_credentials, 'mail_username'));
     }
 
+    /**
+     * The sender address this site's email goes out from: the From address, else the SMTP username when that
+     * is itself an email address. Null when neither is — Amazon SES, for one, uses an access-key ID like
+     * AKIA… as the SMTP username, which is not a sender.
+     */
+    public function mailFromAddress(StorefrontSetting $setting): ?string
+    {
+        $credentials = (array) $setting->notification_credentials;
+
+        foreach ([$credentials['mail_from_address'] ?? null, $credentials['mail_username'] ?? null] as $candidate) {
+            if (is_string($candidate) && filter_var($candidate, FILTER_VALIDATE_EMAIL)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
     protected function companyMailer(StorefrontSetting $setting): Mailer
     {
         $credentials = (array) $setting->notification_credentials;
@@ -156,11 +286,45 @@ class StorefrontNotificationService
             'password' => $credentials['mail_password'] ?? null,
         ]);
         Config::set('mail.from', [
-            'address' => $credentials['mail_from_address'] ?? $credentials['mail_username'] ?? config('mail.from.address'),
+            'address' => $this->mailFromAddress($setting) ?? config('mail.from.address'),
             'name' => $credentials['mail_from_name'] ?? config('mail.from.name'),
         ]);
 
+        // The mail manager keeps a built mailer for the whole process; a queue worker sending for one company
+        // after another would otherwise keep using the first company's SMTP account and sender.
+        Mail::purge('storefront_dynamic');
+
         return Mail::mailer('storefront_dynamic');
+    }
+
+    /**
+     * Sends a short test message through this site's own saved SMTP account (never the server's default
+     * mailer). Returns null when the server accepted it, else the server's own error, which for Amazon SES
+     * says what is wrong (unverified sender, sandbox recipient, wrong credentials).
+     */
+    public function sendTestEmail(StorefrontSetting $setting, string $email): ?string
+    {
+        if (! $this->mailConfigured($setting)) {
+            return __('SMTP host and username are not saved yet.');
+        }
+
+        $logs = app(EmailLogService::class);
+        $via = $logs->via($setting, true);
+
+        try {
+            $this->companyMailer($setting)->raw(
+                __('This is a test email from ZamZam ERP. If you can read it, email sending for this site works.'),
+                fn ($message) => $message->to($email)->subject(__('ZamZam ERP test email')),
+            );
+        } catch (\Throwable $exception) {
+            $logs->failed($setting, EmailLog::KIND_TEST, $email, $via, $exception->getMessage());
+
+            return $exception->getMessage();
+        }
+
+        $logs->sent($setting, EmailLog::KIND_TEST, $email, $via);
+
+        return null;
     }
 
     /**
@@ -174,47 +338,60 @@ class StorefrontNotificationService
             || ! in_array(config('mail.default'), ['log', 'array', null, ''], true);
     }
 
-    /** Any mail through the company's own SMTP when it has one (IMS v2 notifications). */
-    public function sendMailable(StorefrontSetting $setting, string $email, Mailable $mail): bool
+    /**
+     * Any mail through the company's own SMTP when it has one (IMS v2 notifications). $kind says what the
+     * message is for, in the email log.
+     */
+    public function sendMailable(StorefrontSetting $setting, string $email, Mailable $mail, string $kind = EmailLog::KIND_OTHER): bool
     {
-        try {
-            $mailer = $this->mailConfigured($setting) ? $this->companyMailer($setting) : Mail::mailer();
-            $mailer->to($email)->send($mail);
-
-            return true;
-        } catch (\Throwable $exception) {
-            Log::warning('Company email failed', ['error' => $exception->getMessage(), 'mail' => $mail::class]);
-
-            return false;
-        }
+        return $this->deliver($setting, $email, $mail, $kind, 'Company email failed');
     }
 
     public function sendResellerPasswordResetEmail(StorefrontSetting $setting, string $email, string $companyName, string $url, int $minutes): bool
     {
-        try {
-            $mailer = $this->mailConfigured($setting) ? $this->companyMailer($setting) : Mail::mailer();
-            $mailer->to($email)->send(new ResellerPasswordResetLink($companyName, $url, $minutes));
-
-            return true;
-        } catch (\Throwable $exception) {
-            Log::warning('Reseller password reset email failed', ['error' => $exception->getMessage()]);
-
-            return false;
-        }
+        return $this->deliver(
+            $setting,
+            $email,
+            new ResellerPasswordResetLink($companyName, $url, $minutes),
+            EmailLog::KIND_RESELLER_PASSWORD_RESET,
+            'Reseller password reset email failed',
+        );
     }
 
     public function sendLoginOtpEmail(StorefrontSetting $setting, string $email, string $companyName, string $code): bool
     {
-        try {
-            $mailer = $this->mailConfigured($setting) ? $this->companyMailer($setting) : Mail::mailer();
-            $mailer->to($email)->send(new StorefrontLoginOtp($companyName, $code));
+        return $this->deliver($setting, $email, new StorefrontLoginOtp($companyName, $code), EmailLog::KIND_LOGIN_CODE, 'Storefront login OTP email failed');
+    }
 
-            return true;
+    /**
+     * Sends one mailable through this site's own SMTP when it has one, else the server's default mailer, and
+     * writes the outcome to the email log (never the text of the message). Logging never changes the result.
+     */
+    protected function deliver(StorefrontSetting $setting, string $email, Mailable $mail, string $kind, string $failureWarning): bool
+    {
+        $logs = app(EmailLogService::class);
+        $ownSmtp = $this->mailConfigured($setting);
+        $via = $logs->via($setting, $ownSmtp);
+
+        try {
+            $mailer = $ownSmtp ? $this->companyMailer($setting) : Mail::mailer();
+            $mailer->to($email)->send($mail);
         } catch (\Throwable $exception) {
-            Log::warning('Storefront login OTP email failed', ['error' => $exception->getMessage()]);
+            Log::warning($failureWarning, ['error' => $exception->getMessage(), 'mail' => $mail::class]);
+            $logs->failed($setting, $kind, $email, $via, $exception->getMessage());
 
             return false;
         }
+
+        // The server's default mailer may only write to a log file ("log" / "array"): the send works, but
+        // nothing leaves the server, and the log must not call that "sent".
+        if (! $ownSmtp && ! $this->emailDeliveryAvailable($setting)) {
+            $logs->skipped((int) $setting->company_id, $kind, $email, EmailLogService::REASON_LOG_ONLY, $via);
+        } else {
+            $logs->sent($setting, $kind, $email, $via);
+        }
+
+        return true;
     }
 
     public function sendWhatsAppTemplate(

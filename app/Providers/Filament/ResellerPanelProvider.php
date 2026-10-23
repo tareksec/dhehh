@@ -19,6 +19,7 @@ use App\Filament\Reseller\Pages\Profile;
 use App\Filament\Reseller\Pages\Withdrawals;
 use App\Http\Middleware\ResolveCompanyFromResellerPortalDomain;
 use App\Http\Middleware\RestrictPortalHosts;
+use App\Http\Middleware\SetResellerPortalLocale;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Services\CompanyContext;
@@ -94,6 +95,9 @@ class ResellerPanelProvider extends PanelProvider
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn (): View|string => $this->depositBadge())
             // The tab bar at the bottom of a phone screen, for approved resellers only.
             ->renderHook(PanelsRenderHook::LAYOUT_END, fn (): View|string => $this->bottomNav())
+            // Bangla / English on the sign-in and application pages (the choice made on the landing page holds here).
+            ->renderHook(PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE, fn (): View => view('filament.reseller.language-switch'))
+            ->renderHook(PanelsRenderHook::AUTH_REGISTER_FORM_BEFORE, fn (): View => view('filament.reseller.language-switch'))
             // "Read the rules first" above the application form, while the guide is on.
             ->renderHook(PanelsRenderHook::AUTH_REGISTER_FORM_BEFORE, fn (): View|string => $this->guideLink())
             // Hind Siliguri, self-hosted: @font-face lives in the portal theme, so no font URL here.
@@ -106,6 +110,7 @@ class ResellerPanelProvider extends PanelProvider
                 ResolveCompanyFromResellerPortalDomain::class,
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
+                SetResellerPortalLocale::class,
                 StartSession::class,
                 AuthenticateSession::class,
                 ShareErrorsFromSession::class,
@@ -121,6 +126,8 @@ class ResellerPanelProvider extends PanelProvider
             // login could not find the reseller's company.
             ->persistentMiddleware([
                 ResolveCompanyFromResellerPortalDomain::class,
+                // After it: the language chosen on the landing page also holds for the portal's Livewire requests.
+                SetResellerPortalLocale::class,
             ])
             ->authMiddleware([
                 Authenticate::class,

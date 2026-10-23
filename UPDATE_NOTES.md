@@ -12,9 +12,9 @@ Checked in the browser on the throwaway preview DB: desktop 1366px and 1024px (m
 
 Needs Bangla review: the sign-in page's five lines ("আপনার ব্যবসা এক জায়গায়" and the three points).
 
-Full plain `php artisan test`: see the line below.
+Main (v2.107.0, 56 commits) merged into the branch first; conflicts kept both sides (lang files: every key of both; `OrderStatusSmsService`: main's skip-log flow plus the Delivery Challan exclusion; the Trade Portal CHANGELOG notes moved back under [Unreleased] after git put them in [2.98.0]). Full plain `php artisan test` after the merge (PHP 8.4, assets built): 3,128 passed, 5 skipped, 0 failed. (One run before the merge had 1 failure whose name was cut from the output; it did not come back.)
 
-Commit status: pending.
+Commit status: committed, pushed to `feature/trade-portal-reports` and merged into `main` with the owner's approval (2026-10-23).
 
 ## 2026-10-23 - Trade Portal phone look (owner's reference design)
 
@@ -190,6 +190,206 @@ Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tre
 Not committed on purpose: the owner's original sample files in `docs/tasneem-samples/` (the .docx / .xlsx documents and the challan photo) — business papers, kept local; only `PLAN.md`, `SUMMARY.md` and `BUILD-BRIEF.md` are in the commit.
 
 Commit status: committed and pushed to `feature/trade-portal-foundation`; not on `main` (waits for the owner's approval).
+## 2026-10-23 - Test SMS "1001 Invalid Number" with the new API key
+
+Owner (Bangla, with a phone screenshot of the SMS Log): after connecting the new API, the Send test SMS button with their own number says the number is invalid.
+
+**What the log shows:** 10:17 code 1032 (IP not whitelisted), so the key is now accepted (the earlier 1011 is gone); 10:19, after the whitelist change, code 1001 Invalid Number for both `01728714614` and `8801728714614`. The system turns both into `8801728714614`, so the number itself is sent in the right form. Both forms failing the same way points at the saved URL template. My best guess (I cannot see the owner's URL): BulkSMSBD's example reads `number=88017XXXXXXXX`; replacing only `017XXXXXXXX` with `{phone}` leaves `number=88{phone}`, i.e. `888801...`.
+
+**Fix:** an `88` or `880` right before `{phone}` in the template is no longer repeated. **Send test SMS** now shows the gateway address that was called (number and sender ID visible, API key and text hidden) when the gateway refuses, so a wrong template is visible at once. If the owner's URL is something else and 1001 stays, that preview will show what is wrong (or the number really is not valid for that operator on that account; then ask BulkSMSBD support).
+
+**Needs Bangla review (lang/bn.json):** the new 1001 advice and "যা পাঠানো হয়েছিল (key ও লেখা লুকানো)".
+
+**Verified:** `SmsDashboardTest` (+2, all nine number/template combinations send `number=8801728714614`), `SmsLogTest`, `IntegrationsPageTest`, `TranslationParityTest`. Full `php artisan test` before the push.
+
+Commit status: committed to `claude/order-management-features-nafks7`; not on `main` until the owner says so.
+
+## 2026-10-23 - SMS Dashboard (counts, cost, BulkSMSBD balance)
+
+Owner (Bangla): can a dashboard be made for the SMS gateway, with how many SMS came and went, what it cost, and recharge from the dashboard, so nobody has to log in to BulkSMSBD and everything is controlled from here?
+
+**What BulkSMSBD allows (checked on its developer page):** only three things by API: send, send many-to-many, and read the balance (`/api/getBalanceApi?api_key=`). There is **no API to recharge**, none for delivery reports or history, and none for prices. So: counts and cost come from our own SMS log; the balance is live; **a recharge cannot be done from here**, the dashboard has a button that opens their site (a login there is still needed); "sent" means the gateway accepted it, not that the phone got it; the cost is parts x the owner's own price per SMS, an estimate. Ask BulkSMSBD support whether they offer a reseller / payment API if the owner wants more.
+
+**What was built:** Settings → SMS Dashboard (period picker, balance card with refresh and recharge link and a low-balance warning, sent / parts / estimated cost / refused / skipped cards, by-kind table, day-by-day bars). Settings → Integrations → SMS Gateway has **Price per SMS** and **Warn me when the balance is below**. Every SMS is now counted, not only order SMS: login/recovery codes, reminders, broadcasts and investor messages leave a `kind = other` row (phone, result, parts, never the text).
+
+**Found on the way, fixed:** a gateway connection error carried the full request URL, API key included, into the SMS Log detail, the application log and (on the dashboard) the page. URLs are now stripped (`StorefrontNotificationService::scrubUrls()`), the migration cleans old rows. The owner may want to replace the BulkSMSBD API key if a connection error ever appeared in the SMS Log.
+
+**Not verified:** the balance reply for a VALID key (I only have a dummy key: BulkSMSBD answered the dummy with `{"response_code":1011,...}`, which the page shows with the fix advice). The reader accepts a `balance` field or a bare number and shows anything else as it came; if the owner's page shows "no balance could be read" with the raw reply, send me that reply and I will adjust the reader.
+
+**Needs Bangla review (lang/bn.json):** the 41 new keys, mainly "ফিরিয়ে দিয়েছে" (Refused), "আমাদের নিয়মেই পাঠানো হয়নি" (Not sent by our own rules), "পার্ট" (Parts) and the balance and price helper texts.
+
+**Verified:** `SmsDashboardTest` (13), `SmsLogTest`, `IntegrationsPageTest`, `TranslationParityTest`, `MultiCompanyIsolationTest`, `ModuleGuardTest`, Pint on my files; browser check on a scratch SQLite database (desktop and 390px phone, no sideways scroll, real call to BulkSMSBD with a dummy key shows the 1011 advice). Full `php artisan test` before the push.
+
+Commit status: committed to `claude/order-management-features-nafks7`; not on `main` until the owner says so.
+
+## 2026-10-23 - Courier COD is the due amount, and the order page has a Payment section
+
+Owner (Bangla): when an order is booked with a courier the grand total is sent as the COD amount; with an advance payment the due amount shows on the order but the courier still gets the grand total, and it should be the due amount. Also: separate the payment section on the order page, a new person cannot tell where the payment / advance payment goes.
+
+**COD:** the 2026-10 rule ("COD = full invoice total, never reduced by an advance", `UPDATE_NOTES` entry for `courierCodAmount()`) is replaced on the owner's word. `Order::courierCodAmount()` is now the grand total (with the zone delivery fee added when the order has no shipping fee of its own, unchanged) minus `paid_amount`, never below 0. Every booking path already read `courierCodAmount()`, so the popup on the order page, the row action in the orders list and the bulk action all send the due amount. The popup shows "Grand total ৳560 − advance paid ৳200 = ৳360" under the COD field; the field is still editable. Not covered: a payment recorded AFTER the booking does not change the COD already sent to the courier.
+
+**Payment section:** `OrderForm` (create and edit) ends **Totals** at "Grand total" and adds a non-collapsible **Payment** section: Advance / paid amount, Payment Method (create only), Due amount, each with a helper line; on edit the helper points to the Payments History table. `OrderInfolist` (view page) gets a **Payment** block (advance / paid amount, due amount) after **Totals**.
+
+**Needs Bangla review (lang/bn.json):** "Grand total", "Advance / paid amount", "Due amount" (বাকি (ডিউ) টাকা), the Payment section description and the five helper lines, and the COD sum line ("মোট :total − অগ্রিম পরিশোধিত :paid = :due").
+
+**Verified:** `CourierIntegrationTest` (COD rule with advance, later payments, fully paid = 0, popup end to end), `OrderFormTest` (Payment section), `TranslationParityTest`, Pint on my files; browser check on a scratch SQLite database (create form and view page show the Payment section; the Book courier popup on a ৳560 order with ৳200 advance shows COD 360 and the sum line). Full `php artisan test` before the push.
+
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("ওকে মেইন এ পুশ কর").
+
+## 2026-10-23 (later) - Reseller landing page broken on a phone
+
+Owner (Bangla), with a phone screenshot of reseller.zamzamint.com: why is everything messed up, is the mobile layout not responsive, and it looks wrong on desktop too?
+
+**What the screenshot was:** the page's colours, borders, fonts and buttons were there but none of its layout (huge logo, the language switch twice, no padding, buttons stacked). I reproduced that exactly by removing `app.css` from the page: the layout classes (Tailwind utilities) came only from the site-wide `app.css`, and the neo-brutalist rules from `reseller-landing.css`. So at that moment the phone had loaded the second file and not the first. I could not find out why that one load failed: the live site serves both files correctly now (checked the real HTML and files from reseller.zamzamint.com, rendered at 412 px and 1280 px, the layout is right). The most likely cause is the moment of a deploy: `app.css` changes its file name on every deploy (its content changes whenever any Blade view changes), `reseller-landing.css` almost never does, and the screenshot was taken at 9:20 BD time, minutes before the new build's files were written (03:22 UTC). That is a guess, not something I could prove.
+
+**What I changed (so it cannot happen again, whatever the cause):** the landing page now has its own Tailwind build (`@import 'tailwindcss' source(none)` plus `@source` lines for the landing views) and does not load `app.css`. It is 24 KB instead of 252 KB, which also helps on a slow phone connection. Not fully immune: if the landing's own file changes in a deploy, someone who opens the page during that deploy could still get an old page with a new file name, but that now happens only when the landing itself changes, not on every deploy.
+
+**A second, real problem found on the way:** a sideways scroll at phone widths (the page was 444 px wide on a 390 px screen; the long store address in the "Your own store" picture widened a grid column). Fixed with `grid-cols-1` on every grid and `minmax(0, …)` on the hero's columns. Measured with Chromium at 280 / 320 / 360 / 375 / 390 / 412 / 600 / 768 / 1024 / 1280 px, English and Bangla (with the real Anek Bangla font served over HTTP): page width = screen width at all of them. Looked at the phone, tablet, desktop and dark-mode screenshots, with and without the website footer.
+
+**Verified:** `ResellerLandingPageTest` (2 new tests; I checked the grid test fails on the old markup), `ResellerGuidePageTest`, `ResellerPortalTest`, `TranslationParityTest`; `npm run build`. No new strings. **Needs the owner:** after deploy, open reseller.zamzamint.com on the phone once with a normal reload; if it ever shows the broken layout again, tell me roughly when and I will look at the deploy logs.
+
+Commit status: committed on `claude/reseller-module-status-v9tobe` and pushed to `main` on the owner's approval ("মেনে পুস কর", read as "main-এ পুশ কর").
+
+## 2026-10-23 - Email Log (sent / failed / not sent, and why)
+
+Owner (Bangla): "ইমেইলের লগ পেজ তৈরি করেছ? ইমেইল পাঠানো হইছে ফেল হইছে সফল হইছে ফেল হইলে কেন হয় নাই" (did you build an email log page? email sent, failed, succeeded, and if it failed, why). I had not: only the SMS Log existed (another session). I answered that and built it the same way as the SMS Log.
+
+What it does: a tab on Settings → Logs (the one Logs page main gained today), read-only, one row per email through `StorefrontNotificationService` (login code, reseller password reset link, investor code / invitation / message, owner digest, test email). Result: Sent / Failed / Not sent. A failure shows a plain reason plus the mail server's own answer; "Not sent" covers no email account for the site and a server mailer that only logs (the send still returns true as before, so local development and tests that read the log mailer keep working, but the log does not call it "sent").
+
+Decisions (mine, say if you want them different):
+- **No message text, no subject.** Only recipient, kind, result, and the server's answer, so a login or reset code can never be read from the log (the SMS Log also skips code messages; here the row exists but carries no code).
+- **"Sent" means the mail server accepted it.** The page says so. SES bounce / complaint tracking (SNS) is still not built, so an address that bounces later still shows "Sent". This is the main gap against "did it reach the customer".
+- **No clean-up of old rows yet** (the SMS Log has none either). Every customer login code is a row; add a pruning job if the table grows.
+- The reason mapping reads the error text (`classify()`), tested against typical SES answers (535 login, 554 not verified, 454 throttling, quota, connect/time-out). A message that matches none shows "The mail server could not send the message" with the raw answer next to it.
+
+Not logged: emails that do not go through this service (none found; the panels' password resets are custom and use it). Not tested against real SES.
+
+Needs Bangla review (new keys): "Email Log" → "ইমেইল লগ", the kind labels ("Customer login code", "Reseller password reset link", "Investor code/invitation/message", "Owner daily digest", "Test email", "Other email"), "Sent through", "SMTP :host", "Server mailer (:mailer)", the page note and the eight reason texts.
+
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` on the owner's approval ("মেনে পুস করো"). Merged `main` (v2.104.0) first and moved the Email Log into the new Settings → Logs page as an "Email" tab (own sidebar entry removed, one-column phone layout). Full test run after the merge: 3042 passed, 6 skipped, 0 failed.
+
+## 2026-10-23 - One Logs page, and the "User Id not found" SMS error
+
+Owner (Bangla): put all the log pages on one page, with a single "Logs" menu entry and the logs as tabs, like Integrations; and the first SMS Log row says the gateway refused with 1011 "User Id not found" — can it be fixed?
+
+**Logs page:** Settings → Logs, tabs SMS, Audit, Courier status, Courier webhooks, Meta events, Deploy errors, Mobile crashes (each only for people who could already open it; see CHANGELOG). Left where they were because they are business data, not system logs: Storefront → Checkout Attempts and Courier → Risk Events (the owner can say if they should move too). Checked in a real browser on a scratch SQLite database (not the demo DB): login, all 7 tabs, tab kept in the address, the sidebar shows only "Logs", 0px horizontal overflow at 1280 and 390 px.
+
+**1011:** that is BulkSMSBD saying it does not know the API key. I cannot see or test the owner's key, so I did not "fix" the gateway; the code now tells the owner exactly what to do (see CHANGELOG), catches an empty key, trims spaces, and stops the browser from autofilling the login password into the API key box (a plausible cause: the box is a password field). **Next step for the owner:** re-copy the API key from the BulkSMSBD Developers page into Integrations → SMS Gateway, Save changes, press Send test SMS.
+
+**Needs Bangla review (lang/bn.json):** the tab names (Audit, Courier status, Courier webhooks, Meta events, Deploy errors, Mobile crashes), "Logs", "Nothing logged yet", and the nine gateway-hint sentences.
+
+**Verified:** `LogsPageTest` (8), `SmsLogTest`, `SmsTemplatesTest`, `AdminNavigationClustersTest`, `ModuleGuardTest`, `TranslationParityTest`. Full `php artisan test` (plain, no `--env`): 3006 passed, 2 skipped.
+
+## 2026-10-23 - Amazon SES setup for the ERP's email
+
+Owner (Bangla): "আমরা email সার্ভার হিসেবে aws ses সার্ভিস নিয়েছি। সেখানে আমাদের ডোমেইনগুলো এপ্রুভ হয়েছে। এখন সেটা সেটআপ করা বাকি erp তে। এর জন্য কোন কাজ করা লাগলে সেটাও কর" (we took AWS SES as the email server, our domains are approved there; setting it up in the ERP remains; do whatever work is needed).
+
+Decision (mine, not asked): SES through its **SMTP interface**, not the SES API. Every email flow already goes through the per-site SMTP account (`StorefrontNotificationService`: storefront login codes, reseller password reset, investor/IMS mail, owner digest), so no new dependency, no new credential store, and each company/site keeps its own From domain. The API route (`aws/aws-sdk-php` is installed) would need new per-site key/secret/region fields and a new transport; say so if the owner wants it.
+
+What changed: Email Setup tab gets an **Amazon SES region** quick fill (host, 587, TLS), a **Send test email** button (shows the mail server's own error), and a warning on save when no usable From address exists. Guide: `docs/email-ses-setup.md`.
+
+Two bugs found on the way, both fixed:
+- **Wrong company's SMTP/sender in a long-running queue worker.** `Mail::mailer('storefront_dynamic')` is cached by the mail manager for the process; the second company's mail went out through the first company's SMTP host and From. With several verified SES domains that means mail sent under the wrong company's address, with no error. Now purged before each build; `CompanyEmailSetupTest` fails without it (checked by removing the line).
+- **SES user names are not email addresses.** The sender defaulted to the SMTP user name (`AKIA…`), which is not a valid sender. Now From address, else an email-shaped user name, else the server default.
+
+Found, not changed: Laravel 13's SMTP transport ignores the `encryption` setting (port 465 = SSL, other ports = STARTTLS when offered). The encryption box is therefore cosmetic; I added a help line saying so rather than rewiring it. `Config::set('mail.from')` in `companyMailer()` is still a process-wide side effect (the server-default mailer could pick up a company's From if it is first built afterwards); only the SES-relevant leak above was fixed.
+
+**What the owner must do outside the ERP:** (1) SES must be out of the **sandbox** — verified domains do not lift it; in the sandbox customers would receive nothing. (2) In SES → SMTP settings → Create SMTP credentials (user name `AKIA…`, long password; region-specific; one pair works for all domains in that region). (3) In the ERP, per site: region, user name, password, a **From address on that site's verified domain**, Save, then Send test email. (4) Optional: `MAIL_*` in Coolify for the server-wide fallback. Not built: SES bounce/complaint handling (SNS webhook) — SES can restrict an account with many bounces; offer if wanted.
+
+Checked: full `php artisan test` with PHP 8.4.27: 2990 passed, 6 skipped, 0 failed. Not tested against real SES (no credentials here) — the transport is built and the sender/host/port are asserted, and sending is covered with a fake mailer and an unreachable host only.
+
+Needs Bangla review (new keys): "Amazon SES region (quick setup)", its long help text, "Send test email", "Send to", "Test email sent/failed", "Email needs a From address" and its body, "Port 465 connects over SSL…", the new From address help text, the test email's subject and body.
+
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` on the owner's approval ("কমিট এবং পুশ কর করে মেইন এ পুশ কর"). Merged `main` three times on the way (SMS Log, v2.101.0, v2.102.0); full test run after the last code merge: 3010 passed, 6 skipped, 0 failed.
+
+## 2026-10-23 - Email (SMTP) settings moved to Integrations → Email Setup
+
+Owner (Bangla): "ইমেইল ইন্টিগ্রেশন এর জন্য যে সেটিংস গুলো আছে সেগুলো ইন্টিগ্রেশন পেজে ইমেইল সেটআপ ট্যাব এ নিয়ে যাও।" (move the settings that exist for email integration to the Email Setup tab on the Integrations page). There was no Email Setup tab yet, so I added it next to SMS Gateway, the same way the SMS gateway was moved on 2026-10-10.
+
+What changed: the seven SMTP fields (host, port, encryption, username, password, From address, From name) are removed from Storefront Settings → Customer Notifications & Reminders and live on Settings → Integrations → Email Setup, per site (Site picker). Same storage (`notification_credentials`), no migration, saved values keep working. Each page merges only the keys it owns, so neither can wipe the other's (or the WhatsApp reminder) keys. The "Email is not set up…" message for the reseller password-reset action and the Customer Notifications section note now point to the new tab.
+
+Left as is: the WhatsApp reminder fields stay on Storefront Settings (the owner asked only for email). `BroadcastForm` still says the SMS gateway is "under Storefront Settings → Customer Notifications" — stale since the SMS move of 2026-10-10, not touched here.
+
+Needs Bangla review (new keys): "Email Setup" → "ইমেইল সেটআপ", the tab note, "SMTP host/port/encryption/username/password", "From address" → "প্রেরকের ঠিকানা", "From name" → "প্রেরকের নাম".
+
+Found while testing: choosing "None" for encryption was saved as null, which the mail code reads as TLS (the old Storefront Settings select had the same flaw). The new tab now saves "None" as an empty string and shows a saved null as TLS, so nothing changes for existing sites.
+
+Checked: full `php artisan test` (PHP 8.4.27): 2982 passed, 6 skipped, 0 failed. No real SMTP server or browser was used — the tab is covered by Livewire tests only, and I did not look at it rendered.
+
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` on the owner's approval ("কমিট এবং পুশ কর করে মেইন এ পুশ কর"). Merged `main` three times on the way (SMS Log, v2.101.0, v2.102.0); full test run after the last code merge: 3010 passed, 6 skipped, 0 failed.
+
+## 2026-10-23 - SMS Log and "Send test SMS" (why did no SMS arrive?)
+
+Owner (Bangla): "আমি এইমাত্র এই অর্ডার টা করলাম কিন্তু কোন এসএমএস আমার ফোন নাম্বারে আসে নাই, তাহলে বুঝা গেল যে sms gateway ঠিকমতো কাজ করছে না।" Also asked earlier whether each message (order, login OTP, password reset, reseller) has its own template, because the SMS Gateway tab shows a single URL.
+
+**What I found:** there was no way to see why an SMS did not go. Every skip was silent (no wording saved, no phone, opted out, no gateway, duplicate) and a gateway refusal went only to the server log file. The gateway is not proven broken by one missing SMS: the most likely causes are (1) the "Order placed" / status wording is not saved on SMS Templates (blank = nothing is sent, owner decision 2026-10-17), (2) no queue worker is running in production (the "placed" SMS waits 45 seconds in the queue), (3) the gateway refuses the text (masking sender ID needs Bangla text, error 1012; balance; IP whitelist).
+
+**What changed:** Settings → SMS Log (one row per order SMS with result and reason, stuck-queue warning), Settings → Integrations → SMS Gateway → **Send test SMS** (real SMS, shows the gateway's answer), and a note that the URL only delivers messages. See CHANGELOG. Code messages are never logged.
+
+**Not changed (asked of the owner):** reseller sign-up/login/password-reset codes still share the shop customers' three code templates, and the reseller's three messages (approved, profit payable, payout paid) are still written on Reseller Settings, not on SMS Templates. The owner has been asked whether to split/move them.
+
+**Needs Bangla review (lang/bn.json):** SMS Log, Order status change, Test SMS, Waiting in the queue, Not sent: gateway, Not sent: skipped, Message, Send test SMS, the reason sentences (no wording / no phone / opt-out / no gateway / duplicate / excluded / gateway refused / unreachable), the test-SMS texts (including the Bangla test message sent for masking sender IDs: ":company থেকে টেস্ট SMS। আপনার SMS গেটওয়ে ঠিকমতো কাজ করছে।") and the stuck-queue sentence.
+
+**Verified:** `SmsLogTest` (13), `SmsTemplatesTest`, `MultiCompanyIsolationTest`, `TranslationParityTest`. Full `php artisan test` (plain, no `--env`): 2995 passed, 2 skipped.
+
+**Commit status:** committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("টেস্ট শেষ হলে মেন এ ও পুশ করে দিও").
+
+## 2026-10-22 - PHP security update: production Dockerfile
+
+Reason - owner forwarded Contabo's email about the PHP RCE vulnerabilities CVE-2026-109618 / CVE-2026-109619 and asked whether the server needs an update. I checked the claims on php.net (advisory 2026-10-21; fixed in 8.4.27 / 8.5.12 / 8.3.36 / 8.2.35; PHP-FPM is affected). The owner's ERP container reports `PHP 8.4.2 (built Dec 17 2024)`, so it is vulnerable, and 25 patch releases behind.
+
+Cause - Coolify's Nixpacks builds PHP from a frozen old nixpkgs snapshot, so redeploying (even with "force rebuild") cannot reach 8.4.27.
+
+What changed (repo only; nothing is live until the owner switches the Build Pack in Coolify):
+- `Dockerfile` on `php:8.4.27-fpm-bookworm` (version pinned), multi-stage: PHP + extensions, Composer, Vite assets, final image with nginx + PHP-FPM under supervisord; `CONTAINER_ROLE=worker` runs `queue:work` instead.
+- `docker/` config (nginx = plain version of `nginx.template.conf`, `clear_env = no` so Coolify's environment reaches PHP, `session.upload_progress.enabled=0`, `pm.max_requests=500`), `.dockerignore`.
+- Entry point fixes the owner of the existing `/app/storage` volume once (the Nixpacks files belong to another user).
+- `.github/workflows/docker-image.yml` builds and starts the image (web from a root-owned empty volume, worker role) on every change to these files.
+- `docs/deployment.md`: switch / rollback / "raise PHP_VERSION on each PHP security release".
+
+Not verified: the sandbox has no Docker daemon, so the image is tested only by the GitHub workflow. Memory settings (`memory_limit=256M`, `pm.max_children=16`) are my choice, not measured on the owner's server. I did not run `php -v` on the VPS host or check Coolify's own PHP (Coolify is itself a Laravel app and needs its own update). Intentionally not done: the advisory's interim `memory_limit=-1` (can exhaust the server's RAM).
+
+Open for the owner: switch the Build Pack (steps in the docs), update Coolify, check the VPS for other PHP sites, and look for signs of compromise (the advisory says exploitation is active).
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
+
+## 2026-10-22 - Automatic order messages: SMS on creation + WhatsApp summary card
+
+Owner (Bangla): "আর কোন অর্ডার তৈরি হলে সাথে সাথে কাস্টমারের ফোন নাম্বারে অর্ডার ডিটেইলস এবং অর্ডার স্ট্যাটাস সহ চলে যাবে। প্রতিটা অর্ডার স্ট্যাটাস পরিবর্তন হলে কাস্টমারে ফোন নাম্বারে অর্ডার ইনফো সহ মেসেজ চলে যাবে, এবং তার যদি whatsapp থাকে তাহলে তাকে অর্ডার সামারি কার্ড অটো পাঠানো হবে।" Owner's answers to my two questions: WhatsApp through the **official Cloud API** (Recommended) and **try every customer** (a number without WhatsApp just fails).
+
+What already existed: a status SMS at every stage, using the owner's wording on SMS Templates (empty wording = nothing sent, owner decision 2026-10-17). I kept that rule, so **nothing is sent until the owner saves the wording** for "Order placed" and for each stage (one click: "Use suggested wording"). If the owner wants the SMS to go before any wording is saved, that is a separate decision.
+
+What changed: SMS "Order placed" (+ `:items`), the WhatsApp card (new page Settings → Order WhatsApp card; server-drawn card picture; Cloud API template with Image header and five body variables), see CHANGELOG. Rules kept: never web (QR) channels (whatsapp-web-rules rule 4), never reseller / imported / opted-out, one send per event.
+
+**What the owner must do before the WhatsApp card works:** (1) have a Cloud API or Coexistence channel in Chat Channels; (2) create and get approved a Meta template with an Image header and a body using {{1}} name, {{2}} order number, {{3}} status, {{4}} total, {{5}} due; (3) pick channel and template on Settings → Order WhatsApp card and switch it on; (4) make sure the server can draw the picture — the page says so; if not, install ImageMagick's Pango support (`libmagickcore-6.q16-6-extra` on Debian/Ubuntu). WhatsApp's business-initiated messages are charged by Meta per template message.
+
+Checked: the card picture was drawn on this machine (Imagick 6.9 with Pango; Bangla names, addresses and product names join correctly) for a company with a logo and for a reseller; Meta calls are tested with faked responses only — **not tested against the real Meta API or a real phone**. Not run on the production server, whose ImageMagick build is unknown.
+
+Needs Bangla review (new keys): all new keys of the Order WhatsApp card page and "Items ordered (product names with quantities)" → "অর্ডার করা পণ্য (নামসহ পরিমাণ)".
+
+Commit status: Committed and pushed to `claude/order-management-features-nafks7` and to `main` (owner approved: "মেইন এ পুশ কর"). Full test run after merging main v2.99.0: 2982 passed, 2 skipped.
+
+## 2026-10-22 - Order summary card: corporate layout
+
+Owner (Bangla): "সামারি কার্ডকে আরো প্রফেশনাল ডিজাইন করা লাগবে এটা একদম জেনেরিক ডিজাইন হয়ে গেছে। কম্পানী লোগো, কন্টাক্ট ইনফো, অর্ডার ইনফো, কাস্টমার ইনফো, সব আরো গুছানো কর্পোরেট এন্টারপ্রাইজ লেভেলের হতে হবে।" (make the summary card more professional — company logo, contact info, order info, customer info, all organised at corporate enterprise level).
+
+What changed: the card is redrawn with a logo + contact header, a navy title band with the invoice number, Order details and Customer details boxes side by side (payment badge in the order box), a striped items table with picture, unit price, qty and amount, a note box, totals ending in a big Due band (orange, green when paid), and a footer with just the thank-you line.
+
+Follow-up (owner, with a screenshot): "কম্পানি ইনফো দুই জায়গায় দেখাচ্ছে হেডারে ফুটারে, যে কোন এক জায়গায় দেও" — the company's phone, e-mail, website and address now show only in the header (browser card and the server-drawn WhatsApp card); the footer company line and the Contact box are gone, and the unused "Contact" key was removed. `OrderSummaryCardService` supplies the logo (data URI), contact lines, address, note, payment state and unit prices. Reseller orders keep the reseller's name/logo and show no company contact details.
+
+Checked in headless Chromium with a logo, three items (two pictures, one without), a Bangla customer name and address, and the reseller variant (no logo, no contact). Not tested on a phone — the sending path is unchanged.
+
+Needs Bangla review (new keys): "Customer details" → "কাস্টমারের তথ্য", "Paid in full" → "সম্পূর্ণ পরিশোধিত", "Partially paid" → "আংশিক পরিশোধিত", "Payment due" → "পেমেন্ট বাকি", "Payment" → "পেমেন্ট".
+
+Commit status: Committed and pushed to `claude/order-management-features-nafks7` and to `main` (owner approved: "মেইন এ পুশ কর"). Full test run after merging main v2.99.0: 2982 passed, 2 skipped.
+
+## 2026-10-22 - Order summary card: product pictures
+
+Owner (Bangla): "অর্ডার সামারি কার্ড এ প্রডাক্ট ইমেজ এড করতে। তাহলে কাস্টমার বুঝবে যে তাকে তার অর্ডার করা প্রডাক্ট ই দেয়া হচ্ছে।" (add the product image to the order summary card so the customer knows they get the product they ordered).
+
+What changed: `OrderSummaryCardService` gives each item a 160 px square JPEG data URI of the ordered variant's first photo, else the product's main image (null when none or unreadable). `summary-card.blade.php` preloads the pictures and draws a rounded thumbnail beside each item; items without a picture get a plain box; rows are taller when pictures are shown. No new lang keys. Checked in headless Chromium: card with two pictures and one picture-less item draws correctly. Not tested on a phone — the sending path is unchanged.
+
+Commit status: Committed and pushed to `claude/order-management-features-nafks7` and to `main` (owner approved: "মেইন এ পুশ কর"). Full test run after merging main v2.99.0: 2982 passed, 2 skipped.
 
 ## 2026-10-22 - IMS office: phone layout like an app
 
@@ -208,6 +408,7 @@ Not done: the office's other pages (forms, detail pages) are Filament's own one-
 Full plain `php artisan test` on the branch (assets built from this tree): 2,959 passed, 1 skipped, 0 failed.
 
 Commit status: committed and pushed to `feature/ims-office-mobile`; not on `main` (waits for the owner's approval).
+
 
 ## 2026-10-21 - Purchases: import from CSV, and the Items layout
 
@@ -1306,6 +1507,86 @@ Needs Bangla review (new keys): Reseller levels (রিসেলার লেভ
 Tests: `ResellerLevelsTest` (10). Verified: full suite 2543 passed, 1 skipped, 0 failed.
 
 Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16). Not pushed to `main`.
+
+## 2026-10-22 (last) - Landing page: the reseller's questions answered, Bangla version, Anek Bangla font
+
+The owner (in Bangla) passed on the questions of a prospective reseller (list products on Facebook/website with photos, details, prices; send customer name/address/phone/bill; the store sends by Steadfast on cash on delivery and deducts the product price, packaging and other charges before sending the profit; how payment and profit settlement work) and asked that **the answers are written on the landing page**, that the page **has a Bangla version**, and that it **uses the Anek Bangla font**.
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+
+1. A **Questions resellers ask** section with six answers, written only from what the code does (checked in `ResellerOrderPlacementService::quote()`, `ResellerCommissionService`, the portal's Products / Earnings / Withdrawals pages): cash on delivery with nothing in advance; customer bill = the reseller's prices + the store's delivery charge + VAT where it applies; profit = selling price − cost per piece; **no packaging charge on store-delivered orders** (packaging is charged only on own-courier orders, as the guide already says); profit payable after delivery; withdrawal to bKash / Nagad / Rocket / bank, reviewed and paid by the store.
+2. A **Bangla / English switch** on the landing page (cookie, `?lang=bn`), followed by the portal's sign-in and application pages. Default stays the app's language for anyone who did not use the switch.
+3. **Anek Bangla** (variable, self-hosted, OFL) for the whole landing page; Hind Siliguri and Unbounded are no longer loaded there. The admin portal itself is unchanged (still Hind Siliguri).
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- **Courier names (decided by the owner, 2026-10-23):** I first left the courier out because the code does not say which courier the store uses for reseller orders. The owner gave the wording: "<company name> sends the parcel by courier (Steadfast, Pathao, RedX) on cash on delivery …". It is now in the page (English and Bangla), with the company name filled in from the company's settings. The three courier names are written in the page's text, not an admin setting, so a change of couriers needs a text change.
+- **No promise about how fast the store pays.** The system has no payout deadline, so the answer gives none.
+- **The prospective reseller's "packaging and other charges are deducted from the delivery money" is answered with what the system does:** the reseller's cost (shown on each product) is what the store keeps; delivery charge and VAT are added to the customer's bill; no separate packaging charge on store-delivered orders; the return charge only if the order comes back (and only if the store set one). If the owner's real practice is different (for example a packaging deduction), the system itself would have to change first.
+- **The answers are part of the page's code, not an admin-edited list**, like the other "how it works" sections (so they are in Bangla and English from the language files). The guide's introduction and rules are still admin-written, and appear in whatever language the admin typed them. If the owner wants the questions editable from Reseller Settings too, that is a small follow-up.
+- Language default: I did **not** make Bangla the default; only a visitor's own choice changes it. Setting `APP_LOCALE=bn` would make Bangla the default for the whole app, not just this page.
+- Two language-name keys hold the language's own name ("English", "বাংলা") and are read in their own language, so the switch is always readable; the Bangla word lives only in `lang/bn.json`.
+
+Needs Bangla review (new keys, all in `lang/bn.json`): the six questions and their answers (long sentences; I wrote them in the same plain style as the guide, using "আয়" for profit, "খরচ" for cost and "উইথড্র" as the guide does), *Questions resellers ask*, *Questions and answers*, the short line under the heading, *Change language*.
+
+**Deploy: `npm run build`** (new font files and CSS).
+
+Verified: `npm run build`, the English and Bangla pages rendered in Chromium (desktop and 390 px phone), and the full suite on the tree with `origin/main` (v2.100.0) merged in: 2986 passed, 5 skipped, 0 failed.
+
+Commit status: committed to the work branch `claude/reseller-module-status-v9tobe`, `origin/main` (v2.100.1) merged in, full suite on the merged tree green (result below); pushed to `main` on the owner's explicit approval ("ওকে এটা মেইনে পুশ কর", 2026-10-23).
+
+Follow-up (2026-10-23): the parcel answer now names the company and its couriers (Steadfast, Pathao, RedX) in the owner's wording; full suite 2999 passed, 5 skipped, 0 failed; pushed to `main` on the owner's explicit approval ("টেস্ট শেষ হলে মেইনেও পুশ করে দিও", 2026-10-23).
+
+## 2026-10-22 (later) - Landing page redesigned in neo-brutalism
+
+The owner (in Bangla) said the landing page was not beautiful and asked for names of trending UI styles; I listed eight and recommended Bento + gradient; the owner chose **Neo-brutalism**.
+
+What changed (details in `CHANGELOG.md` [Unreleased]): only the look of `resources/views/reseller/guide.blade.php`; every text, number, link, `data-reseller-guide` / `data-guide-cta` hook and admin-managed content is unchanged, and there are **no new lang keys**.
+
+- New stylesheet `resources/css/reseller-landing.css` (new Vite entry in `vite.config.js`): thick ink borders, flat colour blocks, hard shadows with lift-on-hover and press-on-click, dot-grid hero, yellow ticker of the four step titles (repeats existing text, hidden from screen readers), numbered colour step cards, accordion rules, bold closing banner. Fonts: Hind Siliguri (self-hosted, same as the portal) and Unbounded (already in `app.css`).
+- Colours: cream / yellow / pink / mint / sky / orange are fixed style colours; the store's own `theme_color` is used for the main buttons and the closing banner, with white or near-black text chosen for readability. Dark mode (OS setting) flips paper, cards and outlines and keeps the colour blocks.
+- I rendered it in Chromium at desktop, 390 px phone and dark mode, found and fixed three things (colour blocks showing white, an unreadable chip in dark mode, a header chip squeezing the name on phones), and re-checked.
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- I kept the cream background and bright pastel blocks (classic neo-brutalism) with the brand colour as the button colour, instead of making the whole page the brand colour.
+- The first-screen card shows "price − cost = profit" using only the words the page already had; I added no promises or numbers.
+- The footer under the page is still the website's dark footer.
+
+**Deploy: `npm run build`** — the page now needs the new CSS entry in the build, or it fails to load its stylesheet.
+
+Tests: `ResellerLandingPageTest` (+1: the page loads its own stylesheet and brand colours). Focused files pass (`ResellerLandingPageTest`, `ResellerGuidePageTest`, `ResellerPortalTest`, `StorefrontApiTest`: 51 passed); full suite: 2564 passed, 1 skipped, 0 failed.
+
+Commit status: committed to the work branch `claude/reseller-module-status-v9tobe`, `origin/main` (v2.98.0) merged in, full suite on the merged tree 2969 passed, 1 skipped, 0 failed; pushed to `main` on the owner's explicit approval ("main এ পুশ কর", 2026-10-22).
+
+## 2026-10-22 - Reseller landing page at reseller.<domain> with the website's footer; "Become a reseller" banner button on the website
+
+The owner (in Bangla), with the "Reselling Program — Start Your Online Business Without Investment" banner attached: make `reseller.zamzamint.com` the landing page, with login / registration buttons and call-to-action buttons on the page; take the footer from the Next.js site built for zamzamint; and in the Next.js site's footer replace "Become a reseller" with a call-to-action button, using the attached image itself as the button so it looks interactive.
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+
+1. **The landing page already existed** (`/portal/guide`: header with *Sign in* / *Apply now*, hero, how it works, money, store, orders, rules, closing banner with two buttons). `reseller.<domain>` now **opens it directly** instead of redirecting to the sign-in page. `/portal/guide` still works. The existing *Show the reseller guide* switch controls it; off, the address redirects to `/portal` (sign-in) as before.
+2. **Its footer is the Next.js website's footer**: same Footer Builder blocks, footer menu, social links and background colour (the *Next.js* row's), laid out like `Footer.tsx`. Links to the website's pages (shop, categories, pages, track, account, legal links) are built on the row's **website domain**. If the company has no website domain, only absolute links stay (links to website pages cannot be built, so they are left out). A menu link that points at the reseller program is left out of this footer, since it sits on that page. No Next.js row: the old plain copyright line stays.
+3. **Website: the footer's "Become a reseller" item is a banner button.** The ERP now sends `image_url` on *Become a reseller* menu items; the website's footer pulls those items out of the link lists and shows the picture once, above the columns, as the button (hover lift + zoom, a light sweep every few seconds, both off for `prefers-reduced-motion`; keyboard focus ring; the menu label is its alt text). The header and mobile menu keep the text link. I rendered it in Chromium (desktop, hover, 390 px phone) and checked the Tailwind build output.
+4. **The picture is admin-managed**: **Reseller Settings → Website banner button** (upload; cleared = standard). The owner's attached banner ships with the ERP as the standard one (`public/images/reseller-program-banner.png`, 1080 × 360), so nothing needs uploading for it to appear.
+5. The storefront's *Become a reseller* links (account menu, footer, API menu item) now point at the portal address itself (`https://reseller.<domain>/`), not `/portal/guide`.
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- The footer comes from the **Next.js row only**. A company with only a Blade row gets the simple footer; I did not fall back to the Blade footer because the owner asked for the website's footer.
+- The banner sits **above the footer columns**, centred, up to 672 px wide. A 1080 × 360 banner inside a narrow link column would make its small line unreadable.
+- The banner is shown for every *Become a reseller* item the admin placed in the footer menu or in a footer link column (once, even if two items point to the same address); the header keeps the text link. To remove the button, remove the item from the footer menu.
+- The banner picture has English text. It ships as the standard picture for every company until that company uploads its own.
+
+Needs Bangla review (new keys, all in `lang/bn.json`): *Website banner button* (ওয়েবসাইটের ব্যানার বাটন), its helper line (it keeps the English names "Become a reseller" and "Reselling Program" because the menu label and the banner text are English), the new *Show the reseller guide* helper line (front page of the portal address), *Contact* (যোগাযোগ), *Social link* (সোশ্যাল লিংক). The old helper line for the guide switch was replaced.
+
+Deploy: `php artisan migrate` (new column `storefront_settings.reseller_banner_image`), `npm run build`, and deploy the website branch `feature/reseller-menu-link` for the button (the ERP part alone only changes the landing page and sends the extra field).
+
+Tests: `ResellerLandingPageTest` (9: front page, guide off, other hosts untouched, module off, footer from the website, no domain, no website, banner upload and clear through the settings page, standard banner ships); `StorefrontApiTest` and `ResellerGuidePageTest` updated for the new address. `ModuleGuard` wraps the footer, but isolation is off in tests, so no test covers a failing footer. `ResellerPortalTest` had one test that expected the old redirect from the portal host's `/`; it now expects the landing page (`test_visiting_the_portal_host_root_shows_the_reseller_landing_page`).
+
+Verified: asset build passes (`npm run build`), the website builds and typechecks, and the landing page and the banner button were rendered in Chromium (desktop, phone, hover). Full suite: 2562 passed, 1 skipped, 1 failed — the failure was that old redirect test; after updating it, it passes on its own and the other files were not changed, so the full suite was not run a second time.
+
+Commit status: committed to the work branch `claude/reseller-module-status-v9tobe` and the website's `feature/reseller-menu-link`; both pushed to `main` on the owner's explicit approval ("main এ পুশ কর", 2026-10-22), ERP first, then the website.
 
 ## 2026-10-15 - Admin: reset a reseller's password / email a reset link; portal ↔ admin audit
 

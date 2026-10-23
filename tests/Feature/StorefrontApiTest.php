@@ -598,9 +598,23 @@ class StorefrontApiTest extends TestCase
         $site = $this->api('site')->assertOk();
         $item = collect($site->json('data.menus.header'))->firstWhere('label', 'Sell with us');
         $this->assertSame('reseller', $item['type']);
-        $this->assertStringEndsWith('://reseller.offer.example.test/portal/guide', $item['url']);
+        $this->assertStringEndsWith('://reseller.offer.example.test/', $item['url']);
         $this->assertTrue($item['new_tab']);
-        $this->assertStringEndsWith('://reseller.offer.example.test/portal/guide', $site->json('data.menus.footer.0.url'));
+        $this->assertStringEndsWith('://reseller.offer.example.test/', $site->json('data.menus.footer.0.url'));
+
+        // The item also carries the program banner the website's footer shows as a button: the standard one
+        // that ships with the ERP until the admin uploads their own (Reseller Settings).
+        $this->assertStringEndsWith('/images/reseller-program-banner.png', $item['image_url']);
+        $this->assertSame($item['image_url'], $site->json('data.menus.footer.0.image_url'));
+        $this->assertNull(collect($site->json('data.menus.header'))->firstWhere('label', 'Shop')['image_url']);
+
+        Storage::fake('public');
+        $path = 'companies/'.$this->company->storage_key.'/public/storefront/design/custom-banner.webp';
+        Storage::disk('public')->put($path, 'img');
+        // The reseller settings live on the Blade row, not the website's own.
+        StorefrontSetting::query()->create(['company_id' => $this->company->getKey(), 'site_type' => StorefrontSetting::SITE_BLADE, 'reseller_banner_image' => $path]);
+
+        $this->assertStringContainsString('custom-banner.webp', $this->api('site')->assertOk()->json('data.menus.footer.0.image_url'));
     }
 
     protected function api(string $path, ?string $token = null): TestResponse

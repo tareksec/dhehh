@@ -21,6 +21,9 @@ use App\Support\StorefrontSiteDesign;
  */
 class StorefrontSiteConfigService
 {
+    /** Where the standard reseller banner lives, under the ERP's public folder. */
+    public const DEFAULT_RESELLER_BANNER = '/images/reseller-program-banner.png';
+
     public function __construct(protected Company $company, protected StorefrontSetting $setting) {}
 
     /** @return array<string, mixed> */
@@ -81,11 +84,7 @@ class StorefrontSiteConfigService
                 'hours' => $setting->contact_hours,
                 'helpline' => $setting->marketplace_helpline,
             ],
-            'social_links' => collect($setting->social_links ?? [])
-                ->map(fn ($link): array => ['platform' => $link['platform'] ?? null, 'url' => $link['url'] ?? null])
-                ->filter(fn (array $link): bool => filled($link['platform']) && filled($link['url']))
-                ->values()
-                ->all(),
+            'social_links' => $this->socialLinks(),
             'hero' => [
                 'heading' => $setting->hero_heading,
                 'subheading' => $setting->hero_subheading,
@@ -161,11 +160,11 @@ class StorefrontSiteConfigService
         // "Become a reseller" is not a page of the website: it is the reseller portal's guide (or
         // application form), as the Blade storefront links it. With the reseller module off, or no
         // portal address, the item is dropped like a menu item pointing at a category that is gone.
-        $resellerUrl = $items->contains(fn (array $item): bool => ($item['type'] ?? null) === 'reseller')
-            ? $this->company->resellerJoinUrl()
-            : null;
+        $isReseller = $items->contains(fn (array $item): bool => ($item['type'] ?? null) === 'reseller');
+        $resellerUrl = $isReseller ? $this->company->resellerJoinUrl() : null;
+        $resellerBanner = $resellerUrl ? $this->resellerBannerUrl() : null;
 
-        return $items->map(function (array $item) use ($categories, $pages, $resellerUrl): ?array {
+        return $items->map(function (array $item) use ($categories, $pages, $resellerUrl, $resellerBanner): ?array {
             $type = (string) ($item['type'] ?? 'custom');
             $categorySlug = $type === 'category' ? $categories->get($item['category_id'] ?? null) : null;
             $pageSlug = $type === 'page' ? $pages->get($item['page_id'] ?? null) : null;
@@ -186,8 +185,145 @@ class StorefrontSiteConfigService
                 },
                 'new_tab' => (bool) ($item['new_tab'] ?? false),
                 'icon' => $item['icon'] ?? null,
+                // A "Become a reseller" item also carries the program banner, which the website's footer
+                // shows as a button instead of a text link (menus without it ignore the key).
+                'image_url' => $type === 'reseller' ? $resellerBanner : null,
             ];
         })->filter()->values()->all();
+    }
+
+    /**
+     * The picture of the reseller program's call-to-action button: the one the admin uploaded in
+     * Resellers → Reseller Settings, otherwise the standard "Reselling Program" banner that ships with the ERP.
+     */
+    public function resellerBannerUrl(): string
+    {
+        $uploaded = StorefrontSetting::bladeFor($this->company->getKey())?->reseller_banner_image;
+
+        return Media::url($uploaded, $this->company) ?: url(self::DEFAULT_RESELLER_BANNER);
+    }
+
+    /** @return list<array{platform: mixed, url: mixed}> */
+    protected function socialLinks(): array
+    {
+        return collect($this->setting->social_links ?? [])
+            ->map(fn ($link): array => ['platform' => $link['platform'] ?? null, 'url' => $link['url'] ?? null])
+            ->filter(fn (array $link): bool => filled($link['platform']) && filled($link['url']))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The website's footer for a page that is not part of the website (the reseller landing page):
+     * the same Footer Builder blocks, footer menu, social links and background colour, grouped into
+     * columns the way the website draws them, with every link turned into an address that works from
+     * another host. A link to a page of the website needs the website's domain, so without one only
+     * absolute links stay; links to the reseller program itself are left out, because this footer
+     * sits on it.
+     *
+     * @return array{name: string, logo_url: ?string, background: string, dark: bool, social_links: array, menu: array, columns: array, bottom: ?array, template: string}
+     */
+    public function footer(string $scheme = 'https'): array
+    {
+        $base = filled($this->setting->nextjs_site_domain) ? $scheme.'://'.$this->setting->nextjs_site_domain : null;
+        $absolute = fn (?string $url): ?string => $url !== null && str_starts_with($url, '/') ? ($base ? $base.$url : null) : $url;
+        $links = fn (array $items): array => collect($items)
+            ->map(fn (array $item): ?array => ($href = $absolute($this->menuPath($item))) && ($item['type'] ?? null) !== 'reseller' && filled($item['label'] ?? null)
+                ? ['label' => (string) $item['label'], 'href' => $href, 'new_tab' => (bool) ($item['new_tab'] ?? false)]
+                : null)
+            ->filter()
+            ->values()
+            ->all();
+
+        $blocks = collect($this->footerBlocks())->map(function (array $block) use ($absolute, $links): array {
+            $data = $block['data'];
+
+            switch ($block['type']) {
+                case 'custom_links':
+                    $data['links'] = $links($data['links'] ?? []);
+                    break;
+
+                case 'custom_text':
+                    $data['button_url'] = $absolute($data['button_url'] ?? null);
+                    break;
+
+                case 'image':
+                    $data['url'] = $absolute($data['url'] ?? null);
+                    break;
+
+                case 'bottom_bar':
+                    $data['center_url'] = $absolute($data['center_url'] ?? null);
+                    $data['legal_links'] = collect($data['legal_links'] ?? [])
+                        ->map(fn (array $link): array => ['label' => $link['label'], 'href' => $absolute('/pages/'.$link['page_slug'])])
+                        ->filter(fn (array $link): bool => $link['href'] !== null)
+                        ->values()
+                        ->all();
+                    break;
+            }
+
+            return ['type' => $block['type'], 'data' => $data];
+        });
+
+        // One column per "column" block; the small blocks (social, payments, text, image) ride along
+        // under the previous one unless the admin gave them a column of their own.
+        $columns = [];
+
+        foreach ($blocks->reject(fn (array $block): bool => $block['type'] === 'bottom_bar') as $block) {
+            $stacks = in_array($block['type'], ['social_links', 'custom_text', 'payment_methods', 'image'], true) && ! ($block['data']['own_column'] ?? false);
+
+            if ($columns === [] || ! $stacks) {
+                $columns[] = [$block];
+            } else {
+                $columns[array_key_last($columns)][] = $block;
+            }
+        }
+
+        $background = $this->setting->siteDesign()['footer']['background'] ?? '#09090B';
+        $template = count($columns) > 1
+            ? collect($columns)->map(fn (array $column): string => collect($column)->contains(fn (array $block): bool => in_array($block['type'], ['brand_about', 'contact_info'], true)) ? 'minmax(0, 1.3fr)' : 'minmax(0, 1fr)')->implode(' ')
+            : '1fr';
+
+        return [
+            'name' => $this->company->name,
+            'logo_url' => Media::url($this->setting->logo, $this->company),
+            'background' => $background,
+            'dark' => self::isDarkColor($background),
+            'social_links' => $this->socialLinks(),
+            'menu' => $links($this->menu($this->setting->footer_menu)),
+            'columns' => $columns,
+            'bottom' => $blocks->first(fn (array $block): bool => $block['type'] === 'bottom_bar')['data'] ?? null,
+            'template' => $template,
+        ];
+    }
+
+    /** Where a menu item points on the website, as the website itself routes it (src/lib/nav.ts menuHref). */
+    protected function menuPath(array $item): ?string
+    {
+        return match ($item['type'] ?? null) {
+            'shop' => '/products',
+            'category' => filled($item['category_slug'] ?? null) ? '/category/'.$item['category_slug'] : null,
+            'page' => filled($item['page_slug'] ?? null) ? '/pages/'.$item['page_slug'] : null,
+            'track' => '/track',
+            'account' => '/account',
+            'custom', 'reseller' => $item['url'] ?? null,
+            default => null,
+        };
+    }
+
+    /** True when white text reads better than black text on this hex colour (WCAG relative luminance, like the website). */
+    public static function isDarkColor(string $hex): bool
+    {
+        if (! preg_match('/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i', trim($hex), $m)) {
+            return false;
+        }
+
+        [$r, $g, $b] = array_map(function (string $channel): float {
+            $c = hexdec($channel) / 255;
+
+            return $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4;
+        }, [$m[1], $m[2], $m[3]]);
+
+        return 0.2126 * $r + 0.7152 * $g + 0.0722 * $b <= 0.179;
     }
 
     /**

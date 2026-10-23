@@ -76,6 +76,9 @@ class SmsTemplateService
 
     public const PROJECT_SETTLED = 'investor_project.settled';
 
+    /** The message sent when an order is created (before it reaches any stage below). */
+    public const ORDER_PLACED = 'order.placed';
+
     /** Order stages a customer is texted about (Order::WORKFLOW_STAGES). */
     public const ORDER_STAGES = [
         Order::STAGE_CONFIRMED,
@@ -92,6 +95,8 @@ class SmsTemplateService
      * Wording the page can fill in for an order stage: short, plain English (one SMS), no link and no
      * single quotation mark, so it follows BulkSMSBD's rules. The owner reads it and saves it, or edits it first.
      */
+    public const SUGGESTED_ORDER_PLACED = 'Dear :name, we received your order :order (:items). Total Tk :total, due Tk :due. Status: :status. - :company';
+
     public const SUGGESTED_ORDER = [
         Order::STAGE_CONFIRMED => 'Dear :name, your order :order is confirmed. Total Tk :total. - :company',
         Order::STAGE_PROCESSING => 'Dear :name, your order :order is being prepared. - :company',
@@ -133,6 +138,7 @@ class SmsTemplateService
             'name' => __('Customer name'),
             'order' => __('Order number'),
             'status' => __('Order status'),
+            'items' => __('Items ordered (product names with quantities)'),
             'total' => __('Order total'),
             'due' => __('Amount still due'),
             'tracking' => __('Courier tracking ID (empty until a parcel is booked)'),
@@ -152,6 +158,15 @@ class SmsTemplateService
         ];
 
         $definitions = [];
+
+        $definitions[self::ORDER_PLACED] = [
+            'group' => self::GROUP_ORDER,
+            'label' => __('Order placed'),
+            'placeholders' => $order,
+            'required' => [],
+            'default' => null,
+            'suggested' => self::SUGGESTED_ORDER_PLACED,
+        ];
 
         foreach (self::ORDER_STAGES as $stage) {
             $definitions[self::orderKey($stage)] = [

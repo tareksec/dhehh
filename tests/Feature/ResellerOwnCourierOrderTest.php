@@ -201,7 +201,8 @@ class ResellerOwnCourierOrderTest extends TestCase
         $this->assertStringNotContainsString('630', $card['text']);
         $this->assertSame(['total', 'due'], array_column($card['totals'], 'key'));
         $this->assertSame('Rima Fashion', $card['company']);
-        $this->assertNull($card['company_phone']);
+        $this->assertSame([], $card['contact']);
+        $this->assertSame('', $card['address']);
 
         // The PDF invoice follows the same rules.
         $pdf = view('orders.pdf', [
@@ -274,7 +275,8 @@ class ResellerOwnCourierOrderTest extends TestCase
 
         $card = app(OrderSummaryCardService::class)->build($order->fresh());
         $this->assertSame('Rima Fashion', $card['company']);
-        $this->assertNull($card['company_phone']);
+        $this->assertSame([], $card['contact']);
+        $this->assertSame('', $card['address']);
 
         $pdf = view('orders.pdf', [
             'order' => $order->fresh()->load(['company', 'customer', 'items.product', 'reseller']),

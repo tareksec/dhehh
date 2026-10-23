@@ -6,6 +6,8 @@ use App\Jobs\PushWooCommerceOrderStatusJob;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\GeneratesSequentialNumber;
 use App\Services\CustomerRiskService;
+use App\Services\OrderStatusSmsService;
+use App\Services\OrderWhatsAppCardService;
 use App\Services\OrderWorkflowService;
 use App\Services\ResellerCommissionService;
 use App\Services\ResellerOwnCourierService;
@@ -21,6 +23,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class Order extends Model
 {
@@ -317,6 +320,19 @@ class Order extends Model
                     'note' => 'Recorded at order creation.',
                     'paid_at' => $order->order_date ?? now()->toDateString(),
                 ]);
+            }
+
+            // The customer hears about the new order right away (SMS with the owner's wording, and the
+            // summary card on WhatsApp). Both wait a little in the queue so the items are saved first, and
+            // a failure here must never undo the order.
+            try {
+                if (Schema::hasTable('sms_templates')) {
+                    app(OrderStatusSmsService::class)->dispatchForOrderPlaced($order);
+                }
+
+                app(OrderWhatsAppCardService::class)->dispatchForOrderPlaced($order);
+            } catch (Throwable $exception) {
+                report($exception);
             }
         });
 
@@ -751,13 +767,12 @@ class Order extends Model
     }
 
     /**
-     * What a courier should collect on delivery: the full invoice total
-     * (products − discount + VAT + shipping), never reduced by an advance
-     * already paid. If the order carries no shipping fee of its own, the zone
-     * delivery charge for the customer's address is added on top so the COD
-     * always includes delivery (owner rule).
+     * The grand total the customer owes for this order, delivery included
+     * (products − discount + VAT + shipping). If the order carries no shipping
+     * fee of its own, the zone delivery charge for the customer's address is
+     * added on top so the parcel always pays for delivery (owner rule).
      */
-    public function courierCodAmount(): float
+    public function courierInvoiceTotal(): float
     {
         $this->loadMissing('customer');
 
@@ -769,6 +784,18 @@ class Order extends Model
         }
 
         return round(max($total, 0), 2);
+    }
+
+    /**
+     * What a courier should collect on delivery: the grand total minus the
+     * advance / payments already received, so a customer who paid ৳200 up
+     * front on a ৳560 order is asked for ৳360, and a fully paid order for
+     * nothing (owner decision 2026-10-23; it had been the full grand total
+     * since 2026-10, which made the courier collect the advance twice).
+     */
+    public function courierCodAmount(): float
+    {
+        return round(max($this->courierInvoiceTotal() - (float) $this->paid_amount, 0), 2);
     }
 
     /**

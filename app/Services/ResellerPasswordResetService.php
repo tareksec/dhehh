@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Customer;
+use App\Models\EmailLog;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\URL;
@@ -73,6 +74,8 @@ class ResellerPasswordResetService
         }
 
         if (! $setting || ! $this->notifications->emailDeliveryAvailable($setting)) {
+            app(EmailLogService::class)->skipped((int) $company->getKey(), EmailLog::KIND_RESELLER_PASSWORD_RESET, $email, EmailLogService::REASON_NOT_CONFIGURED);
+
             return self::MAIL_NOT_SET_UP;
         }
 

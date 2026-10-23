@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Reseller\ResellerGuideController;
 use App\Models\Category;
 use App\Models\Company;
 use App\Models\Product;
 use App\Models\ProductCarousel;
 use App\Models\StorefrontSlide;
+use App\Services\CompanyContext;
 use App\Support\CompanyMedia;
 use App\Support\StorefrontListingCache;
 use App\Support\StorefrontSchema;
@@ -23,6 +25,15 @@ class HomeController extends Controller
         $company = $request->attributes->get('storefront_company');
 
         if (! $company instanceof Company) {
+            // reseller.<domain> itself is the reseller program's landing page.
+            $portal = $request->attributes->get('reseller_portal_company');
+
+            if ($portal instanceof Company) {
+                app(CompanyContext::class)->set($portal);
+
+                return app(ResellerGuideController::class)($request);
+            }
+
             // The app's own domain (e.g. app.zamzamint.com — the Filament admin
             // panel and the Android app both load this host) has no storefront
             // company; send it straight into /admin instead of the generic

@@ -8,14 +8,6 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Added
 
-- **IMS office on a phone works like an app.** Owner request 2026-10-22 (the owner's mobile reference designs). On phones and tablets the office (`/office`) now has:
-  - **A tab bar at the bottom**: Home · Investors · a round green **+** · **To do** · **Menu**, with names under every icon. The menu button in the top bar is gone on phones; everything is in the bar.
-  - **+** opens the things staff add (add an investor, new project, and the others the person is allowed to add).
-  - **To do** opens "What to do today" from any page; a red number on the tab says how many things are waiting.
-  - **Menu** shows every page as big tiles in the same groups as the top menu (with their waiting numbers), the English / বাংলা switch, light / dark, the company list and Sign out.
-  - **Home**: initials, "Good morning!" and the name at the top, then the green card, then four round buttons — Confirm money, KYC, Payouts, Support — each with how many are waiting.
-  - **Every list is a stack of cards** on a phone: the first column in bold as the card's title, then "label … value" lines and the buttons at the bottom, instead of a table that had to be scrolled sideways. The investor portal's lists do the same.
-  - Desktop and laptop screens are unchanged.
 - **Trade Portal, first part: a simple shop portal at `/trade`** (docs/tasneem-samples/PLAN.md, phase 1 — first company: Tasneem Knitting Industry). It is switched on per company by a Super Admin (Companies → edit → **Trade Portal**), on the main domain, with the usual staff sign-in.
   - **Bangla first**, with বাংলা / English at the top (and on the sign-in page). Made for a phone: big cards, big text, a tab bar at the bottom (Home · Business profile · Menu); the Menu sheet has the language, the company list (when a person has more than one) and Sign out. Light theme.
   - **Home** shows four cards: today's sales, dues to collect (with the customers who owe most), low stock (products at or below their reorder level) and the **LC files** still open (purchases with an LC number whose goods have not arrived; "LC opened" or "Shipped (invoice received)" once the Commercial Invoice number is in). Each card has a friendly line when there is nothing yet.
@@ -101,6 +93,223 @@ All notable production changes to Business Dashboard are documented here.
 - Phase 6: `TradeReportService` (nine reports, one shape), pages `Reports` / `Report` (Livewire `#[Url]` type / from / to), `TradeReportDownloadController` (route `trade/reports/{report}/download/{print|pdf|xlsx}`), views `resources/views/trade/reports/{print,pdf}`, `App\Support\TradeReportFormat`. DomPDF cannot shape Bangla (checked: vowel signs misplaced), so the PDF file is English and the Bangla copy is the browser print page (the investor reports' approach, shared print script). Migration `2026_10_26_100000_add_reports_permission_to_trade_owner_role` (no schema change). The stock ledger dates moves by `stock_movements.created_at` (there is no movement date). 34 new keys in `lang/en.json` + `lang/bn.json`. Test: `TradeReportsTest` (9). Codebase map: `core-platform.md`.
 - Trade Portal phone look: `TradeNavigation::layout()` gains each page's Menu-sheet group (`GROUPS`, `groups()`), `TradeNavigation::backUrl()` reads the page being drawn (`Livewire::current()`, so a Livewire update keeps the same link) and `resources/views/filament/trade/back-button.blade.php` draws it at `PAGE_HEADER_HEADING_BEFORE` inside `ModuleGuard::run('trade-back-button')`. `Home::getHeading()` is empty (the view draws the greeting). Panel primary colour is a written-out navy OKLCH palette (a palette generated from the hex made 600 a mid blue and Filament then drew pale buttons with dark text). The card lists, navy header and floating bar are CSS in `resources/css/filament/trade/theme.css` (below 640px / 1024px). The challan list shows the buyer column first. No migration, model or route. 5 new keys in `lang/en.json` + `lang/bn.json`. Test: `TradePortalShopWorkTest` (+1).
 - Trade Portal font / desktop / sign-in: panel font `Trade Text` (`@font-face` in the trade theme: Tiro Bangla woff2 for the Bengali range, Hind Siliguri Latin for the rest; files in `resources/fonts/tiro-bangla/` with `OFL.txt`, from @fontsource/tiro-bangla 5.2.5). `TradeNavigation::build()` puts the non-tab pages into `NavigationGroup`s (same groups as the phone Menu sheet). `resources/views/filament/trade/auth-side.blade.php` at `SIMPLE_LAYOUT_START`. 5 new keys in `lang/en.json` + `lang/bn.json`. Test: `TradePortalTest` (sign-in page).
+
+## [2.107.0] - 2026-10-23
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **SMS Dashboard (Settings → SMS Dashboard).** Owner request 2026-10-23: see how many SMS went, how many failed, what it cost and what is left on the BulkSMSBD account without logging in to BulkSMSBD. It shows, for today / the last 7 days / the last 30 days / this month: **SMS sent**, the SMS **parts** used (a Bangla or long message takes more than one), **refused by the gateway** (with a link to the SMS Log for the reason), **not sent by our own rules** (no wording, opted out; these cost nothing), the messages still waiting in the queue, a split by kind of message, and a day-by-day bar list. The **balance on BulkSMSBD** is read live from BulkSMSBD's balance API (refresh button, kept for five minutes), with a red warning when it falls below the amount you set, and a **Recharge on BulkSMSBD** button that opens their site. **Limits, set by BulkSMSBD and not by us:** its API has no recharge, no delivery report and no price list, so a recharge is still made on their site, "sent" means the gateway accepted the message (not that the phone received it), and the cost is an estimate (parts × your price per SMS), not BulkSMSBD's own charge.
+- **Price per SMS** and **Warn me when the balance is below** on Settings → Integrations → SMS Gateway. The first is your own price (the cost is not shown until you enter it); the second drives the low-balance warning.
+- **Every SMS is now counted, not only order SMS.** Login codes, recovery codes, abandoned-cart and lead reminders, broadcasts and investor/IMS messages were not logged at all. They now leave a row in the SMS Log of kind "Other messages" with the phone number, the result, the gateway's answer and the parts used. The text is **never** stored, so a login code does not sit in the database.
+
+### Fixed
+
+- **The test SMS said "1001 Invalid Number" for a correct phone number.** Owner report 2026-10-23 (the API key was already accepted by then). BulkSMSBD's own example writes the number as `number=88017XXXXXXXX`, so a gateway URL saved as `number=88{phone}` sent the country code twice (`888801...`). The system always sends the number as `8801XXXXXXXXX` and now notices an `88` or `880` written in front of `{phone}` in the URL and does not repeat it. When the gateway refuses an SMS, **Send test SMS** now also shows **what was sent**, the gateway address with the number and sender ID but with the API key and the message text hidden, and the advice for code 1001 says to write `number={phone}` with nothing in front.
+- **A connection error could put the SMS API key on screen and in the SMS Log.** When the gateway could not be reached, the request's error message (which names the whole gateway URL, API key included) was saved in the SMS Log's detail column and the application log. Gateway URLs are now removed from those messages before they are saved or shown, and the same is done to rows an earlier version already wrote. If a gateway connection error ever appeared in your SMS Log, consider replacing the BulkSMSBD API key (Developers page) as a precaution.
+
+### Technical Notes
+
+- `StorefrontNotificationService`: `smsRequestUrl()` builds the gateway address (one place for the send and the preview, with the `88{phone}` / `880{phone}` rule), `smsRequestPreview()` hides the key (also when it is typed into the URL) and the text; `sendSmsDetailed()` returns it as `request`. Tests: `SmsDashboardTest` (+2).
+- SMS dashboard: `App\Filament\Pages\SmsDashboard` (Settings cluster, "manage settings" permission), `SmsUsageService` (aggregates the SMS log; the company scope applies), `SmsBalanceService` (BulkSMSBD hosts only, host taken from the saved URL template, answer parsed from a `balance` field or a bare number, anything else shown as it came; the real reply for a valid key could not be checked here), `App\Support\SmsSegments`. `sms_logs.segments` (migration `2026_10_23_210000`, backfills older rows from their text and scrubs gateway URLs from old `detail` values); `SmsLog::KIND_OTHER`; `StorefrontNotificationService::sendSms()` now writes the `other` row through `SmsLogService::other()` and `sendSmsDetailed()` also returns `segments`; `scrubUrls()`. `sms_price_per_sms` and `sms_low_balance_alert` join `SMS_CREDENTIAL_KEYS` (kept by both Integrations and Storefront Settings). Tests: new `SmsDashboardTest` (13). Lang: 41 new keys.
+## [2.106.0] - 2026-10-23
+
+**Release type:** Minor Feature Update
+
+### Changed
+
+- **The order page has a Payment section of its own.** Owner request 2026-10-23: a new person could not tell where an advance payment goes, because the paid amount sat among the totals as a plain "Paid Amount". On the order form (create and edit) **Totals** now ends at the **Grand total**, and a separate, always-open **Payment** section below it holds the **Advance / paid amount**, the **Payment Method** (the account the money went into) and the **Due amount**, each with a line saying what to enter. When editing an existing order the advance is added in the **Payments History** table under the form, and the line says so. The order's view page shows the same **Payment** block (advance / paid amount and due amount) apart from **Totals**.
+
+### Fixed
+
+- **Courier booking asked the courier to collect the whole grand total even when the customer had paid an advance.** Owner report 2026-10-23: with a ৳200 advance on a ৳560 order the courier still got ৳560, so the customer would have paid the advance twice. **Book courier** (the order's own button, the orders list and the bulk action) now sends the **due amount**: grand total minus the payments received, for example ৳360, and ৳0 when the order is fully paid. The grand total still includes delivery, with the customer's zone delivery fee added when the order has no shipping fee of its own. A line under the COD field shows the sum ("Grand total ৳560 − advance paid ৳200 = ৳360"); the amount stays editable per booking. This replaces the 2026-10 rule that sent the full total.
+- **The reseller landing page could come up with no layout on a phone.** Owner report 2026-10-23 (a screenshot of reseller.zamzamint.com with an enormous logo, the language switch shown twice and no spacing). The page took its layout classes from the site-wide `app.css`, which gets a new file name on every deploy; when that one file did not load, the page's own stylesheet still did, so the colours and borders showed but the layout fell apart. The landing page now carries its **own** stylesheet with exactly the layout classes it uses (24 KB, 6 KB compressed, instead of the 252 KB site-wide file), so it no longer depends on `app.css` at all.
+- **The landing page scrolled sideways on a phone.** At phone widths a long line (the store address in the "Your own store" picture) pushed one column about 54 px wider than the screen, so the browser zoomed the whole page out. Every grid on the page and in the website footer now starts as one column that may shrink, so long text is cut with "…" or wraps. Checked at 280, 320, 360, 375, 390, 412, 600, 768, 1024 and 1280 px, in English and in Bangla: no sideways scroll at any of them.
+
+### Technical Notes
+
+- `Order::courierInvoiceTotal()` (grand total incl. the zone-fee fallback, the old `courierCodAmount()` body) and `Order::courierCodAmount()` = that minus `paid_amount`, floored at 0. `CourierService::codHelperText()` feeds the helper text of `cod_amount` in `ViewOrder` and `OrdersTable`. `OrderForm` / `OrderInfolist` split Totals and Payment. Tests: `CourierIntegrationTest` (due-amount rule, advance + later payments, popup end to end), `OrderFormTest` (Payment section holds `paid_amount`, `payment_account_id`, `due_amount`, Totals does not). Lang: 10 new keys.
+- `resources/css/reseller-landing.css` starts with `@import 'tailwindcss' source(none);` and three `@source` lines (the guide view, `reseller/partials/*.blade.php` and the shared social icon partial); `guide.blade.php` loads only this file through `@vite`. A new class in another view that the landing includes needs that view added to those lines. The grids use `grid-cols-1` as the base and `minmax(0, …)` for the hero's two columns. Tests (`ResellerLandingPageTest`): the page links its own stylesheet and not `app.css`, every view it includes is scanned, and every grid has a base column count.
+## [2.105.0] - 2026-10-23
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Email Log: was the email sent, did it fail, and why.** Owner request 2026-10-23. New **Email** tab on **Settings → Logs** lists every email the ERP tries to send, for the selected company: time, the kind of message (customer login code, reseller password reset link, investor code, investor invitation, investor message, owner's daily digest, test email), who it went to, the result and the way it was sent (the site's own SMTP host, or the server's default mailer).
+  - **Sent**: the mail server (for example Amazon SES) accepted the message. The page says this does not prove the inbox received it; bounces and spam-folder delivery are not tracked yet.
+  - **Failed**: with a plain reason and the mail server's own answer: wrong SMTP user name or password, an email address that is not verified (the From address, or the recipient while SES is still in its sandbox), sending limit or rate reached, mail server unreachable, invalid address, or any other refusal.
+  - **Not sent**: no email account is set up for the site, or the server's own mailer only writes to a log file so nothing left the server. A reseller password reset link or an investor code that could not be sent for this reason is now logged too.
+  - Filter by result or kind of message. Staff who can manage settings see only their own company's rows. The text of a message is never stored, only who it went to and the result, so a login or reset code never sits in the log.
+  - The **Send test email** button on Integrations → Email Setup also writes to this log.
+
+### Technical Notes
+
+- New table `email_logs` (migration `2026_10_23_200000_create_email_logs_table.php`, short index name) and company-owned model `EmailLog` (registered in `MultiCompanyIsolationTest`). `EmailLogService` writes rows, never throws (a failed write is reported and ignored, so logging cannot stop an email), and `classify()` maps the server's error text to a reason key (`auth_failed`, `address_not_verified`, `limit_reached`, `unreachable`, `invalid_address`, `send_error`); `not_configured` and `log_only` are written by the sender itself.
+- `StorefrontNotificationService`: the three senders (`sendMailable()`, `sendResellerPasswordResetEmail()`, `sendLoginOtpEmail()`) now share one `deliver()`; the failure warning logged to `laravel.log` is unchanged (its context now always includes the mail class). `sendMailable()` takes the message kind as an optional last argument (IMS code, invitation, message, owner digest at their call sites). `sendTestEmail()` logs too. A send through a server mailer that is `log` or `array` still returns true as before but is logged as not sent (`log_only`).
+- `OtpService` and `ResellerPasswordResetService` log the "no email account" case before returning, since they stop before any send.
+- New read-only resource `EmailLogResource` (`canManageSettings()`), shown as the `email` tab of the Logs page (listed in `LogCatalog`, no sidebar entry of its own, route `/admin/settings/email-logs` kept; one-column phone layout like the SMS log), `docs/codebase-map/crm-messaging.md` updated, `docs/email-ses-setup.md` gains a section on the log. Lang keys in `lang/en.json` and `lang/bn.json`.
+- Tests: new `EmailLogTest` (sent / failed / log-only rows, no code stored, the reason mapping with SES answers, logging failure never stops the email, company isolation, the page, the two early-return call sites, the Integrations test button); `ResellerPasswordResetByStaffTest` asserts the skip row; `MultiCompanyIsolationTest` lists `EmailLog`.
+## [2.104.0] - 2026-10-23
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **One "Logs" page for every log.** Owner request 2026-10-23. **Settings → Logs** is now the only log entry in the menu, with one tab per log, the way **Integrations** gathers the integrations: **SMS**, **Audit**, **Courier status**, **Courier webhooks**, **Meta events**, **Deploy errors** and **Mobile crashes**. A tab appears only for people who could already open that log, so nobody gains or loses access. The separate sidebar entries for SMS Log, Audit Logs, Deploy Error Logs and Mobile Crash Reports are gone; the logs' own pages and links (for example the link in a deploy-error alert, or Courier → Status Logs) keep working. The open tab is kept in the address, so a link opens the right log. The SMS log reads as one column on a phone (when, number, result, why) so it does not scroll sideways.
+
+### Changed
+
+- **Reseller landing page: the parcel answer names the company and its couriers.** Owner wording 2026-10-23. The answer to *How is the parcel sent, and who collects the money?* now reads "<company name> sends the parcel to your customer by courier (Steadfast, Pathao, RedX) on cash on delivery …" (the company name comes from the company's own settings; the three courier names are part of the page's text, in English and in Bangla).
+
+### Fixed
+
+- **"User Id not found" (code 1011) from BulkSMSBD now says what to do.** The SMS Log and the Send test SMS button explain each gateway reply in plain words next to its code: 1011 means BulkSMSBD does not recognise the API key, so copy it again from the BulkSMSBD Developers page; the same for sender-ID problems (1002, 1013-1015), an empty balance (1006, 1007), Bangla-only masking (1012), IP whitelist (1032) and an account that needs attention (1018, 1031).
+- An **empty SMS API key** is now caught before the gateway is called and logged as "The SMS API key is empty".
+- **Spaces copied with the key**, sender ID or URL are removed when the settings are saved and when an SMS is sent. The **SMS API key** box also asks the browser not to fill it in: a browser can put the saved login password into a password-type box, which the gateway then answers with "User Id not found".
+
+### Technical Notes
+
+- Logs page and SMS gateway hints: `App\Filament\Pages\Logs` (Settings cluster, needs the "manage settings" permission) builds its tabs from `App\Support\LogCatalog`, which lists the log resources and keeps those whose `canViewAny()` passes. Each tab embeds `App\Livewire\LogTable` (lazy, `#[Locked] $log`, re-checked on mount) which reuses the resource's own `table()` on the model's company-scoped query; a resource's `ViewAction` becomes a plain link to the resource's view page, and a resource may add a `logNotice()` (SMS and courier webhooks use it for the "queue worker not running" warning). The four resources set `$shouldRegisterNavigation = false` and keep their routes. `StorefrontNotificationService::sendSmsDetailed()` now also returns `reason` (`no_gateway`, `no_api_key`, `gateway_unreachable`, `gateway_refused`) and `smsGatewayHint()` maps codes to advice. Tests: `LogsPageTest` (8), extra cases in `SmsLogTest`. No migrations.
+## [2.103.0] - 2026-10-23
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Amazon SES setup for the ERP's email.** Owner request 2026-10-23 (the domains are approved in AWS SES). SES is used through its SMTP interface, so it plugs into **Settings → Integrations → Email Setup** like any SMTP account:
+  - **Amazon SES region (quick setup):** type the region (for example `ap-southeast-1`) and the SMTP host (`email-smtp.<region>.amazonaws.com`), port 587 and TLS are filled in. The region is not stored; it is read back from the saved host.
+  - **Send test email:** sends a message through the settings saved for the site being edited and shows the mail server's own answer when it fails (for SES: unverified sender, sandbox recipient, wrong credentials or region).
+  - **From address reminder:** an SES SMTP user name is an access-key ID (`AKIA…`), not an email address. If the saved account has no From address and its user name is not an email address, saving shows a warning, and the From address help text says so.
+  - Step-by-step guide: `docs/email-ses-setup.md` (what to do in the SES console, what to enter here, common errors, the optional server-wide fallback in Coolify).
+
+### Changed
+
+- **The email (SMTP) settings moved from Storefront Settings to Settings → Integrations → Email Setup.** Owner request 2026-10-23. SMTP host, port, encryption, username, password, From address and From name are now edited on a new **Email Setup** tab next to **SMS Gateway**, per site (use the Site picker, like Payment Gateway and SMS Gateway). Values already saved keep working — nothing needs to be re-entered. Saving Storefront Settings no longer touches the email keys. The WhatsApp reminder fields stay on Storefront Settings → Customer Notifications & Reminders.
+- The message shown to staff when a reseller's password-reset link cannot be sent because email is not set up now points to **Settings → Integrations → Email Setup**.
+
+### Fixed
+
+- **A company's email could go out through another company's SMTP account and sender.** The mail manager keeps the mailer it built for the whole process, so a long-running queue worker sending for one company after another (IMS and investor emails) kept using the first company's SMTP host, login and From address. Each send now builds the company's own mailer. With several domains on one SES account this would have sent a company's mail under another company's From address.
+- The sender no longer falls back to an SMTP user name that is not an email address (it used to, which made every message fail); it uses the From address, else an email-shaped user name, else the server's default sender.
+
+### Technical Notes
+
+- Email keys (`mail_host`, `mail_port`, `mail_encryption`, `mail_username`, `mail_password`, `mail_from_address`, `mail_from_name`; new `StorefrontNotificationService::MAIL_CREDENTIAL_KEYS`) still live in the encrypted `storefront_settings.notification_credentials`; no migration. `Integrations::save()` merges only the SMS and email keys into the stored array (`ownedNotificationKeys()`), and `EditStorefrontSetting::mutateFormDataBeforeSave()` re-adds both sets so the Storefront Settings form, which no longer has these fields, cannot wipe them.
+- `StorefrontNotificationService`: new `mailFromAddress()` (From address, else an email-shaped user name, else null), `sendTestEmail()` (returns null or the server's error text, never throws); `companyMailer()` now calls `Mail::purge('storefront_dynamic')` before building the mailer and uses `mailFromAddress()`.
+- In this Laravel version the SMTP transport ignores the `encryption` setting: port 465 connects over SSL (`smtps`), any other port is plain SMTP that upgrades with STARTTLS when the server offers it. The SMTP encryption box therefore does not change how the connection is made; the tab says so. A site with no encryption saved (or a saved null) is shown as TLS; None is saved as an empty string.
+- Lang: new keys for the tab, the SES quick setup, the test email and the From address warning; the Storefront Settings section note, the From address help text and the "Email is not set up…" message changed text in `lang/en.json` and `lang/bn.json`.
+- `.env.example` points to `docs/email-ses-setup.md` for the server-wide fallback mailer (`MAIL_*`); nothing else in the environment changes.
+- Tests: new `CompanyEmailSetupTest` (5: sender rules, per-company mailer isolation — fails without the `purge` — and the test email); `IntegrationsPageTest` (+7, one rewritten); `ResellerPasswordResetByStaffTest` expects the new message.
+## [2.102.0] - 2026-10-23
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller landing page: the questions new resellers ask, answered.** Owner request 2026-10-22, from a real prospective reseller's questions. A new **Questions resellers ask** section (with a link chip in the page's menu) answers six questions in plain words, each answer taken from what the system really does, not from promises: can I just market and sell while the store packs and delivers; can I list the products on my Facebook page and website with photos, details and prices; what do I send when a customer confirms an order (nothing: you enter the order in the portal and the form shows the customer's bill and your profit); how the parcel is sent (cash on delivery, nothing in advance) and what the customer's bill is made of; what is deducted from the money collected (your profit is your selling price minus your cost; the delivery charge and VAT are added on top; no separate packaging charge on orders the store delivers; the return charge only when the store has set one and the amount only when *Show money figures on the guide* is on); and when and how the profit is paid (payable after delivery, withdrawal request to bKash, Nagad, Rocket or a bank account, the store reviews and pays, the Earnings page shows every order).
+- **Reseller landing page in Bangla, with a language switch.** Owner request 2026-10-22. The landing page now has an **English | বাংলা** switch in its header (and above the first screen on phones). The choice is kept in a cookie for a year, and the portal's sign-in and application pages follow it (they also carry the same small switch), including the portal's own Livewire requests. Nobody who never used the switch sees any change: they get the app's default language as before; the shop and the admin are never touched. Words the admin typed (the guide's introduction and rules) stay as entered; everything else is translated.
+
+### Changed
+
+- **Reseller landing page is set in Anek Bangla.** Owner request 2026-10-22. The whole page, Bangla and English alike, uses the Anek Bangla font (SIL OFL 1.1, variable weights 100–800), self-hosted with the ERP so no third-party font request is made; the landing page no longer loads Hind Siliguri or Unbounded.
+
+### Technical Notes
+
+- New `App\Http\Middleware\SetResellerPortalLocale` (cookie `reseller_portal_locale`, values `en` / `bn`, set by `?lang=`): runs in the `web` group right after `RestrictPortalHosts` and in the reseller panel's middleware and `persistentMiddleware` (after `ResolveCompanyFromResellerPortalDomain`, so Livewire updates keep the language); it does nothing unless the request is on a reseller portal host (`reseller_portal_company` attribute). Views: `resources/views/reseller/partials/language-switch.blade.php` (landing) and `resources/views/filament/reseller/language-switch.blade.php` (sign-in / application pages, panel render hooks). The language names are `Language name: English` / `Language name: Bangla` and are read in their own language (`__('...', [], 'bn')`), so the switch always shows "বাংলা". 18 new keys in `lang/en.json` and `lang/bn.json`.
+- Font files under `resources/fonts/anek-bangla/` (Bengali, Latin and Latin-extended subsets of the variable font, plus `OFL.txt`) and their `@font-face` rules in `resources/css/reseller-landing.css`. **Deploy: `npm run build`.** Tests: `ResellerLandingPageTest` (+7: the questions and answers, figures following the settings, the Bangla version and cookie, the language kept on the landing and application pages, an unknown language ignored, the shop untouched, the font shipping with the ERP).
+## [2.101.0] - 2026-10-23
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **SMS Log: you can now see why a customer got no SMS.** Owner report 2026-10-23: an order was placed and no SMS arrived, and nothing in the system said why. **Settings → SMS Log** now lists every order SMS (order placed and each status change) with its result:
+  - **Sent**, with the exact text that went out.
+  - **Not sent: gateway**, with the gateway's own reply (for example `1012 Masking SMS must be sent in Bengali`, `1007 Balance Insufficient`, `1032 IP not whitelisted`) or "could not be reached".
+  - **Not sent: skipped**, with the reason: no wording written on SMS Templates, customer has no phone, number opted out, no SMS gateway set, already sent once, imported or reseller store order.
+  - **Waiting in the queue**: when a message waits more than 5 minutes the page says the queue worker does not seem to be running, which is the usual reason nothing leaves in production.
+  Code messages (OTP, password reset) are never logged, so a code is never stored.
+- **Send test SMS** button on **Settings → Integrations → SMS Gateway.** It sends one real SMS to your own number through the saved gateway and shows the gateway's answer on screen, so "does the gateway work?" is a ten-second check without placing an order. With a masking (letters) sender ID the test text is sent in Bangla, because BulkSMSBD refuses English there. The result also appears in the SMS Log.
+- A note on the SMS Gateway tab explaining that the URL only delivers messages: the wording is written on **Settings → SMS Templates**, and the branding comes from the sender ID and that wording.
+
+**Technical Notes:** New table `sms_logs` (migration `2026_10_23_100000_create_sms_logs_table.php`, short index names) and company-owned model `SmsLog` (registered in `MultiCompanyIsolationTest`). `SmsLogService` writes the rows and never throws (a logging failure is reported and the SMS still goes out; covered by a test). `OrderStatusSmsService` logs a row when the message is queued, or a skipped row at dispatch when no wording is written, and closes it in `send()` / `sendPlaced()`; the existing send rules and dedupe are unchanged. `StorefrontNotificationService::sendSmsDetailed()` returns the gateway's code, its meaning and any error; `sendSms()` still returns a bool. `SmsLogResource` is read-only and needs the "manage settings" permission. New strings in `lang/en.json` and `lang/bn.json`. Tests: `SmsLogTest` (13). No other behaviour changes.
+## [2.100.1] - 2026-10-22
+
+**Release type:** Security Update
+
+### Security
+
+- **PHP update path for the critical PHP vulnerabilities of 2026-10-21 (CVE-2026-109618 and CVE-2026-109619, remote code execution without logging in).** The ERP container's PHP was 8.4.2 (December 2024): Coolify's Nixpacks builder keeps an old package snapshot, so a plain redeploy would never bring the fixed version. The repository now has a production `Dockerfile` on the official `php:8.4.27-fpm` image (PHP 8.4.27 is the fixed version). Nothing changes on the live server until the owner switches the ERP app's Build Pack in Coolify from Nixpacks to Dockerfile (steps in `docs/deployment.md`). The old Nixpacks setup is untouched and stays the rollback.
+- The image also turns off PHP's upload-progress feature (`session.upload_progress.enabled=0`), one of the ways the second vulnerability is reached, and recycles PHP-FPM workers every 500 requests.
+
+### Technical Notes
+
+- New: `Dockerfile` (stages: PHP runtime + extensions `bcmath exif gd imagick intl opcache pcntl pdo_mysql zip`, Composer, Vite assets, final image), `.dockerignore`, `docker/` (`nginx.conf` = the Nixpacks template as plain nginx, `php.ini`, `php-fpm-pool.conf` with `clear_env = no`, `supervisord.conf`, `entrypoint.sh`).
+- `entrypoint.sh` fixes the owner of the persistent `/app/storage` volume once (files from the Nixpacks image belong to another user), links `public/storage`, then starts nginx + PHP-FPM, or the queue worker when `CONTAINER_ROLE=worker` (the worker app uses the same image).
+- `PHP_VERSION` in the `Dockerfile` is pinned to `8.4.27` and must be raised on each PHP security release.
+- New workflow `.github/workflows/docker-image.yml` builds the image and checks: PHP >= 8.4.27, required extensions, nginx + FPM serving the app from a root-owned empty volume (`/health.html`, Laravel `/up`, container environment visible to PHP, storage writable by the web user), and the worker role running as `www-data`.
+## [2.100.0] - 2026-10-22
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **The order summary card now shows each product's picture.** On the order page, **Order summary card** draws a small picture beside every item, so the customer sees the very product they ordered. It uses the variant's own photo when the ordered variant has one, otherwise the product's main image. An item with no picture (or one that cannot be read) gets a plain grey box so the rows stay lined up. The pictures are part of the image sent to WhatsApp, WeChat, Messenger and Telegram, and of the downloaded image. "Copy text" is unchanged.
+
+**Technical Notes:** `OrderSummaryCardService` adds `image` to each item: the picture is read through `CompanyStorageService::readPublic()`, cropped to a square, shrunk to 160 px and returned as a JPEG data URI (needs PHP GD; without it the card has no pictures). It is embedded so the browser canvas stays untainted and can still be exported. `summary-card.blade.php` decodes the pictures before drawing (`loadImages()`) and draws rounded thumbnails in the items table. New tests in `OrderManagementFeaturesTest` (picture present and 160x160; none when the product has no picture or the file is gone). No migrations, no new lang keys.
+
+### Changed
+
+- **The order summary card has a corporate, enterprise-style layout.** Owner request 2026-10-22: the card looked generic. It is now laid out like a business document:
+  - **Header:** the company logo on the left (the company name in large type when there is no logo) and the company's phone, e-mail, website and address on the right. The company details appear only here, not again in the footer.
+  - **Title band:** "Order summary" with the invoice number, under a dark navy band with an orange line.
+  - **Two detail boxes side by side:** **Order details** (invoice, date, status, courier, tracking, and a coloured payment badge: Paid in full, Partially paid or Payment due) and **Customer details** (name, phone, address).
+  - **Items table** with a dark header row (Item, Price, Qty, Amount), the product picture, the unit price and striped rows.
+  - **Note box** on the left (the order note, when there is one) and **totals** on the right, ending in a large **Due** band: orange when something is owed, green when the order is paid in full.
+  - **Footer:** the thank-you line and a navy strip.
+  - A reseller's order still shows only the reseller's store name and logo, retail prices and no company contact details, as on the invoice.
+
+**Technical Notes (layout):** `OrderSummaryCardService::build()` now returns `logo` (PNG data URI, shrunk to fit 520x160, transparency kept), `contact` (hotline from the invoice settings else company phone, e-mail, website), `address`, `invoice`, `order_rows` / `customer_rows` (each with a `key`), `payment` (`paid` / `partial` / `unpaid`), `note`, per-item `price`, and `labels`; it no longer returns `meta` or `company_phone`. Reseller orders return no contact or address. `summary-card.blade.php` draws the whole card on the canvas from this data (new `loadImages()` also loads the logo). New strings (Customer details, Paid in full, Partially paid, Payment due, Payment) are in `lang/en.json` and `lang/bn.json`. Tests: two new cases in `OrderManagementFeaturesTest`; the reseller tests now check `contact` / `address` instead of `company_phone`. No migrations.
+
+### Added
+
+- **The customer is told about every order automatically.** Owner request 2026-10-22.
+  - **SMS when an order is created.** A new message, **Order placed**, on Settings → SMS Templates (Order status tab). It can use `:items` (product names with quantities) as well as the order number, status, total and due. It follows the same rules as the status SMS: nothing is sent until the owner writes or saves the wording ("Use suggested wording" fills it in), never for reseller orders, imported past orders, customers without a phone or on the opt-out list. It waits about 45 seconds in the queue so the items are saved first. The existing status SMS also gets `:items`.
+  - **The order summary card on WhatsApp, by itself.** New page **Settings → Order WhatsApp card**. When switched on, the customer is sent the card as a picture on WhatsApp when the order is created and each time it reaches a new stage (confirmed, processing, shipping, delivered, completed, cancelled, returned, refunded). It goes only through the official WhatsApp Cloud API (a Cloud API or Coexistence channel) with an approved template that has an **Image** header and exactly five body variables in this order: customer name, order number, status, total, amount due. The page lists only templates like that. A QR-linked WhatsApp Web channel is never used for automatic messages (`docs/whatsapp-web-rules.md`, rule 4). WhatsApp cannot be asked beforehand who has an account, so every customer with a phone is tried and a number without WhatsApp is simply skipped; the SMS is separate. Reseller orders, imported past orders and opted-out customers are never sent. The page also says whether this server can draw the card picture.
+
+**Technical Notes (automatic messages):** `OrderStatusSmsService::dispatchForOrderPlaced()` / `sendPlaced()` and `SendOrderPlacedSmsJob` (delay `PLACED_DELAY_SECONDS`, one send per order via a cache lock); `SmsTemplateService::ORDER_PLACED` (`order.placed`) and the `items` placeholder. `OrderWhatsAppCardService` (queued by `Order::created` and `OrderStatusTransition::created`, both wrapped so a failure never undoes the order or status change) renders the card with the new `OrderSummaryCardImageService` and sends it through `MetaGraphService::uploadWhatsAppMedia()` (picture upload, no public link needed) and `sendWhatsAppTemplate()` (new `$headerImageId`). `listMessageTemplates()` now also returns `has_image_header` and `body_variables`. Settings live in `companies.settings['order_whatsapp']` (`OrderWhatsAppSettings`); no migration. **Server requirement:** the card is drawn with Imagick through ImageMagick's Pango coder, which joins Bangla letters correctly (GD and Imagick's own text drawing do not); on Debian/Ubuntu this is the package `libmagickcore-6.q16-6-extra`. `OrderSummaryCardImageService::canRender()` checks the coder and a Bangla shaping probe; without them no card is sent and the reason is recorded on the channel and shown on the settings page. The bundled Hind Siliguri font is registered through a private fontconfig file in `storage/app/order-card-fonts`. Tests: `OrderWhatsAppCardTest` (8), two new cases in `SmsTemplatesTest`. Failed WhatsApp sends are logged and shown as the channel's last error, never retried automatically.
+## [2.99.0] - 2026-10-22
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller landing page at the portal address, ending with the website's footer.** Owner request 2026-10-22. `reseller.<company domain>` (or the company's own reseller portal domain) now opens the reseller landing page itself instead of going straight to the sign-in page: how the program works and the company's rules, **Sign in** and **Apply now** buttons in the header, the first screen and a closing banner, and at the end the **footer of the company's Next.js website** — its Footer Builder blocks, footer menu, social links and background colour, with links to the website's pages built on the website's domain. A link back to the reseller program is left out of it, since the footer sits on that page. A company with no Next.js website keeps the simple copyright line, and without a website domain only absolute links (not links to the website's own pages) are shown. The page is also still at `/portal/guide`. **Resellers → Reseller Settings → Show the reseller guide** controls it: off, the address goes straight to the sign-in page as before. The storefront's *Become a reseller* links now point at the portal address itself.
+- **Website footer: "Become a reseller" is a banner button.** Owner request 2026-10-22. The *Become a reseller* menu item is now sent to the Next.js site together with a banner picture (`image_url`), and the website's footer shows that picture as a call-to-action button above its columns instead of a text link (it lifts a little on hover and a light sweeps across it now and then; both stop for visitors who prefer less motion). The header keeps the text link. The picture is the owner's "Reselling Program — Start Your Online Business Without Investment" banner, which ships with the ERP; **Reseller Settings → Website banner button** lets the admin upload their own, and clearing it brings the standard banner back. The matching website change is on the website repo's `feature/reseller-menu-link` branch.
+- **Reseller landing page redesigned in the neo-brutalist style.** Owner request 2026-10-22 (the owner found the first design plain and chose neo-brutalism from a short list of trending styles). The page keeps every word, rule, figure and button it had — only its look changes: a warm cream page with a dot grid, thick black outlines, flat bright colour blocks (yellow, pink, mint, sky, orange next to the store's own brand colour) and hard offset shadows that lift on hover and press flat on click; heavy headlines (Unbounded for English, Hind Siliguri for Bangla and body text); a "price − cost = profit" card in the first screen; a scrolling yellow ticker of the four steps; coloured step cards; an expandable rules list; and a bold closing banner. It follows the visitor's light or dark setting, works on phones, and stops all motion for visitors who prefer less motion. Text on the brand colour is white or near-black, whichever is readable on the store's colour. The website's footer under it is unchanged.
+
+### Technical Notes
+
+- Reseller landing page: `RestrictPortalHosts` lets the reseller host's `/` through while `Company::resellerLandingEnabled()` (the guide switch) is on and remembers the portal company on the request (`reseller_portal_company`); `ResolveCompanyFromDomain` in `optional` mode leaves such a host alone; `HomeController` sets the company and hands the request to `ResellerGuideController`. `Company::resellerJoinUrl()` returns the host root while the landing page is on (the application form otherwise). The footer is `StorefrontSiteConfigService::footer()` (blocks grouped into columns, links made absolute on the website's domain, colour darkness like the website's `isDarkColor`) drawn by `resources/views/reseller/partials/footer.blade.php`, built inside `ModuleGuard` so a footer problem only costs the page its footer. Banner: migration `2026_10_22_100000_add_reseller_banner_image_to_storefront_settings` (`storefront_settings.reseller_banner_image`, nullable, on the Blade row), `StorefrontSiteConfigService::resellerBannerUrl()`, the standard picture at `public/images/reseller-program-banner.png`. Tests: `ResellerLandingPageTest` (9); `StorefrontApiTest` and `ResellerGuidePageTest` updated for the new address. **Deploy: `php artisan migrate`, `npm run build` (new Tailwind classes in the footer partial), and deploy the website branch for the button.**
+- Neo-brutalist landing page: new Vite entry `resources/css/reseller-landing.css` (the `.nb-*` component classes and the self-hosted Hind Siliguri faces; Unbounded comes from `app.css`), loaded after `app.css` by `resources/views/reseller/guide.blade.php`. Those rules are not in a cascade layer, so they beat Tailwind's utilities: do not put a conflicting utility (display, background, border) on the same element, wrap it. `ResellerGuideController` also passes `onBrandColor` (`StorefrontSiteConfigService::isDarkColor()`, now public static, decides white or near-black text on the brand colour). No migration, no new text (no lang keys). Test: `ResellerLandingPageTest` (+1). **Deploy: `npm run build` (a new CSS entry); a deploy without it fails on `@vite` until the manifest has `reseller-landing.css`.**
+## [2.98.0] - 2026-10-22
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **IMS office on a phone works like an app.** Owner request 2026-10-22 (the owner's mobile reference designs). On phones and tablets the office (`/office`) now has:
+  - **A tab bar at the bottom**: Home · Investors · a round green **+** · **To do** · **Menu**, with names under every icon. The menu button in the top bar is gone on phones; everything is in the bar.
+  - **+** opens the things staff add (add an investor, new project, and the others the person is allowed to add).
+  - **To do** opens "What to do today" from any page; a red number on the tab says how many things are waiting.
+  - **Menu** shows every page as big tiles in the same groups as the top menu (with their waiting numbers), the English / বাংলা switch, light / dark, the company list and Sign out.
+  - **Home**: initials, "Good morning!" and the name at the top, then the green card, then four round buttons — Confirm money, KYC, Payouts, Support — each with how many are waiting.
+  - **Every list is a stack of cards** on a phone: the first column in bold as the card's title, then "label … value" lines and the buttons at the bottom, instead of a table that had to be scrolled sideways. The investor portal's lists do the same.
+  - Desktop and laptop screens are unchanged.
+
+### Technical Notes
 
 - `OfficeNavigation::mobile()` builds the bar, the "+" list (`canAccess()` + `canCreate()` + a create page), the to-do (`OwnerTodo`) and the menu tiles; `resources/views/filament/ims/office/mobile-nav.blade.php` draws them at `BODY_END` through `ModuleGuard::run('ims-office-mobile-nav')` — if it fails nothing is drawn and the top-bar menu button comes back (it is hidden only while `.ims-tabbar` is on the page). `Home::quickActions()` (guarded too) feeds the round buttons; the welcome header takes `app: true` for the phone greeting.
 - Lists: `Table::configureUsing()` in `AppServiceProvider` sets Filament's `stackedOnMobile()` for the `office` and `investor` panels only; the card look is in `resources/css/filament/ims/theme.css` (below 640px).

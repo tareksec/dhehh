@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\SmsTemplates;
+use App\Jobs\SendOrderPlacedSmsJob;
 use App\Models\Company;
 use App\Models\CourierBooking;
 use App\Models\CourierProvider;
@@ -28,6 +29,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -121,6 +123,46 @@ class SmsTemplatesTest extends TestCase
         $order->update(['status' => Order::STATUS_CONFIRMED]);
 
         $this->assertSame(Order::STATUS_CONFIRMED, $order->fresh()->status);
+    }
+
+    public function test_a_new_order_texts_the_customer_with_the_items_and_status(): void
+    {
+        $this->write([SmsTemplateService::ORDER_PLACED => 'Hi :name, we got order :order (:items). Total :total, due :due. Status: :status. - :company']);
+        Queue::fake();
+
+        [$order] = $this->orderWithBooking();
+
+        // The message waits in the queue so the items saved just after the order are in it.
+        Queue::assertPushed(SendOrderPlacedSmsJob::class, fn (SendOrderPlacedSmsJob $job): bool => $job->orderId === $order->id
+            && $job->delay !== null);
+
+        app(\App\Services\OrderStatusSmsService::class)->sendPlaced($order->id);
+
+        $sent = $this->sent();
+        $this->assertCount(1, $sent);
+        $this->assertSame('01712345678', $sent[0]['phone']);
+        $this->assertSame("Hi Template Customer, we got order {$order->order_number} (Template Product x2). Total 200, due 200. Status: Draft. - Template Co", $sent[0]['msg']);
+
+        // A retried job never texts the same order twice.
+        app(\App\Services\OrderStatusSmsService::class)->sendPlaced($order->id);
+        $this->assertCount(1, $this->sent());
+    }
+
+    public function test_a_new_order_texts_nothing_without_wording_and_never_for_resellers_imports_or_opted_out_numbers(): void
+    {
+        Queue::fake();
+        $this->orderWithBooking();
+        Queue::assertNothingPushed();
+
+        $this->write([SmsTemplateService::ORDER_PLACED => 'Order :order received']);
+        $reseller = Customer::query()->create(['name' => 'A Reseller', 'phone' => '01799999999']);
+        Order::query()->create(['customer_id' => Customer::query()->create(['name' => 'Buyer', 'phone' => '01711111111'])->id, 'reseller_customer_id' => $reseller->id, 'status' => Order::STATUS_DRAFT]);
+        Order::query()->create(['customer_id' => Customer::query()->create(['name' => 'Old', 'phone' => '01722222222'])->id, 'source' => Order::SOURCE_NUPORT_IMPORT, 'status' => Order::STATUS_DRAFT]);
+        Queue::assertNothingPushed();
+
+        $quiet = Order::query()->create(['customer_id' => Customer::query()->create(['name' => 'Quiet', 'phone' => '01733333333', 'opted_out_at' => now()])->id, 'status' => Order::STATUS_DRAFT]);
+        app(\App\Services\OrderStatusSmsService::class)->sendPlaced($quiet->id);
+        Http::assertNothingSent();
     }
 
     // ---------------------------------------------------------------- codes

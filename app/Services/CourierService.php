@@ -8,6 +8,7 @@ use App\Models\CourierProvider;
 use App\Models\CourierReturn;
 use App\Models\CourierStatusLog;
 use App\Models\Order;
+use App\Support\MoneyFormatter;
 use Closure;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
@@ -40,6 +41,22 @@ class CourierService
                 'is_active' => true,
             ],
         );
+    }
+
+    /**
+     * The line under the COD field of every booking popup: grand total minus
+     * the advance already received, so staff see why the courier is asked to
+     * collect less than the invoice total.
+     */
+    public function codHelperText(Order $order): string
+    {
+        $currency = $order->company?->currency ?: 'BDT';
+
+        return __('Grand total :total − advance paid :paid = :due. This is what the courier collects from the customer.', [
+            'total' => MoneyFormatter::currency($order->courierInvoiceTotal(), $currency),
+            'paid' => MoneyFormatter::currency((float) $order->paid_amount, $currency),
+            'due' => MoneyFormatter::currency($order->courierCodAmount(), $currency),
+        ]);
     }
 
     /**

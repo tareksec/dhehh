@@ -667,10 +667,21 @@ class Company extends Model
     }
 
     /**
-     * Where the storefront's "Become a reseller" links go: the public reseller
-     * guide on the portal host while it is on (Resellers → Reseller Settings),
-     * otherwise straight to the portal's application form. Null when this
-     * company has no portal host.
+     * Whether the portal host's front page is the public reseller landing page
+     * (the guide, with its sign-in and apply buttons). On unless it is switched
+     * off in Resellers → Reseller Settings; off, the host goes straight to the
+     * portal's sign-in page.
+     */
+    public function resellerLandingEnabled(): bool
+    {
+        return (bool) ($this->storefrontSetting?->reseller_guide_enabled ?? true);
+    }
+
+    /**
+     * Where the storefront's "Become a reseller" links go: the landing page
+     * that is the portal host's front page while it is on (Resellers →
+     * Reseller Settings), otherwise straight to the portal's application form.
+     * Null when this company has no portal host.
      */
     public function resellerJoinUrl(): ?string
     {
@@ -680,9 +691,7 @@ class Company extends Model
             return null;
         }
 
-        $guide = (bool) ($this->storefrontSetting?->reseller_guide_enabled ?? true);
-
-        return request()->getScheme().'://'.$host.'/portal/'.($guide ? 'guide' : 'register');
+        return request()->getScheme().'://'.$host.($this->resellerLandingEnabled() ? '/' : '/portal/register');
     }
 
     public static function normalizeInvoicePrefix(?string $prefix, ?string $companyName = null): string
