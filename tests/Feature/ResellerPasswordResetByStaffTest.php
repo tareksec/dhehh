@@ -191,6 +191,12 @@ class ResellerPasswordResetByStaffTest extends TestCase
 
         Mail::assertNothingSent();
         $this->assertNull($this->reseller->fresh()->password_reset_code);
+
+        // The email log says why nothing went out.
+        $log = \App\Models\EmailLog::query()->sole();
+        $this->assertSame('reseller_password_reset', $log->kind);
+        $this->assertSame('skipped', $log->status);
+        $this->assertSame('not_configured', $log->reason);
     }
 
     public function test_a_send_that_fails_leaves_no_working_link(): void

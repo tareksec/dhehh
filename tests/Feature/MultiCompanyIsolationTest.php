@@ -35,6 +35,7 @@ use App\Models\CustomerPayment;
 use App\Models\CustomerRiskEvent;
 use App\Models\CustomerRiskProfile;
 use App\Models\CustomerRiskReview;
+use App\Models\EmailLog;
 use App\Models\ExchangeRate;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
@@ -157,7 +158,7 @@ class MultiCompanyIsolationTest extends TestCase
             StorefrontMetaAttribution::class, StorefrontMetaEvent::class,
             FundSource::class, Voucher::class,
             VoucherAttachment::class, FundTransfer::class,
-            StorefrontSlide::class, SmsTemplate::class, SmsLog::class,
+            StorefrontSlide::class, SmsTemplate::class, SmsLog::class, EmailLog::class,
             Lead::class, Quotation::class, QuotationItem::class,
             AiInstructionVersion::class, AttentionItem::class, Conversation::class, ConversationChannel::class, ConversationModeEvent::class,
             ChaseMark::class, ChatOrderLink::class, CompanyFaq::class, KnowledgeDocument::class, QuickReply::class,

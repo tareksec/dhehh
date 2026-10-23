@@ -6,6 +6,7 @@ use App\Filament\Pages\Logs;
 use App\Filament\Resources\AuditLogs\AuditLogResource;
 use App\Filament\Resources\CourierStatusLogs\CourierStatusLogResource;
 use App\Filament\Resources\DeploymentErrors\DeploymentErrorResource;
+use App\Filament\Resources\EmailLogs\EmailLogResource;
 use App\Filament\Resources\MobileCrashReports\MobileCrashReportResource;
 use App\Filament\Resources\SmsLogs\SmsLogResource;
 use App\Livewire\LogTable;
@@ -45,7 +46,7 @@ class LogsPageTest extends TestCase
         $this->actingAs(User::factory()->create(['role' => 'super_admin', 'is_active' => true]));
 
         $this->assertSame(
-            ['sms', 'audit', 'courier_status', 'courier_webhooks', 'meta_events', 'deploy_errors', 'mobile_crashes'],
+            ['sms', 'email', 'audit', 'courier_status', 'courier_webhooks', 'meta_events', 'deploy_errors', 'mobile_crashes'],
             array_keys(LogCatalog::visible()),
         );
 
@@ -63,7 +64,7 @@ class LogsPageTest extends TestCase
         $this->assertTrue(Logs::shouldRegisterNavigation());
         $this->assertSame('Logs', Logs::getNavigationLabel());
 
-        foreach ([AuditLogResource::class, SmsLogResource::class, DeploymentErrorResource::class, MobileCrashReportResource::class] as $resource) {
+        foreach ([AuditLogResource::class, SmsLogResource::class, EmailLogResource::class, DeploymentErrorResource::class, MobileCrashReportResource::class] as $resource) {
             $this->assertFalse($resource::shouldRegisterNavigation(), $resource.' still has its own sidebar entry');
         }
     }

@@ -4,10 +4,12 @@ namespace App\Ims\Onboarding;
 
 use App\Mail\ImsMessage;
 use App\Models\Company;
+use App\Models\EmailLog;
 use App\Models\InvestorOtpCode;
 use App\Models\StorefrontSetting;
 use App\Services\AuditLogService;
 use App\Services\SmsTemplateService;
+use App\Services\EmailLogService;
 use App\Services\StorefrontNotificationService;
 use Illuminate\Support\Facades\Hash;
 
@@ -115,6 +117,8 @@ class OtpService
         $setting = StorefrontSetting::primaryFor((int) $company->getKey());
 
         if ($setting === null || ! $this->notifications->emailDeliveryAvailable($setting)) {
+            app(EmailLogService::class)->skipped((int) $company->getKey(), EmailLog::KIND_IMS_CODE, $email, EmailLogService::REASON_NOT_CONFIGURED);
+
             return false;
         }
 
@@ -122,6 +126,6 @@ class OtpService
             $company->name,
             __('Your code to join'),
             [__('Your code is :code. It works for :minutes minutes and only once.', ['code' => $code, 'minutes' => InvestorOtpCode::VALID_MINUTES])],
-        ));
+        ), EmailLog::KIND_IMS_CODE);
     }
 }

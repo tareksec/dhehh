@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Mail\ImsMessage;
 use App\Models\ChannelPartner;
 use App\Models\Company;
+use App\Models\EmailLog;
 use App\Models\Investor;
 use App\Models\InvestorPortalAccount;
 use App\Models\StorefrontSetting;
@@ -289,7 +290,7 @@ class InvestorPortalAccountService
                 __('Your password reset code is :code. It works for :minutes minutes and only once.', ['code' => $code, 'minutes' => self::EMAIL_CODE_VALID_MINUTES]),
                 __('If you did not ask for this, you can ignore this e-mail. Your password stays the same.'),
             ],
-        ));
+        ), EmailLog::KIND_IMS_CODE);
 
         if (! $sent) {
             $this->clearCode($account);
