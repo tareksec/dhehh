@@ -214,7 +214,7 @@ class OrderStatusSmsService
             return $this->closeLog($log, SmsLog::STATUS_SENT, null, $extra);
         }
 
-        return $this->closeLog($log, SmsLog::STATUS_FAILED, $result['code'] !== null ? 'gateway_refused' : 'gateway_unreachable', $extra);
+        return $this->closeLog($log, SmsLog::STATUS_FAILED, $result['reason'], $extra);
     }
 
     /**

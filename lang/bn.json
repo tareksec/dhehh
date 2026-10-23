@@ -3567,5 +3567,22 @@
     "The gateway accepted the test SMS": "গেটওয়ে টেস্ট SMS গ্রহণ করেছে",
     "It should reach :phone within a minute. If it does not, ask BulkSMSBD about the sender ID or the number.": "এক মিনিটের মধ্যে :phone নম্বরে পৌঁছানোর কথা। না এলে সেন্ডার আইডি বা নম্বর নিয়ে BulkSMSBD-কে জিজ্ঞেস করুন।",
     "The gateway did not send the test SMS": "গেটওয়ে টেস্ট SMS পাঠায়নি",
-    "This URL only delivers messages. The wording of each SMS is written on Settings → SMS Templates, and your branding comes from the sender ID and the wording you write there.": "এই ইউআরএল শুধু মেসেজ পৌঁছে দেয়। প্রতিটি SMS-এর লেখা সেটিংস → SMS টেমপ্লেটে লেখা হয়, আর আপনার ব্র্যান্ডিং আসে সেন্ডার আইডি ও সেখানে লেখা শব্দ থেকে।"
+    "This URL only delivers messages. The wording of each SMS is written on Settings → SMS Templates, and your branding comes from the sender ID and the wording you write there.": "এই ইউআরএল শুধু মেসেজ পৌঁছে দেয়। প্রতিটি SMS-এর লেখা সেটিংস → SMS টেমপ্লেটে লেখা হয়, আর আপনার ব্র্যান্ডিং আসে সেন্ডার আইডি ও সেখানে লেখা শব্দ থেকে।",
+    "BulkSMSBD does not recognise this API key. Copy the API key again from the BulkSMSBD dashboard (Developers page) into Integrations → SMS Gateway → SMS API key, with no spaces, press Save changes, then press Send test SMS.": "BulkSMSBD এই API কী চিনতে পারছে না। BulkSMSBD ড্যাশবোর্ডের Developers পেজ থেকে API কী আবার কপি করে ইন্টিগ্রেশনস → SMS Gateway → SMS API key-তে বসান (কোনো স্পেস ছাড়া), Save changes চাপুন, তারপর Send test SMS চাপুন।",
+    "The sender ID is wrong, switched off or does not belong to this API key. Use a sender ID that is approved on your BulkSMSBD account.": "সেন্ডার আইডি ভুল, বন্ধ, বা এই API কী-র সাথে মেলে না। BulkSMSBD অ্যাকাউন্টে অনুমোদিত সেন্ডার আইডি ব্যবহার করুন।",
+    "The BulkSMSBD balance is empty or expired. Top it up.": "BulkSMSBD-র ব্যালেন্স শেষ বা মেয়াদোত্তীর্ণ। রিচার্জ করুন।",
+    "A masking sender ID sends Bangla text only. Write this message in Bangla on SMS Templates, or use a numeric sender ID.": "মাস্কিং সেন্ডার আইডিতে শুধু বাংলা লেখা যায়। SMS টেমপ্লেটে এই মেসেজ বাংলায় লিখুন, অথবা নম্বর-সেন্ডার আইডি ব্যবহার করুন।",
+    "Add this server's IP address to the BulkSMSBD whitelist, or switch the IP whitelist off.": "এই সার্ভারের IP ঠিকানা BulkSMSBD-র whitelist-এ যোগ করুন, অথবা IP whitelist বন্ধ করুন।",
+    "Your BulkSMSBD account needs attention. Contact BulkSMSBD support.": "আপনার BulkSMSBD অ্যাকাউন্টে সমস্যা আছে। BulkSMSBD সাপোর্টের সাথে যোগাযোগ করুন।",
+    "The phone number is not valid.": "ফোন নম্বরটি সঠিক নয়।",
+    "A required value is missing in the gateway URL. Use the template shown in the URL box.": "গেটওয়ে ইউআরএলে একটি প্রয়োজনীয় মান নেই। ইউআরএল বক্সে দেখানো টেমপ্লেট ব্যবহার করুন।",
+    "The SMS API key is empty. Enter it in Integrations → SMS Gateway → SMS API key and save.": "SMS API কী ফাঁকা। ইন্টিগ্রেশনস → SMS Gateway → SMS API key-তে বসিয়ে সেভ করুন।",
+    "Nothing logged yet": "এখনো কিছু লগ হয়নি",
+    "Logs": "লগ",
+    "Audit": "অডিট",
+    "Courier status": "কুরিয়ার স্ট্যাটাস",
+    "Courier webhooks": "কুরিয়ার ওয়েবহুক",
+    "Meta events": "মেটা ইভেন্ট",
+    "Deploy errors": "ডিপ্লয় এরর",
+    "Mobile crashes": "মোবাইল ক্র্যাশ"
 }

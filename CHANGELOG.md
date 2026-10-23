@@ -8,6 +8,16 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Added
 
+- **One "Logs" page for every log.** Owner request 2026-10-23. **Settings → Logs** is now the only log entry in the menu, with one tab per log, the way **Integrations** gathers the integrations: **SMS**, **Audit**, **Courier status**, **Courier webhooks**, **Meta events**, **Deploy errors** and **Mobile crashes**. A tab appears only for people who could already open that log, so nobody gains or loses access. The separate sidebar entries for SMS Log, Audit Logs, Deploy Error Logs and Mobile Crash Reports are gone; the logs' own pages and links (for example the link in a deploy-error alert, or Courier → Status Logs) keep working. The open tab is kept in the address, so a link opens the right log. The SMS log reads as one column on a phone (when, number, result, why) so it does not scroll sideways.
+
+### Fixed
+
+- **"User Id not found" (code 1011) from BulkSMSBD now says what to do.** The SMS Log and the Send test SMS button explain each gateway reply in plain words next to its code: 1011 means BulkSMSBD does not recognise the API key, so copy it again from the BulkSMSBD Developers page; the same for sender-ID problems (1002, 1013-1015), an empty balance (1006, 1007), Bangla-only masking (1012), IP whitelist (1032) and an account that needs attention (1018, 1031).
+- An **empty SMS API key** is now caught before the gateway is called and logged as "The SMS API key is empty".
+- **Spaces copied with the key**, sender ID or URL are removed when the settings are saved and when an SMS is sent. The **SMS API key** box also asks the browser not to fill it in: a browser can put the saved login password into a password-type box, which the gateway then answers with "User Id not found".
+
+### Added
+
 - **SMS Log: you can now see why a customer got no SMS.** Owner report 2026-10-23: an order was placed and no SMS arrived, and nothing in the system said why. **Settings → SMS Log** now lists every order SMS (order placed and each status change) with its result:
   - **Sent**, with the exact text that went out.
   - **Not sent: gateway**, with the gateway's own reply (for example `1012 Masking SMS must be sent in Bengali`, `1007 Balance Insufficient`, `1032 IP not whitelisted`) or "could not be reached".
@@ -18,6 +28,8 @@ All notable production changes to Business Dashboard are documented here.
 - A note on the SMS Gateway tab explaining that the URL only delivers messages: the wording is written on **Settings → SMS Templates**, and the branding comes from the sender ID and that wording.
 
 **Technical Notes:** New table `sms_logs` (migration `2026_10_23_100000_create_sms_logs_table.php`, short index names) and company-owned model `SmsLog` (registered in `MultiCompanyIsolationTest`). `SmsLogService` writes the rows and never throws (a logging failure is reported and the SMS still goes out; covered by a test). `OrderStatusSmsService` logs a row when the message is queued, or a skipped row at dispatch when no wording is written, and closes it in `send()` / `sendPlaced()`; the existing send rules and dedupe are unchanged. `StorefrontNotificationService::sendSmsDetailed()` returns the gateway's code, its meaning and any error; `sendSms()` still returns a bool. `SmsLogResource` is read-only and needs the "manage settings" permission. New strings in `lang/en.json` and `lang/bn.json`. Tests: `SmsLogTest` (13). No other behaviour changes.
+
+**Technical Notes (Logs page):** `App\Filament\Pages\Logs` (Settings cluster, needs the "manage settings" permission) builds its tabs from `App\Support\LogCatalog`, which lists the log resources and keeps those whose `canViewAny()` passes. Each tab embeds `App\Livewire\LogTable` (lazy, `#[Locked] $log`, re-checked on mount) which reuses the resource's own `table()` on the model's company-scoped query; a resource's `ViewAction` becomes a plain link to the resource's view page, and a resource may add a `logNotice()` (SMS and courier webhooks use it for the "queue worker not running" warning). The four resources set `$shouldRegisterNavigation = false` and keep their routes. `StorefrontNotificationService::sendSmsDetailed()` now also returns `reason` (`no_gateway`, `no_api_key`, `gateway_unreachable`, `gateway_refused`) and `smsGatewayHint()` maps codes to advice. Tests: `LogsPageTest` (8), extra cases in `SmsLogTest`. No migrations.
 
 ## [2.100.1] - 2026-10-22
 

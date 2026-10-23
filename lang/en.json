@@ -3567,5 +3567,22 @@
     "The gateway accepted the test SMS": "The gateway accepted the test SMS",
     "It should reach :phone within a minute. If it does not, ask BulkSMSBD about the sender ID or the number.": "It should reach :phone within a minute. If it does not, ask BulkSMSBD about the sender ID or the number.",
     "The gateway did not send the test SMS": "The gateway did not send the test SMS",
-    "This URL only delivers messages. The wording of each SMS is written on Settings → SMS Templates, and your branding comes from the sender ID and the wording you write there.": "This URL only delivers messages. The wording of each SMS is written on Settings → SMS Templates, and your branding comes from the sender ID and the wording you write there."
+    "This URL only delivers messages. The wording of each SMS is written on Settings → SMS Templates, and your branding comes from the sender ID and the wording you write there.": "This URL only delivers messages. The wording of each SMS is written on Settings → SMS Templates, and your branding comes from the sender ID and the wording you write there.",
+    "BulkSMSBD does not recognise this API key. Copy the API key again from the BulkSMSBD dashboard (Developers page) into Integrations → SMS Gateway → SMS API key, with no spaces, press Save changes, then press Send test SMS.": "BulkSMSBD does not recognise this API key. Copy the API key again from the BulkSMSBD dashboard (Developers page) into Integrations → SMS Gateway → SMS API key, with no spaces, press Save changes, then press Send test SMS.",
+    "The sender ID is wrong, switched off or does not belong to this API key. Use a sender ID that is approved on your BulkSMSBD account.": "The sender ID is wrong, switched off or does not belong to this API key. Use a sender ID that is approved on your BulkSMSBD account.",
+    "The BulkSMSBD balance is empty or expired. Top it up.": "The BulkSMSBD balance is empty or expired. Top it up.",
+    "A masking sender ID sends Bangla text only. Write this message in Bangla on SMS Templates, or use a numeric sender ID.": "A masking sender ID sends Bangla text only. Write this message in Bangla on SMS Templates, or use a numeric sender ID.",
+    "Add this server's IP address to the BulkSMSBD whitelist, or switch the IP whitelist off.": "Add this server's IP address to the BulkSMSBD whitelist, or switch the IP whitelist off.",
+    "Your BulkSMSBD account needs attention. Contact BulkSMSBD support.": "Your BulkSMSBD account needs attention. Contact BulkSMSBD support.",
+    "The phone number is not valid.": "The phone number is not valid.",
+    "A required value is missing in the gateway URL. Use the template shown in the URL box.": "A required value is missing in the gateway URL. Use the template shown in the URL box.",
+    "The SMS API key is empty. Enter it in Integrations → SMS Gateway → SMS API key and save.": "The SMS API key is empty. Enter it in Integrations → SMS Gateway → SMS API key and save.",
+    "Nothing logged yet": "Nothing logged yet",
+    "Logs": "Logs",
+    "Audit": "Audit",
+    "Courier status": "Courier status",
+    "Courier webhooks": "Courier webhooks",
+    "Meta events": "Meta events",
+    "Deploy errors": "Deploy errors",
+    "Mobile crashes": "Mobile crashes"
 }
