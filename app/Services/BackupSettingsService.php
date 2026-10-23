@@ -161,7 +161,9 @@ class BackupSettingsService
             return 'https://'.strtolower($account).'.r2.cloudflarestorage.com';
         }
 
-        return preg_match('#^https?://#i', $account) === 1 ? rtrim($account, '/') : null;
+        // Cloudflare's bucket page shows the address with the bucket name on the end; only the
+        // scheme and host belong to the endpoint (the bucket is a separate field).
+        return preg_match('~^https?://[^\s/?]+~i', $account, $address) === 1 ? $address[0] : null;
     }
 
     /** @param  array{enabled?: bool, auto_upload?: bool, account?: ?string, bucket?: ?string, prefix?: ?string, access_key_id?: ?string, secret_access_key?: ?string, usd_bdt_rate?: mixed}  $data */

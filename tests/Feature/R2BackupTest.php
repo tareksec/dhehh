@@ -163,6 +163,10 @@ class R2BackupTest extends TestCase
         $this->r2Settings(['account' => 'https://'.self::ACCOUNT.'.eu.r2.cloudflarestorage.com/']);
         $this->assertSame('https://'.self::ACCOUNT.'.eu.r2.cloudflarestorage.com', $settings->r2Endpoint());
 
+        // The address Cloudflare shows on the bucket page ends with the bucket name.
+        $this->r2Settings(['account' => 'https://'.self::ACCOUNT.'.r2.cloudflarestorage.com/erpbackup']);
+        $this->assertSame('https://'.self::ACCOUNT.'.r2.cloudflarestorage.com', $settings->r2Endpoint());
+
         $this->r2Settings(['account' => 'not an account']);
         $this->assertNull($settings->r2Endpoint());
         $this->assertContains('Account ID (32 letters and digits) or the endpoint address (https://...)', app(R2BackupService::class)->missingSettings());
