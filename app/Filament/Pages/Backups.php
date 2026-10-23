@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Clusters\Settings;
+use App\Models\BackupRun;
 use App\Services\AppBackupService;
 use App\Services\BackupSettingsService;
 use App\Services\DatabaseBackupService;
@@ -22,6 +23,8 @@ use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema as DatabaseSchema;
+use Illuminate\Support\Number;
 use Throwable;
 
 class Backups extends Page
@@ -151,7 +154,7 @@ class Backups extends Page
                     ]),
 
                 Section::make('Database Backups')
-                    ->description('Manual database backups are stored privately. The latest 10 backups are kept automatically.')
+                    ->description(__('Database backups are stored privately. Each type (hourly, daily, before deploy, manual) keeps its own latest files, so one type never pushes out another.'))
                     ->icon(Heroicon::OutlinedCircleStack)
                     ->headerActions([
                         Action::make('createDatabaseBackup')
@@ -164,7 +167,40 @@ class Backups extends Page
                             'databaseBackupFiles',
                             fn (): array => $this->backupFiles(),
                             'No database backups created yet.',
+                            showKind: true,
                         ),
+                    ]),
+
+                Section::make(__('Backup history'))
+                    ->description(__('The last 20 backup attempts, newest first. A failed attempt shows the reason.'))
+                    ->icon(Heroicon::OutlinedClock)
+                    ->schema([
+                        RepeatableEntry::make('backupRunRows')
+                            ->hiddenLabel()
+                            ->state(fn (): array => $this->backupRuns())
+                            ->placeholder(__('No backups have been recorded yet.'))
+                            ->table([
+                                TableColumn::make(__('Status')),
+                                TableColumn::make(__('Type')),
+                                TableColumn::make('File'),
+                                TableColumn::make('Size'),
+                                TableColumn::make(__('Started')),
+                                TableColumn::make(__('Note')),
+                            ])
+                            ->schema([
+                                TextEntry::make('status_label')
+                                    ->badge()
+                                    ->color(fn (string $state): string => match ($state) {
+                                        __('Success') => 'success',
+                                        __('Failed') => 'danger',
+                                        default => 'warning',
+                                    }),
+                                TextEntry::make('type_label'),
+                                TextEntry::make('filename')->placeholder('—'),
+                                TextEntry::make('size_human')->placeholder('—'),
+                                TextEntry::make('started_label'),
+                                TextEntry::make('note')->placeholder('—'),
+                            ]),
                     ]),
             ]);
     }
@@ -278,7 +314,45 @@ class Backups extends Page
 
     public function backupFiles(): array
     {
-        return app(DatabaseBackupService::class)->all();
+        return collect(app(DatabaseBackupService::class)->all())
+            ->map(fn (array $file): array => [...$file, 'kind_label' => $this->kindLabel($file['kind'])])
+            ->all();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function backupRuns(): array
+    {
+        if (! DatabaseSchema::hasTable('backup_runs')) {
+            return [];
+        }
+
+        return BackupRun::query()
+            ->latest('id')
+            ->limit(20)
+            ->get()
+            ->map(fn (BackupRun $run): array => [
+                'status_label' => match ($run->status) {
+                    BackupRun::STATUS_SUCCESS => __('Success'),
+                    BackupRun::STATUS_FAILED => __('Failed'),
+                    default => __('Running'),
+                },
+                'type_label' => $this->kindLabel($run->kind).' · '.($run->scope === BackupRun::SCOPE_APP ? __('Full app') : __('Database')),
+                'filename' => $run->filename,
+                'size_human' => $run->size_bytes === null ? null : Number::fileSize($run->size_bytes, precision: 1),
+                'started_label' => $run->started_at->format('d M Y, h:i A'),
+                'note' => $run->error ?? ($run->sha256 ? 'SHA-256 '.substr($run->sha256, 0, 12).'…' : null),
+            ])
+            ->all();
+    }
+
+    protected function kindLabel(string $kind): string
+    {
+        return match ($kind) {
+            BackupRun::KIND_HOURLY => __('Hourly'),
+            BackupRun::KIND_DAILY => __('Daily'),
+            BackupRun::KIND_PREDEPLOY => __('Before deploy'),
+            default => __('Manual'),
+        };
     }
 
     public function appBackupFiles(): array
@@ -299,7 +373,7 @@ class Backups extends Page
     /**
      * @param  callable(): array<int, array<string, mixed>>  $state
      */
-    protected function backupList(string $name, callable $state, string $emptyMessage): RepeatableEntry
+    protected function backupList(string $name, callable $state, string $emptyMessage, bool $showKind = false): RepeatableEntry
     {
         return RepeatableEntry::make($name)
             ->hiddenLabel()
@@ -307,6 +381,7 @@ class Backups extends Page
             ->placeholder($emptyMessage)
             ->table([
                 TableColumn::make('File'),
+                ...($showKind ? [TableColumn::make(__('Type'))] : []),
                 TableColumn::make('Size'),
                 TableColumn::make('Created'),
             ])
@@ -314,6 +389,7 @@ class Backups extends Page
                 TextEntry::make('name')
                     ->icon(Heroicon::OutlinedArrowDownTray)
                     ->url(fn (string $state): string => route('backups.download', $state)),
+                ...($showKind ? [TextEntry::make('kind_label')] : []),
                 TextEntry::make('size_human'),
                 TextEntry::make('modified_label'),
             ]);

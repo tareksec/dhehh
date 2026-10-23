@@ -2,6 +2,32 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - Advanced backups, Phase 1: a dump that can be trusted every hour
+
+Reason - owner (Bangla): the whole app and the database should be backed up every day, and the database every hour (it holds no images, videos or files, so it is light); asked for a plan building on the early backup work. I read the code and wrote a five-phase plan in the chat (owner approved it: "ঠিক আছে শুরু কর"); this is Phase 1. The owner has **not** answered the plan's six open questions yet (off-site place, retention, "hourly" = a new file each hour, encryption key, alert channel, R2 media), so nothing here depends on them.
+
+What the code review found (all in `CHANGELOG.md` terms): the only schedule was `backup:database` daily at 02:00; the "Auto upload daily" switch is saved but read by nothing; every database backup kept only 10 files (ignoring `BACKUP_RETAIN_FILES`), so hourly backups would have left 10 hours of history and evicted the daily/pre-deploy ones; the MySQL dump was held in memory with a 120 s limit and the password on the command line; no image installs `mysqldump`; nothing recorded or reported a failure; `backup:verify` only knew SQLite.
+
+What changed (Phase 1 only):
+- Backup kinds `hourly | daily | predeploy | manual` in the file name, pruned per kind (`config/backup.php` `database.keep`).
+- MySQL dump streamed through gzip into a `.part` file, renamed only after mysqldump's "Dump completed" line; password via a 0600 option file; `--no-tablespaces`; SHA-256 of the file.
+- `backup_runs` table + `BackupRunRecorder`; Backups page has a **Backup history** section; a scheduled/pre-deploy backup that fails alerts the Super Admins once per run of failures.
+- `backup:database` is a real command (`--kind`, exit code 1 on failure); the daily schedule uses `--kind=daily` and a 30-minute overlap lock (the default 24 h lock would block a day of backups after one killed run).
+- `backup:verify` checks `.sql.gz` dumps (complete, has `migrations`, checksum matches).
+- `Dockerfile` installs `default-mysql-client`; `docs/backup-restore.md` rewritten for kinds, gz restore, retention variables.
+
+Verified here: `BackupRunsTest` (21) + `BackupSystemTest` (11) + translation parity, migration identifier length, ModuleGuard, multi-company isolation, navigation tests pass on PHP 8.4.27; full suite: 2999 passed, 6 skipped, 0 failed (31,996 assertions; run before the last one-line `--default-character-set=utf8mb4` addition, after which the backup, parity and BackupSystem tests were re-run: 34 passed). The new migration also ran cleanly on a real MySQL 8.0.46 database (explicit short index name). The dump was also run end to end against a real local MySQL 8.0.46 with both MySQL's own `mysqldump` and the MariaDB 10.11 client that `default-mysql-client` installs on Debian bookworm (what the `Dockerfile` gets): `caching_sha2_password`, a password full of `" \ # ; $`, Bangla text and a binary column restored with a bare `gunzip -c | mysql` came back identical byte for byte, a wrong password failed cleanly with no file left behind and no password in the message.
+
+Not verified: MySQL **8.4** (production) itself - 8.0.46 was what the sandbox could install; the Docker image build (no Docker daemon here; the `docker-image.yml` workflow builds it); anything on the live server. A first `php artisan backup:database --kind=manual` after the redeploy is the real test.
+
+Found, not fixed (belongs to later phases or needs the owner): (1) the Coolify post-deploy command `deploy:migrate` runs migrations **without** a pre-migrate backup, and `docs/deployment.md`'s "the deploy workflow creates a database backup" describes a server-deploy step that `.github/workflows/deploy.yml` does not have - the `predeploy` kind exists but nothing creates it automatically yet (Phase 2: decide whether `deploy:migrate` should back up first and whether a failed backup may block the deploy); (2) the full app backup still puts `.env` (all secrets) unencrypted in the zip and uploads it to Drive, leaves out `storage/app/private`, and `GoogleDriveBackupService::upload()` loads the whole zip into memory (Phase 3); (3) the Drive folder must be on a Shared Drive or uploads from a service account may fail with "Service Accounts do not have storage quota" (untested).
+
+Needs Bangla review (`lang/bn.json`): "ঘণ্টাভিত্তিক" (Hourly), "ডেপ্লয়ের আগে" (Before deploy), "পুরো অ্যাপ" (Full app), "ডেটাবেজ" (Database), and the two Backups-page sentences (history description, retention description).
+
+Owner / agent still to do (Phase 0, on the live server, in the app's Coolify terminal): `which mysqldump`; `df -h /app/storage | tail -1` (first column `overlay` = backups are deleted on every redeploy); `php artisan schedule:list` and that the Coolify task `php artisan schedule:run` (every minute) exists (the 2026-10-21 note says it was still to be added); database size and the biggest tables. Then redeploy from the `Dockerfile` image and run `php artisan migrate --force`.
+
+Commit status: committed and pushed to the feature branch `ccr-4c1eb24d-2dzxxt` (the branch this session was told to use); not on `main` (needs the owner's approval).
+
 ## 2026-10-22 - PHP security update: production Dockerfile
 
 Reason - owner forwarded Contabo's email about the PHP RCE vulnerabilities CVE-2026-109618 / CVE-2026-109619 and asked whether the server needs an update. I checked the claims on php.net (advisory 2026-10-21; fixed in 8.4.27 / 8.5.12 / 8.3.36 / 8.2.35; PHP-FPM is affected). The owner's ERP container reports `PHP 8.4.2 (built Dec 17 2024)`, so it is vulnerable, and 25 patch releases behind.

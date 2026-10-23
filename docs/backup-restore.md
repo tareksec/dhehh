@@ -6,16 +6,30 @@ Business Dashboard includes database backups, full app backups, backup downloads
 
 | Type | Contents | Location |
 |---|---|---|
-| Database backup | SQLite or MySQL/MariaDB dump | `storage/app/private/backups/database` |
+| Database backup | MySQL/MariaDB dump (`.sql.gz`, compressed) or SQLite file (`.sqlite`) | `storage/app/private/backups/database` |
 | Full app backup | App files plus database backup | `storage/app/private/backups/app` |
 | Google Drive backup | Uploaded full app backup | Configured Drive folder |
+
+Every backup runs under one **kind**, which is the last part of the file name
+(`database-backup-20261023-020000-mysql-daily.sql.gz`):
+
+| Kind | Made by | Kept (default) |
+|---|---|---|
+| `hourly` | the hourly schedule (not switched on yet) | latest 48 |
+| `daily` | the daily schedule at `BACKUP_SCHEDULE_TIME` | latest 30 |
+| `predeploy` | `php artisan backup:database --kind=predeploy`, before an update | latest 10 |
+| `manual` | the **Create Backup** button, or `backup:database` with no kind. Files from before kinds existed count as `manual` | latest 10 |
+
+Each kind is pruned on its own, so a stream of hourly files can never push out
+a daily or pre-deploy backup.
 
 ## Create Database Backup
 
 From CLI:
 
 ```bash
-php artisan backup:database
+php artisan backup:database                      # manual
+php artisan backup:database --kind=predeploy     # before an update
 ```
 
 From the admin panel:
@@ -26,21 +40,33 @@ From the admin panel:
 
 Database backup supports SQLite and MySQL/MariaDB.
 
+For MySQL the server needs the MySQL client tools (`mysqldump`). The production
+`Dockerfile` installs them (`default-mysql-client`); on the old Nixpacks setup
+they are not there and the backup fails with "[mysqldump] was not found". The
+dump is streamed through gzip into a `.part` file and only renamed once it ended
+with mysqldump's "Dump completed" line, so a half-written dump never shows up in
+the list. The database password is given to mysqldump through a temporary
+option file (mode 0600), not on the command line.
+
 Create a database backup before every production update, before running migrations, and before changing server database/storage settings.
 
-For SQLite, verify the newest backup by restoring it into an automatically deleted disposable database:
+Every attempt, successful or not, is listed under **Backup history** on the
+Backups page with its size, checksum (SHA-256) or the reason it failed. A
+scheduled backup that fails is also reported to Super Admins (Deploy Error
+Logs and the bell), once per run of failures, so a failing hourly job does not
+send 24 alerts a day.
+
+## Verify a Backup
 
 ```bash
-php artisan backup:verify
+php artisan backup:verify                                  # the newest backup
+php artisan backup:verify database-backup-YYYYMMDD-HHMMSS-mysql-daily.sql.gz
 ```
 
-Or verify a specific SQLite backup filename:
+- **SQLite:** the backup is restored into an automatically deleted disposable database and integrity-checked.
+- **MySQL dump (`.sql.gz`):** the file is read to the end and must finish with the "Dump completed" line and contain the `migrations` table, and its SHA-256 must still match the one recorded when it was made.
 
-```bash
-php artisan backup:verify database-backup-YYYYMMDD-HHMMSS-sqlite.sqlite
-```
-
-This command never overwrites the configured database. MySQL/MariaDB restore drills should continue to use a separate disposable database/server following the manual procedure below.
+This command never overwrites the configured database. It does **not** load a MySQL dump into a database: a full restore drill into a scratch MySQL database should still be done by hand (manual procedure below) until it is automated.
 
 ## Create Full App Backup
 
@@ -57,10 +83,15 @@ Full app backups require PHP Zip extension.
 Configure retention in `.env`:
 
 ```env
-BACKUP_RETAIN_FILES=10
+BACKUP_KEEP_HOURLY=48
+BACKUP_KEEP_DAILY=30
+BACKUP_KEEP_PREDEPLOY=10
+BACKUP_RETAIN_FILES=10     # manual backups, and full app backups of every kind
 ```
 
-Old backups beyond the retention count are cleaned automatically by the backup services.
+Old backups beyond the retention count of their kind are cleaned automatically by the backup services. At least one file of each kind is always kept.
+
+Other settings: `BACKUP_MYSQLDUMP_BINARY` (default `mysqldump`) and `BACKUP_DUMP_TIMEOUT` (seconds, default 900).
 
 ## Google Drive Upload
 
@@ -96,7 +127,7 @@ php artisan down
 2. Copy the selected backup over the active database file:
 
 ```bash
-cp storage/app/private/backups/database/database-backup-YYYYMMDD-HHMMSS-sqlite.sqlite database/database.sqlite
+cp storage/app/private/backups/database/database-backup-YYYYMMDD-HHMMSS-sqlite-daily.sqlite database/database.sqlite
 ```
 
 3. Clear caches and bring the app back:
@@ -114,11 +145,13 @@ php artisan up
 php artisan down
 ```
 
-2. Import the selected SQL dump:
+2. Import the selected dump (new backups are gzip-compressed; very old `.sql` files are loaded with `mysql ... < file.sql`):
 
 ```bash
-mysql -u DB_USERNAME -p DB_DATABASE < storage/app/private/backups/database/database-backup-YYYYMMDD-HHMMSS-mysql.sql
+gunzip -c storage/app/private/backups/database/database-backup-YYYYMMDD-HHMMSS-mysql-daily.sql.gz | mysql -u DB_USERNAME -p DB_DATABASE
 ```
+
+   The dump sets its own character set, so Bangla text restores correctly without any extra option.
 
 3. Run migrations if the code is newer than the backup:
 

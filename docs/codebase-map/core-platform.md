@@ -1,5 +1,5 @@
 # Core Platform
-> Last checked: 2026-10-21, merge of `ccr-4505e72d-hwaq92` into main (CAPTCHA for a challenged sign-in)
+> Last checked: 2026-10-23, advanced backups Phase 1 on `ccr-4c1eb24d-2dzxxt` (backup kinds, `backup_runs`, streamed gzip MySQL dump)
 
 ## What it does
 The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and four distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated backups to Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
@@ -27,6 +27,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Models/AppSetting.php` | Global system key-value storage with optional string encryption. |
 | `app/Models/DeploymentError.php` | Persistent log of caught deployment, migration, or module runtime errors. |
 | `app/Models/AuditLog.php` | Security audit trail recording model mutations, user actions, and IP addresses. |
+| `app/Models/BackupRun.php` | One backup attempt (scope database/app, kind hourly/daily/predeploy/manual, status, file, size, SHA-256, error). Global, no `company_id`. |
 
 ### Concerns & Scopes
 | Path | What it does |
@@ -45,10 +46,11 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Services/CompanyDataMigrationService.php` | Exports and imports tenant-specific datasets across installations. |
 | `app/Services/CompanyDeletionService.php` | Safely purges or soft-deletes company data while enforcing integrity constraints. |
 | `app/Services/StorageSettingsService.php` | Configures S3, Cloudflare R2, and local filesystem credentials. |
-| `app/Services/BackupSettingsService.php` | Manages scheduled database backup schedules and retention rules. |
-| `app/Services/DatabaseBackupService.php` | Dumps database tables and compresses backups locally. |
+| `app/Services/BackupSettingsService.php` | Google Drive backup settings (admin-configurable, service account JSON encrypted). |
+| `app/Services/DatabaseBackupService.php` | Database backups by kind: SQLite copy or MySQL `mysqldump` streamed through gzip (`.sql.gz`, atomic rename, SHA-256), per-kind `prune()`, `verifyRestore()` for SQLite and `.sql.gz`. |
+| `app/Services/BackupRunRecorder.php` | Wraps a backup in a `backup_runs` row; recording errors never stop a backup; first failure of a scheduled kind alerts Super Admins via `DeploymentErrorReporter`. |
 | `app/Services/GoogleDriveBackupService.php` | Uploads compressed database backups to Google Drive storage. |
-| `app/Services/AppBackupService.php` | Coordinates local backup creation, cleanup, and cloud synchronization. |
+| `app/Services/AppBackupService.php` | Full app zip (files + a database backup of the same kind), count-based cleanup, optional Google Drive upload; records an app run. |
 | `app/Services/AppReleaseStateService.php` | Tracks release versions, deployment tags, and migration readiness. |
 | `app/Services/AppUpdateService.php` | Manages application update checks, Git pulls, and cache refreshing. |
 | `app/Services/AppUpdatePushService.php` | Dispatches deployment update notifications to administrators. |
@@ -96,7 +98,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Filament/Pages/CompanySettings.php` | Settings page for company profile, logo, timezone, currency, and address. |
 | `app/Filament/Pages/CloudStorageSettings.php` | Configures S3/R2 storage disks and credentials. |
 | `app/Filament/Pages/CoolifyDeploymentSettings.php` | Configures Coolify webhook deployment settings. |
-| `app/Filament/Pages/Backups.php` | Interface for manual database backups and download history. |
+| `app/Filament/Pages/Backups.php` | Backups page: Drive settings, full app and database backup lists (with kind), Backup history from `backup_runs`. |
 | `app/Filament/Pages/AppVersions.php` | Shows current system version, commit, and update readiness. |
 | `app/Filament/Pages/ReleaseNotes.php` | Displays published software update release notes to users. |
 | `app/Filament/Auth/AdminLogin.php` | Custom Filament login page integrated with `LoginGate` and company detection. |
@@ -128,12 +130,13 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | Path | What it does |
 | --- | --- |
 | `app/Console/Commands/DeployMigrate.php` | Runs pending database migrations safely during automated deployment pipelines. |
-| `app/Console/Commands/VerifyDatabaseBackup.php` | Verifies backup archive integrity and checks cloud upload status. |
+| `app/Console/Commands/BackupDatabase.php` | `backup:database --connection= --kind=hourly|daily|predeploy|manual`; exit code 1 on failure. |
+| `app/Console/Commands/VerifyDatabaseBackup.php` | `backup:verify`: SQLite restore drill in a disposable file, or completeness + checksum check of a `.sql.gz` dump. |
 | `app/Console/Commands/CutRelease.php` | Automates release tagging, manifest updates, and git commit creation. |
 | `app/Console/Commands/NotifyLatestRelease.php` | Alerts super admins of newly installed application updates. |
 | `app/Console/Commands/MigrateCompanyData.php` | CLI tool to migrate data records across companies. |
 | `app/Console/Commands/MigrateCompanyStorage.php` | CLI tool to transfer physical media between storage disks. |
-| `bootstrap/app.php` | Defines scheduled cron jobs (backups, release notifications, cleanups). |
+| `bootstrap/app.php` | Defines scheduled cron jobs (daily `backup:database --kind=daily` with a 30-minute overlap lock, release notifications, cleanups). |
 
 ### Notifications & Observers
 | Path | What it does |
@@ -157,7 +160,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | --- | --- |
 | `config/app.php` | Core Laravel settings, default timezone, application name, error isolation flags. |
 | `config/auth.php` | Authentication guards and password reset providers for admin, customer, and portal users. |
-| `config/backup.php` | Backup directory paths, dump binaries, disk destinations, and schedule time. |
+| `config/backup.php` | Daily schedule time, per-kind retention (`database.keep`), `mysqldump` binary and timeout, app-backup paths, Google Drive. |
 | `config/filesystems.php` | Disks definition (`local`, `public`, `company_media`, `s3`). |
 | `config/login_protection.php` | Rates, budgets, device cookie tokens, and lockout thresholds for `LoginGate`. |
 | `config/release.php` | Current release version metadata and update check endpoints. |
@@ -169,6 +172,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 - `database/migrations/*create_user_roles_table.php`
 - `database/migrations/*create_app_settings_table.php`
 - `database/migrations/*create_deployment_errors_table.php`
+- `database/migrations/*create_backup_runs_table.php`
 - `database/migrations/*create_audit_logs_table.php`
 - `database/migrations/*add_company_id_to_*`
 
@@ -188,6 +192,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `tests/Feature/LoginGateTest.php` | Verifies pre-hash rate limiting, device cookies, and lockout rules. |
 | `tests/Feature/ModuleGuardTest.php` | Asserts that caught component exceptions return fallbacks and avoid 500 status codes. |
 | `tests/Feature/BackupSystemTest.php` | Tests database dump generation and cloud upload workflows. |
+| `tests/Feature/BackupRunsTest.php` | Tests backup kinds and per-kind pruning, `backup_runs` recording and failure alerts, the streamed gzip MySQL dump (fake dumper + a real process), `.sql.gz` verification, the commands, the schedule lock and the history on the Backups page. |
 | `tests/Feature/ReleaseNotesTest.php` | Tests release notes rendering and version display. |
 | `tests/Feature/ReleaseCutterTest.php` | Tests semantic release creation script. |
 | `tests/Feature/ReleaseNotificationTest.php` | Tests notification dispatching when updates complete. |
@@ -213,6 +218,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 - `user_roles`: Custom role permissions table. Key columns: `id`, `name`, `slug`, `permissions` (JSON), `is_active`, `created_at`, `updated_at`.
 - `app_settings`: Global key-value store. Key columns: `id`, `key` (unique), `value`, `is_encrypted`, `created_at`, `updated_at`.
 - `deployment_errors`: Module and deployment crash tracker. Key columns: `id`, `source`, `message`, `details`, `context` (JSON), `occurred_at`, `created_at`, `updated_at`.
+- `backup_runs`: Backup attempts (global). Key columns: `id`, `scope` (database|app), `kind` (hourly|daily|predeploy|manual), `status` (running|success|failed), `filename`, `size_bytes`, `sha256`, `error`, `started_at`, `finished_at`, `created_at`, `updated_at`.
 - `audit_logs`: User activity and data mutation audit log. Key columns: `id`, `company_id`, `user_id`, `action`, `auditable_type`, `auditable_id`, `old_values` (JSON), `new_values` (JSON), `ip_address`, `user_agent`, `created_at`, `updated_at`.
 
 ## Rules that matter
@@ -224,6 +230,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 - **Login Gate Protection**: All authentication attempts must be evaluated by `LoginGate::begin` prior to invoking bcrypt hashes to thwart DDoS credential stuffing. Enforced by `app/Services/LoginGate.php` and `app/Filament/Auth/AdminLogin.php`.
 - **Software License Key Format**: License keys must match the regex `^ZZERP-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$`. Enforced by `app/Services/LicenseActivationService.php`.
 - **Documentation Discrepancy (Filament Version)**: Legacy documents (e.g. `PROJECT_GUIDE.md`) refer to Filament 4; the actual codebase runs Filament 5 (`app/Providers/Filament/AdminPanelProvider.php`).
+- **Backups**: a database backup's kind is the last part of its file name; each kind is pruned on its own (`config/backup.php` `database.keep`), and a file with no kind counts as `manual`. A backup is only listed once complete (streamed to `.part`, renamed after mysqldump's "Dump completed" line). Recording in `backup_runs` must never stop a backup (the table may not exist yet before `migrate`). Enforced by `DatabaseBackupService` and `BackupRunRecorder`.
 
 ## Links to other modules
 - **catalog-inventory.md**: All catalog and inventory models rely on `BelongsToCompany` and `CompanyScope`.

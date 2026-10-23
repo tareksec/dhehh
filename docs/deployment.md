@@ -213,7 +213,7 @@ In production, a failing sidebar badge, widget, render hook or page does not tak
 ```bash
 cd /path/to/project
 php artisan down --retry=60
-php artisan backup:database
+php artisan backup:database --kind=predeploy
 git pull origin main
 composer install --no-dev --prefer-dist --no-interaction --no-progress
 npm ci
@@ -441,7 +441,7 @@ php artisan db:wipe
 Before every production update:
 
 1. Confirm the current code version and the target `APP_VERSION`.
-2. Create a database backup with `php artisan backup:database`.
+2. Create a database backup with `php artisan backup:database --kind=predeploy`.
 3. Run only reviewed migrations with `php artisan migrate --force`.
 4. Verify admin login, dashboard totals, recent orders, purchases, payments, and stock after deploy.
 5. Update `CHANGELOG.md` and GitHub release notes for the deployed version.

@@ -3541,5 +3541,16 @@
     "Order WhatsApp card settings saved": "Order WhatsApp card settings saved",
     "Choose a company first: the order WhatsApp card belongs to one company.": "Choose a company first: the order WhatsApp card belongs to one company.",
     "Items ordered (product names with quantities)": "Items ordered (product names with quantities)",
-    "Settings": "Settings"
+    "Settings": "Settings",
+    "Started": "Started",
+    "Success": "Success",
+    "Full app": "Full app",
+    "Database": "Database",
+    "Hourly": "Hourly",
+    "Daily": "Daily",
+    "Before deploy": "Before deploy",
+    "Backup history": "Backup history",
+    "The last 20 backup attempts, newest first. A failed attempt shows the reason.": "The last 20 backup attempts, newest first. A failed attempt shows the reason.",
+    "No backups have been recorded yet.": "No backups have been recorded yet.",
+    "Database backups are stored privately. Each type (hourly, daily, before deploy, manual) keeps its own latest files, so one type never pushes out another.": "Database backups are stored privately. Each type (hourly, daily, before deploy, manual) keeps its own latest files, so one type never pushes out another."
 }

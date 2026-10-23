@@ -17,8 +17,10 @@ FROM php:${PHP_VERSION}-fpm-bookworm AS php-base
 COPY --from=ghcr.io/mlocati/php-extension-installer:2 /usr/bin/install-php-extensions /usr/local/bin/
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# default-mysql-client provides `mysqldump`, which the database backups
+# (App\Services\DatabaseBackupService) need; on Debian it is the MariaDB client.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl gosu nginx procps supervisor unzip \
+    && apt-get install -y --no-install-recommends ca-certificates curl default-mysql-client gosu nginx procps supervisor unzip \
     && install-php-extensions bcmath exif gd imagick intl opcache pcntl pdo_mysql zip \
     && rm -rf /var/lib/apt/lists/* /tmp/* \
     && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"

@@ -4,6 +4,30 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Backup history on Settings → Backups.** Every backup attempt, database or full app, is now listed with its type, size, checksum (SHA-256) and, when it failed, the reason. Owner request 2026-10-23 (first step of the advanced backup plan: hourly database backups, daily full backups).
+- **Backups come in types: hourly, daily, before deploy and manual.** The type is shown next to each database backup and is part of the file name. Each type keeps its own latest files (default 48 hourly, 30 daily, 10 before deploy, 10 manual), so a stream of hourly backups can no longer push out a daily or pre-deploy one.
+- **A failed scheduled backup now tells the Super Admins.** It appears under Deploy Error Logs and in the bell, once for each run of failures, so a job that keeps failing does not send an alert every hour.
+- **`backup:verify` now also checks MySQL backups.** It reads the compressed dump to the end, makes sure it finished and holds the migrations table, and compares its checksum with the one recorded when it was made. (Loading a dump into a scratch MySQL database is a later step.)
+
+### Fixed
+
+- **The server images did not include `mysqldump`, which the MySQL database backup needs.** Neither the Nixpacks setup nor the new production `Dockerfile` installed it; the `Dockerfile` now installs the MySQL client tools. Until the app runs from this image (or `mysqldump` is installed another way), `php artisan backup:database` fails with a message saying what is missing. Whether the live server already had it is for the owner to check (`which mysqldump` in the app's Coolify terminal).
+- **Database backups are safer and smaller.** The dump is now compressed (`.sql.gz`) and written piece by piece instead of being held in memory, so a large database no longer exhausts memory or hits the old 2-minute limit (now 15 minutes). A dump that stopped half-way is discarded instead of being kept as a backup. The database password is no longer on the `mysqldump` command line, where other programs on the server could read it, and the dump no longer asks MySQL 8 for the "PROCESS" privilege (which printed an access-denied message on every run).
+- **The number of backups kept ignored the setting.** Every database backup kept only the latest 10 files whatever `BACKUP_RETAIN_FILES` said, which would have left only 10 hours of history once backups run every hour. Retention is now per type (see above).
+- **One backup that dies in the middle could stop the daily backup for a day.** The scheduler's overlap lock now expires after 30 minutes instead of 24 hours.
+
+### Technical Notes
+
+- New table `backup_runs` (migration `2026_10_23_100000_create_backup_runs_table`, global like `deployment_errors`: no `company_id`, not in `MultiCompanyIsolationTest`) and model `App\Models\BackupRun` (scope database/app, kind, status, filename, size, sha256, error, started/finished). `App\Services\BackupRunRecorder` wraps each backup: a recording problem (for example the table not existing yet when the pre-deploy backup runs before `migrate`) is only logged and never stops the backup; a run left "running" for longer than the dump timeout + 5 minutes is closed as failed when the next one starts; failures of non-manual kinds go to `DeploymentErrorReporter` (source `backup:{scope}:{kind}`) unless the previous finished run of that kind also failed.
+- `DatabaseBackupService`: `create($connection, $kind)`; file name `database-backup-{Ymd-His}-{connection}-{kind}.{sqlite|sql.gz}` (`kindOf()` reads it back; a name without a kind counts as manual); `prune()` replaces `cleanup()`; `verifyRestore()` also handles `.sql.gz`. mysqldump runs with `--defaults-extra-file` (a 0600 temp file), `--single-transaction --quick --skip-lock-tables --no-tablespaces --hex-blob`; no `--routines/--events` because the app has none and they need extra privileges. `AppBackupService::create(bool $upload, string $kind)` records an app run and its database run with the same kind and returns the zip's SHA-256.
+- `backup:database` is now `App\Console\Commands\BackupDatabase` (`--connection`, `--kind=hourly|daily|predeploy|manual`, exit code 1 on failure); the daily schedule runs it with `--kind=daily` and `withoutOverlapping(30)`. The hourly and full-app schedules, off-site copy of database dumps, encryption and a restore drill into a scratch MySQL database are the next steps of the plan and are **not** switched on by this change.
+- New env/config: `BACKUP_KEEP_HOURLY`, `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_PREDEPLOY` (manual keeps using `BACKUP_RETAIN_FILES`), `BACKUP_MYSQLDUMP_BINARY`, `BACKUP_DUMP_TIMEOUT` (`config/backup.php`, `database.*`).
+- Production: needs a rebuild/redeploy from the `Dockerfile` for `mysqldump` (the old Nixpacks image has none), `php artisan migrate --force` for `backup_runs`, and the scheduler (`php artisan schedule:run` every minute) running for any scheduled backup to happen.
+- Checked against a real MySQL 8.0.46 with the MariaDB 10.11 client that `default-mysql-client` installs on Debian bookworm: dump, `backup:verify`, restore with a bare `mysql < dump` (Bangla text and binary columns identical byte for byte), a wrong password failing cleanly. Not yet against MySQL 8.4, the production version.
+- Tests: new `BackupRunsTest` (21 cases); `BackupSystemTest` updated for `prune()`. New strings are in `lang/en.json` and `lang/bn.json`.
+
 ## [2.100.1] - 2026-10-22
 
 **Release type:** Security Update

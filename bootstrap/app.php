@@ -27,9 +27,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withSchedule(function (Schedule $schedule): void {
-        $schedule->command('backup:database')
+        // The overlap lock expires after 30 minutes (a dump stops at 15, see
+        // backup.database.timeout). The default lock lasts 24 hours, so one run
+        // killed by a container restart would block every backup for a day.
+        $schedule->command('backup:database --kind=daily')
             ->dailyAt((string) config('backup.schedule_time', '02:00'))
-            ->withoutOverlapping()
+            ->withoutOverlapping(30)
             ->onOneServer();
         $schedule->command('storefront:send-abandoned-cart-reminders')
             ->hourly()

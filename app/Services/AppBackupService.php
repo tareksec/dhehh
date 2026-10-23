@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\BackupRun;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
@@ -12,9 +13,19 @@ class AppBackupService
     public function __construct(
         protected DatabaseBackupService $databases,
         protected GoogleDriveBackupService $googleDrive,
+        protected BackupRunRecorder $runs,
     ) {}
 
-    public function create(bool $uploadToGoogleDrive = false): array
+    public function create(bool $uploadToGoogleDrive = false, string $kind = BackupRun::KIND_MANUAL): array
+    {
+        return $this->runs->record(
+            BackupRun::SCOPE_APP,
+            $kind,
+            fn (): array => $this->createArchive($uploadToGoogleDrive, $kind),
+        );
+    }
+
+    protected function createArchive(bool $uploadToGoogleDrive, string $kind): array
     {
         if (! class_exists(ZipArchive::class)) {
             throw new RuntimeException('PHP Zip extension is required for full app backups.');
@@ -26,7 +37,8 @@ class AppBackupService
 
         File::ensureDirectoryExists(dirname($absolutePath));
 
-        $databaseBackup = $this->databases->create(config('backup.app.database_connection'));
+        // The database dump made here prunes its own kind (DatabaseBackupService::create).
+        $databaseBackup = $this->databases->create(config('backup.app.database_connection'), $kind);
         $zip = new ZipArchive();
 
         if ($zip->open($absolutePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
@@ -41,10 +53,10 @@ class AppBackupService
 
         $zip->close();
 
-        app(DatabaseBackupService::class)->cleanup((int) config('backup.retention', 10));
         $this->cleanup((int) config('backup.retention', 10));
 
         $backup = $this->fileDetails($relativePath);
+        $backup['sha256'] = hash_file('sha256', $absolutePath);
 
         if ($uploadToGoogleDrive) {
             $backup['google_drive'] = $this->googleDrive->upload($absolutePath, $filename);

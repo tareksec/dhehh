@@ -75,7 +75,7 @@ class BackupSystemTest extends TestCase
             touch(Storage::disk('local')->path($path), now()->subMinutes(12 - $index)->timestamp);
         }
 
-        app(DatabaseBackupService::class)->cleanup();
+        app(DatabaseBackupService::class)->prune();
 
         $this->assertCount(10, app(DatabaseBackupService::class)->all());
     }
