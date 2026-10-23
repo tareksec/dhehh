@@ -58,7 +58,9 @@ The QA follow-up run (18:52) passed J (old data import: samples, a correct file,
 
 Main (v2.110.0) merged into the branch first; no conflicts.
 
-Commit status: pending.
+Full plain `php artisan test` (PHP 8.4): 3,152 passed, 5 skipped, 0 failed. No frontend assets changed.
+
+Commit status: committed (0ff1bf6f) and pushed to `feature/trade-portal-reports`; not on `main` (waits for the owner's approval).
 
 ## 2026-10-23 - Trade Portal: Tiro Bangla, desktop menu, sign-in page; merge to main
 
