@@ -2,6 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 (next) - Login codes (OTP) failed while order status texts worked
+
+Owner (Bangla), with a screenshot of Logs → SMS: "OTP messages do not come. Order status messages come." The screenshot showed two `Not sent: gateway` rows (15:08, 15:25) of kind "Other messages (login codes...)" for 01728714614, reason "The SMS gateway URL has no {phone} or no {message}", and the earlier test SMS (13:16) as Sent.
+
+**Cause:** SMS settings are saved per site (Blade storefront, Next.js site). Order texts pick the order's site, then the primary site, then the other, by "has a gateway", so they used the fixed one. A login code uses the site the visitor is on (the Blade storefront login, the reseller panel's forgot-password), and that site's setting still had the example words (`number=Receiver`). Nothing in the owner's view said which site was broken: the dashboard warning read only the primary site.
+
+**What changed:** `StorefrontNotificationService::workingGateway()`: a site whose saved gateway address cannot work now sends through the company's other site that has a working one (same rule order texts already followed). A site with no gateway keeps SMS off. `sendSmsDetailed(..., ownGatewayOnly: true)` is used by **Send test SMS**, so the test still checks the site being edited. `SmsTemplateService::gatewayFor()` prefers a site that can send. The SMS Log reason now names the site. I could not read the production database, so the two-site cause is inferred from the screenshot, not confirmed: if the company has only one site, the broken address is on that one and Save on Integrations fixes it (the page tidies it on save).
+
+**Needs Bangla review (lang/bn.json):** the changed key "The SMS gateway URL of the site named in the brackets has no {phone} or no {message}..." (the old key without "of the site named in the brackets" is gone).
+
+**Verified:** `SmsDashboardTest` (+3: fallback both ways, test button does not borrow, gatewayFor prefers a usable site), SMS and OTP related tests; full `php artisan test` before the push.
+
+Commit status: committed on `claude/order-management-features-nafks7`; not on `main`.
+
 ## 2026-10-23 (later still) - The SMS gateway address follows the API key and sender ID boxes
 
 Owner (Bangla): set it up so that typing the API key and the sender ID in their boxes updates the URL, the way the phone number and the message are filled in.

@@ -74,6 +74,37 @@ class StorefrontNotificationService
         return filled(data_get($setting->notification_credentials, 'sms_api_url'));
     }
 
+    /** Whether the gateway address saved on this site can send: it has {phone} and {message} to fill in. */
+    public function smsUsable(StorefrontSetting $setting): bool
+    {
+        $template = trim((string) data_get($setting->notification_credentials, 'sms_api_url'));
+
+        return $template !== '' && self::smsTemplateMissing($template) === [];
+    }
+
+    /**
+     * The site whose gateway really sends for $setting. A site whose own gateway address is saved but cannot work
+     * (the gateway's example words left in it, no {phone}) sends through the company's other site that has a working
+     * one, so a login code is not lost because one of two sites was never fixed. A site with no gateway at all,
+     * and a site whose gateway works, keep their own.
+     */
+    public function workingGateway(StorefrontSetting $setting): StorefrontSetting
+    {
+        if (! $this->smsConfigured($setting) || $this->smsUsable($setting)) {
+            return $setting;
+        }
+
+        $companyId = (int) $setting->company_id;
+
+        foreach ([StorefrontSetting::primaryFor($companyId), StorefrontSetting::bladeFor($companyId), StorefrontSetting::nextjsFor($companyId)] as $other) {
+            if ($other !== null && ! $other->is($setting) && $this->smsUsable($other)) {
+                return $other;
+            }
+        }
+
+        return $setting;
+    }
+
     /**
      * Sends one SMS for a caller that keeps no SMS log of its own (a login or recovery code, a reminder, a
      * broadcast message) and counts it for the SMS dashboard.
@@ -142,14 +173,19 @@ class StorefrontNotificationService
      * `request` is the gateway address that was called with the API key and the text hidden, so a refused number or
      * sender ID can be checked against what was really sent.
      *
+     * A site whose own gateway address cannot work sends through the company's other working one (workingGateway());
+     * `$ownGatewayOnly` turns that off, for the "Send test SMS" button that must test the site being edited.
+     *
      * @return array{ok: bool, reason: ?string, code: ?int, meaning: ?string, detail: ?string, segments: int, request: ?string}
      */
-    public function sendSmsDetailed(StorefrontSetting $setting, string $phone, string $message): array
+    public function sendSmsDetailed(StorefrontSetting $setting, string $phone, string $message, bool $ownGatewayOnly = false): array
     {
+        $gateway = $ownGatewayOnly ? $setting : $this->workingGateway($setting);
+
         return [
-            ...$this->deliverSms($setting, $phone, $message),
+            ...$this->deliverSms($gateway, $phone, $message),
             'segments' => SmsSegments::count($message),
-            'request' => $this->smsRequestPreview($setting, $phone),
+            'request' => $this->smsRequestPreview($gateway, $phone),
         ];
     }
 
@@ -213,7 +249,7 @@ class StorefrontNotificationService
         $missing = self::smsTemplateMissing($urlTemplate);
 
         if ($missing !== []) {
-            return ['ok' => false, 'reason' => 'bad_gateway_url', 'code' => null, 'meaning' => null, 'detail' => 'missing '.implode(', ', $missing)];
+            return ['ok' => false, 'reason' => 'bad_gateway_url', 'code' => null, 'meaning' => null, 'detail' => $setting->siteTypeLabel().': missing '.implode(', ', $missing)];
         }
 
         // The gateway would answer "User Id not found" for an empty key; say what is really wrong.

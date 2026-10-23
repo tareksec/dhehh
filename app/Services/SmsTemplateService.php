@@ -374,14 +374,20 @@ class SmsTemplateService
 
     /**
      * The storefront settings row whose SMS gateway sends this company's
-     * messages: the preferred one (an order's own site) when it has a gateway,
+     * messages: the preferred one (an order's own site) when it has a working gateway,
      * else the primary site, else the other.
      */
     public function gatewayFor(int $companyId, ?StorefrontSetting $preferred = null): ?StorefrontSetting
     {
-        foreach ([$preferred, StorefrontSetting::primaryFor($companyId), StorefrontSetting::bladeFor($companyId), StorefrontSetting::nextjsFor($companyId)] as $setting) {
-            if ($setting !== null && $this->notifications->smsConfigured($setting)) {
-                return $setting;
+        $candidates = array_filter([$preferred, StorefrontSetting::primaryFor($companyId), StorefrontSetting::bladeFor($companyId), StorefrontSetting::nextjsFor($companyId)]);
+
+        // A site whose saved address can send wins; one whose address cannot (the gateway's example words left
+        // in it) is used only when no site has a working one, so the SMS log can say what is wrong.
+        foreach ([fn (StorefrontSetting $setting): bool => $this->notifications->smsUsable($setting), fn (StorefrontSetting $setting): bool => $this->notifications->smsConfigured($setting)] as $works) {
+            foreach ($candidates as $setting) {
+                if ($works($setting)) {
+                    return $setting;
+                }
             }
         }
 

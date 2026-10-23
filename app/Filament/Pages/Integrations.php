@@ -908,7 +908,7 @@ class Integrations extends Page
         // A masking sender ID (letters) is accepted only for Bangla text, so the test is written in Bangla for it.
         $language = BulkSmsBdPolicy::isMaskingSender(data_get($setting->notification_credentials, 'sms_sender_id')) ? 'bn' : app()->getLocale();
         $message = BulkSmsBdPolicy::clean(__('SMS test from :company. Your SMS gateway works.', ['company' => $company->name], $language));
-        $result = $notifications->sendSmsDetailed($setting, $phone, $message);
+        $result = $notifications->sendSmsDetailed($setting, $phone, $message, ownGatewayOnly: true);
 
         $logs = app(SmsLogService::class);
         $logs->finish(
