@@ -2,19 +2,25 @@
 
 **Release type:** Patch/Fix Update
 
-### Fixed
-
-- **Login codes (OTP) did not arrive while order status texts did.** Owner report 2026-10-23, with the SMS Log showing "The SMS gateway URL has no {phone} or no {message}" for the owner's own number. A company with two sites (the Blade storefront and the Next.js site) keeps one SMS gateway setting per site; order texts used the working one, but a login code asked for on the other site used that site's setting, which still had the gateway's example words in it. A site whose saved gateway address cannot work now sends through the company's other site that has a working one (`StorefrontNotificationService::workingGateway()`), as order texts already did, so no login, recovery or reminder text is lost to a site that was never fixed. A site with no gateway at all keeps SMS off, and **Send test SMS** still tests only the site being edited. The SMS Log now names the site in the reason, for example "(Blade storefront (reseller store): missing {phone}, {message})", and the SMS Dashboard reads the price and balance from a site that can send.
-
 ### Changed
 
 - **Settings → Amazon SES: removing a domain or address from the AWS account is for a super admin only.** Owner decision 2026-10-23. Until now a company's own staff could remove that company's own domains; a removed domain stops email for every company that sends from it, and the AWS account is shared, so the button now shows to super admins only. Everyone else sees the list, can add a domain or address, and reads one line saying only a super admin can remove one. A request crafted by hand is refused on the server before any call to Amazon, even for the company's own domain.
 
 ### Technical Notes
 
-- `StorefrontNotificationService::smsUsable()` (address saved and has `{phone}` and `{message}`) and `workingGateway()` (the site itself, else the company's primary / Blade / Next.js site that is usable); `sendSmsDetailed()` takes `ownGatewayOnly` (the test button passes it) and sends through `workingGateway()` otherwise. `SmsTemplateService::gatewayFor()` prefers a usable site and falls back to a configured-but-broken one only when none works, so the log can still say what is wrong. The `bad_gateway_url` detail now starts with the site's label. Tests in `SmsDashboardTest`. No migrations.
 - `AmazonSes::canRemoveDomains()` (was `canRemoveOtherDomains()`) is the single check, used by the view and by the `deleteIdentity` action; the own-domain test `isOwnIdentity()` stays, but only for grouping the list. `AmazonSesPageTest` covers a settings manager (no button, both removals refused, no AWS call) and a super admin (button, both removals go through). Lang: one new key, one replaced.
 
+## [2.112.1] - 2026-10-23
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Login codes (OTP) did not arrive while order status texts did.** Owner report 2026-10-23, with the SMS Log showing "The SMS gateway URL has no {phone} or no {message}" for the owner's own number. A company with two sites (the Blade storefront and the Next.js site) keeps one SMS gateway setting per site; order texts used the working one, but a login code asked for on the other site used that site's setting, which still had the gateway's example words in it. A site whose saved gateway address cannot work now sends through the company's other site that has a working one (`StorefrontNotificationService::workingGateway()`), as order texts already did, so no login, recovery or reminder text is lost to a site that was never fixed. A site with no gateway at all keeps SMS off, and **Send test SMS** still tests only the site being edited. The SMS Log now names the site in the reason, for example "(Blade storefront (reseller store): missing {phone}, {message})", and the SMS Dashboard reads the price and balance from a site that can send.
+
+### Technical Notes
+
+- `StorefrontNotificationService::smsUsable()` (address saved and has `{phone}` and `{message}`) and `workingGateway()` (the site itself, else the company's primary / Blade / Next.js site that is usable); `sendSmsDetailed()` takes `ownGatewayOnly` (the test button passes it) and sends through `workingGateway()` otherwise. `SmsTemplateService::gatewayFor()` prefers a usable site and falls back to a configured-but-broken one only when none works, so the log can still say what is wrong. The `bad_gateway_url` detail now starts with the site's label. Tests in `SmsDashboardTest`. No migrations.
 ## [2.112.0] - 2026-10-23
 
 **Release type:** Minor Feature Update
