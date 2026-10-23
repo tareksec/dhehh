@@ -4,6 +4,17 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **The reseller landing page could come up with no layout on a phone.** Owner report 2026-10-23 (a screenshot of reseller.zamzamint.com with an enormous logo, the language switch shown twice and no spacing). The page took its layout classes from the site-wide `app.css`, which gets a new file name on every deploy; when that one file did not load, the page's own stylesheet still did, so the colours and borders showed but the layout fell apart. The landing page now carries its **own** stylesheet with exactly the layout classes it uses (24 KB, 6 KB compressed, instead of the 252 KB site-wide file), so it no longer depends on `app.css` at all.
+- **The landing page scrolled sideways on a phone.** At phone widths a long line (the store address in the "Your own store" picture) pushed one column about 54 px wider than the screen, so the browser zoomed the whole page out. Every grid on the page and in the website footer now starts as one column that may shrink, so long text is cut with "…" or wraps. Checked at 280, 320, 360, 375, 390, 412, 600, 768, 1024 and 1280 px, in English and in Bangla: no sideways scroll at any of them.
+
+### Technical Notes
+
+- `resources/css/reseller-landing.css` starts with `@import 'tailwindcss' source(none);` and three `@source` lines (the guide view, `reseller/partials/*.blade.php` and the shared social icon partial); `guide.blade.php` loads only this file through `@vite`. A new class in another view that the landing includes needs that view added to those lines. The grids use `grid-cols-1` as the base and `minmax(0, …)` for the hero's two columns. Tests (`ResellerLandingPageTest`): the page links its own stylesheet and not `app.css`, every view it includes is scanned, and every grid has a base column count.
+
 ## [2.104.0] - 2026-10-23
 
 **Release type:** Minor Feature Update

@@ -2,10 +2,17 @@
  * The public reseller landing page (resources/views/reseller/guide.blade.php),
  * drawn in the neo-brutalist style the owner chose on 2026-10-22: flat bright
  * colours, thick ink borders, hard offset shadows that "press" on click, big
- * heavy headlines. It loads after app.css, whose utility classes it builds on.
- * These rules are not in a cascade layer, so they win over Tailwind's utilities
- * (which are): never put a utility that fights a .nb-* rule (display, background,
- * border) on the same element; wrap it instead.
+ * heavy headlines, on top of Tailwind's utility classes. These rules are not in a
+ * cascade layer, so they win over Tailwind's utilities (which are): never put a
+ * utility that fights a .nb-* rule (display, background, border) on the same
+ * element; wrap it instead.
+ *
+ * The page carries its own Tailwind build, scanning only the landing views, and does
+ * not load app.css (owner report 2026-10-23: on a phone the page came up with no layout
+ * at all, because the global app.css - rebuilt, with a new file name, on every deploy -
+ * did not load while this file did). It is a small public page, so a smaller file also
+ * helps on a slow mobile connection. A class used in a new landing view needs that view
+ * listed in the @source lines below.
  *
  * The whole page is set in Anek Bangla (owner request 2026-10-22), for Bangla and
  * English text alike: a variable font (weights 100-800, SIL OFL 1.1, see
@@ -13,6 +20,11 @@
  * blocks rendering. The browser fetches only the Bengali or Latin file the page
  * actually needs.
  */
+
+@import 'tailwindcss' source(none);
+@source '../views/reseller/guide.blade.php';
+@source '../views/reseller/partials/*.blade.php';
+@source '../views/storefront/partials/social-icon.blade.php';
 
 @font-face {
     font-family: 'Anek Bangla';

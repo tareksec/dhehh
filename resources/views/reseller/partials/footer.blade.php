@@ -39,7 +39,7 @@
     })->values()->all())->filter()->values();
 @endphp
 <footer data-reseller-footer style="background-color: {{ $footer['background'] }}" @class(['dark' => $dark])>
-    <div class="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:[grid-template-columns:var(--footer-columns)]" style="--footer-columns: {{ $columns->count() > 1 ? $footer['template'] : '1fr' }}">
+    <div class="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:[grid-template-columns:var(--footer-columns)]" style="--footer-columns: {{ $columns->count() > 1 ? $footer['template'] : '1fr' }}">
         @foreach ($columns as $column)
             <div class="min-w-0 space-y-5">
                 @foreach ($column as $block)
