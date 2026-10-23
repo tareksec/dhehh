@@ -2,6 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - Test SMS "1001 Invalid Number" with the new API key
+
+Owner (Bangla, with a phone screenshot of the SMS Log): after connecting the new API, the Send test SMS button with their own number says the number is invalid.
+
+**What the log shows:** 10:17 code 1032 (IP not whitelisted), so the key is now accepted (the earlier 1011 is gone); 10:19, after the whitelist change, code 1001 Invalid Number for both `01728714614` and `8801728714614`. The system turns both into `8801728714614`, so the number itself is sent in the right form. Both forms failing the same way points at the saved URL template. My best guess (I cannot see the owner's URL): BulkSMSBD's example reads `number=88017XXXXXXXX`; replacing only `017XXXXXXXX` with `{phone}` leaves `number=88{phone}`, i.e. `888801...`.
+
+**Fix:** an `88` or `880` right before `{phone}` in the template is no longer repeated. **Send test SMS** now shows the gateway address that was called (number and sender ID visible, API key and text hidden) when the gateway refuses, so a wrong template is visible at once. If the owner's URL is something else and 1001 stays, that preview will show what is wrong (or the number really is not valid for that operator on that account; then ask BulkSMSBD support).
+
+**Needs Bangla review (lang/bn.json):** the new 1001 advice and "যা পাঠানো হয়েছিল (key ও লেখা লুকানো)".
+
+**Verified:** `SmsDashboardTest` (+2, all nine number/template combinations send `number=8801728714614`), `SmsLogTest`, `IntegrationsPageTest`, `TranslationParityTest`. Full `php artisan test` before the push.
+
+Commit status: committed to `claude/order-management-features-nafks7`; not on `main` until the owner says so.
+
 ## 2026-10-23 - SMS Dashboard (counts, cost, BulkSMSBD balance)
 
 Owner (Bangla): can a dashboard be made for the SMS gateway, with how many SMS came and went, what it cost, and recharge from the dashboard, so nobody has to log in to BulkSMSBD and everything is controlled from here?

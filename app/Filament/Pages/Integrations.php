@@ -889,6 +889,7 @@ class Integrations extends Page
                 $result['reason'] !== null ? (SmsLogService::reasonLabels()[$result['reason']] ?? null) : null,
                 collect([$result['code'], $result['meaning'] ?? $result['detail']])->filter()->implode(' - '),
                 StorefrontNotificationService::smsGatewayHint($result['code']),
+                filled($result['request']) ? __('What was sent (key and text hidden): :request', ['request' => $result['request']]) : null,
             ])->filter()->implode(' '))
             ->danger()
             ->persistent()

@@ -3638,7 +3638,6 @@
     "A masking sender ID sends Bangla text only. Write this message in Bangla on SMS Templates, or use a numeric sender ID.": "মাস্কিং সেন্ডার আইডিতে শুধু বাংলা লেখা যায়। SMS টেমপ্লেটে এই মেসেজ বাংলায় লিখুন, অথবা নম্বর-সেন্ডার আইডি ব্যবহার করুন।",
     "Add this server's IP address to the BulkSMSBD whitelist, or switch the IP whitelist off.": "এই সার্ভারের IP ঠিকানা BulkSMSBD-র whitelist-এ যোগ করুন, অথবা IP whitelist বন্ধ করুন।",
     "Your BulkSMSBD account needs attention. Contact BulkSMSBD support.": "আপনার BulkSMSBD অ্যাকাউন্টে সমস্যা আছে। BulkSMSBD সাপোর্টের সাথে যোগাযোগ করুন।",
-    "The phone number is not valid.": "ফোন নম্বরটি সঠিক নয়।",
     "A required value is missing in the gateway URL. Use the template shown in the URL box.": "গেটওয়ে ইউআরএলে একটি প্রয়োজনীয় মান নেই। ইউআরএল বক্সে দেখানো টেমপ্লেট ব্যবহার করুন।",
     "The SMS API key is empty. Enter it in Integrations → SMS Gateway → SMS API key and save.": "SMS API কী ফাঁকা। ইন্টিগ্রেশনস → SMS Gateway → SMS API key-তে বসিয়ে সেভ করুন।",
     "Nothing logged yet": "এখনো কিছু লগ হয়নি",
@@ -3700,5 +3699,7 @@
     "What one SMS part costs you at BulkSMSBD (a Bangla or long message takes more than one part). Used only to estimate the cost on the SMS Dashboard.": "BulkSMSBD-তে এক পার্ট SMS-এ আপনার কত খরচ হয় (বাংলা বা লম্বা মেসেজ একের বেশি পার্ট নেয়)। শুধু SMS ড্যাশবোর্ডে আনুমানিক খরচ দেখাতে ব্যবহার হয়।",
     "Wrong key or sender ID, no balance, an invalid number...": "ভুল key বা সেন্ডার আইডি, ব্যালেন্স নেই, ভুল নম্বর...",
     "refused": "ফিরিয়ে দিয়েছে",
-    "sent": "পাঠানো হয়েছে"
+    "sent": "পাঠানো হয়েছে",
+    "The gateway says the phone number is not valid. The system sends it as 8801XXXXXXXXX, so in the gateway URL write number={phone} with nothing in front of {phone}. Check the number itself too.": "গেটওয়ে বলছে ফোন নম্বরটি সঠিক নয়। সিস্টেম নম্বরটি 8801XXXXXXXXX ফরম্যাটে পাঠায়, তাই গেটওয়ে URL-এ number={phone} লিখুন, {phone}-এর আগে কিছু রাখবেন না। নম্বরটিও একবার মিলিয়ে দেখুন।",
+    "What was sent (key and text hidden): :request": "যা পাঠানো হয়েছিল (key ও লেখা লুকানো): :request"
 }

@@ -109,7 +109,7 @@ class StorefrontNotificationService
             1012 => __('A masking sender ID sends Bangla text only. Write this message in Bangla on SMS Templates, or use a numeric sender ID.'),
             1032 => __('Add this server\'s IP address to the BulkSMSBD whitelist, or switch the IP whitelist off.'),
             1018, 1031 => __('Your BulkSMSBD account needs attention. Contact BulkSMSBD support.'),
-            1001 => __('The phone number is not valid.'),
+            1001 => __('The gateway says the phone number is not valid. The system sends it as 8801XXXXXXXXX, so in the gateway URL write number={phone} with nothing in front of {phone}. Check the number itself too.'),
             1003 => __('A required value is missing in the gateway URL. Use the template shown in the URL box.'),
             default => null,
         };
@@ -121,11 +121,62 @@ class StorefrontNotificationService
      * `reason` is null when the SMS was accepted, else no_gateway, no_api_key, gateway_unreachable or gateway_refused.
      * `segments` is how many SMS parts the text is billed as.
      *
-     * @return array{ok: bool, reason: ?string, code: ?int, meaning: ?string, detail: ?string, segments: int}
+     * `request` is the gateway address that was called with the API key and the text hidden, so a refused number or
+     * sender ID can be checked against what was really sent.
+     *
+     * @return array{ok: bool, reason: ?string, code: ?int, meaning: ?string, detail: ?string, segments: int, request: ?string}
      */
     public function sendSmsDetailed(StorefrontSetting $setting, string $phone, string $message): array
     {
-        return [...$this->deliverSms($setting, $phone, $message), 'segments' => SmsSegments::count($message)];
+        return [
+            ...$this->deliverSms($setting, $phone, $message),
+            'segments' => SmsSegments::count($message),
+            'request' => $this->smsRequestPreview($setting, $phone),
+        ];
+    }
+
+    /**
+     * The gateway address for one SMS, filled in from the saved URL template. The number goes in the country-code
+     * form (8801XXXXXXXXX), the format the gateway's own docs show. A template copied from the gateway's example
+     * may already have the country code in front of {phone} (number=88{phone}); it then gets the rest of the number,
+     * so the code is not sent twice.
+     *
+     * @param  array<string, mixed>  $credentials
+     */
+    protected function smsRequestUrl(string $template, array $credentials, string $phone, string $message): string
+    {
+        $digits = PhoneLinks::internationalDigits($phone) ?? $phone;
+        $template = (string) preg_replace(['/(?<=[=,&])880\{phone\}/', '/(?<=[=,&])88\{phone\}/'], ['880{phone_after_880}', '88{phone_after_88}'], $template);
+
+        return strtr($template, [
+            '{api_key}' => rawurlencode(trim((string) ($credentials['sms_api_key'] ?? ''))),
+            '{sender_id}' => rawurlencode(trim((string) ($credentials['sms_sender_id'] ?? ''))),
+            '{phone}' => rawurlencode($digits),
+            '{phone_after_88}' => rawurlencode((string) preg_replace('/^88/', '', $digits)),
+            '{phone_after_880}' => rawurlencode((string) preg_replace('/^880/', '', $digits)),
+            '{message}' => rawurlencode($message),
+        ]);
+    }
+
+    /** What would be called for this phone, with the key and the text hidden; null when no gateway is saved. */
+    protected function smsRequestPreview(StorefrontSetting $setting, string $phone): ?string
+    {
+        $credentials = $setting->notification_credentials ?? [];
+        $template = trim((string) ($credentials['sms_api_url'] ?? ''));
+
+        if ($template === '') {
+            return null;
+        }
+
+        $url = rawurldecode($this->smsRequestUrl($template, $credentials, $phone, '[message]'));
+        $apiKey = trim((string) ($credentials['sms_api_key'] ?? ''));
+
+        if ($apiKey !== '') {
+            $url = str_replace([$apiKey, rawurlencode($apiKey)], '***', $url);
+        }
+
+        // A key typed into the template itself, not through {api_key}.
+        return (string) preg_replace('/((?:api_?key|key|token|secret|pass(?:word)?)=)[^&]*/i', '${1}***', $url);
     }
 
     /** @return array{ok: bool, reason: ?string, code: ?int, meaning: ?string, detail: ?string} */
@@ -144,13 +195,7 @@ class StorefrontNotificationService
             return ['ok' => false, 'reason' => 'no_api_key', 'code' => null, 'meaning' => null, 'detail' => null];
         }
 
-        $url = strtr($urlTemplate, [
-            '{api_key}' => rawurlencode($apiKey),
-            '{sender_id}' => rawurlencode(trim((string) ($credentials['sms_sender_id'] ?? ''))),
-            // Country-code form (8801XXXXXXXXX), the format the gateway's own docs show.
-            '{phone}' => rawurlencode(PhoneLinks::internationalDigits($phone) ?? $phone),
-            '{message}' => rawurlencode($message),
-        ]);
+        $url = $this->smsRequestUrl($urlTemplate, $credentials, $phone, $message);
 
         try {
             $response = Http::timeout(20)->get($url);

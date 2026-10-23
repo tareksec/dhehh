@@ -169,6 +169,58 @@ class SmsDashboardTest extends TestCase
         Http::assertNothingSent();
     }
 
+    /**
+     * Owner report 2026-10-23: the test SMS came back "1001 Invalid Number". BulkSMSBD's own example reads
+     * number=88017XXXXXXXX, so a template with number=88{phone} sent the country code twice.
+     */
+    public function test_a_template_with_the_country_code_before_the_phone_does_not_send_it_twice(): void
+    {
+        $sent = [];
+        Http::fake(function (Request $request) use (&$sent) {
+            $sent[] = $request->url();
+
+            return Http::response('{"response_code":202}');
+        });
+        $notifications = app(StorefrontNotificationService::class);
+
+        foreach ([
+            'http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}',
+            'http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number=88{phone}&senderid={sender_id}&message={message}',
+            'http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number=880{phone}&senderid={sender_id}&message={message}',
+        ] as $template) {
+            $this->setting->update(['notification_credentials' => [...$this->setting->notification_credentials, 'sms_api_url' => $template]]);
+
+            // Typed as 01…, as 8801… and with spaces and a plus: all the same number.
+            foreach (['01728714614', '8801728714614', '+880 1728 714614'] as $typed) {
+                $this->assertTrue($notifications->sendSmsDetailed($this->setting->fresh(), $typed, 'hi')['ok']);
+            }
+        }
+
+        $this->assertCount(9, $sent);
+
+        foreach ($sent as $url) {
+            $this->assertStringContainsString('number=8801728714614&', $url);
+        }
+    }
+
+    public function test_the_request_preview_shows_the_number_and_hides_the_key_and_the_text(): void
+    {
+        Http::fake(['bulksmsbd.net/*' => Http::response('{"response_code":1001,"error_message":"Invalid Number"}')]);
+
+        $result = app(StorefrontNotificationService::class)->sendSmsDetailed($this->setting, '01728714614', 'Secret wording of the message');
+
+        $this->assertSame(1001, $result['code']);
+        $this->assertStringContainsString('number=8801728714614', (string) $result['request']);
+        $this->assertStringContainsString('senderid=8809617643387', (string) $result['request']);
+        $this->assertStringNotContainsString('real-key', (string) $result['request']);
+        $this->assertStringNotContainsString('Secret wording', (string) $result['request']);
+        $this->assertStringContainsString('api_key=***', (string) $result['request']);
+
+        // A key typed into the template itself, not through {api_key}, is hidden as well.
+        $this->setting->update(['notification_credentials' => ['sms_api_url' => 'http://bulksmsbd.net/api/smsapi?api_key=typed-in-url&number={phone}&message={message}']]);
+        $this->assertStringNotContainsString('typed-in-url', (string) app(StorefrontNotificationService::class)->sendSmsDetailed($this->setting->fresh(), '01728714614', 'hi')['request']);
+    }
+
     public function test_a_connection_error_never_puts_the_api_key_in_the_log_detail_or_on_the_page(): void
     {
         $error = 'cURL error 35: Connection reset for http://bulksmsbd.net/api/smsapi?api_key=real-key&number=017&message=hello';

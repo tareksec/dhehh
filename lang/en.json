@@ -3638,7 +3638,6 @@
     "A masking sender ID sends Bangla text only. Write this message in Bangla on SMS Templates, or use a numeric sender ID.": "A masking sender ID sends Bangla text only. Write this message in Bangla on SMS Templates, or use a numeric sender ID.",
     "Add this server's IP address to the BulkSMSBD whitelist, or switch the IP whitelist off.": "Add this server's IP address to the BulkSMSBD whitelist, or switch the IP whitelist off.",
     "Your BulkSMSBD account needs attention. Contact BulkSMSBD support.": "Your BulkSMSBD account needs attention. Contact BulkSMSBD support.",
-    "The phone number is not valid.": "The phone number is not valid.",
     "A required value is missing in the gateway URL. Use the template shown in the URL box.": "A required value is missing in the gateway URL. Use the template shown in the URL box.",
     "The SMS API key is empty. Enter it in Integrations → SMS Gateway → SMS API key and save.": "The SMS API key is empty. Enter it in Integrations → SMS Gateway → SMS API key and save.",
     "Nothing logged yet": "Nothing logged yet",
@@ -3700,5 +3699,7 @@
     "What one SMS part costs you at BulkSMSBD (a Bangla or long message takes more than one part). Used only to estimate the cost on the SMS Dashboard.": "What one SMS part costs you at BulkSMSBD (a Bangla or long message takes more than one part). Used only to estimate the cost on the SMS Dashboard.",
     "Wrong key or sender ID, no balance, an invalid number...": "Wrong key or sender ID, no balance, an invalid number...",
     "refused": "refused",
-    "sent": "sent"
+    "sent": "sent",
+    "The gateway says the phone number is not valid. The system sends it as 8801XXXXXXXXX, so in the gateway URL write number={phone} with nothing in front of {phone}. Check the number itself too.": "The gateway says the phone number is not valid. The system sends it as 8801XXXXXXXXX, so in the gateway URL write number={phone} with nothing in front of {phone}. Check the number itself too.",
+    "What was sent (key and text hidden): :request": "What was sent (key and text hidden): :request"
 }
