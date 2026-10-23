@@ -14,7 +14,7 @@ Owner (Bangla), with a screenshot of Logs → SMS: "OTP messages do not come. Or
 
 **Verified:** `SmsDashboardTest` (+3: fallback both ways, test button does not borrow, gatewayFor prefers a usable site), SMS and OTP related tests; full `php artisan test` before the push.
 
-Commit status: committed on `claude/order-management-features-nafks7`; not on `main`.
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
 
 ## 2026-10-23 - Advanced backups, Phase 6: Cloudflare R2 off-site copy, an R2 dashboard and a bill estimate
 
