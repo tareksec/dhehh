@@ -129,6 +129,29 @@ and the built-in Manager role hold `ai_tools.menu`,
 `ai_tools.video_generation`, and `ai_tools.video_generation.review`; grant
 them to any custom role from the role editor.
 
+### Trade Portal (`/trade`, 2026-10-22)
+
+```text
+trade.access               open the Trade Portal (a company with the portal switched on)
+trade.profile.manage       edit the Business profile there (addresses, TIN/BIN/IRC, banks, letterhead)
+trade.sales                Delivery Challans: sell, receive money, print, cancel
+trade.purchases            Goods in: enter purchases, mark goods arrived
+trade.stock                Stock: add items, correct counts
+trade.dues                 Dues: see who owes, receive money
+trade.import               Bring in old data (buyers with old dues, items with stock)
+trade.lc                   LC files: import details, stages, print the LC letter, DRL, certificate, packing list, shipment advice
+trade.reports              Reports on screen, as a print page, PDF (English) and Excel
+trade.landed_cost          Landed cost worksheet of an LC file; apply it to the stock buying price
+trade.cashbook             Cash book and balance sheet; record bank deposits, supplier payments, costs
+trade.money_accounts       Cash and bank accounts: add them, set the money in them at the start
+```
+
+The **Trade Owner** role (`trade_owner`, made by a migration, editable in
+Users → Roles) holds all of these. A role whose permissions are all
+`trade.*` opens `/trade` only: `/admin` refuses it (`User::isTradePortalOnly()`).
+A role with any other permission, or none, keeps `/admin` as before. Staff
+accounts open no panel other than `/admin`, `/office` and `/trade`.
+
 ## Custom Roles
 
 Custom roles can be created from the admin panel. A custom role stores:

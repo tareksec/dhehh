@@ -53,7 +53,7 @@ class SupplierPayment extends Model
 
             if ((float) $payment->amount > $availablePayable) {
                 throw ValidationException::withMessages([
-                    'amount' => 'Supplier payment cannot be greater than the current supplier payable.',
+                    'amount' => __('Supplier payment cannot be greater than the current supplier payable.'),
                 ]);
             }
 
@@ -64,7 +64,7 @@ class SupplierPayment extends Model
 
             if ($payment->account?->projectedBalanceAfterOutflow((float) $payment->amount, $ledger?->id) < 0) {
                 throw ValidationException::withMessages([
-                    'amount' => 'This payment would make the account balance negative.',
+                    'amount' => __('This payment would make the account balance negative.'),
                 ]);
             }
         });
