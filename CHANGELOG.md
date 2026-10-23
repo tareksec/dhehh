@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.102.0] - 2026-10-23
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -37,7 +39,6 @@ All notable production changes to Business Dashboard are documented here.
 - Tests: new `CompanyEmailSetupTest` (5: sender rules, per-company mailer isolation — fails without the `purge` — and the test email); `IntegrationsPageTest` (+7, one rewritten); `ResellerPasswordResetByStaffTest` expects the new message.
 - New `App\Http\Middleware\SetResellerPortalLocale` (cookie `reseller_portal_locale`, values `en` / `bn`, set by `?lang=`): runs in the `web` group right after `RestrictPortalHosts` and in the reseller panel's middleware and `persistentMiddleware` (after `ResolveCompanyFromResellerPortalDomain`, so Livewire updates keep the language); it does nothing unless the request is on a reseller portal host (`reseller_portal_company` attribute). Views: `resources/views/reseller/partials/language-switch.blade.php` (landing) and `resources/views/filament/reseller/language-switch.blade.php` (sign-in / application pages, panel render hooks). The language names are `Language name: English` / `Language name: Bangla` and are read in their own language (`__('...', [], 'bn')`), so the switch always shows "বাংলা". 18 new keys in `lang/en.json` and `lang/bn.json`.
 - Font files under `resources/fonts/anek-bangla/` (Bengali, Latin and Latin-extended subsets of the variable font, plus `OFL.txt`) and their `@font-face` rules in `resources/css/reseller-landing.css`. **Deploy: `npm run build`.** Tests: `ResellerLandingPageTest` (+7: the questions and answers, figures following the settings, the Bangla version and cookie, the language kept on the landing and application pages, an unknown language ignored, the shop untouched, the font shipping with the ERP).
-
 ## [2.101.0] - 2026-10-23
 
 **Release type:** Minor Feature Update
