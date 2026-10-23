@@ -20,6 +20,21 @@ All notable production changes to Business Dashboard are documented here.
 - New `App\Http\Middleware\SetResellerPortalLocale` (cookie `reseller_portal_locale`, values `en` / `bn`, set by `?lang=`): runs in the `web` group right after `RestrictPortalHosts` and in the reseller panel's middleware and `persistentMiddleware` (after `ResolveCompanyFromResellerPortalDomain`, so Livewire updates keep the language); it does nothing unless the request is on a reseller portal host (`reseller_portal_company` attribute). Views: `resources/views/reseller/partials/language-switch.blade.php` (landing) and `resources/views/filament/reseller/language-switch.blade.php` (sign-in / application pages, panel render hooks). The language names are `Language name: English` / `Language name: Bangla` and are read in their own language (`__('...', [], 'bn')`), so the switch always shows "বাংলা". 18 new keys in `lang/en.json` and `lang/bn.json`.
 - Font files under `resources/fonts/anek-bangla/` (Bengali, Latin and Latin-extended subsets of the variable font, plus `OFL.txt`) and their `@font-face` rules in `resources/css/reseller-landing.css`. **Deploy: `npm run build`.** Tests: `ResellerLandingPageTest` (+7: the questions and answers, figures following the settings, the Bangla version and cookie, the language kept on the landing and application pages, an unknown language ignored, the shop untouched, the font shipping with the ERP).
 
+## [2.100.1] - 2026-10-22
+
+**Release type:** Security Update
+
+### Security
+
+- **PHP update path for the critical PHP vulnerabilities of 2026-10-21 (CVE-2026-109618 and CVE-2026-109619, remote code execution without logging in).** The ERP container's PHP was 8.4.2 (December 2024): Coolify's Nixpacks builder keeps an old package snapshot, so a plain redeploy would never bring the fixed version. The repository now has a production `Dockerfile` on the official `php:8.4.27-fpm` image (PHP 8.4.27 is the fixed version). Nothing changes on the live server until the owner switches the ERP app's Build Pack in Coolify from Nixpacks to Dockerfile (steps in `docs/deployment.md`). The old Nixpacks setup is untouched and stays the rollback.
+- The image also turns off PHP's upload-progress feature (`session.upload_progress.enabled=0`), one of the ways the second vulnerability is reached, and recycles PHP-FPM workers every 500 requests.
+
+### Technical Notes
+
+- New: `Dockerfile` (stages: PHP runtime + extensions `bcmath exif gd imagick intl opcache pcntl pdo_mysql zip`, Composer, Vite assets, final image), `.dockerignore`, `docker/` (`nginx.conf` = the Nixpacks template as plain nginx, `php.ini`, `php-fpm-pool.conf` with `clear_env = no`, `supervisord.conf`, `entrypoint.sh`).
+- `entrypoint.sh` fixes the owner of the persistent `/app/storage` volume once (files from the Nixpacks image belong to another user), links `public/storage`, then starts nginx + PHP-FPM, or the queue worker when `CONTAINER_ROLE=worker` (the worker app uses the same image).
+- `PHP_VERSION` in the `Dockerfile` is pinned to `8.4.27` and must be raised on each PHP security release.
+- New workflow `.github/workflows/docker-image.yml` builds the image and checks: PHP >= 8.4.27, required extensions, nginx + FPM serving the app from a root-owned empty volume (`/health.html`, Laravel `/up`, container environment visible to PHP, storage writable by the web user), and the worker role running as `www-data`.
 ## [2.100.0] - 2026-10-22
 
 **Release type:** Minor Feature Update
@@ -84,6 +99,7 @@ All notable production changes to Business Dashboard are documented here.
 - `OfficeNavigation::mobile()` builds the bar, the "+" list (`canAccess()` + `canCreate()` + a create page), the to-do (`OwnerTodo`) and the menu tiles; `resources/views/filament/ims/office/mobile-nav.blade.php` draws them at `BODY_END` through `ModuleGuard::run('ims-office-mobile-nav')` — if it fails nothing is drawn and the top-bar menu button comes back (it is hidden only while `.ims-tabbar` is on the page). `Home::quickActions()` (guarded too) feeds the round buttons; the welcome header takes `app: true` for the phone greeting.
 - Lists: `Table::configureUsing()` in `AppServiceProvider` sets Filament's `stackedOnMobile()` for the `office` and `investor` panels only; the card look is in `resources/css/filament/ims/theme.css` (below 640px).
 - The sheets lock the page by a veil with `touch-action: none` rather than `overflow: hidden` on the page, which made phones jump/zoom in testing. No migration, no new model or route. 10 new keys in `lang/en.json` + `lang/bn.json`. Test: `OfficeHomeTest` (+1).
+
 ## [2.97.0] - 2026-10-21
 
 **Release type:** Minor Feature Update

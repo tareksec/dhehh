@@ -2,6 +2,25 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-22 - PHP security update: production Dockerfile
+
+Reason - owner forwarded Contabo's email about the PHP RCE vulnerabilities CVE-2026-109618 / CVE-2026-109619 and asked whether the server needs an update. I checked the claims on php.net (advisory 2026-10-21; fixed in 8.4.27 / 8.5.12 / 8.3.36 / 8.2.35; PHP-FPM is affected). The owner's ERP container reports `PHP 8.4.2 (built Dec 17 2024)`, so it is vulnerable, and 25 patch releases behind.
+
+Cause - Coolify's Nixpacks builds PHP from a frozen old nixpkgs snapshot, so redeploying (even with "force rebuild") cannot reach 8.4.27.
+
+What changed (repo only; nothing is live until the owner switches the Build Pack in Coolify):
+- `Dockerfile` on `php:8.4.27-fpm-bookworm` (version pinned), multi-stage: PHP + extensions, Composer, Vite assets, final image with nginx + PHP-FPM under supervisord; `CONTAINER_ROLE=worker` runs `queue:work` instead.
+- `docker/` config (nginx = plain version of `nginx.template.conf`, `clear_env = no` so Coolify's environment reaches PHP, `session.upload_progress.enabled=0`, `pm.max_requests=500`), `.dockerignore`.
+- Entry point fixes the owner of the existing `/app/storage` volume once (the Nixpacks files belong to another user).
+- `.github/workflows/docker-image.yml` builds and starts the image (web from a root-owned empty volume, worker role) on every change to these files.
+- `docs/deployment.md`: switch / rollback / "raise PHP_VERSION on each PHP security release".
+
+Not verified: the sandbox has no Docker daemon, so the image is tested only by the GitHub workflow. Memory settings (`memory_limit=256M`, `pm.max_children=16`) are my choice, not measured on the owner's server. I did not run `php -v` on the VPS host or check Coolify's own PHP (Coolify is itself a Laravel app and needs its own update). Intentionally not done: the advisory's interim `memory_limit=-1` (can exhaust the server's RAM).
+
+Open for the owner: switch the Build Pack (steps in the docs), update Coolify, check the VPS for other PHP sites, and look for signs of compromise (the advisory says exploitation is active).
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
+
 ## 2026-10-22 - Automatic order messages: SMS on creation + WhatsApp summary card
 
 Owner (Bangla): "আর কোন অর্ডার তৈরি হলে সাথে সাথে কাস্টমারের ফোন নাম্বারে অর্ডার ডিটেইলস এবং অর্ডার স্ট্যাটাস সহ চলে যাবে। প্রতিটা অর্ডার স্ট্যাটাস পরিবর্তন হলে কাস্টমারে ফোন নাম্বারে অর্ডার ইনফো সহ মেসেজ চলে যাবে, এবং তার যদি whatsapp থাকে তাহলে তাকে অর্ডার সামারি কার্ড অটো পাঠানো হবে।" Owner's answers to my two questions: WhatsApp through the **official Cloud API** (Recommended) and **try every customer** (a number without WhatsApp just fails).
@@ -57,6 +76,7 @@ Not done: the office's other pages (forms, detail pages) are Filament's own one-
 Full plain `php artisan test` on the branch (assets built from this tree): 2,959 passed, 1 skipped, 0 failed.
 
 Commit status: committed and pushed to `feature/ims-office-mobile`; not on `main` (waits for the owner's approval).
+
 
 ## 2026-10-21 - Purchases: import from CSV, and the Items layout
 
@@ -1181,7 +1201,7 @@ Needs Bangla review (new keys, all in `lang/bn.json`): the six questions and the
 
 Verified: `npm run build`, the English and Bangla pages rendered in Chromium (desktop and 390 px phone), and the full suite on the tree with `origin/main` (v2.100.0) merged in: 2986 passed, 5 skipped, 0 failed.
 
-Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-22). **Not pushed to `main`:** the owner's earlier "main এ পুশ কর" covered the previous batch only; this batch waits for a new explicit approval.
+Commit status: committed to the work branch `claude/reseller-module-status-v9tobe`, `origin/main` (v2.100.1) merged in, full suite on the merged tree green (result below); pushed to `main` on the owner's explicit approval ("ওকে এটা মেইনে পুশ কর", 2026-10-23).
 
 ## 2026-10-22 (later) - Landing page redesigned in neo-brutalism
 
