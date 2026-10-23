@@ -25,7 +25,6 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Navigation\NavigationBuilder;
 use Filament\Panel;
 use Filament\PanelProvider;
-use Filament\Support\Colors\Color;
 use Filament\Support\Enums\Width;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\View\View;
@@ -61,8 +60,21 @@ class TradePortalPanelProvider extends PanelProvider
             ->brandName(fn (): string => app(CompanySettingsService::class)->name(app(CompanyContext::class)->company()))
             ->brandLogo(fn (): ?string => app(CompanySettingsService::class)->logoUrl(app(CompanyContext::class)->company()))
             ->brandLogoHeight('2.25rem')
-            // Tailwind blue (its 700 is the theme's --trade-primary): buttons get a strong blue with white text.
-            ->colors(['primary' => Color::Blue])
+            // Navy like the theme's --trade-navy-2 (owner's reference 2026-10-23), written out shade by
+            // shade: a palette generated from the hex makes 600 a mid blue, and buttons then turn pale.
+            ->colors(['primary' => [
+                50 => 'oklch(0.97 0.014 262)',
+                100 => 'oklch(0.93 0.03 262)',
+                200 => 'oklch(0.87 0.05 262)',
+                300 => 'oklch(0.77 0.08 262)',
+                400 => 'oklch(0.62 0.11 262)',
+                500 => 'oklch(0.5 0.12 262)',
+                600 => 'oklch(0.41 0.11 262)',
+                700 => 'oklch(0.36 0.1 262)',
+                800 => 'oklch(0.3 0.08 262)',
+                900 => 'oklch(0.25 0.07 262)',
+                950 => 'oklch(0.19 0.05 262)',
+            ]])
             ->font('Hind Siliguri', provider: LocalFontProvider::class)
             // Light only: the owner works in daylight in the shop (BUILD-BRIEF.md "light theme").
             ->darkMode(false)
@@ -91,6 +103,7 @@ class TradePortalPanelProvider extends PanelProvider
                     ->name('reports.download');
             })
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn (): View => view('filament.trade.language-switch'))
+            ->renderHook(PanelsRenderHook::PAGE_HEADER_HEADING_BEFORE, fn (): View => view('filament.trade.back-button'))
             // Phones: the bottom tab bar with its menu sheet.
             ->renderHook(PanelsRenderHook::BODY_END, fn (): View => view('filament.trade.mobile-nav'))
             ->renderHook(PanelsRenderHook::SIMPLE_PAGE_START, fn (): View => view('filament.trade.language-switch', ['simple' => true]))

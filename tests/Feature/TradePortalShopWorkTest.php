@@ -96,6 +96,25 @@ class TradePortalShopWorkTest extends TestCase
         }
     }
 
+    public function test_the_phone_header_back_button_and_menu_sheet_lead_to_the_right_pages(): void
+    {
+        $as = fn () => $this->actingAs($this->owner)->withSession([SetTradePortalLocale::SESSION_KEY => 'en']);
+
+        // Home has no back button; the menu sheet lists its pages under headings.
+        $as()->get('/trade')->assertOk()
+            ->assertDontSee('class="trade-back"', false)
+            ->assertSee('Accounts and reports')
+            ->assertSee('Import and goods')
+            ->assertSee('Setup')
+            ->assertSee('At a glance')
+            ->assertSee('Quick jobs');
+
+        // A list goes back to Home, a form to its list.
+        $as()->get('/trade/challans')->assertOk()->assertSee('<a href="'.url('/trade').'" class="trade-back"', false);
+        $as()->get('/trade/challans/create')->assertOk()->assertSee('<a href="'.url('/trade/challans').'" class="trade-back"', false);
+        $as()->get('/trade/stock/create')->assertOk()->assertSee('<a href="'.url('/trade/stock').'" class="trade-back"', false);
+    }
+
     public function test_someone_with_only_the_portal_permission_cannot_open_the_shop_pages(): void
     {
         UserRole::query()->create(['name' => 'Viewer', 'slug' => 'trade_viewer', 'permissions' => ['trade.access'], 'is_active' => true]);

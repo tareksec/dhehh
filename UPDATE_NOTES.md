@@ -2,6 +2,22 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - Trade Portal phone look (owner's reference design)
+
+Owner request: the portal's phone screens were not clear enough; make them like the owner's reference image (a clean app: navy hero card, soft-blue overview, round quick buttons, navy page header with a back button, floating bottom bar) so a person can see at once where each thing is. The owner said the desktop look is not the topic now.
+
+What changed: Home (greeting, today's sales on a navy card, At a glance, Quick jobs, short lists), a navy header with a back button on every other page, every list as cards, a floating tab bar, the Menu sheet in three groups, Reports as rows, navy buttons. Details in `CHANGELOG.md`.
+
+Decided without asking: the sale list's card title is the buyer (not the pad number); the "View" / "Edit" link on a list card is hidden on phones because tapping the card does the same; the hero shows today's sales because it is the shop's main daily figure; Menu groups are Accounts and reports / Import and goods / Setup.
+
+Checked in the browser at 390px and 360px on the throwaway preview copy of the database (sample buyers, items and three challans added there only): Home, Sales list + search, a challan, the challan form, Stock, Dues, Cash book, Reports, a report, Menu sheet; goods in (list, form), LC files, serial numbers, accounts, balance sheet, business profile, import, new item — no page scrolls sideways; back links checked (list → Home, form → its list, report → Reports, and the same after a Livewire search). Desktop (1280px) still shows the top menu; Home cards sit side by side.
+
+Needs Bangla review: "এক নজরে", "দ্রুত কাজ", "হিসাব ও রিপোর্ট", "আমদানি ও মাল", "সেটআপ".
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 3,025 passed, 1 skipped, 0 failed. New: `TradePortalShopWorkTest` (+1, back button and menu groups).
+
+Commit status: committed and pushed to `feature/trade-portal-reports`; not on `main` (waits for the owner's approval).
+
 ## 2026-10-26 - Trade Portal phase 6 (reports + phone testing)
 
 Owner request: start Phase 6 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-reports`. The branch starts from `feature/trade-portal-landed-cost`, so it carries all six phases; none is on `main`.

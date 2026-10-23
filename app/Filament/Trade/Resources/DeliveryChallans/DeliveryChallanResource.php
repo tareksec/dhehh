@@ -215,8 +215,9 @@ class DeliveryChallanResource extends Resource
             ->defaultSort('id', 'desc')
             ->modifyQueryUsing(fn (Builder $query) => $query->with('order'))
             ->columns([
-                TextColumn::make('challan_number')->label(__('SL no.'))->searchable()->weight('bold'),
-                TextColumn::make('buyer_name')->label(__('Buyer'))->searchable()->wrap(),
+                // The buyer first: on a phone the first column is the card's title.
+                TextColumn::make('buyer_name')->label(__('Buyer'))->searchable()->wrap()->weight('bold'),
+                TextColumn::make('challan_number')->label(__('SL no.'))->searchable(),
                 TextColumn::make('challan_date')->label(__('Date'))->formatStateUsing(fn ($state): string => ImsNumbers::date($state)),
                 TextColumn::make('total')->label(__('Total'))->formatStateUsing(fn ($state): string => ImsNumbers::money($state)),
                 TextColumn::make('due')

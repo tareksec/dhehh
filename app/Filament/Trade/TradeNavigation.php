@@ -17,6 +17,9 @@ use Filament\Facades\Filament;
 use Filament\Navigation\NavigationBuilder;
 use Filament\Navigation\NavigationItem;
 use Filament\Pages\Page;
+use Filament\Resources\Pages\ListRecords;
+use Filament\Resources\Pages\Page as ResourcePage;
+use Filament\Resources\Pages\ViewRecord;
 use Filament\Resources\Resource;
 
 /**
@@ -28,23 +31,30 @@ use Filament\Resources\Resource;
  */
 class TradeNavigation
 {
-    /** @return list<array{0: class-string<Page|resource>, 1: string, 2: string, 3: bool}> class, label, icon, on the phone tab bar */
+    /** The headings of the Menu sheet, in order; each page of the sheet sits under one. */
+    public const GROUPS = [
+        'money' => 'Accounts and reports',
+        'import' => 'Import and goods',
+        'setup' => 'Setup',
+    ];
+
+    /** @return list<array{0: class-string<Page|resource>, 1: string, 2: string, 3: bool, 4: string|null}> class, label, icon, on the phone tab bar, Menu sheet group */
     public static function layout(): array
     {
         return [
-            [Pages\Home::class, 'Home', 'heroicon-o-home', true],
-            [DeliveryChallanResource::class, 'Sales', 'heroicon-o-document-text', true],
-            [StockItemResource::class, 'Stock', 'heroicon-o-archive-box', true],
-            [DueResource::class, 'Dues', 'heroicon-o-clock', true],
-            [Pages\Reports::class, 'Reports', 'heroicon-o-chart-bar', false],
-            [Pages\CashBook::class, 'Cash book', 'heroicon-o-book-open', false],
-            [Pages\BalanceSheet::class, 'Balance sheet', 'heroicon-o-scale', false],
-            [GoodsInResource::class, 'Goods in', 'heroicon-o-truck', false],
-            [LcFileResource::class, 'LC files', 'heroicon-o-globe-asia-australia', false],
-            [MachineSerialResource::class, 'Serial numbers', 'heroicon-o-qr-code', false],
-            [MoneyAccountResource::class, 'Cash and bank accounts', 'heroicon-o-building-library', false],
-            [Pages\ImportOldData::class, 'Bring in old data', 'heroicon-o-arrow-up-tray', false],
-            [Pages\BusinessProfile::class, 'Business profile', 'heroicon-o-building-office-2', false],
+            [Pages\Home::class, 'Home', 'heroicon-o-home', true, null],
+            [DeliveryChallanResource::class, 'Sales', 'heroicon-o-document-text', true, null],
+            [StockItemResource::class, 'Stock', 'heroicon-o-archive-box', true, null],
+            [DueResource::class, 'Dues', 'heroicon-o-clock', true, null],
+            [Pages\Reports::class, 'Reports', 'heroicon-o-chart-bar', false, 'money'],
+            [Pages\CashBook::class, 'Cash book', 'heroicon-o-book-open', false, 'money'],
+            [Pages\BalanceSheet::class, 'Balance sheet', 'heroicon-o-scale', false, 'money'],
+            [GoodsInResource::class, 'Goods in', 'heroicon-o-truck', false, 'import'],
+            [LcFileResource::class, 'LC files', 'heroicon-o-globe-asia-australia', false, 'import'],
+            [MachineSerialResource::class, 'Serial numbers', 'heroicon-o-qr-code', false, 'import'],
+            [MoneyAccountResource::class, 'Cash and bank accounts', 'heroicon-o-building-library', false, 'money'],
+            [Pages\ImportOldData::class, 'Bring in old data', 'heroicon-o-arrow-up-tray', false, 'setup'],
+            [Pages\BusinessProfile::class, 'Business profile', 'heroicon-o-building-office-2', false, 'setup'],
         ];
     }
 
@@ -56,13 +66,13 @@ class TradeNavigation
             ->isActiveWhen(fn (): bool => $item['active']), static::items()));
     }
 
-    /** @return list<array{label: string, icon: string, url: string, active: bool, tab: bool}> */
+    /** @return list<array{label: string, icon: string, url: string, active: bool, tab: bool, group: string|null}> */
     public static function items(): array
     {
         $panel = Filament::getPanel('trade');
         $items = [];
 
-        foreach (static::layout() as [$class, $label, $icon, $tab]) {
+        foreach (static::layout() as [$class, $label, $icon, $tab, $group]) {
             if (! class_exists($class) || ! $class::canAccess()) {
                 continue;
             }
@@ -77,10 +87,63 @@ class TradeNavigation
                 'url' => $class::getUrl(panel: 'trade'),
                 'active' => $active,
                 'tab' => $tab,
+                'group' => $group,
             ];
         }
 
         return $items;
+    }
+
+    /**
+     * The Menu sheet's pages under their headings, empty groups left out.
+     *
+     * @param  list<array{label: string, icon: string, url: string, active: bool, tab: bool, group: string|null}>  $items
+     * @return list<array{label: string, items: list<array<string, mixed>>}>
+     */
+    public static function groups(array $items): array
+    {
+        $groups = [];
+
+        foreach (static::GROUPS as $key => $label) {
+            $inGroup = array_values(array_filter($items, fn (array $item): bool => ! $item['tab'] && $item['group'] === $key));
+
+            if ($inGroup !== []) {
+                $groups[] = ['label' => __($label), 'items' => $inGroup];
+            }
+        }
+
+        return $groups;
+    }
+
+    /**
+     * Where the round back button in a page's header goes on a phone: a
+     * record's page → its list, a list or a page of the menu → Home, one
+     * report → the reports, a record's other page (landed cost) → the
+     * record. Null on Home. Read from the page being drawn, so a Livewire
+     * update draws the same button.
+     */
+    public static function backUrl(mixed $page): ?string
+    {
+        if ($page === null || $page instanceof Pages\Home) {
+            return null;
+        }
+
+        if ($page instanceof Pages\Report) {
+            return Pages\Reports::getUrl(panel: 'trade');
+        }
+
+        if ($page instanceof ResourcePage && ! $page instanceof ListRecords) {
+            $resource = $page::getResource();
+            $record = method_exists($page, 'getRecord') ? $page->getRecord() : null;
+
+            if ($record !== null && ! $page instanceof ViewRecord && $resource::hasPage('view')) {
+                return $resource::getUrl('view', ['record' => $record], panel: 'trade');
+            }
+
+            return $resource::getUrl(panel: 'trade');
+        }
+
+        return Pages\Home::getUrl(panel: 'trade');
     }
 
     /**

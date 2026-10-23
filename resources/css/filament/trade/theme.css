@@ -4,28 +4,33 @@
  * The Trade Portal's theme (docs/tasneem-samples/PLAN.md §1): light only,
  * phone first, big touch targets and big numbers for a non-technical shop
  * owner. Colours come from the tokens below. On phones the top menu button
- * gives way to the bottom tab bar (filament/trade/mobile-nav).
+ * gives way to the floating tab bar (filament/trade/mobile-nav), each page
+ * opens under a navy header with a back button, and lists are cards — the
+ * app look of the owner's reference (2026-10-23), see "Phones" at the end.
  */
 @source '../../../../app/Filament/Trade/**/*';
 @source '../../../../resources/views/filament/trade/**/*';
 
 :root {
-    --trade-page: #f3f5f8;
+    --trade-page: #eef1f6;
     --trade-card: #ffffff;
-    --trade-line: #e3e7ed;
-    --trade-ink: #111827;
-    --trade-muted: #5b6472;
-    --trade-primary: #1d4ed8;
-    --trade-primary-soft: #e3ebfd;
-    --trade-blue-soft: #e3ebfd;
-    --trade-blue-ink: #1d4ed8;
+    --trade-line: #e4e8ef;
+    --trade-ink: #0f1b33;
+    --trade-muted: #5d6779;
+    --trade-navy: #13264a;
+    --trade-navy-2: #23417a;
+    --trade-primary: #23417a;
+    --trade-primary-soft: #e3eafa;
+    --trade-blue-soft: #e3eafa;
+    --trade-blue-ink: #23417a;
     --trade-amber-soft: #fdf0d8;
     --trade-amber-ink: #8a4b05;
     --trade-red-soft: #fde2e2;
     --trade-red-ink: #a51d1d;
     --trade-green-soft: #dcefe4;
     --trade-green-ink: #0e6b3e;
-    --trade-radius: 20px;
+    --trade-radius: 24px;
+    --trade-shadow: 0 1px 2px rgb(15 27 51 / 0.04), 0 10px 28px -14px rgb(15 27 51 / 0.18);
     --trade-shadow-pop: 0 12px 32px -4px rgb(17 24 39 / 0.14), 0 4px 12px -2px rgb(17 24 39 / 0.08);
 }
 
@@ -59,10 +64,214 @@
 
 /* ---------- Home ---------- */
 
-.trade-date {
-    margin-top: -0.75rem;
+.trade-home {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.trade-hello-greet {
     color: var(--trade-muted);
-    font-size: 0.9375rem;
+    font-size: 1rem;
+}
+
+.trade-hello-name {
+    font-size: 1.625rem;
+    font-weight: 700;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+.trade-home-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+}
+
+@media (min-width: 1024px) {
+    .trade-home-top {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* Today's sales: the big navy card. */
+.trade-hero {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-height: 12rem;
+    padding: 1.375rem 1.375rem 1.25rem;
+    overflow: hidden;
+    border-radius: 1.75rem;
+    background: linear-gradient(135deg, var(--trade-navy-2) 0%, var(--trade-navy) 70%);
+    color: #ffffff;
+    box-shadow: 0 18px 36px -18px rgb(19 38 74 / 0.7);
+}
+
+.trade-hero-art {
+    position: absolute;
+    top: 0.75rem;
+    inset-inline-end: -1.25rem;
+    width: 9rem;
+    height: 9rem;
+    opacity: 0.12;
+    pointer-events: none;
+}
+
+.trade-hero-label {
+    font-size: 1rem;
+    font-weight: 600;
+    opacity: 0.85;
+}
+
+.trade-hero-big {
+    font-size: 2.375rem;
+    font-weight: 700;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+.trade-hero-note {
+    opacity: 0.9;
+}
+
+.trade-hero-date {
+    font-size: 0.875rem;
+    opacity: 0.7;
+}
+
+.trade-hero-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: auto;
+    padding-top: 0.75rem;
+}
+
+.trade-hero-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 2.875rem;
+    padding-inline: 1.125rem;
+    border-radius: 999px;
+    background-color: #ffffff;
+    color: var(--trade-navy);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+/* The round arrow that opens a whole list (reference: "→" on each card). */
+.trade-go {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.875rem;
+    height: 2.875rem;
+    margin-inline-start: auto;
+    border-radius: 999px;
+    background-color: var(--trade-navy);
+    color: #ffffff;
+}
+
+.trade-go-light {
+    background-color: rgb(255 255 255 / 0.16);
+    color: #ffffff;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.3);
+}
+
+/* At a glance: four figures on a soft blue card. */
+.trade-glance {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+    padding: 1.125rem;
+    border-radius: 1.75rem;
+    background: linear-gradient(180deg, #dde7fb 0%, #edf2fd 100%);
+}
+
+.trade-section-title {
+    font-size: 1.0625rem;
+    font-weight: 700;
+}
+
+.trade-glance-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.625rem;
+}
+
+.trade-glance-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+    padding: 0.875rem;
+    border-radius: 1.125rem;
+    background-color: rgb(255 255 255 / 0.75);
+    color: inherit;
+    text-decoration: none;
+    touch-action: manipulation;
+}
+
+.trade-glance-item:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+}
+
+.trade-glance-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    color: var(--trade-muted);
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.trade-glance-icon {
+    flex-shrink: 0;
+    width: 1.875rem;
+    height: 1.875rem;
+    padding: 0.375rem;
+    border-radius: 999px;
+}
+
+/* A money figure stays on one line; it shrinks a little on narrow phones instead of breaking. */
+.trade-glance-item strong {
+    font-size: clamp(1rem, 4.4vw, 1.3125rem);
+    font-weight: 700;
+    line-height: 1.25;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.trade-glance-item small {
+    color: var(--trade-muted);
+    font-size: 0.8125rem;
+    line-height: 1.35;
+}
+
+.trade-glance-item:focus-visible,
+.trade-hero-btn:focus-visible,
+.trade-go:focus-visible {
+    outline: 3px solid var(--trade-primary);
+    outline-offset: 2px;
+}
+
+/* A plain white card holding a heading and its content. */
+.trade-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.125rem;
+    border-radius: 1.75rem;
+    background-color: var(--trade-card);
+    box-shadow: var(--trade-shadow);
 }
 
 .trade-cards {
@@ -77,14 +286,20 @@
     }
 }
 
+@media (min-width: 1280px) {
+    .trade-home .trade-cards {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
 .trade-card {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
     padding: 1.25rem;
     border-radius: var(--trade-radius);
-    border: 1px solid var(--trade-line);
     background-color: var(--trade-card);
+    box-shadow: var(--trade-shadow);
 }
 
 .trade-card-head {
@@ -186,11 +401,19 @@
 }
 
 .trade-card-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-height: 2.25rem;
     margin-inline-start: auto;
+    padding-inline: 0.75rem;
+    border-radius: 999px;
+    background-color: var(--trade-primary-soft);
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--trade-primary);
     text-decoration: none;
+    white-space: nowrap;
 }
 
 .trade-due {
@@ -400,12 +623,6 @@
     }
 }
 
-@media (min-width: 768px) {
-    .trade-reports {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-}
-
 /* Label / value pairs on a challan's page. */
 .trade-facts {
     display: grid;
@@ -429,38 +646,122 @@
     overflow-wrap: anywhere;
 }
 
-/* Home: the big buttons for the daily jobs, and the tiles in the Menu sheet. */
-.trade-quick,
-.trade-tiles {
+/* Home: the daily jobs as round buttons with their names under them. */
+.trade-quick {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
 }
 
-@media (min-width: 768px) {
-    .trade-quick {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-}
-
-.trade-quick-btn,
-.trade-tile {
+.trade-quick-btn {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.75rem;
-    min-height: 4rem;
-    padding: 0.75rem;
-    border-radius: 1rem;
-    border: 1px solid var(--trade-line);
-    background-color: var(--trade-card);
-    font-weight: 700;
+    gap: 0.5rem;
+    min-width: 0;
+    padding-block: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    text-align: center;
     text-decoration: none;
     touch-action: manipulation;
 }
 
+.trade-quick-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 999px;
+    background-color: var(--trade-primary-soft);
+    color: var(--trade-primary);
+}
+
+.trade-quick-btn:first-child .trade-quick-icon {
+    background-color: var(--trade-navy);
+    color: #ffffff;
+}
+
+/* The tiles in the Menu sheet: three to a row, the icon above the name. */
+.trade-tiles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
 .trade-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    min-height: 6rem;
+    padding: 0.75rem 0.375rem;
+    border-radius: 1.125rem;
     background-color: var(--trade-page);
-    border-color: transparent;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    text-align: center;
+    text-decoration: none;
+    touch-action: manipulation;
+}
+
+/* Rows of links in one white card, each with an icon and an arrow (Reports). */
+.trade-links {
+    display: flex;
+    flex-direction: column;
+    padding: 0.375rem;
+    border-radius: var(--trade-radius);
+    background-color: var(--trade-card);
+    box-shadow: var(--trade-shadow);
+}
+
+.trade-link-row {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    min-height: 4rem;
+    padding: 0.625rem 0.75rem;
+    border-radius: 1.125rem;
+    font-weight: 600;
+    text-decoration: none;
+    touch-action: manipulation;
+}
+
+.trade-link-row + .trade-link-row {
+    border-top: 1px solid var(--trade-line);
+}
+
+.trade-link-label {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.trade-link-arrow {
+    flex-shrink: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+    color: var(--trade-muted);
+}
+
+.trade-link-row:focus-visible {
+    outline: 3px solid var(--trade-primary);
+    outline-offset: -3px;
+}
+
+@media (min-width: 768px) {
+    .trade-links.trade-reports {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.25rem;
+    }
+
+    .trade-links.trade-reports .trade-link-row + .trade-link-row {
+        border-top: 0;
+    }
 }
 
 .trade-tile-on {
@@ -543,16 +844,18 @@
     display: none !important;
 }
 
+/* A floating white bar; the open page is a navy pill with its name. */
 .trade-tabbar {
     position: fixed;
-    inset-inline: 0;
-    bottom: 0;
+    inset-inline: 0.75rem;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom));
     z-index: 30;
     display: flex;
-    padding: 0.375rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom));
+    gap: 0.25rem;
+    padding: 0.375rem;
+    border-radius: 999px;
     background-color: var(--trade-card);
-    border-radius: 1.25rem 1.25rem 0 0;
-    box-shadow: 0 -1px 0 var(--trade-line), 0 -10px 30px -18px rgb(17 24 39 / 0.25);
+    box-shadow: 0 0 0 1px rgb(15 27 51 / 0.05), 0 16px 36px -12px rgb(15 27 51 / 0.35);
 }
 
 .trade-tabbar-item {
@@ -562,10 +865,10 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.25rem;
-    min-height: 3.75rem;
-    border-radius: 1rem;
-    font-size: 0.8125rem;
+    gap: 0.125rem;
+    min-height: 3.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
     font-weight: 600;
     line-height: 1.2;
     color: var(--trade-muted);
@@ -582,22 +885,21 @@
 }
 
 .trade-tabbar-icon {
-    width: 1.625rem;
-    height: 1.625rem;
-    padding: 0.25rem 1rem;
-    box-sizing: content-box;
-    border-radius: 999px;
+    flex-shrink: 0;
+    width: 1.5rem;
+    height: 1.5rem;
 }
 
 .trade-tabbar-item[aria-current],
 .trade-tabbar-item[aria-expanded='true'] {
-    color: var(--trade-primary);
+    flex-grow: 1.4;
+    flex-direction: row;
+    gap: 0.375rem;
+    padding-inline: 0.75rem;
+    background-color: var(--trade-navy);
+    color: #ffffff;
+    font-size: 0.875rem;
     font-weight: 700;
-}
-
-.trade-tabbar-item[aria-current] .trade-tabbar-icon,
-.trade-tabbar-item[aria-expanded='true'] .trade-tabbar-icon {
-    background-color: var(--trade-primary-soft);
 }
 
 .trade-tabbar-item:focus-visible,
@@ -677,7 +979,13 @@
     gap: 0.375rem;
 }
 
-.trade-companies-title {
+.trade-sheet-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.trade-sheet-group-title {
     font-size: 0.875rem;
     font-weight: 700;
     color: var(--trade-muted);
@@ -718,16 +1026,322 @@
     display: none !important;
 }
 
-@media (max-width: 1023.98px) {
-    /* Keep the last lines of a page above the bottom bar. */
-    .fi-panel-trade .fi-main {
-        padding-bottom: 6.5rem;
+@media (min-width: 1024px) {
+    .trade-mobile,
+    .trade-back {
+        display: none;
     }
 }
 
-@media (min-width: 1024px) {
-    .trade-mobile {
+/* ---------- Phones: the app look (owner's reference, 2026-10-23) ---------- */
+
+.trade-back {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 999px;
+    background-color: rgb(255 255 255 / 0.14);
+    color: #ffffff;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.22);
+}
+
+.trade-back:focus-visible {
+    outline: 3px solid #ffffff;
+    outline-offset: 2px;
+}
+
+@media (max-width: 1023.98px) {
+    .fi-panel-trade {
+        --trade-gutter: 1rem;
+    }
+
+    /* Keep the last lines of a page above the floating bar. */
+    .fi-panel-trade .fi-main {
+        padding-bottom: 7.5rem;
+    }
+
+    /* Top bar: light on Home, navy on every other page so it runs into the page's navy header. */
+    .fi-panel-trade .fi-topbar {
+        background-color: var(--trade-page);
+        box-shadow: none;
+    }
+
+    .fi-panel-trade:not(:has(.trade-home)) .fi-topbar {
+        background-color: var(--trade-navy);
+    }
+
+    .fi-panel-trade:not(:has(.trade-home)) .fi-topbar .fi-logo {
+        color: #ffffff;
+    }
+
+    /* Home: no heading row, so the greeting starts close to the top bar. */
+    .fi-panel-trade .fi-page:has(.trade-home) .fi-page-header-main-ctn {
+        padding-top: 0.5rem;
+    }
+
+    /* Every other page: title, back button and the page's buttons on a navy band. */
+    .fi-panel-trade .fi-page:not(:has(.trade-home)) > .fi-page-header-main-ctn {
+        padding-top: 0;
+        row-gap: 1.25rem;
+    }
+
+    .fi-panel-trade .fi-header {
+        margin-inline: calc(-1 * var(--trade-gutter));
+        padding: 0.5rem var(--trade-gutter) 1.5rem;
+        border-radius: 0 0 1.75rem 1.75rem;
+        background-color: var(--trade-navy);
+        color: #ffffff;
+    }
+
+    .fi-panel-trade .fi-header .fi-breadcrumbs {
         display: none;
+    }
+
+    .fi-panel-trade .fi-header > div:first-child {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+        min-width: 0;
+    }
+
+    .fi-panel-trade .fi-header-heading {
+        flex: 1 1 0;
+    }
+
+    .fi-panel-trade .fi-header-heading {
+        min-width: 0;
+        color: #ffffff;
+        font-size: 1.5rem;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+    }
+
+    .fi-panel-trade .fi-header-subheading {
+        flex-basis: 100%;
+        margin: 0;
+        color: rgb(255 255 255 / 0.8);
+    }
+
+    .fi-panel-trade .fi-header .fi-btn {
+        min-height: 2.75rem;
+        border-radius: 999px;
+        padding-inline: 1rem;
+    }
+
+    /* The main button of a page (New challan, Print …) is white on the navy band. */
+    .fi-panel-trade .fi-header .fi-btn.fi-color-primary {
+        background-color: #ffffff;
+        color: var(--trade-navy);
+    }
+
+    .fi-panel-trade .fi-header .fi-btn.fi-color-primary .fi-icon {
+        color: var(--trade-navy);
+    }
+
+    .fi-panel-trade .fi-header .fi-btn.fi-color-gray,
+    .fi-panel-trade .fi-header .fi-btn:not([class*='fi-color-']) {
+        background-color: rgb(255 255 255 / 0.14);
+        color: #ffffff;
+        box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25);
+    }
+
+    /* Sections, forms and tables: white cards with soft shadows and round corners, no hard lines. */
+    .fi-panel-trade .fi-section {
+        border-radius: var(--trade-radius);
+        box-shadow: var(--trade-shadow);
+    }
+
+    .fi-panel-trade .fi-input-wrp {
+        min-height: 3rem;
+        border-radius: 0.875rem;
+    }
+
+    .fi-panel-trade .fi-sc-actions .fi-btn,
+    .fi-panel-trade .fi-form-actions .fi-btn {
+        min-height: 3rem;
+        border-radius: 999px;
+    }
+}
+
+/* Lists on phones: one card per record — its first column as the title,
+   the other columns as "name … value" lines, an arrow when the card opens
+   the record. Filament stacks table rows below 640px. */
+@media (max-width: 639.98px) {
+    .fi-panel-trade .fi-ta-ctn:has(.fi-ta-table-stacked-on-mobile) {
+        background-color: transparent;
+        box-shadow: none;
+        border-radius: 0;
+    }
+
+    .fi-panel-trade .fi-ta-ctn:has(.fi-ta-table-stacked-on-mobile) .fi-ta-header-toolbar {
+        padding-inline: 0;
+        border: 0;
+    }
+
+    /* The search box takes the whole row, the filter button beside it. */
+    .fi-panel-trade .fi-ta-header-toolbar > div:has(.fi-ta-search-field) {
+        display: flex;
+        flex: 1 1 auto;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .fi-panel-trade .fi-ta-header-toolbar .fi-ta-search-field {
+        flex: 1 1 auto;
+        max-width: none;
+    }
+
+    .fi-panel-trade .fi-ta-search-field .fi-input-wrp {
+        border-radius: 999px;
+        background-color: var(--trade-card);
+    }
+
+    .fi-panel-trade .fi-ta-content-ctn,
+    .fi-panel-trade .fi-ta-ctn:has(.fi-ta-table-stacked-on-mobile) > div {
+        border: 0;
+    }
+
+    .fi-panel-trade .fi-ta-table-stacked-on-mobile,
+    .fi-panel-trade .fi-ta-table-stacked-on-mobile > thead,
+    .fi-panel-trade .fi-ta-table-stacked-on-mobile > thead > tr,
+    .fi-panel-trade .fi-ta-table-stacked-on-mobile > tbody {
+        border: 0;
+        background-color: transparent;
+    }
+
+    .fi-panel-trade .fi-ta-table-stacked-header-cell {
+        padding: 0 0 0.75rem;
+        background-color: transparent;
+    }
+
+    .fi-panel-trade .fi-ta-table-stacked-sorting .fi-input-wrp {
+        background-color: var(--trade-card);
+    }
+
+    .fi-panel-trade .fi-ta-table-stacked-on-mobile > tbody {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .fi-panel-trade .fi-ta-table-stacked-on-mobile > tbody > tr.fi-ta-row {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+        padding: 1rem 1.125rem;
+        border: 0;
+        border-radius: 1.375rem;
+        background-color: var(--trade-card);
+        box-shadow: var(--trade-shadow);
+    }
+
+    .fi-panel-trade .fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:not(.fi-ta-selection-cell) {
+        padding: 0;
+        border: 0;
+    }
+
+    .fi-panel-trade .fi-ta-row > .fi-ta-cell:has(> .fi-ta-cell-label) {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+
+    .fi-panel-trade .fi-ta-row .fi-ta-cell-label {
+        flex-shrink: 0;
+        padding: 0;
+        color: var(--trade-muted);
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .fi-panel-trade .fi-ta-row .fi-ta-cell-content {
+        min-width: 0;
+        text-align: end;
+    }
+
+    .fi-panel-trade .fi-ta-row .fi-ta-cell-content .fi-ta-text,
+    .fi-panel-trade .fi-ta-row .fi-ta-cell-content .fi-ta-text-item {
+        justify-content: flex-end;
+        font-size: 0.9375rem;
+        font-weight: 600;
+    }
+
+    /* The first column is the card's title. */
+    .fi-panel-trade .fi-ta-row > .fi-ta-cell:first-child {
+        display: block;
+        margin-bottom: 0.25rem;
+        padding-inline-end: 2.5rem;
+    }
+
+    .fi-panel-trade .fi-ta-row > .fi-ta-cell:first-child .fi-ta-cell-label {
+        display: none;
+    }
+
+    .fi-panel-trade .fi-ta-row > .fi-ta-cell:first-child .fi-ta-cell-content {
+        text-align: start;
+    }
+
+    .fi-panel-trade .fi-ta-row > .fi-ta-cell:first-child .fi-ta-text,
+    .fi-panel-trade .fi-ta-row > .fi-ta-cell:first-child .fi-ta-text-item {
+        justify-content: flex-start;
+        font-size: 1.0625rem;
+        font-weight: 700;
+    }
+
+    /* A card that opens its record shows a round arrow; its own "View" / "Edit" link would say the same. */
+    .fi-panel-trade .fi-ta-row.fi-clickable::after {
+        content: '';
+        position: absolute;
+        top: 0.875rem;
+        inset-inline-end: 0.875rem;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 999px;
+        background-color: var(--trade-primary-soft);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2323417a'%3E%3Cpath fill-rule='evenodd' d='M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: 1.125rem;
+        pointer-events: none;
+    }
+
+    .fi-panel-trade .fi-ta-row.fi-clickable .fi-ta-actions > a.fi-ac-link-action {
+        display: none;
+    }
+
+    .fi-panel-trade .fi-ta-row .fi-ta-actions {
+        justify-content: flex-start;
+    }
+
+    .fi-panel-trade .fi-ta-row .fi-ta-actions:not(:has(> :not(a.fi-ac-link-action))) {
+        display: none;
+    }
+
+    .fi-panel-trade .fi-ta-row .fi-ta-actions > button.fi-ac-link-action {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        line-height: 1.2;
+        min-height: 2.5rem;
+        margin-top: 0.25rem;
+        padding-inline: 0.875rem;
+        border-radius: 999px;
+        background-color: var(--trade-primary-soft);
+        color: var(--trade-primary);
+        font-weight: 700;
+    }
+
+    .fi-panel-trade .fi-ta-row .fi-ta-actions > button.fi-ac-link-action .fi-link-label {
+        align-self: center;
+    }
+
+    .fi-panel-trade .fi-ta-ctn:has(.fi-ta-table-stacked-on-mobile) .fi-pagination {
+        padding-inline: 0;
     }
 }
 

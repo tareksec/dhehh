@@ -1,5 +1,5 @@
 # Core Platform
-> Last checked: 2026-10-26, branch `feature/trade-portal-reports` (Trade Portal phase 6)
+> Last checked: 2026-10-23, branch `feature/trade-portal-reports` (Trade Portal phone look, after phase 6)
 
 ## What it does
 The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and five distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal, Trade Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated backups to Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
@@ -86,8 +86,8 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Providers/Filament/InvestorPanelProvider.php` | Configures the external investor portal (`/investor`, ID: `investor`). |
 | `app/Providers/Filament/ResellerPanelProvider.php` | Configures the reseller program portal (`/portal`, ID: `reseller`). |
 | `app/Providers/Filament/TradePortalPanelProvider.php` | Configures the Trade Portal (`/trade`, ID: `trade`): phone-first, Bangla-first shop portal on the main domain (docs/tasneem-samples/PLAN.md). |
-| `app/Filament/Trade/TradeNavigation.php` | The Trade Portal's menu: top menu on wide screens, bottom tab bar on phones (`resources/views/filament/trade/mobile-nav.blade.php`). |
-| `app/Filament/Trade/Pages/Home.php` | Trade Portal home: four cards (today's sales, dues, low stock, open LCs) from `TradePortalHome`. |
+| `app/Filament/Trade/TradeNavigation.php` | The Trade Portal's menu: top menu on wide screens, floating bottom tab bar and the grouped Menu sheet on phones (`resources/views/filament/trade/mobile-nav.blade.php`), and `backUrl()` for the round back button in the phone header (`resources/views/filament/trade/back-button.blade.php`). |
+| `app/Filament/Trade/Pages/Home.php` | Trade Portal home: greeting, today's sales (navy card), "At a glance" (dues, cash and bank, low stock, open LCs), quick jobs and short lists, from `TradePortalHome`. |
 | `app/Filament/Trade/Pages/BusinessProfile.php` | Trade Portal business profile (addresses, TIN/BIN/IRC, bank accounts, signatory, letterhead); needs `trade.profile.manage`. |
 | `app/Services/TradePortalCompanies.php` | Which companies a user may open in `/trade` (`trade.access` + `companies.trade_portal_enabled`), the chosen one, `mayEnter()`. |
 | `app/Services/TradePortalHome.php` | The Trade Portal home figures, each card inside `ModuleGuard::run()`. |

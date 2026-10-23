@@ -35,6 +35,12 @@ class Home extends Dashboard
         return __('Welcome, :name', ['name' => auth()->user()?->name ?? '']);
     }
 
+    /** The page draws its own greeting (home.blade.php) instead of a heading. */
+    public function getHeading(): string
+    {
+        return '';
+    }
+
     public static function canAccess(): bool
     {
         return auth()->user()?->hasPermission('trade.access') ?? false;
@@ -50,7 +56,11 @@ class Home extends Dashboard
     {
         $home = app(TradePortalHome::class);
 
+        $hour = now()->hour;
+
         return [
+            'greeting' => __($hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good evening')),
+            'name' => auth()->user()?->name ?? '',
             'sales' => $home->todaySales(),
             'dues' => $home->dues(),
             'lowStock' => $home->lowStock(),
@@ -63,6 +73,7 @@ class Home extends Dashboard
                 'stock' => StockItemResource::canAccess() ? StockItemResource::getUrl(panel: 'trade') : null,
                 'lcs' => LcFileResource::canAccess() ? LcFileResource::getUrl(panel: 'trade') : (GoodsInResource::canAccess() ? GoodsInResource::getUrl(panel: 'trade') : null),
                 'money' => CashBook::canAccess() ? CashBook::getUrl(panel: 'trade') : null,
+                'newSale' => DeliveryChallanResource::canAccess() ? DeliveryChallanResource::getUrl('create', panel: 'trade') : null,
             ],
         ];
     }
