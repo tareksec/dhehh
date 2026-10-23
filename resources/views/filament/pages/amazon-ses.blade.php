@@ -57,7 +57,7 @@
                 {{-- 2. The account --}}
                 @if (! empty($overview['account']))
                     @php($account = $overview['account'])
-                    <x-filament::section :heading="__('2. Your Amazon SES account')">
+                    <x-filament::section :heading="__('2. Your Amazon SES account')" :description="__('The limits and the health rating belong to the whole AWS account, so every company that uses it shares them.')">
                         <dl class="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
                             <div>
                                 <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Mode') }}</dt>
@@ -92,7 +92,7 @@
 
                 {{-- 3. Domains and addresses --}}
                 @if (isset($overview['identities']) || ! empty($overview['errors']['identities']))
-                    <x-filament::section :heading="__('3. Domains and addresses that may send')">
+                    <x-filament::section :heading="__('3. Domains and addresses that may send')" :description="__('This company\'s own domains come first. Domains of other companies on the same AWS account are listed below them.')">
                         <x-slot name="afterHeader">{{ $this->addIdentityAction }}</x-slot>
 
                         @if (! empty($overview['errors']['identities']))
@@ -101,8 +101,14 @@
                             <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('Nothing is verified in this account yet. Add the domain emails are sent from.') }}</p>
                         @else
                             <ul class="divide-y divide-gray-200 text-sm dark:divide-white/10">
-                                @foreach ($overview['identities'] as $identity)
-                                    <li class="space-y-2 py-3">
+                                @php($identities = collect($overview['identities'])->sortByDesc('own')->values())
+                                @foreach ($identities as $identity)
+                                    @if (! $identity['own'] && ($loop->first || $identities[$loop->index - 1]['own']))
+                                        <li class="pb-1 pt-5 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                            {{ __('Other domains and addresses in this AWS account (used by other companies)') }}
+                                        </li>
+                                    @endif
+                                    <li class="space-y-2 py-3 {{ $identity['own'] ? '' : 'opacity-75' }}">
                                         <div class="flex flex-wrap items-center gap-2">
                                             <span class="break-all font-semibold">{{ $identity['name'] }}</span>
                                             <x-filament::badge :color="$identity['verification'] === 'SUCCESS' ? 'success' : ($identity['verification'] === 'FAILED' ? 'danger' : 'warning')">
@@ -114,9 +120,11 @@
                                                 } }}
                                             </x-filament::badge>
                                             <span class="text-xs text-gray-500 dark:text-gray-400">{{ $identity['type'] === 'DOMAIN' ? __('Domain') : __('Address') }}</span>
-                                            <span class="ms-auto">
-                                                <x-filament::button color="danger" size="xs" outlined wire:click="mountAction('deleteIdentity', {{ \Illuminate\Support\Js::from(['identity' => $identity['name']]) }})">{{ __('Remove') }}</x-filament::button>
-                                            </span>
+                                            @if ($identity['own'] || $this->canRemoveOtherDomains())
+                                                <span class="ms-auto">
+                                                    <x-filament::button color="danger" size="xs" outlined wire:click="mountAction('deleteIdentity', {{ \Illuminate\Support\Js::from(['identity' => $identity['name']]) }})">{{ __('Remove') }}</x-filament::button>
+                                                </span>
+                                            @endif
                                         </div>
                                         @if ($identity['verification'] !== 'SUCCESS' && $identity['dns_records'] !== [])
                                             <div class="rounded-lg bg-gray-50 p-3 text-xs dark:bg-white/5">

@@ -6,6 +6,7 @@ use App\Filament\Pages\AmazonSes;
 use App\Models\Company;
 use App\Models\StorefrontSetting;
 use App\Models\User;
+use App\Models\UserRole;
 use App\Services\CompanyContext;
 use App\Services\Ses\SesTrackingService;
 use App\Services\StorefrontNotificationService;
@@ -158,6 +159,58 @@ class AmazonSesPageTest extends TestCase
 
         $this->assertSame('shop.test', $this->awsCalls[0]['args']['EmailIdentity']);
         $this->assertAllAwsCallsMade();
+    }
+
+    /** One AWS account, several companies: this company's domains first, the others' below and not removable by company staff. */
+    public function test_domains_of_other_companies_on_the_same_account_are_told_apart_and_protected(): void
+    {
+        $this->saveKey();
+        $this->setting->company->forceFill(['domain' => 'offer.shop.test'])->save();
+        $identities = [
+            ['IdentityType' => 'DOMAIN', 'IdentityName' => 'otherco.example', 'SendingEnabled' => true],
+            ['IdentityType' => 'DOMAIN', 'IdentityName' => 'shop.test', 'SendingEnabled' => true],
+            ['IdentityType' => 'EMAIL_ADDRESS', 'IdentityName' => 'hello@shop.test', 'SendingEnabled' => true],
+        ];
+        $verified = fn () => $this->awsResult(['VerificationStatus' => 'SUCCESS', 'DkimAttributes' => ['Status' => 'SUCCESS', 'Tokens' => []]]);
+        $refresh = [
+            ['GetAccount', $this->awsResult(['ProductionAccessEnabled' => true, 'SendingEnabled' => true, 'EnforcementStatus' => 'HEALTHY', 'SendQuota' => ['Max24HourSend' => 1.0, 'MaxSendRate' => 1.0, 'SentLast24Hours' => 0.0]])],
+            ['ListEmailIdentities', $this->awsResult(['EmailIdentities' => $identities])],
+            ['GetEmailIdentity', $verified()], ['GetEmailIdentity', $verified()], ['GetEmailIdentity', $verified()],
+            ['ListSuppressedDestinations', $this->awsResult(['SuppressedDestinationSummaries' => []])],
+        ];
+
+        // A settings manager who is not a super admin.
+        UserRole::query()->create(['name' => 'Ops', 'slug' => 'ops_manager', 'permissions' => ['settings.manage'], 'is_active' => true]);
+        $manager = User::factory()->create(['role' => 'ops_manager', 'is_active' => true]);
+        $manager->companies()->attach($this->company, ['role' => 'ops_manager', 'is_default' => true]);
+        Auth::login($manager);
+
+        $this->fakeAws([...$refresh]);
+        $page = Livewire::test(AmazonSes::class)->call('refresh');
+        $rows = collect($page->get('overview')['identities'])->pluck('own', 'name')->all();
+
+        $this->assertEquals(['shop.test' => true, 'hello@shop.test' => true, 'otherco.example' => false], $rows);
+        $page->assertSee('used by other companies')->assertSee('otherco.example');
+        $this->assertFalse($page->instance()->canRemoveOtherDomains());
+
+        // Crafted request: the other company's domain is refused without any AWS call.
+        $this->fakeAws([]);
+        $page->callAction('deleteIdentity', arguments: ['identity' => 'otherco.example'])
+            ->assertNotified('Could not remove it');
+        $this->assertAllAwsCallsMade();
+
+        // Its own domain goes through.
+        $this->fakeAws([['DeleteEmailIdentity', $this->awsResult()], ...$refresh]);
+        $page->callAction('deleteIdentity', arguments: ['identity' => 'shop.test'])->assertNotified('Removed from Amazon SES');
+        $this->assertSame('shop.test', $this->awsCalls[0]['args']['EmailIdentity']);
+
+        // A super admin may remove any.
+        Auth::login(User::factory()->create(['role' => 'super_admin', 'is_active' => true]));
+        $this->fakeAws([['DeleteEmailIdentity', $this->awsResult()], ...$refresh]);
+        $admin = Livewire::test(AmazonSes::class);
+        $this->assertTrue($admin->instance()->canRemoveOtherDomains());
+        $admin->callAction('deleteIdentity', arguments: ['identity' => 'otherco.example'])->assertNotified('Removed from Amazon SES');
+        $this->assertSame('otherco.example', $this->awsCalls[0]['args']['EmailIdentity']);
     }
 
     public function test_a_domain_name_that_is_not_one_is_not_sent_to_amazon(): void

@@ -53,7 +53,30 @@ What the page does:
 
 The page covers the SES account, not the sending itself: emails still go out through the SMTP account of section 2. Asking Amazon to lift the sandbox (production access) is still done in the AWS console (SES → Account dashboard), because Amazon wants a written use case.
 
-## 5. Server-wide fallback (optional)
+## 5. Several companies on one AWS account
+
+One AWS account can send for several companies: verify every company's domain in it once, and connect each company separately. SES identities, the SMTP login and the limits belong to the account; everything the ERP does with them is kept per company.
+
+**In AWS (once for the whole account):** verify each company's domain (section 1), create one SMTP credential pair for the region (it works for every domain in that region), ask for production access (the sandbox is account-wide), and create one IAM user for the dashboard with the policy shown on **Settings → Amazon SES**.
+
+**In the ERP, for each company** (pick the company in the top bar, then):
+
+1. **Settings → Integrations → Email Setup** (pick the site if the company has two): the SES region, the same SMTP user name and password, a **From address on this company's own domain** (for example `orders@<that company's domain>`) and the company's **From name**.
+2. **Settings → Amazon SES**: paste the AWS access key ID, secret and region (the same key for every company is fine; each company keeps its own copy, encrypted), **Save and check**, then **Turn tracking on**.
+3. **Send test email** (Integrations → Email Setup) and look at **Settings → Logs → Email**.
+
+What is separate for each company, and what is shared:
+
+| Per company | Shared by every company on the account |
+| --- | --- |
+| The From address and name; the SMTP settings saved for its site | The sending limit, the send rate and the sandbox / production state |
+| The Email Log (each company sees only its own rows) | Amazon's health rating of the account (one company's many bounces can put all of them under review) |
+| Bounce / complaint tracking: its own SNS topic, SES configuration set and webhook, so a report always lands in the right company's log | The suppression list: an address that bounced for one company is refused for all |
+| Its domains on the Amazon SES page, shown first | The list of domains: the other companies' domains are shown below, read-only for company staff (only a super admin can remove them) |
+
+Keep each company sending only from its own domain, and clean up bad addresses (the Email Log shows them), because the reputation is shared. If a company must be fully isolated from the others, give it its own AWS account.
+
+## 6. Server-wide fallback (optional)
 
 Anything that is not tied to a site's own SMTP uses the environment's mailer. To send that through SES as well, set these in Coolify (they are not secrets in the repo):
 

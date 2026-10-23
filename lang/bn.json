@@ -3776,5 +3776,9 @@
     "Amazon SES did not try: the address is on its suppression list after an earlier bounce or complaint.": "Amazon SES চেষ্টাই করেনি: আগের বাউন্স বা অভিযোগের পর ঠিকানাটি তার সাপ্রেশন তালিকায় আছে।",
     "The recipient marked the message as spam.": "প্রাপক বার্তাটিকে স্প্যাম চিহ্নিত করেছেন।",
     "Amazon SES rejected the message before sending it.": "Amazon SES পাঠানোর আগেই বার্তাটি প্রত্যাখ্যান করেছে।",
-    "Sent means the mail server accepted the message, not that the inbox received it. With tracking switched on (Settings → Amazon SES) a message later turns into Delivered, Bounced or Marked as spam; until then bounces and spam-folder delivery are not tracked.": "Sent মানে মেইল সার্ভার বার্তাটি গ্রহণ করেছে, ইনবক্স পেয়েছে তা নয়। ট্র্যাকিং চালু থাকলে (Settings → Amazon SES) বার্তাটি পরে Delivered, Bounced বা স্প্যাম চিহ্নিত হয়ে যায়; তার আগে বাউন্স ও স্প্যাম ফোল্ডারে যাওয়া ধরা হয় না।"
+    "Sent means the mail server accepted the message, not that the inbox received it. With tracking switched on (Settings → Amazon SES) a message later turns into Delivered, Bounced or Marked as spam; until then bounces and spam-folder delivery are not tracked.": "Sent মানে মেইল সার্ভার বার্তাটি গ্রহণ করেছে, ইনবক্স পেয়েছে তা নয়। ট্র্যাকিং চালু থাকলে (Settings → Amazon SES) বার্তাটি পরে Delivered, Bounced বা স্প্যাম চিহ্নিত হয়ে যায়; তার আগে বাউন্স ও স্প্যাম ফোল্ডারে যাওয়া ধরা হয় না।",
+    "Other domains and addresses in this AWS account (used by other companies)": "এই AWS অ্যাকাউন্টের অন্যান্য ডোমেইন ও ঠিকানা (অন্য কোম্পানিগুলো ব্যবহার করে)",
+    "The limits and the health rating belong to the whole AWS account, so every company that uses it shares them.": "সীমা ও স্বাস্থ্য-মূল্যায়ন পুরো AWS অ্যাকাউন্টের, তাই এটি যত কোম্পানি ব্যবহার করে সবাই একই জিনিস ভাগ করে।",
+    "This company's own domains come first. Domains of other companies on the same AWS account are listed below them.": "এই কোম্পানির নিজের ডোমেইন আগে দেখানো হয়। একই AWS অ্যাকাউন্টের অন্য কোম্পানির ডোমেইন তার নিচে থাকে।",
+    ":name is not one of this company's domains. Only a super admin can remove it.": ":name এই কোম্পানির ডোমেইন নয়। এটি শুধু সুপার অ্যাডমিন মুছতে পারেন।"
 }

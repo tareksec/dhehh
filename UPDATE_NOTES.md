@@ -23,7 +23,11 @@ Not built: asking Amazon for production access (it needs a written use case, don
 
 Needs Bangla review (lang/bn.json): the whole Amazon SES page (118 new keys: headings 1-5, the checklist lines, the account labels, the dialogs and notifications, the AWS refusal messages), the Email Log result names "Delivered", "Bounced", "Marked as spam" (Bounced → বাউন্স হয়েছে, Marked as spam → স্প্যাম চিহ্নিত) and their reason texts, and the rewritten note above the Email Log.
 
-Commit status: committed and pushed to `ccr-3799b463-p4pv7n`; not on `main` yet (needs the owner's approval). Full test run: 3087 passed, 6 skipped, 0 failed.
+**Follow-up (owner: four domains approved on one AWS account, four companies — how to connect company by company):** the design already keeps everything per company except what Amazon itself shares, so the answer is a procedure (`docs/email-ses-setup.md` section 5) plus one change: the domain list now separates this company's own domains (the From address's domain and the company's site domains, including parents such as `zamzamint.com` for `offer.zamzamint.com`) from the other companies' on the same account, and company staff cannot remove the others' (a super admin can). Shared by all four, by Amazon's design: sending limit and sandbox state, the account health rating, the suppression list. If one company must be fully isolated, it needs its own AWS account. Owner decision still open: whether to allow removal of domains only for super admins altogether.
+
+Needs Bangla review (follow-up): the four new keys on the Amazon SES page (other companies' domains heading, shared-limits note, own-domains-first note, "not one of this company's domains").
+
+Commit status: committed and pushed to `ccr-3799b463-p4pv7n` (follow-up on top of `e554020`); not on `main` yet (needs the owner's approval). Full test run: 3088 passed, 6 skipped, 0 failed.
 
 ## 2026-10-23 - Courier COD is the due amount, and the order page has a Payment section
 

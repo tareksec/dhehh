@@ -141,6 +141,12 @@ class AmazonSes extends Page
             ->columns(3);
     }
 
+    /** Another company's domains on the same AWS account are shown, but only a super admin may remove them. */
+    public function canRemoveOtherDomains(): bool
+    {
+        return (bool) Auth::user()?->isSuperAdmin();
+    }
+
     /** True when the saved row already holds a secret (the box itself is never filled back). */
     public function secretSaved(): bool
     {
@@ -315,6 +321,15 @@ class AmazonSes extends Page
 
         $overview['from_address'] = app(StorefrontNotificationService::class)->mailFromAddress($setting);
         $overview['from_domain'] = $this->fromDomain($setting);
+
+        // One AWS account can serve several companies: tell this company's own domains from the others'.
+        if (isset($overview['identities'])) {
+            $overview['identities'] = array_map(
+                fn (array $identity): array => $identity + ['own' => $this->isOwnIdentity($identity['name'], $overview['from_address'])],
+                $overview['identities'],
+            );
+        }
+
         $overview['smtp_is_ses'] = preg_match(SesApiService::SMTP_HOST_PATTERN, (string) data_get($setting->notification_credentials, 'mail_host')) === 1;
 
         $this->overview = $overview;
@@ -335,6 +350,50 @@ class AmazonSes extends Page
 
             return null;
         }
+    }
+
+    /**
+     * The domains this company sends from or serves its sites on: the From address's domain, the company's
+     * storefront domain and each site's own domain, in lower case without scheme, path or "www.".
+     *
+     * @return array<int, string>
+     */
+    protected function ownDomains(?string $fromAddress): array
+    {
+        $domains = [];
+
+        if ($fromAddress !== null && str_contains($fromAddress, '@')) {
+            $domains[] = substr(strrchr($fromAddress, '@'), 1);
+        }
+
+        foreach ($this->companySettings() as $site) {
+            $domains[] = (string) $site->siteDomain();
+        }
+
+        return collect($domains)
+            ->map(fn (string $domain): string => (string) preg_replace('#^(?:https?://)?(?:www\.)?([^/:]+).*$#i', '$1', strtolower(trim($domain))))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Whether a domain or address in the AWS account is this company's: the From address itself, or a domain that
+     * is (or is the parent of) one of its own domains. Everything else belongs to another company on the same account.
+     */
+    protected function isOwnIdentity(string $identity, ?string $fromAddress): bool
+    {
+        $identity = strtolower($identity);
+
+        if ($fromAddress !== null && $identity === strtolower($fromAddress)) {
+            return true;
+        }
+
+        $domain = str_contains($identity, '@') ? substr(strrchr($identity, '@'), 1) : $identity;
+
+        return collect($this->ownDomains($fromAddress))
+            ->contains(fn (string $own): bool => $own === $domain || str_ends_with($own, '.'.$domain));
     }
 
     protected function fromDomain(StorefrontSetting $setting): ?string
@@ -412,9 +471,17 @@ class AmazonSes extends Page
             })
             ->action(function (array $arguments): void {
                 $setting = $this->setting();
+                $name = (string) ($arguments['identity'] ?? '');
+
+                // Another company's domain on the same AWS account is not this company's to remove; only a super admin may.
+                if (! Auth::user()?->isSuperAdmin() && ! $this->isOwnIdentity($name, app(StorefrontNotificationService::class)->mailFromAddress($setting))) {
+                    Notification::make()->title(__('Could not remove it'))->body(__(':name is not one of this company\'s domains. Only a super admin can remove it.', ['name' => $name]))->danger()->send();
+
+                    return;
+                }
 
                 try {
-                    app(SesApiService::class)->deleteIdentity($setting, (string) ($arguments['identity'] ?? ''));
+                    app(SesApiService::class)->deleteIdentity($setting, $name);
                 } catch (SesApiException $exception) {
                     Notification::make()->title(__('Could not remove it'))->body($exception->getMessage())->danger()->persistent()->send();
 
