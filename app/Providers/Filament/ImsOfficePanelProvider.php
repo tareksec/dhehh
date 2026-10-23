@@ -75,7 +75,7 @@ class ImsOfficePanelProvider extends PanelProvider
             ->login(AdminLogin::class)
             ->brandName(fn (): string => app(CompanySettingsService::class)->name($this->officeCompany()))
             ->brandLogo(fn (): ?string => app(CompanySettingsService::class)->logoUrl($this->officeCompany()))
-            ->brandLogoHeight('2.5rem')
+            ->brandLogoHeight('2rem')
             ->colors(['primary' => Color::hex(InvestorPanelProvider::IMS_PRIMARY)])
             ->font('Hind Siliguri', provider: LocalFontProvider::class)
             // Light and dark mode; light until the person picks dark (the moon button in the top bar and on the sign-in page).
@@ -167,9 +167,13 @@ class ImsOfficePanelProvider extends PanelProvider
             ]);
     }
 
-    /** The name and logo at the top are the IMS domain's, whichever company is open (18_IMS_ALL_COMPANIES_PLAN.md §3.2). */
+    /**
+     * The name and logo at the top follow the company the person picked in the top bar
+     * (owner report 2026-10-23: another company showed the IMS domain's logo). The IMS
+     * domain's own company is only the fallback, e.g. on the sign-in page.
+     */
     protected function officeCompany(): ?Company
     {
-        return Company::forImsHost(request()->getHost()) ?? app(CompanyContext::class)->company();
+        return app(CompanyContext::class)->company() ?? Company::forImsHost(request()->getHost());
     }
 }
