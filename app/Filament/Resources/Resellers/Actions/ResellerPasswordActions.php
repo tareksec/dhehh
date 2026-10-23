@@ -93,7 +93,7 @@ class ResellerPasswordActions
                 Notification::make()
                     ->title(match ($status) {
                         ResellerPasswordResetService::NO_EMAIL => __('This reseller has no email address. Add one on the Edit page, or set a new password instead.'),
-                        ResellerPasswordResetService::MAIL_NOT_SET_UP => __('Email is not set up for this company yet (Storefront Settings → Customer Notifications & Reminders), so no link can be sent. Set a new password instead.'),
+                        ResellerPasswordResetService::MAIL_NOT_SET_UP => __('Email is not set up for this company yet (Settings → Integrations → Email Setup), so no link can be sent. Set a new password instead.'),
                         ResellerPasswordResetService::NO_PORTAL => __('This company has no reseller portal address yet, so there is no page to send the reseller to.'),
                         ResellerPasswordResetService::NOT_A_RESELLER => __('This reseller cannot use the portal (the application is not pending or approved).'),
                         default => __('The link could not be sent. Please try again, or set a new password instead.'),

@@ -14,6 +14,44 @@ Owner (Bangla): put all the log pages on one page, with a single "Logs" menu ent
 
 **Verified:** `LogsPageTest` (8), `SmsLogTest`, `SmsTemplatesTest`, `AdminNavigationClustersTest`, `ModuleGuardTest`, `TranslationParityTest`. Full `php artisan test` (plain, no `--env`): 3006 passed, 2 skipped.
 
+## 2026-10-23 - Amazon SES setup for the ERP's email
+
+Owner (Bangla): "আমরা email সার্ভার হিসেবে aws ses সার্ভিস নিয়েছি। সেখানে আমাদের ডোমেইনগুলো এপ্রুভ হয়েছে। এখন সেটা সেটআপ করা বাকি erp তে। এর জন্য কোন কাজ করা লাগলে সেটাও কর" (we took AWS SES as the email server, our domains are approved there; setting it up in the ERP remains; do whatever work is needed).
+
+Decision (mine, not asked): SES through its **SMTP interface**, not the SES API. Every email flow already goes through the per-site SMTP account (`StorefrontNotificationService`: storefront login codes, reseller password reset, investor/IMS mail, owner digest), so no new dependency, no new credential store, and each company/site keeps its own From domain. The API route (`aws/aws-sdk-php` is installed) would need new per-site key/secret/region fields and a new transport; say so if the owner wants it.
+
+What changed: Email Setup tab gets an **Amazon SES region** quick fill (host, 587, TLS), a **Send test email** button (shows the mail server's own error), and a warning on save when no usable From address exists. Guide: `docs/email-ses-setup.md`.
+
+Two bugs found on the way, both fixed:
+- **Wrong company's SMTP/sender in a long-running queue worker.** `Mail::mailer('storefront_dynamic')` is cached by the mail manager for the process; the second company's mail went out through the first company's SMTP host and From. With several verified SES domains that means mail sent under the wrong company's address, with no error. Now purged before each build; `CompanyEmailSetupTest` fails without it (checked by removing the line).
+- **SES user names are not email addresses.** The sender defaulted to the SMTP user name (`AKIA…`), which is not a valid sender. Now From address, else an email-shaped user name, else the server default.
+
+Found, not changed: Laravel 13's SMTP transport ignores the `encryption` setting (port 465 = SSL, other ports = STARTTLS when offered). The encryption box is therefore cosmetic; I added a help line saying so rather than rewiring it. `Config::set('mail.from')` in `companyMailer()` is still a process-wide side effect (the server-default mailer could pick up a company's From if it is first built afterwards); only the SES-relevant leak above was fixed.
+
+**What the owner must do outside the ERP:** (1) SES must be out of the **sandbox** — verified domains do not lift it; in the sandbox customers would receive nothing. (2) In SES → SMTP settings → Create SMTP credentials (user name `AKIA…`, long password; region-specific; one pair works for all domains in that region). (3) In the ERP, per site: region, user name, password, a **From address on that site's verified domain**, Save, then Send test email. (4) Optional: `MAIL_*` in Coolify for the server-wide fallback. Not built: SES bounce/complaint handling (SNS webhook) — SES can restrict an account with many bounces; offer if wanted.
+
+Checked: full `php artisan test` with PHP 8.4.27: 2990 passed, 6 skipped, 0 failed. Not tested against real SES (no credentials here) — the transport is built and the sender/host/port are asserted, and sending is covered with a fake mailer and an unreachable host only.
+
+Needs Bangla review (new keys): "Amazon SES region (quick setup)", its long help text, "Send test email", "Send to", "Test email sent/failed", "Email needs a From address" and its body, "Port 465 connects over SSL…", the new From address help text, the test email's subject and body.
+
+Commit status: committed and pushed to `ccr-3799b463-p4pv7n`; not on `main` (needs the owner's approval).
+
+## 2026-10-23 - Email (SMTP) settings moved to Integrations → Email Setup
+
+Owner (Bangla): "ইমেইল ইন্টিগ্রেশন এর জন্য যে সেটিংস গুলো আছে সেগুলো ইন্টিগ্রেশন পেজে ইমেইল সেটআপ ট্যাব এ নিয়ে যাও।" (move the settings that exist for email integration to the Email Setup tab on the Integrations page). There was no Email Setup tab yet, so I added it next to SMS Gateway, the same way the SMS gateway was moved on 2026-10-10.
+
+What changed: the seven SMTP fields (host, port, encryption, username, password, From address, From name) are removed from Storefront Settings → Customer Notifications & Reminders and live on Settings → Integrations → Email Setup, per site (Site picker). Same storage (`notification_credentials`), no migration, saved values keep working. Each page merges only the keys it owns, so neither can wipe the other's (or the WhatsApp reminder) keys. The "Email is not set up…" message for the reseller password-reset action and the Customer Notifications section note now point to the new tab.
+
+Left as is: the WhatsApp reminder fields stay on Storefront Settings (the owner asked only for email). `BroadcastForm` still says the SMS gateway is "under Storefront Settings → Customer Notifications" — stale since the SMS move of 2026-10-10, not touched here.
+
+Needs Bangla review (new keys): "Email Setup" → "ইমেইল সেটআপ", the tab note, "SMTP host/port/encryption/username/password", "From address" → "প্রেরকের ঠিকানা", "From name" → "প্রেরকের নাম".
+
+Found while testing: choosing "None" for encryption was saved as null, which the mail code reads as TLS (the old Storefront Settings select had the same flaw). The new tab now saves "None" as an empty string and shows a saved null as TLS, so nothing changes for existing sites.
+
+Checked: full `php artisan test` (PHP 8.4.27): 2982 passed, 6 skipped, 0 failed. No real SMTP server or browser was used — the tab is covered by Livewire tests only, and I did not look at it rendered.
+
+Commit status: committed and pushed to `ccr-3799b463-p4pv7n`; not on `main` (needs the owner's approval).
+
 ## 2026-10-23 - SMS Log and "Send test SMS" (why did no SMS arrive?)
 
 Owner (Bangla): "আমি এইমাত্র এই অর্ডার টা করলাম কিন্তু কোন এসএমএস আমার ফোন নাম্বারে আসে নাই, তাহলে বুঝা গেল যে sms gateway ঠিকমতো কাজ করছে না।" Also asked earlier whether each message (order, login OTP, password reset, reseller) has its own template, because the SMS Gateway tab shows a single URL.
@@ -1203,6 +1241,33 @@ Needs Bangla review (new keys): Reseller levels (রিসেলার লেভ
 Tests: `ResellerLevelsTest` (10). Verified: full suite 2543 passed, 1 skipped, 0 failed.
 
 Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16). Not pushed to `main`.
+
+## 2026-10-22 (last) - Landing page: the reseller's questions answered, Bangla version, Anek Bangla font
+
+The owner (in Bangla) passed on the questions of a prospective reseller (list products on Facebook/website with photos, details, prices; send customer name/address/phone/bill; the store sends by Steadfast on cash on delivery and deducts the product price, packaging and other charges before sending the profit; how payment and profit settlement work) and asked that **the answers are written on the landing page**, that the page **has a Bangla version**, and that it **uses the Anek Bangla font**.
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+
+1. A **Questions resellers ask** section with six answers, written only from what the code does (checked in `ResellerOrderPlacementService::quote()`, `ResellerCommissionService`, the portal's Products / Earnings / Withdrawals pages): cash on delivery with nothing in advance; customer bill = the reseller's prices + the store's delivery charge + VAT where it applies; profit = selling price − cost per piece; **no packaging charge on store-delivered orders** (packaging is charged only on own-courier orders, as the guide already says); profit payable after delivery; withdrawal to bKash / Nagad / Rocket / bank, reviewed and paid by the store.
+2. A **Bangla / English switch** on the landing page (cookie, `?lang=bn`), followed by the portal's sign-in and application pages. Default stays the app's language for anyone who did not use the switch.
+3. **Anek Bangla** (variable, self-hosted, OFL) for the whole landing page; Hind Siliguri and Unbounded are no longer loaded there. The admin portal itself is unchanged (still Hind Siliguri).
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- **I did not name Steadfast.** The prospective reseller asked about Steadfast, but the courier is the store's own setting and I could not confirm from the code which courier the store uses for reseller orders. The answer says "the store sends the parcel on cash on delivery". If the owner wants Steadfast named, tell me the exact words.
+- **No promise about how fast the store pays.** The system has no payout deadline, so the answer gives none.
+- **The prospective reseller's "packaging and other charges are deducted from the delivery money" is answered with what the system does:** the reseller's cost (shown on each product) is what the store keeps; delivery charge and VAT are added to the customer's bill; no separate packaging charge on store-delivered orders; the return charge only if the order comes back (and only if the store set one). If the owner's real practice is different (for example a packaging deduction), the system itself would have to change first.
+- **The answers are part of the page's code, not an admin-edited list**, like the other "how it works" sections (so they are in Bangla and English from the language files). The guide's introduction and rules are still admin-written, and appear in whatever language the admin typed them. If the owner wants the questions editable from Reseller Settings too, that is a small follow-up.
+- Language default: I did **not** make Bangla the default; only a visitor's own choice changes it. Setting `APP_LOCALE=bn` would make Bangla the default for the whole app, not just this page.
+- Two language-name keys hold the language's own name ("English", "বাংলা") and are read in their own language, so the switch is always readable; the Bangla word lives only in `lang/bn.json`.
+
+Needs Bangla review (new keys, all in `lang/bn.json`): the six questions and their answers (long sentences; I wrote them in the same plain style as the guide, using "আয়" for profit, "খরচ" for cost and "উইথড্র" as the guide does), *Questions resellers ask*, *Questions and answers*, the short line under the heading, *Change language*.
+
+**Deploy: `npm run build`** (new font files and CSS).
+
+Verified: `npm run build`, the English and Bangla pages rendered in Chromium (desktop and 390 px phone), and the full suite on the tree with `origin/main` (v2.100.0) merged in: 2986 passed, 5 skipped, 0 failed.
+
+Commit status: committed to the work branch `claude/reseller-module-status-v9tobe`, `origin/main` (v2.100.1) merged in, full suite on the merged tree green (result below); pushed to `main` on the owner's explicit approval ("ওকে এটা মেইনে পুশ কর", 2026-10-23).
 
 ## 2026-10-22 (later) - Landing page redesigned in neo-brutalism
 

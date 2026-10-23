@@ -8,6 +8,30 @@
         ['title' => __('Set up your store'), 'body' => __('Pick the products for your store, set your own prices and share your store link.'), 'color' => 'nb-mint'],
         ['title' => __('Earn on every sale'), 'body' => __('You earn the difference between your price and your cost on every delivered order.'), 'color' => 'nb-sky'],
     ];
+    $faq = [
+        ['q' => __('Can I just market and sell while you pack and deliver?'), 'color' => 'nb-yellow', 'a' => [
+            __('Yes. That is how the program works: you choose the products, set your own prices and bring the orders. The store keeps the stock and packs the parcel; unless you choose your own courier, the store delivers it too.'),
+        ]],
+        ['q' => __('Can I list your products on my Facebook page and website with photos, details and prices?'), 'color' => 'nb-pink', 'a' => [
+            __('Yes. The portal shows every product with its photos, details, the suggested price and your cost. You can download the product photos for your posts, share a product or your whole store on WhatsApp and Facebook, and set your own selling price, which can be your cost or any price above it. Every approved reseller also gets an online store that shows only the products they picked, at their prices.'),
+        ]],
+        ['q' => __('A customer confirmed an order. What do I send you?'), 'color' => 'nb-mint', 'a' => [
+            __('You do not send it to us; you enter the order yourself in the portal: the customer\'s name, phone and address, the products and quantities, and your selling price for each. The form shows your customer\'s bill and your profit before you save. The order then reaches the store, which confirms it, packs it and delivers it.'),
+        ]],
+        ['q' => __('How is the parcel sent, and who collects the money?'), 'color' => 'nb-sky', 'a' => [
+            __('The store sends the parcel to your customer on cash on delivery, so your customer pays when it arrives and you pay nothing in advance. The customer\'s bill is the prices you set plus the store\'s delivery charge, and VAT where it applies. You do not have to book a courier yourself.'),
+        ]],
+        ['q' => __('What is deducted from the money collected, and how much is my profit?'), 'color' => 'nb-orange', 'a' => array_values(array_filter([
+            __('Your profit is your selling price minus your cost, for every piece. Your cost is the price shown on each product in the portal; that is what the store keeps for the product. The delivery charge and VAT are added to your customer\'s bill on top, so they are not taken out of your profit, and there is no separate packaging charge on orders the store delivers.'),
+            __('Cancelled, returned or refunded orders earn no profit. If a delivered order is returned later, its profit is taken back.'),
+            $returnCharge > 0 ? __('When an order is returned, a return charge is taken from your deposit, once for that order. This applies to orders the store delivers and to your own-courier orders alike.') : null,
+            $returnCharge > 0 && $showFigures ? __('The return charge is :amount for each returned order.', ['amount' => $money($returnCharge)]) : null,
+        ]))],
+        ['q' => __('When and how do I get my profit? How do payment and profit settlement work?'), 'color' => 'nb-yellow', 'a' => array_values(array_filter([
+            __('Your profit waits while the order is on its way and becomes payable once the order is delivered. Open :withdrawals in the portal and request any amount up to your available balance, to bKash, Nagad, Rocket or a bank account. The store reviews the request and pays it, and you see its status in the portal. The :earnings page lists every order with its sale amount, your cost, your profit and its status.', ['withdrawals' => __('Withdrawals'), 'earnings' => __('Earnings')]),
+            $showFigures && $minWithdrawal > 0 ? __('The smallest withdrawal is :amount.', ['amount' => $money($minWithdrawal)]) : null,
+        ]))],
+    ];
     $check = '<svg class="h-5 w-5 shrink-0" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>';
     $arrow = '<svg class="h-5 w-5" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/></svg>';
 @endphp
@@ -42,6 +66,7 @@
                 <span class="hidden sm:block"><span class="nb-chip nb-yellow">{{ __('Reseller guide') }}</span></span>
             </a>
             <nav class="flex shrink-0 items-center gap-2 sm:gap-3">
+                <div class="hidden sm:block">@include('reseller.partials.language-switch')</div>
                 <a class="nb-btn nb-btn--light nb-btn--small" href="{{ $loginUrl }}">{{ __('Sign in') }}</a>
                 <a class="nb-btn nb-btn--small" href="{{ $applyUrl }}" data-guide-cta>{{ __('Apply now') }}</a>
             </nav>
@@ -53,6 +78,7 @@
         <section class="nb-dots nb-border-b relative overflow-hidden">
             <div class="mx-auto grid max-w-6xl items-center gap-12 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[1.15fr_0.85fr]">
                 <div>
+                    <div class="mb-6 sm:hidden">@include('reseller.partials.language-switch')</div>
                     <p class="nb-chip nb-pink">{{ __('Reseller program') }}</p>
                     <h1 class="nb-display mt-5" style="font-size: clamp(1.9rem, 5.2vw, 3.5rem)">
                         {{ __('Sell :company products from your own store.', ['company' => $companyName]) }}
@@ -73,6 +99,7 @@
                             'money' => __('Pricing and profit'),
                             'store' => __('Your store'),
                             'orders' => __('Orders and delivery'),
+                            'faq' => __('Questions and answers'),
                             'rules' => __('Rules'),
                         ]) as $anchor => $label)
                             <a class="nb-chip" href="#{{ $anchor }}">{{ $label }}</a>
@@ -230,6 +257,27 @@
                         </article>
                     @endif
                 </div>
+            </div>
+        </section>
+
+        {{-- The questions new resellers ask first, answered from how the program really works --}}
+        <section id="faq" class="mx-auto max-w-6xl scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20">
+            <h2 class="nb-h2">{{ __('Questions resellers ask') }}</h2>
+            <p class="mt-3 max-w-3xl text-lg">{{ __('Short answers to what new resellers ask first. They describe how the program really works.') }}</p>
+            <div class="mt-10 grid gap-6 md:grid-cols-2">
+                @foreach ($faq as $i => $item)
+                    <article class="nb-box nb-lift {{ $item['color'] }} p-6" data-reseller-faq>
+                        <div class="flex items-start gap-4">
+                            <span class="nb-num shrink-0" style="background: #111111; color: #ffffff; width: 2.5rem; height: 2.5rem; font-size: 1rem">{{ $i + 1 }}</span>
+                            <h3 class="text-xl font-bold leading-snug">{{ $item['q'] }}</h3>
+                        </div>
+                        <div class="mt-4 space-y-3 text-base leading-7">
+                            @foreach ($item['a'] as $paragraph)
+                                <p>{{ $paragraph }}</p>
+                            @endforeach
+                        </div>
+                    </article>
+                @endforeach
             </div>
         </section>
 

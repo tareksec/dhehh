@@ -9,12 +9,55 @@ All notable production changes to Business Dashboard are documented here.
 ### Added
 
 - **One "Logs" page for every log.** Owner request 2026-10-23. **Settings → Logs** is now the only log entry in the menu, with one tab per log, the way **Integrations** gathers the integrations: **SMS**, **Audit**, **Courier status**, **Courier webhooks**, **Meta events**, **Deploy errors** and **Mobile crashes**. A tab appears only for people who could already open that log, so nobody gains or loses access. The separate sidebar entries for SMS Log, Audit Logs, Deploy Error Logs and Mobile Crash Reports are gone; the logs' own pages and links (for example the link in a deploy-error alert, or Courier → Status Logs) keep working. The open tab is kept in the address, so a link opens the right log. The SMS log reads as one column on a phone (when, number, result, why) so it does not scroll sideways.
+- **Amazon SES setup for the ERP's email.** Owner request 2026-10-23 (the domains are approved in AWS SES). SES is used through its SMTP interface, so it plugs into **Settings → Integrations → Email Setup** like any SMTP account:
+  - **Amazon SES region (quick setup):** type the region (for example `ap-southeast-1`) and the SMTP host (`email-smtp.<region>.amazonaws.com`), port 587 and TLS are filled in. The region is not stored; it is read back from the saved host.
+  - **Send test email:** sends a message through the settings saved for the site being edited and shows the mail server's own answer when it fails (for SES: unverified sender, sandbox recipient, wrong credentials or region).
+  - **From address reminder:** an SES SMTP user name is an access-key ID (`AKIA…`), not an email address. If the saved account has no From address and its user name is not an email address, saving shows a warning, and the From address help text says so.
+  - Step-by-step guide: `docs/email-ses-setup.md` (what to do in the SES console, what to enter here, common errors, the optional server-wide fallback in Coolify).
+
+### Changed
+
+- **The email (SMTP) settings moved from Storefront Settings to Settings → Integrations → Email Setup.** Owner request 2026-10-23. SMTP host, port, encryption, username, password, From address and From name are now edited on a new **Email Setup** tab next to **SMS Gateway**, per site (use the Site picker, like Payment Gateway and SMS Gateway). Values already saved keep working — nothing needs to be re-entered. Saving Storefront Settings no longer touches the email keys. The WhatsApp reminder fields stay on Storefront Settings → Customer Notifications & Reminders.
+- The message shown to staff when a reseller's password-reset link cannot be sent because email is not set up now points to **Settings → Integrations → Email Setup**.
 
 ### Fixed
 
 - **"User Id not found" (code 1011) from BulkSMSBD now says what to do.** The SMS Log and the Send test SMS button explain each gateway reply in plain words next to its code: 1011 means BulkSMSBD does not recognise the API key, so copy it again from the BulkSMSBD Developers page; the same for sender-ID problems (1002, 1013-1015), an empty balance (1006, 1007), Bangla-only masking (1012), IP whitelist (1032) and an account that needs attention (1018, 1031).
 - An **empty SMS API key** is now caught before the gateway is called and logged as "The SMS API key is empty".
 - **Spaces copied with the key**, sender ID or URL are removed when the settings are saved and when an SMS is sent. The **SMS API key** box also asks the browser not to fill it in: a browser can put the saved login password into a password-type box, which the gateway then answers with "User Id not found".
+- **A company's email could go out through another company's SMTP account and sender.** The mail manager keeps the mailer it built for the whole process, so a long-running queue worker sending for one company after another (IMS and investor emails) kept using the first company's SMTP host, login and From address. Each send now builds the company's own mailer. With several domains on one SES account this would have sent a company's mail under another company's From address.
+- The sender no longer falls back to an SMTP user name that is not an email address (it used to, which made every message fail); it uses the From address, else an email-shaped user name, else the server's default sender.
+
+### Technical Notes
+
+- Logs page and SMS gateway hints: `App\Filament\Pages\Logs` (Settings cluster, needs the "manage settings" permission) builds its tabs from `App\Support\LogCatalog`, which lists the log resources and keeps those whose `canViewAny()` passes. Each tab embeds `App\Livewire\LogTable` (lazy, `#[Locked] $log`, re-checked on mount) which reuses the resource's own `table()` on the model's company-scoped query; a resource's `ViewAction` becomes a plain link to the resource's view page, and a resource may add a `logNotice()` (SMS and courier webhooks use it for the "queue worker not running" warning). The four resources set `$shouldRegisterNavigation = false` and keep their routes. `StorefrontNotificationService::sendSmsDetailed()` now also returns `reason` (`no_gateway`, `no_api_key`, `gateway_unreachable`, `gateway_refused`) and `smsGatewayHint()` maps codes to advice. Tests: `LogsPageTest` (8), extra cases in `SmsLogTest`. No migrations.
+- Email keys (`mail_host`, `mail_port`, `mail_encryption`, `mail_username`, `mail_password`, `mail_from_address`, `mail_from_name`; new `StorefrontNotificationService::MAIL_CREDENTIAL_KEYS`) still live in the encrypted `storefront_settings.notification_credentials`; no migration. `Integrations::save()` merges only the SMS and email keys into the stored array (`ownedNotificationKeys()`), and `EditStorefrontSetting::mutateFormDataBeforeSave()` re-adds both sets so the Storefront Settings form, which no longer has these fields, cannot wipe them.
+- `StorefrontNotificationService`: new `mailFromAddress()` (From address, else an email-shaped user name, else null), `sendTestEmail()` (returns null or the server's error text, never throws); `companyMailer()` now calls `Mail::purge('storefront_dynamic')` before building the mailer and uses `mailFromAddress()`.
+- In this Laravel version the SMTP transport ignores the `encryption` setting: port 465 connects over SSL (`smtps`), any other port is plain SMTP that upgrades with STARTTLS when the server offers it. The SMTP encryption box therefore does not change how the connection is made; the tab says so. A site with no encryption saved (or a saved null) is shown as TLS; None is saved as an empty string.
+- Lang: new keys for the tab, the SES quick setup, the test email and the From address warning; the Storefront Settings section note, the From address help text and the "Email is not set up…" message changed text in `lang/en.json` and `lang/bn.json`.
+- `.env.example` points to `docs/email-ses-setup.md` for the server-wide fallback mailer (`MAIL_*`); nothing else in the environment changes.
+- Tests: new `CompanyEmailSetupTest` (5: sender rules, per-company mailer isolation — fails without the `purge` — and the test email); `IntegrationsPageTest` (+7, one rewritten); `ResellerPasswordResetByStaffTest` expects the new message.
+
+## [2.102.0] - 2026-10-23
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller landing page: the questions new resellers ask, answered.** Owner request 2026-10-22, from a real prospective reseller's questions. A new **Questions resellers ask** section (with a link chip in the page's menu) answers six questions in plain words, each answer taken from what the system really does, not from promises: can I just market and sell while the store packs and delivers; can I list the products on my Facebook page and website with photos, details and prices; what do I send when a customer confirms an order (nothing: you enter the order in the portal and the form shows the customer's bill and your profit); how the parcel is sent (cash on delivery, nothing in advance) and what the customer's bill is made of; what is deducted from the money collected (your profit is your selling price minus your cost; the delivery charge and VAT are added on top; no separate packaging charge on orders the store delivers; the return charge only when the store has set one and the amount only when *Show money figures on the guide* is on); and when and how the profit is paid (payable after delivery, withdrawal request to bKash, Nagad, Rocket or a bank account, the store reviews and pays, the Earnings page shows every order).
+- **Reseller landing page in Bangla, with a language switch.** Owner request 2026-10-22. The landing page now has an **English | বাংলা** switch in its header (and above the first screen on phones). The choice is kept in a cookie for a year, and the portal's sign-in and application pages follow it (they also carry the same small switch), including the portal's own Livewire requests. Nobody who never used the switch sees any change: they get the app's default language as before; the shop and the admin are never touched. Words the admin typed (the guide's introduction and rules) stay as entered; everything else is translated.
+
+### Changed
+
+- **Reseller landing page is set in Anek Bangla.** Owner request 2026-10-22. The whole page, Bangla and English alike, uses the Anek Bangla font (SIL OFL 1.1, variable weights 100–800), self-hosted with the ERP so no third-party font request is made; the landing page no longer loads Hind Siliguri or Unbounded.
+
+### Technical Notes
+
+- New `App\Http\Middleware\SetResellerPortalLocale` (cookie `reseller_portal_locale`, values `en` / `bn`, set by `?lang=`): runs in the `web` group right after `RestrictPortalHosts` and in the reseller panel's middleware and `persistentMiddleware` (after `ResolveCompanyFromResellerPortalDomain`, so Livewire updates keep the language); it does nothing unless the request is on a reseller portal host (`reseller_portal_company` attribute). Views: `resources/views/reseller/partials/language-switch.blade.php` (landing) and `resources/views/filament/reseller/language-switch.blade.php` (sign-in / application pages, panel render hooks). The language names are `Language name: English` / `Language name: Bangla` and are read in their own language (`__('...', [], 'bn')`), so the switch always shows "বাংলা". 18 new keys in `lang/en.json` and `lang/bn.json`.
+- Font files under `resources/fonts/anek-bangla/` (Bengali, Latin and Latin-extended subsets of the variable font, plus `OFL.txt`) and their `@font-face` rules in `resources/css/reseller-landing.css`. **Deploy: `npm run build`.** Tests: `ResellerLandingPageTest` (+7: the questions and answers, figures following the settings, the Bangla version and cookie, the language kept on the landing and application pages, an unknown language ignored, the shop untouched, the font shipping with the ERP).
+## [2.101.0] - 2026-10-23
+
+**Release type:** Minor Feature Update
 
 ### Added
 
@@ -28,9 +71,6 @@ All notable production changes to Business Dashboard are documented here.
 - A note on the SMS Gateway tab explaining that the URL only delivers messages: the wording is written on **Settings → SMS Templates**, and the branding comes from the sender ID and that wording.
 
 **Technical Notes:** New table `sms_logs` (migration `2026_10_23_100000_create_sms_logs_table.php`, short index names) and company-owned model `SmsLog` (registered in `MultiCompanyIsolationTest`). `SmsLogService` writes the rows and never throws (a logging failure is reported and the SMS still goes out; covered by a test). `OrderStatusSmsService` logs a row when the message is queued, or a skipped row at dispatch when no wording is written, and closes it in `send()` / `sendPlaced()`; the existing send rules and dedupe are unchanged. `StorefrontNotificationService::sendSmsDetailed()` returns the gateway's code, its meaning and any error; `sendSms()` still returns a bool. `SmsLogResource` is read-only and needs the "manage settings" permission. New strings in `lang/en.json` and `lang/bn.json`. Tests: `SmsLogTest` (13). No other behaviour changes.
-
-**Technical Notes (Logs page):** `App\Filament\Pages\Logs` (Settings cluster, needs the "manage settings" permission) builds its tabs from `App\Support\LogCatalog`, which lists the log resources and keeps those whose `canViewAny()` passes. Each tab embeds `App\Livewire\LogTable` (lazy, `#[Locked] $log`, re-checked on mount) which reuses the resource's own `table()` on the model's company-scoped query; a resource's `ViewAction` becomes a plain link to the resource's view page, and a resource may add a `logNotice()` (SMS and courier webhooks use it for the "queue worker not running" warning). The four resources set `$shouldRegisterNavigation = false` and keep their routes. `StorefrontNotificationService::sendSmsDetailed()` now also returns `reason` (`no_gateway`, `no_api_key`, `gateway_unreachable`, `gateway_refused`) and `smsGatewayHint()` maps codes to advice. Tests: `LogsPageTest` (8), extra cases in `SmsLogTest`. No migrations.
-
 ## [2.100.1] - 2026-10-22
 
 **Release type:** Security Update

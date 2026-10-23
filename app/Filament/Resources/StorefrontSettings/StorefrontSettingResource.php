@@ -1018,7 +1018,7 @@ class StorefrontSettingResource extends Resource
 
             Section::make('Customer Notifications & Reminders')
                 ->columnSpanFull()
-                ->description(__('The SMS gateway (login OTP, password recovery, abandoned-cart reminders) is set up in Settings → Integrations → SMS Gateway. WhatsApp reminders run hourly via the scheduler.'))
+                ->description(__('The SMS gateway (login OTP, password recovery, abandoned-cart reminders) and the SMTP email are set up in Settings → Integrations → SMS Gateway and Email Setup. WhatsApp reminders run hourly via the scheduler.'))
                 ->schema([
                     Toggle::make('abandoned_cart_reminders_enabled')
                         ->label('Enable reminders')
@@ -1033,36 +1033,6 @@ class StorefrontSettingResource extends Resource
                         ->default(6)
                         ->minValue(1)
                         ->maxValue(168),
-                    TextInput::make('notification_credentials.mail_host')
-                        ->label('SMTP host')
-                        ->maxLength(255)
-                        ->placeholder('smtp.gmail.com')
-                        ->helperText('Used for customer login OTP emails. Leave empty to keep using the server\'s default mailer.')
-                        ->columnSpanFull(),
-                    TextInput::make('notification_credentials.mail_port')
-                        ->label('SMTP port')
-                        ->numeric()
-                        ->placeholder('587'),
-                    Select::make('notification_credentials.mail_encryption')
-                        ->label('SMTP encryption')
-                        ->options(['tls' => 'TLS', 'ssl' => 'SSL', '' => 'None'])
-                        ->default('tls'),
-                    TextInput::make('notification_credentials.mail_username')
-                        ->label('SMTP username')
-                        ->maxLength(255),
-                    TextInput::make('notification_credentials.mail_password')
-                        ->label('SMTP password')
-                        ->password()
-                        ->revealable()
-                        ->maxLength(255),
-                    TextInput::make('notification_credentials.mail_from_address')
-                        ->label('From address')
-                        ->email()
-                        ->maxLength(255)
-                        ->helperText('Defaults to the SMTP username if left empty.'),
-                    TextInput::make('notification_credentials.mail_from_name')
-                        ->label('From name')
-                        ->maxLength(255),
                     Select::make('notification_credentials.whatsapp_channel_id')
                         ->label('WhatsApp Chat Channel')
                         ->options(function (Get $get, ?StorefrontSetting $record): array {
