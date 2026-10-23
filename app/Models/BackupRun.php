@@ -20,6 +20,13 @@ class BackupRun extends Model
 
     public const SCOPE_APP = 'app';
 
+    /** A restore test: the newest dump loaded into a scratch database. Its kind is where the dump came from. */
+    public const SCOPE_DRILL = 'drill';
+
+    public const DRILL_LOCAL = 'local';
+
+    public const DRILL_DRIVE = 'drive';
+
     /** Made on a schedule every hour / every day, before a deploy, or by a person pressing the button. */
     public const KIND_HOURLY = 'hourly';
 
@@ -45,14 +52,17 @@ class BackupRun extends Model
         'size_bytes',
         'sha256',
         'error',
+        'note',
         'started_at',
         'finished_at',
+        'offsite_at',
     ];
 
     protected $casts = [
         'size_bytes' => 'integer',
         'started_at' => 'datetime',
         'finished_at' => 'datetime',
+        'offsite_at' => 'datetime',
     ];
 
     /**

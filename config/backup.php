@@ -79,6 +79,33 @@ return [
         ],
     ],
 
+    // The restore test (php artisan backup:drill, weekly): loads the newest dump into a
+    // scratch database named backup_drill_*, checks it, and drops it. The app's own
+    // database user usually may not create databases, so it needs a user of its own -
+    // see docs/backup-restore.md ("Restore test") for the one-line GRANT that limits it
+    // to backup_drill_* schemas. Off until BACKUP_DRILL_DB_USERNAME is set.
+    'drill' => [
+        'enabled' => filled(env('BACKUP_DRILL_DB_USERNAME')),
+        'connection' => 'backup_drill',
+        'mysql_binary' => env('BACKUP_MYSQL_BINARY', 'mysql'),
+        'schedule_time' => env('BACKUP_DRILL_SCHEDULE_TIME', '03:30'),
+        // Seconds the import may run before it is stopped.
+        'timeout' => (int) env('BACKUP_DRILL_TIMEOUT', 1800),
+    ],
+
+    // How old the newest successful backup of each kind may be before it counts as stale
+    // (the dashboard card, `backup:check` and /health/backups). A little over the schedule,
+    // so one slow run is not an alarm.
+    'health' => [
+        'hourly_max_age_minutes' => (int) env('BACKUP_STALE_HOURLY_MINUTES', 150),
+        'daily_max_age_hours' => (int) env('BACKUP_STALE_DAILY_HOURS', 30),
+        'drill_max_age_days' => (int) env('BACKUP_STALE_DRILL_DAYS', 9),
+        // GET /health/backups?token=... (or "Authorization: Bearer ...") answers 200 when
+        // backups are fresh and 503 when not, for an outside uptime monitor: the only thing
+        // that notices when the scheduler itself has stopped. Off (404) without a token.
+        'token' => env('BACKUP_HEALTH_TOKEN'),
+    ],
+
     // Encrypts the copy that goes to Google Drive (see App\Services\BackupEncryptor).
     // A passphrase of its own, NOT APP_KEY: APP_KEY sits in the .env inside the app
     // backup, so a backup locked with it could not be opened after losing the server.

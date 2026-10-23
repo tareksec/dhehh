@@ -5,6 +5,8 @@ use App\Http\Middleware\PreventDemoModeWrites;
 use App\Http\Middleware\RestrictPortalHosts;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetCurrentCompany;
+use App\Models\BackupRun;
+use App\Services\OffsiteBackupService;
 use App\Support\ModuleGuard;
 use App\Support\PanelErrorPages;
 use App\Support\StorefrontErrorPages;
@@ -16,6 +18,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
 
@@ -59,6 +62,33 @@ return Application::configure(basePath: dirname(__DIR__))
                 ->runInBackground()
                 ->onOneServer();
         }
+
+        // Restore test: every Sunday, the newest dump is loaded into a scratch database and
+        // dropped again; with Drive on, twenty minutes later the newest Drive copy is
+        // downloaded, decrypted and loaded the same way (proves the key and the copy).
+        // Only when BACKUP_DRILL_DB_USERNAME is set (config backup.drill).
+        if (config('backup.drill.enabled')) {
+            $drillTime = (string) config('backup.drill.schedule_time', '03:30');
+            $schedule->command('backup:drill')
+                ->weeklyOn(0, $drillTime)
+                ->withoutOverlapping(120)
+                ->runInBackground()
+                ->onOneServer();
+            $schedule->command('backup:drill --offsite')
+                ->weeklyOn(0, Carbon::createFromFormat('H:i', $drillTime)->addMinutes(20)->format('H:i'))
+                ->when(fn (): bool => app(OffsiteBackupService::class)->shouldAutoUpload(BackupRun::SCOPE_DATABASE, BackupRun::KIND_HOURLY)
+                    || app(OffsiteBackupService::class)->shouldAutoUpload(BackupRun::SCOPE_DATABASE, BackupRun::KIND_DAILY))
+                ->withoutOverlapping(120)
+                ->runInBackground()
+                ->onOneServer();
+        }
+
+        // A backup that is overdue tells the Super Admins (once, then a reminder every 12 hours).
+        // It runs on the scheduler, so it cannot notice a stopped scheduler: /health/backups can.
+        $schedule->command('backup:check')
+            ->everyThirtyMinutes()
+            ->withoutOverlapping(10)
+            ->onOneServer();
         $schedule->command('storefront:send-abandoned-cart-reminders')
             ->hourly()
             ->withoutOverlapping()

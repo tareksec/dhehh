@@ -177,6 +177,21 @@ class GoogleDriveBackupService
         return $files;
     }
 
+    /** Save a Drive file to $destination, streamed to disk (a copy is never held in memory). */
+    public function download(string $fileId, string $destination): void
+    {
+        $response = Http::withToken($this->accessToken())
+            ->timeout(600)
+            ->withOptions(['sink' => $destination])
+            ->get(self::FILES_URL.'/'.rawurlencode($fileId).'?alt=media&supportsAllDrives=true');
+
+        if (! $response->successful()) {
+            File::delete($destination);
+
+            throw new RuntimeException('Google Drive did not send the file (HTTP '.$response->status().').');
+        }
+    }
+
     /** Remove a file by its Drive id. A file that is already gone counts as removed. */
     public function delete(string $fileId): void
     {

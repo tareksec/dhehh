@@ -22,6 +22,7 @@ use App\Http\Controllers\Admin\SupplierCsvController;
 use App\Http\Controllers\Admin\SupplierReportPdfController;
 use App\Http\Controllers\Admin\VoucherAttachmentDownloadController;
 use App\Http\Controllers\Admin\VoucherReceiptController;
+use App\Http\Controllers\BackupHealthController;
 use App\Http\Controllers\ChatOrderController;
 use App\Http\Controllers\CourierHandoverSheetController;
 use App\Http\Controllers\CourierWebhookController;
@@ -542,6 +543,11 @@ Route::get('/health/version', function () {
             'Pragma' => 'no-cache',
         ]);
 })->name('health.version');
+
+// Backup freshness for an outside uptime monitor; needs BACKUP_HEALTH_TOKEN, otherwise 404.
+Route::get('/health/backups', BackupHealthController::class)
+    ->middleware('throttle:30,1')
+    ->name('health.backups');
 
 Route::get('/install', [InstallController::class, 'create'])->name('install.create');
 Route::post('/install', [InstallController::class, 'store'])->name('install.store');

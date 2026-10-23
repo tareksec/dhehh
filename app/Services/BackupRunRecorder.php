@@ -24,7 +24,7 @@ use Throwable;
 class BackupRunRecorder
 {
     /**
-     * @param  callable(): array{name?: string, size?: int, sha256?: string|null}  $work
+     * @param  callable(): array{name?: string, size?: int, sha256?: string|null, note?: string, google_drive?: array}  $work
      * @return array<string, mixed> what $work returned
      */
     public function record(string $scope, string $kind, callable $work): array
@@ -52,13 +52,27 @@ class BackupRunRecorder
             throw $exception;
         }
 
-        $this->safely(fn () => $run?->update([
-            'status' => BackupRun::STATUS_SUCCESS,
-            'filename' => $result['name'] ?? null,
-            'size_bytes' => $result['size'] ?? null,
-            'sha256' => $result['sha256'] ?? null,
-            'finished_at' => now(),
-        ]));
+        $this->safely(function () use ($run, $result): void {
+            $values = [
+                'status' => BackupRun::STATUS_SUCCESS,
+                'filename' => $result['name'] ?? null,
+                'size_bytes' => $result['size'] ?? null,
+                'sha256' => $result['sha256'] ?? null,
+                'finished_at' => now(),
+            ];
+
+            // Columns added after the table: a deploy takes its pre-migration backup before
+            // they exist, and that run must still be recorded as a success.
+            if (isset($result['google_drive']) && Schema::hasColumn('backup_runs', 'offsite_at')) {
+                $values['offsite_at'] = now();
+            }
+
+            if (filled($result['note'] ?? null) && Schema::hasColumn('backup_runs', 'note')) {
+                $values['note'] = Str::limit((string) $result['note'], 500, '');
+            }
+
+            $run?->update($values);
+        });
 
         return $result;
     }

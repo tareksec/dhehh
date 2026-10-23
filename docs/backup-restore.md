@@ -32,6 +32,8 @@ minute, see `docs/deployment.md`):
 |---|---|
 | every hour at :05 | `backup:database --kind=hourly --auto-upload` (switch off with `BACKUP_HOURLY_ENABLED=false`) |
 | every day at `BACKUP_SCHEDULE_TIME` (02:00) | `backup:app --kind=daily --auto-upload`: files + that day's database backup in one zip. With `BACKUP_DAILY_FULL_APP=false` it is `backup:database --kind=daily --auto-upload` (database only) instead |
+| every Sunday at 03:30 (`BACKUP_DRILL_SCHEDULE_TIME`) | `backup:drill`: the restore test of the newest dump on this server. At 03:50, with Drive on, `backup:drill --offsite` tests the newest Drive copy. Only when `BACKUP_DRILL_DB_USERNAME` is set (see **Restore test**) |
+| every 30 minutes | `backup:check`: tells the Super Admins when a backup is overdue (see **Backup health**) |
 
 Both run in the background, so a slow upload never holds up the other scheduled
 jobs. Each job has an overlap lock that expires (1 hour for a database backup
@@ -84,7 +86,85 @@ php artisan backup:verify database-backup-YYYYMMDD-HHMMSS-mysql-daily.sql.gz
 - **SQLite:** the backup is restored into an automatically deleted disposable database and integrity-checked.
 - **MySQL dump (`.sql.gz`):** the file is read to the end and must finish with the "Dump completed" line and contain the `migrations` table, and its SHA-256 must still match the one recorded when it was made.
 
-This command never overwrites the configured database. It does **not** load a MySQL dump into a database: a full restore drill into a scratch MySQL database should still be done by hand (manual procedure below) until it is automated.
+This command never overwrites the configured database. It does **not** load the dump into a database; that is the next section.
+
+## Restore test (backup:drill)
+
+A file that is complete and has the right checksum can still fail to load. The restore
+test loads the newest dump into a scratch MySQL database, checks what came back, and
+**always drops the scratch database again**. The live database is never touched.
+
+```bash
+php artisan backup:drill                                    # the newest .sql.gz on this server
+php artisan backup:drill --file=database-backup-YYYYMMDD-HHMMSS-mysql-hourly.sql.gz
+php artisan backup:drill --offsite                          # downloads, decrypts and tests the newest Drive copy
+```
+
+What it checks: the dump is complete and matches its recorded checksum; it loads without
+an SQL error; the restored database has as many tables as the dump defines and a filled
+`migrations` table. The result ("162 tables, 264 migrations, latest …, 8 s") is in
+**Backup history** under *Restore test*; a failure is reported to the Super Admins like
+any other backup failure. `--offsite` is the one that proves the Drive copy and the
+`BACKUP_ENCRYPTION_KEY` really work together, which nothing else does until the day the
+server is gone.
+
+It needs a MySQL user that may create databases. The app's own user usually may not, and
+should not, so make a second one that can only touch schemas named `backup_drill_…`:
+
+```sql
+CREATE USER 'drill'@'%' IDENTIFIED BY 'a long password';
+GRANT ALL ON `backup\_drill\_%`.* TO 'drill'@'%';
+```
+
+(use the host the app connects from instead of `%` if you know it), then set in the app's
+environment:
+
+```env
+BACKUP_DRILL_DB_USERNAME=drill
+BACKUP_DRILL_DB_PASSWORD=
+# BACKUP_DRILL_DB_HOST / BACKUP_DRILL_DB_PORT default to DB_HOST / DB_PORT
+```
+
+Until `BACKUP_DRILL_DB_USERNAME` is set nothing is scheduled and **Restore test** on the
+dashboard card says "Not set up". The scratch database is named
+`backup_drill_{time}_{random}`; one left behind by a killed run is dropped by the next run
+once it is a day old. The `mysql` client comes with `default-mysql-client` in the
+Dockerfile (`BACKUP_MYSQL_BINARY` to change it). The import may take as long as the
+dump does to load: `BACKUP_DRILL_TIMEOUT` (default 1800 seconds).
+
+## Backup health
+
+The dashboard shows a **Backup health** card to people who may manage backups: the
+hourly database backup, the daily backup, the copy on Google Drive (when Drive and
+auto upload are on) and the restore test (when set up), each with its age and, when
+something is overdue, the last error.
+
+| Check | Overdue after | Setting |
+|---|---|---|
+| hourly database backup | 150 minutes | `BACKUP_STALE_HOURLY_MINUTES` |
+| daily backup | 30 hours | `BACKUP_STALE_DAILY_HOURS` |
+| copy on Google Drive | the same limit as the backup it follows | |
+| restore test | 9 days (a warning, not an alarm) | `BACKUP_STALE_DRILL_DAYS` |
+
+`backup:check` runs every 30 minutes and tells the Super Admins (Deploy Error Logs and the
+bell) when a check is overdue: once, then again every 12 hours while it stays that way.
+Nothing recorded at all is "waiting", not an alarm, until backups have existed for longer
+than the allowed age.
+
+**What this cannot catch: the scheduler itself stopping.** Every job above, `backup:check`
+included, runs from `php artisan schedule:run`; if that Coolify scheduled task is missing
+or dead, nothing runs and nobody is told. For that, point an outside uptime monitor
+(UptimeRobot, Better Stack, …) at:
+
+```
+https://your-erp-domain/health/backups?token=THE_TOKEN
+```
+
+after setting `BACKUP_HEALTH_TOKEN` (any long random string; the address answers 404 without
+it). It returns **200** while backups are fresh and **503** when one is overdue or none was
+ever recorded, with only check names and states in the body. A monitor that can send
+headers may use `Authorization: Bearer THE_TOKEN` instead, which keeps the token out of
+access logs.
 
 ## Create Full App Backup
 

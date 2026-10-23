@@ -344,11 +344,17 @@ class Backups extends Page
                     BackupRun::STATUS_FAILED => __('Failed'),
                     default => __('Running'),
                 },
-                'type_label' => $this->kindLabel($run->kind).' · '.($run->scope === BackupRun::SCOPE_APP ? __('Full app') : __('Database')),
+                'type_label' => $run->scope === BackupRun::SCOPE_DRILL
+                    ? __('Restore test').' · '.($run->kind === BackupRun::DRILL_DRIVE ? __('Google Drive copy') : __('This server'))
+                    : $this->kindLabel($run->kind).' · '.($run->scope === BackupRun::SCOPE_APP ? __('Full app') : __('Database')),
                 'filename' => $run->filename,
                 'size_human' => $run->size_bytes === null ? null : Number::fileSize($run->size_bytes, precision: 1),
                 'started_label' => $run->started_at->format('d M Y, h:i A'),
-                'note' => $run->error ?? ($run->sha256 ? 'SHA-256 '.substr($run->sha256, 0, 12).'…' : null),
+                'note' => $run->error ?: (collect([
+                    $run->offsite_at ? __('Sent to Drive') : null,
+                    $run->note,
+                    $run->sha256 ? 'SHA-256 '.substr($run->sha256, 0, 12).'…' : null,
+                ])->filter()->implode(' · ') ?: null),
             ])
             ->all();
     }

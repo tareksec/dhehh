@@ -473,6 +473,11 @@ before migrations that are pending (nothing pending, nothing backed up); if that
 backup fails the Super Admins are told and the migrations still run. With Google
 Drive and **Auto upload to Drive** on, each backup is also sent, encrypted, to
 Drive (`BACKUP_ENCRYPTION_KEY` must be set, and kept safe outside the server).
+The scheduler also runs `backup:check` every 30 minutes (alerts when a backup is
+overdue) and, when `BACKUP_DRILL_DB_USERNAME` is set, the Sunday restore test.
+**Because all of that depends on this one Coolify task, add an outside uptime monitor
+on `/health/backups?token=…` (`BACKUP_HEALTH_TOKEN`)**: it is the only thing that notices
+the scheduler stopping (`docs/backup-restore.md`, *Backup health*).
 
 Starting the scheduler after a long stop does not message old customers at
 once: abandoned carts older than 3 days (on top of the company's delay) get no

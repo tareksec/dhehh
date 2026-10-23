@@ -91,6 +91,56 @@ class OffsiteBackupService
     }
 
     /**
+     * The newest database dump on Drive (`.sql.gz`, encrypted or not), or null when there is none.
+     *
+     * @return array{id: string, name: string, scope: string, kind: string}|null
+     */
+    public function latestDatabaseDump(): ?array
+    {
+        return collect($this->drive->listBackupFiles())
+            ->map(fn (array $file): ?array => $this->describe($file))
+            ->filter(fn (?array $file): bool => $file !== null
+                && $file['scope'] === BackupRun::SCOPE_DATABASE
+                && preg_match('/\.sql\.gz(\.enc)?$/', $file['name']) === 1)
+            ->sortByDesc('name')
+            ->first();
+    }
+
+    /**
+     * Download a copy from Drive into $directory and, when it is encrypted, decrypt it with
+     * BACKUP_ENCRYPTION_KEY. Returns the path of the plain file; the caller deletes it. A wrong
+     * or missing key fails here, which is exactly what a restore test of the Drive copy is for.
+     *
+     * @param  array{id: string, name: string}  $file
+     */
+    public function fetch(array $file, string $directory): string
+    {
+        File::ensureDirectoryExists($directory);
+
+        $encrypted = str_ends_with($file['name'], BackupEncryptor::EXTENSION);
+        $plain = $directory.'/'.basename($encrypted ? substr($file['name'], 0, -strlen(BackupEncryptor::EXTENSION)) : $file['name']);
+        $download = $encrypted ? $plain.BackupEncryptor::EXTENSION.'.part' : $plain;
+
+        try {
+            $this->drive->download($file['id'], $download);
+
+            if ($encrypted) {
+                $this->encryptor->decryptFile($download, $plain);
+            }
+        } catch (Throwable $exception) {
+            File::delete($plain);
+
+            throw $exception;
+        } finally {
+            if ($encrypted) {
+                File::delete($download);
+            }
+        }
+
+        return $plain;
+    }
+
+    /**
      * Delete the Drive copies beyond the newest few of each scope and kind.
      * A problem here never fails the backup that was just uploaded; it is
      * reported to the Super Admins instead (Deploy Error Logs).

@@ -260,7 +260,7 @@ class DatabaseBackupService
         }
     }
 
-    protected function binaryExists(string $binary): bool
+    public function binaryExists(string $binary): bool
     {
         if (str_contains($binary, '/')) {
             return is_file($binary) && is_executable($binary);
@@ -269,8 +269,13 @@ class DatabaseBackupService
         return (new ExecutableFinder)->find($binary) !== null;
     }
 
-    /** @return string path of a new option file readable only by this user */
-    protected function writeOptionFile(array $config): string
+    /**
+     * A client option file (mode 0600) with the connection's user, password and host,
+     * so the password never appears on a command line. The caller deletes it.
+     *
+     * @return string path of a new option file readable only by this user
+     */
+    public function writeOptionFile(array $config): string
     {
         $path = tempnam(sys_get_temp_dir(), 'dbbackup');
 
@@ -333,7 +338,13 @@ class DatabaseBackupService
         }
     }
 
-    protected function verifyDump(array $backup): array
+    /**
+     * Read a compressed dump to the end: it finished, has a migrations table, and matches the
+     * checksum recorded when it was made. $backup needs `name` and `path`.
+     *
+     * @param  array{name: string, path: string}  $backup
+     */
+    public function verifyDump(array $backup): array
     {
         $recorded = $this->runs->recordedChecksum($backup['name']);
 

@@ -2,6 +2,29 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - Advanced backups, Phase 4: restore test, backup health, overdue alert
+
+Reason - owner (Bangla) "ওকে পরবর্তী কাজ কর" after Phase 3. Still no answers to the open questions (alert channel, R2, key custody, hourly semantics); the defaults below are mine and are config values.
+
+What changed:
+- **Restore test (`backup:drill`):** loads the newest `.sql.gz` (or, with `--offsite`, the newest Drive copy after download + decrypt) into a scratch database `backup_drill_{time}_{random}` through the `mysql` client, checks table count against the dump and a non-empty `migrations`, drops the scratch database in a `finally`, and drops leftovers older than a day. Recorded in `backup_runs` as scope `drill` (kind `local` / `drive`) with a note; failure alerts through the existing reporter. Sundays 03:30 / 03:50, only when `BACKUP_DRILL_DB_USERNAME` is set. It needs its own MySQL user: `GRANT ALL ON \`backup\_drill\_%\`.*` only, so it cannot touch the live schema (recipe in `docs/backup-restore.md`).
+- **`BackupHealth` + dashboard card + `backup:check`:** the card (hourly, daily, Drive copy, restore test) is for `backups.manage`; `backup:check` every 30 minutes reports an overdue check once and again every 12 hours; limits `BACKUP_STALE_HOURLY_MINUTES` 150, `BACKUP_STALE_DAILY_HOURS` 30, drill 9 days (warning). "Nothing recorded yet" is *unknown*, not an alarm, until backups are older than the allowed age.
+- **`/health/backups?token=` (`BACKUP_HEALTH_TOKEN`):** 200 / 503 for an outside uptime monitor. **Why it exists:** if the Coolify `schedule:run` task is missing or dead, no backup runs and `backup:check` cannot run either, so nothing inside the app can say so. This address is judged when the monitor asks. Off (404) without a token.
+- New migration `add_offsite_and_note_to_backup_runs_table` (`offsite_at`, `note`); the recorder writes them only when the columns exist, because `deploy:migrate` takes its pre-migration backup before the migration runs. The history page shows restore tests and "Sent to Drive".
+- `DatabaseBackupService::verifyDump()`, `writeOptionFile()` and `binaryExists()` are now public (reused by the drill).
+
+Verified here: `BackupDrillTest` (14), `BackupHealthTest` (17) and the additions to `OffsiteBackupTest` pass with the earlier backup tests and the translation parity test. **Against a real MySQL 8.0.46** (MariaDB 10.11 client, as the image has): the whole ERP schema (162 tables, 264 migrations) was dumped, then restored by a user whose only grant is on `backup\_drill\_%` - passed in 8 s and left no scratch database; a dump with a broken statement, a wrong drill password and a day-old leftover database behaved as designed. The new migration ran on MySQL. The monitor endpoint and the card are covered by feature tests (the sandbox has no `APP_KEY`, so they were not hit by hand).
+
+Not verified: `--offsite` against a real Google Drive (download uses `alt=media`, `supportsAllDrives`; tested with a fake); MySQL 8.4; the Docker image build; anything on the live server; the card's look in a browser (it is a standard stats widget).
+
+Needs Bangla review (`lang/bn.json`): "রিস্টোর টেস্ট", "ব্যাকআপের অবস্থা", "দেরি হয়েছে", "নজর দিন", "সেট করা নেই", and the card sentences ("সর্বশেষ সফল ব্যাকআপটি ছিল :ago (:allowed-এর বেশি আগে)।" and the other ones added in Phase 4).
+
+Owner still to do, on top of Phase 3's list: create the drill MySQL user (SQL in `docs/backup-restore.md`) and set `BACKUP_DRILL_DB_USERNAME` / `_PASSWORD`; set `BACKUP_HEALTH_TOKEN` and **add an outside uptime monitor on `/health/backups?token=…`** (the only protection against a stopped scheduler); `migrate --force` for the new column. Still open: second off-site place (R2), a Telegram / email channel for alerts (today: Deploy Error Logs + bell), `backup:restore` and the runbook (Phase 5).
+
+Full suite (plain `php artisan test`): 3078 passed, 6 skipped, 0 failed (the `InvestorPortalStaffEntryTest` apostrophe flake from Phase 3 did not trigger this run; it is still a latent random failure).
+
+Commit status: committed and pushed to the feature branch `ccr-4c1eb24d-2dzxxt` on top of the Phase 3 commit; not on `main` (needs the owner's approval).
+
 ## 2026-10-23 - Advanced backups, Phase 3: encrypted off-site copies on Google Drive
 
 Reason - owner (Bangla) "পরবর্তী কাজ কর" after Phase 2. The owner has still **not** answered the open questions (off-site place, retention numbers, key custody, alert channel, R2 media), so the choices below are defaults I picked and flagged; each is a config value, not a hard-coded rule.

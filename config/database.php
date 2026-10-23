@@ -72,6 +72,23 @@ return [
             ]) : [],
         ],
 
+        // Only for the backup restore test (config/backup.php 'drill'): a MySQL user that may
+        // create and drop scratch databases named backup_drill_*. No default database.
+        'backup_drill' => [
+            'driver' => 'mysql',
+            'host' => env('BACKUP_DRILL_DB_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('BACKUP_DRILL_DB_PORT', env('DB_PORT', '3306')),
+            'database' => null,
+            'username' => env('BACKUP_DRILL_DB_USERNAME'),
+            'password' => env('BACKUP_DRILL_DB_PASSWORD', ''),
+            'unix_socket' => env('BACKUP_DRILL_DB_SOCKET', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'strict' => true,
+            'engine' => null,
+        ],
+
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),

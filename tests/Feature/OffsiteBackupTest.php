@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Sleep;
 use RuntimeException;
@@ -301,7 +302,28 @@ class OffsiteBackupTest extends TestCase
         $this->assertTrue($backup['google_drive']['encrypted']);
         $this->assertCount(1, $drive->sent);
         $this->assertMatchesRegularExpression('/^database-backup-.*-hourly\.sqlite\.enc$/', array_key_first($drive->sent));
-        $this->assertSame(['database', 'hourly', 'success'], [BackupRun::query()->sole()->scope, BackupRun::query()->sole()->kind, BackupRun::query()->sole()->status]);
+        $run = BackupRun::query()->sole();
+        $this->assertSame(['database', 'hourly', 'success'], [$run->scope, $run->kind, $run->status]);
+        $this->assertNotNull($run->offsite_at, 'the run remembers that its copy reached Drive');
+
+        // A backup that stayed on the server does not claim to be off-site.
+        app(DatabaseBackupService::class)->create('offsite_test', BackupRun::KIND_DAILY);
+        $this->assertNull(BackupRun::query()->where('kind', 'daily')->sole()->offsite_at);
+    }
+
+    public function test_a_run_is_still_recorded_before_the_newer_columns_exist(): void
+    {
+        // The pre-deploy backup is taken before `migrate` adds columns to backup_runs.
+        $this->fakeDrive();
+        $this->driveSettings();
+        $this->sqliteConnection();
+        Storage::fake('local');
+        Config::set('backup.encryption.key', self::KEY);
+        Schema::dropColumns('backup_runs', ['offsite_at', 'note']);
+
+        app(DatabaseBackupService::class)->create('offsite_test', BackupRun::KIND_HOURLY, upload: true);
+
+        $this->assertSame('success', BackupRun::query()->sole()->status);
     }
 
     public function test_a_failed_upload_fails_the_run_and_alerts_but_the_local_files_are_still_pruned(): void
