@@ -14,7 +14,25 @@ Owner (Bangla): when an order is booked with a courier the grand total is sent a
 
 **Verified:** `CourierIntegrationTest` (COD rule with advance, later payments, fully paid = 0, popup end to end), `OrderFormTest` (Payment section), `TranslationParityTest`, Pint on my files; browser check on a scratch SQLite database (create form and view page show the Payment section; the Book courier popup on a ৳560 order with ৳200 advance shows COD 360 and the sum line). Full `php artisan test` before the push.
 
-Commit status: committed to `claude/order-management-features-nafks7` only; not on `main` until the owner says so.
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("ওকে মেইন এ পুশ কর").
+
+## 2026-10-23 - Email Log (sent / failed / not sent, and why)
+
+Owner (Bangla): "ইমেইলের লগ পেজ তৈরি করেছ? ইমেইল পাঠানো হইছে ফেল হইছে সফল হইছে ফেল হইলে কেন হয় নাই" (did you build an email log page? email sent, failed, succeeded, and if it failed, why). I had not: only the SMS Log existed (another session). I answered that and built it the same way as the SMS Log.
+
+What it does: a tab on Settings → Logs (the one Logs page main gained today), read-only, one row per email through `StorefrontNotificationService` (login code, reseller password reset link, investor code / invitation / message, owner digest, test email). Result: Sent / Failed / Not sent. A failure shows a plain reason plus the mail server's own answer; "Not sent" covers no email account for the site and a server mailer that only logs (the send still returns true as before, so local development and tests that read the log mailer keep working, but the log does not call it "sent").
+
+Decisions (mine, say if you want them different):
+- **No message text, no subject.** Only recipient, kind, result, and the server's answer, so a login or reset code can never be read from the log (the SMS Log also skips code messages; here the row exists but carries no code).
+- **"Sent" means the mail server accepted it.** The page says so. SES bounce / complaint tracking (SNS) is still not built, so an address that bounces later still shows "Sent". This is the main gap against "did it reach the customer".
+- **No clean-up of old rows yet** (the SMS Log has none either). Every customer login code is a row; add a pruning job if the table grows.
+- The reason mapping reads the error text (`classify()`), tested against typical SES answers (535 login, 554 not verified, 454 throttling, quota, connect/time-out). A message that matches none shows "The mail server could not send the message" with the raw answer next to it.
+
+Not logged: emails that do not go through this service (none found; the panels' password resets are custom and use it). Not tested against real SES.
+
+Needs Bangla review (new keys): "Email Log" → "ইমেইল লগ", the kind labels ("Customer login code", "Reseller password reset link", "Investor code/invitation/message", "Owner daily digest", "Test email", "Other email"), "Sent through", "SMTP :host", "Server mailer (:mailer)", the page note and the eight reason texts.
+
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` on the owner's approval ("মেনে পুস করো"). Merged `main` (v2.104.0) first and moved the Email Log into the new Settings → Logs page as an "Email" tab (own sidebar entry removed, one-column phone layout). Full test run after the merge: 3042 passed, 6 skipped, 0 failed.
 
 ## 2026-10-23 - One Logs page, and the "User Id not found" SMS error
 
@@ -48,7 +66,7 @@ Checked: full `php artisan test` with PHP 8.4.27: 2990 passed, 6 skipped, 0 fail
 
 Needs Bangla review (new keys): "Amazon SES region (quick setup)", its long help text, "Send test email", "Send to", "Test email sent/failed", "Email needs a From address" and its body, "Port 465 connects over SSL…", the new From address help text, the test email's subject and body.
 
-Commit status: committed and pushed to `ccr-3799b463-p4pv7n`; not on `main` (needs the owner's approval).
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` on the owner's approval ("কমিট এবং পুশ কর করে মেইন এ পুশ কর"). Merged `main` three times on the way (SMS Log, v2.101.0, v2.102.0); full test run after the last code merge: 3010 passed, 6 skipped, 0 failed.
 
 ## 2026-10-23 - Email (SMTP) settings moved to Integrations → Email Setup
 
@@ -64,7 +82,7 @@ Found while testing: choosing "None" for encryption was saved as null, which the
 
 Checked: full `php artisan test` (PHP 8.4.27): 2982 passed, 6 skipped, 0 failed. No real SMTP server or browser was used — the tab is covered by Livewire tests only, and I did not look at it rendered.
 
-Commit status: committed and pushed to `ccr-3799b463-p4pv7n`; not on `main` (needs the owner's approval).
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` on the owner's approval ("কমিট এবং পুশ কর করে মেইন এ পুশ কর"). Merged `main` three times on the way (SMS Log, v2.101.0, v2.102.0); full test run after the last code merge: 3010 passed, 6 skipped, 0 failed.
 
 ## 2026-10-23 - SMS Log and "Send test SMS" (why did no SMS arrive?)
 
@@ -1268,7 +1286,7 @@ What changed (details in `CHANGELOG.md` [Unreleased]):
 
 Decisions I made without asking, for the owner to confirm or change:
 
-- **I did not name Steadfast.** The prospective reseller asked about Steadfast, but the courier is the store's own setting and I could not confirm from the code which courier the store uses for reseller orders. The answer says "the store sends the parcel on cash on delivery". If the owner wants Steadfast named, tell me the exact words.
+- **Courier names (decided by the owner, 2026-10-23):** I first left the courier out because the code does not say which courier the store uses for reseller orders. The owner gave the wording: "<company name> sends the parcel by courier (Steadfast, Pathao, RedX) on cash on delivery …". It is now in the page (English and Bangla), with the company name filled in from the company's settings. The three courier names are written in the page's text, not an admin setting, so a change of couriers needs a text change.
 - **No promise about how fast the store pays.** The system has no payout deadline, so the answer gives none.
 - **The prospective reseller's "packaging and other charges are deducted from the delivery money" is answered with what the system does:** the reseller's cost (shown on each product) is what the store keeps; delivery charge and VAT are added to the customer's bill; no separate packaging charge on store-delivered orders; the return charge only if the order comes back (and only if the store set one). If the owner's real practice is different (for example a packaging deduction), the system itself would have to change first.
 - **The answers are part of the page's code, not an admin-edited list**, like the other "how it works" sections (so they are in Bangla and English from the language files). The guide's introduction and rules are still admin-written, and appear in whatever language the admin typed them. If the owner wants the questions editable from Reseller Settings too, that is a small follow-up.
@@ -1282,6 +1300,8 @@ Needs Bangla review (new keys, all in `lang/bn.json`): the six questions and the
 Verified: `npm run build`, the English and Bangla pages rendered in Chromium (desktop and 390 px phone), and the full suite on the tree with `origin/main` (v2.100.0) merged in: 2986 passed, 5 skipped, 0 failed.
 
 Commit status: committed to the work branch `claude/reseller-module-status-v9tobe`, `origin/main` (v2.100.1) merged in, full suite on the merged tree green (result below); pushed to `main` on the owner's explicit approval ("ওকে এটা মেইনে পুশ কর", 2026-10-23).
+
+Follow-up (2026-10-23): the parcel answer now names the company and its couriers (Steadfast, Pathao, RedX) in the owner's wording; full suite 2999 passed, 5 skipped, 0 failed; pushed to `main` on the owner's explicit approval ("টেস্ট শেষ হলে মেইনেও পুশ করে দিও", 2026-10-23).
 
 ## 2026-10-22 (later) - Landing page redesigned in neo-brutalism
 

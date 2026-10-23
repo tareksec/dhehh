@@ -19,7 +19,7 @@
             __('You do not send it to us; you enter the order yourself in the portal: the customer\'s name, phone and address, the products and quantities, and your selling price for each. The form shows your customer\'s bill and your profit before you save. The order then reaches the store, which confirms it, packs it and delivers it.'),
         ]],
         ['q' => __('How is the parcel sent, and who collects the money?'), 'color' => 'nb-sky', 'a' => [
-            __('The store sends the parcel to your customer on cash on delivery, so your customer pays when it arrives and you pay nothing in advance. The customer\'s bill is the prices you set plus the store\'s delivery charge, and VAT where it applies. You do not have to book a courier yourself.'),
+            __(':company sends the parcel to your customer by courier (Steadfast, Pathao, RedX) on cash on delivery, so your customer pays when it arrives and you pay nothing in advance. The customer\'s bill is the prices you set plus the store\'s delivery charge, and VAT where it applies. You do not have to book a courier yourself.', ['company' => $companyName]),
         ]],
         ['q' => __('What is deducted from the money collected, and how much is my profit?'), 'color' => 'nb-orange', 'a' => array_values(array_filter([
             __('Your profit is your selling price minus your cost, for every piece. Your cost is the price shown on each product in the portal; that is what the store keeps for the product. The delivery charge and VAT are added to your customer\'s bill on top, so they are not taken out of your profit, and there is no separate packaging charge on orders the store delivers.'),

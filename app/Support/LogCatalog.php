@@ -6,6 +6,7 @@ use App\Filament\Resources\AuditLogs\AuditLogResource;
 use App\Filament\Resources\CourierStatusLogs\CourierStatusLogResource;
 use App\Filament\Resources\CourierWebhookLogs\CourierWebhookLogResource;
 use App\Filament\Resources\DeploymentErrors\DeploymentErrorResource;
+use App\Filament\Resources\EmailLogs\EmailLogResource;
 use App\Filament\Resources\MobileCrashReports\MobileCrashReportResource;
 use App\Filament\Resources\SmsLogs\SmsLogResource;
 use App\Filament\Resources\StorefrontMetaEvents\StorefrontMetaEventResource;
@@ -28,6 +29,7 @@ final class LogCatalog
     {
         return [
             'sms' => ['label' => __('SMS'), 'icon' => Heroicon::OutlinedChatBubbleBottomCenterText, 'resource' => SmsLogResource::class],
+            'email' => ['label' => __('Email'), 'icon' => Heroicon::OutlinedEnvelope, 'resource' => EmailLogResource::class],
             'audit' => ['label' => __('Audit'), 'icon' => Heroicon::OutlinedClipboardDocumentCheck, 'resource' => AuditLogResource::class],
             'courier_status' => ['label' => __('Courier status'), 'icon' => Heroicon::OutlinedListBullet, 'resource' => CourierStatusLogResource::class],
             'courier_webhooks' => ['label' => __('Courier webhooks'), 'icon' => Heroicon::OutlinedSignal, 'resource' => CourierWebhookLogResource::class],
