@@ -1845,7 +1845,7 @@
     "SMS Gateway": "SMS গেটওয়ে",
     "One SMS gateway per site. It sends login OTP codes, password recovery codes, abandoned-cart reminders, and (from the company's main site) CRM and lead follow-up SMS.": "প্রতি সাইটের জন্য একটি SMS গেটওয়ে। এটি লগইন OTP, পাসওয়ার্ড পুনরুদ্ধারের কোড, পরিত্যক্ত কার্ট রিমাইন্ডার এবং (কোম্পানির মূল সাইট থেকে) CRM ও লিড ফলো-আপ SMS পাঠায়।",
     "SMS gateway URL template": "SMS গেটওয়ে URL টেমপ্লেট",
-    "Use the {api_key}, {sender_id}, {phone} and {message} placeholders. {phone} and {message} are required: type them where the gateway's example URL has the words Receiver and TestSMS. Leave empty to turn SMS off for this site.": "{api_key}, {sender_id}, {phone} ও {message} প্লেসহোল্ডার ব্যবহার করুন। {phone} ও {message} অবশ্যই লাগবে: গেটওয়ের নমুনা URL-এ যেখানে Receiver ও TestSMS লেখা আছে, সেখানে এ দুটি বসান। এই সাইটের SMS বন্ধ রাখতে খালি রাখুন।",
+    "You do not need to edit this. Type the API key and the sender ID below and this address is built from them; {phone} and {message} are filled in each time a message is sent. Leave empty to turn SMS off for this site.": "এটি আপনাকে বদলাতে হবে না। নিচে API key ও sender ID লিখলেই এই ঠিকানা তাদের দিয়ে তৈরি হয়; {phone} ও {message} প্রতিবার মেসেজ পাঠানোর সময় বসে যায়। এই সাইটের SMS বন্ধ রাখতে খালি রাখুন।",
     "SMS API key": "SMS API কী",
     "Stored encrypted.": "এনক্রিপ্ট করে সংরক্ষিত।",
     "SMS sender ID": "SMS সেন্ডার আইডি",
@@ -3705,5 +3705,12 @@
     "The SMS gateway URL has no {phone} or no {message} in it, so nothing was sent. Open Integrations → SMS Gateway and replace the sample words (Receiver, TestSMS) with {phone} and {message}.": "SMS গেটওয়ে URL-এ {phone} বা {message} নেই, তাই কিছু পাঠানো হয়নি। ইন্টিগ্রেশনস → SMS Gateway-তে গিয়ে নমুনা শব্দ (Receiver, TestSMS) মুছে {phone} ও {message} বসান।",
     "The URL has no :missing in it, so the number and the text would never reach the gateway. Replace the sample words (Receiver, TestSMS) with {phone} and {message}, for example: http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}": "URL-এ :missing নেই, তাই নম্বর ও লেখা গেটওয়েতে পৌঁছাবে না। নমুনা শব্দ (Receiver, TestSMS) মুছে {phone} ও {message} বসান। উদাহরণ: http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}",
     "The SMS gateway URL has no :missing in it, so no SMS can be sent. Replace the sample words (Receiver, TestSMS) with {phone} and {message}.": "SMS গেটওয়ে URL-এ :missing নেই, তাই কোনো SMS যেতে পারবে না। নমুনা শব্দ (Receiver, TestSMS) মুছে {phone} ও {message} বসান।",
-    "Fix it in Integrations → SMS Gateway.": "ইন্টিগ্রেশনস → SMS Gateway-তে ঠিক করুন।"
+    "Fix it in Integrations → SMS Gateway.": "ইন্টিগ্রেশনস → SMS Gateway-তে ঠিক করুন।",
+    "Use the BulkSMSBD address": "BulkSMSBD-র ঠিকানা বসান",
+    "This replaces the address you have now with the BulkSMSBD one.": "এতে এখনকার ঠিকানা মুছে BulkSMSBD-র ঠিকানা বসবে।",
+    "The gateway address was tidied": "গেটওয়ে ঠিকানা ঠিক করে দেওয়া হয়েছে",
+    "The API key and the sender ID are in their own boxes and {phone} and {message} are in place. Check them and press Save changes.": "API key ও sender ID নিজ নিজ ঘরে বসেছে এবং {phone} ও {message} জায়গামতো আছে। দেখে নিয়ে Save changes চাপুন।",
+    "The address the system will call": "সিস্টেম যে ঠিকানায় ডাকবে",
+    "Nothing yet. Type the SMS API key and the sender ID and the address is built here.": "এখনও কিছু নেই। SMS API key ও sender ID লিখলে ঠিকানা এখানে তৈরি হবে।",
+    "The API key is shown only in part.": "API key-র শুধু শুরুর অংশ দেখানো হয়।"
 }

@@ -240,7 +240,8 @@ class SmsDashboardTest extends TestCase
     {
         $this->actingAs($this->admin())
             ->withSession(['current_company_id' => $this->company->getKey(), 'current_company_selection_explicit' => true]);
-        $example = 'http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number=Receiver&senderid=8809617643387&message=TestSMS';
+        // A BulkSMSBD example is put right when it is typed (see SmsGatewayUrlTest); another gateway's is refused.
+        $example = 'http://sms.example.test/send?key={api_key}&to=Receiver&msg=TestSMS';
 
         Livewire::test(Integrations::class)
             ->set('data.notification_credentials.sms_api_url', $example)

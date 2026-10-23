@@ -2,6 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 (later still) - The SMS gateway address follows the API key and sender ID boxes
+
+Owner (Bangla): set it up so that typing the API key and the sender ID in their boxes updates the URL, the way the phone number and the message are filled in.
+
+**What it does:** the placeholders `{api_key}` and `{sender_id}` already existed, but the owner had typed real values into the URL box. Now the box is managed for them: typing a key or sender ID while the box is empty puts in the BulkSMSBD address; a live line shows the address that will be called (key partly hidden); a sparkle button puts the BulkSMSBD address back; and a BulkSMSBD address pasted with real or sample values is turned back into placeholders (key and sender ID move to their own boxes when empty; sample words such as Receiver and TestSMS are dropped). This runs when the box is left and again at the start of Save, before the `{phone}` / `{message}` check. Other gateways' addresses are never rewritten. **Decision for the owner:** when a box and the pasted address hold different keys, the box wins.
+
+**Browser check:** typed key and sender ID: the live line reads `...api_key=abcd***&type=text&number={phone}&senderid=8809617643387&message={message}`; pasting `api_key=ZZZ999realkey ... senderid=NEWSENDER` left the address in placeholder form and put the key and sender ID in their boxes.
+
+**Needs Bangla review (lang/bn.json):** "এটি আপনাকে বদলাতে হবে না…", "BulkSMSBD-র ঠিকানা বসান", "এতে এখনকার ঠিকানা মুছে BulkSMSBD-র ঠিকানা বসবে।", "গেটওয়ে ঠিকানা ঠিক করে দেওয়া হয়েছে", "সিস্টেম যে ঠিকানায় ডাকবে", and the two short lines under the live address.
+
+**Verified:** `SmsGatewayUrlTest` (new, 10), `SmsDashboardTest`, `IntegrationsPageTest`, `SmsLogTest`, `TranslationParityTest`; full `php artisan test` before the push.
+
+Commit status: committed to `claude/order-management-features-nafks7`; not on `main` until the owner says so.
+
 ## 2026-10-23 (later) - The gateway URL had "Receiver" instead of {phone}
 
 Owner sent a screenshot of the failure notice after the `88{phone}` fix. Its "What was sent" line reads `...number=Receiver&senderid=8809617643387&message=TestSM`: the saved URL template has the sample words of BulkSMSBD's example where `{phone}` and `{message}` belong (the preview shows `[message]` for a real `{message}`, so `TestSM...` is literal text in the template). That is the real cause of 1001, so the `88{phone}` guess below was not it; that protection stays, harmless. The same template would have sent every order SMS to "Receiver" with a fixed text.

@@ -1845,7 +1845,7 @@
     "SMS Gateway": "SMS Gateway",
     "One SMS gateway per site. It sends login OTP codes, password recovery codes, abandoned-cart reminders, and (from the company's main site) CRM and lead follow-up SMS.": "One SMS gateway per site. It sends login OTP codes, password recovery codes, abandoned-cart reminders, and (from the company's main site) CRM and lead follow-up SMS.",
     "SMS gateway URL template": "SMS gateway URL template",
-    "Use the {api_key}, {sender_id}, {phone} and {message} placeholders. {phone} and {message} are required: type them where the gateway's example URL has the words Receiver and TestSMS. Leave empty to turn SMS off for this site.": "Use the {api_key}, {sender_id}, {phone} and {message} placeholders. {phone} and {message} are required: type them where the gateway's example URL has the words Receiver and TestSMS. Leave empty to turn SMS off for this site.",
+    "You do not need to edit this. Type the API key and the sender ID below and this address is built from them; {phone} and {message} are filled in each time a message is sent. Leave empty to turn SMS off for this site.": "You do not need to edit this. Type the API key and the sender ID below and this address is built from them; {phone} and {message} are filled in each time a message is sent. Leave empty to turn SMS off for this site.",
     "SMS API key": "SMS API key",
     "Stored encrypted.": "Stored encrypted.",
     "SMS sender ID": "SMS sender ID",
@@ -3705,5 +3705,12 @@
     "The SMS gateway URL has no {phone} or no {message} in it, so nothing was sent. Open Integrations → SMS Gateway and replace the sample words (Receiver, TestSMS) with {phone} and {message}.": "The SMS gateway URL has no {phone} or no {message} in it, so nothing was sent. Open Integrations → SMS Gateway and replace the sample words (Receiver, TestSMS) with {phone} and {message}.",
     "The URL has no :missing in it, so the number and the text would never reach the gateway. Replace the sample words (Receiver, TestSMS) with {phone} and {message}, for example: http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}": "The URL has no :missing in it, so the number and the text would never reach the gateway. Replace the sample words (Receiver, TestSMS) with {phone} and {message}, for example: http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}",
     "The SMS gateway URL has no :missing in it, so no SMS can be sent. Replace the sample words (Receiver, TestSMS) with {phone} and {message}.": "The SMS gateway URL has no :missing in it, so no SMS can be sent. Replace the sample words (Receiver, TestSMS) with {phone} and {message}.",
-    "Fix it in Integrations → SMS Gateway.": "Fix it in Integrations → SMS Gateway."
+    "Fix it in Integrations → SMS Gateway.": "Fix it in Integrations → SMS Gateway.",
+    "Use the BulkSMSBD address": "Use the BulkSMSBD address",
+    "This replaces the address you have now with the BulkSMSBD one.": "This replaces the address you have now with the BulkSMSBD one.",
+    "The gateway address was tidied": "The gateway address was tidied",
+    "The API key and the sender ID are in their own boxes and {phone} and {message} are in place. Check them and press Save changes.": "The API key and the sender ID are in their own boxes and {phone} and {message} are in place. Check them and press Save changes.",
+    "The address the system will call": "The address the system will call",
+    "Nothing yet. Type the SMS API key and the sender ID and the address is built here.": "Nothing yet. Type the SMS API key and the sender ID and the address is built here.",
+    "The API key is shown only in part.": "The API key is shown only in part."
 }
