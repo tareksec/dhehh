@@ -2,6 +2,22 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - SMS Log and "Send test SMS" (why did no SMS arrive?)
+
+Owner (Bangla): "আমি এইমাত্র এই অর্ডার টা করলাম কিন্তু কোন এসএমএস আমার ফোন নাম্বারে আসে নাই, তাহলে বুঝা গেল যে sms gateway ঠিকমতো কাজ করছে না।" Also asked earlier whether each message (order, login OTP, password reset, reseller) has its own template, because the SMS Gateway tab shows a single URL.
+
+**What I found:** there was no way to see why an SMS did not go. Every skip was silent (no wording saved, no phone, opted out, no gateway, duplicate) and a gateway refusal went only to the server log file. The gateway is not proven broken by one missing SMS: the most likely causes are (1) the "Order placed" / status wording is not saved on SMS Templates (blank = nothing is sent, owner decision 2026-10-17), (2) no queue worker is running in production (the "placed" SMS waits 45 seconds in the queue), (3) the gateway refuses the text (masking sender ID needs Bangla text, error 1012; balance; IP whitelist).
+
+**What changed:** Settings → SMS Log (one row per order SMS with result and reason, stuck-queue warning), Settings → Integrations → SMS Gateway → **Send test SMS** (real SMS, shows the gateway's answer), and a note that the URL only delivers messages. See CHANGELOG. Code messages are never logged.
+
+**Not changed (asked of the owner):** reseller sign-up/login/password-reset codes still share the shop customers' three code templates, and the reseller's three messages (approved, profit payable, payout paid) are still written on Reseller Settings, not on SMS Templates. The owner has been asked whether to split/move them.
+
+**Needs Bangla review (lang/bn.json):** SMS Log, Order status change, Test SMS, Waiting in the queue, Not sent: gateway, Not sent: skipped, Message, Send test SMS, the reason sentences (no wording / no phone / opt-out / no gateway / duplicate / excluded / gateway refused / unreachable), the test-SMS texts (including the Bangla test message sent for masking sender IDs: ":company থেকে টেস্ট SMS। আপনার SMS গেটওয়ে ঠিকমতো কাজ করছে।") and the stuck-queue sentence.
+
+**Verified:** `SmsLogTest` (13), `SmsTemplatesTest`, `MultiCompanyIsolationTest`, `TranslationParityTest`. Full suite: see below.
+
+**Commit status:** on branch `claude/order-management-features-nafks7`; not on `main` (waiting for the owner's approval).
+
 ## 2026-10-22 - Automatic order messages: SMS on creation + WhatsApp summary card
 
 Owner (Bangla): "আর কোন অর্ডার তৈরি হলে সাথে সাথে কাস্টমারের ফোন নাম্বারে অর্ডার ডিটেইলস এবং অর্ডার স্ট্যাটাস সহ চলে যাবে। প্রতিটা অর্ডার স্ট্যাটাস পরিবর্তন হলে কাস্টমারে ফোন নাম্বারে অর্ডার ইনফো সহ মেসেজ চলে যাবে, এবং তার যদি whatsapp থাকে তাহলে তাকে অর্ডার সামারি কার্ড অটো পাঠানো হবে।" Owner's answers to my two questions: WhatsApp through the **official Cloud API** (Recommended) and **try every customer** (a number without WhatsApp just fails).

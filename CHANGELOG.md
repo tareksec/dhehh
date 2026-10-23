@@ -8,6 +8,19 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Added
 
+- **SMS Log: you can now see why a customer got no SMS.** Owner report 2026-10-23: an order was placed and no SMS arrived, and nothing in the system said why. **Settings → SMS Log** now lists every order SMS (order placed and each status change) with its result:
+  - **Sent**, with the exact text that went out.
+  - **Not sent: gateway**, with the gateway's own reply (for example `1012 Masking SMS must be sent in Bengali`, `1007 Balance Insufficient`, `1032 IP not whitelisted`) or "could not be reached".
+  - **Not sent: skipped**, with the reason: no wording written on SMS Templates, customer has no phone, number opted out, no SMS gateway set, already sent once, imported or reseller store order.
+  - **Waiting in the queue**: when a message waits more than 5 minutes the page says the queue worker does not seem to be running, which is the usual reason nothing leaves in production.
+  Code messages (OTP, password reset) are never logged, so a code is never stored.
+- **Send test SMS** button on **Settings → Integrations → SMS Gateway.** It sends one real SMS to your own number through the saved gateway and shows the gateway's answer on screen, so "does the gateway work?" is a ten-second check without placing an order. With a masking (letters) sender ID the test text is sent in Bangla, because BulkSMSBD refuses English there. The result also appears in the SMS Log.
+- A note on the SMS Gateway tab explaining that the URL only delivers messages: the wording is written on **Settings → SMS Templates**, and the branding comes from the sender ID and that wording.
+
+**Technical Notes:** New table `sms_logs` (migration `2026_10_23_100000_create_sms_logs_table.php`, short index names) and company-owned model `SmsLog` (registered in `MultiCompanyIsolationTest`). `SmsLogService` writes the rows and never throws (a logging failure is reported and the SMS still goes out; covered by a test). `OrderStatusSmsService` logs a row when the message is queued, or a skipped row at dispatch when no wording is written, and closes it in `send()` / `sendPlaced()`; the existing send rules and dedupe are unchanged. `StorefrontNotificationService::sendSmsDetailed()` returns the gateway's code, its meaning and any error; `sendSms()` still returns a bool. `SmsLogResource` is read-only and needs the "manage settings" permission. New strings in `lang/en.json` and `lang/bn.json`. Tests: `SmsLogTest` (13). No other behaviour changes.
+
+### Added
+
 - **The order summary card now shows each product's picture.** On the order page, **Order summary card** draws a small picture beside every item, so the customer sees the very product they ordered. It uses the variant's own photo when the ordered variant has one, otherwise the product's main image. An item with no picture (or one that cannot be read) gets a plain grey box so the rows stay lined up. The pictures are part of the image sent to WhatsApp, WeChat, Messenger and Telegram, and of the downloaded image. "Copy text" is unchanged.
 
 **Technical Notes:** `OrderSummaryCardService` adds `image` to each item: the picture is read through `CompanyStorageService::readPublic()`, cropped to a square, shrunk to 160 px and returned as a JPEG data URI (needs PHP GD; without it the card has no pictures). It is embedded so the browser canvas stays untainted and can still be exported. `summary-card.blade.php` decodes the pictures before drawing (`loadImages()`) and draws rounded thumbnails in the items table. New tests in `OrderManagementFeaturesTest` (picture present and 160x160; none when the product has no picture or the file is gone). No migrations, no new lang keys.

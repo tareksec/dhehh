@@ -7,6 +7,8 @@ use App\Jobs\SendOrderStatusSmsJob;
 use App\Models\CourierBooking;
 use App\Models\Order;
 use App\Models\OrderStatusTransition;
+use App\Models\SmsLog;
+use App\Models\StorefrontSetting;
 use App\Services\Crm\ContactSuppressionService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -31,6 +33,7 @@ class OrderStatusSmsService
         protected StorefrontNotificationService $notifications,
         protected ContactSuppressionService $suppression,
         protected StorefrontMetaTrackingService $tracking,
+        protected SmsLogService $logs,
     ) {}
 
     /**
@@ -40,11 +43,20 @@ class OrderStatusSmsService
      */
     public function dispatchForOrderPlaced(Order $order): void
     {
-        if ($order->isHistoricalImport()
-            || filled($order->reseller_customer_id)
-            || $this->templates->body((int) $order->company_id, SmsTemplateService::ORDER_PLACED) === null) {
+        if ($order->isHistoricalImport() || filled($order->reseller_customer_id)) {
             return;
         }
+
+        $companyId = (int) $order->company_id;
+        $phone = trim((string) $order->customer?->phone) ?: null;
+
+        if ($this->templates->body($companyId, SmsTemplateService::ORDER_PLACED) === null) {
+            $this->logs->skipped($companyId, SmsLog::KIND_ORDER_PLACED, (int) $order->getKey(), null, 'no_wording', $phone);
+
+            return;
+        }
+
+        $this->logs->queued($companyId, SmsLog::KIND_ORDER_PLACED, (int) $order->getKey(), null, $phone);
 
         SendOrderPlacedSmsJob::dispatch($order->getKey())->delay(now()->addSeconds(self::PLACED_DELAY_SECONDS))->afterCommit();
     }
@@ -54,9 +66,21 @@ class OrderStatusSmsService
     {
         $stage = $this->stageFor($transition);
 
-        if ($stage === null || $this->templates->body((int) $transition->company_id, SmsTemplateService::orderKey($stage)) === null) {
+        if ($stage === null) {
             return;
         }
+
+        $companyId = (int) $transition->company_id;
+        $orderId = (int) $transition->order_id;
+        $reference = (string) $transition->getKey();
+
+        if ($this->templates->body($companyId, SmsTemplateService::orderKey($stage)) === null) {
+            $this->logs->skipped($companyId, SmsLog::KIND_ORDER_STATUS, $orderId, $reference, 'no_wording', null, __(Order::WORKFLOW_STAGES[$stage]));
+
+            return;
+        }
+
+        $this->logs->queued($companyId, SmsLog::KIND_ORDER_STATUS, $orderId, $reference);
 
         SendOrderStatusSmsJob::dispatch($transition->getKey())->afterCommit();
     }
@@ -94,15 +118,25 @@ class OrderStatusSmsService
         $stage = $this->stageFor($transition);
         $order = Order::withoutGlobalScopes()->with(['customer', 'company', 'storefrontSetting', 'latestCourierBooking'])->find($transition->order_id);
 
-        if ($stage === null || $order === null || $order->isHistoricalImport() || filled($order->reseller_customer_id)) {
+        if ($stage === null || $order === null) {
             return false;
         }
 
         $companyId = (int) $order->company_id;
+        $log = $this->logs->claim($companyId, SmsLog::KIND_ORDER_STATUS, (int) $order->getKey(), (string) $transition->getKey());
+
+        if ($order->isHistoricalImport() || filled($order->reseller_customer_id)) {
+            return $this->closeLog($log, SmsLog::STATUS_SKIPPED, 'excluded');
+        }
+
         $phone = trim((string) $order->customer?->phone);
 
-        if ($phone === '' || $this->suppression->suppressed($companyId, $phone)) {
-            return false;
+        if ($phone === '') {
+            return $this->closeLog($log, SmsLog::STATUS_SKIPPED, 'no_phone');
+        }
+
+        if ($this->suppression->suppressed($companyId, $phone)) {
+            return $this->closeLog($log, SmsLog::STATUS_SKIPPED, 'opted_out', ['phone' => $phone]);
         }
 
         $values = $this->values($order, __(Order::WORKFLOW_STAGES[$stage]));
@@ -111,13 +145,19 @@ class OrderStatusSmsService
 
         // A retried job must never text the same change twice, and a courier sending the same news twice
         // in a row must not text the customer twice.
-        if (blank($message) || $setting === null
-            || ! Cache::add('order-status-sms:'.$transition->getKey(), true, now()->addDays(2))
-            || ! Cache::add("order-status-sms:{$order->getKey()}:{$stage}", true, now()->addMinutes(5))) {
-            return false;
+        $skip = match (true) {
+            blank($message) => 'no_wording',
+            $setting === null => 'no_gateway',
+            ! Cache::add('order-status-sms:'.$transition->getKey(), true, now()->addDays(2)),
+            ! Cache::add("order-status-sms:{$order->getKey()}:{$stage}", true, now()->addMinutes(5)) => 'duplicate',
+            default => null,
+        };
+
+        if ($skip !== null) {
+            return $this->closeLog($log, SmsLog::STATUS_SKIPPED, $skip, ['phone' => $phone, 'message' => $message]);
         }
 
-        return $this->notifications->sendSms($setting, $phone, $message);
+        return $this->deliver($log, $setting, $phone, (string) $message);
     }
 
     /** The "order placed" SMS (same exclusions as a status SMS). */
@@ -125,26 +165,68 @@ class OrderStatusSmsService
     {
         $order = Order::withoutGlobalScopes()->with(['customer', 'company', 'storefrontSetting', 'latestCourierBooking', 'items.product'])->find($orderId);
 
-        if ($order === null || $order->isHistoricalImport() || filled($order->reseller_customer_id)) {
+        if ($order === null) {
             return false;
         }
 
         $companyId = (int) $order->company_id;
+        $log = $this->logs->claim($companyId, SmsLog::KIND_ORDER_PLACED, (int) $order->getKey());
+
+        if ($order->isHistoricalImport() || filled($order->reseller_customer_id)) {
+            return $this->closeLog($log, SmsLog::STATUS_SKIPPED, 'excluded');
+        }
+
         $phone = trim((string) $order->customer?->phone);
 
-        if ($phone === '' || $this->suppression->suppressed($companyId, $phone)) {
-            return false;
+        if ($phone === '') {
+            return $this->closeLog($log, SmsLog::STATUS_SKIPPED, 'no_phone');
+        }
+
+        if ($this->suppression->suppressed($companyId, $phone)) {
+            return $this->closeLog($log, SmsLog::STATUS_SKIPPED, 'opted_out', ['phone' => $phone]);
         }
 
         $status = Order::STATUSES[$order->status] ?? (string) str((string) $order->status)->headline();
         $message = $this->templates->render($companyId, SmsTemplateService::ORDER_PLACED, $this->values($order, __($status)));
         $setting = $this->templates->gatewayFor($companyId, $order->siteSetting());
 
-        if (blank($message) || $setting === null || ! Cache::add('order-placed-sms:'.$order->getKey(), true, now()->addDays(2))) {
-            return false;
+        $skip = match (true) {
+            blank($message) => 'no_wording',
+            $setting === null => 'no_gateway',
+            ! Cache::add('order-placed-sms:'.$order->getKey(), true, now()->addDays(2)) => 'duplicate',
+            default => null,
+        };
+
+        if ($skip !== null) {
+            return $this->closeLog($log, SmsLog::STATUS_SKIPPED, $skip, ['phone' => $phone, 'message' => $message]);
         }
 
-        return $this->notifications->sendSms($setting, $phone, $message);
+        return $this->deliver($log, $setting, $phone, (string) $message);
+    }
+
+    /** Sends the text through the gateway and records exactly what the gateway answered. */
+    protected function deliver(?SmsLog $log, StorefrontSetting $setting, string $phone, string $message): bool
+    {
+        $result = $this->notifications->sendSmsDetailed($setting, $phone, $message);
+        $extra = ['phone' => $phone, 'message' => $message, 'gateway_code' => $result['code'], 'detail' => $result['meaning'] ?? $result['detail']];
+
+        if ($result['ok']) {
+            return $this->closeLog($log, SmsLog::STATUS_SENT, null, $extra);
+        }
+
+        return $this->closeLog($log, SmsLog::STATUS_FAILED, $result['code'] !== null ? 'gateway_refused' : 'gateway_unreachable', $extra);
+    }
+
+    /**
+     * Closes the log row; returns whether the SMS was sent.
+     *
+     * @param  array{phone?: ?string, message?: ?string, gateway_code?: ?int, detail?: ?string}  $extra
+     */
+    protected function closeLog(?SmsLog $log, string $status, ?string $reason = null, array $extra = []): bool
+    {
+        $this->logs->finish($log, $status, $reason, $extra);
+
+        return $status === SmsLog::STATUS_SENT;
     }
 
     /**

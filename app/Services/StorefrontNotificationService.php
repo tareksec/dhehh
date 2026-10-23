@@ -71,11 +71,22 @@ class StorefrontNotificationService
 
     public function sendSms(StorefrontSetting $setting, string $phone, string $message): bool
     {
+        return $this->sendSmsDetailed($setting, $phone, $message)['ok'];
+    }
+
+    /**
+     * Sends one SMS and says what the gateway answered, so the SMS log and the "Send test SMS" button can
+     * show why a message did not leave (no balance, wrong sender ID, IP not whitelisted ...), not only that it did not.
+     *
+     * @return array{ok: bool, code: ?int, meaning: ?string, detail: ?string}
+     */
+    public function sendSmsDetailed(StorefrontSetting $setting, string $phone, string $message): array
+    {
         $credentials = $setting->notification_credentials ?? [];
         $urlTemplate = (string) ($credentials['sms_api_url'] ?? '');
 
         if ($urlTemplate === '') {
-            return false;
+            return ['ok' => false, 'code' => null, 'meaning' => null, 'detail' => 'no_gateway'];
         }
 
         $url = strtr($urlTemplate, [
@@ -91,13 +102,13 @@ class StorefrontNotificationService
         } catch (\Throwable $exception) {
             Log::warning('Storefront SMS send failed', ['error' => $exception->getMessage()]);
 
-            return false;
+            return ['ok' => false, 'code' => null, 'meaning' => null, 'detail' => 'unreachable: '.str($exception->getMessage())->limit(180)];
         }
 
         if (! $response->successful()) {
             Log::warning('Storefront SMS rejected by gateway', ['company_id' => $setting->company_id, 'http_status' => $response->status()]);
 
-            return false;
+            return ['ok' => false, 'code' => null, 'meaning' => null, 'detail' => 'http_'.$response->status()];
         }
 
         // These gateways answer HTTP 200 even when they refuse the SMS (no balance, wrong sender ID, IP not
@@ -111,10 +122,10 @@ class StorefrontNotificationService
                 'meaning' => self::SMS_GATEWAY_CODES[$code] ?? null,
             ]);
 
-            return false;
+            return ['ok' => false, 'code' => $code, 'meaning' => self::SMS_GATEWAY_CODES[$code] ?? null, 'detail' => null];
         }
 
-        return true;
+        return ['ok' => true, 'code' => $code, 'meaning' => $code !== null ? (self::SMS_GATEWAY_CODES[$code] ?? null) : null, 'detail' => null];
     }
 
     /**

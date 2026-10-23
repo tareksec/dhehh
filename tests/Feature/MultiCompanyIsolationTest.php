@@ -107,6 +107,7 @@ use App\Models\ResellerPayoutAccount;
 use App\Models\ResellerPayoutRequest;
 use App\Models\SettlementPayout;
 use App\Models\Shipment;
+use App\Models\SmsLog;
 use App\Models\SmsTemplate;
 use App\Models\StatementDispatch;
 use App\Models\StockMovement;
@@ -156,7 +157,7 @@ class MultiCompanyIsolationTest extends TestCase
             StorefrontMetaAttribution::class, StorefrontMetaEvent::class,
             FundSource::class, Voucher::class,
             VoucherAttachment::class, FundTransfer::class,
-            StorefrontSlide::class, SmsTemplate::class,
+            StorefrontSlide::class, SmsTemplate::class, SmsLog::class,
             Lead::class, Quotation::class, QuotationItem::class,
             AiInstructionVersion::class, AttentionItem::class, Conversation::class, ConversationChannel::class, ConversationModeEvent::class,
             ChaseMark::class, ChatOrderLink::class, CompanyFaq::class, KnowledgeDocument::class, QuickReply::class,
