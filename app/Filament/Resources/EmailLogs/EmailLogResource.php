@@ -27,6 +27,9 @@ class EmailLogResource extends Resource
 
     protected static ?string $cluster = Settings::class;
 
+    /** Reached from Settings → Logs (App\Filament\Pages\Logs), not from the sidebar. */
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?int $navigationSort = 6;
 
     public static function getNavigationLabel(): string
@@ -94,34 +97,77 @@ class EmailLogResource extends Resource
         return $table
             ->defaultSort('id', 'desc')
             ->columns([
-                TextColumn::make('created_at')->label(__('Time'))->dateTime()->sortable(),
-                TextColumn::make('kind')
-                    ->label(__('Message'))
-                    ->formatStateUsing(fn (string $state): string => self::kindLabels()[$state] ?? $state),
-                TextColumn::make('recipient')->label(__('To'))->searchable(),
+                // On a phone one column tells the whole story (when, who, result, why) so nothing scrolls sideways;
+                // from a tablet up the same facts get a column each (same layout as the SMS log).
+                TextColumn::make('summary')
+                    ->label(__('Email'))
+                    ->state(fn (EmailLog $record): string => self::summaryHtml($record))
+                    ->html()
+                    ->wrap()
+                    ->hiddenFrom('md'),
+                TextColumn::make('created_at')->label(__('Time'))->dateTime('d M, H:i')->sortable()->visibleFrom('md'),
+                TextColumn::make('recipient')->label(__('To'))->searchable()->visibleFrom('md'),
                 TextColumn::make('status')
                     ->label(__('Result'))
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => self::statusLabels()[$state] ?? $state)
-                    ->color(fn (string $state): string => match ($state) {
-                        EmailLog::STATUS_SENT => 'success',
-                        EmailLog::STATUS_FAILED => 'danger',
-                        default => 'warning',
-                    }),
+                    ->color(fn (string $state): string => self::statusColor($state))
+                    ->visibleFrom('md'),
                 TextColumn::make('reason')
                     ->label(__('Why'))
                     ->state(fn (EmailLog $record): ?string => self::why($record))
                     ->wrap()
-                    ->placeholder('-'),
+                    ->extraAttributes(['style' => 'min-width: 16rem'])
+                    ->placeholder('-')
+                    ->visibleFrom('md'),
+                TextColumn::make('kind')
+                    ->label(__('Message'))
+                    ->formatStateUsing(fn (string $state): string => self::kindLabels()[$state] ?? $state)
+                    ->visibleFrom('md'),
                 TextColumn::make('via')
                     ->label(__('Sent through'))
                     ->formatStateUsing(fn (?string $state): string => self::viaLabel($state))
-                    ->placeholder('-'),
+                    ->placeholder('-')
+                    ->visibleFrom('md'),
             ])
             ->filters([
                 SelectFilter::make('status')->label(__('Result'))->options(self::statusLabels()),
                 SelectFilter::make('kind')->label(__('Message'))->options(self::kindLabels()),
             ]);
+    }
+
+    public static function statusColor(string $status): string
+    {
+        return match ($status) {
+            EmailLog::STATUS_SENT => 'success',
+            EmailLog::STATUS_FAILED => 'danger',
+            default => 'warning',
+        };
+    }
+
+    /** The phone layout of a row: when, who and what, the result, and why (every value is escaped). */
+    public static function summaryHtml(EmailLog $record): string
+    {
+        $color = match (self::statusColor($record->status)) {
+            'success' => 'text-success-600 dark:text-success-400',
+            'danger' => 'text-danger-600 dark:text-danger-400',
+            default => 'text-warning-600 dark:text-warning-400',
+        };
+
+        return '<div class="space-y-1" style="min-width: 14rem">'
+            .'<div class="text-xs text-gray-500 dark:text-gray-400">'.e(collect([$record->created_at?->format('d M, H:i'), $record->recipient, self::kindLabels()[$record->kind] ?? $record->kind])->filter()->implode(' · ')).'</div>'
+            .'<div class="font-semibold '.$color.'">'.e(self::statusLabels()[$record->status] ?? $record->status).'</div>'
+            .(filled($why = self::why($record)) ? '<div class="whitespace-normal text-sm">'.e($why).'</div>' : '')
+            .'</div>';
+    }
+
+    /**
+     * "Sent" is the mail server's own acceptance of the message. It is not proof that the inbox received it: a
+     * bounce or a spam-folder delivery happens later and is not tracked. Shown above the table, here and on the Logs tab.
+     */
+    public static function logNotice(): ?string
+    {
+        return __('Sent means the mail server accepted the message. It does not prove the inbox received it: bounces and spam-folder delivery are not tracked yet.');
     }
 
     /** The reason in words, with the mail server's own answer when there is one. */

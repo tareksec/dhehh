@@ -40,6 +40,9 @@ class DeploymentErrorResource extends Resource
 
     protected static ?string $navigationLabel = 'Deploy Error Logs';
 
+    /** Reached from Settings → Logs (App\Filament\Pages\Logs), not from the sidebar. */
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?int $navigationSort = 8;
 
     protected static ?string $recordTitleAttribute = 'source';

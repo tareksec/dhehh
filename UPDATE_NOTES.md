@@ -2,12 +2,11 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-
 ## 2026-10-23 - Email Log (sent / failed / not sent, and why)
 
 Owner (Bangla): "ইমেইলের লগ পেজ তৈরি করেছ? ইমেইল পাঠানো হইছে ফেল হইছে সফল হইছে ফেল হইলে কেন হয় নাই" (did you build an email log page? email sent, failed, succeeded, and if it failed, why). I had not: only the SMS Log existed (another session). I answered that and built it the same way as the SMS Log.
 
-What it does: Settings → Email Log, read-only, one row per email through `StorefrontNotificationService` (login code, reseller password reset link, investor code / invitation / message, owner digest, test email). Result: Sent / Failed / Not sent. A failure shows a plain reason plus the mail server's own answer; "Not sent" covers no email account for the site and a server mailer that only logs (the send still returns true as before, so local development and tests that read the log mailer keep working, but the log does not call it "sent").
+What it does: a tab on Settings → Logs (the one Logs page main gained today), read-only, one row per email through `StorefrontNotificationService` (login code, reseller password reset link, investor code / invitation / message, owner digest, test email). Result: Sent / Failed / Not sent. A failure shows a plain reason plus the mail server's own answer; "Not sent" covers no email account for the site and a server mailer that only logs (the send still returns true as before, so local development and tests that read the log mailer keep working, but the log does not call it "sent").
 
 Decisions (mine, say if you want them different):
 - **No message text, no subject.** Only recipient, kind, result, and the server's answer, so a login or reset code can never be read from the log (the SMS Log also skips code messages; here the row exists but carries no code).
@@ -19,7 +18,19 @@ Not logged: emails that do not go through this service (none found; the panels' 
 
 Needs Bangla review (new keys): "Email Log" → "ইমেইল লগ", the kind labels ("Customer login code", "Reseller password reset link", "Investor code/invitation/message", "Owner daily digest", "Test email", "Other email"), "Sent through", "SMTP :host", "Server mailer (:mailer)", the page note and the eight reason texts.
 
-Commit status: committed and pushed to `ccr-3799b463-p4pv7n`; not on `main` yet (needs the owner's approval). Full test run: 3028 passed, 6 skipped, 0 failed.
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` on the owner's approval ("মেনে পুস করো"). Merged `main` (v2.104.0) first and moved the Email Log into the new Settings → Logs page as an "Email" tab (own sidebar entry removed, one-column phone layout). Full test run after the merge: 3042 passed, 6 skipped, 0 failed.
+
+## 2026-10-23 - One Logs page, and the "User Id not found" SMS error
+
+Owner (Bangla): put all the log pages on one page, with a single "Logs" menu entry and the logs as tabs, like Integrations; and the first SMS Log row says the gateway refused with 1011 "User Id not found" — can it be fixed?
+
+**Logs page:** Settings → Logs, tabs SMS, Audit, Courier status, Courier webhooks, Meta events, Deploy errors, Mobile crashes (each only for people who could already open it; see CHANGELOG). Left where they were because they are business data, not system logs: Storefront → Checkout Attempts and Courier → Risk Events (the owner can say if they should move too). Checked in a real browser on a scratch SQLite database (not the demo DB): login, all 7 tabs, tab kept in the address, the sidebar shows only "Logs", 0px horizontal overflow at 1280 and 390 px.
+
+**1011:** that is BulkSMSBD saying it does not know the API key. I cannot see or test the owner's key, so I did not "fix" the gateway; the code now tells the owner exactly what to do (see CHANGELOG), catches an empty key, trims spaces, and stops the browser from autofilling the login password into the API key box (a plausible cause: the box is a password field). **Next step for the owner:** re-copy the API key from the BulkSMSBD Developers page into Integrations → SMS Gateway, Save changes, press Send test SMS.
+
+**Needs Bangla review (lang/bn.json):** the tab names (Audit, Courier status, Courier webhooks, Meta events, Deploy errors, Mobile crashes), "Logs", "Nothing logged yet", and the nine gateway-hint sentences.
+
+**Verified:** `LogsPageTest` (8), `SmsLogTest`, `SmsTemplatesTest`, `AdminNavigationClustersTest`, `ModuleGuardTest`, `TranslationParityTest`. Full `php artisan test` (plain, no `--env`): 3006 passed, 2 skipped.
 
 ## 2026-10-23 - Amazon SES setup for the ERP's email
 
@@ -1261,7 +1272,7 @@ What changed (details in `CHANGELOG.md` [Unreleased]):
 
 Decisions I made without asking, for the owner to confirm or change:
 
-- **I did not name Steadfast.** The prospective reseller asked about Steadfast, but the courier is the store's own setting and I could not confirm from the code which courier the store uses for reseller orders. The answer says "the store sends the parcel on cash on delivery". If the owner wants Steadfast named, tell me the exact words.
+- **Courier names (decided by the owner, 2026-10-23):** I first left the courier out because the code does not say which courier the store uses for reseller orders. The owner gave the wording: "<company name> sends the parcel by courier (Steadfast, Pathao, RedX) on cash on delivery …". It is now in the page (English and Bangla), with the company name filled in from the company's settings. The three courier names are written in the page's text, not an admin setting, so a change of couriers needs a text change.
 - **No promise about how fast the store pays.** The system has no payout deadline, so the answer gives none.
 - **The prospective reseller's "packaging and other charges are deducted from the delivery money" is answered with what the system does:** the reseller's cost (shown on each product) is what the store keeps; delivery charge and VAT are added to the customer's bill; no separate packaging charge on store-delivered orders; the return charge only if the order comes back (and only if the store set one). If the owner's real practice is different (for example a packaging deduction), the system itself would have to change first.
 - **The answers are part of the page's code, not an admin-edited list**, like the other "how it works" sections (so they are in Bangla and English from the language files). The guide's introduction and rules are still admin-written, and appear in whatever language the admin typed them. If the owner wants the questions editable from Reseller Settings too, that is a small follow-up.
@@ -1275,6 +1286,8 @@ Needs Bangla review (new keys, all in `lang/bn.json`): the six questions and the
 Verified: `npm run build`, the English and Bangla pages rendered in Chromium (desktop and 390 px phone), and the full suite on the tree with `origin/main` (v2.100.0) merged in: 2986 passed, 5 skipped, 0 failed.
 
 Commit status: committed to the work branch `claude/reseller-module-status-v9tobe`, `origin/main` (v2.100.1) merged in, full suite on the merged tree green (result below); pushed to `main` on the owner's explicit approval ("ওকে এটা মেইনে পুশ কর", 2026-10-23).
+
+Follow-up (2026-10-23): the parcel answer now names the company and its couriers (Steadfast, Pathao, RedX) in the owner's wording; full suite 2999 passed, 5 skipped, 0 failed; pushed to `main` on the owner's explicit approval ("টেস্ট শেষ হলে মেইনেও পুশ করে দিও", 2026-10-23).
 
 ## 2026-10-22 (later) - Landing page redesigned in neo-brutalism
 

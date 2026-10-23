@@ -3,16 +3,19 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\Integrations;
+use App\Filament\Resources\EmailLogs\EmailLogResource;
 use App\Filament\Resources\EmailLogs\Pages\ListEmailLogs;
+use App\Ims\Onboarding\OtpService;
+use App\Livewire\LogTable;
 use App\Mail\ImsMessage;
 use App\Models\Company;
 use App\Models\EmailLog;
 use App\Models\StorefrontSetting;
 use App\Models\User;
-use App\Ims\Onboarding\OtpService;
 use App\Services\CompanyContext;
 use App\Services\EmailLogService;
 use App\Services\StorefrontNotificationService;
+use App\Support\LogCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
@@ -194,6 +197,43 @@ class EmailLogTest extends TestCase
         $this->assertSame(EmailLog::STATUS_SENT, $log->status);
         $this->assertNull($log->detail);
         $this->assertDoesNotMatchRegularExpression('/\d{6}/', json_encode($log->getAttributes()), 'No code may be stored in the log.');
+    }
+
+    public function test_the_email_log_is_a_tab_on_the_logs_page_and_not_a_sidebar_entry(): void
+    {
+        $this->assertArrayHasKey('email', LogCatalog::visible());
+        $this->assertFalse(EmailLogResource::shouldRegisterNavigation());
+
+        app(EmailLogService::class)->failed($this->site(['mail_host' => 'smtp.example.test']), EmailLog::KIND_LOGIN_CODE, 'buyer@example.test', 'smtp:smtp.example.test', '535 Authentication Credentials Invalid');
+
+        Livewire::test(LogTable::class, ['log' => 'email'])
+            ->assertOk()
+            ->assertSee('buyer@example.test')
+            ->assertSee('refused the SMTP user name or password')
+            ->assertSee('bounces and spam-folder delivery are not tracked yet');
+    }
+
+    public function test_the_email_tab_is_not_shown_to_staff_without_settings_access(): void
+    {
+        Auth::login(User::factory()->create(['role' => 'sales_staff', 'is_active' => true]));
+
+        $this->assertArrayNotHasKey('email', LogCatalog::visible());
+        Livewire::test(LogTable::class, ['log' => 'email'])->assertForbidden();
+    }
+
+    public function test_the_phone_layout_of_an_email_row_escapes_what_the_mail_server_said(): void
+    {
+        $row = new EmailLog([
+            'kind' => EmailLog::KIND_LOGIN_CODE, 'status' => EmailLog::STATUS_FAILED, 'recipient' => 'buyer@example.test',
+            'reason' => EmailLogService::REASON_SEND_ERROR, 'detail' => '<script>alert(1)</script>',
+        ]);
+
+        $html = EmailLogResource::summaryHtml($row);
+
+        $this->assertStringNotContainsString('<script>', $html);
+        $this->assertStringContainsString('&lt;script&gt;', $html);
+        $this->assertStringContainsString('buyer@example.test', $html);
+        $this->assertStringContainsString('Failed', $html);
     }
 
     public function test_the_log_page_opens_from_settings_for_a_super_admin(): void

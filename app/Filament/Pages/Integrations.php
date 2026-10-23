@@ -869,7 +869,7 @@ class Integrations extends Page
         $logs->finish(
             $logs->queued((int) $company->getKey(), SmsLog::KIND_TEST, null, null, $phone),
             $result['ok'] ? SmsLog::STATUS_SENT : SmsLog::STATUS_FAILED,
-            $result['ok'] ? null : ($result['code'] !== null ? 'gateway_refused' : 'gateway_unreachable'),
+            $result['reason'],
             ['message' => $message, 'gateway_code' => $result['code'], 'detail' => $result['meaning'] ?? $result['detail']],
         );
 
@@ -885,7 +885,11 @@ class Integrations extends Page
 
         Notification::make()
             ->title(__('The gateway did not send the test SMS'))
-            ->body(collect([$result['code'], $result['meaning'] ?? $result['detail']])->filter()->implode(' - '))
+            ->body(collect([
+                $result['reason'] !== null ? (SmsLogService::reasonLabels()[$result['reason']] ?? null) : null,
+                collect([$result['code'], $result['meaning'] ?? $result['detail']])->filter()->implode(' - '),
+                StorefrontNotificationService::smsGatewayHint($result['code']),
+            ])->filter()->implode(' '))
             ->danger()
             ->persistent()
             ->send();
@@ -1355,18 +1359,24 @@ class Integrations extends Page
                                     ->columnSpanFull(),
                                 TextInput::make('notification_credentials.sms_api_url')
                                     ->label(__('SMS gateway URL template'))
+                                    ->dehydrateStateUsing(fn (?string $state): ?string => $state === null ? null : trim($state))
                                     ->maxLength(500)
                                     ->placeholder('http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}')
                                     ->helperText(__('Use the {api_key}, {sender_id}, {phone} and {message} placeholders. Leave empty to turn SMS off for this site.'))
                                     ->columnSpanFull(),
+                                // new-password keeps the browser from filling the login password into this box (the gateway
+                                // then answers "User Id not found"); a space copied with the key is dropped on save.
                                 TextInput::make('notification_credentials.sms_api_key')
                                     ->label(__('SMS API key'))
                                     ->password()
                                     ->revealable()
+                                    ->autocomplete('new-password')
+                                    ->dehydrateStateUsing(fn (?string $state): ?string => $state === null ? null : trim($state))
                                     ->maxLength(255)
                                     ->helperText(__('Stored encrypted.')),
                                 TextInput::make('notification_credentials.sms_sender_id')
                                     ->label(__('SMS sender ID'))
+                                    ->dehydrateStateUsing(fn (?string $state): ?string => $state === null ? null : trim($state))
                                     ->maxLength(100),
                                 Placeholder::make('sms_gateway_wording_note')
                                     ->hiddenLabel()

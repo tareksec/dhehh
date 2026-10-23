@@ -89,8 +89,11 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Filament/Pages/ConnectWhatsAppBusinessApp.php` | Embedded Meta Cloud API onboarding wizard for coexisting official WhatsApp channels. |
 | `app/Filament/Pages/WhatsAppWebLogin.php` | Displays live QR code for scanning and linking WhatsApp Web Baileys bridge. |
 | `app/Filament/Pages/SmsTemplates.php` | Admin editor for system notification SMS templates. |
-| `app/Filament/Resources/SmsLogs/SmsLogResource.php` | Settings → SMS Log: read-only list of every order SMS and why it was or was not sent. |
-| `app/Filament/Resources/EmailLogs/EmailLogResource.php` | Settings → Email Log: read-only list of every email and whether it was sent, failed or not sent, and why. |
+| `app/Filament/Resources/SmsLogs/SmsLogResource.php` | SMS log table (a tab on Settings → Logs, no sidebar entry of its own): every order SMS and why it was or was not sent; one-column phone layout. |
+| `app/Filament/Pages/Logs.php` | Settings → Logs: one page, one tab per log (SMS, audit, courier status/webhooks, Meta events, deploy errors, mobile crashes), each shown only to people who may open that log. |
+| `app/Livewire/LogTable.php` | Embeds one log resource's own table inside a Logs tab (View buttons become links to the resource's page). |
+| `app/Support/LogCatalog.php` | The list of logs on the Logs page and who may see each (the log resource's `canViewAny()`). |
+| `app/Filament/Resources/EmailLogs/EmailLogResource.php` | Email log table (a tab on Settings → Logs, no sidebar entry of its own): every email and whether it was sent, failed or not sent, and why. |
 | `app/Filament/Pages/OrderWhatsAppCard.php` | Settings → Order WhatsApp card: switch on the automatic order card, pick the official channel and approved template. |
 | `app/Filament/Pages/PushNotificationSettings.php` | Configures Firebase Cloud Messaging credentials and web push permissions. |
 

@@ -212,7 +212,8 @@ class ResellerLandingPageTest extends TestCase
             // The answers state what the system does: the profit rule, cash on delivery, the withdrawal route.
             ->assertSee('Your profit is your selling price minus your cost, for every piece.')
             ->assertSee('there is no separate packaging charge on orders the store delivers')
-            ->assertSee('cash on delivery, so your customer pays when it arrives and you pay nothing in advance')
+            // The parcel answer names the company and its couriers (owner wording, 2026-10-23).
+            ->assertSee('Landing Co sends the parcel to your customer by courier (Steadfast, Pathao, RedX) on cash on delivery, so your customer pays when it arrives and you pay nothing in advance')
             ->assertSee('Open Withdrawals in the portal and request any amount up to your available balance, to bKash, Nagad, Rocket or a bank account.');
 
         $this->assertSame(6, substr_count($page->getContent(), 'data-reseller-faq'));
@@ -247,6 +248,9 @@ class ResellerLandingPageTest extends TestCase
             ->assertCookie(SetResellerPortalLocale::COOKIE, 'bn');
 
         // The switch is on the page, with each language named in itself.
+        // In Bangla the same answer carries the company's name and the same three couriers.
+        $bangla->assertSee('Landing Co কুরিয়ারের (Steadfast, Pathao, RedX) মাধ্যমে ক্যাশ অন ডেলিভারিতে');
+
         $bangla->assertSee('data-reseller-language-switch', false)->assertSee('?lang=en', false)->assertSee('?lang=bn', false)
             ->assertSee(__('Language name: Bangla', [], 'bn'))
             ->assertSee('English');

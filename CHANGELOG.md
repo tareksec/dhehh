@@ -8,7 +8,7 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Added
 
-- **Email Log: was the email sent, did it fail, and why.** Owner request 2026-10-23. New page **Settings → Email Log** lists every email the ERP tries to send, for the selected company: time, the kind of message (customer login code, reseller password reset link, investor code, investor invitation, investor message, owner's daily digest, test email), who it went to, the result and the way it was sent (the site's own SMTP host, or the server's default mailer).
+- **Email Log: was the email sent, did it fail, and why.** Owner request 2026-10-23. New **Email** tab on **Settings → Logs** lists every email the ERP tries to send, for the selected company: time, the kind of message (customer login code, reseller password reset link, investor code, investor invitation, investor message, owner's daily digest, test email), who it went to, the result and the way it was sent (the site's own SMTP host, or the server's default mailer).
   - **Sent**: the mail server (for example Amazon SES) accepted the message. The page says this does not prove the inbox received it; bounces and spam-folder delivery are not tracked yet.
   - **Failed**: with a plain reason and the mail server's own answer: wrong SMTP user name or password, an email address that is not verified (the From address, or the recipient while SES is still in its sandbox), sending limit or rate reached, mail server unreachable, invalid address, or any other refusal.
   - **Not sent**: no email account is set up for the site, or the server's own mailer only writes to a log file so nothing left the server. A reseller password reset link or an investor code that could not be sent for this reason is now logged too.
@@ -20,9 +20,30 @@ All notable production changes to Business Dashboard are documented here.
 - New table `email_logs` (migration `2026_10_23_200000_create_email_logs_table.php`, short index name) and company-owned model `EmailLog` (registered in `MultiCompanyIsolationTest`). `EmailLogService` writes rows, never throws (a failed write is reported and ignored, so logging cannot stop an email), and `classify()` maps the server's error text to a reason key (`auth_failed`, `address_not_verified`, `limit_reached`, `unreachable`, `invalid_address`, `send_error`); `not_configured` and `log_only` are written by the sender itself.
 - `StorefrontNotificationService`: the three senders (`sendMailable()`, `sendResellerPasswordResetEmail()`, `sendLoginOtpEmail()`) now share one `deliver()`; the failure warning logged to `laravel.log` is unchanged (its context now always includes the mail class). `sendMailable()` takes the message kind as an optional last argument (IMS code, invitation, message, owner digest at their call sites). `sendTestEmail()` logs too. A send through a server mailer that is `log` or `array` still returns true as before but is logged as not sent (`log_only`).
 - `OtpService` and `ResellerPasswordResetService` log the "no email account" case before returning, since they stop before any send.
-- New Settings-cluster resource `EmailLogResource` (read-only, `canManageSettings()`), `docs/codebase-map/crm-messaging.md` updated, `docs/email-ses-setup.md` gains a section on the log. Lang keys in `lang/en.json` and `lang/bn.json`.
+- New read-only resource `EmailLogResource` (`canManageSettings()`), shown as the `email` tab of the Logs page (listed in `LogCatalog`, no sidebar entry of its own, route `/admin/settings/email-logs` kept; one-column phone layout like the SMS log), `docs/codebase-map/crm-messaging.md` updated, `docs/email-ses-setup.md` gains a section on the log. Lang keys in `lang/en.json` and `lang/bn.json`.
 - Tests: new `EmailLogTest` (sent / failed / log-only rows, no code stored, the reason mapping with SES answers, logging failure never stops the email, company isolation, the page, the two early-return call sites, the Integrations test button); `ResellerPasswordResetByStaffTest` asserts the skip row; `MultiCompanyIsolationTest` lists `EmailLog`.
 
+## [2.104.0] - 2026-10-23
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **One "Logs" page for every log.** Owner request 2026-10-23. **Settings → Logs** is now the only log entry in the menu, with one tab per log, the way **Integrations** gathers the integrations: **SMS**, **Audit**, **Courier status**, **Courier webhooks**, **Meta events**, **Deploy errors** and **Mobile crashes**. A tab appears only for people who could already open that log, so nobody gains or loses access. The separate sidebar entries for SMS Log, Audit Logs, Deploy Error Logs and Mobile Crash Reports are gone; the logs' own pages and links (for example the link in a deploy-error alert, or Courier → Status Logs) keep working. The open tab is kept in the address, so a link opens the right log. The SMS log reads as one column on a phone (when, number, result, why) so it does not scroll sideways.
+
+### Changed
+
+- **Reseller landing page: the parcel answer names the company and its couriers.** Owner wording 2026-10-23. The answer to *How is the parcel sent, and who collects the money?* now reads "<company name> sends the parcel to your customer by courier (Steadfast, Pathao, RedX) on cash on delivery …" (the company name comes from the company's own settings; the three courier names are part of the page's text, in English and in Bangla).
+
+### Fixed
+
+- **"User Id not found" (code 1011) from BulkSMSBD now says what to do.** The SMS Log and the Send test SMS button explain each gateway reply in plain words next to its code: 1011 means BulkSMSBD does not recognise the API key, so copy it again from the BulkSMSBD Developers page; the same for sender-ID problems (1002, 1013-1015), an empty balance (1006, 1007), Bangla-only masking (1012), IP whitelist (1032) and an account that needs attention (1018, 1031).
+- An **empty SMS API key** is now caught before the gateway is called and logged as "The SMS API key is empty".
+- **Spaces copied with the key**, sender ID or URL are removed when the settings are saved and when an SMS is sent. The **SMS API key** box also asks the browser not to fill it in: a browser can put the saved login password into a password-type box, which the gateway then answers with "User Id not found".
+
+### Technical Notes
+
+- Logs page and SMS gateway hints: `App\Filament\Pages\Logs` (Settings cluster, needs the "manage settings" permission) builds its tabs from `App\Support\LogCatalog`, which lists the log resources and keeps those whose `canViewAny()` passes. Each tab embeds `App\Livewire\LogTable` (lazy, `#[Locked] $log`, re-checked on mount) which reuses the resource's own `table()` on the model's company-scoped query; a resource's `ViewAction` becomes a plain link to the resource's view page, and a resource may add a `logNotice()` (SMS and courier webhooks use it for the "queue worker not running" warning). The four resources set `$shouldRegisterNavigation = false` and keep their routes. `StorefrontNotificationService::sendSmsDetailed()` now also returns `reason` (`no_gateway`, `no_api_key`, `gateway_unreachable`, `gateway_refused`) and `smsGatewayHint()` maps codes to advice. Tests: `LogsPageTest` (8), extra cases in `SmsLogTest`. No migrations.
 ## [2.103.0] - 2026-10-23
 
 **Release type:** Minor Feature Update

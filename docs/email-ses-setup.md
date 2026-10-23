@@ -19,7 +19,7 @@ Email the ERP sends this way: customer login codes (storefront), reseller passwo
 4. **From address**: an address on a domain verified in SES for this site. This is required with SES, because the SMTP user name is not an email address. **From name** is the display name customers see.
 5. **Save changes** (a reminder appears if there is no usable From address), then **Send test email** and open the inbox (check spam too).
 
-The test email is sent through the saved settings and shows the mail server's own answer when it fails. Every email the ERP sends, the test ones included, is also written to **Settings → Email Log** (see below):
+The test email is sent through the saved settings and shows the mail server's own answer when it fails. Every email the ERP sends, the test ones included, is also written to the **Email** tab of **Settings → Logs** (see below):
 
 | Answer | Usually means |
 | --- | --- |
@@ -32,7 +32,7 @@ Port 465 connects over SSL; any other port starts with TLS when the server offer
 
 ## 3. Email Log: was it sent, did it fail, and why
 
-**Settings → Email Log** lists every email the ERP tried to send for the company: when, what kind of message (customer login code, reseller password reset link, investor code or invitation, investor message, owner's daily digest, test email), who it went to, and the result:
+The **Email** tab of **Settings → Logs** lists every email the ERP tried to send for the company: when, what kind of message (customer login code, reseller password reset link, investor code or invitation, investor message, owner's daily digest, test email), who it went to, and the result:
 
 - **Sent**: the mail server (SES) accepted the message. This does **not** prove the inbox received it: a bounce or a spam-folder delivery happens afterwards and is not tracked yet.
 - **Failed**: the mail server or the connection refused it. The **Why** column gives a plain reason (wrong SMTP user name or password, an email address not verified, sending limit reached, mail server unreachable, invalid address) followed by the mail server's own answer.
