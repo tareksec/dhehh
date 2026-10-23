@@ -35,6 +35,9 @@ class StorefrontNotificationService
     /** notification_credentials keys edited on Settings → Integrations → SMS Gateway (not on Storefront Settings). */
     public const SMS_CREDENTIAL_KEYS = ['sms_api_url', 'sms_api_key', 'sms_sender_id'];
 
+    /** notification_credentials keys edited on Settings → Integrations → Email Setup (not on Storefront Settings). */
+    public const MAIL_CREDENTIAL_KEYS = ['mail_host', 'mail_port', 'mail_encryption', 'mail_username', 'mail_password', 'mail_from_address', 'mail_from_name'];
+
     /** Reply code BulkSMSBD-style gateways send (inside an HTTP 200) when the SMS was accepted. */
     public const SMS_GATEWAY_SUCCESS_CODE = 202;
 

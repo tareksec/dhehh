@@ -2,6 +2,22 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - Email (SMTP) settings moved to Integrations → Email Setup
+
+Owner (Bangla): "ইমেইল ইন্টিগ্রেশন এর জন্য যে সেটিংস গুলো আছে সেগুলো ইন্টিগ্রেশন পেজে ইমেইল সেটআপ ট্যাব এ নিয়ে যাও।" (move the settings that exist for email integration to the Email Setup tab on the Integrations page). There was no Email Setup tab yet, so I added it next to SMS Gateway, the same way the SMS gateway was moved on 2026-10-10.
+
+What changed: the seven SMTP fields (host, port, encryption, username, password, From address, From name) are removed from Storefront Settings → Customer Notifications & Reminders and live on Settings → Integrations → Email Setup, per site (Site picker). Same storage (`notification_credentials`), no migration, saved values keep working. Each page merges only the keys it owns, so neither can wipe the other's (or the WhatsApp reminder) keys. The "Email is not set up…" message for the reseller password-reset action and the Customer Notifications section note now point to the new tab.
+
+Left as is: the WhatsApp reminder fields stay on Storefront Settings (the owner asked only for email). `BroadcastForm` still says the SMS gateway is "under Storefront Settings → Customer Notifications" — stale since the SMS move of 2026-10-10, not touched here.
+
+Needs Bangla review (new keys): "Email Setup" → "ইমেইল সেটআপ", the tab note, "SMTP host/port/encryption/username/password", "From address" → "প্রেরকের ঠিকানা", "From name" → "প্রেরকের নাম".
+
+Found while testing: choosing "None" for encryption was saved as null, which the mail code reads as TLS (the old Storefront Settings select had the same flaw). The new tab now saves "None" as an empty string and shows a saved null as TLS, so nothing changes for existing sites.
+
+Checked: full `php artisan test` (PHP 8.4.27): 2982 passed, 6 skipped, 0 failed. No real SMTP server or browser was used — the tab is covered by Livewire tests only, and I did not look at it rendered.
+
+Commit status: committed and pushed to `ccr-3799b463-p4pv7n`; not on `main` (needs the owner's approval).
+
 ## 2026-10-22 - PHP security update: production Dockerfile
 
 Reason - owner forwarded Contabo's email about the PHP RCE vulnerabilities CVE-2026-109618 / CVE-2026-109619 and asked whether the server needs an update. I checked the claims on php.net (advisory 2026-10-21; fixed in 8.4.27 / 8.5.12 / 8.3.36 / 8.2.35; PHP-FPM is affected). The owner's ERP container reports `PHP 8.4.2 (built Dec 17 2024)`, so it is vulnerable, and 25 patch releases behind.

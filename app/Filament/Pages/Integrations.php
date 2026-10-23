@@ -50,8 +50,9 @@ use Livewire\Attributes\Locked;
  * (credentials, order-webhook test/sync, and the full product import),
  * Payment Gateway (ZiniPay/PayStation credentials and base URLs), SMS Gateway
  * (URL template, API key, sender ID — stored in the SMS keys of
- * `notification_credentials`, merged so the mail/WhatsApp keys edited on
- * Storefront Settings are kept), and the
+ * `notification_credentials`, merged so the WhatsApp keys edited on
+ * Storefront Settings are kept), Email Setup (the per-site SMTP account, stored
+ * in the mail keys of the same array and merged the same way), and the
  * entire Meta Pixel & Conversions API configuration — connection, consent,
  * browser/status events, purchase timing, and the Event Log & Retries table
  * (embedded via App\Livewire\MetaEventLogTable, the same
@@ -129,7 +130,7 @@ class Integrations extends Page
             'online_payment_enabled' => $setting?->online_payment_enabled ?? false,
             'online_payment_gateway' => $setting?->online_payment_gateway ?? 'zinipay',
             'payment_credentials' => $setting?->payment_credentials ?? [],
-            'notification_credentials' => Arr::only((array) $setting?->notification_credentials, StorefrontNotificationService::SMS_CREDENTIAL_KEYS),
+            'notification_credentials' => $this->notificationFillState($setting),
             ...array_merge($this->metaFieldDefaults(), $setting?->only($this->metaFields()) ?? []),
         ]);
     }
@@ -224,6 +225,31 @@ class Integrations extends Page
         $active = $this->activeSetting();
 
         return $active === null || $active->isPrimary();
+    }
+
+    /**
+     * The notification_credentials keys this page edits (SMS gateway and SMTP email); the WhatsApp
+     * and other keys in the same array belong to Storefront Settings and are never touched here.
+     *
+     * @return array<int, string>
+     */
+    protected function ownedNotificationKeys(): array
+    {
+        return [...StorefrontNotificationService::SMS_CREDENTIAL_KEYS, ...StorefrontNotificationService::MAIL_CREDENTIAL_KEYS];
+    }
+
+    /**
+     * The SMS and email values of the site being edited. An empty encryption string means "None";
+     * a missing or null one sends over TLS (StorefrontNotificationService::companyMailer()), so it is shown as TLS.
+     *
+     * @return array<string, mixed>
+     */
+    protected function notificationFillState(?StorefrontSetting $setting): array
+    {
+        $credentials = Arr::only((array) $setting?->notification_credentials, $this->ownedNotificationKeys());
+        $credentials['mail_encryption'] ??= 'tls';
+
+        return $credentials;
     }
 
     public function canManageAi(): bool
@@ -1211,6 +1237,47 @@ class Integrations extends Page
                             ])
                             ->columns(2),
 
+                        Tab::make(__('Email Setup'))
+                            ->icon(Heroicon::OutlinedEnvelope)
+                            ->schema([
+                                Placeholder::make('email_setup_note')
+                                    ->hiddenLabel()
+                                    ->content(__('One SMTP email account per site. It sends customer login codes and reseller password-reset links, and (from the company\'s main site) investor and IMS emails. Leave the SMTP host empty to use the server\'s default mailer.'))
+                                    ->columnSpanFull(),
+                                TextInput::make('notification_credentials.mail_host')
+                                    ->label(__('SMTP host'))
+                                    ->maxLength(255)
+                                    ->placeholder('smtp.gmail.com')
+                                    ->columnSpanFull(),
+                                TextInput::make('notification_credentials.mail_port')
+                                    ->label(__('SMTP port'))
+                                    ->numeric()
+                                    ->placeholder('587'),
+                                Select::make('notification_credentials.mail_encryption')
+                                    ->label(__('SMTP encryption'))
+                                    ->options(['tls' => 'TLS', 'ssl' => 'SSL', '' => __('None')])
+                                    // "None" must reach the database as an empty string: null would be read back as TLS.
+                                    ->dehydrateStateUsing(fn (?string $state): string => (string) $state),
+                                TextInput::make('notification_credentials.mail_username')
+                                    ->label(__('SMTP username'))
+                                    ->maxLength(255),
+                                TextInput::make('notification_credentials.mail_password')
+                                    ->label(__('SMTP password'))
+                                    ->password()
+                                    ->revealable()
+                                    ->maxLength(255)
+                                    ->helperText(__('Stored encrypted.')),
+                                TextInput::make('notification_credentials.mail_from_address')
+                                    ->label(__('From address'))
+                                    ->email()
+                                    ->maxLength(255)
+                                    ->helperText(__('Defaults to the SMTP username if left empty.')),
+                                TextInput::make('notification_credentials.mail_from_name')
+                                    ->label(__('From name'))
+                                    ->maxLength(255),
+                            ])
+                            ->columns(2),
+
                         Tab::make('Meta Pixel & CAPI')
                             ->icon(Heroicon::OutlinedSignal)
                             ->schema([
@@ -1476,10 +1543,10 @@ class Integrations extends Page
 
         $active = $this->activeSetting();
 
-        // notification_credentials also holds mail/WhatsApp keys edited on Storefront Settings; only touch the SMS ones.
+        // notification_credentials also holds WhatsApp keys edited on Storefront Settings; only touch the SMS and email ones.
         $state['notification_credentials'] = array_merge(
             (array) $active?->notification_credentials,
-            Arr::only((array) ($state['notification_credentials'] ?? []), StorefrontNotificationService::SMS_CREDENTIAL_KEYS),
+            Arr::only((array) ($state['notification_credentials'] ?? []), $this->ownedNotificationKeys()),
         );
 
         StorefrontSetting::withoutGlobalScopes()->updateOrCreate(

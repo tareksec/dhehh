@@ -4,6 +4,20 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **The email (SMTP) settings moved from Storefront Settings to Settings → Integrations → Email Setup.** Owner request 2026-10-23. SMTP host, port, encryption, username, password, From address and From name are now edited on a new **Email Setup** tab next to **SMS Gateway**, per site (use the Site picker, like Payment Gateway and SMS Gateway). Values already saved keep working — nothing needs to be re-entered. Saving Storefront Settings no longer touches the email keys. The WhatsApp reminder fields stay on Storefront Settings → Customer Notifications & Reminders.
+- The message shown to staff when a reseller's password-reset link cannot be sent because email is not set up now points to **Settings → Integrations → Email Setup**.
+
+### Technical Notes
+
+- Email keys (`mail_host`, `mail_port`, `mail_encryption`, `mail_username`, `mail_password`, `mail_from_address`, `mail_from_name`; new `StorefrontNotificationService::MAIL_CREDENTIAL_KEYS`) still live in the encrypted `storefront_settings.notification_credentials`; no migration and nothing reads them differently (`mailConfigured()` / `companyMailer()` are unchanged). `Integrations::save()` merges only the SMS and email keys into the stored array (`ownedNotificationKeys()`), and `EditStorefrontSetting::mutateFormDataBeforeSave()` re-adds both sets so the Storefront Settings form, which no longer has these fields, cannot wipe them.
+- A site with no encryption saved (or a saved null) is shown as TLS on the new tab (that is what `companyMailer()` already sends with); choosing None stores an empty string, which still means no encryption. The Select dehydrates its state to a string because a null would be read back as TLS.
+- Lang: new keys for the tab (Email Setup, its note, SMTP host/port/encryption/username/password, From address, From name, the From address helper); the Storefront Settings section note and the "Email is not set up…" message changed text in `lang/en.json` and `lang/bn.json`.
+- Tests: `IntegrationsPageTest` (+4, one rewritten); `ResellerPasswordResetByStaffTest` expects the new message.
+
 ## [2.100.1] - 2026-10-22
 
 **Release type:** Security Update

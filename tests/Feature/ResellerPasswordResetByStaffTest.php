@@ -187,7 +187,7 @@ class ResellerPasswordResetByStaffTest extends TestCase
 
         Livewire::test(ViewReseller::class, ['record' => $this->reseller->getKey()])
             ->callAction('emailResetLink')
-            ->assertNotified('Email is not set up for this company yet (Storefront Settings → Customer Notifications & Reminders), so no link can be sent. Set a new password instead.');
+            ->assertNotified('Email is not set up for this company yet (Settings → Integrations → Email Setup), so no link can be sent. Set a new password instead.');
 
         Mail::assertNothingSent();
         $this->assertNull($this->reseller->fresh()->password_reset_code);
