@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.111.1] - 2026-10-23
+
 **Release type:** Patch/Fix Update
 
 ### Fixed
@@ -24,7 +26,6 @@ All notable production changes to Business Dashboard are documented here.
 - Translation key replaced (en + bn): the Apply confirmation now takes `:items` instead of `:per_unit`.
 - Not changed: two serial numbers written on one line are one serial number. The form splits on new lines, commas and semicolons; the check's "TEST-SN-001TEST-SN-002" was typed without a line break.
 - Tests: new `TradePortalQaRegressionTest` (the check's data: every report on screen in both languages and as PDF / Excel / Print, the DRL without a date, LC edit / landed cost / serial actions, Home LC card, Goods in button, the Trade module error page); `ModuleGuardTest` checks the `/trade` mapping.
-
 ## [2.111.0] - 2026-10-23
 
 **Release type:** Minor Feature Update
