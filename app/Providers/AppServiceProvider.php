@@ -9,6 +9,7 @@ use App\Filament\Resources\CategoryResource\Pages\ListCategories;
 use App\Filament\Resources\Products\Pages\CreateProduct;
 use App\Filament\Resources\Products\Pages\EditProduct;
 use App\Filament\Resources\Products\Pages\ListProducts;
+use App\Http\Controllers\Auth\PanelLogoutController;
 use App\Models\Account;
 use App\Models\AgreementTemplate;
 use App\Models\Category;
@@ -52,7 +53,6 @@ use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use App\Models\TransactionLedger;
 use App\Models\User;
-use App\Http\Controllers\Auth\PanelLogoutController;
 use App\Observers\AuditObserver;
 use App\Observers\CompanyNotificationObserver;
 use App\Observers\OrderNotificationObserver;
@@ -67,13 +67,13 @@ use App\Support\ModuleHealth;
 use App\Support\MoneyFormatter;
 use Filament\Auth\Http\Controllers\LogoutController;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse as LoginResponseContract;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\FileUpload;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Livewire\Notifications;
 use Filament\Support\View\ViewManager;
 use Filament\Tables\Columns\Summarizers\Summarizer;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Facades\Filament;
 use Filament\Tables\Table;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Builder;
@@ -234,8 +234,9 @@ class AppServiceProvider extends ServiceProvider
         Table::configureUsing(function (Table $table): void {
             $table->defaultSort(fn (Builder $query): string => DefaultTableSort::column($query), 'desc');
             // IMS on phones (IMS-V2/DESIGN.md §6.2): every list is a stack of
-            // cards with labels instead of a table that scrolls sideways.
-            $table->stackedOnMobile(fn (): bool => in_array(Filament::getCurrentPanel()?->getId(), ['office', 'investor'], true));
+            // cards with labels instead of a table that scrolls sideways. The
+            // Trade Portal is phone first too.
+            $table->stackedOnMobile(fn (): bool => in_array(Filament::getCurrentPanel()?->getId(), ['office', 'investor', 'trade'], true));
         });
 
         // Every FileUpload gets a label-row "Remove" action so an image whose

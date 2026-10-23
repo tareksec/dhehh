@@ -1,8 +1,8 @@
 # Core Platform
-> Last checked: 2026-10-23, the log pages moved onto one Settings → Logs page (earlier check: 2026-10-21, CAPTCHA for a challenged sign-in)
+> Last checked: 2026-10-23, the Trade Portal (phases 1–6, phone look, sign-in) merged with main, where the log pages moved onto one Settings → Logs page
 
 ## What it does
-The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and four distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated backups to Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
+The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and five distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal, Trade Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated backups to Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
 
 ## Where to start
 - `app/Models/Concerns/BelongsToCompany.php` — Trait that automatically assigns the active company ID on model creation and registers `CompanyScope`.
@@ -85,6 +85,30 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Providers/Filament/ImsOfficePanelProvider.php` | Configures the IMS office management panel (`/office`, ID: `office`). |
 | `app/Providers/Filament/InvestorPanelProvider.php` | Configures the external investor portal (`/investor`, ID: `investor`). |
 | `app/Providers/Filament/ResellerPanelProvider.php` | Configures the reseller program portal (`/portal`, ID: `reseller`). |
+| `app/Providers/Filament/TradePortalPanelProvider.php` | Configures the Trade Portal (`/trade`, ID: `trade`): phone-first, Bangla-first shop portal on the main domain (docs/tasneem-samples/PLAN.md). |
+| `app/Filament/Trade/TradeNavigation.php` | The Trade Portal's menu: top menu on wide screens, floating bottom tab bar and the grouped Menu sheet on phones (`resources/views/filament/trade/mobile-nav.blade.php`), and `backUrl()` for the round back button in the phone header (`resources/views/filament/trade/back-button.blade.php`). |
+| `app/Filament/Trade/Pages/Home.php` | Trade Portal home: greeting, today's sales (navy card), "At a glance" (dues, cash and bank, low stock, open LCs), quick jobs and short lists, from `TradePortalHome`. |
+| `app/Filament/Trade/Pages/BusinessProfile.php` | Trade Portal business profile (addresses, TIN/BIN/IRC, bank accounts, signatory, letterhead); needs `trade.profile.manage`. |
+| `app/Services/TradePortalCompanies.php` | Which companies a user may open in `/trade` (`trade.access` + `companies.trade_portal_enabled`), the chosen one, `mayEnter()`. |
+| `app/Services/TradePortalHome.php` | The Trade Portal home figures, each card inside `ModuleGuard::run()`. |
+| `app/Filament/Trade/Resources/DeliveryChallans/DeliveryChallanResource.php` | Trade Portal sales: Delivery Challan list, create (the sale), view with Print / Receive money / Cancel (`trade.sales`). Work done by `DeliveryChallanService` (sales-orders-couriers.md). |
+| `app/Filament/Trade/Resources/GoodsIn/GoodsInResource.php` | Trade Portal "Goods in": short purchase entry and "Goods arrived" over `Purchase` (`trade.purchases`). |
+| `app/Filament/Trade/Resources/StockItems/StockItemResource.php` | Trade Portal stock: items with stock (coming-soon cost placeholders hidden), new item with opening stock, "Correct count" (`trade.stock`). |
+| `app/Filament/Trade/Resources/Dues/DueResource.php` | Trade Portal dues: customers with `current_balance > 0`, "Receive money" against a challan or the old due (`trade.dues`). |
+| `app/Filament/Trade/Pages/ImportOldData.php` | Trade Portal "Bring in old data": buyers with opening dues and items with stock from CSV/Excel via `TradeImportService` (`trade.import`). |
+| `app/Filament/Trade/Pages/CashBook.php` | Trade Portal cash book (`trade/cash-book`, `trade.cashbook`): day or month view and the buttons Bank deposit / move money, Pay a supplier, Other cost, Receive money (→ Dues). Data from `TradeCashBookService` (accounts-finance.md). |
+| `app/Filament/Trade/Pages/BalanceSheet.php` | Trade Portal simple balance sheet (`trade/balance-sheet`, `trade.cashbook`). |
+| `app/Filament/Trade/Resources/MoneyAccounts/MoneyAccountResource.php` | Trade Portal cash and bank accounts (`trade/accounts`, `trade.money_accounts`): the company's manual `Account`s with their balance; add one with its opening money. |
+| `app/Filament/Trade/Resources/LcFiles/LcFileResource.php` | Trade Portal LC files (`trade/lc-files`, `trade.lc`): list with stage and bank-document status, one form saved by `LcFileService` (catalog-inventory.md), a page per file with the stages, "Move to" the next stage and the five papers (print or what is still needed). |
+| `app/Filament/Trade/Resources/LcFiles/Pages/LandedCost.php` | Trade Portal landed cost worksheet of an LC file (`trade/lc-files/{record}/landed-cost`, `trade.landed_cost`): cost lines with their source, bank rate, per unit / per item, "Apply to stock buying price". Figures from `LandedCostService` (catalog-inventory.md). |
+| `app/Filament/Trade/Pages/Reports.php` / `Report.php` | Trade Portal reports (`trade/reports`, `trade/report?type=&from=&to=`, `trade.reports`): tiles, then one report with its period, a table on wide screens / cards on phones, and Print, PDF, Excel buttons. |
+| `app/Services/TradeReportService.php` | The nine reports (`REPORTS`: daily / monthly sales, dues by age, stock ledger, owed to suppliers, cash and bank, LC status, landed cost per shipment, shipment advice register) as one shape: columns (typed), rows, totals, notes. Reads orders + challans, customers, the stock ledger (by movement `created_at`), suppliers, the account ledger, LC files and `LandedCostService`. |
+| `app/Http/Controllers/Trade/TradeReportDownloadController.php` | `GET trade/reports/{report}/download/{format}` (name `filament.trade.reports.download`): `print` = HTML print page in the portal's language (views `trade/reports/print`, browser shapes Bangla, "Save as PDF"), `pdf` = DomPDF file in English (`trade/reports/pdf`; DomPDF cannot shape Bangla), `xlsx` = OpenSpout file with numbers as numbers. Cells written by `App\Support\TradeReportFormat`. |
+| `app/Filament/Trade/Resources/MachineSerials/MachineSerialResource.php` | Trade Portal serial numbers list (`trade/serials`, `trade.lc` or `trade.sales`): item, LC no., in the shop or which challan / buyer. Serials are written on the LC file page and chosen on the challan page (`MachineSerialService`). |
+| `app/Http/Controllers/Trade/TradeLcDocumentController.php` | `GET trade/lc-files/{lcFile}/papers/{document}` (name `filament.trade.lc-files.document`): LC Opening Letter, Beneficiary's Certificate, Detail Packing List, Shipment Advice, DRL as A4 PDFs (views `resources/views/trade/lc/*`, DomPDF like the ERP's PI/CI/PL); a paper with empty fields returns a 422 page listing them (`LcFile::missingFor()`). |
+| `app/Filament/Trade/TradeErrors.php` | Turns an ERP refusal (`ValidationException` from a service or model) inside a portal button or form into a red notice; the caller then halts so the form stays open. |
+| `app/Services/TradeImportService.php` | Runs `CustomerCsvService` / `ProductCsvService` on a CSV or Excel file (`App\Support\SpreadsheetCsv`); items without SKU get `TRD-<name>`. |
+| `app/Http/Controllers/Trade/TradeChallanPrintController.php` | `GET trade/challans/{challan}/print` (name `filament.trade.challans.print`): the challan on A4 like the owner's pad, view `resources/views/trade/challan-print.blade.php`. |
 | `app/Filament/Clusters/CompanyManagement.php` | Navigation cluster grouping tenant company resources and settings. |
 | `app/Filament/Clusters/Settings.php` | Navigation cluster grouping system-wide configuration pages. |
 | `app/Filament/Resources/Companies/CompanyResource.php` | CRUD interface for managing companies, domains, and branding. |
@@ -116,7 +140,9 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | Path | What it does |
 | --- | --- |
 | `app/Http/Middleware/SetCurrentCompany.php` | Sets the request's `CompanyContext` based on user session, host, or fallback. |
-| `app/Http/Middleware/RestrictPortalHosts.php` | Ensures reseller and investor portals are accessed only via authorized domains. |
+| `app/Http/Middleware/RestrictPortalHosts.php` | Ensures reseller and investor portals are accessed only via authorized domains; `MAIN_HOST_PATHS` (`trade`) are served on every non-portal host. |
+| `app/Http/Middleware/ResolveTradePortalCompany.php` | Trade Portal: opens the signed-in person's chosen company (or none) on every request, before route bindings. |
+| `app/Http/Middleware/SetTradePortalLocale.php` | Trade Portal language: Bangla by default, English by choice (`GET trade/language/{locale}`, `Trade\TradePortalLocaleController`). |
 | `app/Http/Middleware/PreventDemoModeWrites.php` | Blocks mutating HTTP requests when demo mode is active. |
 | `app/Http/Middleware/SecurityHeaders.php` | Adds strict CSP, HSTS, X-Frame-Options, and nosniff HTTP response headers. |
 | `app/Http/Middleware/InvalidateStaleCustomerSession.php` | Flushes outdated storefront customer session tokens upon schema or password changes. |
@@ -191,6 +217,13 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `tests/Feature/ReleaseNotesTest.php` | Tests release notes rendering and version display. |
 | `tests/Feature/ReleaseCutterTest.php` | Tests semantic release creation script. |
 | `tests/Feature/ReleaseNotificationTest.php` | Tests notification dispatching when updates complete. |
+| `tests/Feature/TradePortalTest.php` | Trade Portal access both ways (`/trade` vs `/admin`), host rule, company isolation, home cards, business profile. |
+| `tests/Feature/TradePortalShopWorkTest.php` | Trade Portal pages: challan form + print, receive money, goods in, stock, dues, CSV/Excel import, permissions. |
+| `tests/Feature/DeliveryChallanServiceTest.php` | Delivery Challan rules against the owner's paper (totals, stock, due, payments, cancel, numbering). |
+| `tests/Feature/TradeReportsTest.php` | Trade Portal reports: each report's figures, screen / print / PDF / Excel for all nine, Bangla print vs English PDF, Excel numbers, period changes, permission, company isolation. |
+| `tests/Feature/TradeLandedCostTest.php` | Trade Portal landed cost worksheet (rate, lines, sharing, apply, no effect on purchase/supplier) and machine serial numbers (purchase limits, challan, cancel), with their pages. |
+| `tests/Feature/TradeLcFileTest.php` | Trade Portal LC file: one form to purchase/supplier/file, the five papers' wording against the samples, PDF output, missing-field gate (cover note), stages, permissions, isolation. |
+| `tests/Feature/TradePortalCashBookTest.php` | Trade Portal cash book, balance sheet and cash/bank accounts pages, permissions, refusals shown as notices. |
 | `tests/Feature/UserManagementEscalationTest.php` | Ensures non-super admins cannot elevate privileges or modify protected users. |
 
 ## Routes and panels
@@ -198,6 +231,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 - **IMS Office Panel**: URL prefix `office`, provider: `App\Providers\Filament\ImsOfficePanelProvider`, panel ID `office`. Dedicated investment back-office.
 - **Investor Portal**: URL prefix `investor`, provider: `App\Providers\Filament\InvestorPanelProvider`, panel ID `investor`. Public investor self-service portal.
 - **Reseller Portal**: URL prefix `portal`, provider: `App\Providers\Filament\ResellerPanelProvider`, panel ID `reseller`. Reseller management portal.
+- **Trade Portal**: URL prefix `trade`, provider: `App\Providers\Filament\TradePortalPanelProvider`, panel ID `trade`. Shop portal for a company with `trade_portal_enabled`; guard `web`; routes `GET trade/language/{locale}` (name `filament.trade.language`) and `GET trade/challans/{challan}/print` (name `filament.trade.challans.print`); resources at `trade/challans`, `trade/goods-in`, `trade/stock`, `trade/dues`, `trade/accounts`, `trade/lc-files` (+ `/{record}/landed-cost`), `trade/serials`; pages `trade/reports`, `trade/report`; route `GET trade/reports/{report}/download/{format}`; route `GET trade/lc-files/{lcFile}/papers/{document}`; pages `trade/import`, `trade/business-profile`, `trade/cash-book`, `trade/balance-sheet`.
 - **Core HTTP Routes**:
   - `POST admin/company/switch` (name `admin.company.switch`) -> `App\Http\Controllers\Admin\CompanySwitchController`
   - `POST admin/app-updates/sync` (name `admin.app-updates.sync`) -> `App\Http\Controllers\Admin\AppUpgradeController@synchronize`
@@ -207,7 +241,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
   - `POST install` (name `install.store`) -> `App\Http\Controllers\InstallController@store`
 
 ## Data
-- `companies`: Primary tenant table. Key columns: `id`, `name`, `slug`, `business_type`, `logo`, `phone`, `email`, `address`, `currency`, `timezone`, `invoice_prefix`, `is_active`, `settings` (JSON), `domain`, `domain_verified`, `dashboard_color`, `reseller_module_enabled`, `reseller_portal_domain`, `reseller_subdomains_enabled`, `reseller_custom_domains_enabled`, `investor_portal_enabled`, `investor_portal_domain`, `investor_project_completed_message`, `ims_enabled`, `ims_domain`, `created_at`, `updated_at`.
+- `companies`: Primary tenant table. Key columns: `id`, `name`, `slug`, `business_type`, `logo`, `phone`, `email`, `address`, `currency`, `timezone`, `invoice_prefix`, `is_active`, `settings` (JSON), `domain`, `domain_verified`, `dashboard_color`, `reseller_module_enabled`, `reseller_portal_domain`, `reseller_subdomains_enabled`, `reseller_custom_domains_enabled`, `investor_portal_enabled`, `investor_portal_domain`, `investor_project_completed_message`, `ims_enabled`, `ims_domain`, `bin_number` (import papers), `irc_number`, `tin_number`, `signatory_name`, `signatory_title`, `signature_path`, `trade_portal_enabled`, `registered_address`, `factory_address`, `challan_bin_number` (Delivery Challan; blank = `bin_number`, `Company::challanBin()`), `bank_accounts` (JSON list), `letterhead_path`, `created_at`, `updated_at`.
 - `company_user`: Pivot table associating users with accessible companies. Key columns: `id`, `company_id`, `user_id`, `role`, `is_default`, `created_at`, `updated_at`.
 - `users`: Staff and administrator accounts. Key columns: `id`, `name`, `email`, `email_verified_at`, `password`, `remember_token`, `role`, `is_active`, `acknowledged_app_deployment_id`, `app_upgrade_acknowledged_at`, `acknowledged_app_version`, `acknowledged_app_commit`, `acknowledged_app_built_at`, `last_company_selection`, `created_at`, `updated_at`.
 - `user_roles`: Custom role permissions table. Key columns: `id`, `name`, `slug`, `permissions` (JSON), `is_active`, `created_at`, `updated_at`.
@@ -219,6 +253,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 - **Tenant Isolation Enforcement**: Every company-owned model MUST use the `BelongsToCompany` trait and register `CompanyScope`. In queries, if the active `CompanyContext` is denied (`none`), queries fail-closed with `1 = 0`. Enforced by `app/Scopes/CompanyScope.php` and `app/Models/Concerns/BelongsToCompany.php`.
 - **Middleware Precedence for Route Binding**: `SetCurrentCompany` middleware is prepended before `SubstituteBindings` in `bootstrap/app.php` so that route-model-binding resolution queries are constrained to the tenant. Enforced by `bootstrap/app.php`.
 - **Super Admin Protection**: An admin cannot delete or deactivate their own user account, and at least one active `super_admin` must remain in the database at all times. Enforced by `app/Models/User.php`.
+- **Panel Access**: `User::canAccessPanel()` — `office` via `ImsOfficeCompanies::mayEnter()`, `trade` via `TradePortalCompanies::mayEnter()`, `admin` for every active user except a role whose permissions are all `trade.*` (`isTradePortalOnly()`, e.g. the editable `trade_owner` role); any other panel is refused (the investor and reseller portals use their own guards). Tested by `tests/Feature/TradePortalTest.php`.
 - **Permission Checking Hierarchy**: Super admins (`super_admin`) bypass permission gates with wildcard access (`*`). All other users must have the explicit permission slug present in their role's JSON permission array. Enforced by `app/Models/User.php`.
 - **Module Failure Isolation**: Navigation badges, widget rendering, and layout hooks must run inside `ModuleGuard::run` or `renderView` so a database or runtime crash inside one module does not bring down the entire admin panel. Production isolates; local/testing environments rethrow by default unless `ISOLATE_MODULE_ERRORS=true`. Enforced by `app/Support/ModuleGuard.php`.
 - **Login Gate Protection**: All authentication attempts must be evaluated by `LoginGate::begin` prior to invoking bcrypt hashes to thwart DDoS credential stuffing. Enforced by `app/Services/LoginGate.php` and `app/Filament/Auth/AdminLogin.php`.
