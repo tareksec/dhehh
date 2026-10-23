@@ -3588,5 +3588,8 @@
     "Not set up": "Not set up",
     "Google Drive copy": "Google Drive copy",
     "This server": "This server",
-    "Sent to Drive": "Sent to Drive"
+    "Sent to Drive": "Sent to Drive",
+    "Before restore": "Before restore",
+    "Files": "Files",
+    "Database and files": "Database and files"
 }

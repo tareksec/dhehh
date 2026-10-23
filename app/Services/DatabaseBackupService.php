@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\BackupRun;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use PDO;
 use RuntimeException;
@@ -299,6 +300,56 @@ class DatabaseBackupService
         file_put_contents($path, implode("\n", $lines)."\n");
 
         return $path;
+    }
+
+    /**
+     * Streams a compressed dump through gunzip into the mysql client for $database, never
+     * holding it in memory. Used by the restore test (a scratch database) and by backup:restore
+     * (the live one). The dump's own DROP TABLE / CREATE TABLE statements replace what is there.
+     *
+     * @param  array  $config  the connection's host, port, username and password
+     */
+    public function loadDump(array $config, string $database, string $path, string $binary = 'mysql', float $timeout = 1800): void
+    {
+        if (! $this->binaryExists($binary)) {
+            throw new RuntimeException("[{$binary}] was not found on this server. Install the MySQL client tools (the Dockerfile does this) or set BACKUP_MYSQL_BINARY.");
+        }
+
+        $gzip = gzopen($path, 'rb');
+
+        if ($gzip === false) {
+            throw new RuntimeException('The dump could not be opened.');
+        }
+
+        $optionFile = $this->writeOptionFile($config);
+
+        try {
+            $input = (function () use ($gzip): \Generator {
+                while (! gzeof($gzip)) {
+                    $chunk = gzread($gzip, 1048576);
+
+                    if ($chunk === false) {
+                        throw new RuntimeException('The dump could not be read.');
+                    }
+
+                    if ($chunk !== '') {
+                        yield $chunk;
+                    }
+                }
+            })();
+
+            $process = new Process([$binary, '--defaults-extra-file='.$optionFile, '--default-character-set=utf8mb4', $database]);
+            $process->setTimeout($timeout);
+            $process->setInput($input);
+            $process->run();
+
+            if (! $process->isSuccessful()) {
+                throw new RuntimeException('Loading the dump failed: '.(trim(Str::limit($process->getErrorOutput(), 1000, '')) ?: "exit code {$process->getExitCode()}"));
+            }
+        } finally {
+            gzclose($gzip);
+            File::delete($optionFile);
+        }
     }
 
     protected function optionValue(string $value): string

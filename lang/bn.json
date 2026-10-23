@@ -3588,5 +3588,8 @@
     "Not set up": "সেট করা নেই",
     "Google Drive copy": "Google Drive-এর কপি",
     "This server": "এই সার্ভার",
-    "Sent to Drive": "Drive-এ পাঠানো হয়েছে"
+    "Sent to Drive": "Drive-এ পাঠানো হয়েছে",
+    "Before restore": "রিস্টোরের আগে",
+    "Files": "ফাইল",
+    "Database and files": "ডেটাবেজ ও ফাইল"
 }

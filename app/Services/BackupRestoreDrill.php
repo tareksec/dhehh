@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use RuntimeException;
-use Symfony\Component\Process\Process;
 
 /**
  * The only proof that a backup works is restoring it. This loads a dump into a scratch
@@ -68,6 +67,22 @@ class BackupRestoreDrill
             $fromDrive ? BackupRun::DRILL_DRIVE : BackupRun::DRILL_LOCAL,
             fn (): array => $this->restoreAndCheck($filename, $fromDrive),
         );
+    }
+
+    /**
+     * Load $dump into a scratch database and check it, without recording a run: backup:restore
+     * calls this before it touches the live database, and the restore is the record.
+     *
+     * @param  array{name: string, path: string}  $dump
+     * @return string what was found, e.g. "restored into a scratch database in 8 s: 162 tables, ..."
+     */
+    public function rehearse(array $dump, int $expectedTables): string
+    {
+        if (! $this->isEnabled()) {
+            throw new RuntimeException('The restore test is not set up: set BACKUP_DRILL_DB_USERNAME (and its password) for a MySQL user that may create backup_drill_* databases. See docs/backup-restore.md.');
+        }
+
+        return $this->restoreIntoScratch($dump['path'], $expectedTables);
     }
 
     protected function restoreAndCheck(?string $filename, bool $fromDrive): array
@@ -165,47 +180,13 @@ class BackupRestoreDrill
     /** Streams the dump through gunzip into the mysql client, never holding it in memory. */
     protected function load(array $config, string $scratch, string $path): void
     {
-        $binary = (string) config('backup.drill.mysql_binary', 'mysql');
-
-        if (! $this->backups->binaryExists($binary)) {
-            throw new RuntimeException("[{$binary}] was not found on this server. Install the MySQL client tools (the Dockerfile does this) or set BACKUP_MYSQL_BINARY.");
-        }
-
-        $gzip = gzopen($path, 'rb');
-
-        if ($gzip === false) {
-            throw new RuntimeException('The dump could not be opened.');
-        }
-
-        $optionFile = $this->backups->writeOptionFile($config);
-
-        try {
-            $input = (function () use ($gzip): \Generator {
-                while (! gzeof($gzip)) {
-                    $chunk = gzread($gzip, 1048576);
-
-                    if ($chunk === false) {
-                        throw new RuntimeException('The dump could not be read.');
-                    }
-
-                    if ($chunk !== '') {
-                        yield $chunk;
-                    }
-                }
-            })();
-
-            $process = new Process([$binary, '--defaults-extra-file='.$optionFile, '--default-character-set=utf8mb4', $scratch]);
-            $process->setTimeout((float) config('backup.drill.timeout', 1800));
-            $process->setInput($input);
-            $process->run();
-
-            if (! $process->isSuccessful()) {
-                throw new RuntimeException('Loading the dump failed: '.(trim(Str::limit($process->getErrorOutput(), 1000, '')) ?: "exit code {$process->getExitCode()}"));
-            }
-        } finally {
-            gzclose($gzip);
-            File::delete($optionFile);
-        }
+        $this->backups->loadDump(
+            $config,
+            $scratch,
+            $path,
+            (string) config('backup.drill.mysql_binary', 'mysql'),
+            (float) config('backup.drill.timeout', 1800),
+        );
     }
 
     /** A scratch database left by a run that was killed: dropped once it is a day old. */

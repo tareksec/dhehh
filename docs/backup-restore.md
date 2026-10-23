@@ -18,6 +18,7 @@ Every backup runs under one **kind**, which is the last part of the file name
 | `hourly` | the hourly schedule: a database backup at five past every hour | latest 48 |
 | `daily` | the daily schedule at `BACKUP_SCHEDULE_TIME`: a full app backup, which holds that day's database backup | database latest 30; full app archives latest 10 |
 | `predeploy` | `deploy:migrate` right before migrations that are pending, or `php artisan backup:database --kind=predeploy` by hand | database latest 10; archives latest 3 |
+| `prerestore` | `backup:restore`, right before it replaces the database: the way back if the restore was a mistake. Never sent to Drive | latest 5 (`BACKUP_KEEP_PRERESTORE`) |
 | `manual` | the **Create Backup** / **Create App Backup** buttons, or the commands with no kind. Files from before kinds existed count as `manual` | latest 10 |
 
 Each kind is pruned on its own, so a stream of hourly files can never push out
@@ -201,6 +202,8 @@ Configure retention in `.env`:
 BACKUP_KEEP_HOURLY=48
 BACKUP_KEEP_DAILY=30
 BACKUP_KEEP_PREDEPLOY=10
+# the safety copy backup:restore takes before it replaces the database
+BACKUP_KEEP_PRERESTORE=5
 # full app archives (they hold the uploaded files, so they are the big ones)
 BACKUP_APP_KEEP_DAILY=10
 BACKUP_APP_KEEP_PREDEPLOY=3
@@ -210,7 +213,7 @@ BACKUP_RETAIN_FILES=10
 
 Old backups beyond the retention count of their kind are cleaned automatically by the backup services, and so are half-written `.part` files older than 6 hours. At least one file of each kind is always kept. These numbers are for the copies on this server; the copies on Google Drive have their own (see below).
 
-Other settings: `BACKUP_MYSQLDUMP_BINARY` (default `mysqldump`) and `BACKUP_DUMP_TIMEOUT` (seconds, default 900).
+Other settings: `BACKUP_MYSQLDUMP_BINARY` (default `mysqldump`), `BACKUP_DUMP_TIMEOUT` (seconds, default 900), `BACKUP_MYSQL_BINARY` (the `mysql` client, default `mysql`) and `BACKUP_RESTORE_TIMEOUT` (seconds a restore's import may run, default 3600).
 
 ## Google Drive: the off-site copy
 
@@ -300,11 +303,11 @@ BACKUP_KEY='the key' openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -md sha256
 
 ### Restoring from Google Drive
 
-1. Download the newest copy you want from the Drive folder (the file name tells
-   the type and the time).
-2. Decrypt it with one of the commands above.
-3. A `.sql.gz` is restored with **Restore MySQL/MariaDB Backup** below. A `.zip`
-   holds the code and files plus the `database/` dump of that day.
+`php artisan backup:restore --drive` downloads the newest database copy, decrypts it and restores it
+(see **Restore a backup**). For anything else, download the file you want from the Drive folder (the
+name tells the type and the time), decrypt it with one of the commands above and give the result to
+`backup:restore`, or give `backup:restore` the `.enc` file itself and it decrypts it (it asks for the
+key when `BACKUP_ENCRYPTION_KEY` is not set).
 
 ## Download Permissions
 
@@ -315,67 +318,163 @@ Backup download requires:
 
 Backup downloads are written to the audit log as `backup_downloaded`.
 
-## Restore SQLite Backup
+## Restore a backup (backup:restore)
 
-1. Put the app in maintenance mode:
+`php artisan backup:restore` puts a backup back. It is the one command that **replaces the live
+database**, so it is built to ask first, try the dump first, keep a copy of what it replaces, and undo
+itself when the load fails. Everything below was run for real against MySQL (see *What was tested*).
+
+```bash
+php artisan backup:restore                                   # no file: lists the backups on this server
+php artisan backup:restore database-backup-20261023-120500-mysql-hourly.sql.gz
+php artisan backup:restore app-backup-20261023-020000-daily.zip            # database and uploaded files
+php artisan backup:restore app-backup-20261023-020000-daily.zip --only=files
+php artisan backup:restore /home/me/downloads/database-backup-….sql.gz.enc  # a file you downloaded (decrypted for you)
+php artisan backup:restore --drive                           # the newest database copy on Google Drive
+```
+
+**What it does, in this order** (nothing is touched until step 5):
+
+1. Finds the file: a name in the backup folders, a path anywhere, or `--drive`. A `.enc` file is decrypted
+   with `BACKUP_ENCRYPTION_KEY` (or the key you type). From a full app archive (`.zip`) it takes out the
+   `database/….sql.gz` dump.
+2. Reads the dump to the end: it must be complete, hold the `migrations` table and still match the
+   SHA-256 recorded when it was made.
+3. **Tries the dump in a scratch database** (the restore test, see above) when `BACKUP_DRILL_DB_USERNAME`
+   is set. A dump that does not load is refused here, with the live database untouched.
+4. Shows what it is about to do (the file, how old it is, the database it will replace) and asks you to
+   **type the database name**. Without a keyboard, `--confirm=THE_DATABASE_NAME` must be given: a script
+   cannot restore by accident.
+5. Copies the current database (`prerestore` backup), switches maintenance mode on, **empties** the
+   database (every table and view, never the database itself), loads the dump, runs pending migrations
+   (the code may be newer than the backup), clears the caches and switches maintenance mode off.
+   Emptying first matters: a dump only replaces the tables it contains, and a table created by a newer
+   migration would stay behind and make the next `migrate` fail with "already exists".
+
+**If something goes wrong**
+
+| What happened | What the command does |
+|---|---|
+| The file is damaged, incomplete, or the key is wrong | Stops at step 1 or 2. Nothing was changed. |
+| The dump does not load into the scratch database | Stops at step 3. Nothing was changed. |
+| The safety copy cannot be made (disk full) | Stops before maintenance mode. Nothing was changed. |
+| The load fails half-way, or the restored database has a different number of tables than the dump | Loads the safety copy back automatically, switches maintenance mode off, says so. Nothing was lost. |
+| Putting the safety copy back fails too | Leaves the app in maintenance mode and names the safety copy: `php artisan backup:restore <that file>`. |
+| The data is restored but a migration fails | Keeps the restored data, leaves maintenance mode **on** and says what to run: `php artisan migrate --force`, then `php artisan up`. |
+| The command is killed (a dropped SSH session) | Run it in `tmux`/`screen` or the Coolify terminal. If it was killed anyway, run the same command again: it starts over from an empty database. |
+
+**Options**
+
+| Option | Effect |
+|---|---|
+| `--only=database` / `--only=files` | For a `.zip`: only the database, or only the uploaded files (no maintenance mode, no database work). A `.sql.gz` is always database only. |
+| `--confirm=NAME` | The database name (or `files` for `--only=files`), instead of being asked. |
+| `--skip-rehearsal` | Do not try the dump in a scratch database first. |
+| `--skip-safety-backup` | Do not copy the current database first. Only for a database that is already ruined. |
+| `--no-migrate` | Do not run pending migrations afterwards. |
+
+**What it will not do**
+
+- It replaces a **MySQL/MariaDB** database only. A SQLite database is restored by hand (below).
+- From a full app archive it copies back **only the uploaded files** (`storage/app/public` and
+  `storage/app/private`, `backup.restore.file_paths`): files with the same name are replaced, nothing is
+  deleted, links are not followed, and a name that climbs out of those folders is refused. The **code**
+  comes from the deploy and the **`.env`** from the server's environment; neither is overwritten. (The
+  `.env` inside an archive is how you recover the secrets after losing the server, see below.)
+- It does not touch the database user's privileges: it uses the app's own connection, which can
+  create and drop tables because migrations need that.
+
+**After a restore**
+
+The summary prints the number of tables and migrations, the name of the safety copy, any warnings, and
+the state of maintenance mode. Then check: sign in, the dashboard totals, the latest orders and
+payments, `/health/version`. Things to know:
+
+- Everything saved **after the backup was made is gone** (the safety copy still has it). The prompt tells
+  you how old the backup is.
+- Sessions, caches and queues in Redis are not part of a database restore. If the queue lives in the
+  database (`QUEUE_CONNECTION=database`) its jobs come back with the backup and the summary warns you.
+- A backup made by a **newer** version of the app than the running code is flagged: deploy that version
+  before using the app.
+- The history on the Backups page starts again from the backup's own moment, plus one **Restore** row
+  written after the restore. "Running" rows that every dump carries are removed.
+- The first backup after a restore is the next hourly one; the dashboard card may say a backup is
+  overdue until then.
+
+## If the server is gone
+
+The ERP can be rebuilt from three things that live outside the server: **the code** (GitHub), **the
+Drive folder**, and **`BACKUP_ENCRYPTION_KEY`**. Check today that you have all three, plus Coolify
+access and the DNS login. Without the key the Drive copies cannot be opened by anyone.
+
+1. **Download from the Drive folder** (in a browser, which always works): the newest
+   `app-backup-…-daily.zip.enc` and the newest `database-backup-…-hourly.sql.gz.enc`.
+2. **Decrypt them on any computer** with `openssl` (see *Encryption* above; no PHP needed).
+3. **Get the secrets back.** The `.env` is inside the archive:
+   `unzip -p app-backup-…-daily.zip .env`. Put its values (`APP_KEY` above all: encrypted settings such
+   as API keys and the Drive service account cannot be read without it) into the new Coolify application.
+4. **New server:** deploy `main` from GitHub with those environment variables and a new, empty MySQL
+   database. The container starts, runs the migrations and serves an empty ERP.
+5. **Put the data back**, from the container terminal, with the two files on the server (or, when the
+   Drive variables are set, `php artisan backup:restore --drive` fetches the newest database copy itself):
+
+   ```bash
+   php artisan backup:restore database-backup-…-hourly.sql.gz
+   php artisan backup:restore app-backup-…-daily.zip --only=files
+   ```
+
+6. Check the list under **After a restore**, then set the uptime monitor on `/health/backups?token=…`
+   again and run `php artisan backup:drill` once the drill user exists.
+
+What is lost in this case: the data entered since the newest hourly backup (up to an hour), and files
+kept on Cloudflare R2 are not in the archive at all.
+
+## Restore by hand
+
+Use these only when `php artisan` cannot run. `backup:restore` does the same with more care.
+
+**SQLite**
 
 ```bash
 php artisan down
-```
-
-2. Copy the selected backup over the active database file:
-
-```bash
 cp storage/app/private/backups/database/database-backup-YYYYMMDD-HHMMSS-sqlite-daily.sqlite database/database.sqlite
-```
-
-3. Clear caches and bring the app back:
-
-```bash
 php artisan optimize:clear
 php artisan up
 ```
 
-## Restore MySQL/MariaDB Backup
-
-1. Put the app in maintenance mode:
+**MySQL/MariaDB** (empty the database first, or tables created by newer migrations stay behind):
 
 ```bash
 php artisan down
-```
-
-2. Import the selected dump (new backups are gzip-compressed; very old `.sql` files are loaded with `mysql ... < file.sql`):
-
-```bash
 gunzip -c storage/app/private/backups/database/database-backup-YYYYMMDD-HHMMSS-mysql-daily.sql.gz | mysql -u DB_USERNAME -p DB_DATABASE
-```
-
-   The dump sets its own character set, so Bangla text restores correctly without any extra option.
-
-3. Run migrations if the code is newer than the backup:
-
-```bash
-php artisan migrate --force
-```
-
-4. Clear caches and bring the app back:
-
-```bash
+php artisan migrate --force      # if the code is newer than the backup
 php artisan optimize:clear
 php artisan up
 ```
+
+The dump sets its own character set, so Bangla text restores correctly without any extra option. Very old
+plain `.sql` files are loaded with `mysql … < file.sql`.
 
 ## Restore Checklist
 
 1. Confirm the backup file date and environment.
-2. Download a copy before restoring.
-3. Put the app in maintenance mode.
-4. Restore database.
-5. Run migrations if needed.
-6. Clear caches.
-7. Verify admin login.
-8. Check dashboard totals.
-9. Check recent orders, purchases, payments, and stock.
-10. Review audit logs.
-11. Verify company settings and invoice branding.
-12. Confirm `/health/version` shows the expected app version after the restore or redeploy.
+2. Download a copy before restoring (`backup:restore` also makes a `prerestore` copy by itself).
+3. Run `php artisan backup:restore` (or restore by hand with the app in maintenance mode).
+4. Run migrations if needed (automatic unless `--no-migrate`).
+5. Clear caches (automatic).
+6. Verify admin login.
+7. Check dashboard totals.
+8. Check recent orders, purchases, payments, and stock.
+9. Review audit logs.
+10. Verify company settings and invoice branding.
+11. Confirm `/health/version` shows the expected app version after the restore or redeploy.
+
+## What was tested
+
+`backup:restore` was run for real against MySQL 8.0 with the whole ERP schema (163 tables, 264
+migrations) and the `mysql` client from the image: a plain dump, an `openssl`-encrypted copy from outside
+the backup folder, a full app archive (database and files, and files only), a wrong confirmation, a
+wrong key, a dump with a broken statement in the middle (stopped by the scratch test, and, with the test
+skipped, rolled back from the safety copy with the app reopened), and an app that was already in
+maintenance mode. Not tried: a real Google Drive (`--drive` is covered with a fake), MySQL 8.4, and the
+live server.

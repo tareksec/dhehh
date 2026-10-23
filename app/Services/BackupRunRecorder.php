@@ -77,6 +77,53 @@ class BackupRunRecorder
         return $result;
     }
 
+    /**
+     * A run that is already over, recorded afterwards. A restore replaces the database, and
+     * with it the row a start-then-finish record() would have been updating, so it writes one
+     * row when everything is done. Never throws.
+     *
+     * @param  array{status?: string, filename?: string|null, size?: int|null, error?: string|null, note?: string|null, started_at?: \Carbon\CarbonInterface}  $values
+     */
+    public function recordFinished(string $scope, string $kind, array $values): void
+    {
+        $this->safely(function () use ($scope, $kind, $values): void {
+            if (! Schema::hasTable('backup_runs')) {
+                return;
+            }
+
+            $row = [
+                'scope' => $scope,
+                'kind' => $kind,
+                'status' => $values['status'] ?? BackupRun::STATUS_SUCCESS,
+                'filename' => $values['filename'] ?? null,
+                'size_bytes' => $values['size'] ?? null,
+                'error' => isset($values['error']) ? Str::limit((string) $values['error'], 2000, '') : null,
+                'started_at' => $values['started_at'] ?? now(),
+                'finished_at' => now(),
+            ];
+
+            if (filled($values['note'] ?? null) && Schema::hasColumn('backup_runs', 'note')) {
+                $row['note'] = Str::limit((string) $values['note'], 500, '');
+            }
+
+            BackupRun::query()->create($row);
+        });
+    }
+
+    /**
+     * Drops the "running" rows a restored database comes with. A dump is taken while its own
+     * backup is still recorded as running, so every restore brings one back that would stay
+     * "running" for ever; nothing can be running in a database that was just loaded.
+     */
+    public function discardUnfinished(): void
+    {
+        $this->safely(function (): void {
+            if (Schema::hasTable('backup_runs')) {
+                BackupRun::query()->where('status', BackupRun::STATUS_RUNNING)->delete();
+            }
+        });
+    }
+
     /** The checksum recorded when this file was made, or null when none was recorded. */
     public function recordedChecksum(string $filename): ?string
     {

@@ -154,7 +154,7 @@ class AppBackupService
         }
     }
 
-    protected function isExcluded(string $relativePath): bool
+    public function isExcluded(string $relativePath): bool
     {
         $relativePath = trim(str_replace('\\', '/', $relativePath), '/');
 

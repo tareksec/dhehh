@@ -112,8 +112,9 @@ class OffsiteBackupService
      * or missing key fails here, which is exactly what a restore test of the Drive copy is for.
      *
      * @param  array{id: string, name: string}  $file
+     * @param  ?string  $key  the passphrase to use instead of BACKUP_ENCRYPTION_KEY
      */
-    public function fetch(array $file, string $directory): string
+    public function fetch(array $file, string $directory, ?string $key = null): string
     {
         File::ensureDirectoryExists($directory);
 
@@ -125,7 +126,7 @@ class OffsiteBackupService
             $this->drive->download($file['id'], $download);
 
             if ($encrypted) {
-                $this->encryptor->decryptFile($download, $plain);
+                $this->encryptor->decryptFile($download, $plain, $key);
             }
         } catch (Throwable $exception) {
             File::delete($plain);

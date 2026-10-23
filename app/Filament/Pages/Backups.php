@@ -344,9 +344,15 @@ class Backups extends Page
                     BackupRun::STATUS_FAILED => __('Failed'),
                     default => __('Running'),
                 },
-                'type_label' => $run->scope === BackupRun::SCOPE_DRILL
-                    ? __('Restore test').' · '.($run->kind === BackupRun::DRILL_DRIVE ? __('Google Drive copy') : __('This server'))
-                    : $this->kindLabel($run->kind).' · '.($run->scope === BackupRun::SCOPE_APP ? __('Full app') : __('Database')),
+                'type_label' => match ($run->scope) {
+                    BackupRun::SCOPE_DRILL => __('Restore test').' · '.($run->kind === BackupRun::DRILL_DRIVE ? __('Google Drive copy') : __('This server')),
+                    BackupRun::SCOPE_RESTORE => __('Restore').' · '.match ($run->kind) {
+                        BackupRun::RESTORED_FILES => __('Files'),
+                        BackupRun::RESTORED_BOTH => __('Database and files'),
+                        default => __('Database'),
+                    },
+                    default => $this->kindLabel($run->kind).' · '.($run->scope === BackupRun::SCOPE_APP ? __('Full app') : __('Database')),
+                },
                 'filename' => $run->filename,
                 'size_human' => $run->size_bytes === null ? null : Number::fileSize($run->size_bytes, precision: 1),
                 'started_label' => $run->started_at->format('d M Y, h:i A'),
@@ -365,6 +371,7 @@ class Backups extends Page
             BackupRun::KIND_HOURLY => __('Hourly'),
             BackupRun::KIND_DAILY => __('Daily'),
             BackupRun::KIND_PREDEPLOY => __('Before deploy'),
+            BackupRun::KIND_PRERESTORE => __('Before restore'),
             default => __('Manual'),
         };
     }

@@ -27,16 +27,28 @@ class BackupRun extends Model
 
     public const DRILL_DRIVE = 'drive';
 
-    /** Made on a schedule every hour / every day, before a deploy, or by a person pressing the button. */
+    /** A restore (php artisan backup:restore). Its kind is what was put back. */
+    public const SCOPE_RESTORE = 'restore';
+
+    public const RESTORED_DATABASE = 'database';
+
+    public const RESTORED_FILES = 'files';
+
+    public const RESTORED_BOTH = 'both';
+
+    /** Made on a schedule every hour / every day, before a deploy or a restore, or by a person pressing the button. */
     public const KIND_HOURLY = 'hourly';
 
     public const KIND_DAILY = 'daily';
 
     public const KIND_PREDEPLOY = 'predeploy';
 
+    /** The copy backup:restore takes of the current database right before it replaces it. */
+    public const KIND_PRERESTORE = 'prerestore';
+
     public const KIND_MANUAL = 'manual';
 
-    public const KINDS = [self::KIND_HOURLY, self::KIND_DAILY, self::KIND_PREDEPLOY, self::KIND_MANUAL];
+    public const KINDS = [self::KIND_HOURLY, self::KIND_DAILY, self::KIND_PREDEPLOY, self::KIND_PRERESTORE, self::KIND_MANUAL];
 
     public const STATUS_RUNNING = 'running';
 

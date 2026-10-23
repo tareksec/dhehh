@@ -12,6 +12,8 @@ return [
             'hourly' => (int) env('BACKUP_KEEP_HOURLY', 48),
             'daily' => (int) env('BACKUP_KEEP_DAILY', 30),
             'predeploy' => (int) env('BACKUP_KEEP_PREDEPLOY', 10),
+            // The safety copy backup:restore takes first: the way back if the restore was a mistake.
+            'prerestore' => (int) env('BACKUP_KEEP_PRERESTORE', 5),
             'manual' => (int) env('BACKUP_RETAIN_FILES', 10),
         ],
 
@@ -43,6 +45,7 @@ return [
             'hourly' => 10,
             'daily' => (int) env('BACKUP_APP_KEEP_DAILY', 10),
             'predeploy' => (int) env('BACKUP_APP_KEEP_PREDEPLOY', 3),
+            'prerestore' => 1,
             'manual' => (int) env('BACKUP_RETAIN_FILES', 10),
         ],
 
@@ -93,6 +96,21 @@ return [
         'timeout' => (int) env('BACKUP_DRILL_TIMEOUT', 1800),
     ],
 
+    // php artisan backup:restore: puts a backup back (MySQL/MariaDB). See docs/backup-restore.md.
+    'restore' => [
+        'mysql_binary' => env('BACKUP_MYSQL_BINARY', 'mysql'),
+        // Seconds the import may run before it is stopped; a restore that is cut off half-way
+        // is rolled back from the safety copy.
+        'timeout' => (int) env('BACKUP_RESTORE_TIMEOUT', 3600),
+        // The only folders of a full app archive that are copied back. The code comes from the
+        // deploy and the .env from the server's environment; neither is ever overwritten.
+        // Files matching app.exclude_paths are skipped here as well.
+        'file_paths' => [
+            'storage/app/public',
+            'storage/app/private',
+        ],
+    ],
+
     // How old the newest successful backup of each kind may be before it counts as stale
     // (the dashboard card, `backup:check` and /health/backups). A little over the schedule,
     // so one slow run is not an alarm.
@@ -135,12 +153,14 @@ return [
                 'hourly' => (int) env('BACKUP_DRIVE_KEEP_HOURLY', 48),
                 'daily' => (int) env('BACKUP_DRIVE_KEEP_DAILY', 30),
                 'predeploy' => (int) env('BACKUP_DRIVE_KEEP_PREDEPLOY', 10),
+                'prerestore' => 5,
                 'manual' => 10,
             ],
             'app' => [
                 'hourly' => 5,
                 'daily' => (int) env('BACKUP_DRIVE_APP_KEEP_DAILY', 7),
                 'predeploy' => 2,
+                'prerestore' => 1,
                 'manual' => 5,
             ],
         ],

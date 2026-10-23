@@ -420,7 +420,10 @@ it drops the push ledgers and acknowledged release metadata and may roll back a
 different migration when batches contain other changes.
 
 If a release includes an incompatible or destructive migration, restore the
-matching pre-deploy database backup under a separately reviewed rollback plan.
+matching pre-deploy database backup under a separately reviewed rollback plan
+(`php artisan backup:restore <file>`: it asks for the database name, copies the
+current database first, and puts it back if the load fails; see
+`docs/backup-restore.md`).
 Rolling the single container back still does not create per-user old/new
 version retention; that requires the blue/green routing architecture described
 above.
@@ -477,7 +480,8 @@ The scheduler also runs `backup:check` every 30 minutes (alerts when a backup is
 overdue) and, when `BACKUP_DRILL_DB_USERNAME` is set, the Sunday restore test.
 **Because all of that depends on this one Coolify task, add an outside uptime monitor
 on `/health/backups?token=…` (`BACKUP_HEALTH_TOKEN`)**: it is the only thing that notices
-the scheduler stopping (`docs/backup-restore.md`, *Backup health*).
+the scheduler stopping (`docs/backup-restore.md`, *Backup health*). The same document has
+the restore command and the steps for rebuilding after the server is lost.
 
 Starting the scheduler after a long stop does not message old customers at
 once: abandoned carts older than 3 days (on top of the company's delay) get no

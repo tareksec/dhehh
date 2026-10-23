@@ -2,6 +2,35 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - Advanced backups, Phase 5: `backup:restore` and the rebuild runbook
+
+Reason - owner (Bangla) "পরবর্তী কাজ কর" after Phase 4. This is the last phase of the plan. The open questions (R2 as a second off-site place, an alert channel other than Deploy Error Logs + the bell, key custody, retention numbers, hourly semantics) are still unanswered; nothing here depends on them.
+
+What changed:
+- **`php artisan backup:restore {file?} --drive --only= --confirm= --skip-rehearsal --skip-safety-backup --no-migrate`** (`RestoreBackup` over `BackupRestorer`). The file is a name in the backup folders, any path (a `.enc` is decrypted with `BACKUP_ENCRYPTION_KEY` or a typed key), a full app `.zip`, or `--drive` (newest database copy on Drive). Order: read the dump to the end + checksum, try it in a scratch database (the restore test, when set up), show age/target, **ask for the database name to be typed** (`--confirm=NAME` without a keyboard), safety copy (`prerestore`), maintenance mode, empty the database, load, table-count check, `migrate`, `optimize:clear`, back online. **A failed load/check loads the safety copy back and reopens the app.**
+- **Emptying the database first** is deliberate: a dump replaces only the tables it contains, so a table from a newer migration would stay and the next `migrate` would fail with "already exists" (the old manual steps had this flaw; fixed in the guide).
+- **From a full app archive** only `storage/app/public` + `storage/app/private` are copied back (added or replaced, never deleted; `..`/absolute names and linked folders/files refused; `backups` and `livewire-tmp` skipped). Code and `.env` are never overwritten.
+- New backup type **`prerestore`** (latest 5, never sent to Drive); `backup_runs.scope` `restore` (kind `database`/`files`/`both`) written after the restore; the "running" rows every dump carries are removed after a restore. The Backups page labels them ("Restore · Database and files", "Before restore").
+- `DatabaseBackupService::loadDump()` is the loader moved out of the restore test (same code, same messages, restore-test tests unchanged); `BackupRestoreDrill::rehearse()`; `OffsiteBackupService::fetch()` takes a key; `AppBackupService::isExcluded()` public; `BackupRunRecorder::recordFinished()` / `discardUnfinished()`.
+- **Runbook** in `docs/backup-restore.md`: *Restore a backup*, a failure table, *If the server is gone* (what must exist outside the server, getting the secrets back from the archive's `.env`, the two commands), *Restore by hand* (SQLite, MySQL), *What was tested*.
+
+Found by running it for real (not by the unit tests): the first live run **failed its own table-count check** ("325 tables but the dump defines 163") because `Schema::getTables()` with no argument lists every schema the MySQL user can see, not just the application's; the rollback from the safety copy then ran and left the database exactly as it was, which is how the rollback was proved. Fixed (`getTables($schema->getCurrentSchemaListing())`) and covered by a test that counts one database's own tables.
+
+Verified here:
+- `BackupRestoreTest` (47) with the 115 earlier backup, deploy and translation tests: 162 passed.
+- **Against a real MySQL 8.0.46** (MariaDB-style client, the whole ERP schema: 163 tables, 264 migrations; a least-privilege app user): a plain restore (a row added after the backup and a table created after it are gone; Bangla text intact; another database on the same server untouched); the refusals (no file, no `--confirm` without a keyboard, wrong answer, wrong key); an `openssl`-encrypted copy from outside the backup folder; a full archive (database + files), and files only (a changed file restored, a deleted private file back, a newer file kept, the modification time kept); a dump with a broken statement in the middle - stopped by the scratch-database try with nothing touched, and, with that skipped, **rolled back from the safety copy with the app reopened**; an app that was already in maintenance mode stays in it; the prompt (piped answers).
+- Not verified: `--drive` against a real Google Drive (fake in tests), MySQL 8.4, the Docker image, the live server, a restore of a multi-gigabyte dump (the import is streamed and `BACKUP_RESTORE_TIMEOUT` is 3600 s by default, but no big database was tried), and the Coolify terminal as the place to run it.
+
+Known and left alone: the first restore after a long time shows the dashboard "Backup health" card as overdue until the next hourly backup (the restored history is as old as the dump).
+
+Needs Bangla review (`lang/bn.json`): "রিস্টোরের আগে" (Before restore), "ফাইল" (Files), "ডেটাবেজ ও ফাইল" (Database and files).
+
+Owner still to do, on top of the earlier lists: **read "If the server is gone" and check you really have the three things outside the server** (GitHub access, the Drive folder, `BACKUP_ENCRYPTION_KEY`) plus Coolify and DNS logins; do a rehearsal of the real procedure on a spare Coolify app once (the one thing no test here could do); decide the open questions above.
+
+Full suite (plain `php artisan test`): 3125 passed, 6 skipped, 0 failed.
+
+Commit status: committed and pushed to the feature branch `ccr-4c1eb24d-2dzxxt` on top of the Phase 4 commit; not on `main` (needs the owner's approval).
+
 ## 2026-10-23 - Advanced backups, Phase 4: restore test, backup health, overdue alert
 
 Reason - owner (Bangla) "ওকে পরবর্তী কাজ কর" after Phase 3. Still no answers to the open questions (alert channel, R2, key custody, hourly semantics); the defaults below are mine and are config values.
