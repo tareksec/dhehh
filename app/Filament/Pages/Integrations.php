@@ -53,8 +53,9 @@ use Livewire\Attributes\Locked;
  * (credentials, order-webhook test/sync, and the full product import),
  * Payment Gateway (ZiniPay/PayStation credentials and base URLs), SMS Gateway
  * (URL template, API key, sender ID — stored in the SMS keys of
- * `notification_credentials`, merged so the mail/WhatsApp keys edited on
- * Storefront Settings are kept), and the
+ * `notification_credentials`, merged so the WhatsApp keys edited on
+ * Storefront Settings are kept), Email Setup (the per-site SMTP account, stored
+ * in the mail keys of the same array and merged the same way), and the
  * entire Meta Pixel & Conversions API configuration — connection, consent,
  * browser/status events, purchase timing, and the Event Log & Retries table
  * (embedded via App\Livewire\MetaEventLogTable, the same
@@ -83,6 +84,12 @@ use Livewire\Attributes\Locked;
  */
 class Integrations extends Page
 {
+    /** An Amazon SES SMTP endpoint; the first group is the AWS region. */
+    private const SES_HOST_PATTERN = '/^email-smtp\.([a-z0-9-]+)\.amazonaws\.com$/i';
+
+    /** An AWS region name such as ap-southeast-1. */
+    private const SES_REGION_PATTERN = '/^[a-z]{2}(-[a-z]+)+-\d$/';
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPuzzlePiece;
 
     protected static ?string $cluster = Settings::class;
@@ -132,7 +139,7 @@ class Integrations extends Page
             'online_payment_enabled' => $setting?->online_payment_enabled ?? false,
             'online_payment_gateway' => $setting?->online_payment_gateway ?? 'zinipay',
             'payment_credentials' => $setting?->payment_credentials ?? [],
-            'notification_credentials' => Arr::only((array) $setting?->notification_credentials, StorefrontNotificationService::SMS_CREDENTIAL_KEYS),
+            'notification_credentials' => $this->notificationFillState($setting),
             ...array_merge($this->metaFieldDefaults(), $setting?->only($this->metaFields()) ?? []),
         ]);
     }
@@ -227,6 +234,31 @@ class Integrations extends Page
         $active = $this->activeSetting();
 
         return $active === null || $active->isPrimary();
+    }
+
+    /**
+     * The notification_credentials keys this page edits (SMS gateway and SMTP email); the WhatsApp
+     * and other keys in the same array belong to Storefront Settings and are never touched here.
+     *
+     * @return array<int, string>
+     */
+    protected function ownedNotificationKeys(): array
+    {
+        return [...StorefrontNotificationService::SMS_CREDENTIAL_KEYS, ...StorefrontNotificationService::MAIL_CREDENTIAL_KEYS];
+    }
+
+    /**
+     * The SMS and email values of the site being edited. An empty encryption string means "None";
+     * a missing or null one sends over TLS (StorefrontNotificationService::companyMailer()), so it is shown as TLS.
+     *
+     * @return array<string, mixed>
+     */
+    protected function notificationFillState(?StorefrontSetting $setting): array
+    {
+        $credentials = Arr::only((array) $setting?->notification_credentials, $this->ownedNotificationKeys());
+        $credentials['mail_encryption'] ??= 'tls';
+
+        return $credentials;
     }
 
     public function canManageAi(): bool
@@ -731,6 +763,59 @@ class Integrations extends Page
             ->title('Test webhook queued')
             ->body('Check your website\'s webhook endpoint logs for a "ping" event.')
             ->success()
+            ->send();
+    }
+
+    /**
+     * Sends a test message through the SMTP account saved for the site being edited (what is really
+     * stored, not unsaved form state), so the mail server's own answer — for Amazon SES an unverified
+     * sender, a sandbox recipient or wrong credentials — is shown right here.
+     */
+    protected function testEmailAction(): Action
+    {
+        return Action::make('testEmail')
+            ->label(__('Send test email'))
+            ->icon(Heroicon::OutlinedPaperAirplane)
+            ->color('gray')
+            ->modalHeading(__('Send test email'))
+            ->modalDescription(__('Sent through the email settings saved for this site, so save your changes first.'))
+            ->schema([
+                TextInput::make('email')
+                    ->label(__('Send to'))
+                    ->email()
+                    ->required()
+                    ->maxLength(255)
+                    ->default(fn (): ?string => Auth::user()?->email),
+            ])
+            ->action(fn (array $data): mixed => $this->sendTestEmail($data))
+            ->visible(fn (): bool => $this->hasSelectedCompany());
+    }
+
+    public function sendTestEmail(array $data): void
+    {
+        $this->selectedCompany();
+
+        $setting = $this->activeSetting();
+        $email = (string) $data['email'];
+        $error = $setting
+            ? app(StorefrontNotificationService::class)->sendTestEmail($setting, $email)
+            : __('SMTP host and username are not saved yet.');
+
+        if ($error === null) {
+            Notification::make()
+                ->title(__('Test email sent'))
+                ->body(__('The mail server accepted the message for :email. Check that inbox, and the spam folder.', ['email' => $email]))
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title(__('Test email failed'))
+            ->body($error)
+            ->danger()
+            ->persistent()
             ->send();
     }
 
@@ -1292,6 +1377,75 @@ class Integrations extends Page
                             ])
                             ->columns(2),
 
+                        Tab::make(__('Email Setup'))
+                            ->icon(Heroicon::OutlinedEnvelope)
+                            ->schema([
+                                Placeholder::make('email_setup_note')
+                                    ->hiddenLabel()
+                                    ->content(__('One SMTP email account per site. It sends customer login codes and reseller password-reset links, and (from the company\'s main site) investor and IMS emails. Leave the SMTP host empty to use the server\'s default mailer.'))
+                                    ->columnSpanFull(),
+                                TextInput::make('ses_region')
+                                    ->label(__('Amazon SES region (quick setup)'))
+                                    ->placeholder('ap-southeast-1')
+                                    ->maxLength(30)
+                                    ->live(onBlur: true)
+                                    ->dehydrated(false)
+                                    ->helperText(__('Using Amazon SES? Type the AWS region your SES account sends from (for example ap-southeast-1) and the host, port 587 and TLS below are filled in. Then enter the SES SMTP user name and password (SES console → SMTP settings → Create SMTP credentials) and a From address on a domain verified in SES. Everything stays editable.'))
+                                    ->afterStateHydrated(function (TextInput $component, Get $get): void {
+                                        // Show the region again when the saved host is an SES endpoint.
+                                        if (preg_match(self::SES_HOST_PATTERN, (string) $get('notification_credentials.mail_host'), $match)) {
+                                            $component->state(strtolower($match[1]));
+                                        }
+                                    })
+                                    ->afterStateUpdated(function (?string $state, Set $set): void {
+                                        $region = strtolower(trim((string) $state));
+
+                                        if (! preg_match(self::SES_REGION_PATTERN, $region)) {
+                                            return;
+                                        }
+
+                                        $set('notification_credentials.mail_host', "email-smtp.{$region}.amazonaws.com");
+                                        $set('notification_credentials.mail_port', 587);
+                                        $set('notification_credentials.mail_encryption', 'tls');
+                                    })
+                                    ->columnSpanFull(),
+                                TextInput::make('notification_credentials.mail_host')
+                                    ->label(__('SMTP host'))
+                                    ->maxLength(255)
+                                    ->placeholder('smtp.gmail.com')
+                                    ->columnSpanFull(),
+                                TextInput::make('notification_credentials.mail_port')
+                                    ->label(__('SMTP port'))
+                                    ->numeric()
+                                    ->placeholder('587'),
+                                Select::make('notification_credentials.mail_encryption')
+                                    ->label(__('SMTP encryption'))
+                                    ->options(['tls' => 'TLS', 'ssl' => 'SSL', '' => __('None')])
+                                    // "None" must reach the database as an empty string: null would be read back as TLS.
+                                    ->dehydrateStateUsing(fn (?string $state): string => (string) $state)
+                                    ->helperText(__('Port 465 connects over SSL; any other port starts with TLS when the mail server offers it.')),
+                                TextInput::make('notification_credentials.mail_username')
+                                    ->label(__('SMTP username'))
+                                    ->maxLength(255),
+                                TextInput::make('notification_credentials.mail_password')
+                                    ->label(__('SMTP password'))
+                                    ->password()
+                                    ->revealable()
+                                    ->maxLength(255)
+                                    ->helperText(__('Stored encrypted.')),
+                                TextInput::make('notification_credentials.mail_from_address')
+                                    ->label(__('From address'))
+                                    ->email()
+                                    ->maxLength(255)
+                                    ->helperText(__('Defaults to the SMTP username if that is an email address. Amazon SES and most providers need a From address on a verified domain — Amazon SES user names are not email addresses, so fill this in.')),
+                                TextInput::make('notification_credentials.mail_from_name')
+                                    ->label(__('From name'))
+                                    ->maxLength(255),
+                                SchemaActions::make([$this->testEmailAction()])
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(2),
+
                         Tab::make('Meta Pixel & CAPI')
                             ->icon(Heroicon::OutlinedSignal)
                             ->schema([
@@ -1557,10 +1711,10 @@ class Integrations extends Page
 
         $active = $this->activeSetting();
 
-        // notification_credentials also holds mail/WhatsApp keys edited on Storefront Settings; only touch the SMS ones.
+        // notification_credentials also holds WhatsApp keys edited on Storefront Settings; only touch the SMS and email ones.
         $state['notification_credentials'] = array_merge(
             (array) $active?->notification_credentials,
-            Arr::only((array) ($state['notification_credentials'] ?? []), StorefrontNotificationService::SMS_CREDENTIAL_KEYS),
+            Arr::only((array) ($state['notification_credentials'] ?? []), $this->ownedNotificationKeys()),
         );
 
         StorefrontSetting::withoutGlobalScopes()->updateOrCreate(
@@ -1582,6 +1736,18 @@ class Integrations extends Page
         // Re-fill from the fresh, now-persisted state — never keeps the
         // plaintext API keys in the browser past a save.
         $this->mount($aiSettings);
+
+        $saved = $this->activeSetting();
+        $notifications = app(StorefrontNotificationService::class);
+
+        if ($saved && $notifications->mailConfigured($saved) && $notifications->mailFromAddress($saved) === null) {
+            Notification::make()
+                ->title(__('Email needs a From address'))
+                ->body(__('The SMTP user name is not an email address, so there is no sender to send from. Fill in the From address (on a domain your mail provider has verified).'))
+                ->warning()
+                ->persistent()
+                ->send();
+        }
 
         Notification::make()
             ->title('Integration settings saved')
