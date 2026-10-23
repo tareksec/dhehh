@@ -232,7 +232,7 @@
                 <li>{{ __('Operations counted: what this app does when it uploads, trims and tests backups. Manual and before-restore copies are not planned for.') }}</li>
                 <li>
                     {{ __('Prices as of :date.', ['date' => $price['as_of']]) }}
-                    <a href="{{ $price['url'] }}" target="_blank" rel="noopener" class="underline">{{ __('Check Cloudflare\'s price list') }}</a>
+                    <a href="{{ $price['url'] }}" target="_blank" rel="noopener" class="underline">{{ __('Check Cloudflare\'s price list') }}</a>.
                     {{ __('If it changed, update config/backup.php (r2.pricing) or the BACKUP_R2_PRICE_* settings.') }}
                 </li>
                 @if ($price['usd_bdt_rate'] === null)
@@ -334,15 +334,15 @@
                         <tbody>
                             @foreach ($d['recent_runs'] as $run)
                                 <tr class="border-t border-gray-200 align-top dark:border-white/10">
-                                    <td class="py-1.5 pe-3">
+                                    <td class="whitespace-nowrap py-1.5 pe-3">
                                         <x-filament::badge :color="$run['status'] === 'success' ? 'success' : ($run['status'] === 'failed' ? 'danger' : 'warning')">
                                             {{ $run['status'] === 'success' ? __('Success') : ($run['status'] === 'failed' ? __('Failed') : __('Running')) }}
                                         </x-filament::badge>
                                     </td>
                                     <td class="py-1.5 pe-3">{{ $run['what'] }}</td>
                                     <td class="py-1.5 pe-3 font-mono text-xs">{{ $run['filename'] ?: '—' }}</td>
-                                    <td class="py-1.5 pe-3 text-right">{{ $run['size'] ? $this->bytes($run['size']) : '—' }}</td>
-                                    <td class="py-1.5 pe-3">{{ $this->ago($run['at']) }}</td>
+                                    <td class="whitespace-nowrap py-1.5 pe-3 text-right">{{ $run['size'] ? $this->bytes($run['size']) : '—' }}</td>
+                                    <td class="whitespace-nowrap py-1.5 pe-3">{{ $this->ago($run['at']) }}</td>
                                     <td class="py-1.5 text-xs text-gray-500 dark:text-gray-400">{{ $run['note'] ?: '—' }}</td>
                                 </tr>
                             @endforeach

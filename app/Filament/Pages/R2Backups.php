@@ -365,9 +365,14 @@ class R2Backups extends Page
         return '';
     }
 
+    /** A bill to the cent ($1.77); a price keeps its precision ($0.015); a tiny bill is not rounded to nothing ($0.0045). */
     public function usd(float $amount): string
     {
-        return MoneyFormatter::currency($amount, 'USD', $amount > 0 && $amount < 0.01 ? 4 : 2);
+        if ($amount >= 1 || abs($amount * 100 - round($amount * 100)) < 1e-9) {
+            return '$'.number_format($amount, 2);
+        }
+
+        return '$'.rtrim(number_format($amount, 4), '0');
     }
 
     public function taka(?float $amount): ?string

@@ -392,8 +392,27 @@ class R2DashboardTest extends TestCase
         $this->actingAs($this->admin())->get('/admin/settings/r2-backups')
             ->assertOk()
             ->assertSee('Over the free allowance')
-            ->assertSee('$ 1.5')
+            ->assertSee('$1.50')
             ->assertSee('৳ 180');
+    }
+
+    public function test_prices_keep_their_precision_and_bills_are_shown_to_the_cent(): void
+    {
+        $page = new R2Backups;
+
+        $this->assertSame('$0.015', $page->usd(0.015), 'The storage price must not be rounded to $0.02.');
+        $this->assertSame('$4.50', $page->usd(4.5));
+        $this->assertSame('$0.36', $page->usd(0.36));
+        $this->assertSame('$1.77', $page->usd(118 * 0.015));
+        $this->assertSame('$0.00', $page->usd(0.0));
+        $this->assertSame('$0.0045', $page->usd(0.0045));
+        $this->assertSame('$1,234.50', $page->usd(1234.5));
+
+        $this->actingAs($this->admin())->get('/admin/settings/r2-backups')
+            ->assertOk()
+            ->assertSee('$0.015 per GB-month')
+            ->assertSee('$4.50 per million')
+            ->assertSee('$0.36 per million');
     }
 
     public function test_a_broken_connection_shows_a_message_and_not_an_error_page(): void
