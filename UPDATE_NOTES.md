@@ -2,6 +2,41 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - Advanced backups, Phase 6: Cloudflare R2 off-site copy, an R2 dashboard and a bill estimate
+
+Reason - owner (Bangla): asked how to set up the Shared Drive; the answer was that Shared Drives need paid Google Workspace, and the owner replied "no workspace, upload to R2, check what the bill could be there, and build a dashboard page for R2 that shows everything at a glance". This also settles the open question "R2 as an off-site place": it is now the first choice (Drive stays, for anyone who has Workspace).
+
+What changed:
+- **R2 as an off-site place** through the S3 API (`R2BackupService`, `aws-sdk-php` which was already installed): Settings → R2 Backups → Configure (Account ID or endpoint, bucket, folder, Access Key ID, Secret Access Key encrypted, optional dollar→taka rate), **Test connection**, **Back up now**. `BackupDestination` is the shared contract; `OffsiteBackupService` encrypts once and sends the same file to every place that is on, trims each, and lets one place fail without losing the other (reported, noted in the history, its own health card). Only an error when no place got the file.
+- **R2 Backups page** (`R2Backups` + `r2-backups.blade.php`): status, stored size, free-allowance bar, estimated bill this month and when the schedule has filled the bucket, health cards, bill table, growth scenarios (2×/5×/10×) or typical-size examples while there is nothing to measure, copies by type against the keep limits, latest files, latest uploads/tests/failures. The bucket is read from R2 (one list request per 1,000 files), cached 10 minutes, **Refresh** reads again, a failed connection is shown on the page.
+- **Bill estimate** (`R2CostEstimator`): Cloudflare's Standard prices as read from <https://developers.cloudflare.com/r2/pricing/> on 2026-10-23 ($0.015/GB-month, $4.50/M Class A, $0.36/M Class B, free 10 GB / 1 M / 10 M per account, deletes and egress free) in `config/backup.r2.pricing`. Storage is the cost; operations are a few dozen an hour. Examples with the default schedule: 50 MB db + 500 MB archive ≈ 6.4 GB stored = $0.00; 200 MB + 2 GB ≈ 25.6 GB ≈ $0.23/month; 1 GB + 10 GB ≈ 128 GB ≈ $1.77/month.
+- `backup:restore --r2 | --offsite | --drive`, `backup:drill --r2 | --offsite | --drive`; the Sunday restore test checks the R2 copy at 03:50 and the Drive copy at 04:10 (was `--offsite` at 03:50).
+- New column `backup_runs.offsite_to` (migration `2026_10_23_120000`); backup health now has one card per auto-upload place (`offsite-r2`, `offsite-drive`); the `google_drive` key of a backup result is now `offsite`; `DatabaseBackupService::create()` / `AppBackupService::create()` take `$automatic` (a scheduled backup goes only to places with Auto upload on; a person reaches every place that is on, or, with none on, those that are set up); `AppBackupService::create()`'s `uploadToGoogleDrive` argument is now `upload`.
+- Docs: new chapter *Cloudflare R2: the off-site copy* in `docs/backup-restore.md` (setup, what is sent, failure behaviour, cost table, the page, restoring), the Drive chapter says Shared Drives need Workspace, *If the server is gone* covers R2, `docs/deployment.md`, env examples, codebase map.
+
+Decisions that were mine (change them if you disagree):
+- A **bucket of its own and a token limited to it**, not the Cloud Storage media buckets or their keys: the media token should not be able to delete backups, and a leaked backup token should reach nothing else. R2 therefore has its own credentials on its own page; nothing is read from *Cloud Storage*.
+- A blank folder means the default folder `erp-backups`, so the app can never list or trim the top of a shared bucket by accident (`BACKUP_R2_PREFIX=` in the environment can still choose none).
+- R2 comes first when a restore or restore test is not told which place to use.
+- The free 10 GB is account-wide: the estimate counts only the backup folder and says so; if the media buckets are on the same account they use the allowance too.
+- 1 GB is counted as 10⁹ bytes (the higher figure if Cloudflare counts in 1,024s). The bill page leaves out its own list requests (one per refresh).
+
+Verified here:
+- `R2BackupTest` (28) and `R2DashboardTest` (25) with an in-memory bucket (`tests/Support/FakeS3.php`), plus the updated `BackupRestoreTest`, `BackupDrillTest`, `BackupHealthTest`, `OffsiteBackupTest`: pass.
+- **Against a real S3 protocol implementation** (`moto` server, path-style, the app's own client settings): a 200 KB and a 12 MiB (three parts of 5 MiB) upload, listing, trimming that left a foreign file and an object outside the folder alone, download with SHA-256 equal, refusal of a key outside the folder, a missing bucket and an unreachable address with their messages.
+- The part-retry (resume after one failed part) and the abort after three failures are exercised with the in-memory bucket, which rejects the way the SDK's own handlers do; moto was not made to fail a part.
+- Full suite (plain `php artisan test`): 3182 passed, 6 skipped, 0 failed (then the 238 backup, R2, translation, migration and ModuleGuard tests again after small tidy-ups made while it ran).
+
+Not verified: **anything against Cloudflare R2 itself** (no account here): the SDK's checksum options are set the way Cloudflare documents for R2 but only a real bucket proves them; do **Test connection**, **Back up now** and `php artisan backup:drill --r2` once after setting it up. Whether Cloudflare asks for a payment card before R2 can be used at all (the page and docs say "may"); the free-tier numbers and prices come from one reading of the pricing page; multi-gigabyte uploads (parts are 16 MiB, S3 allows 10,000 parts, so the limit is about 160 GB); the page in a browser (rendered in tests only; new Tailwind classes need `npm run build`, which the deploy does).
+
+Found and left alone: `MoneyFormatter::number($amount, 0)` strips the zeros of whole numbers (`number(180, 0)` gives "18", `number(1200, 0)` gives "1,2") because it trims zeros after `number_format` even when there is no decimal point. No code calls it with 0 decimals today; the R2 page uses 2 decimals to stay clear of it.
+
+Needs Bangla review (`lang/bn.json`, 123 new keys; I am least sure of): "বাকেট" (bucket), "অফসাইট" (off-site), "ফ্রি সীমা" (free allowance), "প্রতি দশ লক্ষ :price" (per million), ":times গুণ বড়" (N times as big), "বন্ধ করা আছে" (switched off), "অটো আপলোড", "লেখা ও তালিকা (Class A)" / "পড়া ও যাচাই (Class B)", and the long explanatory sentences under *What will it cost?*.
+
+Owner still to do: **create the Cloudflare account, the private bucket and the limited API token (steps in `docs/backup-restore.md`), fill them in under Settings → R2 Backups → Configure, press Test connection and Back up now**; keep `BACKUP_ENCRYPTION_KEY` (and a copy outside the server) set, or nothing is uploaded; run `php artisan migrate --force` for `backup_runs.offsite_to`; add a dollar→taka rate if you want the estimate in taka; check the prices on Cloudflare's page and update `backup.r2.pricing` if they changed; decide whether the Cloud Storage (media) buckets share this Cloudflare account, because then they share the free 10 GB. Still open from before: alert channel (Telegram/email), retention numbers, what "hourly" should mean.
+
+Commit status: committed and pushed to the feature branch `ccr-4c1eb24d-2dzxxt` on top of the Phase 5 commit; not on `main` (needs the owner's approval).
+
 ## 2026-10-23 - Advanced backups, Phase 5: `backup:restore` and the rebuild runbook
 
 Reason - owner (Bangla) "পরবর্তী কাজ কর" after Phase 4. This is the last phase of the plan. The open questions (R2 as a second off-site place, an alert channel other than Deploy Error Logs + the bell, key custody, retention numbers, hourly semantics) are still unanswered; nothing here depends on them.

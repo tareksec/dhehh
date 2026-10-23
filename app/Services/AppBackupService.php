@@ -17,16 +17,16 @@ class AppBackupService
         protected BackupRunRecorder $runs,
     ) {}
 
-    public function create(bool $uploadToGoogleDrive = false, string $kind = BackupRun::KIND_MANUAL): array
+    public function create(bool $upload = false, string $kind = BackupRun::KIND_MANUAL, bool $automatic = false): array
     {
         return $this->runs->record(
             BackupRun::SCOPE_APP,
             $kind,
-            fn (): array => $this->createArchive($uploadToGoogleDrive, $kind),
+            fn (): array => $this->createArchive($upload, $kind, $automatic),
         );
     }
 
-    protected function createArchive(bool $uploadToGoogleDrive, string $kind): array
+    protected function createArchive(bool $upload, string $kind, bool $automatic): array
     {
         // The database dump comes first: a problem with the archive step (no Zip
         // extension, disk full) must not lose the dump of the day. It prunes its
@@ -86,8 +86,8 @@ class AppBackupService
         $backup = $this->fileDetails($relativePath);
         $backup['sha256'] = hash_file('sha256', $absolutePath);
 
-        if ($uploadToGoogleDrive) {
-            $backup['google_drive'] = $this->offsite->send($absolutePath);
+        if ($upload) {
+            $backup['offsite'] = $this->offsite->send($absolutePath, $automatic);
         }
 
         return $backup;

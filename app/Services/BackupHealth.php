@@ -32,8 +32,6 @@ class BackupHealth
     /** Nothing to judge yet, or the check is not set up. */
     public const UNKNOWN = 'unknown';
 
-    public function __construct(protected BackupSettingsService $settings) {}
-
     /**
      * @return array<int, array{key: string, label: string, state: string, detail: string, at: ?CarbonInterface, optional: bool}>
      */
@@ -66,8 +64,9 @@ class BackupHealth
             (int) config('backup.health.daily_max_age_hours', 30).' '.__('hours'),
         );
 
-        if ($this->settings->googleDriveEnabled() && $this->settings->googleDriveAutoUpload()) {
-            $checks[] = $this->offsiteCheck();
+        // One check per off-site place that takes automatic uploads: each can fail on its own.
+        foreach (app(OffsiteBackupService::class)->autoDestinations() as $place) {
+            $checks[] = $this->offsiteCheck($place);
         }
 
         $checks[] = $this->drillCheck();
@@ -122,13 +121,15 @@ class BackupHealth
     }
 
     /** @return array{key: string, label: string, state: string, detail: string, at: ?CarbonInterface, optional: bool} */
-    protected function offsiteCheck(): array
+    protected function offsiteCheck(BackupDestination $place): array
     {
-        $label = __('Copy on Google Drive');
+        $key = 'offsite-'.$place->key();
+        $name = $place->label();
+        $label = __('Copy on :place', ['place' => $name]);
 
-        // Recorded since the update that added backup health; before its migration there is nothing to read.
-        if (! Schema::hasColumn('backup_runs', 'offsite_at')) {
-            return $this->result('offsite', $label, self::UNKNOWN, __('Waiting for the database update.'), null);
+        // Recorded since the update that added the off-site places; before its migration there is nothing to read.
+        if (! Schema::hasColumn('backup_runs', 'offsite_to')) {
+            return $this->result($key, $label, self::UNKNOWN, __('Waiting for the database update.'), null);
         }
 
         $hourly = config('backup.hourly.enabled', true) && in_array(BackupRun::KIND_HOURLY, (array) config('backup.offsite.database_kinds', []), true);
@@ -139,28 +140,36 @@ class BackupHealth
         $latest = BackupRun::query()
             ->where('status', BackupRun::STATUS_SUCCESS)
             ->whereNotNull('offsite_at')
+            ->where(fn ($query) => $query->where('offsite_to', $place->key())
+                ->orWhere('offsite_to', 'like', $place->key().',%')
+                ->orWhere('offsite_to', 'like', '%,'.$place->key())
+                ->orWhere('offsite_to', 'like', '%,'.$place->key().',%'))
             ->max('offsite_at');
 
         if ($latest !== null && Carbon::parse($latest)->gte($limit)) {
-            return $this->result('offsite', $label, self::OK, __('Last one :ago.', ['ago' => Carbon::parse($latest)->diffForHumans()]), Carbon::parse($latest));
+            return $this->result($key, $label, self::OK, __('Last one :ago.', ['ago' => Carbon::parse($latest)->diffForHumans()]), Carbon::parse($latest));
         }
 
+        // Either the whole run failed with this place named in the reason, or the run went through
+        // and only this place was left out (recorded in its note).
         $failure = BackupRun::query()
-            ->where('status', BackupRun::STATUS_FAILED)
-            ->where('error', 'like', '%Google Drive%')
+            ->where(fn ($query) => $query
+                ->where(fn ($failed) => $failed->where('status', BackupRun::STATUS_FAILED)->where('error', 'like', '%'.$name.'%'))
+                ->orWhere('note', 'like', '%Not sent to%'.$place->key().'%'))
             ->latest('id')
             ->first();
-        $note = $failure !== null ? ' '.__('Last problem: :error', ['error' => Str::limit((string) $failure->error, 160)]) : '';
+        $reason = $failure !== null ? ($failure->error ?: $failure->note) : null;
+        $note = $reason !== null ? ' '.__('Last problem: :error', ['error' => Str::limit((string) $reason, 160)]) : '';
 
         if ($latest !== null) {
-            return $this->result('offsite', $label, self::DANGER, __('The last copy reached Google Drive :ago.', ['ago' => Carbon::parse($latest)->diffForHumans()]).$note, Carbon::parse($latest));
+            return $this->result($key, $label, self::DANGER, __('The last copy reached :place :ago.', ['place' => $name, 'ago' => Carbon::parse($latest)->diffForHumans()]).$note, Carbon::parse($latest));
         }
 
         $first = BackupRun::query()->min('created_at');
 
         return $first !== null && Carbon::parse($first)->lt($limit)
-            ? $this->result('offsite', $label, self::DANGER, __('No copy has reached Google Drive yet.').$note, null)
-            : $this->result('offsite', $label, self::UNKNOWN, __('Waiting for the first copy.'), null);
+            ? $this->result($key, $label, self::DANGER, __('No copy has reached :place yet.', ['place' => $name]).$note, null)
+            : $this->result($key, $label, self::UNKNOWN, __('Waiting for the first copy.'), null);
     }
 
     /** @return array{key: string, label: string, state: string, detail: string, at: ?CarbonInterface, optional: bool} */

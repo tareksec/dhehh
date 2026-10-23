@@ -266,6 +266,12 @@ class OffsiteBackupTest extends TestCase
         ];
         $drive->remote = collect($names)->map(fn (string $name, string $id): array => ['id' => $id, 'name' => $name])->values()->all();
 
+        // A place that is switched off is left alone.
+        $this->driveSettings(enabled: false);
+        $this->assertSame(0, app(OffsiteBackupService::class)->prune());
+        $this->assertSame([], $drive->deleted);
+
+        $this->driveSettings();
         $removed = app(OffsiteBackupService::class)->prune();
 
         $this->assertEqualsCanonicalizing(['a1', 'b1', 'c1', 'd1'], $drive->deleted);
@@ -299,7 +305,8 @@ class OffsiteBackupTest extends TestCase
 
         $backup = app(DatabaseBackupService::class)->create('offsite_test', BackupRun::KIND_HOURLY, upload: true);
 
-        $this->assertTrue($backup['google_drive']['encrypted']);
+        $this->assertTrue($backup['offsite']['encrypted']);
+        $this->assertSame(['drive'], array_keys($backup['offsite']['destinations']));
         $this->assertCount(1, $drive->sent);
         $this->assertMatchesRegularExpression('/^database-backup-.*-hourly\.sqlite\.enc$/', array_key_first($drive->sent));
         $run = BackupRun::query()->sole();

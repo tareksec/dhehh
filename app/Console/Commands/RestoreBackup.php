@@ -16,7 +16,9 @@ class RestoreBackup extends Command
 {
     protected $signature = 'backup:restore
         {file? : A backup in the backup folder, or the path of a downloaded one (.sql.gz or .zip, with or without .enc)}
-        {--drive : Use the newest database copy on Google Drive instead of a file}
+        {--offsite : Use the newest database copy off-site instead of a file (Cloudflare R2 if set up, else Google Drive)}
+        {--r2 : Use the newest database copy on Cloudflare R2}
+        {--drive : Use the newest database copy on Google Drive}
         {--only= : For a .zip: "database" or "files" (default: both)}
         {--confirm= : The database name (or "files" for a files-only restore), to confirm without being asked}
         {--skip-rehearsal : Do not try the dump in a scratch database first}
@@ -29,7 +31,12 @@ class RestoreBackup extends Command
     {
         $only = $this->option('only') ?: null;
         $file = $this->argument('file');
-        $fromDrive = (bool) $this->option('drive');
+        $offsite = match (true) {
+            (bool) $this->option('r2') => 'r2',
+            (bool) $this->option('drive') => 'drive',
+            default => (bool) $this->option('offsite'),
+        };
+        $fromOffsite = $offsite !== false;
 
         if ($only !== null && ! in_array($only, ['database', 'files'], true)) {
             $this->error('--only must be "database" or "files".');
@@ -37,8 +44,8 @@ class RestoreBackup extends Command
             return self::FAILURE;
         }
 
-        if ($file === null && ! $fromDrive) {
-            $this->error('Say which backup to restore: a file name or path, or --drive for the newest database copy on Google Drive.');
+        if ($file === null && ! $fromOffsite) {
+            $this->error('Say which backup to restore: a file name or path, or --offsite (--r2, --drive) for the newest database copy off-site.');
             $this->listBackups();
 
             return self::FAILURE;
@@ -47,13 +54,17 @@ class RestoreBackup extends Command
         // The key is only asked for when it is needed and not already in the environment.
         $key = null;
 
-        if (($fromDrive || str_ends_with((string) $file, BackupEncryptor::EXTENSION)) && ! $encryptor->isConfigured()) {
+        if (($fromOffsite || str_ends_with((string) $file, BackupEncryptor::EXTENSION)) && ! $encryptor->isConfigured()) {
             $key = ((string) $this->secret('Backup encryption key (BACKUP_ENCRYPTION_KEY)')) ?: null;
         }
 
         try {
-            $this->line($fromDrive ? 'Fetching the newest database copy from Google Drive...' : 'Reading the backup...');
-            $source = $restorer->prepare($file, $fromDrive, $key);
+            $this->line($fromOffsite ? 'Fetching the newest database copy from '.(match ($offsite) {
+                'r2' => 'Cloudflare R2',
+                'drive' => 'Google Drive',
+                default => 'the off-site place',
+            }).'...' : 'Reading the backup...');
+            $source = $restorer->prepare($file, $offsite, $key);
         } catch (Throwable $exception) {
             $this->error($exception->getMessage());
 

@@ -13,8 +13,8 @@ class BackupDatabase extends Command
     protected $signature = 'backup:database
         {--connection= : Database connection; defaults to the app database}
         {--kind=manual : hourly, daily, predeploy or manual - each kind is kept and pruned on its own}
-        {--upload : Also send an encrypted copy to Google Drive}
-        {--auto-upload : Send to Google Drive only when "Auto upload" is switched on (Backups page) for this kind}';
+        {--upload : Also send an encrypted copy to every off-site place that is switched on (Cloudflare R2, Google Drive)}
+        {--auto-upload : Send off-site only to the places with "Auto upload" switched on, and only for the kinds listed in backup.offsite}';
 
     protected $description = 'Create a private database backup';
 
@@ -28,22 +28,37 @@ class BackupDatabase extends Command
             return self::FAILURE;
         }
 
-        // "Auto upload" needs Drive switched on as well. If it is on but Drive or the
+        // "Auto upload" needs a place switched on as well. If it is on but the place or the
         // encryption key is not set up, the upload fails and the run is recorded as
         // failed (with the reason) instead of silently keeping the copy on the server.
         $upload = (bool) $this->option('upload')
             || ((bool) $this->option('auto-upload') && $offsite->shouldAutoUpload(BackupRun::SCOPE_DATABASE, $kind));
 
         try {
-            $backup = $backups->create($this->option('connection') ?: null, $kind, $upload);
+            $backup = $backups->create($this->option('connection') ?: null, $kind, $upload, automatic: ! (bool) $this->option('upload'));
         } catch (Throwable $exception) {
             $this->error('Database backup failed: '.$exception->getMessage());
 
             return self::FAILURE;
         }
 
-        $this->info("Database backup created: {$backup['name']} ({$backup['size_human']})".($upload ? ' and sent to Google Drive' : ''));
+        $this->info("Database backup created: {$backup['name']} ({$backup['size_human']})".$this->sentTo($backup));
 
         return self::SUCCESS;
+    }
+
+    /** " and sent to Cloudflare R2, Google Drive" or "" */
+    protected function sentTo(array $backup): string
+    {
+        $places = array_keys($backup['offsite']['destinations'] ?? []);
+
+        if ($places === []) {
+            return '';
+        }
+
+        $labels = array_map(fn (string $key): string => $key === 'r2' ? 'Cloudflare R2' : 'Google Drive', $places);
+        $failed = array_keys($backup['offsite']['failed'] ?? []);
+
+        return ' and sent to '.implode(', ', $labels).($failed !== [] ? ' (not to: '.implode(', ', $failed).' - see the Backups page)' : '');
     }
 }

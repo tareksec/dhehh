@@ -27,6 +27,8 @@ class BackupRun extends Model
 
     public const DRILL_DRIVE = 'drive';
 
+    public const DRILL_R2 = 'r2';
+
     /** A restore (php artisan backup:restore). Its kind is what was put back. */
     public const SCOPE_RESTORE = 'restore';
 
@@ -68,6 +70,7 @@ class BackupRun extends Model
         'started_at',
         'finished_at',
         'offsite_at',
+        'offsite_to',
     ];
 
     protected $casts = [
@@ -76,6 +79,12 @@ class BackupRun extends Model
         'finished_at' => 'datetime',
         'offsite_at' => 'datetime',
     ];
+
+    /** @return array<int, string> the off-site places that got this run's copy ("r2", "drive") */
+    public function offsitePlaces(): array
+    {
+        return array_values(array_filter(explode(',', (string) $this->offsite_to)));
+    }
 
     /**
      * The kind in a backup file's name (the last part before the extension).

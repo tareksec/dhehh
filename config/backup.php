@@ -134,7 +134,8 @@ return [
         'key' => env('BACKUP_ENCRYPTION_KEY'),
     ],
 
-    // What goes to Google Drive when "Auto upload" is switched on (Backups page).
+    // What goes off-site (Google Drive and/or Cloudflare R2) when "Auto upload" is switched on
+    // for a place (Backups page, R2 Backups page).
     'offsite' => [
         // Backup kinds sent by --auto-upload. A daily full app archive already holds
         // that day's dump, so the kinds only decide which stand-alone dumps also go.
@@ -143,11 +144,11 @@ return [
 
         // Nothing is uploaded unless BACKUP_ENCRYPTION_KEY is set. A dump holds every
         // customer and the app archive holds the .env. Set false only if you accept
-        // plain copies on Google Drive.
+        // plain copies off-site.
         'require_encryption' => (bool) env('BACKUP_OFFSITE_REQUIRE_ENCRYPTION', true),
 
-        // Copies kept on Drive per kind; older ones are deleted after each upload.
-        // Only files named like our backups are ever touched.
+        // Copies kept per kind in each off-site place; older ones are deleted after each
+        // upload. Only files named like our backups are ever touched.
         'keep' => [
             'database' => [
                 'hourly' => (int) env('BACKUP_DRIVE_KEEP_HOURLY', 48),
@@ -163,6 +164,43 @@ return [
                 'prerestore' => 1,
                 'manual' => 5,
             ],
+        ],
+    ],
+
+    // Cloudflare R2: an off-site place that needs no Google Workspace. The S3 API is used
+    // (aws-sdk-php), so any S3-compatible bucket works. Use a bucket of its own - never the
+    // media buckets of Cloud Storage - and an API token limited to that one bucket
+    // (Object Read & Write). Settings saved on the R2 Backups page win over these values.
+    'r2' => [
+        'enabled' => env('BACKUP_R2_ENABLED', false),
+        'auto_upload' => env('BACKUP_R2_AUTO_UPLOAD', false),
+        // The Cloudflare Account ID (32 hex characters) or the full endpoint
+        // https://<account-id>.r2.cloudflarestorage.com (also for the EU jurisdiction).
+        'account' => env('BACKUP_R2_ACCOUNT_ID', env('BACKUP_R2_ENDPOINT')),
+        'bucket' => env('BACKUP_R2_BUCKET'),
+        // A folder inside the bucket; everything this app writes or deletes stays under it.
+        'prefix' => env('BACKUP_R2_PREFIX', 'erp-backups'),
+        'access_key_id' => env('BACKUP_R2_ACCESS_KEY_ID'),
+        'secret_access_key' => env('BACKUP_R2_SECRET_ACCESS_KEY'),
+        // Bytes per part of a big upload (at least 5 MiB; every part but the last has this size).
+        'part_bytes' => (int) env('BACKUP_R2_PART_BYTES', 16 * 1024 * 1024),
+        // Optional: shows the estimated bill in taka as well.
+        'usd_bdt_rate' => env('BACKUP_R2_USD_BDT_RATE'),
+
+        // What Cloudflare charges for the Standard storage class, in US dollars. Used only by
+        // the estimate on the R2 Backups page - it never limits anything. Check
+        // https://developers.cloudflare.com/r2/pricing/ and change the values (or set the
+        // environment variables) when Cloudflare changes its prices.
+        'pricing' => [
+            'as_of' => env('BACKUP_R2_PRICING_AS_OF', '2026-10-23'),
+            'url' => 'https://developers.cloudflare.com/r2/pricing/',
+            'storage_per_gb_month' => (float) env('BACKUP_R2_PRICE_STORAGE_GB', 0.015),
+            'class_a_per_million' => (float) env('BACKUP_R2_PRICE_CLASS_A', 4.50),
+            'class_b_per_million' => (float) env('BACKUP_R2_PRICE_CLASS_B', 0.36),
+            // Free every month for the whole Cloudflare account (all buckets together).
+            'free_storage_gb' => (float) env('BACKUP_R2_FREE_STORAGE_GB', 10),
+            'free_class_a' => (int) env('BACKUP_R2_FREE_CLASS_A', 1_000_000),
+            'free_class_b' => (int) env('BACKUP_R2_FREE_CLASS_B', 10_000_000),
         ],
     ],
 

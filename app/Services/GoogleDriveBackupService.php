@@ -17,8 +17,10 @@ use RuntimeException;
  * backup folder) and, since Video Generation Phase 4, for "Save to Google
  * Drive" (uploadStream(), into a folder the caller names).
  */
-class GoogleDriveBackupService
+class GoogleDriveBackupService implements BackupDestination
 {
+    public const KEY = 'drive';
+
     private const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
     /** Resumable upload: any size, streamed; supportsAllDrives lets the target be a Shared Drive folder. */
@@ -38,11 +40,38 @@ class GoogleDriveBackupService
 
     private int $tokenExpiresAt = 0;
 
+    public function key(): string
+    {
+        return self::KEY;
+    }
+
+    public function label(): string
+    {
+        return 'Google Drive';
+    }
+
+    public function isEnabled(): bool
+    {
+        return app(BackupSettingsService::class)->googleDriveEnabled();
+    }
+
+    public function autoUploadEnabled(): bool
+    {
+        return app(BackupSettingsService::class)->googleDriveAutoUpload();
+    }
+
     public function isConfigured(): bool
     {
-        return app(BackupSettingsService::class)->googleDriveEnabled()
+        return $this->isEnabled()
             && filled($this->folderId())
             && $this->credentials() !== [];
+    }
+
+    public function assertReady(): void
+    {
+        if (blank($this->folderId())) {
+            throw new RuntimeException('Google Drive backup folder ID is required.');
+        }
     }
 
     public function upload(string $absolutePath, ?string $filename = null, string $mimeType = 'application/zip'): array

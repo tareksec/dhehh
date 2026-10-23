@@ -11,12 +11,14 @@ use App\Services\BackupSettingsService;
 use App\Services\DatabaseBackupService;
 use App\Services\GoogleDriveBackupService;
 use App\Services\OffsiteBackupService;
+use App\Services\R2BackupService;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
+use Tests\Support\FakeS3;
 use Tests\TestCase;
 
 class BackupDrillTest extends TestCase
@@ -98,6 +100,9 @@ class BackupDrillTest extends TestCase
 
             /** @var array<string, string> id => file bytes */
             public array $files = [];
+
+            /** A stand-in that is always set up. */
+            public function assertReady(): void {}
 
             public function listBackupFiles(): array
             {
@@ -238,7 +243,7 @@ class BackupDrillTest extends TestCase
         Storage::disk('local')->delete(DatabaseBackupService::DIRECTORY.'/database-backup-20261023-110500-mysql-hourly.sql.gz');
         $drill = $this->drill();
 
-        $result = $drill->run(fromDrive: true);
+        $result = $drill->run(offsite: 'drive');
 
         $this->assertSame('database-backup-20261023-110500-mysql-hourly.sql.gz', $result['name']);
         $this->assertSame(4, $drill->restored[0]['tables']);
@@ -246,6 +251,40 @@ class BackupDrillTest extends TestCase
         $this->assertSame([], Storage::disk('local')->files('backups/tmp'));
         $run = BackupRun::query()->sole();
         $this->assertSame(['drill', 'drive', 'success'], [$run->scope, $run->kind, $run->status]);
+    }
+
+    public function test_the_r2_copy_is_downloaded_decrypted_tested_and_recorded_as_an_r2_test(): void
+    {
+        Config::set('backup.encryption.key', self::KEY);
+        app(BackupSettingsService::class)->saveR2([
+            'enabled' => true, 'account' => '0123456789abcdef0123456789abcdef', 'bucket' => 'b', 'prefix' => 'erp-backups',
+            'access_key_id' => 'k', 'secret_access_key' => 's',
+        ]);
+        $s3 = new FakeS3;
+        $this->app->instance(R2BackupService::class, app(R2BackupService::class)->withClient($s3->client()));
+
+        $plain = $this->putDump('database-backup-20261023-110500-mysql-hourly.sql.gz', $this->dumpContents(tables: 4));
+        app(BackupEncryptor::class)->encryptFile($plain, storage_path('framework/testing/drill-r2.enc'));
+        $s3->put('erp-backups/database-backup-20261023-110500-mysql-hourly.sql.gz.enc', (string) file_get_contents(storage_path('framework/testing/drill-r2.enc')));
+        $s3->put('erp-backups/database-backup-20261023-100500-mysql-hourly.sql.gz.enc', 'older, never downloaded');
+        Storage::disk('local')->delete(DatabaseBackupService::DIRECTORY.'/database-backup-20261023-110500-mysql-hourly.sql.gz');
+        $drill = $this->drill();
+
+        $result = $drill->run(offsite: 'r2');
+
+        $this->assertSame('database-backup-20261023-110500-mysql-hourly.sql.gz', $result['name']);
+        $this->assertSame(4, $drill->restored[0]['tables']);
+        $this->assertSame(1, $s3->count('GetObject'), 'Only the newest copy is downloaded.');
+        $this->assertSame([], Storage::disk('local')->files('backups/tmp'));
+        $run = BackupRun::query()->sole();
+        $this->assertSame(['drill', 'r2', 'success'], [$run->scope, $run->kind, $run->status]);
+
+        // The command: --r2 reads R2, and an empty bucket is a recorded, alerted failure.
+        $s3->objects = [];
+        $this->artisan('backup:drill', ['--r2' => true])
+            ->expectsOutputToContain('No database copy was found on Cloudflare R2.')
+            ->assertExitCode(1);
+        $this->assertSame('r2', BackupRun::query()->latest('id')->first()->kind);
     }
 
     public function test_the_drive_copy_fails_with_a_wrong_key_nothing_on_drive_or_no_key(): void
@@ -259,7 +298,7 @@ class BackupDrillTest extends TestCase
 
         Config::set('backup.encryption.key', 'some-other-key-1234567');
         try {
-            $drill->run(fromDrive: true);
+            $drill->run(offsite: 'drive');
             $this->fail('A wrong key must fail the test of the Drive copy.');
         } catch (RuntimeException $exception) {
             $this->assertStringContainsString('wrong key', $exception->getMessage());
@@ -267,7 +306,7 @@ class BackupDrillTest extends TestCase
 
         Config::set('backup.encryption.key', null);
         try {
-            $drill->run(fromDrive: true);
+            $drill->run(offsite: 'drive');
             $this->fail('A missing key must fail.');
         } catch (RuntimeException $exception) {
             $this->assertStringContainsString('BACKUP_ENCRYPTION_KEY is not set', $exception->getMessage());
@@ -275,7 +314,7 @@ class BackupDrillTest extends TestCase
 
         $drive->remote = [];
         try {
-            $drill->run(fromDrive: true);
+            $drill->run(offsite: 'drive');
             $this->fail('An empty Drive folder must fail.');
         } catch (RuntimeException $exception) {
             $this->assertStringContainsString('No database copy was found on Google Drive', $exception->getMessage());
@@ -317,25 +356,33 @@ class BackupDrillTest extends TestCase
         $this->assertNull($this->scheduledEvent('backup:drill'));
     }
 
-    public function test_the_restore_test_runs_on_sundays_and_the_drive_copy_is_tested_only_with_drive_on(): void
+    public function test_the_restore_test_runs_on_sundays_and_each_off_site_copy_is_tested_only_with_its_place_on(): void
     {
         $this->artisan('schedule:list')->expectsOutputToContain('backup:drill')->assertSuccessful();
 
         $local = $this->scheduledEvent('backup:drill');
-        $drive = $this->scheduledEvent('backup:drill --offsite');
+        $r2 = $this->scheduledEvent('backup:drill --r2');
+        $drive = $this->scheduledEvent('backup:drill --drive');
 
         $this->assertSame('30 3 * * 0', $local->expression);
         $this->assertTrue($local->withoutOverlapping);
         $this->assertTrue($local->runInBackground);
         $this->assertTrue($local->onOneServer);
-        $this->assertSame('50 3 * * 0', $drive->expression, 'twenty minutes after the local one');
+        $this->assertSame('50 3 * * 0', $r2->expression, 'twenty minutes after the local one');
+        $this->assertSame('10 4 * * 0', $drive->expression, 'forty minutes after the local one');
 
-        // The "when" test runs at fire time, so a Drive switched on later is picked up.
+        // The "when" test runs at fire time, so a place switched on later is picked up.
+        $this->assertFalse($r2->filtersPass($this->app));
         $this->assertFalse($drive->filtersPass($this->app));
+
         app(BackupSettingsService::class)->saveGoogleDrive([
             'enabled' => true, 'auto_upload' => true, 'folder_id' => 'folder', 'service_account_path' => '', 'service_account_json' => '',
         ]);
         $this->assertTrue($drive->filtersPass($this->app));
+        $this->assertFalse($r2->filtersPass($this->app), 'Drive on does not schedule a test of the R2 copy.');
+
+        app(BackupSettingsService::class)->saveR2(['enabled' => true, 'auto_upload' => true]);
+        $this->assertTrue($r2->filtersPass($this->app));
     }
 
     // --- the loading step, with a stand-in for the mysql client ----------

@@ -1,6 +1,6 @@
 # Backup and Restore Guide
 
-Business Dashboard includes database backups, full app backups, backup downloads, and optional encrypted off-site copies on Google Drive.
+Business Dashboard includes database backups, full app backups, backup downloads, and optional encrypted off-site copies on Cloudflare R2 and/or Google Drive.
 
 ## Backup Types
 
@@ -8,7 +8,7 @@ Business Dashboard includes database backups, full app backups, backup downloads
 |---|---|---|
 | Database backup | MySQL/MariaDB dump (`.sql.gz`, compressed) or SQLite file (`.sqlite`) | `storage/app/private/backups/database` |
 | Full app backup | App files plus a database backup of the same kind (`app-backup-20261023-020000-daily.zip`) | `storage/app/private/backups/app` |
-| Google Drive copy | The same files, **encrypted** (`….sql.gz.enc`, `….zip.enc`), sent after they are made | Configured Drive folder |
+| Off-site copy | The same files, **encrypted** (`….sql.gz.enc`, `….zip.enc`), sent after they are made | Cloudflare R2 bucket and/or Google Drive folder (either, or both) |
 
 Every backup runs under one **kind**, which is the last part of the file name
 (`database-backup-20261023-020000-mysql-daily.sql.gz`):
@@ -33,7 +33,7 @@ minute, see `docs/deployment.md`):
 |---|---|
 | every hour at :05 | `backup:database --kind=hourly --auto-upload` (switch off with `BACKUP_HOURLY_ENABLED=false`) |
 | every day at `BACKUP_SCHEDULE_TIME` (02:00) | `backup:app --kind=daily --auto-upload`: files + that day's database backup in one zip. With `BACKUP_DAILY_FULL_APP=false` it is `backup:database --kind=daily --auto-upload` (database only) instead |
-| every Sunday at 03:30 (`BACKUP_DRILL_SCHEDULE_TIME`) | `backup:drill`: the restore test of the newest dump on this server. At 03:50, with Drive on, `backup:drill --offsite` tests the newest Drive copy. Only when `BACKUP_DRILL_DB_USERNAME` is set (see **Restore test**) |
+| every Sunday at 03:30 (`BACKUP_DRILL_SCHEDULE_TIME`) | `backup:drill`: the restore test of the newest dump on this server. At 03:50, with R2 on, `backup:drill --r2` tests the newest R2 copy; at 04:10, with Drive on, `backup:drill --drive` tests the newest Drive copy. Only when `BACKUP_DRILL_DB_USERNAME` is set (see **Restore test**) |
 | every 30 minutes | `backup:check`: tells the Super Admins when a backup is overdue (see **Backup health**) |
 
 Both run in the background, so a slow upload never holds up the other scheduled
@@ -215,6 +215,132 @@ Old backups beyond the retention count of their kind are cleaned automatically b
 
 Other settings: `BACKUP_MYSQLDUMP_BINARY` (default `mysqldump`), `BACKUP_DUMP_TIMEOUT` (seconds, default 900), `BACKUP_MYSQL_BINARY` (the `mysql` client, default `mysql`) and `BACKUP_RESTORE_TIMEOUT` (seconds a restore's import may run, default 3600).
 
+## Cloudflare R2: the off-site copy (no Google Workspace needed)
+
+R2 is Cloudflare's S3-compatible storage. A private bucket in your own Cloudflare account keeps the
+encrypted copy of every backup away from the server. It needs no Google Workspace (a free Gmail account
+cannot be used for the Drive copy: see the next chapter), downloads are free, and the monthly free
+allowance covers small backups completely. The **R2 Backups** page (Settings → R2 Backups) shows what is
+stored, how much of the free allowance is used and what the bill is likely to be.
+
+### Set it up
+
+1. Create a Cloudflare account and open **R2 Object Storage** in the dashboard. Cloudflare may ask for a
+   payment card before R2 can be used, even for the free allowance: use a card that works for dollar
+   payments.
+2. **Create bucket** for backups only, for example `zamzam-erp-backups`. Leave it **private**: do not
+   connect a public domain and do not enable the `r2.dev` address. Do not reuse the buckets of
+   *Cloud Storage* (product images, customer files): a backup bucket must hold nothing else.
+3. **R2 → Manage R2 API Tokens → Create API token**: permission **Object Read & Write**, *Specify
+   bucket(s)* → the backup bucket only. Copy the **Access Key ID** and the **Secret Access Key** at once:
+   the secret is shown one time only. (Why a token of its own: if it leaks, it can reach the backups and
+   nothing else; and a token for the media buckets cannot delete the backups.)
+4. The **Account ID** is on the R2 overview page (right side). It is 32 letters and digits. For a bucket
+   in the EU jurisdiction paste the full address
+   `https://<account-id>.eu.r2.cloudflarestorage.com` instead.
+5. In the ERP open **Settings → R2 Backups → Configure**: switch on **Enable Cloudflare R2 backup** and
+   **Auto upload to R2**, fill in the Account ID, bucket name and the two keys. Press **Save**, then
+   **Test connection**: it writes, reads, lists and deletes a small test file, which is what backups
+   need. Then **Back up now** sends a first database backup.
+6. Make sure `BACKUP_ENCRYPTION_KEY` is set (see **Encryption**) and a copy is kept outside the server.
+   Nothing is uploaded without it.
+
+The same values can come from the environment instead (what is saved on the page wins; the secret is
+saved encrypted):
+
+```env
+BACKUP_R2_ENABLED=true
+BACKUP_R2_AUTO_UPLOAD=true
+BACKUP_R2_ACCOUNT_ID=          # or the full https://… endpoint address
+BACKUP_R2_BUCKET=zamzam-erp-backups
+BACKUP_R2_PREFIX=erp-backups   # the folder inside the bucket; everything the app writes or deletes stays in it
+BACKUP_R2_ACCESS_KEY_ID=
+BACKUP_R2_SECRET_ACCESS_KEY=
+BACKUP_ENCRYPTION_KEY=
+```
+
+### What is sent, and what happens when something fails
+
+The same kinds as for Drive (see **What is sent**; the numbers kept per kind are `backup.offsite.keep`,
+the same for every place). The backup is encrypted once and the same file goes to every place that is
+switched on:
+
+- **Auto upload** is a switch of each place: a scheduled backup goes only to places with it on. A person
+  pressing **Upload off-site** / **Back up now**, or running `--upload`, reaches every place that is on
+  (or, when none is on, the ones that are set up).
+- A place that fails does not stop the other one. The backup counts as sent when at least one place got
+  it; the place that did not is named in the **Backup history** note ("Not sent to r2: …"), reported to
+  the Super Admins, and its **Backup health** card ("Copy on Cloudflare R2") turns red when no copy has
+  arrived in time. Only when no place got it is the run a failure.
+- After every upload the folder is trimmed to the newest copies of each kind. Only files named like our
+  backups (`database-backup-…`, `app-backup-…`, with or without `.enc`) inside the folder are ever
+  deleted; any other file in the folder is counted in the bill and left alone. The app also refuses to
+  download or delete anything outside the folder.
+- Big files go up in parts of `BACKUP_R2_PART_BYTES` (default 16 MiB). A part that fails is retried from
+  where the upload stopped; an upload that is given up is aborted, so no half-uploaded file is left. The
+  stored size is checked after every upload.
+- If R2 refuses, the error is explained in words: wrong Secret Access Key, unknown Access Key ID, token
+  without access to the bucket, bucket not found, server cannot reach Cloudflare.
+
+### What it costs
+
+Prices below are Cloudflare's published prices for the **Standard** storage class, checked on
+2026-10-23 (<https://developers.cloudflare.com/r2/pricing/>); they are in `config/backup.php`
+(`r2.pricing`, or `BACKUP_R2_PRICE_*`) and must be updated there when Cloudflare changes them.
+
+| Item | Price | Free every month (whole Cloudflare account) |
+|---|---|---|
+| Storage | $0.015 per GB-month | 10 GB-month |
+| Class A operations (writes, uploads of parts, lists) | $4.50 per million | 1 million |
+| Class B operations (reads, size checks) | $0.36 per million | 10 million |
+| Deleting, aborting an upload | free | |
+| Data going out (restoring, restore tests) | free | |
+
+Storage is billed on the highest size of each day, averaged over the month. The free 10 GB is for the
+whole account, so if the *Cloud Storage* buckets (product images, customer files) are on the same
+account they use it too; the R2 Backups page cannot see them. Operations are never the problem: an hour
+of backups is a handful of requests (for a 1 GB database about 63 an hour, against a million free a
+month), so the bill is storage.
+
+What sits in the bucket once the schedule has been running for a while (hourly 48 copies, before-deploy
+10, daily full app archive 7, with the default `backup.offsite.keep`), as examples only:
+
+| Database copy | Full app archive | Stored | Bill per month |
+|---|---|---|---|
+| 50 MB | 500 MB | about 6.4 GB | $0.00 (inside the free 10 GB) |
+| 200 MB | 2 GB | about 25.6 GB | about $0.23 |
+| 1 GB | 10 GB | about 128 GB | about $1.77 |
+
+The page works this out for the real database from the copies already in the bucket (and the backup
+history), shows it next to the bill so far this month, and shows what 2×, 5× and 10× bigger backups would
+cost. To keep the bill down, lower the numbers kept per kind (`BACKUP_DRIVE_KEEP_HOURLY` etc. apply to
+every off-site place) or switch the hourly schedule off.
+
+### The R2 Backups page
+
+Settings → R2 Backups, for people who may manage backups. It shows, at a glance:
+
+- the status (connected, switched off, not set up, problem), auto upload, encryption, the last upload
+  and the bucket;
+- how much is stored, the share of the free allowance, the estimated bill this month and the bill once
+  the schedule has filled the bucket;
+- the backup health checks (hourly, daily, copy on R2, restore test);
+- the bill line by line (storage, Class A, Class B) now and when full, growth scenarios, and examples with
+  typical sizes while there is nothing to measure yet;
+- the copies by type against how many are kept, the latest files, and the latest uploads, restore tests
+  and failed attempts.
+
+The bucket is read from R2 itself, which is one list request per 1,000 files; the answer is reused for 10
+minutes, **Refresh** reads again, and a connection problem is shown on the page instead of an error. The
+page can only see the backup folder and the operations this app makes; Cloudflare's own dashboard is the
+final word on the bill. Add a **dollar-to-taka rate** under **Configure** to see it in taka as well.
+
+### Restoring from R2
+
+`php artisan backup:restore --r2` downloads the newest database copy from R2, decrypts it and restores
+it (see **Restore a backup**); `--offsite` takes the first place that is set up (R2, else Drive).
+`php artisan backup:drill --r2` tests that copy without touching the live database.
+
 ## Google Drive: the off-site copy
 
 A backup that sits only on the server is lost with the server (or with a
@@ -237,7 +363,9 @@ Use either service account JSON content or a path to a service account JSON file
 Use a folder in a **Shared Drive**, and give the service account the **Content
 manager** role there: a service account has no storage quota of its own (Google
 refuses uploads into a normal "My Drive" folder with "Service Accounts do not
-have storage quota"), and it needs to delete old copies.
+have storage quota"), and it needs to delete old copies. Shared Drives exist only
+in paid Google Workspace: with a free Gmail account use Cloudflare R2 (previous
+chapter) instead.
 
 ### What is sent
 
@@ -303,8 +431,8 @@ BACKUP_KEY='the key' openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -md sha256
 
 ### Restoring from Google Drive
 
-`php artisan backup:restore --drive` downloads the newest database copy, decrypts it and restores it
-(see **Restore a backup**). For anything else, download the file you want from the Drive folder (the
+`php artisan backup:restore --drive` (or `--offsite`, `--r2` for Cloudflare R2) downloads the newest
+database copy, decrypts it and restores it (see **Restore a backup**). For anything else, download the file you want from the Drive folder (the
 name tells the type and the time), decrypt it with one of the commands above and give the result to
 `backup:restore`, or give `backup:restore` the `.enc` file itself and it decrypts it (it asks for the
 key when `BACKUP_ENCRYPTION_KEY` is not set).
@@ -404,11 +532,13 @@ payments, `/health/version`. Things to know:
 ## If the server is gone
 
 The ERP can be rebuilt from three things that live outside the server: **the code** (GitHub), **the
-Drive folder**, and **`BACKUP_ENCRYPTION_KEY`**. Check today that you have all three, plus Coolify
-access and the DNS login. Without the key the Drive copies cannot be opened by anyone.
+off-site folder** (the Cloudflare R2 bucket and its keys, or the Drive folder), and
+**`BACKUP_ENCRYPTION_KEY`**. Check today that you have all three, plus Coolify access and the DNS login.
+Without the key the off-site copies cannot be opened by anyone.
 
-1. **Download from the Drive folder** (in a browser, which always works): the newest
-   `app-backup-…-daily.zip.enc` and the newest `database-backup-…-hourly.sql.gz.enc`.
+1. **Download from the bucket or Drive folder** (R2: the Cloudflare dashboard → R2 → the bucket → the
+   folder; Drive: in a browser. Both always work): the newest `app-backup-…-daily.zip.enc` and the
+   newest `database-backup-…-hourly.sql.gz.enc`.
 2. **Decrypt them on any computer** with `openssl` (see *Encryption* above; no PHP needed).
 3. **Get the secrets back.** The `.env` is inside the archive:
    `unzip -p app-backup-…-daily.zip .env`. Put its values (`APP_KEY` above all: encrypted settings such
@@ -416,7 +546,7 @@ access and the DNS login. Without the key the Drive copies cannot be opened by a
 4. **New server:** deploy `main` from GitHub with those environment variables and a new, empty MySQL
    database. The container starts, runs the migrations and serves an empty ERP.
 5. **Put the data back**, from the container terminal, with the two files on the server (or, when the
-   Drive variables are set, `php artisan backup:restore --drive` fetches the newest database copy itself):
+   R2 or Drive variables are set, `php artisan backup:restore --offsite` fetches the newest database copy itself):
 
    ```bash
    php artisan backup:restore database-backup-…-hourly.sql.gz

@@ -120,7 +120,8 @@ class BackupHealthTest extends TestCase
         $this->assertNotContains('hourly', $keys);
         $this->assertSame('Daily database backup', $this->check('daily')['label']);
         $this->assertSame('ok', $this->check('daily')['state']);
-        $this->assertNotContains('offsite', $keys, 'no Drive, no off-site check');
+        $this->assertNotContains('offsite-drive', $keys, 'no Drive, no off-site check');
+        $this->assertNotContains('offsite-r2', $keys, 'no R2, no off-site check');
     }
 
     public function test_the_off_site_copy_is_judged_by_when_it_arrived_not_when_the_backup_ran(): void
@@ -131,16 +132,44 @@ class BackupHealthTest extends TestCase
         // The backup ran, but nothing ever reached Drive and backups are old enough to expect it.
         BackupRun::query()->update(['created_at' => now()->subHours(6)]);
         $this->record('database', 'hourly', 'failed', extra: ['error' => 'Google Drive upload failed.']);
-        $this->assertSame('danger', $this->check('offsite')['state']);
-        $this->assertStringContainsString('No copy has reached Google Drive yet.', $this->check('offsite')['detail']);
-        $this->assertStringContainsString('Google Drive upload failed.', $this->check('offsite')['detail']);
+        $this->assertSame('danger', $this->check('offsite-drive')['state']);
+        $this->assertStringContainsString('No copy has reached Google Drive yet.', $this->check('offsite-drive')['detail']);
+        $this->assertStringContainsString('Google Drive upload failed.', $this->check('offsite-drive')['detail']);
 
-        $this->record('database', 'hourly', finished: now()->subMinutes(30), extra: ['offsite_at' => now()->subMinutes(30)]);
-        $this->assertSame('ok', $this->check('offsite')['state']);
+        $this->record('database', 'hourly', finished: now()->subMinutes(30), extra: ['offsite_at' => now()->subMinutes(30), 'offsite_to' => 'drive']);
+        $this->assertSame('ok', $this->check('offsite-drive')['state']);
 
         BackupRun::query()->update(['offsite_at' => now()->subHours(8)]);
-        $this->assertSame('danger', $this->check('offsite')['state']);
-        $this->assertStringContainsString('The last copy reached Google Drive 8 hours ago.', $this->check('offsite')['detail']);
+        $this->assertSame('danger', $this->check('offsite-drive')['state']);
+        $this->assertStringContainsString('The last copy reached Google Drive 8 hours ago.', $this->check('offsite-drive')['detail']);
+    }
+
+    public function test_each_off_site_place_is_judged_on_its_own(): void
+    {
+        $this->driveOn();
+        app(BackupSettingsService::class)->saveR2(['enabled' => true, 'auto_upload' => true]);
+
+        // The copy reached R2 half an hour ago, and Drive was left out of it (the run still succeeded).
+        $this->record('database', 'hourly', finished: now()->subMinutes(30), extra: [
+            'offsite_at' => now()->subMinutes(30),
+            'offsite_to' => 'r2',
+            'note' => 'Not sent to drive: Google Drive upload failed.',
+        ]);
+        BackupRun::query()->update(['created_at' => now()->subHours(6)]);
+
+        $r2 = $this->check('offsite-r2');
+        $this->assertSame('ok', $r2['state']);
+        $this->assertSame('Copy on Cloudflare R2', $r2['label']);
+
+        $drive = $this->check('offsite-drive');
+        $this->assertSame('danger', $drive['state']);
+        $this->assertSame('Copy on Google Drive', $drive['label']);
+        $this->assertStringContainsString('No copy has reached Google Drive yet.', $drive['detail']);
+        $this->assertStringContainsString('Google Drive upload failed.', $drive['detail']);
+
+        // A run that reached both is counted for both, and "r2" is not mistaken for part of another name.
+        $this->record('database', 'hourly', finished: now()->subMinutes(5), extra: ['offsite_at' => now()->subMinutes(5), 'offsite_to' => 'r2,drive']);
+        $this->assertSame('ok', $this->check('offsite-drive')['state']);
     }
 
     public function test_the_restore_test_is_ok_then_a_warning_then_danger_when_it_fails(): void
@@ -302,12 +331,13 @@ class BackupHealthTest extends TestCase
             ->assertSee('The last good one was 7 hours ago');
     }
 
-    public function test_the_history_lists_restore_tests_and_marks_copies_sent_to_drive(): void
+    public function test_the_history_lists_restore_tests_and_marks_the_places_a_copy_was_sent_to(): void
     {
         $this->record('database', 'hourly', extra: [
             'filename' => 'database-backup-20261023-120500-mysql-hourly.sql.gz',
             'sha256' => str_repeat('cd', 32),
             'offsite_at' => now(),
+            'offsite_to' => 'r2,drive',
         ]);
         $this->record('drill', 'drive', extra: [
             'filename' => 'database-backup-20261023-120500-mysql-hourly.sql.gz',
@@ -319,7 +349,7 @@ class BackupHealthTest extends TestCase
             ->assertOk()
             ->assertSee('Restore test')
             ->assertSee('Google Drive copy')
-            ->assertSee('Sent to Drive')
+            ->assertSee('Sent to Cloudflare R2, Google Drive')
             ->assertSee('162 tables, 264 migrations');
     }
 }

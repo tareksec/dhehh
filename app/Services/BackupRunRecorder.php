@@ -24,7 +24,7 @@ use Throwable;
 class BackupRunRecorder
 {
     /**
-     * @param  callable(): array{name?: string, size?: int, sha256?: string|null, note?: string, google_drive?: array}  $work
+     * @param  callable(): array{name?: string, size?: int, sha256?: string|null, note?: string, offsite?: array}  $work
      * @return array<string, mixed> what $work returned
      */
     public function record(string $scope, string $kind, callable $work): array
@@ -63,12 +63,23 @@ class BackupRunRecorder
 
             // Columns added after the table: a deploy takes its pre-migration backup before
             // they exist, and that run must still be recorded as a success.
-            if (isset($result['google_drive']) && Schema::hasColumn('backup_runs', 'offsite_at')) {
+            if (isset($result['offsite']) && Schema::hasColumn('backup_runs', 'offsite_at')) {
                 $values['offsite_at'] = now();
+
+                if (Schema::hasColumn('backup_runs', 'offsite_to')) {
+                    $values['offsite_to'] = implode(',', array_keys((array) ($result['offsite']['destinations'] ?? [])));
+                }
             }
 
-            if (filled($result['note'] ?? null) && Schema::hasColumn('backup_runs', 'note')) {
-                $values['note'] = Str::limit((string) $result['note'], 500, '');
+            // A place that did not get the copy is not an error of the backup, but it must show.
+            $failed = (array) ($result['offsite']['failed'] ?? []);
+            $note = collect([
+                $result['note'] ?? null,
+                $failed !== [] ? 'Not sent to '.implode(', ', array_keys($failed)).': '.implode(' ', $failed) : null,
+            ])->filter()->implode(' · ');
+
+            if ($note !== '' && Schema::hasColumn('backup_runs', 'note')) {
+                $values['note'] = Str::limit($note, 500, '');
             }
 
             $run?->update($values);

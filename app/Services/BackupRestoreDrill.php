@@ -18,7 +18,7 @@ use RuntimeException;
  * The live database is never touched: the connection has no default database and the
  * only names it ever creates or drops match a strict pattern.
  *
- * Two sources: the newest dump on this server, or the newest copy on Google Drive, which
+ * Two sources: the newest dump on this server, or the newest copy off-site (R2 or Drive), which
  * is downloaded and decrypted first - that one also proves the encryption key is the
  * right one, and nobody finds out otherwise until the day the server is gone.
  *
@@ -49,23 +49,31 @@ class BackupRestoreDrill
 
     /**
      * @param  string|null  $filename  a dump in the local backup folder; default: the newest
-     * @param  bool  $fromDrive  test the newest copy on Google Drive instead
+     * @param  bool|string  $offsite  test the newest copy off-site instead: true = the first place that is
+     *                                set up (R2, else Drive), "r2" or "drive" = that place
      * @return array<string, mixed> name, size, note (what was found)
      */
-    public function run(?string $filename = null, bool $fromDrive = false): array
+    public function run(?string $filename = null, bool|string $offsite = false): array
     {
         if (! $this->isEnabled()) {
             throw new RuntimeException('The restore test is not set up: set BACKUP_DRILL_DB_USERNAME (and its password) for a MySQL user that may create backup_drill_* databases. See docs/backup-restore.md.');
         }
 
-        if ($filename !== null && $fromDrive) {
-            throw new InvalidArgumentException('Choose a local file or the Google Drive copy, not both.');
+        if ($filename !== null && $offsite !== false) {
+            throw new InvalidArgumentException('Choose a local file or the off-site copy, not both.');
         }
+
+        // The run is recorded under the place the copy is read from.
+        $place = $offsite === false ? null : $this->offsite->destination(is_string($offsite) ? $offsite : null);
 
         return $this->runs->record(
             BackupRun::SCOPE_DRILL,
-            $fromDrive ? BackupRun::DRILL_DRIVE : BackupRun::DRILL_LOCAL,
-            fn (): array => $this->restoreAndCheck($filename, $fromDrive),
+            match ($place?->key()) {
+                null => BackupRun::DRILL_LOCAL,
+                R2BackupService::KEY => BackupRun::DRILL_R2,
+                default => BackupRun::DRILL_DRIVE,
+            },
+            fn (): array => $this->restoreAndCheck($filename, $place),
         );
     }
 
@@ -85,14 +93,14 @@ class BackupRestoreDrill
         return $this->restoreIntoScratch($dump['path'], $expectedTables);
     }
 
-    protected function restoreAndCheck(?string $filename, bool $fromDrive): array
+    protected function restoreAndCheck(?string $filename, ?BackupDestination $place): array
     {
         $staged = null;
 
         try {
-            if ($fromDrive) {
-                $copy = $this->offsite->latestDatabaseDump()
-                    ?? throw new RuntimeException('No database copy was found on Google Drive.');
+            if ($place !== null) {
+                $copy = $this->offsite->latestDatabaseDump($place->key())
+                    ?? throw new RuntimeException("No database copy was found on {$place->label()}.");
                 $staged = $this->offsite->fetch($copy, Storage::disk('local')->path(self::STAGING_DIRECTORY));
                 $dump = ['name' => basename($staged), 'path' => $staged];
             } else {

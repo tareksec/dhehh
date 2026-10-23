@@ -11,9 +11,11 @@ use App\Services\BackupRestoreDrill;
 use App\Services\BackupRestoreException;
 use App\Services\BackupRestorer;
 use App\Services\BackupRunRecorder;
+use App\Services\BackupSettingsService;
 use App\Services\DatabaseBackupService;
 use App\Services\GoogleDriveBackupService;
 use App\Services\OffsiteBackupService;
+use App\Services\R2BackupService;
 use ArrayObject;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -24,6 +26,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use RuntimeException;
+use Tests\Support\FakeS3;
 use Tests\TestCase;
 use Throwable;
 use ZipArchive;
@@ -121,7 +124,7 @@ class BackupRestoreTest extends TestCase
                 parent::__construct($runs, $offsite);
             }
 
-            public function create(?string $connection = null, string $kind = BackupRun::KIND_MANUAL, bool $upload = false): array
+            public function create(?string $connection = null, string $kind = BackupRun::KIND_MANUAL, bool $upload = false, bool $automatic = false): array
             {
                 $this->log[] = "safety:{$connection}:{$kind}";
 
@@ -254,6 +257,9 @@ class BackupRestoreTest extends TestCase
             /** @var array<string, string> id => file bytes */
             public array $files = [];
 
+            /** A stand-in that is always set up. */
+            public function assertReady(): void {}
+
             public function listBackupFiles(): array
             {
                 return $this->remote;
@@ -344,7 +350,7 @@ class BackupRestoreTest extends TestCase
         $drive->files = ['old' => 'not used', 'new' => (string) file_get_contents($encrypted)];
 
         $restorer = $this->restorer();
-        $source = $restorer->prepare(null, fromDrive: true);
+        $source = $restorer->prepare(null, offsite: true);
 
         $this->assertSame('database-backup-20261023-120500-mysql-hourly.sql.gz.enc', $source['label']);
         $this->assertSame(file_get_contents($plain), file_get_contents($source['path']));
@@ -352,7 +358,7 @@ class BackupRestoreTest extends TestCase
 
         $drive->remote = [];
         $this->expectExceptionMessage('No database copy was found on Google Drive.');
-        $restorer->prepare(null, fromDrive: true);
+        $restorer->prepare(null, offsite: true);
     }
 
     public function test_a_file_or_drive_not_both_and_not_neither(): void
@@ -1069,9 +1075,9 @@ class BackupRestoreTest extends TestCase
 
             public array $result = [];
 
-            public function prepare(?string $file, bool $fromDrive = false, ?string $key = null): array
+            public function prepare(?string $file, bool|string $offsite = false, ?string $key = null): array
             {
-                $this->calls[] = ['prepare', compact('file', 'fromDrive', 'key')];
+                $this->calls[] = ['prepare', compact('file', 'offsite', 'key')];
 
                 return $this->prepareFails ? throw $this->prepareFails : $this->source;
             }
@@ -1184,7 +1190,7 @@ class BackupRestoreTest extends TestCase
             ->assertExitCode(0);
 
         $this->assertSame([['database' => true, 'files' => false, 'safetyBackup' => true, 'migrate' => true, 'expectedTables' => 163]], $this->called($restorer, 'restore'));
-        $this->assertSame([['file' => 'x.sql.gz', 'fromDrive' => false, 'key' => null]], $this->called($restorer, 'prepare'));
+        $this->assertSame([['file' => 'x.sql.gz', 'offsite' => false, 'key' => null]], $this->called($restorer, 'prepare'));
     }
 
     public function test_the_flags_reach_the_restore_and_confirm_replaces_the_question(): void
@@ -1196,7 +1202,61 @@ class BackupRestoreTest extends TestCase
             ->assertExitCode(0);
 
         $this->assertSame([['database' => true, 'files' => false, 'safetyBackup' => false, 'migrate' => false, 'expectedTables' => 163]], $this->called($restorer, 'restore'));
-        $this->assertSame([['file' => null, 'fromDrive' => true, 'key' => null]], $this->called($restorer, 'prepare'));
+        $this->assertSame([['file' => null, 'offsite' => 'drive', 'key' => null]], $this->called($restorer, 'prepare'));
+    }
+
+    public function test_the_r2_flags_and_offsite_choose_the_place_to_read_from(): void
+    {
+        Config::set('backup.encryption.key', self::KEY);
+
+        foreach ([['--r2' => true, 'expected' => 'r2'], ['--offsite' => true, 'expected' => true], ['--drive' => true, 'expected' => 'drive']] as $case) {
+            $restorer = $this->commandRestorer();
+            $expected = $case['expected'];
+            unset($case['expected']);
+
+            $this->artisan('backup:restore', [...$case, '--confirm' => 'erp', '--skip-safety-backup' => true, '--no-migrate' => true, '--skip-rehearsal' => true])
+                ->assertExitCode(0);
+
+            $this->assertSame([['file' => null, 'offsite' => $expected, 'key' => null]], $this->called($restorer, 'prepare'));
+        }
+    }
+
+    public function test_the_newest_copy_on_r2_is_fetched_and_decrypted_and_r2_is_tried_first(): void
+    {
+        config(['backup.encryption.key' => self::KEY]);
+        app(BackupSettingsService::class)->saveR2([
+            'enabled' => true, 'account' => '0123456789abcdef0123456789abcdef', 'bucket' => 'b', 'prefix' => 'erp-backups',
+            'access_key_id' => 'k', 'secret_access_key' => 's',
+        ]);
+        $s3 = new FakeS3;
+        $this->app->instance(R2BackupService::class, app(R2BackupService::class)->withClient($s3->client()));
+        $drive = $this->fakeDrive();
+        $drive->remote = [['id' => 'd', 'name' => 'database-backup-20261024-120500-mysql-hourly.sql.gz.enc']];
+
+        $plain = $this->base.'/plain.sql.gz';
+        $encrypted = $this->base.'/copy.enc';
+        File::put($plain, $this->dumpContents());
+        app(BackupEncryptor::class)->encryptFile($plain, $encrypted, self::KEY);
+        $s3->put('erp-backups/database-backup-20261022-120500-mysql-hourly.sql.gz.enc', 'older');
+        $s3->put('erp-backups/database-backup-20261023-120500-mysql-hourly.sql.gz.enc', (string) file_get_contents($encrypted));
+
+        $restorer = $this->restorer();
+
+        // Without a name, the first place that is on: R2.
+        $source = $restorer->prepare(null, offsite: true);
+        $this->assertSame('database-backup-20261023-120500-mysql-hourly.sql.gz.enc', $source['label']);
+        $this->assertSame(file_get_contents($plain), file_get_contents($source['path']));
+        $restorer->release($source);
+
+        // Named, the other place is read instead.
+        $drive->files = ['d' => (string) file_get_contents($encrypted)];
+        $source = $restorer->prepare(null, offsite: 'drive');
+        $this->assertSame('database-backup-20261024-120500-mysql-hourly.sql.gz.enc', $source['label']);
+        $restorer->release($source);
+
+        $s3->objects = [];
+        $this->expectExceptionMessage('No database copy was found on Cloudflare R2.');
+        $restorer->prepare(null, offsite: 'r2');
     }
 
     public function test_a_full_app_archive_restores_both_and_only_limits_it(): void

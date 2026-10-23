@@ -21,7 +21,7 @@ use ZipArchive;
  * Puts a backup back. The one place that replaces the live database, so it is built to leave
  * nothing half done and to undo itself:
  *
- *  1. prepare()  - find the file (backup folder, a path, or the newest copy on Google Drive),
+ *  1. prepare()  - find the file (backup folder, a path, or the newest copy off-site: R2 or Drive),
  *                  decrypt it, and take the dump out of a full app archive. Touches nothing live.
  *  2. check()    - read the dump to the end and compare its checksum; look through the archive.
  *  3. rehearse() - load the dump into a scratch database (the restore test), if that is set up.
@@ -59,14 +59,19 @@ class BackupRestorer
 
     /**
      * Find $file (a name in the backup folders, or a path) or fetch the newest database copy from
-     * Google Drive, decrypt it and unpack the dump. The caller must release() the result.
+     * an off-site place, decrypt it and unpack the dump. The caller must release() the result.
+     *
+     * @param  bool|string  $offsite  false = use $file; true = the newest copy in the first off-site
+     *                                place that is set up (R2, else Drive); "r2" or "drive" = that place
      *
      * @return array{label: string, name: string, kind: string, path: string, dump: ?array{name: string, path: string}, taken_at: ?CarbonInterface, size: int, directory: string}
      */
-    public function prepare(?string $file, bool $fromDrive = false, ?string $key = null): array
+    public function prepare(?string $file, bool|string $offsite = false, ?string $key = null): array
     {
-        if ($fromDrive === ($file !== null)) {
-            throw new InvalidArgumentException('Name one backup file, or use --drive for the newest database copy on Google Drive.');
+        $fromOffsite = $offsite !== false;
+
+        if ($fromOffsite === ($file !== null)) {
+            throw new InvalidArgumentException('Name one backup file, or use --offsite (or --r2, --drive) for the newest database copy off-site.');
         }
 
         $this->deleteOldStaging();
@@ -75,9 +80,10 @@ class BackupRestorer
         File::ensureDirectoryExists($directory);
 
         try {
-            if ($fromDrive) {
-                $copy = $this->offsite->latestDatabaseDump()
-                    ?? throw new RuntimeException('No database copy was found on Google Drive.');
+            if ($fromOffsite) {
+                $place = $this->offsite->destination(is_string($offsite) ? $offsite : null);
+                $copy = $this->offsite->latestDatabaseDump($place->key())
+                    ?? throw new RuntimeException("No database copy was found on {$place->label()}.");
                 $label = $copy['name'];
                 $path = $this->offsite->fetch($copy, $directory, $key);
             } else {

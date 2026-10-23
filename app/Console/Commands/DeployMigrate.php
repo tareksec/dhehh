@@ -87,7 +87,7 @@ class DeployMigrate extends Command
             // container (and with it the local backup folder) right after this.
             $upload = app(OffsiteBackupService::class)->shouldAutoUpload(BackupRun::SCOPE_DATABASE, BackupRun::KIND_PREDEPLOY);
 
-            $backup = $backups->create(config('backup.app.database_connection'), BackupRun::KIND_PREDEPLOY, $upload);
+            $backup = $backups->create(config('backup.app.database_connection'), BackupRun::KIND_PREDEPLOY, $upload, automatic: true);
 
             $this->info("Database backup before migrating: {$backup['name']}");
         } catch (Throwable $exception) {

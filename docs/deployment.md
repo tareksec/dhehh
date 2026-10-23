@@ -473,9 +473,10 @@ every hour at five past and a full app backup every day at `BACKUP_SCHEDULE_TIME
 **Without this scheduled task none of them run.** Separately, the **Post-deployment
 Command** `php artisan deploy:migrate` takes a `predeploy` database backup right
 before migrations that are pending (nothing pending, nothing backed up); if that
-backup fails the Super Admins are told and the migrations still run. With Google
-Drive and **Auto upload to Drive** on, each backup is also sent, encrypted, to
-Drive (`BACKUP_ENCRYPTION_KEY` must be set, and kept safe outside the server).
+backup fails the Super Admins are told and the migrations still run. With Cloudflare R2
+(Settings → R2 Backups) and/or Google Drive switched on with **Auto upload**, each backup is
+also sent, encrypted, to those places (`BACKUP_ENCRYPTION_KEY` must be set, and kept safe
+outside the server).
 The scheduler also runs `backup:check` every 30 minutes (alerts when a backup is
 overdue) and, when `BACKUP_DRILL_DB_USERNAME` is set, the Sunday restore test.
 **Because all of that depends on this one Coolify task, add an outside uptime monitor
