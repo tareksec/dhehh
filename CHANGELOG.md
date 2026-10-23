@@ -4,12 +4,13 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.111.3] - 2026-10-23
+
 **Release type:** Patch/Fix Update
 
 ### Fixed
 
 - IMS office top bar on laptops (1024–1799px): one slim line instead of two — the company picker is a round icon, the language switch shows only the other language, the menu pills are tighter; only below 1240px does the menu still get its own line.
-
 ## [2.111.2] - 2026-10-23
 
 **Release type:** Patch/Fix Update
