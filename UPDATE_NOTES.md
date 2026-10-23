@@ -14,9 +14,28 @@ Owner (Bangla): "আমি এইমাত্র এই অর্ডার ট�
 
 **Needs Bangla review (lang/bn.json):** SMS Log, Order status change, Test SMS, Waiting in the queue, Not sent: gateway, Not sent: skipped, Message, Send test SMS, the reason sentences (no wording / no phone / opt-out / no gateway / duplicate / excluded / gateway refused / unreachable), the test-SMS texts (including the Bangla test message sent for masking sender IDs: ":company থেকে টেস্ট SMS। আপনার SMS গেটওয়ে ঠিকমতো কাজ করছে।") and the stuck-queue sentence.
 
-**Verified:** `SmsLogTest` (13), `SmsTemplatesTest`, `MultiCompanyIsolationTest`, `TranslationParityTest`. Full suite: see below.
+**Verified:** `SmsLogTest` (13), `SmsTemplatesTest`, `MultiCompanyIsolationTest`, `TranslationParityTest`. Full `php artisan test` (plain, no `--env`): 2995 passed, 2 skipped.
 
-**Commit status:** on branch `claude/order-management-features-nafks7`; not on `main` (waiting for the owner's approval).
+**Commit status:** committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("টেস্ট শেষ হলে মেন এ ও পুশ করে দিও").
+
+## 2026-10-22 - PHP security update: production Dockerfile
+
+Reason - owner forwarded Contabo's email about the PHP RCE vulnerabilities CVE-2026-109618 / CVE-2026-109619 and asked whether the server needs an update. I checked the claims on php.net (advisory 2026-10-21; fixed in 8.4.27 / 8.5.12 / 8.3.36 / 8.2.35; PHP-FPM is affected). The owner's ERP container reports `PHP 8.4.2 (built Dec 17 2024)`, so it is vulnerable, and 25 patch releases behind.
+
+Cause - Coolify's Nixpacks builds PHP from a frozen old nixpkgs snapshot, so redeploying (even with "force rebuild") cannot reach 8.4.27.
+
+What changed (repo only; nothing is live until the owner switches the Build Pack in Coolify):
+- `Dockerfile` on `php:8.4.27-fpm-bookworm` (version pinned), multi-stage: PHP + extensions, Composer, Vite assets, final image with nginx + PHP-FPM under supervisord; `CONTAINER_ROLE=worker` runs `queue:work` instead.
+- `docker/` config (nginx = plain version of `nginx.template.conf`, `clear_env = no` so Coolify's environment reaches PHP, `session.upload_progress.enabled=0`, `pm.max_requests=500`), `.dockerignore`.
+- Entry point fixes the owner of the existing `/app/storage` volume once (the Nixpacks files belong to another user).
+- `.github/workflows/docker-image.yml` builds and starts the image (web from a root-owned empty volume, worker role) on every change to these files.
+- `docs/deployment.md`: switch / rollback / "raise PHP_VERSION on each PHP security release".
+
+Not verified: the sandbox has no Docker daemon, so the image is tested only by the GitHub workflow. Memory settings (`memory_limit=256M`, `pm.max_children=16`) are my choice, not measured on the owner's server. I did not run `php -v` on the VPS host or check Coolify's own PHP (Coolify is itself a Laravel app and needs its own update). Intentionally not done: the advisory's interim `memory_limit=-1` (can exhaust the server's RAM).
+
+Open for the owner: switch the Build Pack (steps in the docs), update Coolify, check the VPS for other PHP sites, and look for signs of compromise (the advisory says exploitation is active).
+
+Commit status: committed and pushed to `claude/whatsapp-web-login-sync-l0tdz7`; not on `main` yet (needs the owner's approval).
 
 ## 2026-10-22 - Automatic order messages: SMS on creation + WhatsApp summary card
 
@@ -73,6 +92,7 @@ Not done: the office's other pages (forms, detail pages) are Filament's own one-
 Full plain `php artisan test` on the branch (assets built from this tree): 2,959 passed, 1 skipped, 0 failed.
 
 Commit status: committed and pushed to `feature/ims-office-mobile`; not on `main` (waits for the owner's approval).
+
 
 ## 2026-10-21 - Purchases: import from CSV, and the Items layout
 

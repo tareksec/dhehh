@@ -19,6 +19,25 @@ All notable production changes to Business Dashboard are documented here.
 
 **Technical Notes:** New table `sms_logs` (migration `2026_10_23_100000_create_sms_logs_table.php`, short index names) and company-owned model `SmsLog` (registered in `MultiCompanyIsolationTest`). `SmsLogService` writes the rows and never throws (a logging failure is reported and the SMS still goes out; covered by a test). `OrderStatusSmsService` logs a row when the message is queued, or a skipped row at dispatch when no wording is written, and closes it in `send()` / `sendPlaced()`; the existing send rules and dedupe are unchanged. `StorefrontNotificationService::sendSmsDetailed()` returns the gateway's code, its meaning and any error; `sendSms()` still returns a bool. `SmsLogResource` is read-only and needs the "manage settings" permission. New strings in `lang/en.json` and `lang/bn.json`. Tests: `SmsLogTest` (13). No other behaviour changes.
 
+## [2.100.1] - 2026-10-22
+
+**Release type:** Security Update
+
+### Security
+
+- **PHP update path for the critical PHP vulnerabilities of 2026-10-21 (CVE-2026-109618 and CVE-2026-109619, remote code execution without logging in).** The ERP container's PHP was 8.4.2 (December 2024): Coolify's Nixpacks builder keeps an old package snapshot, so a plain redeploy would never bring the fixed version. The repository now has a production `Dockerfile` on the official `php:8.4.27-fpm` image (PHP 8.4.27 is the fixed version). Nothing changes on the live server until the owner switches the ERP app's Build Pack in Coolify from Nixpacks to Dockerfile (steps in `docs/deployment.md`). The old Nixpacks setup is untouched and stays the rollback.
+- The image also turns off PHP's upload-progress feature (`session.upload_progress.enabled=0`), one of the ways the second vulnerability is reached, and recycles PHP-FPM workers every 500 requests.
+
+### Technical Notes
+
+- New: `Dockerfile` (stages: PHP runtime + extensions `bcmath exif gd imagick intl opcache pcntl pdo_mysql zip`, Composer, Vite assets, final image), `.dockerignore`, `docker/` (`nginx.conf` = the Nixpacks template as plain nginx, `php.ini`, `php-fpm-pool.conf` with `clear_env = no`, `supervisord.conf`, `entrypoint.sh`).
+- `entrypoint.sh` fixes the owner of the persistent `/app/storage` volume once (files from the Nixpacks image belong to another user), links `public/storage`, then starts nginx + PHP-FPM, or the queue worker when `CONTAINER_ROLE=worker` (the worker app uses the same image).
+- `PHP_VERSION` in the `Dockerfile` is pinned to `8.4.27` and must be raised on each PHP security release.
+- New workflow `.github/workflows/docker-image.yml` builds the image and checks: PHP >= 8.4.27, required extensions, nginx + FPM serving the app from a root-owned empty volume (`/health.html`, Laravel `/up`, container environment visible to PHP, storage writable by the web user), and the worker role running as `www-data`.
+## [2.100.0] - 2026-10-22
+
+**Release type:** Minor Feature Update
+
 ### Added
 
 - **The order summary card now shows each product's picture.** On the order page, **Order summary card** draws a small picture beside every item, so the customer sees the very product they ordered. It uses the variant's own photo when the ordered variant has one, otherwise the product's main image. An item with no picture (or one that cannot be read) gets a plain grey box so the rows stay lined up. The pictures are part of the image sent to WhatsApp, WeChat, Messenger and Telegram, and of the downloaded image. "Copy text" is unchanged.
@@ -45,7 +64,6 @@ All notable production changes to Business Dashboard are documented here.
   - **The order summary card on WhatsApp, by itself.** New page **Settings → Order WhatsApp card**. When switched on, the customer is sent the card as a picture on WhatsApp when the order is created and each time it reaches a new stage (confirmed, processing, shipping, delivered, completed, cancelled, returned, refunded). It goes only through the official WhatsApp Cloud API (a Cloud API or Coexistence channel) with an approved template that has an **Image** header and exactly five body variables in this order: customer name, order number, status, total, amount due. The page lists only templates like that. A QR-linked WhatsApp Web channel is never used for automatic messages (`docs/whatsapp-web-rules.md`, rule 4). WhatsApp cannot be asked beforehand who has an account, so every customer with a phone is tried and a number without WhatsApp is simply skipped; the SMS is separate. Reseller orders, imported past orders and opted-out customers are never sent. The page also says whether this server can draw the card picture.
 
 **Technical Notes (automatic messages):** `OrderStatusSmsService::dispatchForOrderPlaced()` / `sendPlaced()` and `SendOrderPlacedSmsJob` (delay `PLACED_DELAY_SECONDS`, one send per order via a cache lock); `SmsTemplateService::ORDER_PLACED` (`order.placed`) and the `items` placeholder. `OrderWhatsAppCardService` (queued by `Order::created` and `OrderStatusTransition::created`, both wrapped so a failure never undoes the order or status change) renders the card with the new `OrderSummaryCardImageService` and sends it through `MetaGraphService::uploadWhatsAppMedia()` (picture upload, no public link needed) and `sendWhatsAppTemplate()` (new `$headerImageId`). `listMessageTemplates()` now also returns `has_image_header` and `body_variables`. Settings live in `companies.settings['order_whatsapp']` (`OrderWhatsAppSettings`); no migration. **Server requirement:** the card is drawn with Imagick through ImageMagick's Pango coder, which joins Bangla letters correctly (GD and Imagick's own text drawing do not); on Debian/Ubuntu this is the package `libmagickcore-6.q16-6-extra`. `OrderSummaryCardImageService::canRender()` checks the coder and a Bangla shaping probe; without them no card is sent and the reason is recorded on the channel and shown on the settings page. The bundled Hind Siliguri font is registered through a private fontconfig file in `storage/app/order-card-fonts`. Tests: `OrderWhatsAppCardTest` (8), two new cases in `SmsTemplatesTest`. Failed WhatsApp sends are logged and shown as the channel's last error, never retried automatically.
-
 ## [2.99.0] - 2026-10-22
 
 **Release type:** Minor Feature Update
@@ -80,6 +98,7 @@ All notable production changes to Business Dashboard are documented here.
 - `OfficeNavigation::mobile()` builds the bar, the "+" list (`canAccess()` + `canCreate()` + a create page), the to-do (`OwnerTodo`) and the menu tiles; `resources/views/filament/ims/office/mobile-nav.blade.php` draws them at `BODY_END` through `ModuleGuard::run('ims-office-mobile-nav')` — if it fails nothing is drawn and the top-bar menu button comes back (it is hidden only while `.ims-tabbar` is on the page). `Home::quickActions()` (guarded too) feeds the round buttons; the welcome header takes `app: true` for the phone greeting.
 - Lists: `Table::configureUsing()` in `AppServiceProvider` sets Filament's `stackedOnMobile()` for the `office` and `investor` panels only; the card look is in `resources/css/filament/ims/theme.css` (below 640px).
 - The sheets lock the page by a veil with `touch-action: none` rather than `overflow: hidden` on the page, which made phones jump/zoom in testing. No migration, no new model or route. 10 new keys in `lang/en.json` + `lang/bn.json`. Test: `OfficeHomeTest` (+1).
+
 ## [2.97.0] - 2026-10-21
 
 **Release type:** Minor Feature Update
