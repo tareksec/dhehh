@@ -2,6 +2,18 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 (later) - The gateway URL had "Receiver" instead of {phone}
+
+Owner sent a screenshot of the failure notice after the `88{phone}` fix. Its "What was sent" line reads `...number=Receiver&senderid=8809617643387&message=TestSM`: the saved URL template has the sample words of BulkSMSBD's example where `{phone}` and `{message}` belong (the preview shows `[message]` for a real `{message}`, so `TestSM...` is literal text in the template). That is the real cause of 1001, so the `88{phone}` guess below was not it; that protection stays, harmless. The same template would have sent every order SMS to "Receiver" with a fixed text.
+
+**Fix:** (1) the URL box on Integrations → SMS Gateway refuses to save a URL without `{phone}` and `{message}` and shows the correct example, its help text says so; (2) a template like that already saved is not sent at all: reason `bad_gateway_url` in the SMS Log and in the test SMS notice; (3) the SMS Dashboard shows a red warning with a link. The owner must edit the URL box to `http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}`, keep the key in **SMS API key** and the sender ID in **SMS sender ID**, save and send the test again. If the real API key was typed into the URL itself, it is now in a visible box: put it in the SMS API key field and use `{api_key}`.
+
+**Needs Bangla review (lang/bn.json):** "SMS গেটওয়ে URL-এ {phone} বা {message} নেই…", "URL-এ :missing নেই…", "SMS গেটওয়ে URL-এ :missing নেই, তাই কোনো SMS যেতে পারবে না…", "ইন্টিগ্রেশনস → SMS Gateway-তে ঠিক করুন।", and the changed help text of the URL box and the 1001 advice.
+
+**Verified:** `SmsDashboardTest` (+3: the exact URL from the screenshot is not sent and logged, saving it is refused, the dashboard warns). Full `php artisan test` before the push.
+
+Commit status: committed to `claude/order-management-features-nafks7`; not on `main` until the owner says so.
+
 ## 2026-10-23 - Test SMS "1001 Invalid Number" with the new API key
 
 Owner (Bangla, with a phone screenshot of the SMS Log): after connecting the new API, the Send test SMS button with their own number says the number is invalid.

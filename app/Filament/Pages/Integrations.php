@@ -21,6 +21,7 @@ use App\Services\WooCommerceOrderSyncService;
 use App\Services\ZiniPayClient;
 use App\Support\BulkSmsBdPolicy;
 use BackedEnum;
+use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\MarkdownEditor;
@@ -603,7 +604,7 @@ class Integrations extends Page
      * the same pattern already used throughout this codebase, e.g.
      * CloudStorageSettings::required(fn (Get $get) => $get('enabled'))).
      */
-    protected function providerConnectionFields(string $prefix, bool|\Closure $requiredWhen = true): array
+    protected function providerConnectionFields(string $prefix, bool|Closure $requiredWhen = true): array
     {
         $presets = $this->llmProviderPresets();
         $presetOptions = collect($presets)->map(fn (array $preset): string => $preset['label'])->all();
@@ -1363,7 +1364,16 @@ class Integrations extends Page
                                     ->dehydrateStateUsing(fn (?string $state): ?string => $state === null ? null : trim($state))
                                     ->maxLength(500)
                                     ->placeholder('http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}')
-                                    ->helperText(__('Use the {api_key}, {sender_id}, {phone} and {message} placeholders. Leave empty to turn SMS off for this site.'))
+                                    // A gateway's example URL has words like Receiver and TestSMS where {phone} and {message} belong;
+                                    // saved as it is, every SMS goes to a number called "Receiver" ("1001 Invalid Number").
+                                    ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                                        $missing = StorefrontNotificationService::smsTemplateMissing(trim((string) $value));
+
+                                        if (filled($value) && $missing !== []) {
+                                            $fail(__('The URL has no :missing in it, so the number and the text would never reach the gateway. Replace the sample words (Receiver, TestSMS) with {phone} and {message}, for example: http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}', ['missing' => implode(' / ', $missing)]));
+                                        }
+                                    })
+                                    ->helperText(__('Use the {api_key}, {sender_id}, {phone} and {message} placeholders. {phone} and {message} are required: type them where the gateway\'s example URL has the words Receiver and TestSMS. Leave empty to turn SMS off for this site.'))
                                     ->columnSpanFull(),
                                 // new-password keeps the browser from filling the login password into this box (the gateway
                                 // then answers "User Id not found"); a space copied with the key is dropped on save.

@@ -1845,7 +1845,7 @@
     "SMS Gateway": "SMS গেটওয়ে",
     "One SMS gateway per site. It sends login OTP codes, password recovery codes, abandoned-cart reminders, and (from the company's main site) CRM and lead follow-up SMS.": "প্রতি সাইটের জন্য একটি SMS গেটওয়ে। এটি লগইন OTP, পাসওয়ার্ড পুনরুদ্ধারের কোড, পরিত্যক্ত কার্ট রিমাইন্ডার এবং (কোম্পানির মূল সাইট থেকে) CRM ও লিড ফলো-আপ SMS পাঠায়।",
     "SMS gateway URL template": "SMS গেটওয়ে URL টেমপ্লেট",
-    "Use the {api_key}, {sender_id}, {phone} and {message} placeholders. Leave empty to turn SMS off for this site.": "{api_key}, {sender_id}, {phone} ও {message} প্লেসহোল্ডার ব্যবহার করুন। এই সাইটের SMS বন্ধ রাখতে খালি রাখুন।",
+    "Use the {api_key}, {sender_id}, {phone} and {message} placeholders. {phone} and {message} are required: type them where the gateway's example URL has the words Receiver and TestSMS. Leave empty to turn SMS off for this site.": "{api_key}, {sender_id}, {phone} ও {message} প্লেসহোল্ডার ব্যবহার করুন। {phone} ও {message} অবশ্যই লাগবে: গেটওয়ের নমুনা URL-এ যেখানে Receiver ও TestSMS লেখা আছে, সেখানে এ দুটি বসান। এই সাইটের SMS বন্ধ রাখতে খালি রাখুন।",
     "SMS API key": "SMS API কী",
     "Stored encrypted.": "এনক্রিপ্ট করে সংরক্ষিত।",
     "SMS sender ID": "SMS সেন্ডার আইডি",
@@ -3700,6 +3700,10 @@
     "Wrong key or sender ID, no balance, an invalid number...": "ভুল key বা সেন্ডার আইডি, ব্যালেন্স নেই, ভুল নম্বর...",
     "refused": "ফিরিয়ে দিয়েছে",
     "sent": "পাঠানো হয়েছে",
-    "The gateway says the phone number is not valid. The system sends it as 8801XXXXXXXXX, so in the gateway URL write number={phone} with nothing in front of {phone}. Check the number itself too.": "গেটওয়ে বলছে ফোন নম্বরটি সঠিক নয়। সিস্টেম নম্বরটি 8801XXXXXXXXX ফরম্যাটে পাঠায়, তাই গেটওয়ে URL-এ number={phone} লিখুন, {phone}-এর আগে কিছু রাখবেন না। নম্বরটিও একবার মিলিয়ে দেখুন।",
-    "What was sent (key and text hidden): :request": "যা পাঠানো হয়েছিল (key ও লেখা লুকানো): :request"
+    "The gateway says the phone number is not valid. The system sends it as 8801XXXXXXXXX, so in the gateway URL write number={phone} with nothing in front of {phone}, and not a word like Receiver or a fixed number. Check the number itself too.": "গেটওয়ে বলছে ফোন নম্বরটি সঠিক নয়। সিস্টেম নম্বরটি 8801XXXXXXXXX ফরম্যাটে পাঠায়, তাই গেটওয়ে URL-এ number={phone} লিখুন। {phone}-এর আগে কিছু রাখবেন না, Receiver-এর মতো কোনো শব্দ বা নির্দিষ্ট নম্বরও বসাবেন না। নম্বরটিও একবার মিলিয়ে দেখুন।",
+    "What was sent (key and text hidden): :request": "যা পাঠানো হয়েছিল (key ও লেখা লুকানো): :request",
+    "The SMS gateway URL has no {phone} or no {message} in it, so nothing was sent. Open Integrations → SMS Gateway and replace the sample words (Receiver, TestSMS) with {phone} and {message}.": "SMS গেটওয়ে URL-এ {phone} বা {message} নেই, তাই কিছু পাঠানো হয়নি। ইন্টিগ্রেশনস → SMS Gateway-তে গিয়ে নমুনা শব্দ (Receiver, TestSMS) মুছে {phone} ও {message} বসান।",
+    "The URL has no :missing in it, so the number and the text would never reach the gateway. Replace the sample words (Receiver, TestSMS) with {phone} and {message}, for example: http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}": "URL-এ :missing নেই, তাই নম্বর ও লেখা গেটওয়েতে পৌঁছাবে না। নমুনা শব্দ (Receiver, TestSMS) মুছে {phone} ও {message} বসান। উদাহরণ: http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}",
+    "The SMS gateway URL has no :missing in it, so no SMS can be sent. Replace the sample words (Receiver, TestSMS) with {phone} and {message}.": "SMS গেটওয়ে URL-এ :missing নেই, তাই কোনো SMS যেতে পারবে না। নমুনা শব্দ (Receiver, TestSMS) মুছে {phone} ও {message} বসান।",
+    "Fix it in Integrations → SMS Gateway.": "ইন্টিগ্রেশনস → SMS Gateway-তে ঠিক করুন।"
 }

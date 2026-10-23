@@ -203,6 +203,76 @@ class SmsDashboardTest extends TestCase
         }
     }
 
+    /**
+     * Owner screenshot 2026-10-23: the saved URL still held the gateway example's words (number=Receiver,
+     * message=TestSMS), so every SMS went to a number called "Receiver" and came back "1001 Invalid Number".
+     */
+    public function test_a_url_with_the_gateway_example_words_instead_of_the_placeholders_is_not_sent(): void
+    {
+        Http::fake();
+        $this->setting->update(['notification_credentials' => [
+            ...$this->setting->notification_credentials,
+            'sms_api_url' => 'http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number=Receiver&senderid=8809617643387&message=TestSMS',
+        ]]);
+        $notifications = app(StorefrontNotificationService::class);
+
+        $this->assertSame(['{phone}', '{message}'], StorefrontNotificationService::smsTemplateMissing('http://x.test/send?number=Receiver&message=TestSMS'));
+        $this->assertSame(['{message}'], StorefrontNotificationService::smsTemplateMissing('http://x.test/send?to={phone}'));
+        $this->assertSame([], StorefrontNotificationService::smsTemplateMissing('http://x.test/send?to={phone}&msg={message}'));
+
+        $result = $notifications->sendSmsDetailed($this->setting->fresh(), '01728714614', 'hi');
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('bad_gateway_url', $result['reason']);
+        $this->assertSame('missing {phone}, {message}', $result['detail']);
+        // The request shown to the owner makes the cause visible.
+        $this->assertStringContainsString('number=Receiver', (string) $result['request']);
+
+        $this->assertFalse($notifications->sendSms($this->setting->fresh(), '01728714614', 'hi'));
+        $row = SmsLog::withoutGlobalScopes()->latest('id')->firstOrFail();
+        $this->assertSame(SmsLog::STATUS_FAILED, $row->status);
+        $this->assertSame('bad_gateway_url', $row->reason);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_saving_a_gateway_url_without_the_placeholders_is_refused_and_a_good_one_is_saved(): void
+    {
+        $this->actingAs($this->admin())
+            ->withSession(['current_company_id' => $this->company->getKey(), 'current_company_selection_explicit' => true]);
+        $example = 'http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number=Receiver&senderid=8809617643387&message=TestSMS';
+
+        Livewire::test(Integrations::class)
+            ->set('data.notification_credentials.sms_api_url', $example)
+            ->call('save')
+            ->assertHasFormErrors(['notification_credentials.sms_api_url']);
+
+        $this->assertStringContainsString('{phone}', $this->setting->fresh()->notification_credentials['sms_api_url']);
+        $this->assertStringNotContainsString('Receiver', $this->setting->fresh()->notification_credentials['sms_api_url']);
+
+        // Empty still turns SMS off for the site, and a template with both placeholders saves.
+        Livewire::test(Integrations::class)
+            ->set('data.notification_credentials.sms_api_url', 'http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}')
+            ->call('save')
+            ->assertHasNoFormErrors();
+    }
+
+    public function test_the_dashboard_warns_when_the_saved_url_has_no_placeholders(): void
+    {
+        $this->actingAs($this->admin());
+
+        Livewire::test(SmsDashboard::class)->assertDontSee(__('Fix it in Integrations → SMS Gateway.'));
+
+        $this->setting->update(['notification_credentials' => [
+            ...$this->setting->notification_credentials,
+            'sms_api_url' => 'http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number=Receiver&message=TestSMS',
+        ]]);
+
+        Livewire::test(SmsDashboard::class)
+            ->assertSee(__('Fix it in Integrations → SMS Gateway.'))
+            ->assertSee('{phone} / {message}');
+    }
+
     public function test_the_request_preview_shows_the_number_and_hides_the_key_and_the_text(): void
     {
         Http::fake(['bulksmsbd.net/*' => Http::response('{"response_code":1001,"error_message":"Invalid Number"}')]);
