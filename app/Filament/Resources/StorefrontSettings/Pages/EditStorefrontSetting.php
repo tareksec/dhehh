@@ -59,11 +59,12 @@ class EditStorefrontSetting extends EditRecord
 
         unset($data['company_domain'], $data['company_domain_verified'], $data['site_type'], $data['copy_from_blade']);
 
-        // The SMS gateway and the SMTP email setup are edited on Integrations, so this form no longer carries them; keep what is stored.
+        // The SMS gateway, the SMTP email setup and the Amazon SES connection are edited on Integrations / Settings → Amazon SES, so this form does not carry them; keep what is stored.
         $data['notification_credentials'] = array_merge(
             Arr::only((array) $this->record->notification_credentials, [
                 ...StorefrontNotificationService::SMS_CREDENTIAL_KEYS,
                 ...StorefrontNotificationService::MAIL_CREDENTIAL_KEYS,
+                ...StorefrontNotificationService::SES_CREDENTIAL_KEYS,
             ]),
             (array) ($data['notification_credentials'] ?? []),
         );

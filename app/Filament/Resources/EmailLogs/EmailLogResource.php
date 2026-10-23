@@ -87,6 +87,9 @@ class EmailLogResource extends Resource
     {
         return [
             EmailLog::STATUS_SENT => __('Sent'),
+            EmailLog::STATUS_DELIVERED => __('Delivered'),
+            EmailLog::STATUS_BOUNCED => __('Bounced'),
+            EmailLog::STATUS_COMPLAINED => __('Marked as spam'),
             EmailLog::STATUS_FAILED => __('Failed'),
             EmailLog::STATUS_SKIPPED => __('Not sent'),
         ];
@@ -139,8 +142,8 @@ class EmailLogResource extends Resource
     public static function statusColor(string $status): string
     {
         return match ($status) {
-            EmailLog::STATUS_SENT => 'success',
-            EmailLog::STATUS_FAILED => 'danger',
+            EmailLog::STATUS_SENT, EmailLog::STATUS_DELIVERED => 'success',
+            EmailLog::STATUS_FAILED, EmailLog::STATUS_BOUNCED, EmailLog::STATUS_COMPLAINED => 'danger',
             default => 'warning',
         };
     }
@@ -163,11 +166,12 @@ class EmailLogResource extends Resource
 
     /**
      * "Sent" is the mail server's own acceptance of the message. It is not proof that the inbox received it: a
-     * bounce or a spam-folder delivery happens later and is not tracked. Shown above the table, here and on the Logs tab.
+     * bounce or a spam-folder delivery happens later, and is only reported back when Amazon SES tracking is on
+     * (Settings → Amazon SES). Shown above the table, here and on the Logs tab.
      */
     public static function logNotice(): ?string
     {
-        return __('Sent means the mail server accepted the message. It does not prove the inbox received it: bounces and spam-folder delivery are not tracked yet.');
+        return __('Sent means the mail server accepted the message, not that the inbox received it. With tracking switched on (Settings → Amazon SES) a message later turns into Delivered, Bounced or Marked as spam; until then bounces and spam-folder delivery are not tracked.');
     }
 
     /** The reason in words, with the mail server's own answer when there is one. */

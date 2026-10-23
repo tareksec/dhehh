@@ -4,6 +4,37 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Settings → Amazon SES: control the Amazon SES account from the dashboard.** Owner request 2026-10-23. A new page, with one AWS key per site (a separate AWS user for the dashboard, not the SMTP login; the secret is stored encrypted and never sent back to the browser):
+  - **Setup checklist** (the AWS key works, out of the sandbox, the From address is on a verified domain, the site sends through SES, tracking is on), each failing step saying what to do.
+  - **Account:** sandbox or production, sending on or paused, sent in the last 24 hours against the daily limit, the send rate, and Amazon's own health rating for the account.
+  - **Domains and addresses:** list with verification state; **add** a domain (the three DNS records to publish are shown right under it) or an address (Amazon emails it a link); **remove** one (a warning when it is what the site sends from).
+  - **Addresses Amazon will not send to** (its suppression list after a bounce or complaint): **allow again** or **block** an address.
+  - **Bounce, complaint and delivery tracking:** one button creates what is needed in the AWS account (an SNS topic, an SES configuration set and a subscription to this ERP) and one removes it again. Needs the site to be on a public https address.
+  - The page lists the AWS permissions the key needs as a policy to paste into IAM. A missing permission is explained in words and only hides its own part of the page.
+- **The Email Log now follows what happens after the mail server accepts a message.** With tracking on, a **Sent** row becomes **Delivered**, **Bounced** (hard, soft or suppressed, with the recipient server's own answer) or **Marked as spam**, each with a plain reason. A worse result is never replaced by a better one (a bounce stays a bounce). The log filter has the new results.
+
+### Changed
+
+- The Email Log note no longer says bounces are never tracked: it explains what **Sent** means and points to Settings → Amazon SES.
+- A "configuration set does not exist" refusal from Amazon (the tracking set was deleted in AWS) is explained in the Email Log: turn tracking off and on again.
+
+### Security
+
+- The webhook Amazon calls is protected three ways: the address carries a token derived from the app key, every message must carry a valid Amazon SNS signature (the certificate is only fetched over https from an `sns.<region>.amazonaws.com` address), and the message must name the topic that was created for that site. A forged or misdirected message writes nothing. The subscription confirmation is only followed to an SNS address.
+
+### Technical Notes
+
+- New services under `App\Services\Ses`: `AwsClientFactory` (the one place AWS SDK clients are built; tests bind a mock-handler subclass, so no test calls AWS), `SesApiService` (account, identities and their DKIM records, suppression list; failures become `SesApiException` with an actionable message), `SesTrackingService` (turns tracking on and off: STS caller identity, SNS topic with a policy that lets this account's SES publish, SES configuration set `zamzam-erp-<company>-<site>` with an SNS event destination for DELIVERY / BOUNCE / COMPLAINT / REJECT, https subscription), `SesEventService` (applies an SES event to the Email Log row by message ID, else by recipient among the last 7 days' unanswered sends, else as a new row), `SnsMessageValidator` (SNS signature versions 1 and 2).
+- `SesWebhookController` (`POST /webhooks/ses/{setting}/{token}`, route `webhooks.ses`, CSRF-exempt, throttled); the token is `hash_hmac(app key, "ses-events|<setting id>")`, so nothing is stored for it.
+- `StorefrontNotificationService`: mail through an SES SMTP host names the configuration set in the `X-SES-CONFIGURATION-SET` header while tracking is on (per site, no change to the SES identities), and the SES message ID is read from the SMTP answer (`250 Ok <id>`) and kept on the log row. New `SES_CREDENTIAL_KEYS` in the encrypted `notification_credentials` (`ses_api_key_id`, `ses_api_secret`, `ses_api_region`, `ses_config_set`, `ses_topic_arn`, `ses_tracking_enabled`, `ses_subscription_confirmed_at`); `EditStorefrontSetting` carries them over when Storefront Settings is saved.
+- Migration `2026_10_23_210000_add_message_id_to_email_logs_table.php` (`message_id`, named index). `EmailLog` gains the statuses `delivered`, `bounced`, `complained`.
+- New page `App\Filament\Pages\AmazonSes` (Settings cluster, `canManageSettings()`, never fills the secret back into the form) and its view; `docs/email-ses-setup.md` and `docs/codebase-map/crm-messaging.md` updated.
+- Tests: `SesApiServiceTest` (8), `SesTrackingTest` (18, including SNS messages signed with a certificate generated in the test), `AmazonSesPageTest` (13), new cases in `EmailLogTest`; `tests/Feature/Concerns/FakesAws.php` is the shared Amazon stand-in. Checked in a real browser (desktop and 390 px, no sideways scroll, the add-domain dialog opens) with Amazon faked.
+
 ## [2.106.0] - 2026-10-23
 
 **Release type:** Minor Feature Update

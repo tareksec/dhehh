@@ -2,6 +2,29 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - Amazon SES controlled from the dashboard, and bounce / complaint tracking
+
+Owner (Bangla): "ওকে বানাও" (build the bounce / spam tracking) "আর ses এর api দিয়ে আমাদের ড্যাশবোর্ড থেকেই ses এর সার্ভিস কন্ট্রোল করতে চাই সেটা করা যাবে কিনা" (and can we control SES from our dashboard through its API?). Answer: yes, and it is built.
+
+What it is: **Settings → Amazon SES** (one AWS key per site, encrypted): checklist, account state, domains / addresses with the DNS records to publish, the suppression list, and a switch that sets up bounce / complaint / delivery reporting in the AWS account. The Email Log then shows Delivered / Bounced / Marked as spam. See CHANGELOG for the full list.
+
+Decisions (mine, say if you want them different):
+- **Emails still go out over SMTP.** The API is used to control and watch the account, not to send. Moving the sending itself to the SES API would change every email flow for no gain the owner asked for.
+- **A separate AWS key for the dashboard**, not the SMTP login: the SMTP password is derived from the secret key and cannot be turned back. The page prints the IAM policy to paste. The policy is written from the AWS documentation; I could not test it with a real key, so if a call is refused the page names the missing permission in words.
+- **Tracking works through a header, not by editing the SES identities.** Mail names the configuration set (`X-SES-CONFIGURATION-SET`) only while tracking is on, per site. Consequence: if someone deletes that set in the AWS console, SES refuses every mail from that site until tracking is turned off and on again (the Email Log says so in words).
+- **One site, one topic and one set** (names carry company and site), so several companies can share an AWS account without clashing.
+- The page lets any user who can manage settings remove a verified domain or an address in the AWS account the key belongs to. Two companies that paste the same key can therefore remove each other's domains; the confirmation warns when the domain is the one the site sends from. Say if removal should be limited to the super admin.
+
+Verified: the API service, the tracking set-up (the exact calls and the SNS topic policy), the events, and the webhook (SNS signatures made with a certificate generated in the test, tampered / foreign / http certificate, wrong token, foreign topic) are tested with Amazon faked. I also looked at the page in a real browser at 1280 and 390 px with Amazon faked (no sideways scroll; the Add dialog opens), and once against the real AWS endpoint with a made-up key, which returned the real "key not recognised" refusal that the page shows in words. **Not tested with a real AWS key, a real SNS delivery or real bounce.**
+
+First real run for the owner: Settings → Amazon SES → paste the key → Save and check → fix the red items → Turn tracking on → press Refresh after a minute (it must say "On and connected") → send a test email to a bad address like `bounce@simulator.amazonses.com` and a good one `success@simulator.amazonses.com` (Amazon's own mailbox simulator) and watch the Email Log turn Bounced / Delivered.
+
+Not built: asking Amazon for production access (it needs a written use case, done once in the AWS console), pausing all sending, dedicated IPs and SES templates, stopping our own sends to an address that bounced (Amazon's suppression list already does), reputation graphs, and pruning old log rows.
+
+Needs Bangla review (lang/bn.json): the whole Amazon SES page (118 new keys: headings 1-5, the checklist lines, the account labels, the dialogs and notifications, the AWS refusal messages), the Email Log result names "Delivered", "Bounced", "Marked as spam" (Bounced → বাউন্স হয়েছে, Marked as spam → স্প্যাম চিহ্নিত) and their reason texts, and the rewritten note above the Email Log.
+
+Commit status: committed and pushed to `ccr-3799b463-p4pv7n`; not on `main` yet (needs the owner's approval). Full test run: 3087 passed, 6 skipped, 0 failed.
+
 ## 2026-10-23 - Courier COD is the due amount, and the order page has a Payment section
 
 Owner (Bangla): when an order is booked with a courier the grand total is sent as the COD amount; with an advance payment the due amount shows on the order but the courier still gets the grand total, and it should be the due amount. Also: separate the payment section on the order page, a new person cannot tell where the payment / advance payment goes.

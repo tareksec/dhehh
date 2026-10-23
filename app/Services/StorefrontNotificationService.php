@@ -8,6 +8,8 @@ use App\Models\ConversationChannel;
 use App\Models\EmailLog;
 use App\Models\StorefrontSetting;
 use App\Services\Meta\MetaGraphService;
+use App\Services\Ses\SesApiService;
+use App\Services\Ses\SesTrackingService;
 use App\Support\PhoneLinks;
 use Illuminate\Contracts\Mail\Mailer;
 use Illuminate\Mail\Mailable;
@@ -15,6 +17,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Symfony\Component\Mime\Email;
 
 /**
  * Sends customer notifications (abandoned-cart reminders etc.) over a
@@ -38,6 +41,12 @@ class StorefrontNotificationService
 
     /** notification_credentials keys edited on Settings → Integrations → Email Setup (not on Storefront Settings). */
     public const MAIL_CREDENTIAL_KEYS = ['mail_host', 'mail_port', 'mail_encryption', 'mail_username', 'mail_password', 'mail_from_address', 'mail_from_name'];
+
+    /**
+     * notification_credentials keys of the Amazon SES connection and its event tracking (Settings → Amazon SES, not
+     * Storefront Settings): the AWS access key for the SES API, and the names the tracking set-up created.
+     */
+    public const SES_CREDENTIAL_KEYS = ['ses_api_key_id', 'ses_api_secret', 'ses_api_region', 'ses_config_set', 'ses_topic_arn', 'ses_tracking_enabled', 'ses_subscription_confirmed_at'];
 
     /** Reply code BulkSMSBD-style gateways send (inside an HTTP 200) when the SMS was accepted. */
     public const SMS_GATEWAY_SUCCESS_CODE = 202;
@@ -240,10 +249,18 @@ class StorefrontNotificationService
         $logs = app(EmailLogService::class);
         $via = $logs->via($setting, true);
 
+        $configSet = $this->trackingConfigSet($setting);
+
         try {
-            $this->companyMailer($setting)->raw(
+            $sent = $this->companyMailer($setting)->raw(
                 __('This is a test email from ZamZam ERP. If you can read it, email sending for this site works.'),
-                fn ($message) => $message->to($email)->subject(__('ZamZam ERP test email')),
+                function ($message) use ($email, $configSet): void {
+                    $message->to($email)->subject(__('ZamZam ERP test email'));
+
+                    if ($configSet !== null) {
+                        $message->getSymfonyMessage()->getHeaders()->addTextHeader('X-SES-CONFIGURATION-SET', $configSet);
+                    }
+                },
             );
         } catch (\Throwable $exception) {
             $logs->failed($setting, EmailLog::KIND_TEST, $email, $via, $exception->getMessage());
@@ -251,7 +268,7 @@ class StorefrontNotificationService
             return $exception->getMessage();
         }
 
-        $logs->sent($setting, EmailLog::KIND_TEST, $email, $via);
+        $logs->sent($setting, EmailLog::KIND_TEST, $email, $via, $this->sesMessageId($sent));
 
         return null;
     }
@@ -302,9 +319,16 @@ class StorefrontNotificationService
         $ownSmtp = $this->mailConfigured($setting);
         $via = $logs->via($setting, $ownSmtp);
 
+        $configSet = $ownSmtp ? $this->trackingConfigSet($setting) : null;
+
         try {
             $mailer = $ownSmtp ? $this->companyMailer($setting) : Mail::mailer();
-            $mailer->to($email)->send($mail);
+
+            if ($configSet !== null) {
+                $mail->withSymfonyMessage(fn (Email $message) => $message->getHeaders()->addTextHeader('X-SES-CONFIGURATION-SET', $configSet));
+            }
+
+            $sent = $mailer->to($email)->send($mail);
         } catch (\Throwable $exception) {
             Log::warning($failureWarning, ['error' => $exception->getMessage(), 'mail' => $mail::class]);
             $logs->failed($setting, $kind, $email, $via, $exception->getMessage());
@@ -317,10 +341,37 @@ class StorefrontNotificationService
         if (! $ownSmtp && ! $this->emailDeliveryAvailable($setting)) {
             $logs->skipped((int) $setting->company_id, $kind, $email, EmailLogService::REASON_LOG_ONLY, $via);
         } else {
-            $logs->sent($setting, $kind, $email, $via);
+            $logs->sent($setting, $kind, $email, $via, $ownSmtp ? $this->sesMessageId($sent) : null);
         }
 
         return true;
+    }
+
+    /**
+     * The Amazon SES configuration set to name on this site's mail, so SES reports what became of each message
+     * (Settings → Amazon SES). Null when tracking is off or the site's SMTP is not an SES endpoint.
+     */
+    protected function trackingConfigSet(StorefrontSetting $setting): ?string
+    {
+        $isSes = preg_match(SesApiService::SMTP_HOST_PATTERN, (string) data_get($setting->notification_credentials, 'mail_host')) === 1;
+
+        return $isSes ? SesTrackingService::configSetFor($setting) : null;
+    }
+
+    /**
+     * The ID Amazon SES gives a message it accepted ("250 Ok <id>" in the SMTP conversation), which is how its
+     * bounce and delivery reports name the message. Null for any other server or when the answer has no ID.
+     */
+    protected function sesMessageId(mixed $sent): ?string
+    {
+        try {
+            $transport = is_object($sent) && method_exists($sent, 'getSymfonySentMessage') ? $sent->getSymfonySentMessage() : $sent;
+            $debug = is_object($transport) && method_exists($transport, 'getDebug') ? (string) $transport->getDebug() : '';
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return preg_match('/\b250 Ok\s+([A-Za-z0-9-]{20,})/', $debug, $match) === 1 ? $match[1] : null;
     }
 
     public function sendWhatsAppTemplate(
