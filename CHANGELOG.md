@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.107.0] - 2026-10-23
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -21,7 +23,6 @@ All notable production changes to Business Dashboard are documented here.
 
 - `StorefrontNotificationService`: `smsRequestUrl()` builds the gateway address (one place for the send and the preview, with the `88{phone}` / `880{phone}` rule), `smsRequestPreview()` hides the key (also when it is typed into the URL) and the text; `sendSmsDetailed()` returns it as `request`. Tests: `SmsDashboardTest` (+2).
 - SMS dashboard: `App\Filament\Pages\SmsDashboard` (Settings cluster, "manage settings" permission), `SmsUsageService` (aggregates the SMS log; the company scope applies), `SmsBalanceService` (BulkSMSBD hosts only, host taken from the saved URL template, answer parsed from a `balance` field or a bare number, anything else shown as it came; the real reply for a valid key could not be checked here), `App\Support\SmsSegments`. `sms_logs.segments` (migration `2026_10_23_210000`, backfills older rows from their text and scrubs gateway URLs from old `detail` values); `SmsLog::KIND_OTHER`; `StorefrontNotificationService::sendSms()` now writes the `other` row through `SmsLogService::other()` and `sendSmsDetailed()` also returns `segments`; `scrubUrls()`. `sms_price_per_sms` and `sms_low_balance_alert` join `SMS_CREDENTIAL_KEYS` (kept by both Integrations and Storefront Settings). Tests: new `SmsDashboardTest` (13). Lang: 41 new keys.
-
 ## [2.106.0] - 2026-10-23
 
 **Release type:** Minor Feature Update
