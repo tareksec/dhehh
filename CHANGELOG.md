@@ -4,8 +4,6 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
-## [2.102.0] - 2026-10-23
-
 **Release type:** Minor Feature Update
 
 ### Added
@@ -15,14 +13,11 @@ All notable production changes to Business Dashboard are documented here.
   - **Send test email:** sends a message through the settings saved for the site being edited and shows the mail server's own answer when it fails (for SES: unverified sender, sandbox recipient, wrong credentials or region).
   - **From address reminder:** an SES SMTP user name is an access-key ID (`AKIA…`), not an email address. If the saved account has no From address and its user name is not an email address, saving shows a warning, and the From address help text says so.
   - Step-by-step guide: `docs/email-ses-setup.md` (what to do in the SES console, what to enter here, common errors, the optional server-wide fallback in Coolify).
-- **Reseller landing page: the questions new resellers ask, answered.** Owner request 2026-10-22, from a real prospective reseller's questions. A new **Questions resellers ask** section (with a link chip in the page's menu) answers six questions in plain words, each answer taken from what the system really does, not from promises: can I just market and sell while the store packs and delivers; can I list the products on my Facebook page and website with photos, details and prices; what do I send when a customer confirms an order (nothing: you enter the order in the portal and the form shows the customer's bill and your profit); how the parcel is sent (cash on delivery, nothing in advance) and what the customer's bill is made of; what is deducted from the money collected (your profit is your selling price minus your cost; the delivery charge and VAT are added on top; no separate packaging charge on orders the store delivers; the return charge only when the store has set one and the amount only when *Show money figures on the guide* is on); and when and how the profit is paid (payable after delivery, withdrawal request to bKash, Nagad, Rocket or a bank account, the store reviews and pays, the Earnings page shows every order).
-- **Reseller landing page in Bangla, with a language switch.** Owner request 2026-10-22. The landing page now has an **English | বাংলা** switch in its header (and above the first screen on phones). The choice is kept in a cookie for a year, and the portal's sign-in and application pages follow it (they also carry the same small switch), including the portal's own Livewire requests. Nobody who never used the switch sees any change: they get the app's default language as before; the shop and the admin are never touched. Words the admin typed (the guide's introduction and rules) stay as entered; everything else is translated.
 
 ### Changed
 
 - **The email (SMTP) settings moved from Storefront Settings to Settings → Integrations → Email Setup.** Owner request 2026-10-23. SMTP host, port, encryption, username, password, From address and From name are now edited on a new **Email Setup** tab next to **SMS Gateway**, per site (use the Site picker, like Payment Gateway and SMS Gateway). Values already saved keep working — nothing needs to be re-entered. Saving Storefront Settings no longer touches the email keys. The WhatsApp reminder fields stay on Storefront Settings → Customer Notifications & Reminders.
 - The message shown to staff when a reseller's password-reset link cannot be sent because email is not set up now points to **Settings → Integrations → Email Setup**.
-- **Reseller landing page is set in Anek Bangla.** Owner request 2026-10-22. The whole page, Bangla and English alike, uses the Anek Bangla font (SIL OFL 1.1, variable weights 100–800), self-hosted with the ERP so no third-party font request is made; the landing page no longer loads Hind Siliguri or Unbounded.
 
 ### Fixed
 
@@ -37,6 +32,22 @@ All notable production changes to Business Dashboard are documented here.
 - Lang: new keys for the tab, the SES quick setup, the test email and the From address warning; the Storefront Settings section note, the From address help text and the "Email is not set up…" message changed text in `lang/en.json` and `lang/bn.json`.
 - `.env.example` points to `docs/email-ses-setup.md` for the server-wide fallback mailer (`MAIL_*`); nothing else in the environment changes.
 - Tests: new `CompanyEmailSetupTest` (5: sender rules, per-company mailer isolation — fails without the `purge` — and the test email); `IntegrationsPageTest` (+7, one rewritten); `ResellerPasswordResetByStaffTest` expects the new message.
+
+## [2.102.0] - 2026-10-23
+
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Reseller landing page: the questions new resellers ask, answered.** Owner request 2026-10-22, from a real prospective reseller's questions. A new **Questions resellers ask** section (with a link chip in the page's menu) answers six questions in plain words, each answer taken from what the system really does, not from promises: can I just market and sell while the store packs and delivers; can I list the products on my Facebook page and website with photos, details and prices; what do I send when a customer confirms an order (nothing: you enter the order in the portal and the form shows the customer's bill and your profit); how the parcel is sent (cash on delivery, nothing in advance) and what the customer's bill is made of; what is deducted from the money collected (your profit is your selling price minus your cost; the delivery charge and VAT are added on top; no separate packaging charge on orders the store delivers; the return charge only when the store has set one and the amount only when *Show money figures on the guide* is on); and when and how the profit is paid (payable after delivery, withdrawal request to bKash, Nagad, Rocket or a bank account, the store reviews and pays, the Earnings page shows every order).
+- **Reseller landing page in Bangla, with a language switch.** Owner request 2026-10-22. The landing page now has an **English | বাংলা** switch in its header (and above the first screen on phones). The choice is kept in a cookie for a year, and the portal's sign-in and application pages follow it (they also carry the same small switch), including the portal's own Livewire requests. Nobody who never used the switch sees any change: they get the app's default language as before; the shop and the admin are never touched. Words the admin typed (the guide's introduction and rules) stay as entered; everything else is translated.
+
+### Changed
+
+- **Reseller landing page is set in Anek Bangla.** Owner request 2026-10-22. The whole page, Bangla and English alike, uses the Anek Bangla font (SIL OFL 1.1, variable weights 100–800), self-hosted with the ERP so no third-party font request is made; the landing page no longer loads Hind Siliguri or Unbounded.
+
+### Technical Notes
+
 - New `App\Http\Middleware\SetResellerPortalLocale` (cookie `reseller_portal_locale`, values `en` / `bn`, set by `?lang=`): runs in the `web` group right after `RestrictPortalHosts` and in the reseller panel's middleware and `persistentMiddleware` (after `ResolveCompanyFromResellerPortalDomain`, so Livewire updates keep the language); it does nothing unless the request is on a reseller portal host (`reseller_portal_company` attribute). Views: `resources/views/reseller/partials/language-switch.blade.php` (landing) and `resources/views/filament/reseller/language-switch.blade.php` (sign-in / application pages, panel render hooks). The language names are `Language name: English` / `Language name: Bangla` and are read in their own language (`__('...', [], 'bn')`), so the switch always shows "বাংলা". 18 new keys in `lang/en.json` and `lang/bn.json`.
 - Font files under `resources/fonts/anek-bangla/` (Bengali, Latin and Latin-extended subsets of the variable font, plus `OFL.txt`) and their `@font-face` rules in `resources/css/reseller-landing.css`. **Deploy: `npm run build`.** Tests: `ResellerLandingPageTest` (+7: the questions and answers, figures following the settings, the Bangla version and cookie, the language kept on the landing and application pages, an unknown language ignored, the shop untouched, the font shipping with the ERP).
 ## [2.101.0] - 2026-10-23
