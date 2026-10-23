@@ -26,6 +26,9 @@ class AuditLogResource extends Resource
 
     protected static ?string $cluster = Settings::class;
 
+    /** Reached from Settings → Logs (App\Filament\Pages\Logs), not from the sidebar. */
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?int $navigationSort = 3;
 
     protected static ?string $recordTitleAttribute = 'action';

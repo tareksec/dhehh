@@ -1,5 +1,5 @@
 # Core Platform
-> Last checked: 2026-10-21, merge of `ccr-4505e72d-hwaq92` into main (CAPTCHA for a challenged sign-in)
+> Last checked: 2026-10-23, the log pages moved onto one Settings → Logs page (earlier check: 2026-10-21, CAPTCHA for a challenged sign-in)
 
 ## What it does
 The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and four distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated backups to Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
@@ -91,8 +91,8 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Filament/Resources/CompanyFaqs/CompanyFaqResource.php` | Manages customer-facing FAQ items per company. |
 | `app/Filament/Resources/Users/UserResource.php` | Manages staff accounts, assigned companies, roles, and status. |
 | `app/Filament/Resources/UserRoles/UserRoleResource.php` | Defines permission roles and access matrices. |
-| `app/Filament/Resources/DeploymentErrors/DeploymentErrorResource.php` | Displays logged deployment and module runtime exceptions for super admins. |
-| `app/Filament/Resources/AuditLogs/AuditLogResource.php` | Searchable viewer for user action and data modification audit logs. |
+| `app/Filament/Resources/DeploymentErrors/DeploymentErrorResource.php` | Displays logged deployment and module runtime exceptions for super admins (a tab on Settings → Logs). |
+| `app/Filament/Resources/AuditLogs/AuditLogResource.php` | Searchable viewer for user action and data modification audit logs (a tab on Settings → Logs). |
 | `app/Filament/Pages/CompanySettings.php` | Settings page for company profile, logo, timezone, currency, and address. |
 | `app/Filament/Pages/CloudStorageSettings.php` | Configures S3/R2 storage disks and credentials. |
 | `app/Filament/Pages/CoolifyDeploymentSettings.php` | Configures Coolify webhook deployment settings. |

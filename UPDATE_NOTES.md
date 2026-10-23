@@ -2,6 +2,18 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - One Logs page, and the "User Id not found" SMS error
+
+Owner (Bangla): put all the log pages on one page, with a single "Logs" menu entry and the logs as tabs, like Integrations; and the first SMS Log row says the gateway refused with 1011 "User Id not found" — can it be fixed?
+
+**Logs page:** Settings → Logs, tabs SMS, Audit, Courier status, Courier webhooks, Meta events, Deploy errors, Mobile crashes (each only for people who could already open it; see CHANGELOG). Left where they were because they are business data, not system logs: Storefront → Checkout Attempts and Courier → Risk Events (the owner can say if they should move too). Checked in a real browser on a scratch SQLite database (not the demo DB): login, all 7 tabs, tab kept in the address, the sidebar shows only "Logs", 0px horizontal overflow at 1280 and 390 px.
+
+**1011:** that is BulkSMSBD saying it does not know the API key. I cannot see or test the owner's key, so I did not "fix" the gateway; the code now tells the owner exactly what to do (see CHANGELOG), catches an empty key, trims spaces, and stops the browser from autofilling the login password into the API key box (a plausible cause: the box is a password field). **Next step for the owner:** re-copy the API key from the BulkSMSBD Developers page into Integrations → SMS Gateway, Save changes, press Send test SMS.
+
+**Needs Bangla review (lang/bn.json):** the tab names (Audit, Courier status, Courier webhooks, Meta events, Deploy errors, Mobile crashes), "Logs", "Nothing logged yet", and the nine gateway-hint sentences.
+
+**Verified:** `LogsPageTest` (8), `SmsLogTest`, `SmsTemplatesTest`, `AdminNavigationClustersTest`, `ModuleGuardTest`, `TranslationParityTest`. Full `php artisan test` (plain, no `--env`): 3006 passed, 2 skipped.
+
 ## 2026-10-23 - Amazon SES setup for the ERP's email
 
 Owner (Bangla): "আমরা email সার্ভার হিসেবে aws ses সার্ভিস নিয়েছি। সেখানে আমাদের ডোমেইনগুলো এপ্রুভ হয়েছে। এখন সেটা সেটআপ করা বাকি erp তে। এর জন্য কোন কাজ করা লাগলে সেটাও কর" (we took AWS SES as the email server, our domains are approved there; setting it up in the ERP remains; do whatever work is needed).

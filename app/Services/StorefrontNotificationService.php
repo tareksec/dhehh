@@ -78,23 +78,49 @@ class StorefrontNotificationService
     }
 
     /**
+     * What to do about a gateway reply code, in the owner's words; null when the code needs no action or is unknown.
+     * Shown in the SMS Log and after "Send test SMS", next to the gateway's own wording.
+     */
+    public static function smsGatewayHint(?int $code): ?string
+    {
+        return match ($code) {
+            1011 => __('BulkSMSBD does not recognise this API key. Copy the API key again from the BulkSMSBD dashboard (Developers page) into Integrations → SMS Gateway → SMS API key, with no spaces, press Save changes, then press Send test SMS.'),
+            1002, 1013, 1014, 1015 => __('The sender ID is wrong, switched off or does not belong to this API key. Use a sender ID that is approved on your BulkSMSBD account.'),
+            1006, 1007 => __('The BulkSMSBD balance is empty or expired. Top it up.'),
+            1012 => __('A masking sender ID sends Bangla text only. Write this message in Bangla on SMS Templates, or use a numeric sender ID.'),
+            1032 => __('Add this server\'s IP address to the BulkSMSBD whitelist, or switch the IP whitelist off.'),
+            1018, 1031 => __('Your BulkSMSBD account needs attention. Contact BulkSMSBD support.'),
+            1001 => __('The phone number is not valid.'),
+            1003 => __('A required value is missing in the gateway URL. Use the template shown in the URL box.'),
+            default => null,
+        };
+    }
+
+    /**
      * Sends one SMS and says what the gateway answered, so the SMS log and the "Send test SMS" button can
      * show why a message did not leave (no balance, wrong sender ID, IP not whitelisted ...), not only that it did not.
+     * `reason` is null when the SMS was accepted, else no_gateway, no_api_key, gateway_unreachable or gateway_refused.
      *
-     * @return array{ok: bool, code: ?int, meaning: ?string, detail: ?string}
+     * @return array{ok: bool, reason: ?string, code: ?int, meaning: ?string, detail: ?string}
      */
     public function sendSmsDetailed(StorefrontSetting $setting, string $phone, string $message): array
     {
         $credentials = $setting->notification_credentials ?? [];
-        $urlTemplate = (string) ($credentials['sms_api_url'] ?? '');
+        $urlTemplate = trim((string) ($credentials['sms_api_url'] ?? ''));
+        $apiKey = trim((string) ($credentials['sms_api_key'] ?? ''));
 
         if ($urlTemplate === '') {
-            return ['ok' => false, 'code' => null, 'meaning' => null, 'detail' => 'no_gateway'];
+            return ['ok' => false, 'reason' => 'no_gateway', 'code' => null, 'meaning' => null, 'detail' => null];
+        }
+
+        // The gateway would answer "User Id not found" for an empty key; say what is really wrong.
+        if ($apiKey === '' && str_contains($urlTemplate, '{api_key}')) {
+            return ['ok' => false, 'reason' => 'no_api_key', 'code' => null, 'meaning' => null, 'detail' => null];
         }
 
         $url = strtr($urlTemplate, [
-            '{api_key}' => rawurlencode((string) ($credentials['sms_api_key'] ?? '')),
-            '{sender_id}' => rawurlencode((string) ($credentials['sms_sender_id'] ?? '')),
+            '{api_key}' => rawurlencode($apiKey),
+            '{sender_id}' => rawurlencode(trim((string) ($credentials['sms_sender_id'] ?? ''))),
             // Country-code form (8801XXXXXXXXX), the format the gateway's own docs show.
             '{phone}' => rawurlencode(PhoneLinks::internationalDigits($phone) ?? $phone),
             '{message}' => rawurlencode($message),
@@ -105,13 +131,13 @@ class StorefrontNotificationService
         } catch (\Throwable $exception) {
             Log::warning('Storefront SMS send failed', ['error' => $exception->getMessage()]);
 
-            return ['ok' => false, 'code' => null, 'meaning' => null, 'detail' => 'unreachable: '.str($exception->getMessage())->limit(180)];
+            return ['ok' => false, 'reason' => 'gateway_unreachable', 'code' => null, 'meaning' => null, 'detail' => 'unreachable: '.str($exception->getMessage())->limit(180)];
         }
 
         if (! $response->successful()) {
             Log::warning('Storefront SMS rejected by gateway', ['company_id' => $setting->company_id, 'http_status' => $response->status()]);
 
-            return ['ok' => false, 'code' => null, 'meaning' => null, 'detail' => 'http_'.$response->status()];
+            return ['ok' => false, 'reason' => 'gateway_unreachable', 'code' => null, 'meaning' => null, 'detail' => 'http_'.$response->status()];
         }
 
         // These gateways answer HTTP 200 even when they refuse the SMS (no balance, wrong sender ID, IP not
@@ -125,10 +151,10 @@ class StorefrontNotificationService
                 'meaning' => self::SMS_GATEWAY_CODES[$code] ?? null,
             ]);
 
-            return ['ok' => false, 'code' => $code, 'meaning' => self::SMS_GATEWAY_CODES[$code] ?? null, 'detail' => null];
+            return ['ok' => false, 'reason' => 'gateway_refused', 'code' => $code, 'meaning' => self::SMS_GATEWAY_CODES[$code] ?? null, 'detail' => null];
         }
 
-        return ['ok' => true, 'code' => $code, 'meaning' => $code !== null ? (self::SMS_GATEWAY_CODES[$code] ?? null) : null, 'detail' => null];
+        return ['ok' => true, 'reason' => null, 'code' => $code, 'meaning' => $code !== null ? (self::SMS_GATEWAY_CODES[$code] ?? null) : null, 'detail' => null];
     }
 
     /**

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\Integrations;
 use App\Filament\Resources\SmsLogs\Pages\ListSmsLogs;
+use App\Filament\Resources\SmsLogs\SmsLogResource;
 use App\Jobs\SendOrderPlacedSmsJob;
 use App\Models\Company;
 use App\Models\Customer;
@@ -15,8 +16,10 @@ use App\Services\CompanyContext;
 use App\Services\OrderStatusSmsService;
 use App\Services\SmsLogService;
 use App\Services\SmsTemplateService;
+use App\Services\StorefrontNotificationService;
 use App\Support\BulkSmsBdPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -241,6 +244,50 @@ class SmsLogTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_a_user_id_not_found_reply_tells_the_owner_to_recopy_the_api_key(): void
+    {
+        $this->reply('{"response_code":1011,"error_message":"User Id not found"}');
+        $this->write([SmsTemplateService::ORDER_PLACED => 'Order :order received']);
+        Queue::fake();
+        $order = $this->order();
+
+        app(OrderStatusSmsService::class)->sendPlaced($order->id);
+
+        $row = SmsLog::query()->sole();
+        $this->assertSame(1011, $row->gateway_code);
+        $why = SmsLogResource::why($row);
+        $this->assertStringContainsString('User Id not found', $why);
+        $this->assertStringContainsString('Copy the API key again', $why);
+    }
+
+    public function test_an_empty_api_key_is_caught_before_the_gateway_is_called(): void
+    {
+        $this->write([SmsTemplateService::ORDER_PLACED => 'Order :order received']);
+        Queue::fake();
+        $this->gateway('8809617643387', apiKey: '   ');
+        $order = $this->order();
+
+        app(OrderStatusSmsService::class)->sendPlaced($order->id);
+
+        $row = SmsLog::query()->sole();
+        $this->assertSame(SmsLog::STATUS_FAILED, $row->status);
+        $this->assertSame('no_api_key', $row->reason);
+        Http::assertNothingSent();
+    }
+
+    public function test_spaces_around_the_credentials_never_reach_the_gateway(): void
+    {
+        $this->gateway(' 8809617643387 ', apiKey: '  abc123  ');
+
+        app(StorefrontNotificationService::class)->sendSms(StorefrontSetting::bladeFor($this->company->id), '01712345678', 'Hello');
+
+        Http::assertSent(function (Request $request): bool {
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            return $query['key'] === 'abc123' && $query['from'] === '8809617643387';
+        });
+    }
+
     private function write(array $bodies): void
     {
         app(SmsTemplateService::class)->save($this->company->id, $bodies);
@@ -258,13 +305,13 @@ class SmsLogTest extends TestCase
             ->each(fn (StorefrontSetting $setting) => $setting->update(['notification_credentials' => []]));
     }
 
-    private function gateway(string $senderId): void
+    private function gateway(string $senderId, string $apiKey = 'key'): void
     {
         StorefrontSetting::query()->withoutGlobalScopes()->updateOrCreate(
             ['company_id' => $this->company->id, 'site_type' => StorefrontSetting::SITE_BLADE],
             ['notification_credentials' => [
                 'sms_api_url' => 'http://sms.example.test/send?key={api_key}&to={phone}&msg={message}&from={sender_id}',
-                'sms_api_key' => 'key',
+                'sms_api_key' => $apiKey,
                 'sms_sender_id' => $senderId,
             ]],
         );

@@ -31,6 +31,9 @@ class MobileCrashReportResource extends Resource
 
     protected static ?string $navigationLabel = 'Mobile Crash Reports';
 
+    /** Reached from Settings → Logs (App\Filament\Pages\Logs), not from the sidebar. */
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?int $navigationSort = 4;
 
     protected static ?string $recordTitleAttribute = 'exception_class';
