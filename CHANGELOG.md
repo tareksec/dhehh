@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.108.0] - 2026-10-23
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -93,7 +95,6 @@ All notable production changes to Business Dashboard are documented here.
 - Phase 6: `TradeReportService` (nine reports, one shape), pages `Reports` / `Report` (Livewire `#[Url]` type / from / to), `TradeReportDownloadController` (route `trade/reports/{report}/download/{print|pdf|xlsx}`), views `resources/views/trade/reports/{print,pdf}`, `App\Support\TradeReportFormat`. DomPDF cannot shape Bangla (checked: vowel signs misplaced), so the PDF file is English and the Bangla copy is the browser print page (the investor reports' approach, shared print script). Migration `2026_10_26_100000_add_reports_permission_to_trade_owner_role` (no schema change). The stock ledger dates moves by `stock_movements.created_at` (there is no movement date). 34 new keys in `lang/en.json` + `lang/bn.json`. Test: `TradeReportsTest` (9). Codebase map: `core-platform.md`.
 - Trade Portal phone look: `TradeNavigation::layout()` gains each page's Menu-sheet group (`GROUPS`, `groups()`), `TradeNavigation::backUrl()` reads the page being drawn (`Livewire::current()`, so a Livewire update keeps the same link) and `resources/views/filament/trade/back-button.blade.php` draws it at `PAGE_HEADER_HEADING_BEFORE` inside `ModuleGuard::run('trade-back-button')`. `Home::getHeading()` is empty (the view draws the greeting). Panel primary colour is a written-out navy OKLCH palette (a palette generated from the hex made 600 a mid blue and Filament then drew pale buttons with dark text). The card lists, navy header and floating bar are CSS in `resources/css/filament/trade/theme.css` (below 640px / 1024px). The challan list shows the buyer column first. No migration, model or route. 5 new keys in `lang/en.json` + `lang/bn.json`. Test: `TradePortalShopWorkTest` (+1).
 - Trade Portal font / desktop / sign-in: panel font `Trade Text` (`@font-face` in the trade theme: Tiro Bangla woff2 for the Bengali range, Hind Siliguri Latin for the rest; files in `resources/fonts/tiro-bangla/` with `OFL.txt`, from @fontsource/tiro-bangla 5.2.5). `TradeNavigation::build()` puts the non-tab pages into `NavigationGroup`s (same groups as the phone Menu sheet). `resources/views/filament/trade/auth-side.blade.php` at `SIMPLE_LAYOUT_START`. 5 new keys in `lang/en.json` + `lang/bn.json`. Test: `TradePortalTest` (sign-in page).
-
 ## [2.107.0] - 2026-10-23
 
 **Release type:** Minor Feature Update
