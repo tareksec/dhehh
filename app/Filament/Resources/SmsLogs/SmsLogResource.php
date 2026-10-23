@@ -76,6 +76,7 @@ class SmsLogResource extends Resource
             SmsLog::KIND_ORDER_PLACED => __('Order placed'),
             SmsLog::KIND_ORDER_STATUS => __('Order status change'),
             SmsLog::KIND_TEST => __('Test SMS'),
+            SmsLog::KIND_OTHER => __('Other messages (login codes, reminders, broadcasts)'),
         ];
     }
 

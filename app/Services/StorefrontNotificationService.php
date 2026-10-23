@@ -9,6 +9,7 @@ use App\Models\EmailLog;
 use App\Models\StorefrontSetting;
 use App\Services\Meta\MetaGraphService;
 use App\Support\PhoneLinks;
+use App\Support\SmsSegments;
 use Illuminate\Contracts\Mail\Mailer;
 use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\Config;
@@ -34,7 +35,7 @@ use Illuminate\Support\Facades\Mail;
 class StorefrontNotificationService
 {
     /** notification_credentials keys edited on Settings → Integrations → SMS Gateway (not on Storefront Settings). */
-    public const SMS_CREDENTIAL_KEYS = ['sms_api_url', 'sms_api_key', 'sms_sender_id'];
+    public const SMS_CREDENTIAL_KEYS = ['sms_api_url', 'sms_api_key', 'sms_sender_id', 'sms_price_per_sms', 'sms_low_balance_alert'];
 
     /** notification_credentials keys edited on Settings → Integrations → Email Setup (not on Storefront Settings). */
     public const MAIL_CREDENTIAL_KEYS = ['mail_host', 'mail_port', 'mail_encryption', 'mail_username', 'mail_password', 'mail_from_address', 'mail_from_name'];
@@ -73,9 +74,26 @@ class StorefrontNotificationService
         return filled(data_get($setting->notification_credentials, 'sms_api_url'));
     }
 
+    /**
+     * Sends one SMS for a caller that keeps no SMS log of its own (a login or recovery code, a reminder, a
+     * broadcast message) and counts it for the SMS dashboard.
+     */
     public function sendSms(StorefrontSetting $setting, string $phone, string $message): bool
     {
-        return $this->sendSmsDetailed($setting, $phone, $message)['ok'];
+        $result = $this->sendSmsDetailed($setting, $phone, $message);
+
+        app(SmsLogService::class)->other($setting, $phone, $result);
+
+        return $result['ok'];
+    }
+
+    /**
+     * An error message with its web addresses taken out. A failed request names the full gateway URL in its message,
+     * and that URL carries the API key and the message text, which must not reach a log or a page.
+     */
+    public static function scrubUrls(string $text): string
+    {
+        return trim((string) preg_replace('~https?://[^\s)]+~i', '[gateway URL]', $text));
     }
 
     /**
@@ -101,10 +119,17 @@ class StorefrontNotificationService
      * Sends one SMS and says what the gateway answered, so the SMS log and the "Send test SMS" button can
      * show why a message did not leave (no balance, wrong sender ID, IP not whitelisted ...), not only that it did not.
      * `reason` is null when the SMS was accepted, else no_gateway, no_api_key, gateway_unreachable or gateway_refused.
+     * `segments` is how many SMS parts the text is billed as.
      *
-     * @return array{ok: bool, reason: ?string, code: ?int, meaning: ?string, detail: ?string}
+     * @return array{ok: bool, reason: ?string, code: ?int, meaning: ?string, detail: ?string, segments: int}
      */
     public function sendSmsDetailed(StorefrontSetting $setting, string $phone, string $message): array
+    {
+        return [...$this->deliverSms($setting, $phone, $message), 'segments' => SmsSegments::count($message)];
+    }
+
+    /** @return array{ok: bool, reason: ?string, code: ?int, meaning: ?string, detail: ?string} */
+    protected function deliverSms(StorefrontSetting $setting, string $phone, string $message): array
     {
         $credentials = $setting->notification_credentials ?? [];
         $urlTemplate = trim((string) ($credentials['sms_api_url'] ?? ''));
@@ -130,9 +155,10 @@ class StorefrontNotificationService
         try {
             $response = Http::timeout(20)->get($url);
         } catch (\Throwable $exception) {
-            Log::warning('Storefront SMS send failed', ['error' => $exception->getMessage()]);
+            $error = self::scrubUrls($exception->getMessage());
+            Log::warning('Storefront SMS send failed', ['error' => $error]);
 
-            return ['ok' => false, 'reason' => 'gateway_unreachable', 'code' => null, 'meaning' => null, 'detail' => 'unreachable: '.str($exception->getMessage())->limit(180)];
+            return ['ok' => false, 'reason' => 'gateway_unreachable', 'code' => null, 'meaning' => null, 'detail' => 'unreachable: '.str($error)->limit(180)];
         }
 
         if (! $response->successful()) {

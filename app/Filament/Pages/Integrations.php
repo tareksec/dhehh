@@ -870,7 +870,7 @@ class Integrations extends Page
             $logs->queued((int) $company->getKey(), SmsLog::KIND_TEST, null, null, $phone),
             $result['ok'] ? SmsLog::STATUS_SENT : SmsLog::STATUS_FAILED,
             $result['reason'],
-            ['message' => $message, 'gateway_code' => $result['code'], 'detail' => $result['meaning'] ?? $result['detail']],
+            ['message' => $message, 'segments' => $result['segments'], 'gateway_code' => $result['code'], 'detail' => $result['meaning'] ?? $result['detail']],
         );
 
         if ($result['ok']) {
@@ -1378,6 +1378,19 @@ class Integrations extends Page
                                     ->label(__('SMS sender ID'))
                                     ->dehydrateStateUsing(fn (?string $state): ?string => $state === null ? null : trim($state))
                                     ->maxLength(100),
+                                // Only for the SMS Dashboard: the gateway has no price API, so the cost is worked out from this.
+                                TextInput::make('notification_credentials.sms_price_per_sms')
+                                    ->label(__('Price per SMS'))
+                                    ->numeric()
+                                    ->minValue(0)
+                                    ->prefix('৳')
+                                    ->helperText(__('What one SMS part costs you at BulkSMSBD (a Bangla or long message takes more than one part). Used only to estimate the cost on the SMS Dashboard.')),
+                                TextInput::make('notification_credentials.sms_low_balance_alert')
+                                    ->label(__('Warn me when the balance is below'))
+                                    ->numeric()
+                                    ->minValue(0)
+                                    ->prefix('৳')
+                                    ->helperText(__('The SMS Dashboard shows a red warning when the BulkSMSBD balance is below this amount. Leave empty for no warning.')),
                                 Placeholder::make('sms_gateway_wording_note')
                                     ->hiddenLabel()
                                     ->content(__('This URL only delivers messages. The wording of each SMS is written on Settings → SMS Templates, and your branding comes from the sender ID and the wording you write there.'))

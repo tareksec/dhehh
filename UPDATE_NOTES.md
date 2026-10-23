@@ -2,6 +2,24 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - SMS Dashboard (counts, cost, BulkSMSBD balance)
+
+Owner (Bangla): can a dashboard be made for the SMS gateway, with how many SMS came and went, what it cost, and recharge from the dashboard, so nobody has to log in to BulkSMSBD and everything is controlled from here?
+
+**What BulkSMSBD allows (checked on its developer page):** only three things by API: send, send many-to-many, and read the balance (`/api/getBalanceApi?api_key=`). There is **no API to recharge**, none for delivery reports or history, and none for prices. So: counts and cost come from our own SMS log; the balance is live; **a recharge cannot be done from here**, the dashboard has a button that opens their site (a login there is still needed); "sent" means the gateway accepted it, not that the phone got it; the cost is parts x the owner's own price per SMS, an estimate. Ask BulkSMSBD support whether they offer a reseller / payment API if the owner wants more.
+
+**What was built:** Settings → SMS Dashboard (period picker, balance card with refresh and recharge link and a low-balance warning, sent / parts / estimated cost / refused / skipped cards, by-kind table, day-by-day bars). Settings → Integrations → SMS Gateway has **Price per SMS** and **Warn me when the balance is below**. Every SMS is now counted, not only order SMS: login/recovery codes, reminders, broadcasts and investor messages leave a `kind = other` row (phone, result, parts, never the text).
+
+**Found on the way, fixed:** a gateway connection error carried the full request URL, API key included, into the SMS Log detail, the application log and (on the dashboard) the page. URLs are now stripped (`StorefrontNotificationService::scrubUrls()`), the migration cleans old rows. The owner may want to replace the BulkSMSBD API key if a connection error ever appeared in the SMS Log.
+
+**Not verified:** the balance reply for a VALID key (I only have a dummy key: BulkSMSBD answered the dummy with `{"response_code":1011,...}`, which the page shows with the fix advice). The reader accepts a `balance` field or a bare number and shows anything else as it came; if the owner's page shows "no balance could be read" with the raw reply, send me that reply and I will adjust the reader.
+
+**Needs Bangla review (lang/bn.json):** the 41 new keys, mainly "ফিরিয়ে দিয়েছে" (Refused), "আমাদের নিয়মেই পাঠানো হয়নি" (Not sent by our own rules), "পার্ট" (Parts) and the balance and price helper texts.
+
+**Verified:** `SmsDashboardTest` (13), `SmsLogTest`, `IntegrationsPageTest`, `TranslationParityTest`, `MultiCompanyIsolationTest`, `ModuleGuardTest`, Pint on my files; browser check on a scratch SQLite database (desktop and 390px phone, no sideways scroll, real call to BulkSMSBD with a dummy key shows the 1011 advice). Full `php artisan test` before the push.
+
+Commit status: committed to `claude/order-management-features-nafks7`; not on `main` until the owner says so.
+
 ## 2026-10-23 - Courier COD is the due amount, and the order page has a Payment section
 
 Owner (Bangla): when an order is booked with a courier the grand total is sent as the COD amount; with an advance payment the due amount shows on the order but the courier still gets the grand total, and it should be the due amount. Also: separate the payment section on the order page, a new person cannot tell where the payment / advance payment goes.

@@ -208,7 +208,7 @@ class OrderStatusSmsService
     protected function deliver(?SmsLog $log, StorefrontSetting $setting, string $phone, string $message): bool
     {
         $result = $this->notifications->sendSmsDetailed($setting, $phone, $message);
-        $extra = ['phone' => $phone, 'message' => $message, 'gateway_code' => $result['code'], 'detail' => $result['meaning'] ?? $result['detail']];
+        $extra = ['phone' => $phone, 'message' => $message, 'segments' => $result['segments'], 'gateway_code' => $result['code'], 'detail' => $result['meaning'] ?? $result['detail']];
 
         if ($result['ok']) {
             return $this->closeLog($log, SmsLog::STATUS_SENT, null, $extra);
@@ -220,7 +220,7 @@ class OrderStatusSmsService
     /**
      * Closes the log row; returns whether the SMS was sent.
      *
-     * @param  array{phone?: ?string, message?: ?string, gateway_code?: ?int, detail?: ?string}  $extra
+     * @param  array{phone?: ?string, message?: ?string, segments?: ?int, gateway_code?: ?int, detail?: ?string}  $extra
      */
     protected function closeLog(?SmsLog $log, string $status, ?string $reason = null, array $extra = []): bool
     {
