@@ -156,6 +156,7 @@
     font-weight: 700;
     line-height: 1;
     text-decoration: none;
+    cursor: pointer;
     transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 
@@ -172,6 +173,25 @@
 .nb-btn--light { background: var(--nb-card); color: var(--nb-ink); }
 .nb-btn--yellow { background: var(--nb-yellow); color: #111111; }
 .nb-btn--small { min-height: 2.5rem; padding: 0 1rem; font-size: 0.9rem; box-shadow: 3px 3px 0 var(--nb-ink); }
+.nb-btn--icon { width: 2.5rem; padding: 0; }
+
+/* The header holds the logo, the sign-in and apply buttons and the dark-mode toggle: on a phone
+   (Bangla labels are the widest) the buttons give up a little padding and size so the logo keeps some room. */
+@media (max-width: 430px) {
+    .nb-btn--small { padding: 0 0.7rem; font-size: 0.85rem; }
+    .nb-btn--icon { padding: 0; }
+}
+
+/* The dark-mode toggle shows the moon in light mode and the sun in dark mode. */
+.nb-theme-icon--sun { display: none; }
+.dark .nb-theme-icon--sun { display: block; }
+.dark .nb-theme-icon--moon { display: none; }
+
+/* The website's logo pair: the light-background logo, swapped for the dark-background one in dark
+   mode. Only drawn as a pair when a dark logo exists (the view adds --light then). */
+.nb-logo--dark { display: none; }
+.dark .nb-logo--dark { display: block; }
+.dark .nb-logo--light { display: none; }
 
 .nb-chip {
     display: inline-flex;

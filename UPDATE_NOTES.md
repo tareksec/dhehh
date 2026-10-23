@@ -2,6 +2,22 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 (latest) - Landing page header: dark / night mode button and the Next.js website's logo pair
+
+Owner (Bangla): add an icon in the header for dark and night mode; and make the header logo render the Next.js theme's logo, so that the white-background and black-background logos render.
+
+**What I did:** (1) A moon / sun button in the landing page header (next to Sign in and Apply). It switches the page between light and dark, remembers the choice on the device (`localStorage` `resellerLandingTheme`, applied before the first paint) and, until pressed, follows the device setting as before. (2) The header logo is now the Next.js website's logo pair (Site → Storefront Settings, Next.js row): the white-background logo in light mode, the black-background logo in dark mode. One logo only = shown in both modes (as on the website); no website logo = the company's own logos (so a store without a website looks as before). `StorefrontSiteConfigService::branding()` is now the single place for that pair (also used by `/site`).
+
+**Found while checking on phone widths:** with the extra button, the Bangla header (logo + Sign in + "এখনই আবেদন করুন") did not fit on a 360-390 px phone and squeezed the logo out. Fixed: on a phone the header's button reads "Apply" (আবেদন করুন), the language switch and the "Reseller guide" tag appear from 768 px (the hero already has the language switch on a phone), the buttons are a little tighter under 430 px, and the logo can shrink instead of sliding under the buttons. Measured in Chromium (English and Bangla, light and dark, 320-1280 px): no sideways scroll and the logo never overlaps the buttons. **Known limit:** at 320 px in Bangla the logo is only about 33 px wide (three buttons plus a logo do not fit); 360 px shows about 73 px, 390 px about 103 px.
+
+**No new strings** ("Apply", "Switch to dark mode", "Switch to light mode" already exist in both languages).
+
+**Not changed:** the footer's logo (it is the website's light logo in the footer's own colour, as on the website). The website itself already has its toggle and logo pair.
+
+**Verified:** `ResellerLandingPageTest` (4 new tests), `StorefrontApiTest`, `TranslationParityTest`; `npm run build`; Chromium screenshots of the toggle (click, reload, device-dark and a saved choice) and of the header at 320 / 360 / 375 / 390 / 414 / 640 / 768 / 1280 px. Full `php artisan test` before the commit.
+
+Commit status: committed to `claude/reseller-module-status-v9tobe` (merged with main at v2.106.0 first); not on `main` until the owner says so.
+
 ## 2026-10-23 - Test SMS "1001 Invalid Number" with the new API key
 
 Owner (Bangla, with a phone screenshot of the SMS Log): after connecting the new API, the Send test SMS button with their own number says the number is invalid.

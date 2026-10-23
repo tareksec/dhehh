@@ -1,5 +1,5 @@
 # Reseller Program & Portal
-> Last checked: 2026-10-23, reseller landing page (portal host front page, website footer, Bangla switch, Anek Bangla, own Tailwind stylesheet) and the website banner button
+> Last checked: 2026-10-23, reseller landing page (portal host front page, website footer, header logo pair and dark-mode toggle, Bangla switch, Anek Bangla, own Tailwind stylesheet) and the website banner button
 
 ## What it does
 The Reseller Program & Portal module enables wholesale multi-vendor dropshipping, affiliate storefronts, commission earnings, and reseller account management. Approved resellers log into a dedicated Filament 5 portal (`/portal`) to browse wholesale catalogs, place customer dropship orders, track commission earnings, and request payout withdrawals to mobile banking or bank accounts. It allows resellers to launch their own branded affiliate stores on company subdomains (e.g. `shop.company.com`) or verified custom domains with automatic on-demand SSL issuance. The module supports customizable variation selling prices, security deposit ledgers, own-courier merchant account fulfillment, and self-service password recovery workflows.
@@ -87,7 +87,7 @@ The Reseller Program & Portal module enables wholesale multi-vendor dropshipping
 | `app/Http/Middleware/RestrictPortalHosts.php` | Enforces domain isolation between portal, admin, and storefront routes; lets the reseller host's `/` through (the landing page) while `Company::resellerLandingEnabled()` and remembers the portal company on the request. |
 | `app/Http/Middleware/SetResellerPortalLocale.php` | The English / Bangla switch of the portal's public pages: `?lang=` sets cookie `reseller_portal_locale`; runs on portal hosts only (web group, panel stack, Livewire persistent middleware). |
 | `app/Http/Controllers/TlsAskController.php` | Authorizes on-demand TLS SSL certificate issuance for reseller domains. |
-| `app/Http/Controllers/Reseller/ResellerGuideController.php` | The public reseller landing page (portal host front page via `HomeController`, and `/portal/guide`): program explanation, questions and answers, rules, apply / sign-in buttons, the Next.js site's footer. |
+| `app/Http/Controllers/Reseller/ResellerGuideController.php` | The public reseller landing page (portal host front page via `HomeController`, and `/portal/guide`): program explanation, questions and answers, rules, apply / sign-in buttons, the Next.js site's header logo pair (`logos()`: light + dark, company logo as fallback) and footer. |
 | `app/Http/Controllers/Reseller/ResellerOnlinePaymentReturnController.php` | Handles gateway callbacks when resellers top up security deposits online. |
 | `app/Http/Controllers/Reseller/ResellerProductPhotosController.php` | Generates zip archives of high-resolution product photos for resellers. |
 | `app/Http/Controllers/Storefront/ResellerController.php` | Public reseller application processing on the Blade storefront. |
@@ -102,7 +102,7 @@ The Reseller Program & Portal module enables wholesale multi-vendor dropshipping
 | `resources/views/filament/reseller/pages/my-store.blade.php` | Reseller custom store configuration view. |
 | `resources/views/filament/reseller/pages/earnings.blade.php` | Reseller earnings and commission breakdown view. |
 | `resources/views/filament/pages/reseller-settings.blade.php` | Admin reseller configuration view. |
-| `resources/views/reseller/guide.blade.php` | The landing page, neo-brutalist (styles in `resources/css/reseller-landing.css`, which also holds the page's own Tailwind build - `@source` lines list the views it scans, and the page does not load `app.css`; font Anek Bangla in `resources/fonts/anek-bangla/`). |
+| `resources/views/reseller/guide.blade.php` | The landing page, neo-brutalist (styles in `resources/css/reseller-landing.css`, which also holds the page's own Tailwind build - `@source` lines list the views it scans, and the page does not load `app.css`; font Anek Bangla in `resources/fonts/anek-bangla/`); its header has the Next.js logo pair (`nb-logo--light` / `nb-logo--dark`) and a dark / light toggle (`data-theme-toggle`, choice kept in `localStorage` key `resellerLandingTheme`). |
 | `resources/views/reseller/partials/footer.blade.php` | The Next.js website's Footer Builder footer on the landing page (data from `StorefrontSiteConfigService::footer()`). |
 | `resources/views/reseller/partials/language-switch.blade.php`, `resources/views/filament/reseller/language-switch.blade.php` | The English / Bangla switch on the landing page and on the sign-in / application pages. |
 
