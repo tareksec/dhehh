@@ -1230,6 +1230,33 @@ Tests: `ResellerLevelsTest` (10). Verified: full suite 2543 passed, 1 skipped, 0
 
 Commit status: committed and pushed to the work branch `claude/reseller-module-status-v9tobe` (2026-10-16). Not pushed to `main`.
 
+## 2026-10-22 (last) - Landing page: the reseller's questions answered, Bangla version, Anek Bangla font
+
+The owner (in Bangla) passed on the questions of a prospective reseller (list products on Facebook/website with photos, details, prices; send customer name/address/phone/bill; the store sends by Steadfast on cash on delivery and deducts the product price, packaging and other charges before sending the profit; how payment and profit settlement work) and asked that **the answers are written on the landing page**, that the page **has a Bangla version**, and that it **uses the Anek Bangla font**.
+
+What changed (details in `CHANGELOG.md` [Unreleased]):
+
+1. A **Questions resellers ask** section with six answers, written only from what the code does (checked in `ResellerOrderPlacementService::quote()`, `ResellerCommissionService`, the portal's Products / Earnings / Withdrawals pages): cash on delivery with nothing in advance; customer bill = the reseller's prices + the store's delivery charge + VAT where it applies; profit = selling price − cost per piece; **no packaging charge on store-delivered orders** (packaging is charged only on own-courier orders, as the guide already says); profit payable after delivery; withdrawal to bKash / Nagad / Rocket / bank, reviewed and paid by the store.
+2. A **Bangla / English switch** on the landing page (cookie, `?lang=bn`), followed by the portal's sign-in and application pages. Default stays the app's language for anyone who did not use the switch.
+3. **Anek Bangla** (variable, self-hosted, OFL) for the whole landing page; Hind Siliguri and Unbounded are no longer loaded there. The admin portal itself is unchanged (still Hind Siliguri).
+
+Decisions I made without asking, for the owner to confirm or change:
+
+- **I did not name Steadfast.** The prospective reseller asked about Steadfast, but the courier is the store's own setting and I could not confirm from the code which courier the store uses for reseller orders. The answer says "the store sends the parcel on cash on delivery". If the owner wants Steadfast named, tell me the exact words.
+- **No promise about how fast the store pays.** The system has no payout deadline, so the answer gives none.
+- **The prospective reseller's "packaging and other charges are deducted from the delivery money" is answered with what the system does:** the reseller's cost (shown on each product) is what the store keeps; delivery charge and VAT are added to the customer's bill; no separate packaging charge on store-delivered orders; the return charge only if the order comes back (and only if the store set one). If the owner's real practice is different (for example a packaging deduction), the system itself would have to change first.
+- **The answers are part of the page's code, not an admin-edited list**, like the other "how it works" sections (so they are in Bangla and English from the language files). The guide's introduction and rules are still admin-written, and appear in whatever language the admin typed them. If the owner wants the questions editable from Reseller Settings too, that is a small follow-up.
+- Language default: I did **not** make Bangla the default; only a visitor's own choice changes it. Setting `APP_LOCALE=bn` would make Bangla the default for the whole app, not just this page.
+- Two language-name keys hold the language's own name ("English", "বাংলা") and are read in their own language, so the switch is always readable; the Bangla word lives only in `lang/bn.json`.
+
+Needs Bangla review (new keys, all in `lang/bn.json`): the six questions and their answers (long sentences; I wrote them in the same plain style as the guide, using "আয়" for profit, "খরচ" for cost and "উইথড্র" as the guide does), *Questions resellers ask*, *Questions and answers*, the short line under the heading, *Change language*.
+
+**Deploy: `npm run build`** (new font files and CSS).
+
+Verified: `npm run build`, the English and Bangla pages rendered in Chromium (desktop and 390 px phone), and the full suite on the tree with `origin/main` (v2.100.0) merged in: 2986 passed, 5 skipped, 0 failed.
+
+Commit status: committed to the work branch `claude/reseller-module-status-v9tobe`, `origin/main` (v2.100.1) merged in, full suite on the merged tree green (result below); pushed to `main` on the owner's explicit approval ("ওকে এটা মেইনে পুশ কর", 2026-10-23).
+
 ## 2026-10-22 (later) - Landing page redesigned in neo-brutalism
 
 The owner (in Bangla) said the landing page was not beautiful and asked for names of trending UI styles; I listed eight and recommended Bento + gradient; the owner chose **Neo-brutalism**.

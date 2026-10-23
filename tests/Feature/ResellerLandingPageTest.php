@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\ResellerSettings;
+use App\Http\Middleware\SetResellerPortalLocale;
 use App\Models\Company;
 use App\Models\StorefrontPage;
 use App\Models\StorefrontSetting;
@@ -193,6 +194,108 @@ class ResellerLandingPageTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertNull($this->blade->fresh()->reseller_banner_image);
+    }
+
+    public function test_the_landing_page_answers_the_questions_new_resellers_ask(): void
+    {
+        $page = $this->get($this->portal.'/')->assertOk();
+
+        $page->assertSee('id="faq"', false)
+            ->assertSeeInOrder([
+                'Can I just market and sell while you pack and deliver?',
+                'Can I list your products on my Facebook page and website with photos, details and prices?',
+                'A customer confirmed an order. What do I send you?',
+                'How is the parcel sent, and who collects the money?',
+                'What is deducted from the money collected, and how much is my profit?',
+                'When and how do I get my profit? How do payment and profit settlement work?',
+            ])
+            // The answers state what the system does: the profit rule, cash on delivery, the withdrawal route.
+            ->assertSee('Your profit is your selling price minus your cost, for every piece.')
+            ->assertSee('there is no separate packaging charge on orders the store delivers')
+            ->assertSee('cash on delivery, so your customer pays when it arrives and you pay nothing in advance')
+            ->assertSee('Open Withdrawals in the portal and request any amount up to your available balance, to bKash, Nagad, Rocket or a bank account.');
+
+        $this->assertSame(6, substr_count($page->getContent(), 'data-reseller-faq'));
+    }
+
+    public function test_figures_in_the_answers_follow_the_settings(): void
+    {
+        $this->blade->forceFill(['reseller_min_withdrawal' => 500, 'reseller_return_charge' => 50])->save();
+
+        $hidden = $this->get($this->portal.'/')->assertOk()->getContent();
+        $this->assertStringNotContainsString('The smallest withdrawal is', $hidden);
+        $this->assertStringNotContainsString('The return charge is', $hidden);
+        // The charge itself is told without its amount.
+        $this->assertStringContainsString('a return charge is taken from your deposit', $hidden);
+
+        $this->blade->forceFill(['reseller_guide_show_figures' => true])->save();
+
+        $shown = $this->get($this->portal.'/')->assertOk()->getContent();
+        // Once in the money section and once in the answer to the last question.
+        $this->assertSame(2, substr_count($shown, 'The smallest withdrawal is'));
+        $this->assertSame(2, substr_count($shown, 'The return charge is'));
+    }
+
+    public function test_the_landing_page_has_a_bangla_version_that_the_visitor_chooses(): void
+    {
+        $bangla = $this->get($this->portal.'/?lang=bn')->assertOk();
+
+        $bangla->assertSee('<html lang="bn"', false)
+            ->assertSee(__('What is deducted from the money collected, and how much is my profit?', [], 'bn'))
+            ->assertSee(__('Apply now', [], 'bn'))
+            ->assertDontSee('What is deducted from the money collected')
+            ->assertCookie(SetResellerPortalLocale::COOKIE, 'bn');
+
+        // The switch is on the page, with each language named in itself.
+        $bangla->assertSee('data-reseller-language-switch', false)->assertSee('?lang=en', false)->assertSee('?lang=bn', false)
+            ->assertSee(__('Language name: Bangla', [], 'bn'))
+            ->assertSee('English');
+
+        $this->get($this->portal.'/?lang=en')->assertOk()
+            ->assertSee('<html lang="en"', false)
+            ->assertSee('What is deducted from the money collected')
+            ->assertCookie(SetResellerPortalLocale::COOKIE, 'en');
+    }
+
+    public function test_the_chosen_language_is_kept_on_the_landing_and_application_pages(): void
+    {
+        // Back on the page later, without "?lang", the stored choice still applies.
+        $this->withCookie(SetResellerPortalLocale::COOKIE, 'bn')->get($this->portal.'/')
+            ->assertOk()
+            ->assertSee('<html lang="bn"', false)
+            ->assertSee(__('Questions resellers ask', [], 'bn'));
+
+        // The same on the portal's application page.
+        $this->withCookie(SetResellerPortalLocale::COOKIE, 'bn')->get($this->portal.'/portal/register')
+            ->assertOk()
+            ->assertSee('data-reseller-language-switch', false)
+            ->assertSee(__('Read the reseller guide', [], 'bn'));
+
+    }
+
+    public function test_a_language_the_page_does_not_have_is_ignored(): void
+    {
+        $this->get($this->portal.'/?lang=fr')->assertOk()
+            ->assertSee('<html lang="en"', false)
+            ->assertCookieMissing(SetResellerPortalLocale::COOKIE);
+    }
+
+    public function test_the_language_choice_never_reaches_the_shop(): void
+    {
+        $this->withCookie(SetResellerPortalLocale::COOKIE, 'bn')->get('https://landing-co.example.test/?lang=bn')
+            ->assertOk()
+            ->assertSee('<html lang="en"', false)
+            ->assertCookieMissing(SetResellerPortalLocale::COOKIE);
+    }
+
+    public function test_the_landing_page_is_set_in_anek_bangla_which_ships_with_the_erp(): void
+    {
+        foreach (['bengali', 'latin', 'latin-ext'] as $subset) {
+            $this->assertFileExists(resource_path("fonts/anek-bangla/anek-bangla-{$subset}-wght-normal.woff2"));
+        }
+
+        $this->assertFileExists(resource_path('fonts/anek-bangla/OFL.txt'));
+        $this->assertStringContainsString("font-family: 'Anek Bangla'", (string) file_get_contents(resource_path('css/reseller-landing.css')));
     }
 
     public function test_the_standard_banner_ships_with_the_erp(): void
