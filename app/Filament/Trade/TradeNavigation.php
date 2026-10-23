@@ -36,6 +36,7 @@ class TradeNavigation
             [DeliveryChallanResource::class, 'Sales', 'heroicon-o-document-text', true],
             [StockItemResource::class, 'Stock', 'heroicon-o-archive-box', true],
             [DueResource::class, 'Dues', 'heroicon-o-clock', true],
+            [Pages\Reports::class, 'Reports', 'heroicon-o-chart-bar', false],
             [Pages\CashBook::class, 'Cash book', 'heroicon-o-book-open', false],
             [Pages\BalanceSheet::class, 'Balance sheet', 'heroicon-o-scale', false],
             [GoodsInResource::class, 'Goods in', 'heroicon-o-truck', false],

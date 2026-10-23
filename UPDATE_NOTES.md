@@ -2,6 +2,30 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-26 - Trade Portal phase 6 (reports + phone testing)
+
+Owner request: start Phase 6 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-reports`. The branch starts from `feature/trade-portal-landed-cost`, so it carries all six phases; none is on `main`.
+
+What changed: Menu → Reports with nine reports (daily sales, monthly sales, dues by age, stock ledger, owed to suppliers, cash and bank, LC status, landed cost per shipment, shipment advice and insurance register), each on screen with Print, PDF and Excel; permission `trade.reports`; the period inputs wrap on small phones. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief "reports as screen + PDF + Excel" and SUMMARY.md §4):
+
+- **PDF language:** DomPDF cannot shape Bangla — checked by rendering a Bangla report and reading it back (ক্রেতা came out as "করতো", vowel signs in the wrong place). So the **PDF file is English**, and **Print** opens the same report in Bangla in the browser, which draws Bangla correctly and can "Save as PDF". The project's investor reports chose the browser print page for the same reason.
+- Dues by age count days from the sale date (challans have due terms in words, not due dates); the opening due from the old books is its own column.
+- Sales reports include every counted sale of the company (Delivery Challans and any ERP order), with the challan number when there is one.
+- The stock ledger counts stock moves on the day they were entered (stock moves have no date of their own), and values stock at the current buying price.
+- Cash and bank lists each account's own in/out (moves between accounts show in both); the LC margins held by the bank are a note under it (from the LC files not yet cleared).
+
+Phone testing: all 30 portal pages (every list, form, detail page, the cash book, balance sheet, the nine reports) opened in a 360px frame on a throwaway copy of the dev database — no page scrolls sideways after the date-input fix; no console errors on the portal pages. A report checked as cards at 360px; the Bangla print page checked on screen; the English PDF read back.
+
+Needs Bangla review: the 34 new keys, especially the report names ("বাকি — কত দিনের", "স্টকের খাতা", "শিপমেন্ট অ্যাডভাইস ও বীমার খাতা") and the notes under the reports.
+
+Not done: a Bangla PDF file (needs a PDF engine with Bangla shaping, e.g. a headless browser on the server — not set up); e-mailing or scheduling reports; profit report (not in the brief's list).
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 3,024 passed, 1 skipped, 0 failed. New: `TradeReportsTest` (9).
+
+Commit status: committed and pushed to `feature/trade-portal-reports`; not on `main` (waits for the owner's approval; it contains all six phases).
+
 ## 2026-10-25 - Trade Portal phase 5 (landed cost + machine serials)
 
 Owner request: start Phase 5 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-landed-cost`. The branch starts from `feature/trade-portal-lc-file` (phases 1–4 are not on `main` yet), so it carries all five.

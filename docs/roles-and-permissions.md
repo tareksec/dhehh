@@ -140,6 +140,7 @@ trade.stock                Stock: add items, correct counts
 trade.dues                 Dues: see who owes, receive money
 trade.import               Bring in old data (buyers with old dues, items with stock)
 trade.lc                   LC files: import details, stages, print the LC letter, DRL, certificate, packing list, shipment advice
+trade.reports              Reports on screen, as a print page, PDF (English) and Excel
 trade.landed_cost          Landed cost worksheet of an LC file; apply it to the stock buying price
 trade.cashbook             Cash book and balance sheet; record bank deposits, supplier payments, costs
 trade.money_accounts       Cash and bank accounts: add them, set the money in them at the start

@@ -215,8 +215,17 @@
 
 .trade-stepper {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* Two dates (from – to) share the row on a phone instead of running off it. */
+.trade-stepper .trade-date-input {
+    flex: 1 1 8.5rem;
+    min-width: 0;
 }
 
 .trade-stepper .trade-round-btn {
@@ -309,6 +318,92 @@
     border-color: var(--trade-primary);
     background-color: var(--trade-primary);
     color: #ffffff;
+}
+
+/* Reports: a table on wide screens, one card per row on a phone. */
+.trade-report-table-wrap {
+    display: none;
+    overflow-x: auto;
+    padding: 0;
+}
+
+.trade-report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.trade-report-table th,
+.trade-report-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--trade-line);
+    text-align: start;
+    vertical-align: top;
+}
+
+.trade-report-table th {
+    background-color: var(--trade-page);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.trade-report-table tfoot td {
+    font-weight: 700;
+    border-bottom: 0;
+}
+
+.trade-report-table .trade-num {
+    text-align: end;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.trade-report-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.trade-report-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.trade-report-lines div {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.trade-report-lines dt {
+    color: var(--trade-muted);
+}
+
+.trade-report-lines dd {
+    font-weight: 600;
+    text-align: end;
+    overflow-wrap: anywhere;
+}
+
+.trade-report-total {
+    background-color: var(--trade-primary-soft);
+}
+
+@media (min-width: 1024px) {
+    .trade-report-table-wrap {
+        display: block;
+    }
+
+    .trade-report-cards {
+        display: none;
+    }
+}
+
+@media (min-width: 768px) {
+    .trade-reports {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
 }
 
 /* Label / value pairs on a challan's page. */

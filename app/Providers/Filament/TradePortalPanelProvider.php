@@ -8,6 +8,7 @@ use App\Filament\Trade\TradeNavigation;
 use App\Http\Controllers\Trade\TradeChallanPrintController;
 use App\Http\Controllers\Trade\TradeLcDocumentController;
 use App\Http\Controllers\Trade\TradePortalLocaleController;
+use App\Http\Controllers\Trade\TradeReportDownloadController;
 use App\Http\Middleware\PreventAdminPageCaching;
 use App\Http\Middleware\ResolveTradePortalCompany;
 use App\Http\Middleware\RestrictPortalHosts;
@@ -15,6 +16,7 @@ use App\Http\Middleware\SetTradePortalLocale;
 use App\Models\LcFile;
 use App\Services\CompanyContext;
 use App\Services\CompanySettingsService;
+use App\Services\TradeReportService;
 use Filament\FontProviders\LocalFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -83,6 +85,10 @@ class TradePortalPanelProvider extends PanelProvider
                     ->whereNumber('lcFile')
                     ->whereIn('document', array_keys(LcFile::DOCUMENTS))
                     ->name('lc-files.document');
+                Route::get('reports/{report}/download/{format}', TradeReportDownloadController::class)
+                    ->whereIn('report', array_keys(TradeReportService::REPORTS))
+                    ->whereIn('format', ['print', 'pdf', 'xlsx'])
+                    ->name('reports.download');
             })
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn (): View => view('filament.trade.language-switch'))
             // Phones: the bottom tab bar with its menu sheet.
