@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.109.0] - 2026-10-23
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -24,7 +26,6 @@ All notable production changes to Business Dashboard are documented here.
 - `App\Support\SmsGatewayUrl`: `BULKSMSBD` (the placeholder address), `tidy()` (BulkSMSBD hosts only; parameter names `api_key`, `senderid`, `number`, `message`; a filled box wins over a value found in the address; sample words are dropped, never taken for a value), `preview()` (key shortened). `Integrations` calls it from `tidyGatewayUrl()` (URL box `afterStateUpdated`, the sparkle suffix action and the start of `save()`, before validation) and `fillEmptyGatewayUrl()` (API key / sender ID `afterStateUpdated`, only when the address is empty). Covered by `SmsGatewayUrlTest`.
 - `StorefrontNotificationService::smsTemplateMissing()` lists which of `{phone}` / `{message}` a URL template lacks; it feeds the save rule on `Integrations` (SMS gateway URL), the `bad_gateway_url` send reason in `deliverSms()` (no gateway call, reason label in `SmsLogService::reasonLabels()`, `detail` = "missing {phone}, {message}") and the red warning on the SMS Dashboard (`urlMissing`). A template saved before this check is not changed, only refused at send time.
 - SMS dashboard: `App\Filament\Pages\SmsDashboard` (Settings cluster, "manage settings" permission), `SmsUsageService` (aggregates the SMS log; the company scope applies), `SmsBalanceService` (BulkSMSBD hosts only, host taken from the saved URL template, answer parsed from a `balance` field or a bare number, anything else shown as it came; the real reply for a valid key could not be checked here), `App\Support\SmsSegments`. `sms_logs.segments` (migration `2026_10_23_210000`, backfills older rows from their text and scrubs gateway URLs from old `detail` values); `SmsLog::KIND_OTHER`; `StorefrontNotificationService::sendSms()` now writes the `other` row through `SmsLogService::other()` and `sendSmsDetailed()` also returns `segments`; `scrubUrls()`. `sms_price_per_sms` and `sms_low_balance_alert` join `SMS_CREDENTIAL_KEYS` (kept by both Integrations and Storefront Settings). Tests: new `SmsDashboardTest` (13). Lang: 41 new keys.
-
 ## [2.108.0] - 2026-10-23
 
 **Release type:** Minor Feature Update
