@@ -5,6 +5,7 @@ namespace App\Console\Commands\Ims;
 use App\Ims\Todo\OwnerTodo;
 use App\Mail\ImsMessage;
 use App\Models\Company;
+use App\Models\EmailLog;
 use App\Models\StorefrontSetting;
 use App\Models\User;
 use App\Services\StorefrontNotificationService;
@@ -45,7 +46,7 @@ class SendOwnerDigest extends ImsCompanyCommand
             Notification::make()->title(__('What to do today'))->body(implode("\n", $lines))->sendToDatabase($user);
 
             if ($setting !== null && filled($user->email)) {
-                app(StorefrontNotificationService::class)->sendMailable($setting, (string) $user->email, new ImsMessage($company->name, __('What to do today'), $lines, $officeUrl));
+                app(StorefrontNotificationService::class)->sendMailable($setting, (string) $user->email, new ImsMessage($company->name, __('What to do today'), $lines, $officeUrl), EmailLog::KIND_OWNER_DIGEST);
             }
 
             $sent++;

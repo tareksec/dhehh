@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Mail\ResellerPasswordResetLink;
 use App\Mail\StorefrontLoginOtp;
 use App\Models\ConversationChannel;
+use App\Models\EmailLog;
 use App\Models\StorefrontSetting;
 use App\Services\Meta\MetaGraphService;
 use App\Support\PhoneLinks;
@@ -210,16 +211,23 @@ class StorefrontNotificationService
             return __('SMTP host and username are not saved yet.');
         }
 
+        $logs = app(EmailLogService::class);
+        $via = $logs->via($setting, true);
+
         try {
             $this->companyMailer($setting)->raw(
                 __('This is a test email from ZamZam ERP. If you can read it, email sending for this site works.'),
                 fn ($message) => $message->to($email)->subject(__('ZamZam ERP test email')),
             );
-
-            return null;
         } catch (\Throwable $exception) {
+            $logs->failed($setting, EmailLog::KIND_TEST, $email, $via, $exception->getMessage());
+
             return $exception->getMessage();
         }
+
+        $logs->sent($setting, EmailLog::KIND_TEST, $email, $via);
+
+        return null;
     }
 
     /**
@@ -233,47 +241,60 @@ class StorefrontNotificationService
             || ! in_array(config('mail.default'), ['log', 'array', null, ''], true);
     }
 
-    /** Any mail through the company's own SMTP when it has one (IMS v2 notifications). */
-    public function sendMailable(StorefrontSetting $setting, string $email, Mailable $mail): bool
+    /**
+     * Any mail through the company's own SMTP when it has one (IMS v2 notifications). $kind says what the
+     * message is for, in the email log.
+     */
+    public function sendMailable(StorefrontSetting $setting, string $email, Mailable $mail, string $kind = EmailLog::KIND_OTHER): bool
     {
-        try {
-            $mailer = $this->mailConfigured($setting) ? $this->companyMailer($setting) : Mail::mailer();
-            $mailer->to($email)->send($mail);
-
-            return true;
-        } catch (\Throwable $exception) {
-            Log::warning('Company email failed', ['error' => $exception->getMessage(), 'mail' => $mail::class]);
-
-            return false;
-        }
+        return $this->deliver($setting, $email, $mail, $kind, 'Company email failed');
     }
 
     public function sendResellerPasswordResetEmail(StorefrontSetting $setting, string $email, string $companyName, string $url, int $minutes): bool
     {
-        try {
-            $mailer = $this->mailConfigured($setting) ? $this->companyMailer($setting) : Mail::mailer();
-            $mailer->to($email)->send(new ResellerPasswordResetLink($companyName, $url, $minutes));
-
-            return true;
-        } catch (\Throwable $exception) {
-            Log::warning('Reseller password reset email failed', ['error' => $exception->getMessage()]);
-
-            return false;
-        }
+        return $this->deliver(
+            $setting,
+            $email,
+            new ResellerPasswordResetLink($companyName, $url, $minutes),
+            EmailLog::KIND_RESELLER_PASSWORD_RESET,
+            'Reseller password reset email failed',
+        );
     }
 
     public function sendLoginOtpEmail(StorefrontSetting $setting, string $email, string $companyName, string $code): bool
     {
-        try {
-            $mailer = $this->mailConfigured($setting) ? $this->companyMailer($setting) : Mail::mailer();
-            $mailer->to($email)->send(new StorefrontLoginOtp($companyName, $code));
+        return $this->deliver($setting, $email, new StorefrontLoginOtp($companyName, $code), EmailLog::KIND_LOGIN_CODE, 'Storefront login OTP email failed');
+    }
 
-            return true;
+    /**
+     * Sends one mailable through this site's own SMTP when it has one, else the server's default mailer, and
+     * writes the outcome to the email log (never the text of the message). Logging never changes the result.
+     */
+    protected function deliver(StorefrontSetting $setting, string $email, Mailable $mail, string $kind, string $failureWarning): bool
+    {
+        $logs = app(EmailLogService::class);
+        $ownSmtp = $this->mailConfigured($setting);
+        $via = $logs->via($setting, $ownSmtp);
+
+        try {
+            $mailer = $ownSmtp ? $this->companyMailer($setting) : Mail::mailer();
+            $mailer->to($email)->send($mail);
         } catch (\Throwable $exception) {
-            Log::warning('Storefront login OTP email failed', ['error' => $exception->getMessage()]);
+            Log::warning($failureWarning, ['error' => $exception->getMessage(), 'mail' => $mail::class]);
+            $logs->failed($setting, $kind, $email, $via, $exception->getMessage());
 
             return false;
         }
+
+        // The server's default mailer may only write to a log file ("log" / "array"): the send works, but
+        // nothing leaves the server, and the log must not call that "sent".
+        if (! $ownSmtp && ! $this->emailDeliveryAvailable($setting)) {
+            $logs->skipped((int) $setting->company_id, $kind, $email, EmailLogService::REASON_LOG_ONLY, $via);
+        } else {
+            $logs->sent($setting, $kind, $email, $via);
+        }
+
+        return true;
     }
 
     public function sendWhatsAppTemplate(

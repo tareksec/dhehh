@@ -4,6 +4,25 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Email Log: was the email sent, did it fail, and why.** Owner request 2026-10-23. New page **Settings → Email Log** lists every email the ERP tries to send, for the selected company: time, the kind of message (customer login code, reseller password reset link, investor code, investor invitation, investor message, owner's daily digest, test email), who it went to, the result and the way it was sent (the site's own SMTP host, or the server's default mailer).
+  - **Sent**: the mail server (for example Amazon SES) accepted the message. The page says this does not prove the inbox received it; bounces and spam-folder delivery are not tracked yet.
+  - **Failed**: with a plain reason and the mail server's own answer: wrong SMTP user name or password, an email address that is not verified (the From address, or the recipient while SES is still in its sandbox), sending limit or rate reached, mail server unreachable, invalid address, or any other refusal.
+  - **Not sent**: no email account is set up for the site, or the server's own mailer only writes to a log file so nothing left the server. A reseller password reset link or an investor code that could not be sent for this reason is now logged too.
+  - Filter by result or kind of message. Staff who can manage settings see only their own company's rows. The text of a message is never stored, only who it went to and the result, so a login or reset code never sits in the log.
+  - The **Send test email** button on Integrations → Email Setup also writes to this log.
+
+### Technical Notes
+
+- New table `email_logs` (migration `2026_10_23_200000_create_email_logs_table.php`, short index name) and company-owned model `EmailLog` (registered in `MultiCompanyIsolationTest`). `EmailLogService` writes rows, never throws (a failed write is reported and ignored, so logging cannot stop an email), and `classify()` maps the server's error text to a reason key (`auth_failed`, `address_not_verified`, `limit_reached`, `unreachable`, `invalid_address`, `send_error`); `not_configured` and `log_only` are written by the sender itself.
+- `StorefrontNotificationService`: the three senders (`sendMailable()`, `sendResellerPasswordResetEmail()`, `sendLoginOtpEmail()`) now share one `deliver()`; the failure warning logged to `laravel.log` is unchanged (its context now always includes the mail class). `sendMailable()` takes the message kind as an optional last argument (IMS code, invitation, message, owner digest at their call sites). `sendTestEmail()` logs too. A send through a server mailer that is `log` or `array` still returns true as before but is logged as not sent (`log_only`).
+- `OtpService` and `ResellerPasswordResetService` log the "no email account" case before returning, since they stop before any send.
+- New Settings-cluster resource `EmailLogResource` (read-only, `canManageSettings()`), `docs/codebase-map/crm-messaging.md` updated, `docs/email-ses-setup.md` gains a section on the log. Lang keys in `lang/en.json` and `lang/bn.json`.
+- Tests: new `EmailLogTest` (sent / failed / log-only rows, no code stored, the reason mapping with SES answers, logging failure never stops the email, company isolation, the page, the two early-return call sites, the Integrations test button); `ResellerPasswordResetByStaffTest` asserts the skip row; `MultiCompanyIsolationTest` lists `EmailLog`.
+
 ## [2.103.0] - 2026-10-23
 
 **Release type:** Minor Feature Update

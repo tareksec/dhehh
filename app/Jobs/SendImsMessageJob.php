@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Mail\ImsMessage;
 use App\Models\Company;
+use App\Models\EmailLog;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
 use App\Services\SmsTemplateService;
@@ -58,7 +59,7 @@ class SendImsMessageJob implements ShouldQueue
                 $setting = StorefrontSetting::primaryFor($this->companyId);
 
                 if ($setting !== null) {
-                    $notifications->sendMailable($setting, $this->email, new ImsMessage($company->name, $this->heading, $this->lines, $this->link, $this->pdfName, $this->pdfBase64));
+                    $notifications->sendMailable($setting, $this->email, new ImsMessage($company->name, $this->heading, $this->lines, $this->link, $this->pdfName, $this->pdfBase64), EmailLog::KIND_IMS_MESSAGE);
                 }
             }
         } finally {

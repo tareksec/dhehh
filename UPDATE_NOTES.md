@@ -2,6 +2,25 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+
+## 2026-10-23 - Email Log (sent / failed / not sent, and why)
+
+Owner (Bangla): "ইমেইলের লগ পেজ তৈরি করেছ? ইমেইল পাঠানো হইছে ফেল হইছে সফল হইছে ফেল হইলে কেন হয় নাই" (did you build an email log page? email sent, failed, succeeded, and if it failed, why). I had not: only the SMS Log existed (another session). I answered that and built it the same way as the SMS Log.
+
+What it does: Settings → Email Log, read-only, one row per email through `StorefrontNotificationService` (login code, reseller password reset link, investor code / invitation / message, owner digest, test email). Result: Sent / Failed / Not sent. A failure shows a plain reason plus the mail server's own answer; "Not sent" covers no email account for the site and a server mailer that only logs (the send still returns true as before, so local development and tests that read the log mailer keep working, but the log does not call it "sent").
+
+Decisions (mine, say if you want them different):
+- **No message text, no subject.** Only recipient, kind, result, and the server's answer, so a login or reset code can never be read from the log (the SMS Log also skips code messages; here the row exists but carries no code).
+- **"Sent" means the mail server accepted it.** The page says so. SES bounce / complaint tracking (SNS) is still not built, so an address that bounces later still shows "Sent". This is the main gap against "did it reach the customer".
+- **No clean-up of old rows yet** (the SMS Log has none either). Every customer login code is a row; add a pruning job if the table grows.
+- The reason mapping reads the error text (`classify()`), tested against typical SES answers (535 login, 554 not verified, 454 throttling, quota, connect/time-out). A message that matches none shows "The mail server could not send the message" with the raw answer next to it.
+
+Not logged: emails that do not go through this service (none found; the panels' password resets are custom and use it). Not tested against real SES.
+
+Needs Bangla review (new keys): "Email Log" → "ইমেইল লগ", the kind labels ("Customer login code", "Reseller password reset link", "Investor code/invitation/message", "Owner daily digest", "Test email", "Other email"), "Sent through", "SMTP :host", "Server mailer (:mailer)", the page note and the eight reason texts.
+
+Commit status: committed and pushed to `ccr-3799b463-p4pv7n`; not on `main` yet (needs the owner's approval). Full test run: 3028 passed, 6 skipped, 0 failed.
+
 ## 2026-10-23 - Amazon SES setup for the ERP's email
 
 Owner (Bangla): "আমরা email সার্ভার হিসেবে aws ses সার্ভিস নিয়েছি। সেখানে আমাদের ডোমেইনগুলো এপ্রুভ হয়েছে। এখন সেটা সেটআপ করা বাকি erp তে। এর জন্য কোন কাজ করা লাগলে সেটাও কর" (we took AWS SES as the email server, our domains are approved there; setting it up in the ERP remains; do whatever work is needed).
