@@ -232,6 +232,8 @@ class DeliveryChallanService
                 'cancelled_at' => now(),
                 'cancel_reason' => $reason,
             ])->save();
+
+            app(MachineSerialService::class)->releaseChallan($challan);
         });
     }
 

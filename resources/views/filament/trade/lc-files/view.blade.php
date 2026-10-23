@@ -47,6 +47,25 @@
         </dl>
     </section>
 
+    @php($serials = \App\Models\MachineSerial::query()->with(['product', 'challan'])->where('purchase_id', $purchase?->getKey())->orderBy('serial_number')->get())
+    @if ($serials->isNotEmpty())
+        <section class="trade-card" aria-labelledby="trade-lc-serials">
+            <h2 id="trade-lc-serials" class="trade-card-title">{{ __('Serial numbers') }}</h2>
+            <ul class="trade-list">
+                @foreach ($serials as $serial)
+                    <li>
+                        <span>
+                            {{ $serial->serial_number }}
+                            <small>{{ $serial->product?->name }}</small>
+                            @if ($serial->isSold())<small>{{ __('Challan :number, :buyer', ['number' => $serial->challan?->challan_number, 'buyer' => $serial->challan?->buyer_name]) }}</small>@endif
+                        </span>
+                        <strong @class(['trade-in' => ! $serial->isSold()])>{{ $serial->isSold() ? __('Sold') : __('In the shop') }}</strong>
+                    </li>
+                @endforeach
+            </ul>
+        </section>
+    @endif
+
     <section class="trade-card" aria-labelledby="trade-lc-papers">
         <h2 id="trade-lc-papers" class="trade-card-title">{{ __('Papers') }}</h2>
         <ul class="trade-list">

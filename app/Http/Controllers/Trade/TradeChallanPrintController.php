@@ -23,7 +23,7 @@ class TradeChallanPrintController extends Controller
     {
         abort_unless($request->user()?->hasPermission('trade.sales'), 403);
 
-        $challan = DeliveryChallan::query()->with(['items', 'customer'])->findOrFail($challan);
+        $challan = DeliveryChallan::query()->with(['items', 'customer', 'serials'])->findOrFail($challan);
         $company = $challan->company;
 
         app()->setLocale('en');

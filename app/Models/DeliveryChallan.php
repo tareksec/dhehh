@@ -66,6 +66,12 @@ class DeliveryChallan extends Model
         return $this->hasMany(DeliveryChallanItem::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    /** The machine serial numbers that left with this challan. */
+    public function serials(): HasMany
+    {
+        return $this->hasMany(MachineSerial::class)->orderBy('serial_number');
+    }
+
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class)->withTrashed();

@@ -160,6 +160,11 @@
     overflow-wrap: anywhere;
 }
 
+/* A small action (e.g. "Remove") under a line's text sits on the left, not centred. */
+.trade-list span > span {
+    align-items: flex-start;
+}
+
 .trade-list small {
     color: var(--trade-muted);
     font-size: 0.8125rem;

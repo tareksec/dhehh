@@ -4,6 +4,9 @@
 
     $money = fn ($amount): string => ImsNumbers::lakh((float) $amount, 0);
     $rows = max(12, $challan->items->count());
+    // Machine serial numbers print once, under the first line of their item.
+    $serialsByProduct = $challan->serials->groupBy('product_id');
+    $shown = [];
 @endphp
 <!doctype html>
 <html lang="en">
@@ -83,6 +86,10 @@
                         {!! nl2br(e($item->description)) !!}
                         @if ($item->unit_price !== null)
                             <div class="price">{{ __('Price: :price × :quantity = :total', ['price' => $money($item->unit_price), 'quantity' => $item->quantity, 'total' => $money($item->lineTotal())]) }}</div>
+                        @endif
+                        @if ($item->product_id && isset($serialsByProduct[$item->product_id]) && ! isset($shown[$item->product_id]))
+                            @php($shown[$item->product_id] = true)
+                            <div class="price">{{ __('S/N: :numbers', ['numbers' => $serialsByProduct[$item->product_id]->pluck('serial_number')->implode(', ')]) }}</div>
                         @endif
                     </td>
                     <td class="qty">{{ $item->quantity ?: '' }} {{ $item->unit }}</td>

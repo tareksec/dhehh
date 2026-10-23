@@ -7,8 +7,10 @@ use App\Filament\Trade\TradeErrors;
 use App\Models\DeliveryChallan;
 use App\Models\OrderPayment;
 use App\Services\DeliveryChallanService;
+use App\Services\MachineSerialService;
 use App\Support\ImsNumbers;
 use Filament\Actions\Action;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -45,6 +47,23 @@ class ViewDeliveryChallan extends ViewRecord
                 ->url(fn (): string => route('filament.trade.challans.print', $this->getRecord()))
                 ->openUrlInNewTab(),
             static::receiveMoneyAction(),
+            Action::make('serials')
+                ->label(__('Serial numbers'))
+                ->icon('heroicon-o-qr-code')
+                ->color('gray')
+                ->visible(fn (): bool => ! $this->getRecord()->isCancelled() && app(MachineSerialService::class)->optionsFor($this->getRecord()) !== [])
+                ->fillForm(fn (): array => ['serials' => $this->getRecord()->serials()->pluck('id')->map(fn ($id): string => (string) $id)->all()])
+                ->schema([
+                    CheckboxList::make('serials')
+                        ->label(__('Machines that left with this challan'))
+                        ->options(fn (): array => app(MachineSerialService::class)->optionsFor($this->getRecord()))
+                        ->columns(1),
+                ])
+                ->action(function (array $data, Action $action): void {
+                    TradeErrors::attempt(fn () => app(MachineSerialService::class)->setForChallan($this->getRecord(), $data['serials'] ?? []))
+                        ? Notification::make()->title(__('Serial numbers saved'))->success()->send()
+                        : $action->halt();
+                }),
             Action::make('cancel')
                 ->label(__('Cancel challan'))
                 ->color('danger')

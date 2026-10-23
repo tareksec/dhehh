@@ -6,6 +6,7 @@ use App\Filament\Trade\Resources\DeliveryChallans\DeliveryChallanResource;
 use App\Filament\Trade\Resources\Dues\DueResource;
 use App\Filament\Trade\Resources\GoodsIn\GoodsInResource;
 use App\Filament\Trade\Resources\LcFiles\LcFileResource;
+use App\Filament\Trade\Resources\MachineSerials\MachineSerialResource;
 use App\Filament\Trade\Resources\MoneyAccounts\MoneyAccountResource;
 use App\Filament\Trade\Resources\StockItems\StockItemResource;
 use App\Models\User;
@@ -39,6 +40,7 @@ class TradeNavigation
             [Pages\BalanceSheet::class, 'Balance sheet', 'heroicon-o-scale', false],
             [GoodsInResource::class, 'Goods in', 'heroicon-o-truck', false],
             [LcFileResource::class, 'LC files', 'heroicon-o-globe-asia-australia', false],
+            [MachineSerialResource::class, 'Serial numbers', 'heroicon-o-qr-code', false],
             [MoneyAccountResource::class, 'Cash and bank accounts', 'heroicon-o-building-library', false],
             [Pages\ImportOldData::class, 'Bring in old data', 'heroicon-o-arrow-up-tray', false],
             [Pages\BusinessProfile::class, 'Business profile', 'heroicon-o-building-office-2', false],

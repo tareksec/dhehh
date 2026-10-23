@@ -2,8 +2,11 @@
 @php
     use App\Support\ImsNumbers;
 
-    $challan = $this->getRecord()->loadMissing(['items', 'order.payments.account']);
+    $challan = $this->getRecord()->loadMissing(['items', 'order.payments.account', 'serials']);
     $payments = $challan->order?->payments?->sortBy('paid_at') ?? collect();
+    // Serial numbers show once, under the first line of their item.
+    $serialsByProduct = $challan->serials->groupBy('product_id');
+    $shown = [];
 @endphp
 
 <x-filament-panels::page>
@@ -29,6 +32,10 @@
                         {{ $item->description }}
                         @if ($item->remarks)<small>{{ $item->remarks }}</small>@endif
                         @if ($item->unit_price !== null)<small>{{ ImsNumbers::money($item->unit_price) }} × {{ ImsNumbers::digits((string) $item->quantity) }} = {{ ImsNumbers::money($item->lineTotal()) }}</small>@endif
+                        @if ($item->product_id && isset($serialsByProduct[$item->product_id]) && ! isset($shown[$item->product_id]))
+                            @php($shown[$item->product_id] = true)
+                            <small>{{ __('S/N: :numbers', ['numbers' => $serialsByProduct[$item->product_id]->pluck('serial_number')->implode(', ')]) }}</small>
+                        @endif
                     </span>
                     <strong>{{ ImsNumbers::digits((string) $item->quantity) }} {{ $item->unit }}</strong>
                 </li>

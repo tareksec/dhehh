@@ -6,6 +6,7 @@ use App\Models\Concerns\BelongsToCompany;
 use App\Support\NumberToWords;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * The LC file (import file) of a purchase in the Trade Portal
@@ -57,6 +58,7 @@ class LcFile extends Model
         'goods_description', 'goods_used', 'total_packages', 'net_weight_kg', 'gross_weight_kg', 'cbm',
         'carrier', 'vessel_name', 'port_of_shipment', 'place_of_delivery', 'etd', 'eta', 'bl_number', 'bl_date', 'container_number', 'seal_number',
         'opening_letter_date', 'certificate_date', 'shipment_advice_date', 'drl_date', 'note',
+        'exchange_rate', 'landed_cost_applied_at',
     ];
 
     protected $casts = [
@@ -76,11 +78,19 @@ class LcFile extends Model
         'certificate_date' => 'date',
         'shipment_advice_date' => 'date',
         'drl_date' => 'date',
+        'exchange_rate' => 'decimal:4',
+        'landed_cost_applied_at' => 'datetime',
     ];
 
     public function purchase(): BelongsTo
     {
         return $this->belongsTo(Purchase::class);
+    }
+
+    /** The costs of this import beyond the goods (the landed cost worksheet). */
+    public function landedCostLines(): HasMany
+    {
+        return $this->hasMany(LandedCostLine::class)->orderBy('id');
     }
 
     public static function stageLabel(?string $stage): string

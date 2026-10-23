@@ -2,6 +2,32 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-25 - Trade Portal phase 5 (landed cost + machine serials)
+
+Owner request: start Phase 5 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-landed-cost`. The branch starts from `feature/trade-portal-lc-file` (phases 1–4 are not on `main` yet), so it carries all five.
+
+What changed: a landed cost worksheet on each LC file (bank rate, cost lines with their source, total, per unit, per item, "Apply to stock buying price"), machine serial numbers (written on the LC file, ticked on the challan, shown on the challan and its print, a searchable list), permission `trade.landed_cost`. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief "manual cost lines per LC file: duty/insurance/C&F from the C&F agent, truck and loading from the owner", PLAN.md §2 and SUMMARY.md §4 report 3):
+
+- The ERP already has landed-cost fields on purchases, but it adds them to the purchase total and so to the supplier's due. Duty, C&F, truck fare and the rest are not owed to the Chinese supplier, so the worksheet keeps its own cost lines per LC file and leaves the purchase total and the supplier's due as they are.
+- Goods value = LC value (CFR, USD) × the bank's settlement rate; with no rate yet, the purchase lines' buying price. The cost kinds are the lines of report 3 plus the owner's truck fare and loading; any other cost can be named. No amounts or rates are filled in by the system.
+- Several kinds of goods on one LC share the total by value (FOB USD, else buying price, else quantity) — the same way the ERP's purchase shares costs.
+- The landed cost changes the items' buying price only when the owner presses "Apply" (it then feeds the balance sheet's stock value and the profit).
+- Serial numbers are optional and only for machines that have one: never more than the quantity on the purchase or on the challan; one serial number per item; cancelling a challan frees them.
+
+Still open (from the brief): the real duty / insurance / C&F figures of one old shipment, to check the result against the owner's own calculation.
+
+Checked in the browser at 390px on a throwaway copy of the dev database (never the real DB): the worksheet with rate 122 and four costs (44,45,632 total, 5,55,704 per machine), three serial numbers written on the LC file, both pages without sideways scroll. Fixed on the way: the "Remove" link under a cost was centred instead of on the left.
+
+Needs Bangla review: the 53 new keys, especially the cost kinds ("কাস্টমস ডিউটি, AIT, ATV, RD", "C&F এজেন্টের কমিশন ও খালাস খরচ"), "Figure from" (হিসাবটা কার কাছ থেকে) and "Apply to stock buying price". The page title uses the ERP's existing Bangla for "Landed cost" (ল্যান্ডেড কস্ট).
+
+Not done: reports as PDF / Excel (phase 6: landed cost per shipment, stock ledger, etc.), selling price suggestions from the landed cost, warranty records per serial number.
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 3,015 passed, 1 skipped, 0 failed. New: `TradeLandedCostTest` (8).
+
+Commit status: committed and pushed to `feature/trade-portal-landed-cost`; not on `main` (waits for the owner's approval; it contains phases 1–4 too).
+
 ## 2026-10-24 - Trade Portal phase 4 (LC file + import papers)
 
 Owner request: start Phase 4 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-lc-file`. The branch starts from `feature/trade-portal-cash-book` (phases 1–3 are not on `main` yet), so it carries all four.

@@ -4,6 +4,7 @@ namespace App\Filament\Trade\Resources\LcFiles;
 
 use App\Filament\Trade\Resources\LcFiles\Pages\CreateLcFile;
 use App\Filament\Trade\Resources\LcFiles\Pages\EditLcFile;
+use App\Filament\Trade\Resources\LcFiles\Pages\LandedCost;
 use App\Filament\Trade\Resources\LcFiles\Pages\ListLcFiles;
 use App\Filament\Trade\Resources\LcFiles\Pages\ViewLcFile;
 use App\Models\LcFile;
@@ -249,6 +250,7 @@ class LcFileResource extends Resource
             'create' => CreateLcFile::route('/create'),
             'view' => ViewLcFile::route('/{record}'),
             'edit' => EditLcFile::route('/{record}/edit'),
+            'landed-cost' => LandedCost::route('/{record}/landed-cost'),
         ];
     }
 }

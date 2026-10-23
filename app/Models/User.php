@@ -366,6 +366,7 @@ class User extends Authenticatable implements FilamentUser
         'trade.import' => 'Trade Portal: Bring In Old Data (buyers with old dues, items with stock)',
         'trade.cashbook' => 'Trade Portal: Cash Book and Balance Sheet (see them, record bank deposits, supplier payments and costs)',
         'trade.lc' => 'Trade Portal: LC Files (import details, stages, print the LC letter, DRL, certificate, packing list, shipment advice)',
+        'trade.landed_cost' => 'Trade Portal: Landed Cost (cost lines per LC, bank rate, apply to the stock buying price)',
         'trade.money_accounts' => 'Trade Portal: Cash and Bank Accounts (add accounts, set the money in them at the start)',
         'marketing.view' => 'Marketing/Ads: View',
         'marketing.create' => 'Marketing/Ads: Create',
