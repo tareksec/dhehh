@@ -8,15 +8,18 @@ use App\Livewire\MetaEventLogTable;
 use App\Livewire\WebsiteApiKeysTable;
 use App\Models\Company;
 use App\Models\Order;
+use App\Models\SmsLog;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
 use App\Services\Crm\AiSettingsService;
 use App\Services\PayStationClient;
-use App\Services\StorefrontNotificationService;
+use App\Services\SmsLogService;
 use App\Services\StorefrontMetaTrackingService;
+use App\Services\StorefrontNotificationService;
 use App\Services\WooCommerceImportService;
 use App\Services\WooCommerceOrderSyncService;
 use App\Services\ZiniPayClient;
+use App\Support\BulkSmsBdPolicy;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\CheckboxList;
@@ -816,6 +819,78 @@ class Integrations extends Page
             ->send();
     }
 
+    /**
+     * Sends a real SMS through the gateway saved for the selected site and shows the gateway's own answer (a
+     * wrong sender ID, no balance, an IP that is not whitelisted ...). It answers "does the gateway work?" without
+     * placing an order. Uses what is saved, not the unsaved form, like the webhook tests above.
+     */
+    protected function testSmsAction(): Action
+    {
+        return Action::make('testSms')
+            ->label(__('Send test SMS'))
+            ->icon(Heroicon::OutlinedPaperAirplane)
+            ->color('gray')
+            ->schema([
+                TextInput::make('phone')
+                    ->label(__('Phone number'))
+                    ->helperText(__('Your own number, in the form 01XXXXXXXXX.'))
+                    ->tel()
+                    ->required()
+                    ->maxLength(40),
+            ])
+            ->action(fn (array $data): mixed => $this->testSms($data))
+            ->visible(fn (): bool => $this->hasSelectedCompany());
+    }
+
+    /** @param array{phone?: ?string} $data */
+    public function testSms(array $data): void
+    {
+        $company = $this->selectedCompany();
+        $setting = $this->activeSetting();
+        $notifications = app(StorefrontNotificationService::class);
+        $phone = trim((string) ($data['phone'] ?? ''));
+
+        if ($setting === null || ! $notifications->smsConfigured($setting)) {
+            Notification::make()
+                ->title(__('The SMS gateway is not saved yet'))
+                ->body(__('Fill in the gateway URL, API key and sender ID, press Save changes, then send the test again.'))
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        // A masking sender ID (letters) is accepted only for Bangla text, so the test is written in Bangla for it.
+        $language = BulkSmsBdPolicy::isMaskingSender(data_get($setting->notification_credentials, 'sms_sender_id')) ? 'bn' : app()->getLocale();
+        $message = BulkSmsBdPolicy::clean(__('SMS test from :company. Your SMS gateway works.', ['company' => $company->name], $language));
+        $result = $notifications->sendSmsDetailed($setting, $phone, $message);
+
+        $logs = app(SmsLogService::class);
+        $logs->finish(
+            $logs->queued((int) $company->getKey(), SmsLog::KIND_TEST, null, null, $phone),
+            $result['ok'] ? SmsLog::STATUS_SENT : SmsLog::STATUS_FAILED,
+            $result['ok'] ? null : ($result['code'] !== null ? 'gateway_refused' : 'gateway_unreachable'),
+            ['message' => $message, 'gateway_code' => $result['code'], 'detail' => $result['meaning'] ?? $result['detail']],
+        );
+
+        if ($result['ok']) {
+            Notification::make()
+                ->title(__('The gateway accepted the test SMS'))
+                ->body(__('It should reach :phone within a minute. If it does not, ask BulkSMSBD about the sender ID or the number.', ['phone' => $phone]))
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title(__('The gateway did not send the test SMS'))
+            ->body(collect([$result['code'], $result['meaning'] ?? $result['detail']])->filter()->implode(' - '))
+            ->danger()
+            ->persistent()
+            ->send();
+    }
+
     protected function syncWooOrderAction(): Action
     {
         return Action::make('syncWooOrder')
@@ -1293,6 +1368,12 @@ class Integrations extends Page
                                 TextInput::make('notification_credentials.sms_sender_id')
                                     ->label(__('SMS sender ID'))
                                     ->maxLength(100),
+                                Placeholder::make('sms_gateway_wording_note')
+                                    ->hiddenLabel()
+                                    ->content(__('This URL only delivers messages. The wording of each SMS is written on Settings → SMS Templates, and your branding comes from the sender ID and the wording you write there.'))
+                                    ->columnSpanFull(),
+                                SchemaActions::make([$this->testSmsAction()])
+                                    ->columnSpanFull(),
                             ])
                             ->columns(2),
 

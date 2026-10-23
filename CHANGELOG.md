@@ -13,6 +13,14 @@ All notable production changes to Business Dashboard are documented here.
   - **Send test email:** sends a message through the settings saved for the site being edited and shows the mail server's own answer when it fails (for SES: unverified sender, sandbox recipient, wrong credentials or region).
   - **From address reminder:** an SES SMTP user name is an access-key ID (`AKIA…`), not an email address. If the saved account has no From address and its user name is not an email address, saving shows a warning, and the From address help text says so.
   - Step-by-step guide: `docs/email-ses-setup.md` (what to do in the SES console, what to enter here, common errors, the optional server-wide fallback in Coolify).
+- **SMS Log: you can now see why a customer got no SMS.** Owner report 2026-10-23: an order was placed and no SMS arrived, and nothing in the system said why. **Settings → SMS Log** now lists every order SMS (order placed and each status change) with its result:
+  - **Sent**, with the exact text that went out.
+  - **Not sent: gateway**, with the gateway's own reply (for example `1012 Masking SMS must be sent in Bengali`, `1007 Balance Insufficient`, `1032 IP not whitelisted`) or "could not be reached".
+  - **Not sent: skipped**, with the reason: no wording written on SMS Templates, customer has no phone, number opted out, no SMS gateway set, already sent once, imported or reseller store order.
+  - **Waiting in the queue**: when a message waits more than 5 minutes the page says the queue worker does not seem to be running, which is the usual reason nothing leaves in production.
+  Code messages (OTP, password reset) are never logged, so a code is never stored.
+- **Send test SMS** button on **Settings → Integrations → SMS Gateway.** It sends one real SMS to your own number through the saved gateway and shows the gateway's answer on screen, so "does the gateway work?" is a ten-second check without placing an order. With a masking (letters) sender ID the test text is sent in Bangla, because BulkSMSBD refuses English there. The result also appears in the SMS Log.
+- A note on the SMS Gateway tab explaining that the URL only delivers messages: the wording is written on **Settings → SMS Templates**, and the branding comes from the sender ID and that wording.
 
 ### Changed
 
@@ -26,6 +34,7 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Technical Notes
 
+- SMS Log: New table `sms_logs` (migration `2026_10_23_100000_create_sms_logs_table.php`, short index names) and company-owned model `SmsLog` (registered in `MultiCompanyIsolationTest`). `SmsLogService` writes the rows and never throws (a logging failure is reported and the SMS still goes out; covered by a test). `OrderStatusSmsService` logs a row when the message is queued, or a skipped row at dispatch when no wording is written, and closes it in `send()` / `sendPlaced()`; the existing send rules and dedupe are unchanged. `StorefrontNotificationService::sendSmsDetailed()` returns the gateway's code, its meaning and any error; `sendSms()` still returns a bool. `SmsLogResource` is read-only and needs the "manage settings" permission. New strings in `lang/en.json` and `lang/bn.json`. Tests: `SmsLogTest` (13). No other behaviour changes.
 - Email keys (`mail_host`, `mail_port`, `mail_encryption`, `mail_username`, `mail_password`, `mail_from_address`, `mail_from_name`; new `StorefrontNotificationService::MAIL_CREDENTIAL_KEYS`) still live in the encrypted `storefront_settings.notification_credentials`; no migration. `Integrations::save()` merges only the SMS and email keys into the stored array (`ownedNotificationKeys()`), and `EditStorefrontSetting::mutateFormDataBeforeSave()` re-adds both sets so the Storefront Settings form, which no longer has these fields, cannot wipe them.
 - `StorefrontNotificationService`: new `mailFromAddress()` (From address, else an email-shaped user name, else null), `sendTestEmail()` (returns null or the server's error text, never throws); `companyMailer()` now calls `Mail::purge('storefront_dynamic')` before building the mailer and uses `mailFromAddress()`.
 - In this Laravel version the SMTP transport ignores the `encryption` setting: port 465 connects over SSL (`smtps`), any other port is plain SMTP that upgrades with STARTTLS when the server offers it. The SMTP encryption box therefore does not change how the connection is made; the tab says so. A site with no encryption saved (or a saved null) is shown as TLS; None is saved as an empty string.
