@@ -81,6 +81,12 @@ use Livewire\Attributes\Locked;
  */
 class Integrations extends Page
 {
+    /** An Amazon SES SMTP endpoint; the first group is the AWS region. */
+    private const SES_HOST_PATTERN = '/^email-smtp\.([a-z0-9-]+)\.amazonaws\.com$/i';
+
+    /** An AWS region name such as ap-southeast-1. */
+    private const SES_REGION_PATTERN = '/^[a-z]{2}(-[a-z]+)+-\d$/';
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedPuzzlePiece;
 
     protected static ?string $cluster = Settings::class;
@@ -757,6 +763,59 @@ class Integrations extends Page
             ->send();
     }
 
+    /**
+     * Sends a test message through the SMTP account saved for the site being edited (what is really
+     * stored, not unsaved form state), so the mail server's own answer — for Amazon SES an unverified
+     * sender, a sandbox recipient or wrong credentials — is shown right here.
+     */
+    protected function testEmailAction(): Action
+    {
+        return Action::make('testEmail')
+            ->label(__('Send test email'))
+            ->icon(Heroicon::OutlinedPaperAirplane)
+            ->color('gray')
+            ->modalHeading(__('Send test email'))
+            ->modalDescription(__('Sent through the email settings saved for this site, so save your changes first.'))
+            ->schema([
+                TextInput::make('email')
+                    ->label(__('Send to'))
+                    ->email()
+                    ->required()
+                    ->maxLength(255)
+                    ->default(fn (): ?string => Auth::user()?->email),
+            ])
+            ->action(fn (array $data): mixed => $this->sendTestEmail($data))
+            ->visible(fn (): bool => $this->hasSelectedCompany());
+    }
+
+    public function sendTestEmail(array $data): void
+    {
+        $this->selectedCompany();
+
+        $setting = $this->activeSetting();
+        $email = (string) $data['email'];
+        $error = $setting
+            ? app(StorefrontNotificationService::class)->sendTestEmail($setting, $email)
+            : __('SMTP host and username are not saved yet.');
+
+        if ($error === null) {
+            Notification::make()
+                ->title(__('Test email sent'))
+                ->body(__('The mail server accepted the message for :email. Check that inbox, and the spam folder.', ['email' => $email]))
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title(__('Test email failed'))
+            ->body($error)
+            ->danger()
+            ->persistent()
+            ->send();
+    }
+
     protected function syncWooOrderAction(): Action
     {
         return Action::make('syncWooOrder')
@@ -1244,6 +1303,31 @@ class Integrations extends Page
                                     ->hiddenLabel()
                                     ->content(__('One SMTP email account per site. It sends customer login codes and reseller password-reset links, and (from the company\'s main site) investor and IMS emails. Leave the SMTP host empty to use the server\'s default mailer.'))
                                     ->columnSpanFull(),
+                                TextInput::make('ses_region')
+                                    ->label(__('Amazon SES region (quick setup)'))
+                                    ->placeholder('ap-southeast-1')
+                                    ->maxLength(30)
+                                    ->live(onBlur: true)
+                                    ->dehydrated(false)
+                                    ->helperText(__('Using Amazon SES? Type the AWS region your SES account sends from (for example ap-southeast-1) and the host, port 587 and TLS below are filled in. Then enter the SES SMTP user name and password (SES console → SMTP settings → Create SMTP credentials) and a From address on a domain verified in SES. Everything stays editable.'))
+                                    ->afterStateHydrated(function (TextInput $component, Get $get): void {
+                                        // Show the region again when the saved host is an SES endpoint.
+                                        if (preg_match(self::SES_HOST_PATTERN, (string) $get('notification_credentials.mail_host'), $match)) {
+                                            $component->state(strtolower($match[1]));
+                                        }
+                                    })
+                                    ->afterStateUpdated(function (?string $state, Set $set): void {
+                                        $region = strtolower(trim((string) $state));
+
+                                        if (! preg_match(self::SES_REGION_PATTERN, $region)) {
+                                            return;
+                                        }
+
+                                        $set('notification_credentials.mail_host', "email-smtp.{$region}.amazonaws.com");
+                                        $set('notification_credentials.mail_port', 587);
+                                        $set('notification_credentials.mail_encryption', 'tls');
+                                    })
+                                    ->columnSpanFull(),
                                 TextInput::make('notification_credentials.mail_host')
                                     ->label(__('SMTP host'))
                                     ->maxLength(255)
@@ -1257,7 +1341,8 @@ class Integrations extends Page
                                     ->label(__('SMTP encryption'))
                                     ->options(['tls' => 'TLS', 'ssl' => 'SSL', '' => __('None')])
                                     // "None" must reach the database as an empty string: null would be read back as TLS.
-                                    ->dehydrateStateUsing(fn (?string $state): string => (string) $state),
+                                    ->dehydrateStateUsing(fn (?string $state): string => (string) $state)
+                                    ->helperText(__('Port 465 connects over SSL; any other port starts with TLS when the mail server offers it.')),
                                 TextInput::make('notification_credentials.mail_username')
                                     ->label(__('SMTP username'))
                                     ->maxLength(255),
@@ -1271,10 +1356,12 @@ class Integrations extends Page
                                     ->label(__('From address'))
                                     ->email()
                                     ->maxLength(255)
-                                    ->helperText(__('Defaults to the SMTP username if left empty.')),
+                                    ->helperText(__('Defaults to the SMTP username if that is an email address. Amazon SES and most providers need a From address on a verified domain — Amazon SES user names are not email addresses, so fill this in.')),
                                 TextInput::make('notification_credentials.mail_from_name')
                                     ->label(__('From name'))
                                     ->maxLength(255),
+                                SchemaActions::make([$this->testEmailAction()])
+                                    ->columnSpanFull(),
                             ])
                             ->columns(2),
 
@@ -1568,6 +1655,18 @@ class Integrations extends Page
         // Re-fill from the fresh, now-persisted state — never keeps the
         // plaintext API keys in the browser past a save.
         $this->mount($aiSettings);
+
+        $saved = $this->activeSetting();
+        $notifications = app(StorefrontNotificationService::class);
+
+        if ($saved && $notifications->mailConfigured($saved) && $notifications->mailFromAddress($saved) === null) {
+            Notification::make()
+                ->title(__('Email needs a From address'))
+                ->body(__('The SMTP user name is not an email address, so there is no sender to send from. Fill in the From address (on a domain your mail provider has verified).'))
+                ->warning()
+                ->persistent()
+                ->send();
+        }
 
         Notification::make()
             ->title('Integration settings saved')

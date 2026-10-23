@@ -146,6 +146,24 @@ class StorefrontNotificationService
             && filled(data_get($setting->notification_credentials, 'mail_username'));
     }
 
+    /**
+     * The sender address this site's email goes out from: the From address, else the SMTP username when that
+     * is itself an email address. Null when neither is — Amazon SES, for one, uses an access-key ID like
+     * AKIA… as the SMTP username, which is not a sender.
+     */
+    public function mailFromAddress(StorefrontSetting $setting): ?string
+    {
+        $credentials = (array) $setting->notification_credentials;
+
+        foreach ([$credentials['mail_from_address'] ?? null, $credentials['mail_username'] ?? null] as $candidate) {
+            if (is_string($candidate) && filter_var($candidate, FILTER_VALIDATE_EMAIL)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
     protected function companyMailer(StorefrontSetting $setting): Mailer
     {
         $credentials = (array) $setting->notification_credentials;
@@ -159,11 +177,38 @@ class StorefrontNotificationService
             'password' => $credentials['mail_password'] ?? null,
         ]);
         Config::set('mail.from', [
-            'address' => $credentials['mail_from_address'] ?? $credentials['mail_username'] ?? config('mail.from.address'),
+            'address' => $this->mailFromAddress($setting) ?? config('mail.from.address'),
             'name' => $credentials['mail_from_name'] ?? config('mail.from.name'),
         ]);
 
+        // The mail manager keeps a built mailer for the whole process; a queue worker sending for one company
+        // after another would otherwise keep using the first company's SMTP account and sender.
+        Mail::purge('storefront_dynamic');
+
         return Mail::mailer('storefront_dynamic');
+    }
+
+    /**
+     * Sends a short test message through this site's own saved SMTP account (never the server's default
+     * mailer). Returns null when the server accepted it, else the server's own error, which for Amazon SES
+     * says what is wrong (unverified sender, sandbox recipient, wrong credentials).
+     */
+    public function sendTestEmail(StorefrontSetting $setting, string $email): ?string
+    {
+        if (! $this->mailConfigured($setting)) {
+            return __('SMTP host and username are not saved yet.');
+        }
+
+        try {
+            $this->companyMailer($setting)->raw(
+                __('This is a test email from ZamZam ERP. If you can read it, email sending for this site works.'),
+                fn ($message) => $message->to($email)->subject(__('ZamZam ERP test email')),
+            );
+
+            return null;
+        } catch (\Throwable $exception) {
+            return $exception->getMessage();
+        }
     }
 
     /**

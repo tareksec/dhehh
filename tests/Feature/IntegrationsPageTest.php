@@ -21,6 +21,7 @@ use App\Services\Crm\AiSettingsService;
 use App\Services\StorefrontNotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -926,6 +927,91 @@ class IntegrationsPageTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertSame('tls', $setting->fresh()->notification_credentials['mail_encryption']);
+    }
+
+    public function test_amazon_ses_region_fills_the_host_port_and_tls_and_is_shown_again_from_the_saved_host(): void
+    {
+        $company = $this->makeCompany();
+        $setting = StorefrontSetting::withoutGlobalScopes()->create([
+            'company_id' => $company->getKey(),
+            'site_type' => StorefrontSetting::SITE_BLADE,
+        ]);
+        $this->actingAs($this->makeSuperAdmin($company))
+            ->withSession(['current_company_id' => $company->getKey(), 'current_company_selection_explicit' => true]);
+
+        Livewire::test(Integrations::class)
+            // Something that is not a region changes nothing.
+            ->set('data.ses_region', 'not a region')
+            ->assertSet('data.notification_credentials.mail_host', null)
+            ->set('data.ses_region', ' AP-Southeast-1 ')
+            ->assertSet('data.notification_credentials.mail_host', 'email-smtp.ap-southeast-1.amazonaws.com')
+            ->assertSet('data.notification_credentials.mail_port', 587)
+            ->assertSet('data.notification_credentials.mail_encryption', 'tls')
+            ->set('data.notification_credentials.mail_username', 'AKIAEXAMPLEKEY')
+            ->set('data.notification_credentials.mail_password', 'ses-smtp-password')
+            ->set('data.notification_credentials.mail_from_address', 'hello@shop.test')
+            ->call('save')
+            ->assertHasNoFormErrors()
+            // The region is not stored; it is read back from the saved host.
+            ->assertSet('data.ses_region', 'ap-southeast-1')
+            ->assertNotNotified('Email needs a From address');
+
+        $credentials = $setting->fresh()->notification_credentials;
+        $this->assertSame('email-smtp.ap-southeast-1.amazonaws.com', $credentials['mail_host']);
+        $this->assertArrayNotHasKey('ses_region', $credentials);
+
+        Livewire::test(Integrations::class)->assertSet('data.ses_region', 'ap-southeast-1');
+    }
+
+    public function test_saving_email_without_any_sender_address_warns_instead_of_failing_later(): void
+    {
+        $company = $this->makeCompany();
+        StorefrontSetting::withoutGlobalScopes()->create([
+            'company_id' => $company->getKey(),
+            'site_type' => StorefrontSetting::SITE_BLADE,
+        ]);
+        $this->actingAs($this->makeSuperAdmin($company))
+            ->withSession(['current_company_id' => $company->getKey(), 'current_company_selection_explicit' => true]);
+
+        Livewire::test(Integrations::class)
+            ->set('data.notification_credentials.mail_host', 'email-smtp.ap-southeast-1.amazonaws.com')
+            ->set('data.notification_credentials.mail_username', 'AKIAEXAMPLEKEY')
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertNotified('Email needs a From address');
+
+        Livewire::test(Integrations::class)
+            ->set('data.notification_credentials.mail_from_address', 'hello@shop.test')
+            ->call('save')
+            ->assertNotNotified('Email needs a From address');
+    }
+
+    public function test_send_test_email_action_reports_success_and_the_mail_servers_error(): void
+    {
+        $company = $this->makeCompany();
+        $setting = StorefrontSetting::withoutGlobalScopes()->create([
+            'company_id' => $company->getKey(),
+            'site_type' => StorefrontSetting::SITE_BLADE,
+        ]);
+        $this->actingAs($this->makeSuperAdmin($company))
+            ->withSession(['current_company_id' => $company->getKey(), 'current_company_selection_explicit' => true]);
+
+        // Nothing saved yet.
+        Livewire::test(Integrations::class)
+            ->callAction('testEmail', data: ['email' => 'me@shop.test'])
+            ->assertNotified('Test email failed');
+
+        // A saved account the mail server refuses: its own error is shown, not a crash.
+        $setting->update(['notification_credentials' => ['mail_host' => '127.0.0.1', 'mail_port' => 1, 'mail_username' => 'AKIAEXAMPLEKEY', 'mail_password' => 'x', 'mail_from_address' => 'hello@shop.test']]);
+        Livewire::test(Integrations::class)
+            ->callAction('testEmail', data: ['email' => 'me@shop.test'])
+            ->assertNotified('Test email failed');
+
+        // A saved account the mail server accepts.
+        Mail::fake();
+        Livewire::test(Integrations::class)
+            ->callAction('testEmail', data: ['email' => 'me@shop.test'])
+            ->assertNotified('Test email sent');
     }
 
     public function test_storefront_settings_no_longer_has_the_smtp_fields(): void
