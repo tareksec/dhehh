@@ -3870,7 +3870,7 @@
     "The rate the bank settled the LC at. The goods cost becomes the LC value × this rate.": "The rate the bank settled the LC at. The goods cost becomes the LC value × this rate.",
     "Rate saved": "Rate saved",
     "Apply to stock buying price": "Apply to stock buying price",
-    "Each item's buying price becomes its landed cost per unit (:per_unit for one unit). The stock value and the profit then use it. You can apply again after adding costs.": "Each item's buying price becomes its landed cost per unit (:per_unit for one unit). The stock value and the profit then use it. You can apply again after adding costs.",
+    "Each item's buying price becomes its own landed cost per unit: :items. The stock value and the profit then use it. You can apply again after adding costs.": "Each item's buying price becomes its own landed cost per unit: :items. The stock value and the profit then use it. You can apply again after adding costs.",
     "Buying price updated for :count items": "Buying price updated for :count items",
     "Cost removed": "Cost removed",
     "serial number": "serial number",
