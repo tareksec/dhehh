@@ -29,7 +29,7 @@ class SmsLogService
             'no_phone' => __('The customer has no phone number.'),
             'opted_out' => __('The number is on the opt-out list.'),
             'no_gateway' => __('No SMS gateway is set. Fill in Integrations → SMS Gateway.'),
-            'bad_gateway_url' => __('The SMS gateway URL has no {phone} or no {message} in it, so nothing was sent. Open Integrations → SMS Gateway and replace the sample words (Receiver, TestSMS) with {phone} and {message}.'),
+            'bad_gateway_url' => __('The SMS gateway URL of the site named in the brackets has no {phone} or no {message} in it, so nothing was sent. Open Integrations → SMS Gateway, choose that site in the Site picker and replace the sample words (Receiver, TestSMS) with {phone} and {message}.'),
             'no_api_key' => __('The SMS API key is empty. Enter it in Integrations → SMS Gateway → SMS API key and save.'),
             'duplicate' => __('The same message was already sent, so it was not sent twice.'),
             'excluded' => __('Not sent for imported past orders or reseller store orders.'),
