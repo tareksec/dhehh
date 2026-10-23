@@ -1,5 +1,5 @@
 # CRM & Omnichannel Messaging
-> Last checked: 2026-10-23
+> Last checked: 2026-10-23 (SMS Dashboard added; gateway URL is built from the API key and sender ID boxes)
 
 ## What it does
 The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, multi-channel chat conversations, automated follow-ups, and marketing broadcasts. It unifies customer communications across WhatsApp Cloud API, WhatsApp Web (QR Baileys bridge), Facebook Messenger, SMS gateways, and Telegram into a single real-time inbox. It incorporates an AI Inbox Control Plane featuring intelligent automated replies, multimodal image/voice note comprehension, intent qualification, cart link generation, and smart human hand-over queues (Agent Desk, Needs Attention, To Chase, Unanswered Questions). Additionally, it coordinates scheduled sales automation cadences, promotional SMS/Messenger broadcasts, quick-reply snippet management, and Firebase Cloud Messaging (FCM) web push notifications.
@@ -27,7 +27,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Models/ConversationModeEvent.php` | Audit log of mode transitions (`ai` to `manual` and vice-versa) with reasons and agent IDs. |
 | `app/Models/WhatsAppContact.php` | Cached WhatsApp address book records and profile pictures synced from the phone. |
 | `app/Models/SmsTemplate.php` | Dynamic SMS templates with variable placeholders for order updates and verification. |
-| `app/Models/SmsLog.php` | One row per order SMS: queued, sent, refused by the gateway, or skipped, with the reason (never a code message). |
+| `app/Models/SmsLog.php` | One row per SMS: queued, sent, refused by the gateway, or skipped, with the reason and the SMS parts used. Order SMS keep their text; every other SMS (login/recovery codes, reminders, broadcasts) is a `kind = other` row with phone, result and parts only, never the text. |
 | `app/Models/EmailLog.php` | One row per email: sent, failed or not sent, with the reason and the mail server's own answer (never the message text or a code); with Amazon SES tracking on, a sent row becomes delivered, bounced or complained. |
 | `app/Models/Broadcast.php` | Marketing broadcast campaign entity targeting filtered customer segments. |
 | `app/Models/BroadcastRecipient.php` | Individual recipient delivery status tracker for a broadcast campaign. |
@@ -65,7 +65,10 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Services/WhatsAppWeb/WhatsAppWebArchiveService.php` | Ingests and stores message history and media attachments from WhatsApp Web sessions. |
 | `app/Services/SmsTemplateService.php` | Parses template tags and dispatches SMS via configured bulk SMS gateways. |
 | `app/Services/OrderStatusSmsService.php` | Formats and sends automated parcel tracking SMS messages to customers. |
-| `app/Services/SmsLogService.php` | Writes the SMS log (queued / sent / failed / skipped + reason) and counts messages stuck for lack of a queue worker. |
+| `app/Services/SmsLogService.php` | Writes the SMS log (queued / sent / failed / skipped + reason), counts messages sent without a row of their own (`other()`, called by `StorefrontNotificationService::sendSms()`) and messages stuck for lack of a queue worker. |
+| `app/Services/SmsUsageService.php` | The SMS dashboard's numbers from the SMS log: counts by result, by kind and by day, SMS parts used and the estimated cost. |
+| `app/Services/SmsBalanceService.php` | Reads the BulkSMSBD balance (`/api/getBalanceApi`, host taken from the saved gateway URL), caches it five minutes, and gives the gateway's own site as the recharge link (the gateway has no recharge, report or price API). |
+| `app/Support/SmsSegments.php` | Counts the SMS parts of a text (GSM 7-bit 160/153, Unicode and Bangla 70/67). |
 | `app/Services/Ses/SesApiService.php` | Amazon SES API: account, identities (DKIM records), suppression list; errors become plain messages. |
 | `app/Services/Ses/SesTrackingService.php` | Switches SES event tracking on/off (SNS topic, configuration set, https subscription) and builds the webhook address. |
 | `app/Services/Ses/SesEventService.php` | Applies an SES delivery/bounce/complaint event to the Email Log row of that message. |
@@ -89,6 +92,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Filament/Pages/ToChase.php` | Prospect chasing queue tracking customers who showed buying interest without ordering. |
 | `app/Filament/Pages/UnansweredQuestions.php` | Shows questions where the AI had no answer, allowing one-click FAQ creation. |
 | `app/Filament/Pages/AiInboxReport.php` | Analytics dashboard evaluating AI reply quality, deflection rates, and handovers. |
+| `app/Filament/Pages/SmsDashboard.php` | Settings → SMS Dashboard: SMS sent / refused / skipped, parts, estimated cost (price per SMS is set on Integrations → SMS Gateway), the BulkSMSBD balance with a low-balance warning and a recharge link. Needs the manage-settings permission. |
 | `app/Filament/Pages/SalesAutomation.php` | Automation rules manager for follow-up triggers and inactivity timeouts. |
 | `app/Filament/Pages/SalesFollowUps.php` | Monitor for active and completed automated sales follow-up sequences. |
 | `app/Filament/Pages/ConnectWhatsAppBusinessApp.php` | Embedded Meta Cloud API onboarding wizard for coexisting official WhatsApp channels. |
@@ -190,6 +194,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 - `email_logs`: One row per email the system tries to send. Key columns: `id`, `company_id`, `kind`, `recipient`, `via` (`smtp:<host>` or `server:<mailer>`), `message_id` (SES message ID), `status` (`sent`, `failed`, `skipped`, `delivered`, `bounced`, `complained`), `reason`, `detail` (the mail server's own answer), `created_at`, `updated_at`. The message text is never stored.
 
 ## Rules that matter
+- **SMS counting and the dashboard**: every SMS that leaves through `StorefrontNotificationService` is counted. Order SMS and the test SMS go through `sendSmsDetailed()` and write their own row (with text); everything else goes through `sendSms()`, which adds a `kind = other` row without the text, so a login code is never stored. "Sent" means the gateway accepted it: BulkSMSBD sends no delivery reports. The cost on the dashboard is parts × the owner's `sms_price_per_sms` (stored with the other SMS keys in `notification_credentials`; blank means no cost is shown), an estimate. Gateway errors that name the request URL are passed through `StorefrontNotificationService::scrubUrls()` before they are logged or shown, because the URL carries the API key. A gateway URL template must contain `{phone}` and `{message}` (`StorefrontNotificationService::smsTemplateMissing()`): the Integrations URL box refuses to save one without them, `deliverSms()` does not call the gateway for one saved earlier (reason `bad_gateway_url`) and the dashboard warns. A URL copied from the gateway's example (`number=Receiver&message=TestSMS`) otherwise sends every SMS to a number called "Receiver" and the gateway answers 1001. The Integrations form builds that address from the API key and sender ID boxes (`App\Support\SmsGatewayUrl`: the standard BulkSMSBD address, `tidy()` of a pasted one, `preview()` for the live line). Covered by `SmsDashboardTest` and `SmsGatewayUrlTest`.
 - **WhatsApp Web (QR) Compliance Rules**: Follows strict policies documented in `docs/whatsapp-web-rules.md`:
   - **Permanent Archive**: Logging out, disconnecting, or account bans never deletes archived conversations, messages, or media files.
   - **Outbound Disabled by Default**: Sending via WhatsApp Web is off by default and requires explicit super admin opt-in acknowledging Meta's unofficial client terms.

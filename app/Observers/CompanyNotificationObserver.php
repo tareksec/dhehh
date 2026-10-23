@@ -25,7 +25,8 @@ class CompanyNotificationObserver
             'company.created',
             'New company added',
             "\"{$company->name}\" was added to the system.",
-            actionUrl: CompanyResource::getUrl('view', ['record' => $company]),
+            // Always the ERP's page: a company can also be saved from another panel (the Trade Portal's Business profile).
+            actionUrl: CompanyResource::getUrl('view', ['record' => $company], panel: 'admin'),
             actionLabel: 'View company',
         );
     }
@@ -44,7 +45,7 @@ class CompanyNotificationObserver
             'notifications.company',
             'Company info updated',
             "\"{$company->name}\"'s settings or information were changed.",
-            actionUrl: CompanyResource::getUrl('view', ['record' => $company]),
+            actionUrl: CompanyResource::getUrl('view', ['record' => $company], panel: 'admin'),
             actionLabel: 'View company',
         );
     }

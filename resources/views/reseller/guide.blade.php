@@ -44,7 +44,9 @@
     <meta name="description" content="{{ __('How the :company reseller program works and the rules every reseller follows.', ['company' => $companyName]) }}">
     <script>
         (function () {
-            var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            var stored = null;
+            try { stored = localStorage.getItem('resellerLandingTheme'); } catch (e) {}
+            var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
             document.documentElement.classList.toggle('dark', dark);
             document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
         })();
@@ -59,16 +61,26 @@
         <div class="mx-auto flex h-[4.5rem] max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
             <a class="flex min-w-0 items-center gap-3" href="#top">
                 @if ($logoUrl)
-                    <img class="h-9 w-auto max-w-32 object-contain" src="{{ $logoUrl }}" alt="{{ $companyName }}">
+                    {{-- The website's logo pair: the dark-background logo takes over in dark mode (CSS), as on the website. --}}
+                    <img class="nb-logo h-9 min-w-0 w-auto max-w-28 shrink object-contain md:max-w-32{{ $logoDarkUrl ? ' nb-logo--light' : '' }}" src="{{ $logoUrl }}" alt="{{ $companyName }}">
+                    @if ($logoDarkUrl)
+                        <img class="nb-logo nb-logo--dark h-9 min-w-0 w-auto max-w-28 shrink object-contain md:max-w-32" src="{{ $logoDarkUrl }}" alt="{{ $companyName }}">
+                    @endif
                 @else
                     <span class="nb-display truncate text-base">{{ $companyName }}</span>
                 @endif
-                <span class="hidden sm:block"><span class="nb-chip nb-yellow">{{ __('Reseller guide') }}</span></span>
+                <span class="hidden md:block"><span class="nb-chip nb-yellow">{{ __('Reseller guide') }}</span></span>
             </a>
             <nav class="flex shrink-0 items-center gap-2 sm:gap-3">
-                <div class="hidden sm:block">@include('reseller.partials.language-switch')</div>
+                <div class="hidden md:block">@include('reseller.partials.language-switch')</div>
+                <button type="button" class="nb-btn nb-btn--light nb-btn--small nb-btn--icon" data-theme-toggle data-light-label="{{ __('Switch to light mode') }}" data-dark-label="{{ __('Switch to dark mode') }}" aria-label="{{ __('Switch to dark mode') }}" title="{{ __('Switch to dark mode') }}" aria-pressed="false">
+                    {{-- Moon in light mode (press for dark), sun in dark mode (press for light); CSS swaps them by mode. --}}
+                    <svg class="nb-theme-icon nb-theme-icon--moon h-5 w-5" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>
+                    <svg class="nb-theme-icon nb-theme-icon--sun h-5 w-5" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+                </button>
                 <a class="nb-btn nb-btn--light nb-btn--small" href="{{ $loginUrl }}">{{ __('Sign in') }}</a>
-                <a class="nb-btn nb-btn--small" href="{{ $applyUrl }}" data-guide-cta>{{ __('Apply now') }}</a>
+                {{-- The short label on a phone (Bangla "Apply now" is long), so the logo keeps its room beside the three buttons. --}}
+                <a class="nb-btn nb-btn--small" href="{{ $applyUrl }}" data-guide-cta><span class="md:hidden">{{ __('Apply') }}</span><span class="hidden md:inline">{{ __('Apply now') }}</span></a>
             </nav>
         </div>
     </header>
@@ -78,7 +90,7 @@
         <section class="nb-dots nb-border-b relative overflow-hidden">
             <div class="mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
                 <div>
-                    <div class="mb-6 sm:hidden">@include('reseller.partials.language-switch')</div>
+                    <div class="mb-6 md:hidden">@include('reseller.partials.language-switch')</div>
                     <p class="nb-chip nb-pink">{{ __('Reseller program') }}</p>
                     <h1 class="nb-display mt-5" style="font-size: clamp(1.9rem, 5.2vw, 3.5rem)">
                         {{ __('Sell :company products from your own store.', ['company' => $companyName]) }}
@@ -331,5 +343,30 @@
             </footer>
         @endif
     </div>
+
+    <script>
+        (function () {
+            var toggle = document.querySelector('[data-theme-toggle]');
+            if (! toggle) { return; }
+
+            var sync = function () {
+                var dark = document.documentElement.classList.contains('dark');
+                var label = dark ? toggle.dataset.lightLabel : toggle.dataset.darkLabel;
+                toggle.setAttribute('aria-label', label);
+                toggle.setAttribute('aria-pressed', dark ? 'true' : 'false');
+                toggle.title = label;
+            };
+
+            toggle.addEventListener('click', function () {
+                var dark = ! document.documentElement.classList.contains('dark');
+                document.documentElement.classList.toggle('dark', dark);
+                document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+                try { localStorage.setItem('resellerLandingTheme', dark ? 'dark' : 'light'); } catch (e) {}
+                sync();
+            });
+
+            sync();
+        })();
+    </script>
 </body>
 </html>

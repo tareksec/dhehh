@@ -11,6 +11,7 @@ use App\Support\NumberToWords;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 class Purchase extends Model
@@ -156,6 +157,12 @@ class Purchase extends Model
     public function shipments(): HasMany
     {
         return $this->hasMany(Shipment::class);
+    }
+
+    /** The Trade Portal's LC file of this purchase (bank, insurance, shipment details for the import papers). */
+    public function lcFile(): HasOne
+    {
+        return $this->hasOne(LcFile::class);
     }
 
     protected function sequentialNumberColumn(): string

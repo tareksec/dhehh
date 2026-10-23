@@ -54,6 +54,15 @@ class ReportService
         ];
     }
 
+    /** @return array{total: float, count: int} the counted sales between $from and $to */
+    public function salesTotals(CarbonInterface $from, CarbonInterface $to): array
+    {
+        return [
+            'total' => (float) $this->salesQuery($from, $to)->sum('total_amount'),
+            'count' => (int) $this->salesQuery($from, $to)->count(),
+        ];
+    }
+
     public function sales(CarbonInterface $from, CarbonInterface $to): Collection
     {
         return $this->salesQuery($from, $to)

@@ -59,7 +59,7 @@ class CustomerPayment extends Model
 
             if ((float) $payment->amount > $availableDue) {
                 throw ValidationException::withMessages([
-                    'amount' => 'Customer payment cannot be greater than the current customer due.',
+                    'amount' => __('Customer payment cannot be greater than the current customer due.'),
                 ]);
             }
         });

@@ -125,7 +125,8 @@ class OrderStatusSmsService
         $companyId = (int) $order->company_id;
         $log = $this->logs->claim($companyId, SmsLog::KIND_ORDER_STATUS, (int) $order->getKey(), (string) $transition->getKey());
 
-        if ($order->isHistoricalImport() || filled($order->reseller_customer_id)) {
+        // A Delivery Challan sale was handed over in the shop: the order-status texts (shipped, delivered…) do not fit it.
+        if ($order->isHistoricalImport() || filled($order->reseller_customer_id) || $order->source === Order::SOURCE_TRADE_CHALLAN) {
             return $this->closeLog($log, SmsLog::STATUS_SKIPPED, 'excluded');
         }
 
@@ -208,7 +209,7 @@ class OrderStatusSmsService
     protected function deliver(?SmsLog $log, StorefrontSetting $setting, string $phone, string $message): bool
     {
         $result = $this->notifications->sendSmsDetailed($setting, $phone, $message);
-        $extra = ['phone' => $phone, 'message' => $message, 'gateway_code' => $result['code'], 'detail' => $result['meaning'] ?? $result['detail']];
+        $extra = ['phone' => $phone, 'message' => $message, 'segments' => $result['segments'], 'gateway_code' => $result['code'], 'detail' => $result['meaning'] ?? $result['detail']];
 
         if ($result['ok']) {
             return $this->closeLog($log, SmsLog::STATUS_SENT, null, $extra);
@@ -220,7 +221,7 @@ class OrderStatusSmsService
     /**
      * Closes the log row; returns whether the SMS was sent.
      *
-     * @param  array{phone?: ?string, message?: ?string, gateway_code?: ?int, detail?: ?string}  $extra
+     * @param  array{phone?: ?string, message?: ?string, segments?: ?int, gateway_code?: ?int, detail?: ?string}  $extra
      */
     protected function closeLog(?SmsLog $log, string $status, ?string $reason = null, array $extra = []): bool
     {

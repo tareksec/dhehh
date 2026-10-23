@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\SmsLog;
+use App\Models\StorefrontSetting;
 use Throwable;
 
 /**
@@ -10,8 +11,10 @@ use Throwable;
  * "waiting in the queue" to "sent", "refused by the gateway" or "skipped" with
  * the reason, so the owner can see why a customer got no text instead of
  * guessing that the gateway is broken. Logging never stops an SMS: a failed
- * write is reported and ignored. Code messages (OTP, password reset) are not
- * logged at all.
+ * write is reported and ignored. Every other SMS (login and recovery codes,
+ * reminders, broadcasts) is counted too, for the SMS dashboard, but only as a
+ * phone number, a result and a part count: its text, which may be a code, is
+ * never stored.
  */
 class SmsLogService
 {
@@ -26,6 +29,7 @@ class SmsLogService
             'no_phone' => __('The customer has no phone number.'),
             'opted_out' => __('The number is on the opt-out list.'),
             'no_gateway' => __('No SMS gateway is set. Fill in Integrations → SMS Gateway.'),
+            'bad_gateway_url' => __('The SMS gateway URL has no {phone} or no {message} in it, so nothing was sent. Open Integrations → SMS Gateway and replace the sample words (Receiver, TestSMS) with {phone} and {message}.'),
             'no_api_key' => __('The SMS API key is empty. Enter it in Integrations → SMS Gateway → SMS API key and save.'),
             'duplicate' => __('The same message was already sent, so it was not sent twice.'),
             'excluded' => __('Not sent for imported past orders or reseller store orders.'),
@@ -71,9 +75,9 @@ class SmsLogService
     }
 
     /**
-     * Closes a row. $extra may hold phone, message, gateway_code and detail.
+     * Closes a row. $extra may hold phone, message, segments, gateway_code and detail.
      *
-     * @param  array{phone?: ?string, message?: ?string, gateway_code?: ?int, detail?: ?string}  $extra
+     * @param  array{phone?: ?string, message?: ?string, segments?: ?int, gateway_code?: ?int, detail?: ?string}  $extra
      */
     public function finish(?SmsLog $log, string $status, ?string $reason = null, array $extra = []): void
     {
@@ -85,6 +89,7 @@ class SmsLogService
             $log->forceFill(array_filter([
                 'phone' => $extra['phone'] ?? null,
                 'message' => $extra['message'] ?? null,
+                'segments' => $extra['segments'] ?? null,
                 'gateway_code' => $extra['gateway_code'] ?? null,
                 'detail' => isset($extra['detail']) ? mb_substr((string) $extra['detail'], 0, 255) : null,
             ], fn ($value): bool => $value !== null) + ['status' => $status, 'reason' => $reason])->save();
@@ -99,6 +104,27 @@ class SmsLogService
             SmsLog::STATUS_SKIPPED,
             $reason,
             ['phone' => $phone, 'detail' => $detail],
+        );
+    }
+
+    /**
+     * Counts an SMS sent without its own log row (a login or recovery code, a reminder, a broadcast message): the
+     * phone, what the gateway answered and how many parts it used, never the text. A site with no gateway at all
+     * sent nothing, so it is not counted.
+     *
+     * @param  array{ok: bool, reason: ?string, code: ?int, meaning: ?string, detail: ?string, segments: int}  $result
+     */
+    public function other(StorefrontSetting $setting, string $phone, array $result): void
+    {
+        if ($result['reason'] === 'no_gateway') {
+            return;
+        }
+
+        $this->finish(
+            $this->queued((int) $setting->company_id, SmsLog::KIND_OTHER, null, null, $phone),
+            $result['ok'] ? SmsLog::STATUS_SENT : SmsLog::STATUS_FAILED,
+            $result['reason'],
+            ['segments' => $result['segments'], 'gateway_code' => $result['code'], 'detail' => $result['meaning'] ?? $result['detail']],
         );
     }
 

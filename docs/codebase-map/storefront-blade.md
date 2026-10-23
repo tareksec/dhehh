@@ -49,7 +49,7 @@ The Storefront (Blade) module powers the server-rendered customer-facing e-comme
 | `app/Services/StorefrontOrderTrackingService.php` | Fetches live order stages and courier tracking data for customer track pages. |
 | `app/Services/StorefrontCustomerActivityService.php` | Logs customer storefront browsing, cart updates, and account logins. |
 | `app/Services/StorefrontCustomerSession.php` | Manages storefront customer authentication sessions and OTP tokens. |
-| `app/Services/StorefrontSiteConfigService.php` | Resolves tenant site logos, SEO metadata, and active theme settings. |
+| `app/Services/StorefrontSiteConfigService.php` | Resolves tenant site logos, SEO metadata, and active theme settings. `branding()` is the site's light + dark logo pair (served in `/site`, and drawn by the reseller landing page header). |
 | `app/Services/PaymentGatewayResolver.php` | Resolves gateway instances for ZiniPay, PayStation, or manual accounts. |
 | `app/Services/ZiniPayClient.php` | Low-level API client for ZiniPay online payment gateway transactions. |
 | `app/Services/PayStationClient.php` | Low-level API client for PayStation multi-channel gateway transactions. |
