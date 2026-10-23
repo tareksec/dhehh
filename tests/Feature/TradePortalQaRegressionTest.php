@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Trade\Resources\GoodsIn\Pages\ListGoodsIn;
+use App\Filament\Trade\Resources\LcFiles\Pages\CreateLcFile;
 use App\Filament\Trade\Resources\LcFiles\Pages\EditLcFile;
 use App\Filament\Trade\Resources\LcFiles\Pages\LandedCost;
 use App\Filament\Trade\Resources\LcFiles\Pages\ViewLcFile;
@@ -139,6 +140,21 @@ class TradePortalQaRegressionTest extends TestCase
 
         $this->file->update(['stage' => 'cleared']);
         $this->assertSame(0, app(TradePortalHome::class)->openLcs()['count']);
+    }
+
+    public function test_a_second_lc_form_brings_the_suppliers_saved_details_and_keeps_them(): void
+    {
+        $this->inPortal();
+        $supplier = Supplier::query()->create(['name' => 'Matill', 'address' => 'HONGKONG ADDRESS', 'phone' => '123']);
+        $purchase = Purchase::query()->create(['supplier_id' => $supplier->getKey(), 'purchase_date' => now()->toDateString(), 'status' => 'draft']);
+
+        Livewire::test(CreateLcFile::class)
+            ->set('data.purchase_id', $purchase->getKey())
+            ->assertSet('data.supplier_address', 'HONGKONG ADDRESS')
+            ->call('create')->assertHasNoFormErrors();
+
+        $this->assertSame('HONGKONG ADDRESS', $supplier->refresh()->address);
+        $this->assertSame('123', $supplier->phone);
     }
 
     public function test_goods_in_shows_its_new_purchase_button(): void
