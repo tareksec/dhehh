@@ -165,7 +165,9 @@
     font-size: 0.8125rem;
 }
 
-.trade-list strong {
+.trade-list strong,
+.trade-list .fi-badge,
+.trade-list .fi-btn {
     flex-shrink: 0;
     font-variant-numeric: tabular-nums;
 }
@@ -248,6 +250,60 @@
 
 .trade-card-big-sm {
     font-size: 1.25rem;
+}
+
+/* LC file: the stages as numbered steps, done ones ticked, the current one in blue. */
+.trade-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+@media (min-width: 768px) {
+    .trade-steps {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+}
+
+.trade-step {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    color: var(--trade-muted);
+}
+
+.trade-step-dot {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 999px;
+    border: 2px solid var(--trade-line);
+    font-size: 0.8125rem;
+    font-weight: 700;
+}
+
+.trade-step-done {
+    color: var(--trade-green-ink);
+}
+
+.trade-step-done .trade-step-dot {
+    border-color: var(--trade-green-ink);
+    background-color: var(--trade-green-soft);
+}
+
+.trade-step-now {
+    color: var(--trade-primary);
+    font-weight: 700;
+}
+
+.trade-step-now .trade-step-dot {
+    border-color: var(--trade-primary);
+    background-color: var(--trade-primary);
+    color: #ffffff;
 }
 
 /* Label / value pairs on a challan's page. */

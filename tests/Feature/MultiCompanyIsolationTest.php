@@ -71,6 +71,7 @@ use App\Models\InvestorPortalAccount;
 use App\Models\InvestorRequest;
 use App\Models\InvestorSecurityInstrument;
 use App\Models\KnowledgeDocument;
+use App\Models\LcFile;
 use App\Models\Lead;
 use App\Models\Media;
 use App\Models\MetaAd;
@@ -149,7 +150,7 @@ class MultiCompanyIsolationTest extends TestCase
             Customer::class, CustomerPayment::class, Expense::class, ExpenseCategory::class,
             CustomerRiskProfile::class, CustomerRiskEvent::class, CustomerRiskReview::class, FraudCheck::class,
             Order::class, OrderItem::class, OrderPayment::class, OrderCost::class,
-            DeliveryChallan::class, DeliveryChallanItem::class,
+            DeliveryChallan::class, DeliveryChallanItem::class, LcFile::class,
             Product::class, Purchase::class, PurchaseItem::class,
             StockMovement::class, Supplier::class, SupplierPayment::class, TransactionLedger::class,
             Container::class, Shipment::class, StorefrontPage::class, StorefrontSetting::class,

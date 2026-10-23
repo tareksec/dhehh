@@ -6,11 +6,13 @@ use App\Filament\Auth\AdminLogin;
 use App\Filament\Trade\Pages\Home;
 use App\Filament\Trade\TradeNavigation;
 use App\Http\Controllers\Trade\TradeChallanPrintController;
+use App\Http\Controllers\Trade\TradeLcDocumentController;
 use App\Http\Controllers\Trade\TradePortalLocaleController;
 use App\Http\Middleware\PreventAdminPageCaching;
 use App\Http\Middleware\ResolveTradePortalCompany;
 use App\Http\Middleware\RestrictPortalHosts;
 use App\Http\Middleware\SetTradePortalLocale;
+use App\Models\LcFile;
 use App\Services\CompanyContext;
 use App\Services\CompanySettingsService;
 use Filament\FontProviders\LocalFontProvider;
@@ -77,6 +79,10 @@ class TradePortalPanelProvider extends PanelProvider
             })
             ->authenticatedRoutes(function (): void {
                 Route::get('challans/{challan}/print', TradeChallanPrintController::class)->whereNumber('challan')->name('challans.print');
+                Route::get('lc-files/{lcFile}/papers/{document}', TradeLcDocumentController::class)
+                    ->whereNumber('lcFile')
+                    ->whereIn('document', array_keys(LcFile::DOCUMENTS))
+                    ->name('lc-files.document');
             })
             ->renderHook(PanelsRenderHook::USER_MENU_BEFORE, fn (): View => view('filament.trade.language-switch'))
             // Phones: the bottom tab bar with its menu sheet.

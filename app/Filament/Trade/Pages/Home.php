@@ -5,6 +5,7 @@ namespace App\Filament\Trade\Pages;
 use App\Filament\Trade\Resources\DeliveryChallans\DeliveryChallanResource;
 use App\Filament\Trade\Resources\Dues\DueResource;
 use App\Filament\Trade\Resources\GoodsIn\GoodsInResource;
+use App\Filament\Trade\Resources\LcFiles\LcFileResource;
 use App\Filament\Trade\Resources\StockItems\StockItemResource;
 use App\Services\TradePortalHome;
 use App\Support\ModuleGuard;
@@ -60,7 +61,7 @@ class Home extends Dashboard
                 'sales' => DeliveryChallanResource::canAccess() ? DeliveryChallanResource::getUrl(panel: 'trade') : null,
                 'dues' => DueResource::canAccess() ? DueResource::getUrl(panel: 'trade') : null,
                 'stock' => StockItemResource::canAccess() ? StockItemResource::getUrl(panel: 'trade') : null,
-                'lcs' => GoodsInResource::canAccess() ? GoodsInResource::getUrl(panel: 'trade') : null,
+                'lcs' => LcFileResource::canAccess() ? LcFileResource::getUrl(panel: 'trade') : (GoodsInResource::canAccess() ? GoodsInResource::getUrl(panel: 'trade') : null),
                 'money' => CashBook::canAccess() ? CashBook::getUrl(panel: 'trade') : null,
             ],
         ];

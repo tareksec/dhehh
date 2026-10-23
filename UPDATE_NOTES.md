@@ -2,6 +2,31 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-24 - Trade Portal phase 4 (LC file + import papers)
+
+Owner request: start Phase 4 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-lc-file`. The branch starts from `feature/trade-portal-cash-book` (phases 1–3 are not on `main` yet), so it carries all four.
+
+What changed: LC files (list, one form, a page per file with stages and papers), five PDF papers (LC Opening Letter, DRL, Beneficiary's Certificate, Detail Packing List, Shipment Advice), the Home LC card showing each file's stage, permission `trade.lc`. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief, PLAN.md §3.2, SUMMARY.md):
+
+- The LC file is a new record attached to a purchase (one each). What the purchase already has (LC / PI / CI numbers and dates, ports, delivery terms, country of origin) stays on the purchase, and the supplier's address stays on the supplier, so the ERP's own PI / CI / PL print the same numbers. The PI is entered as a purchase in Goods in first.
+- Stages and document statuses are the ones in SUMMARY.md §4 (report 2), with "PI received" as the first stage; they move only when the owner presses "Move to" (no automatic stage changes).
+- Wording: the samples' text, word for word, with the numbers filled in. Where two samples differ, the newer full version was used: Beneficiary's Certificate = document 8 (clauses A–E; E only when "used machines" is ticked), Shipment Advice = document 9 plus the vessel / B/L lines of document 7, Detail Packing List = document 7 sheet DP. Dates are written as each sample writes them (06.09.2026 on the letter, 07-September-2026 in the DRL, 24th Sep 2026 on the certificate). "Chattogram" spelling is whatever the owner types.
+- A paper prints only when every field it uses is filled; the page lists what is missing (brief: cover note no. + date mandatory before a Shipment Advice — the same rule is used for every paper so none prints with blanks). The DRL and Shipment Advice dates are optional because the samples have none.
+- The papers are in English like the samples, whatever language the portal is in. Supplier-issued papers carry the supplier's name and seal (the owner prepares them himself, PLAN.md §2).
+- The ERP's PI / CI / PL are not linked from the portal (they are admin pages and need admin permission); a later phase can add them if the owner wants.
+
+Checked in the browser at 390px on a throwaway copy of the dev database (never the real DB): the LC file form in Bangla, saving the sample LC (163026010167, USD 35,600, 30%), the page with the six stages and the papers (four ready, the Shipment Advice "still needs" the cover note), and three PDFs rendered and read back (LC Opening Letter, Shipment Advice, Detail Packing List). Fixed on the way: the "Not ready" badge was squeezed by the long missing-fields text.
+
+Needs Bangla review: the 99 new keys, especially the stage names ("PI পাওয়া গেছে", "পরিদর্শন চলছে", "বন্দরে খালাস"), "Discrepancy pending" (গরমিল মেটানো বাকি) and the paper titles.
+
+Not done: landed cost and machine serials (phase 5), LC status / shipment-advice registers as reports (phase 6), PSI Inspection Order Form (document 3, filled by the exporter), e-mailing papers, the LC margin in the cash book and balance sheet.
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 3,007 passed, 1 skipped, 0 failed. New: `TradeLcFileTest` (9).
+
+Commit status: committed and pushed to `feature/trade-portal-lc-file`; not on `main` (waits for the owner's approval; it contains phases 1–3 too).
+
 ## 2026-10-23 - Trade Portal phase 3 (cash book + balance sheet)
 
 Owner request: start Phase 3 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-cash-book`. The branch starts from `feature/trade-portal-shop-work` (phases 1 and 2 are not on `main` yet), so it carries all three.

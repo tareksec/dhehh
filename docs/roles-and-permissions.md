@@ -139,6 +139,7 @@ trade.purchases            Goods in: enter purchases, mark goods arrived
 trade.stock                Stock: add items, correct counts
 trade.dues                 Dues: see who owes, receive money
 trade.import               Bring in old data (buyers with old dues, items with stock)
+trade.lc                   LC files: import details, stages, print the LC letter, DRL, certificate, packing list, shipment advice
 trade.cashbook             Cash book and balance sheet; record bank deposits, supplier payments, costs
 trade.money_accounts       Cash and bank accounts: add them, set the money in them at the start
 ```

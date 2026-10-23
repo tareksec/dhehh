@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\LcFile;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Support\ModuleGuard;
@@ -79,7 +80,7 @@ class TradePortalHome
 
             return [
                 'count' => (int) (clone $query)->count(),
-                'files' => $query->with('supplier')
+                'files' => $query->with(['supplier', 'lcFile'])
                     ->orderByDesc('lc_date')
                     ->orderByDesc('id')
                     ->limit(self::LIST_LIMIT)
@@ -115,9 +116,17 @@ class TradePortalHome
         });
     }
 
-    /** The furthest paper a purchase has: the Commercial Invoice means it is shipped, else the LC is open. */
+    /**
+     * The stage of an open LC: its LC file's stage when it has one; otherwise
+     * the furthest paper it has (the Commercial Invoice means it is shipped,
+     * else the LC is open).
+     */
     public static function lcStage(Purchase $purchase): string
     {
+        if ($purchase->lcFile) {
+            return LcFile::stageLabel($purchase->lcFile->stage);
+        }
+
         return filled($purchase->ci_number) ? __('Shipped (invoice received)') : __('LC opened');
     }
 }
