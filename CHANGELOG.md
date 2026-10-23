@@ -4,13 +4,28 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **One "Logs" page for every log.** Owner request 2026-10-23. **Settings → Logs** is now the only log entry in the menu, with one tab per log, the way **Integrations** gathers the integrations: **SMS**, **Audit**, **Courier status**, **Courier webhooks**, **Meta events**, **Deploy errors** and **Mobile crashes**. A tab appears only for people who could already open that log, so nobody gains or loses access. The separate sidebar entries for SMS Log, Audit Logs, Deploy Error Logs and Mobile Crash Reports are gone; the logs' own pages and links (for example the link in a deploy-error alert, or Courier → Status Logs) keep working. The open tab is kept in the address, so a link opens the right log. The SMS log reads as one column on a phone (when, number, result, why) so it does not scroll sideways.
+
+### Fixed
+
+- **"User Id not found" (code 1011) from BulkSMSBD now says what to do.** The SMS Log and the Send test SMS button explain each gateway reply in plain words next to its code: 1011 means BulkSMSBD does not recognise the API key, so copy it again from the BulkSMSBD Developers page; the same for sender-ID problems (1002, 1013-1015), an empty balance (1006, 1007), Bangla-only masking (1012), IP whitelist (1032) and an account that needs attention (1018, 1031).
+- An **empty SMS API key** is now caught before the gateway is called and logged as "The SMS API key is empty".
+- **Spaces copied with the key**, sender ID or URL are removed when the settings are saved and when an SMS is sent. The **SMS API key** box also asks the browser not to fill it in: a browser can put the saved login password into a password-type box, which the gateway then answers with "User Id not found".
+
+### Technical Notes
+
+- Logs page and SMS gateway hints: `App\Filament\Pages\Logs` (Settings cluster, needs the "manage settings" permission) builds its tabs from `App\Support\LogCatalog`, which lists the log resources and keeps those whose `canViewAny()` passes. Each tab embeds `App\Livewire\LogTable` (lazy, `#[Locked] $log`, re-checked on mount) which reuses the resource's own `table()` on the model's company-scoped query; a resource's `ViewAction` becomes a plain link to the resource's view page, and a resource may add a `logNotice()` (SMS and courier webhooks use it for the "queue worker not running" warning). The four resources set `$shouldRegisterNavigation = false` and keep their routes. `StorefrontNotificationService::sendSmsDetailed()` now also returns `reason` (`no_gateway`, `no_api_key`, `gateway_unreachable`, `gateway_refused`) and `smsGatewayHint()` maps codes to advice. Tests: `LogsPageTest` (8), extra cases in `SmsLogTest`. No migrations.
+
 ## [2.103.0] - 2026-10-23
 
 **Release type:** Minor Feature Update
 
 ### Added
 
-- **One "Logs" page for every log.** Owner request 2026-10-23. **Settings → Logs** is now the only log entry in the menu, with one tab per log, the way **Integrations** gathers the integrations: **SMS**, **Audit**, **Courier status**, **Courier webhooks**, **Meta events**, **Deploy errors** and **Mobile crashes**. A tab appears only for people who could already open that log, so nobody gains or loses access. The separate sidebar entries for SMS Log, Audit Logs, Deploy Error Logs and Mobile Crash Reports are gone; the logs' own pages and links (for example the link in a deploy-error alert, or Courier → Status Logs) keep working. The open tab is kept in the address, so a link opens the right log. The SMS log reads as one column on a phone (when, number, result, why) so it does not scroll sideways.
 - **Amazon SES setup for the ERP's email.** Owner request 2026-10-23 (the domains are approved in AWS SES). SES is used through its SMTP interface, so it plugs into **Settings → Integrations → Email Setup** like any SMTP account:
   - **Amazon SES region (quick setup):** type the region (for example `ap-southeast-1`) and the SMTP host (`email-smtp.<region>.amazonaws.com`), port 587 and TLS are filled in. The region is not stored; it is read back from the saved host.
   - **Send test email:** sends a message through the settings saved for the site being edited and shows the mail server's own answer when it fails (for SES: unverified sender, sandbox recipient, wrong credentials or region).
@@ -24,15 +39,11 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Fixed
 
-- **"User Id not found" (code 1011) from BulkSMSBD now says what to do.** The SMS Log and the Send test SMS button explain each gateway reply in plain words next to its code: 1011 means BulkSMSBD does not recognise the API key, so copy it again from the BulkSMSBD Developers page; the same for sender-ID problems (1002, 1013-1015), an empty balance (1006, 1007), Bangla-only masking (1012), IP whitelist (1032) and an account that needs attention (1018, 1031).
-- An **empty SMS API key** is now caught before the gateway is called and logged as "The SMS API key is empty".
-- **Spaces copied with the key**, sender ID or URL are removed when the settings are saved and when an SMS is sent. The **SMS API key** box also asks the browser not to fill it in: a browser can put the saved login password into a password-type box, which the gateway then answers with "User Id not found".
 - **A company's email could go out through another company's SMTP account and sender.** The mail manager keeps the mailer it built for the whole process, so a long-running queue worker sending for one company after another (IMS and investor emails) kept using the first company's SMTP host, login and From address. Each send now builds the company's own mailer. With several domains on one SES account this would have sent a company's mail under another company's From address.
 - The sender no longer falls back to an SMTP user name that is not an email address (it used to, which made every message fail); it uses the From address, else an email-shaped user name, else the server's default sender.
 
 ### Technical Notes
 
-- Logs page and SMS gateway hints: `App\Filament\Pages\Logs` (Settings cluster, needs the "manage settings" permission) builds its tabs from `App\Support\LogCatalog`, which lists the log resources and keeps those whose `canViewAny()` passes. Each tab embeds `App\Livewire\LogTable` (lazy, `#[Locked] $log`, re-checked on mount) which reuses the resource's own `table()` on the model's company-scoped query; a resource's `ViewAction` becomes a plain link to the resource's view page, and a resource may add a `logNotice()` (SMS and courier webhooks use it for the "queue worker not running" warning). The four resources set `$shouldRegisterNavigation = false` and keep their routes. `StorefrontNotificationService::sendSmsDetailed()` now also returns `reason` (`no_gateway`, `no_api_key`, `gateway_unreachable`, `gateway_refused`) and `smsGatewayHint()` maps codes to advice. Tests: `LogsPageTest` (8), extra cases in `SmsLogTest`. No migrations.
 - Email keys (`mail_host`, `mail_port`, `mail_encryption`, `mail_username`, `mail_password`, `mail_from_address`, `mail_from_name`; new `StorefrontNotificationService::MAIL_CREDENTIAL_KEYS`) still live in the encrypted `storefront_settings.notification_credentials`; no migration. `Integrations::save()` merges only the SMS and email keys into the stored array (`ownedNotificationKeys()`), and `EditStorefrontSetting::mutateFormDataBeforeSave()` re-adds both sets so the Storefront Settings form, which no longer has these fields, cannot wipe them.
 - `StorefrontNotificationService`: new `mailFromAddress()` (From address, else an email-shaped user name, else null), `sendTestEmail()` (returns null or the server's error text, never throws); `companyMailer()` now calls `Mail::purge('storefront_dynamic')` before building the mailer and uses `mailFromAddress()`.
 - In this Laravel version the SMTP transport ignores the `encryption` setting: port 465 connects over SSL (`smtps`), any other port is plain SMTP that upgrades with STARTTLS when the server offers it. The SMTP encryption box therefore does not change how the connection is made; the tab says so. A site with no encryption saved (or a saved null) is shown as TLS; None is saved as an empty string.
