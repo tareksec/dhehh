@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.105.0] - 2026-10-23
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -22,7 +24,6 @@ All notable production changes to Business Dashboard are documented here.
 - `OtpService` and `ResellerPasswordResetService` log the "no email account" case before returning, since they stop before any send.
 - New read-only resource `EmailLogResource` (`canManageSettings()`), shown as the `email` tab of the Logs page (listed in `LogCatalog`, no sidebar entry of its own, route `/admin/settings/email-logs` kept; one-column phone layout like the SMS log), `docs/codebase-map/crm-messaging.md` updated, `docs/email-ses-setup.md` gains a section on the log. Lang keys in `lang/en.json` and `lang/bn.json`.
 - Tests: new `EmailLogTest` (sent / failed / log-only rows, no code stored, the reason mapping with SES answers, logging failure never stops the email, company isolation, the page, the two early-return call sites, the Integrations test button); `ResellerPasswordResetByStaffTest` asserts the skip row; `MultiCompanyIsolationTest` lists `EmailLog`.
-
 ## [2.104.0] - 2026-10-23
 
 **Release type:** Minor Feature Update
