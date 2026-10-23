@@ -2,6 +2,10 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 (navbar) - IMS top bar logo size and per-company logo
+
+Owner (Bangla): the logo makes the IMS navbar too tall; and picking another company still shows the same logo. Fixed: logo capped in size, top bar compacted, logo/name follow the chosen company. Not browser-verified (no preview DB); tests not run. Status: uncommitted.
+
 ## 2026-10-23 - Amazon SES controlled from the dashboard, and bounce / complaint tracking
 
 Owner (Bangla): "ওকে বানাও" (build the bounce / spam tracking) "আর ses এর api দিয়ে আমাদের ড্যাশবোর্ড থেকেই ses এর সার্ভিস কন্ট্রোল করতে চাই সেটা করা যাবে কিনা" (and can we control SES from our dashboard through its API?). Answer: yes, and it is built.

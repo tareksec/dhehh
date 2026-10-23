@@ -4,6 +4,17 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- IMS office top bar: a wide logo no longer makes the bar tall (logo capped at 2rem high, 8rem wide; the wrapped two-line bar on laptops is shorter).
+- IMS office top bar: choosing another company now shows that company's logo and name instead of the IMS domain's.
+
+### Technical Notes
+
+- `ImsOfficePanelProvider::officeCompany()` prefers the open company (`CompanyContext`) over the IMS host company; CSS in `resources/css/filament/ims/theme.css`.
+
 ## [2.111.1] - 2026-10-23
 
 **Release type:** Patch/Fix Update
