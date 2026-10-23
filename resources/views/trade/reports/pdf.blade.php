@@ -51,7 +51,7 @@
                 @foreach ($report['rows'] as $row)
                     <tr>
                         @foreach ($columns as $column)
-                            <td @class(['num' => TradeReportFormat::isNumeric($column['type'])])>{{ TradeReportFormat::text($row[$column['key']] ?? null, $column['type']) }}</td>
+                            <td @class(['num' => TradeReportFormat::isNumeric($column['type'])])>{{ TradeReportFormat::pdf($row[$column['key']] ?? null, $column['type']) }}</td>
                         @endforeach
                     </tr>
                 @endforeach
@@ -60,7 +60,7 @@
                 <tfoot>
                     <tr>
                         @foreach ($columns as $column)
-                            <td @class(['num' => TradeReportFormat::isNumeric($column['type'])])>{{ TradeReportFormat::text($report['totals'][$column['key']] ?? null, $column['type']) }}</td>
+                            <td @class(['num' => TradeReportFormat::isNumeric($column['type'])])>{{ TradeReportFormat::pdf($report['totals'][$column['key']] ?? null, $column['type']) }}</td>
                         @endforeach
                     </tr>
                 </tfoot>

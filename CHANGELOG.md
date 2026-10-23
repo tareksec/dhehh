@@ -4,6 +4,27 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Trade Portal fixes from the live check of 2026-10-23** (Tasneem Knitting Industry, test data only).
+  - **A Trade Portal page that breaks now shows "This page could not be opened" with a way back, and the error reaches the Super Admins (Settings → Deploy Error Logs).** Before, a crash on `/trade` showed a bare "500" page and was written nowhere the owner could see, so the server errors found in the check (the first save of an LC file's details, the DRL before its date was filled, the first opening of Serial numbers, the *Landed cost per shipment* report, the PDF of the *Shipment advice and insurance register*) could not be traced. The same pages and the same data were run on a copy of the system (SQLite and MySQL/MariaDB) and all of them open, save and print there; the next time one fails on the live site, the Deploy Error Logs will say why.
+  - **Goods in has its New purchase button again.** It was hidden from a Trade Owner by the ERP's purchase rules (the page itself opened by its address).
+  - **Landed cost → Apply to stock buying price** now lists the new buying price of each item in its confirmation (for example "Machine ৳ 45,189.19; Stand ৳ 2,259.46; Feeder ৳ 564.86"), which is what is applied. Before, it showed one blended cost per unit that no item received.
+  - **Home's LC card counts an LC until its LC file is Cleared**, as the reports do, also when the goods are already in. Before, an LC whose goods had arrived dropped off the card even though it was still open at the bank.
+  - **The English report PDFs write "Tk" for Taka**: the PDF engine drew the ৳ sign like a "b". The screen and Print pages keep ৳.
+
+### Technical Notes
+
+- `PanelErrorPages::PANELS` gains `'trade' => '/trade'`, so Trade Portal page crashes and failed Livewire updates get `panel-errors.module` and `ModuleGuard::report()` (→ `DeploymentErrorReporter`) instead of the storefront's 500 page.
+- `GoodsInResource::getCreateAuthorizationResponse()` returns `canCreate()`: Filament's `CreateAction` asks the Gate, not `canCreate()`, and `Gate::before` (AppServiceProvider) decides `Purchase` by the ERP's module permissions (`User::MODEL_MODULES`), which a Trade Owner does not have.
+- `TradePortalHome::openLcs()`: with an LC file, open = stage ≠ `cleared`; without one, the old rule (purchase not received). Cancelled purchases never count.
+- `TradeReportFormat::pdf()` (= `text()` with `Tk` for `৳`) is used by `trade/reports/pdf.blade.php`.
+- Translation key replaced (en + bn): the Apply confirmation now takes `:items` instead of `:per_unit`.
+- Not changed: two serial numbers written on one line are one serial number. The form splits on new lines, commas and semicolons; the check's "TEST-SN-001TEST-SN-002" was typed without a line break.
+- Tests: new `TradePortalQaRegressionTest` (the check's data: every report on screen in both languages and as PDF / Excel / Print, the DRL without a date, LC edit / landed cost / serial actions, Home LC card, Goods in button, the Trade module error page); `ModuleGuardTest` checks the `/trade` mapping.
+
 ## [2.111.0] - 2026-10-23
 
 **Release type:** Minor Feature Update

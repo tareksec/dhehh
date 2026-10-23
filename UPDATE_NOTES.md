@@ -71,6 +71,24 @@ Owner sent a screenshot of the failure notice after the `88{phone}` fix. Its "Wh
 
 Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
 
+## 2026-10-23 - Trade Portal fixes from the live QA report
+
+Owner request: the live QA report of the Trade Portal (app.zamzamint.com/trade, Tasneem Knitting Industry, TEST- data, deploy 41e6212) — fix what it found.
+
+What changed: Trade Portal crashes get the module error page and reach Deploy Error Logs; Goods in shows its New purchase button; the Apply-landed-cost confirmation lists each item's new price; Home's LC card counts LCs until Cleared; English report PDFs write "Tk". Details in `CHANGELOG.md`.
+
+The five server errors of the report (first LC edit save, DRL without its date, first open of Serial numbers, report 8 on screen, report 9 PDF) and the red "Error while loading page" notices after adding a landed cost / applying it / saving serials were **not reproduced**: the same steps with the same data pass on SQLite and on a throwaway MariaDB 11.4 (strict SQL mode), in Bangla and English (`TradePortalQaRegressionTest`). The live server logs could not be read (the Trade Portal's errors were not sent to Deploy Error Logs — fixed here — and signing in to the live admin is the owner's). Still open: once this is live, repeat those steps and read Settings → Deploy Error Logs for the cause.
+
+Decided without asking: an LC with an LC file is "open" until its stage is Cleared (the reports' rule); the English PDF uses "Tk" (the Bangla print page keeps ৳); "TEST-SN-001TEST-SN-002" is not a bug — the form splits on new lines, commas and semicolons, and that text had no break.
+
+The QA follow-up run (18:52) passed J (old data import: samples, a correct file, a file with one wrong row refused whole), N (the Trade Owner gets 403 on /admin) and report 9's Excel and Print — nothing to fix there. Still unchecked by QA: K (360px phone), M (font), the three supplier papers (no TIN / BIN / IRC in the live business details).
+
+Main (v2.110.0) merged into the branch first; no conflicts.
+
+Full plain `php artisan test` (PHP 8.4): 3,152 passed, 5 skipped, 0 failed. No frontend assets changed.
+
+Commit status: committed (0ff1bf6f), pushed to `feature/trade-portal-reports` and merged into `main` with the owner's approval in the conversation (2026-10-23). The merge kept main's v2.111.0 (Amazon SES) notes; the only conflict was `CHANGELOG.md`.
+
 ## 2026-10-23 - Trade Portal: Tiro Bangla, desktop menu, sign-in page; merge to main
 
 Owner request: use Tiro Bangla (Google Fonts link given) for Bangla; check the desktop dashboard (the top menu was broken); make the sign-in page professional; then push and merge into main (owner's explicit approval in the conversation, 2026-10-23).

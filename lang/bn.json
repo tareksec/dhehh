@@ -3870,7 +3870,7 @@
     "The rate the bank settled the LC at. The goods cost becomes the LC value × this rate.": "যে রেটে ব্যাংক এলসির টাকা শোধ করেছে। মালের দাম হবে এলসির মূল্য × এই রেট।",
     "Rate saved": "রেট সংরক্ষণ হয়েছে",
     "Apply to stock buying price": "স্টকের কেনা দামে বসান",
-    "Each item's buying price becomes its landed cost per unit (:per_unit for one unit). The stock value and the profit then use it. You can apply again after adding costs.": "প্রতিটি মালের কেনা দাম হবে তার প্রতি-ইউনিট আসল খরচ (একটির জন্য :per_unit)। এরপর স্টকের মূল্য ও লাভ এটা ধরে হিসাব হবে। পরে খরচ যোগ করলে আবার বসাতে পারবেন।",
+    "Each item's buying price becomes its own landed cost per unit: :items. The stock value and the profit then use it. You can apply again after adding costs.": "প্রতিটি মালের কেনা দাম হবে তার নিজের প্রতি-ইউনিট আসল খরচ: :items। এরপর স্টকের মূল্য ও লাভ এটা ধরে হিসাব হবে। পরে খরচ যোগ করলে আবার বসাতে পারবেন।",
     "Buying price updated for :count items": ":countটি মালের কেনা দাম বদলানো হয়েছে",
     "Cost removed": "খরচ মুছে ফেলা হয়েছে",
     "serial number": "সিরিয়াল নম্বর",

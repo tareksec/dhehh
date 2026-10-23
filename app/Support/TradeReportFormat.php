@@ -32,6 +32,15 @@ final class TradeReportFormat
         };
     }
 
+    /**
+     * A cell of the English PDF file: as text(), with "Tk" for the Taka sign,
+     * which the PDF engine draws like a "b".
+     */
+    public static function pdf(mixed $value, string $type): string
+    {
+        return str_replace('৳', 'Tk', self::text($value, $type));
+    }
+
     protected static function isDate(mixed $value): bool
     {
         return is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}/', $value) === 1;
