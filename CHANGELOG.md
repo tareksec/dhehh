@@ -4,6 +4,12 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **Reseller landing page: the parcel answer names the company and its couriers.** Owner wording 2026-10-23. The answer to *How is the parcel sent, and who collects the money?* now reads "<company name> sends the parcel to your customer by courier (Steadfast, Pathao, RedX) on cash on delivery …" (the company name comes from the company's own settings; the three courier names are part of the page's text, in English and in Bangla).
+
 ## [2.103.0] - 2026-10-23
 
 **Release type:** Minor Feature Update
@@ -45,7 +51,6 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Changed
 
-- **Reseller landing page: the parcel answer names the company and its couriers.** Owner wording 2026-10-23. The answer to *How is the parcel sent, and who collects the money?* now reads "<company name> sends the parcel to your customer by courier (Steadfast, Pathao, RedX) on cash on delivery …" (the company name comes from the company's own settings; the three courier names are part of the page's text, in English and in Bangla).
 - **Reseller landing page is set in Anek Bangla.** Owner request 2026-10-22. The whole page, Bangla and English alike, uses the Anek Bangla font (SIL OFL 1.1, variable weights 100–800), self-hosted with the ERP so no third-party font request is made; the landing page no longer loads Hind Siliguri or Unbounded.
 
 ### Technical Notes
