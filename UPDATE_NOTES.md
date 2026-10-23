@@ -4,7 +4,7 @@ This file is a working update log for changes that may become commits. Use it to
 
 ## 2026-10-23 (navbar) - IMS top bar logo size and per-company logo
 
-Owner (Bangla): the logo makes the IMS navbar too tall; and picking another company still shows the same logo. Fixed: logo capped in size, top bar compacted, logo/name follow the chosen company. Not browser-verified (no preview DB); tests not run. Status: uncommitted.
+Owner (Bangla): the logo makes the IMS navbar too tall; and picking another company still shows the same logo. Fixed: logo capped in size, logo/name follow the chosen company (pushed to main as 49c577d4). Follow-up (owner: still two lines): on laptops the bar is now one 72px line — picker as an icon, only the other language shown, tighter pills; measured in a local preview: English needs 1202px, Bangla 1220px, so the two-line fallback is kept below 1240px. Status: committed and pushed to main.
 
 ## 2026-10-23 - Amazon SES controlled from the dashboard, and bounce / complaint tracking
 

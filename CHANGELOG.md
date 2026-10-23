@@ -11,6 +11,7 @@ All notable production changes to Business Dashboard are documented here.
 ### Fixed
 
 - IMS office top bar: a wide logo no longer makes the bar tall (logo capped at 2rem high, 8rem wide; the wrapped two-line bar on laptops is shorter).
+- IMS office top bar on laptops (1024–1799px): one slim line instead of two — the company picker is a round icon, the language switch shows only the other language, the menu pills are tighter; only below 1240px does the menu still get its own line.
 - IMS office top bar: choosing another company now shows that company's logo and name instead of the IMS domain's.
 
 ### Technical Notes
