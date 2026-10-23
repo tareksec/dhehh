@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.111.2] - 2026-10-23
+
 **Release type:** Patch/Fix Update
 
 ### Fixed
@@ -14,7 +16,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - `ImsOfficePanelProvider::officeCompany()` prefers the open company (`CompanyContext`) over the IMS host company; CSS in `resources/css/filament/ims/theme.css`.
-
 ## [2.111.1] - 2026-10-23
 
 **Release type:** Patch/Fix Update
