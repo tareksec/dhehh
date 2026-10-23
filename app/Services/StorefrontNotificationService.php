@@ -96,6 +96,24 @@ class StorefrontNotificationService
         return trim((string) preg_replace('~https?://[^\s)]+~i', '[gateway URL]', $text));
     }
 
+    /** The placeholders a gateway URL must have for a message to reach its customer. */
+    public const SMS_REQUIRED_PLACEHOLDERS = ['{phone}', '{message}'];
+
+    /**
+     * Which of the required placeholders a gateway URL template lacks. A template copied from a gateway's example
+     * still has the example's words (number=Receiver&message=TestSMS) there, which sends every SMS to a number
+     * called "Receiver" and the gateway answers "1001 Invalid Number".
+     *
+     * @return list<string>
+     */
+    public static function smsTemplateMissing(string $template): array
+    {
+        return array_values(array_filter(
+            self::SMS_REQUIRED_PLACEHOLDERS,
+            fn (string $placeholder): bool => ! str_contains($template, $placeholder),
+        ));
+    }
+
     /**
      * What to do about a gateway reply code, in the owner's words; null when the code needs no action or is unknown.
      * Shown in the SMS Log and after "Send test SMS", next to the gateway's own wording.
@@ -109,7 +127,7 @@ class StorefrontNotificationService
             1012 => __('A masking sender ID sends Bangla text only. Write this message in Bangla on SMS Templates, or use a numeric sender ID.'),
             1032 => __('Add this server\'s IP address to the BulkSMSBD whitelist, or switch the IP whitelist off.'),
             1018, 1031 => __('Your BulkSMSBD account needs attention. Contact BulkSMSBD support.'),
-            1001 => __('The gateway says the phone number is not valid. The system sends it as 8801XXXXXXXXX, so in the gateway URL write number={phone} with nothing in front of {phone}. Check the number itself too.'),
+            1001 => __('The gateway says the phone number is not valid. The system sends it as 8801XXXXXXXXX, so in the gateway URL write number={phone} with nothing in front of {phone}, and not a word like Receiver or a fixed number. Check the number itself too.'),
             1003 => __('A required value is missing in the gateway URL. Use the template shown in the URL box.'),
             default => null,
         };
@@ -118,7 +136,7 @@ class StorefrontNotificationService
     /**
      * Sends one SMS and says what the gateway answered, so the SMS log and the "Send test SMS" button can
      * show why a message did not leave (no balance, wrong sender ID, IP not whitelisted ...), not only that it did not.
-     * `reason` is null when the SMS was accepted, else no_gateway, no_api_key, gateway_unreachable or gateway_refused.
+     * `reason` is null when the SMS was accepted, else no_gateway, bad_gateway_url, no_api_key, gateway_unreachable or gateway_refused.
      * `segments` is how many SMS parts the text is billed as.
      *
      * `request` is the gateway address that was called with the API key and the text hidden, so a refused number or
@@ -188,6 +206,14 @@ class StorefrontNotificationService
 
         if ($urlTemplate === '') {
             return ['ok' => false, 'reason' => 'no_gateway', 'code' => null, 'meaning' => null, 'detail' => null];
+        }
+
+        // Without {phone} and {message} the gateway gets a fixed number and text, so it would only ever answer
+        // "Invalid Number"; say what is really wrong and do not call it.
+        $missing = self::smsTemplateMissing($urlTemplate);
+
+        if ($missing !== []) {
+            return ['ok' => false, 'reason' => 'bad_gateway_url', 'code' => null, 'meaning' => null, 'detail' => 'missing '.implode(', ', $missing)];
         }
 
         // The gateway would answer "User Id not found" for an empty key; say what is really wrong.

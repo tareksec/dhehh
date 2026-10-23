@@ -20,7 +20,9 @@ use App\Services\WooCommerceImportService;
 use App\Services\WooCommerceOrderSyncService;
 use App\Services\ZiniPayClient;
 use App\Support\BulkSmsBdPolicy;
+use App\Support\SmsGatewayUrl;
 use BackedEnum;
+use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\MarkdownEditor;
@@ -44,6 +46,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
 
@@ -603,7 +606,7 @@ class Integrations extends Page
      * the same pattern already used throughout this codebase, e.g.
      * CloudStorageSettings::required(fn (Get $get) => $get('enabled'))).
      */
-    protected function providerConnectionFields(string $prefix, bool|\Closure $requiredWhen = true): array
+    protected function providerConnectionFields(string $prefix, bool|Closure $requiredWhen = true): array
     {
         $presets = $this->llmProviderPresets();
         $presetOptions = collect($presets)->map(fn (array $preset): string => $preset['label'])->all();
@@ -817,6 +820,48 @@ class Integrations extends Page
             ->danger()
             ->persistent()
             ->send();
+    }
+
+    /** One SMS gateway value from the form as it is now (not yet saved), trimmed; '' when empty. */
+    protected function gatewayCredential(string $key): string
+    {
+        return trim((string) data_get($this->data, 'notification_credentials.'.$key));
+    }
+
+    /**
+     * Puts the gateway address in the form into its placeholder form (SmsGatewayUrl::tidy()): a real key or sender ID
+     * or a sample word in it is replaced by the placeholder, and a key or sender ID found there moves to its own
+     * box when that is empty. Returns whether anything changed.
+     */
+    protected function tidyGatewayUrl(bool $notify = false): bool
+    {
+        $tidy = SmsGatewayUrl::tidy($this->gatewayCredential('sms_api_url'), $this->gatewayCredential('sms_api_key'), $this->gatewayCredential('sms_sender_id'));
+
+        if (! $tidy['changed']) {
+            return false;
+        }
+
+        data_set($this->data, 'notification_credentials.sms_api_url', $tidy['url']);
+        data_set($this->data, 'notification_credentials.sms_api_key', $tidy['api_key']);
+        data_set($this->data, 'notification_credentials.sms_sender_id', $tidy['sender_id']);
+
+        if ($notify) {
+            Notification::make()
+                ->title(__('The gateway address was tidied'))
+                ->body(__('The API key and the sender ID are in their own boxes and {phone} and {message} are in place. Check them and press Save changes.'))
+                ->success()
+                ->send();
+        }
+
+        return true;
+    }
+
+    /** Typing the API key or the sender ID while the address is empty puts the BulkSMSBD address in, ready to be built from them. */
+    protected function fillEmptyGatewayUrl(): void
+    {
+        if ($this->gatewayCredential('sms_api_url') === '' && ($this->gatewayCredential('sms_api_key') !== '' || $this->gatewayCredential('sms_sender_id') !== '')) {
+            data_set($this->data, 'notification_credentials.sms_api_url', SmsGatewayUrl::BULKSMSBD);
+        }
     }
 
     /**
@@ -1362,8 +1407,35 @@ class Integrations extends Page
                                     ->label(__('SMS gateway URL template'))
                                     ->dehydrateStateUsing(fn (?string $state): ?string => $state === null ? null : trim($state))
                                     ->maxLength(500)
-                                    ->placeholder('http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}')
-                                    ->helperText(__('Use the {api_key}, {sender_id}, {phone} and {message} placeholders. Leave empty to turn SMS off for this site.'))
+                                    ->placeholder(SmsGatewayUrl::BULKSMSBD)
+                                    ->live(onBlur: true)
+                                    // An address pasted from the gateway's example, with a real key or sender ID or the sample
+                                    // words in it, goes back to the placeholder form; the key and sender ID go to their own boxes.
+                                    ->afterStateUpdated(fn () => $this->tidyGatewayUrl(notify: true))
+                                    ->suffixAction(
+                                        Action::make('useBulkSmsBdUrl')
+                                            ->icon(Heroicon::OutlinedSparkles)
+                                            ->tooltip(__('Use the BulkSMSBD address'))
+                                            ->requiresConfirmation(fn (): bool => filled($this->gatewayCredential('sms_api_url')) && ! SmsGatewayUrl::isBulkSmsBd($this->gatewayCredential('sms_api_url')))
+                                            ->modalDescription(__('This replaces the address you have now with the BulkSMSBD one.'))
+                                            ->action(function (): void {
+                                                if (! SmsGatewayUrl::isBulkSmsBd($this->gatewayCredential('sms_api_url'))) {
+                                                    data_set($this->data, 'notification_credentials.sms_api_url', SmsGatewayUrl::BULKSMSBD);
+                                                }
+
+                                                $this->tidyGatewayUrl(notify: true);
+                                            }),
+                                    )
+                                    // A gateway's example URL has words like Receiver and TestSMS where {phone} and {message} belong;
+                                    // saved as it is, every SMS goes to a number called "Receiver" ("1001 Invalid Number").
+                                    ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                                        $missing = StorefrontNotificationService::smsTemplateMissing(trim((string) $value));
+
+                                        if (filled($value) && $missing !== []) {
+                                            $fail(__('The URL has no :missing in it, so the number and the text would never reach the gateway. Replace the sample words (Receiver, TestSMS) with {phone} and {message}, for example: http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}', ['missing' => implode(' / ', $missing)]));
+                                        }
+                                    })
+                                    ->helperText(__('You do not need to edit this. Type the API key and the sender ID below and this address is built from them; {phone} and {message} are filled in each time a message is sent. Leave empty to turn SMS off for this site.'))
                                     ->columnSpanFull(),
                                 // new-password keeps the browser from filling the login password into this box (the gateway
                                 // then answers "User Id not found"); a space copied with the key is dropped on save.
@@ -1374,11 +1446,28 @@ class Integrations extends Page
                                     ->autocomplete('new-password')
                                     ->dehydrateStateUsing(fn (?string $state): ?string => $state === null ? null : trim($state))
                                     ->maxLength(255)
+                                    ->live(debounce: 600)
+                                    ->afterStateUpdated(fn () => $this->fillEmptyGatewayUrl())
                                     ->helperText(__('Stored encrypted.')),
                                 TextInput::make('notification_credentials.sms_sender_id')
                                     ->label(__('SMS sender ID'))
                                     ->dehydrateStateUsing(fn (?string $state): ?string => $state === null ? null : trim($state))
-                                    ->maxLength(100),
+                                    ->maxLength(100)
+                                    ->live(debounce: 600)
+                                    ->afterStateUpdated(fn () => $this->fillEmptyGatewayUrl()),
+                                Placeholder::make('sms_gateway_address')
+                                    ->label(__('The address the system will call'))
+                                    ->content(function (Get $get): HtmlString|string {
+                                        $url = trim((string) $get('notification_credentials.sms_api_url'));
+
+                                        if ($url === '') {
+                                            return __('Nothing yet. Type the SMS API key and the sender ID and the address is built here.');
+                                        }
+
+                                        return new HtmlString('<code style="word-break: break-all">'.e(SmsGatewayUrl::preview($url, (string) $get('notification_credentials.sms_api_key'), (string) $get('notification_credentials.sms_sender_id'))).'</code>');
+                                    })
+                                    ->helperText(__('The API key is shown only in part.'))
+                                    ->columnSpanFull(),
                                 // Only for the SMS Dashboard: the gateway has no price API, so the cost is worked out from this.
                                 TextInput::make('notification_credentials.sms_price_per_sms')
                                     ->label(__('Price per SMS'))
@@ -1702,6 +1791,8 @@ class Integrations extends Page
     public function save(AiSettingsService $aiSettings): void
     {
         $company = $this->selectedCompany();
+        // An address pasted with real or sample values in it is put right before it is checked.
+        $this->tidyGatewayUrl();
         $state = $this->form->getState();
 
         if ($this->canManageAi()) {

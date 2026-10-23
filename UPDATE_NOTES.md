@@ -16,7 +16,33 @@ Owner (Bangla): add an icon in the header for dark and night mode; and make the 
 
 **Verified:** `ResellerLandingPageTest` (4 new tests), `StorefrontApiTest`, `TranslationParityTest`; `npm run build`; Chromium screenshots of the toggle (click, reload, device-dark and a saved choice) and of the header at 320 / 360 / 375 / 390 / 414 / 640 / 768 / 1280 px. Full `php artisan test` before the commit.
 
-Commit status: committed on `claude/reseller-module-status-v9tobe` and pushed to `main` on the owner's approval ("ওকে মেইনে পুশ কর"), after merging main at v2.108.0.
+Commit status: committed on `claude/reseller-module-status-v9tobe` and pushed to `main` on the owner's approval ("ওকে মেইনে পুশ কর"), after merging main at v2.109.0.
+
+## 2026-10-23 (later still) - The SMS gateway address follows the API key and sender ID boxes
+
+Owner (Bangla): set it up so that typing the API key and the sender ID in their boxes updates the URL, the way the phone number and the message are filled in.
+
+**What it does:** the placeholders `{api_key}` and `{sender_id}` already existed, but the owner had typed real values into the URL box. Now the box is managed for them: typing a key or sender ID while the box is empty puts in the BulkSMSBD address; a live line shows the address that will be called (key partly hidden); a sparkle button puts the BulkSMSBD address back; and a BulkSMSBD address pasted with real or sample values is turned back into placeholders (key and sender ID move to their own boxes when empty; sample words such as Receiver and TestSMS are dropped). This runs when the box is left and again at the start of Save, before the `{phone}` / `{message}` check. Other gateways' addresses are never rewritten. **Decision for the owner:** when a box and the pasted address hold different keys, the box wins.
+
+**Browser check:** typed key and sender ID: the live line reads `...api_key=abcd***&type=text&number={phone}&senderid=8809617643387&message={message}`; pasting `api_key=ZZZ999realkey ... senderid=NEWSENDER` left the address in placeholder form and put the key and sender ID in their boxes.
+
+**Needs Bangla review (lang/bn.json):** "এটি আপনাকে বদলাতে হবে না…", "BulkSMSBD-র ঠিকানা বসান", "এতে এখনকার ঠিকানা মুছে BulkSMSBD-র ঠিকানা বসবে।", "গেটওয়ে ঠিকানা ঠিক করে দেওয়া হয়েছে", "সিস্টেম যে ঠিকানায় ডাকবে", and the two short lines under the live address.
+
+**Verified:** `SmsGatewayUrlTest` (new, 10), `SmsDashboardTest`, `IntegrationsPageTest`, `SmsLogTest`, `TranslationParityTest`; full `php artisan test` before the push.
+
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
+
+## 2026-10-23 (later) - The gateway URL had "Receiver" instead of {phone}
+
+Owner sent a screenshot of the failure notice after the `88{phone}` fix. Its "What was sent" line reads `...number=Receiver&senderid=8809617643387&message=TestSM`: the saved URL template has the sample words of BulkSMSBD's example where `{phone}` and `{message}` belong (the preview shows `[message]` for a real `{message}`, so `TestSM...` is literal text in the template). That is the real cause of 1001, so the `88{phone}` guess below was not it; that protection stays, harmless. The same template would have sent every order SMS to "Receiver" with a fixed text.
+
+**Fix:** (1) the URL box on Integrations → SMS Gateway refuses to save a URL without `{phone}` and `{message}` and shows the correct example, its help text says so; (2) a template like that already saved is not sent at all: reason `bad_gateway_url` in the SMS Log and in the test SMS notice; (3) the SMS Dashboard shows a red warning with a link. The owner must edit the URL box to `http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}`, keep the key in **SMS API key** and the sender ID in **SMS sender ID**, save and send the test again. If the real API key was typed into the URL itself, it is now in a visible box: put it in the SMS API key field and use `{api_key}`.
+
+**Needs Bangla review (lang/bn.json):** "SMS গেটওয়ে URL-এ {phone} বা {message} নেই…", "URL-এ :missing নেই…", "SMS গেটওয়ে URL-এ :missing নেই, তাই কোনো SMS যেতে পারবে না…", "ইন্টিগ্রেশনস → SMS Gateway-তে ঠিক করুন।", and the changed help text of the URL box and the 1001 advice.
+
+**Verified:** `SmsDashboardTest` (+3: the exact URL from the screenshot is not sent and logged, saving it is refused, the dashboard warns). Full `php artisan test` before the push.
+
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
 
 ## 2026-10-23 - Trade Portal: Tiro Bangla, desktop menu, sign-in page; merge to main
 
@@ -206,6 +232,7 @@ Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tre
 Not committed on purpose: the owner's original sample files in `docs/tasneem-samples/` (the .docx / .xlsx documents and the challan photo) — business papers, kept local; only `PLAN.md`, `SUMMARY.md` and `BUILD-BRIEF.md` are in the commit.
 
 Commit status: committed and pushed to `feature/trade-portal-foundation`; not on `main` (waits for the owner's approval).
+
 ## 2026-10-23 - Test SMS "1001 Invalid Number" with the new API key
 
 Owner (Bangla, with a phone screenshot of the SMS Log): after connecting the new API, the Send test SMS button with their own number says the number is invalid.
@@ -218,7 +245,7 @@ Owner (Bangla, with a phone screenshot of the SMS Log): after connecting the new
 
 **Verified:** `SmsDashboardTest` (+2, all nine number/template combinations send `number=8801728714614`), `SmsLogTest`, `IntegrationsPageTest`, `TranslationParityTest`. Full `php artisan test` before the push.
 
-Commit status: committed to `claude/order-management-features-nafks7`; not on `main` until the owner says so.
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
 
 ## 2026-10-23 - SMS Dashboard (counts, cost, BulkSMSBD balance)
 
@@ -236,7 +263,7 @@ Owner (Bangla): can a dashboard be made for the SMS gateway, with how many SMS c
 
 **Verified:** `SmsDashboardTest` (13), `SmsLogTest`, `IntegrationsPageTest`, `TranslationParityTest`, `MultiCompanyIsolationTest`, `ModuleGuardTest`, Pint on my files; browser check on a scratch SQLite database (desktop and 390px phone, no sideways scroll, real call to BulkSMSBD with a dummy key shows the 1011 advice). Full `php artisan test` before the push.
 
-Commit status: committed to `claude/order-management-features-nafks7`; not on `main` until the owner says so.
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
 
 ## 2026-10-23 - Courier COD is the due amount, and the order page has a Payment section
 

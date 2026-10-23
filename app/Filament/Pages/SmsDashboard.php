@@ -9,6 +9,7 @@ use App\Services\CompanyContext;
 use App\Services\SmsBalanceService;
 use App\Services\SmsTemplateService;
 use App\Services\SmsUsageService;
+use App\Services\StorefrontNotificationService;
 use BackedEnum;
 use Carbon\CarbonImmutable;
 use Filament\Pages\Page;
@@ -122,6 +123,7 @@ class SmsDashboard extends Page
             'allCompanies' => app(CompanyContext::class)->isAllCompanies(),
             'price' => $price,
             'lowBalance' => $lowBalance,
+            'urlMissing' => $setting === null ? [] : StorefrontNotificationService::smsTemplateMissing(trim((string) data_get($setting->notification_credentials, 'sms_api_url'))),
             'balanceSupported' => $setting !== null && $balances->supported($setting),
             'rechargeUrl' => $setting !== null ? $balances->rechargeUrl($setting) : null,
             'notice' => SmsLogResource::logNotice(),

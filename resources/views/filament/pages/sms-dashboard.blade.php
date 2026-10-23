@@ -8,6 +8,15 @@
 @endphp
 
 <x-filament-panels::page>
+    @if ($urlMissing !== [])
+        <x-filament::section>
+            <p class="text-sm font-medium text-danger-600 dark:text-danger-400">
+                {{ __('The SMS gateway URL has no :missing in it, so no SMS can be sent. Replace the sample words (Receiver, TestSMS) with {phone} and {message}.', ['missing' => implode(' / ', $urlMissing)]) }}
+                <a href="{{ $integrationsUrl }}" class="underline">{{ __('Fix it in Integrations → SMS Gateway.') }}</a>
+            </p>
+        </x-filament::section>
+    @endif
+
     @if ($notice)
         <x-filament::section>
             <p class="text-sm text-warning-600 dark:text-warning-400">{{ $notice }}</p>
