@@ -1,7 +1,3 @@
-# Changelog
-
-All notable production changes to Business Dashboard are documented here.
-
 ## [Unreleased]
 
 **Release type:** Minor Feature Update
@@ -46,8 +42,6 @@ All notable production changes to Business Dashboard are documented here.
 - **The number of backups kept ignored the setting.** Every database backup kept only the latest 10 files whatever `BACKUP_RETAIN_FILES` said, which would have left only 10 hours of history once backups run every hour. Retention is now per type (see above).
 - **One backup that dies in the middle could stop the daily backup for a day.** The scheduler's overlap lock now expires after 30 minutes instead of 24 hours.
 - **Pasting the S3 address from Cloudflare's bucket page into the R2 settings sent the backups to the wrong place.** That address ends with the bucket name (`https://ACCOUNT_ID.r2.cloudflarestorage.com/bucket-name`), so every file would have landed under an extra folder named after the bucket and the list would have looked empty. Only the scheme and host of a pasted address are used now; the bucket stays in its own field.
-- IMS office top bar: a wide logo no longer makes the bar tall (logo capped at 2rem high, 8rem wide; the wrapped two-line bar on laptops is shorter).
-- IMS office top bar: choosing another company now shows that company's logo and name instead of the IMS domain's.
 
 ### Technical Notes
 
@@ -81,8 +75,26 @@ All notable production changes to Business Dashboard are documented here.
 - New strings are in `lang/en.json` and `lang/bn.json`.
 - Restore (`php artisan backup:restore`, `App\Console\Commands\RestoreBackup` over `App\Services\BackupRestorer`; `BackupRestoreException` carries `rolledBack` / `safetyFile`): MySQL/MariaDB only. `prepare()` → `check()` → `rehearse()` (`BackupRestoreDrill::rehearse()`, no run recorded) → `restore()`: safety copy (`DatabaseBackupService::create($connection, 'prerestore')`, a failure stops before anything changes), maintenance mode (only switched off again if the command switched it on and the migrations passed), `Schema::dropAllViews()` + `dropAllTables()` on the connection's own schema, `DatabaseBackupService::loadDump()` (moved out of the restore test; streams gunzip into the `mysql` client; the restore test still calls it), a restored-table-count check against the dump (counts the connection's own schema: `getTables()` with no argument lists every schema the MySQL user can see), `migrate --force`, `optimize:clear`. A failed load/check loads the safety copy back once. A file lock (`backups/restore.lock`) refuses two restores at once. Archive files: only `backup.restore.file_paths` (`storage/app/public`, `storage/app/private`), `backup.app.exclude_paths` skipped, `..`/absolute/drive-letter names and linked folders/files refused, written to `*.restoring` then renamed, modification time kept.
 - New backup type `prerestore` (`BackupRun::KIND_PRERESTORE`, `BACKUP_KEEP_PRERESTORE` default 5, app archives 1, Drive 5/1 unused); `backup_runs.scope` gains `restore` (kind `database` / `files` / `both`), written once after the restore (`BackupRunRecorder::recordFinished()`) because the restore replaces the table; `discardUnfinished()` removes the "running" rows a dump carries (a dump is taken while its own backup is still recorded as running). `OffsiteBackupService::fetch()` takes an optional key; `AppBackupService::isExcluded()` is public. Config `backup.restore` (`mysql_binary`, `timeout` = `BACKUP_RESTORE_TIMEOUT`, `file_paths`). No migration.
-- `ImsOfficePanelProvider::officeCompany()` prefers the open company (`CompanyContext`) over the IMS host company; CSS in `resources/css/filament/ims/theme.css`.
 
+## [2.111.3] - 2026-10-23
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- IMS office top bar on laptops (1024–1799px): one slim line instead of two — the company picker is a round icon, the language switch shows only the other language, the menu pills are tighter; only below 1240px does the menu still get its own line.
+## [2.111.2] - 2026-10-23
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- IMS office top bar: a wide logo no longer makes the bar tall (logo capped at 2rem high, 8rem wide; the wrapped two-line bar on laptops is shorter).
+- IMS office top bar: choosing another company now shows that company's logo and name instead of the IMS domain's.
+
+### Technical Notes
+
+- `ImsOfficePanelProvider::officeCompany()` prefers the open company (`CompanyContext`) over the IMS host company; CSS in `resources/css/filament/ims/theme.css`.
 ## [2.111.1] - 2026-10-23
 
 **Release type:** Patch/Fix Update
