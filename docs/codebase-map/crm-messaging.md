@@ -1,5 +1,5 @@
 # CRM & Omnichannel Messaging
-> Last checked: 2026-10-22
+> Last checked: 2026-10-23
 
 ## What it does
 The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, multi-channel chat conversations, automated follow-ups, and marketing broadcasts. It unifies customer communications across WhatsApp Cloud API, WhatsApp Web (QR Baileys bridge), Facebook Messenger, SMS gateways, and Telegram into a single real-time inbox. It incorporates an AI Inbox Control Plane featuring intelligent automated replies, multimodal image/voice note comprehension, intent qualification, cart link generation, and smart human hand-over queues (Agent Desk, Needs Attention, To Chase, Unanswered Questions). Additionally, it coordinates scheduled sales automation cadences, promotional SMS/Messenger broadcasts, quick-reply snippet management, and Firebase Cloud Messaging (FCM) web push notifications.
@@ -27,6 +27,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Models/ConversationModeEvent.php` | Audit log of mode transitions (`ai` to `manual` and vice-versa) with reasons and agent IDs. |
 | `app/Models/WhatsAppContact.php` | Cached WhatsApp address book records and profile pictures synced from the phone. |
 | `app/Models/SmsTemplate.php` | Dynamic SMS templates with variable placeholders for order updates and verification. |
+| `app/Models/SmsLog.php` | One row per order SMS: queued, sent, refused by the gateway, or skipped, with the reason (never a code message). |
 | `app/Models/Broadcast.php` | Marketing broadcast campaign entity targeting filtered customer segments. |
 | `app/Models/BroadcastRecipient.php` | Individual recipient delivery status tracker for a broadcast campaign. |
 | `app/Models/QuickReply.php` | Pre-saved response shortcuts for common customer inquiries. |
@@ -63,6 +64,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Services/WhatsAppWeb/WhatsAppWebArchiveService.php` | Ingests and stores message history and media attachments from WhatsApp Web sessions. |
 | `app/Services/SmsTemplateService.php` | Parses template tags and dispatches SMS via configured bulk SMS gateways. |
 | `app/Services/OrderStatusSmsService.php` | Formats and sends automated parcel tracking SMS messages to customers. |
+| `app/Services/SmsLogService.php` | Writes the SMS log (queued / sent / failed / skipped + reason) and counts messages stuck for lack of a queue worker. |
 | `app/Services/TelegramComplaintService.php` | Posts urgent customer complaints to private internal Telegram staff groups. |
 | `app/Services/FirebaseHttpV1Sender.php` | Dispatches push notifications via Firebase Cloud Messaging (FCM) HTTP v1 API. |
 
@@ -85,6 +87,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Filament/Pages/ConnectWhatsAppBusinessApp.php` | Embedded Meta Cloud API onboarding wizard for coexisting official WhatsApp channels. |
 | `app/Filament/Pages/WhatsAppWebLogin.php` | Displays live QR code for scanning and linking WhatsApp Web Baileys bridge. |
 | `app/Filament/Pages/SmsTemplates.php` | Admin editor for system notification SMS templates. |
+| `app/Filament/Resources/SmsLogs/SmsLogResource.php` | Settings → SMS Log: read-only list of every order SMS and why it was or was not sent. |
 | `app/Filament/Pages/OrderWhatsAppCard.php` | Settings → Order WhatsApp card: switch on the automatic order card, pick the official channel and approved template. |
 | `app/Filament/Pages/PushNotificationSettings.php` | Configures Firebase Cloud Messaging credentials and web push permissions. |
 
@@ -130,6 +133,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 ### Migrations (name pattern only)
 - Find a table's migrations by searching `database/migrations/` for the table name: several tables are created together in one migration, so the file name does not always match the table.
 - `database/migrations/*create_sms_templates_table.php`
+- `database/migrations/*create_sms_logs_table.php`
 
 ### Tests
 | Path | What it does |

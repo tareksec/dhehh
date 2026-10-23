@@ -2,6 +2,22 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - SMS Log and "Send test SMS" (why did no SMS arrive?)
+
+Owner (Bangla): "আমি এইমাত্র এই অর্ডার টা করলাম কিন্তু কোন এসএমএস আমার ফোন নাম্বারে আসে নাই, তাহলে বুঝা গেল যে sms gateway ঠিকমতো কাজ করছে না।" Also asked earlier whether each message (order, login OTP, password reset, reseller) has its own template, because the SMS Gateway tab shows a single URL.
+
+**What I found:** there was no way to see why an SMS did not go. Every skip was silent (no wording saved, no phone, opted out, no gateway, duplicate) and a gateway refusal went only to the server log file. The gateway is not proven broken by one missing SMS: the most likely causes are (1) the "Order placed" / status wording is not saved on SMS Templates (blank = nothing is sent, owner decision 2026-10-17), (2) no queue worker is running in production (the "placed" SMS waits 45 seconds in the queue), (3) the gateway refuses the text (masking sender ID needs Bangla text, error 1012; balance; IP whitelist).
+
+**What changed:** Settings → SMS Log (one row per order SMS with result and reason, stuck-queue warning), Settings → Integrations → SMS Gateway → **Send test SMS** (real SMS, shows the gateway's answer), and a note that the URL only delivers messages. See CHANGELOG. Code messages are never logged.
+
+**Not changed (asked of the owner):** reseller sign-up/login/password-reset codes still share the shop customers' three code templates, and the reseller's three messages (approved, profit payable, payout paid) are still written on Reseller Settings, not on SMS Templates. The owner has been asked whether to split/move them.
+
+**Needs Bangla review (lang/bn.json):** SMS Log, Order status change, Test SMS, Waiting in the queue, Not sent: gateway, Not sent: skipped, Message, Send test SMS, the reason sentences (no wording / no phone / opt-out / no gateway / duplicate / excluded / gateway refused / unreachable), the test-SMS texts (including the Bangla test message sent for masking sender IDs: ":company থেকে টেস্ট SMS। আপনার SMS গেটওয়ে ঠিকমতো কাজ করছে।") and the stuck-queue sentence.
+
+**Verified:** `SmsLogTest` (13), `SmsTemplatesTest`, `MultiCompanyIsolationTest`, `TranslationParityTest`. Full `php artisan test` (plain, no `--env`): 2995 passed, 2 skipped.
+
+**Commit status:** committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("টেস্ট শেষ হলে মেন এ ও পুশ করে দিও").
+
 ## 2026-10-22 - PHP security update: production Dockerfile
 
 Reason - owner forwarded Contabo's email about the PHP RCE vulnerabilities CVE-2026-109618 / CVE-2026-109619 and asked whether the server needs an update. I checked the claims on php.net (advisory 2026-10-21; fixed in 8.4.27 / 8.5.12 / 8.3.36 / 8.2.35; PHP-FPM is affected). The owner's ERP container reports `PHP 8.4.2 (built Dec 17 2024)`, so it is vulnerable, and 25 patch releases behind.
