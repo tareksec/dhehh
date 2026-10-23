@@ -125,7 +125,8 @@ class OrderStatusSmsService
         $companyId = (int) $order->company_id;
         $log = $this->logs->claim($companyId, SmsLog::KIND_ORDER_STATUS, (int) $order->getKey(), (string) $transition->getKey());
 
-        if ($order->isHistoricalImport() || filled($order->reseller_customer_id)) {
+        // A Delivery Challan sale was handed over in the shop: the order-status texts (shipped, delivered…) do not fit it.
+        if ($order->isHistoricalImport() || filled($order->reseller_customer_id) || $order->source === Order::SOURCE_TRADE_CHALLAN) {
             return $this->closeLog($log, SmsLog::STATUS_SKIPPED, 'excluded');
         }
 

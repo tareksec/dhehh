@@ -1,5 +1,5 @@
 # Accounts & Finance
-> Last checked: 2026-10-20, commit 0e5316d
+> Last checked: 2026-10-23, branch `feature/trade-portal-cash-book` (Trade Portal cash book)
 
 ## What it does
 The Accounts & Finance module manages tenant-level financial accounting, multi-source cash flow, expenditure tracking, and automated financial reporting. It provides double-entry fund tracking across cash, bank, mobile banking, and digital wallet accounts through an immutable transaction ledger. It implements a structured multi-stage voucher approval system (pending, verified, approved, rejected, cancelled) with soft-delete trash governance. For day-to-day bookkeeping, it processes operational expenses, supplier payments, and AI/OCR-assisted optical expense receipt scanning. Additionally, it compiles profit-and-loss statements, cash flow audits, customer balance ledgers, and downloadable supplier payment reports.
@@ -40,6 +40,7 @@ The Accounts & Finance module manages tenant-level financial accounting, multi-s
 | `app/Services/AccountBalanceService.php` | Dynamically evaluates real-time system balances (inventory value, customer dues). |
 | `app/Services/ReportService.php` | Aggregates income, expenses, profit/loss, and balance sheet metrics. |
 | `app/Services/ReportExportService.php` | Formats and streams accounting ledger data to CSV and Excel exports. |
+| `app/Services/TradeCashBookService.php` | Trade Portal cash book and simple balance sheet, read from `TransactionLedger` of the manual accounts (no ledger of its own): `day()`, `month()`, `balanceSheet()`, `openingOn()`; entries through the existing models — `moveMoney()` (FundTransfer submitted and approved via `FundTransferService::approve()`, ledger rows re-dated to the chosen day), `paySupplier()` (`SupplierPayment`), `recordCost()` (`Expense`, new category via `ExpenseCategory::createWithUniqueSlug()`). Moves between own accounts are shown but not counted as money in/out. An account's opening balance counts from the start of the book. |
 | `app/Services/SupplierReportService.php` | Generates supplier purchase balances and payment settlement statements. |
 | `app/Services/ExpenseScan/ExpenseScanConfigService.php` | Manages AI/OCR credentials and model parameters for receipt scanning. |
 | `app/Services/ExpenseScan/ExpenseScanPublisher.php` | Converts reviewed OCR receipt data into approved business expenses and vouchers. |
@@ -115,6 +116,7 @@ The Accounts & Finance module manages tenant-level financial accounting, multi-s
 | `tests/Feature/VoucherIsolationTest.php` | Asserts financial vouchers and accounts remain isolated to active companies. |
 | `tests/Feature/ExpenseScanTest.php` | Tests OCR receipt parsing, item line extraction, and expense publication. |
 | `tests/Feature/ReportsTest.php` | Tests financial report date filtering and export calculations. |
+| `tests/Feature/TradeCashBookServiceTest.php` | Tests the Trade Portal cash book day/month figures, the balance sheet, the ERP refusals and company isolation. |
 | `tests/Feature/SupplierReportTest.php` | Tests supplier account statement aggregation and PDF downloads. |
 
 ## Routes and panels

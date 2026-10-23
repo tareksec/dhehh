@@ -2,6 +2,194 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - Trade Portal: Tiro Bangla, desktop menu, sign-in page; merge to main
+
+Owner request: use Tiro Bangla (Google Fonts link given) for Bangla; check the desktop dashboard (the top menu was broken); make the sign-in page professional; then push and merge into main (owner's explicit approval in the conversation, 2026-10-23).
+
+What changed: Bangla in Tiro Bangla (self-hosted, SIL OFL), desktop top menu on one line with three dropdown groups, a navy-panel sign-in page. Details in `CHANGELOG.md`.
+
+Checked in the browser on the throwaway preview DB: desktop 1366px and 1024px (menu on one line, dropdown opens over the page, no sideways scroll), sign-in at 1366px and 375px, signing in, phone pages after the font change (a clipped vowel sign in the bottom bar fixed). The preview copy's admin password was set to the `.env` one so the owner can sign in to the preview; nothing else in it changed.
+
+Needs Bangla review: the sign-in page's five lines ("আপনার ব্যবসা এক জায়গায়" and the three points).
+
+Main (v2.107.0, 56 commits) merged into the branch first; conflicts kept both sides (lang files: every key of both; `OrderStatusSmsService`: main's skip-log flow plus the Delivery Challan exclusion; the Trade Portal CHANGELOG notes moved back under [Unreleased] after git put them in [2.98.0]). Full plain `php artisan test` after the merge (PHP 8.4, assets built): 3,128 passed, 5 skipped, 0 failed. (One run before the merge had 1 failure whose name was cut from the output; it did not come back.)
+
+Commit status: committed, pushed to `feature/trade-portal-reports` and merged into `main` with the owner's approval (2026-10-23).
+
+## 2026-10-23 - Trade Portal phone look (owner's reference design)
+
+Owner request: the portal's phone screens were not clear enough; make them like the owner's reference image (a clean app: navy hero card, soft-blue overview, round quick buttons, navy page header with a back button, floating bottom bar) so a person can see at once where each thing is. The owner said the desktop look is not the topic now.
+
+What changed: Home (greeting, today's sales on a navy card, At a glance, Quick jobs, short lists), a navy header with a back button on every other page, every list as cards, a floating tab bar, the Menu sheet in three groups, Reports as rows, navy buttons. Details in `CHANGELOG.md`.
+
+Decided without asking: the sale list's card title is the buyer (not the pad number); the "View" / "Edit" link on a list card is hidden on phones because tapping the card does the same; the hero shows today's sales because it is the shop's main daily figure; Menu groups are Accounts and reports / Import and goods / Setup.
+
+Checked in the browser at 390px and 360px on the throwaway preview copy of the database (sample buyers, items and three challans added there only): Home, Sales list + search, a challan, the challan form, Stock, Dues, Cash book, Reports, a report, Menu sheet; goods in (list, form), LC files, serial numbers, accounts, balance sheet, business profile, import, new item — no page scrolls sideways; back links checked (list → Home, form → its list, report → Reports, and the same after a Livewire search). Desktop (1280px) still shows the top menu; Home cards sit side by side.
+
+Needs Bangla review: "এক নজরে", "দ্রুত কাজ", "হিসাব ও রিপোর্ট", "আমদানি ও মাল", "সেটআপ".
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 3,025 passed, 1 skipped, 0 failed. New: `TradePortalShopWorkTest` (+1, back button and menu groups).
+
+Commit status: committed and pushed to `feature/trade-portal-reports`; not on `main` (waits for the owner's approval).
+
+## 2026-10-26 - Trade Portal phase 6 (reports + phone testing)
+
+Owner request: start Phase 6 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-reports`. The branch starts from `feature/trade-portal-landed-cost`, so it carries all six phases; none is on `main`.
+
+What changed: Menu → Reports with nine reports (daily sales, monthly sales, dues by age, stock ledger, owed to suppliers, cash and bank, LC status, landed cost per shipment, shipment advice and insurance register), each on screen with Print, PDF and Excel; permission `trade.reports`; the period inputs wrap on small phones. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief "reports as screen + PDF + Excel" and SUMMARY.md §4):
+
+- **PDF language:** DomPDF cannot shape Bangla — checked by rendering a Bangla report and reading it back (ক্রেতা came out as "করতো", vowel signs in the wrong place). So the **PDF file is English**, and **Print** opens the same report in Bangla in the browser, which draws Bangla correctly and can "Save as PDF". The project's investor reports chose the browser print page for the same reason.
+- Dues by age count days from the sale date (challans have due terms in words, not due dates); the opening due from the old books is its own column.
+- Sales reports include every counted sale of the company (Delivery Challans and any ERP order), with the challan number when there is one.
+- The stock ledger counts stock moves on the day they were entered (stock moves have no date of their own), and values stock at the current buying price.
+- Cash and bank lists each account's own in/out (moves between accounts show in both); the LC margins held by the bank are a note under it (from the LC files not yet cleared).
+
+Phone testing: all 30 portal pages (every list, form, detail page, the cash book, balance sheet, the nine reports) opened in a 360px frame on a throwaway copy of the dev database — no page scrolls sideways after the date-input fix; no console errors on the portal pages. A report checked as cards at 360px; the Bangla print page checked on screen; the English PDF read back.
+
+Needs Bangla review: the 34 new keys, especially the report names ("বাকি — কত দিনের", "স্টকের খাতা", "শিপমেন্ট অ্যাডভাইস ও বীমার খাতা") and the notes under the reports.
+
+Not done: a Bangla PDF file (needs a PDF engine with Bangla shaping, e.g. a headless browser on the server — not set up); e-mailing or scheduling reports; profit report (not in the brief's list).
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 3,024 passed, 1 skipped, 0 failed. New: `TradeReportsTest` (9).
+
+Commit status: committed and pushed to `feature/trade-portal-reports`; not on `main` (waits for the owner's approval; it contains all six phases).
+
+## 2026-10-25 - Trade Portal phase 5 (landed cost + machine serials)
+
+Owner request: start Phase 5 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-landed-cost`. The branch starts from `feature/trade-portal-lc-file` (phases 1–4 are not on `main` yet), so it carries all five.
+
+What changed: a landed cost worksheet on each LC file (bank rate, cost lines with their source, total, per unit, per item, "Apply to stock buying price"), machine serial numbers (written on the LC file, ticked on the challan, shown on the challan and its print, a searchable list), permission `trade.landed_cost`. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief "manual cost lines per LC file: duty/insurance/C&F from the C&F agent, truck and loading from the owner", PLAN.md §2 and SUMMARY.md §4 report 3):
+
+- The ERP already has landed-cost fields on purchases, but it adds them to the purchase total and so to the supplier's due. Duty, C&F, truck fare and the rest are not owed to the Chinese supplier, so the worksheet keeps its own cost lines per LC file and leaves the purchase total and the supplier's due as they are.
+- Goods value = LC value (CFR, USD) × the bank's settlement rate; with no rate yet, the purchase lines' buying price. The cost kinds are the lines of report 3 plus the owner's truck fare and loading; any other cost can be named. No amounts or rates are filled in by the system.
+- Several kinds of goods on one LC share the total by value (FOB USD, else buying price, else quantity) — the same way the ERP's purchase shares costs.
+- The landed cost changes the items' buying price only when the owner presses "Apply" (it then feeds the balance sheet's stock value and the profit).
+- Serial numbers are optional and only for machines that have one: never more than the quantity on the purchase or on the challan; one serial number per item; cancelling a challan frees them.
+
+Still open (from the brief): the real duty / insurance / C&F figures of one old shipment, to check the result against the owner's own calculation.
+
+Checked in the browser at 390px on a throwaway copy of the dev database (never the real DB): the worksheet with rate 122 and four costs (44,45,632 total, 5,55,704 per machine), three serial numbers written on the LC file, both pages without sideways scroll. Fixed on the way: the "Remove" link under a cost was centred instead of on the left.
+
+Needs Bangla review: the 53 new keys, especially the cost kinds ("কাস্টমস ডিউটি, AIT, ATV, RD", "C&F এজেন্টের কমিশন ও খালাস খরচ"), "Figure from" (হিসাবটা কার কাছ থেকে) and "Apply to stock buying price". The page title uses the ERP's existing Bangla for "Landed cost" (ল্যান্ডেড কস্ট).
+
+Not done: reports as PDF / Excel (phase 6: landed cost per shipment, stock ledger, etc.), selling price suggestions from the landed cost, warranty records per serial number.
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 3,015 passed, 1 skipped, 0 failed. New: `TradeLandedCostTest` (8).
+
+Commit status: committed and pushed to `feature/trade-portal-landed-cost`; not on `main` (waits for the owner's approval; it contains phases 1–4 too).
+
+## 2026-10-24 - Trade Portal phase 4 (LC file + import papers)
+
+Owner request: start Phase 4 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-lc-file`. The branch starts from `feature/trade-portal-cash-book` (phases 1–3 are not on `main` yet), so it carries all four.
+
+What changed: LC files (list, one form, a page per file with stages and papers), five PDF papers (LC Opening Letter, DRL, Beneficiary's Certificate, Detail Packing List, Shipment Advice), the Home LC card showing each file's stage, permission `trade.lc`. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief, PLAN.md §3.2, SUMMARY.md):
+
+- The LC file is a new record attached to a purchase (one each). What the purchase already has (LC / PI / CI numbers and dates, ports, delivery terms, country of origin) stays on the purchase, and the supplier's address stays on the supplier, so the ERP's own PI / CI / PL print the same numbers. The PI is entered as a purchase in Goods in first.
+- Stages and document statuses are the ones in SUMMARY.md §4 (report 2), with "PI received" as the first stage; they move only when the owner presses "Move to" (no automatic stage changes).
+- Wording: the samples' text, word for word, with the numbers filled in. Where two samples differ, the newer full version was used: Beneficiary's Certificate = document 8 (clauses A–E; E only when "used machines" is ticked), Shipment Advice = document 9 plus the vessel / B/L lines of document 7, Detail Packing List = document 7 sheet DP. Dates are written as each sample writes them (06.09.2026 on the letter, 07-September-2026 in the DRL, 24th Sep 2026 on the certificate). "Chattogram" spelling is whatever the owner types.
+- A paper prints only when every field it uses is filled; the page lists what is missing (brief: cover note no. + date mandatory before a Shipment Advice — the same rule is used for every paper so none prints with blanks). The DRL and Shipment Advice dates are optional because the samples have none.
+- The papers are in English like the samples, whatever language the portal is in. Supplier-issued papers carry the supplier's name and seal (the owner prepares them himself, PLAN.md §2).
+- The ERP's PI / CI / PL are not linked from the portal (they are admin pages and need admin permission); a later phase can add them if the owner wants.
+
+Checked in the browser at 390px on a throwaway copy of the dev database (never the real DB): the LC file form in Bangla, saving the sample LC (163026010167, USD 35,600, 30%), the page with the six stages and the papers (four ready, the Shipment Advice "still needs" the cover note), and three PDFs rendered and read back (LC Opening Letter, Shipment Advice, Detail Packing List). Fixed on the way: the "Not ready" badge was squeezed by the long missing-fields text.
+
+Needs Bangla review: the 99 new keys, especially the stage names ("PI পাওয়া গেছে", "পরিদর্শন চলছে", "বন্দরে খালাস"), "Discrepancy pending" (গরমিল মেটানো বাকি) and the paper titles.
+
+Not done: landed cost and machine serials (phase 5), LC status / shipment-advice registers as reports (phase 6), PSI Inspection Order Form (document 3, filled by the exporter), e-mailing papers, the LC margin in the cash book and balance sheet.
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 3,007 passed, 1 skipped, 0 failed. New: `TradeLcFileTest` (9).
+
+Commit status: committed and pushed to `feature/trade-portal-lc-file`; not on `main` (waits for the owner's approval; it contains phases 1–3 too).
+
+## 2026-10-23 - Trade Portal phase 3 (cash book + balance sheet)
+
+Owner request: start Phase 3 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-cash-book`. The branch starts from `feature/trade-portal-shop-work` (phases 1 and 2 are not on `main` yet), so it carries all three.
+
+What changed: Cash and bank accounts page, Cash book (day and month), Balance sheet, the buttons Bank deposit / move money, Pay a supplier, Other cost, Receive money, a "Cash and bank now" card on Home. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief: "Cash book + simple balance sheet over the existing accounts/vouchers, no new ledger", and PLAN.md §5):
+
+- The book is the ERP's account ledger (`TransactionLedger`) of the company's cash, bank and mobile-banking accounts. Nothing new is stored; entries made from the portal are the ERP's own records (fund transfer, supplier payment, expense), so they also show in the ERP's Finance pages.
+- A bank deposit is a fund transfer that is approved at once (the owner records what already happened); it is dated the day chosen, not the day it was typed.
+- Moves between own accounts are shown but not counted as money in or out; a bank charge on a move counts as a cost.
+- An account's opening money counts from the start of the book, also on days before the account was added (simple; correct once the accounts are added on the first day).
+- Balance sheet: cash, bank + mobile banking, stock at buying price (`AccountBalanceService::inventoryValue`), buyers' dues; less supplier payables. Bank loans, LC margin and owner's drawings are not in the system yet, so they are not shown — the page says so.
+- Money received must now name its account (with a challan, on a challan's page, in Dues), or it would be missing from the cash book. Phase 2 allowed it to be empty.
+- Portal refusals: every button and form now shows the ERP's reason in a red notice (found in the browser: a cost bigger than the cash box saved nothing and said nothing).
+
+Checked in the browser at 390px on a throwaway copy of the dev database (never the real DB): the empty cash book, adding a bank account, a move bank → cash and a "Truck fare" cost (both in the day's book, the move not counted as in/out), a cost bigger than the account refused with the Bangla reason and the form kept, the month view, the balance sheet (8,48,500 = 18,500 + 2,30,000 + 6,00,000).
+
+Needs Bangla review: the 70 new keys, especially "Bank deposit / move money", "What is left (your capital)", "Money in it when you started", and the four ERP refusal messages.
+
+Not done: PDF / Excel of the cash book and balance sheet (phase 6), other income (only buyers' money comes in), owner's drawings, bank loans, editing or deleting a cash-book entry from the portal (the ERP's Finance pages still can).
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 2,998 passed, 1 skipped, 0 failed. New: `TradeCashBookServiceTest` (5), `TradePortalCashBookTest` (4).
+
+Commit status: committed and pushed to `feature/trade-portal-cash-book`; not on `main` (waits for the owner's approval; it contains phases 1 and 2 too).
+
+## 2026-10-22 - Trade Portal phase 2 (shop work)
+
+Owner request: start Phase 2 of `docs/tasneem-samples/BUILD-BRIEF.md` on `feature/trade-portal-shop-work`. The branch starts from `feature/trade-portal-foundation` (phase 1 is not on `main` yet and phase 2 needs it), so merging phase 2 brings phase 1 with it.
+
+What changed: Delivery Challan (write, view, print, receive money, cancel), Goods in (short purchase entry, "Goods arrived"), Stock (list, new item with opening stock, correct count), Dues (who owes, receive money against a challan or the old due), Bring in old data (buyers with old dues, items with stock, CSV or Excel), home quick buttons, phone tab bar Home · Sales · Stock · Dues · Menu, challan print text on the Business profile. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief, PLAN.md §4 and the owner's challan photo):
+
+- The challan is backed by an ERP order (`source = trade_challan`), so stock, the customer's due, the due alerts, the home card and payments all use the ERP's own order rules (brief: reuse `Order`/`Customer`). The order is created completed and delivered (the goods leave the shop with the challan) — so it shows in the ERP's Orders list as a completed sale. Customer SMS on status changes are not sent for these orders (those texts are about shipped/delivered parcels).
+- The total is quantity × price over the priced lines only, as on the pad (the machine set has the price; the stand, feeders and CAMs on the same challan have none but still leave the stock). A price needs an item from stock, because only order lines count in the ERP total; a text-only line (e.g. "MC 2 pcs + extra 2 pcs") is printed but takes no stock.
+- The advance and the cash paid are payments of the sale; the cheque on the paper is kept as information (cheque no. and bank) — it is money only when it is received with "Receive money".
+- Cancelling a challan cancels its order: the goods return to stock and the due goes; money already received stays recorded, to be given back by hand.
+- Paying the "old due" makes a customer payment, which the ERP posts to a money account, so an account is required there (the challan payments may leave it empty). If the company has no cash/bank account yet the form says to ask the admin.
+- The challan prints in English like the pad, whatever language the portal is in; the text under it (the bilingual disclaimer) is the owner's own, entered on the Business profile, never hardcoded.
+- Items brought in from a file without a SKU get `TRD-<NAME>`, so bringing the same file in again updates instead of duplicating.
+- The ERP's "coming soon" cost placeholders (C&F, Duty, Misc…) are hidden from portal stock and the challan item list, and no longer counted in the home low-stock card (they were counted as 12 low items in phase 1).
+
+Found and fixed on the way: a payment recorded on an order did not update the customer's total due until the order itself was saved again (`Order::recalculatePaidAmount()` now syncs the customer).
+
+Checked in the browser at 390px on a throwaway copy of the dev database (scratchpad, never the real DB): home with the quick buttons and the new tab bar, new item with opening stock, writing the challan of the photo (total ১৫,০০,০০০ and due ৬,০০,০০০ shown while typing; picking the item filled description and unit), the challan page with Print / Receive money / Cancel, the print page (money block 15,00,000 / 1,00,000 / 8,00,000 / 6,00,000, cheque, due terms), Dues as stacked cards and its Receive-money form, Bring in old data, the Menu sheet tiles; no sideways scroll. The panel's blue buttons were pale (Filament made a light palette from the hex colour) — switched to Filament's Blue.
+
+Needs Bangla review: the 131 new keys, especially "Goods in" (মাল এলো), "Bring in old data" (পুরোনো হিসাব আনুন), "Correct count" (গণনা ঠিক করুন), "Warn when stock is at or below", the long help text of the Goods section, and the import column notes.
+
+Not done: aging of dues and reports (phase 6), cash book (phase 3), LC file (phase 4), landed cost and machine serials (phase 5); editing a saved challan (cancel and write it again); items with variations on a challan; the Delivery Challan does not produce a VAT challan (Mushak 6.3).
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 2,988 passed, 1 skipped, 0 failed. New: `DeliveryChallanServiceTest` (7), `TradePortalShopWorkTest` (8).
+
+Commit status: committed and pushed to `feature/trade-portal-shop-work`; not on `main` (waits for the owner's approval; it contains phase 1 too).
+
+## 2026-10-22 - Trade Portal phase 1 (foundation)
+
+Owner request: build the Tasneem Knitting Industry Trade Portal from `docs/tasneem-samples/BUILD-BRIEF.md`, Phase 1 only, on `feature/trade-portal-foundation`, nothing to `main`.
+
+What changed: new panel `/trade` (`TradePortalPanelProvider`, Bangla first, phone tab bar, light theme), home with four cards (today's sales, dues, low stock, open LCs), Business profile page, company switch "Trade Portal" on Companies → edit (Super Admin only) with the new profile fields, the editable **Trade Owner** role and permissions `trade.access` / `trade.profile.manage`, the `canAccessPanel` security fix (trade-only roles are kept out of `/admin`; staff accounts are refused by unknown panels), `RestrictPortalHosts` serving `/trade` on the main domain. Migration adds 6 columns to `companies` and the `trade_owner` role row. Details in `CHANGELOG.md`.
+
+Decided without asking (by the brief and the rules):
+
+- "Only the trade role" = a role whose permissions are all `trade.*`. Every existing role, any custom role with another permission and a role with no permissions keep `/admin` as before.
+- The open company in `/trade` is the person's default company with the portal on, else the first; a Super Admin sees every company with the portal on. A company list appears in the Menu only with two or more.
+- BIN: the existing `bin_number` stays the import-paper BIN (it is already printed on PI/CI/PL); the new `challan_bin_number` is for the Delivery Challan and falls back to `bin_number` when empty. **Which BIN goes on which paper is still to be confirmed with the owner** (challan sample `006673859-0403`, import papers `006673859-0112`).
+- The existing `address` column is left as the general contact address; the two new address fields are separate.
+- LC stage on the home card is read only from what is filled in: an LC number → "LC opened", plus a Commercial Invoice number → "Shipped (invoice received)"; received or cancelled purchases are not listed. The real LC file with its stages comes in phase 4.
+- Tasneem's company was not created or switched on by code (no data seeded): a Super Admin switches **Trade Portal** on for "Garments Machinery Company" / Tasneem in Companies → edit and gives the owner's user the Trade Owner role.
+
+Found and fixed on the way: saving a company from a non-admin panel crashed in `CompanyNotificationObserver` (link built for the current panel); the trade sign-in could land on a leftover `/admin` or `/investor` address.
+
+Checked in the browser on a throwaway copy of the dev database (scratchpad, never the real DB): `/trade/login` and home at 375px and 390px in Bangla, the Menu sheet, the Business profile page (no sideways scroll), `/admin` returns 403 for the Trade Owner; a quick look at 800px. In that copy `localhost` is the IMS domain, so `/trade` correctly redirected to `/investor` there until the copy's IMS domain was moved.
+
+Needs Bangla review: all 42 new keys, especially "Dues (to collect)" (বাকি (পাওনা)), "Low stock" (মাল কম), "Shipped (invoice received)", "Letterhead" (প্যাড (লেটারহেড)), "items at or below their reorder level".
+
+Not done (later phases): Delivery Challan, purchases, stock, receivables, cash book, LC file and papers, landed cost, reports. The home's sales card counts ERP orders until the Delivery Challan exists.
+
+Full plain `php artisan test` on the branch (PHP 8.4, assets built from this tree): 2,973 passed, 1 skipped, 0 failed. `TradePortalTest`: 14 passed.
+
+Not committed on purpose: the owner's original sample files in `docs/tasneem-samples/` (the .docx / .xlsx documents and the challan photo) — business papers, kept local; only `PLAN.md`, `SUMMARY.md` and `BUILD-BRIEF.md` are in the commit.
+
+Commit status: committed and pushed to `feature/trade-portal-foundation`; not on `main` (waits for the owner's approval).
 ## 2026-10-23 - Test SMS "1001 Invalid Number" with the new API key
 
 Owner (Bangla, with a phone screenshot of the SMS Log): after connecting the new API, the Send test SMS button with their own number says the number is invalid.

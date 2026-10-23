@@ -30,7 +30,12 @@ class AdminLogin extends BaseLogin
     public function mount(): void
     {
         // Already signed in: go to this panel, never a portal page left from before (ImsPanelSessions).
-        ImsPanelSessions::forgetForeignIntendedUrl(Filament::getCurrentPanel());
+        $panel = Filament::getCurrentPanel();
+        ImsPanelSessions::forgetForeignIntendedUrl($panel);
+
+        if ($panel?->getId() === 'trade') {
+            ImsPanelSessions::forgetIntendedUrlOutside($panel);
+        }
 
         parent::mount();
     }
