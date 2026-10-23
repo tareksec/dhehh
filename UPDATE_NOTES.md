@@ -71,6 +71,12 @@ Owner sent a screenshot of the failure notice after the `88{phone}` fix. Its "Wh
 
 Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
 
+## 2026-10-23 - Trade Portal: second LC blanked the supplier's details
+
+While writing the owner's plain-words guide from the code, found that the new-LC form did not prefill the supplier's saved details and wrote empty values back, wiping them. Fixed by filling the boxes when the purchase is chosen; regression test added. Facts for the guide that the code confirms: the challan's item price is NOT filled from the item's sale price (typed each time); a new buyer typed on a challan is always created as a new customer (pick from the list to reuse); money received must name a cash/bank/mobile-banking account; there is no bKash/bank gateway, accounts are named by the owner.
+
+Commit status: committed and pushed to `feature/trade-portal-reports`; not on `main` (waits for the owner's approval).
+
 ## 2026-10-23 - Trade Portal fixes from the live QA report
 
 Owner request: the live QA report of the Trade Portal (app.zamzamint.com/trade, Tasneem Knitting Industry, TEST- data, deploy 41e6212) — fix what it found.

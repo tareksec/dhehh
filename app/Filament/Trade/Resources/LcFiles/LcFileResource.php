@@ -10,6 +10,7 @@ use App\Filament\Trade\Resources\LcFiles\Pages\ViewLcFile;
 use App\Models\LcFile;
 use App\Models\Purchase;
 use App\Services\CompanyContext;
+use App\Services\LcFileService;
 use App\Support\ImsNumbers;
 use BackedEnum;
 use Filament\Actions\ViewAction;
@@ -103,6 +104,16 @@ class LcFileResource extends Resource
                             ->all())
                         ->searchable()
                         ->required()
+                        ->live()
+                        // The supplier's saved details fill the form, so saving a second LC
+                        // for the same supplier does not blank them (LcFileService writes the form back).
+                        ->afterStateUpdated(function (?string $state, Set $set): void {
+                            $supplier = $state ? Purchase::query()->with('supplier')->find($state)?->supplier : null;
+
+                            foreach (LcFileService::SUPPLIER_FIELDS as $field => $column) {
+                                $set($field, $supplier?->{$column});
+                            }
+                        })
                         ->visibleOn('create')
                         ->columnSpanFull(),
                     TextInput::make('pi_number')->label(__('PI no.'))->maxLength(255),

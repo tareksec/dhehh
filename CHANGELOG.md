@@ -8,6 +8,16 @@ All notable production changes to Business Dashboard are documented here.
 
 ### Fixed
 
+- **Trade Portal: a new LC file no longer blanks the supplier's saved address and contacts.** Found while checking what the owner writes only once. The new-LC form did not show the supplier's saved company name, country, address, phone and e-mail, and saving it with those boxes empty wrote the empty values back to the supplier, so the second LC for the same supplier wiped what the first one had saved. Choosing the purchase now fills those boxes from the supplier.
+
+### Technical Notes
+
+- `LcFileResource` form: `purchase_id` is `live()` and `afterStateUpdated` sets the `LcFileService::SUPPLIER_FIELDS` from the purchase's supplier. Test: `TradePortalQaRegressionTest::test_a_second_lc_form_brings_the_suppliers_saved_details_and_keeps_them`.
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
 - **Trade Portal fixes from the live check of 2026-10-23** (Tasneem Knitting Industry, test data only).
   - **A Trade Portal page that breaks now shows "This page could not be opened" with a way back, and the error reaches the Super Admins (Settings → Deploy Error Logs).** Before, a crash on `/trade` showed a bare "500" page and was written nowhere the owner could see, so the server errors found in the check (the first save of an LC file's details, the DRL before its date was filled, the first opening of Serial numbers, the *Landed cost per shipment* report, the PDF of the *Shipment advice and insurance register*) could not be traced. The same pages and the same data were run on a copy of the system (SQLite and MySQL/MariaDB) and all of them open, save and print there; the next time one fails on the live site, the Deploy Error Logs will say why.
   - **Goods in has its New purchase button again.** It was hidden from a Trade Owner by the ERP's purchase rules (the page itself opened by its address).
