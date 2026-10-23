@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [2.112.0] - 2026-10-23
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -75,7 +77,6 @@
 - New strings are in `lang/en.json` and `lang/bn.json`.
 - Restore (`php artisan backup:restore`, `App\Console\Commands\RestoreBackup` over `App\Services\BackupRestorer`; `BackupRestoreException` carries `rolledBack` / `safetyFile`): MySQL/MariaDB only. `prepare()` → `check()` → `rehearse()` (`BackupRestoreDrill::rehearse()`, no run recorded) → `restore()`: safety copy (`DatabaseBackupService::create($connection, 'prerestore')`, a failure stops before anything changes), maintenance mode (only switched off again if the command switched it on and the migrations passed), `Schema::dropAllViews()` + `dropAllTables()` on the connection's own schema, `DatabaseBackupService::loadDump()` (moved out of the restore test; streams gunzip into the `mysql` client; the restore test still calls it), a restored-table-count check against the dump (counts the connection's own schema: `getTables()` with no argument lists every schema the MySQL user can see), `migrate --force`, `optimize:clear`. A failed load/check loads the safety copy back once. A file lock (`backups/restore.lock`) refuses two restores at once. Archive files: only `backup.restore.file_paths` (`storage/app/public`, `storage/app/private`), `backup.app.exclude_paths` skipped, `..`/absolute/drive-letter names and linked folders/files refused, written to `*.restoring` then renamed, modification time kept.
 - New backup type `prerestore` (`BackupRun::KIND_PRERESTORE`, `BACKUP_KEEP_PRERESTORE` default 5, app archives 1, Drive 5/1 unused); `backup_runs.scope` gains `restore` (kind `database` / `files` / `both`), written once after the restore (`BackupRunRecorder::recordFinished()`) because the restore replaces the table; `discardUnfinished()` removes the "running" rows a dump carries (a dump is taken while its own backup is still recorded as running). `OffsiteBackupService::fetch()` takes an optional key; `AppBackupService::isExcluded()` is public. Config `backup.restore` (`mysql_binary`, `timeout` = `BACKUP_RESTORE_TIMEOUT`, `file_paths`). No migration.
-
 ## [2.111.3] - 2026-10-23
 
 **Release type:** Patch/Fix Update
