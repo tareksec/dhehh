@@ -47,7 +47,7 @@ The page shows the state of the SES account and controls it through the SES API,
 What the page does:
 
 - **Checklist and account:** whether the key works, sandbox or production, today's sending against the daily limit, Amazon's health rating of the account, and whether the site's From address is on a verified domain.
-- **Domains and addresses:** add a domain (publish the three CNAME records the page shows at the place the domain's DNS is managed; verification follows within minutes to hours) or an address (click the link Amazon emails), and remove one.
+- **Domains and addresses:** add a domain (publish the three CNAME records the page shows at the place the domain's DNS is managed; verification follows within minutes to hours) or an address (click the link Amazon emails). Removing one is for a super admin only: a removed domain stops email for every company that sends from it, and the AWS account is shared.
 - **Suppression list:** addresses Amazon refuses to send to after a bounce or a spam complaint; allow one again or block one by hand.
 - **Bounce, complaint and delivery tracking:** **Turn tracking on** creates in your AWS account an SNS topic, an SES configuration set and a subscription that posts the reports to this ERP (`/webhooks/ses/...`, which only accepts messages with a valid Amazon signature for that topic). From then on the site's mail carries the configuration set's name and the Email Log shows **Delivered**, **Bounced** or **Marked as spam**. The site must be reachable on a public https address. **Turn tracking off** deletes what was created. If the set is deleted in the AWS console while tracking is on, sending fails with a message pointing here: turn tracking off and on again.
 
@@ -72,7 +72,7 @@ What is separate for each company, and what is shared:
 | The From address and name; the SMTP settings saved for its site | The sending limit, the send rate and the sandbox / production state |
 | The Email Log (each company sees only its own rows) | Amazon's health rating of the account (one company's many bounces can put all of them under review) |
 | Bounce / complaint tracking: its own SNS topic, SES configuration set and webhook, so a report always lands in the right company's log | The suppression list: an address that bounced for one company is refused for all |
-| Its domains on the Amazon SES page, shown first | The list of domains: the other companies' domains are shown below, read-only for company staff (only a super admin can remove them) |
+| Its domains on the Amazon SES page, shown first | The list of domains: the other companies' domains are shown below, in grey. Company staff can add a domain or address but cannot remove any (only a super admin can) |
 
 Keep each company sending only from its own domain, and clean up bad addresses (the Email Log shows them), because the reputation is shared. If a company must be fully isolated from the others, give it its own AWS account.
 

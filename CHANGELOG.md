@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **Settings → Amazon SES: removing a domain or address from the AWS account is for a super admin only.** Owner decision 2026-10-23. Until now a company's own staff could remove that company's own domains; a removed domain stops email for every company that sends from it, and the AWS account is shared, so the button now shows to super admins only. Everyone else sees the list, can add a domain or address, and reads one line saying only a super admin can remove one. A request crafted by hand is refused on the server before any call to Amazon, even for the company's own domain.
+
+### Technical Notes
+
+- `AmazonSes::canRemoveDomains()` (was `canRemoveOtherDomains()`) is the single check, used by the view and by the `deleteIdentity` action; the own-domain test `isOwnIdentity()` stays, but only for grouping the list. `AmazonSesPageTest` covers a settings manager (no button, both removals refused, no AWS call) and a super admin (button, both removals go through). Lang: one new key, one replaced.
+
 ## [2.112.0] - 2026-10-23
 
 **Release type:** Minor Feature Update

@@ -100,6 +100,9 @@
                         @elseif (($overview['identities'] ?? []) === [])
                             <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('Nothing is verified in this account yet. Add the domain emails are sent from.') }}</p>
                         @else
+                            @unless ($this->canRemoveDomains())
+                                <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">{{ __('Only a super admin can remove a domain or address.') }}</p>
+                            @endunless
                             <ul class="divide-y divide-gray-200 text-sm dark:divide-white/10">
                                 @php($identities = collect($overview['identities'])->sortByDesc('own')->values())
                                 @foreach ($identities as $identity)
@@ -120,7 +123,7 @@
                                                 } }}
                                             </x-filament::badge>
                                             <span class="text-xs text-gray-500 dark:text-gray-400">{{ $identity['type'] === 'DOMAIN' ? __('Domain') : __('Address') }}</span>
-                                            @if ($identity['own'] || $this->canRemoveOtherDomains())
+                                            @if ($this->canRemoveDomains())
                                                 <span class="ms-auto">
                                                     <x-filament::button color="danger" size="xs" outlined wire:click="mountAction('deleteIdentity', {{ \Illuminate\Support\Js::from(['identity' => $identity['name']]) }})">{{ __('Remove') }}</x-filament::button>
                                                 </span>

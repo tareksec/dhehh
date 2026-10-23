@@ -2,6 +2,18 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 (latest) - Amazon SES: removing a domain or address is for a super admin only
+
+Owner (Bangla): "ডোমেইন মোছা শুধু সুপার অ্যাডমিনের জন্য করে দাও". This settles the open question from the several-companies-on-one-AWS-account work.
+
+**What I did:** the Remove button on Settings → Amazon SES shows only to a super admin (`canRemoveDomains()`); the `deleteIdentity` action refuses anyone else on the server before any AWS call, also for the company's own domain. Everyone else sees one line: "Only a super admin can remove a domain or address." Adding a domain or address, the suppression list and the tracking switch are unchanged (not asked). `docs/email-ses-setup.md` says so.
+
+**Verified:** `AmazonSesPageTest` (16) and `TranslationParityTest`. Not looked at in a browser.
+
+Needs Bangla review (`lang/bn.json`): "ডোমেইন বা ঠিকানা শুধু সুপার অ্যাডমিন মুছতে পারেন।" (replaces the old "not one of this company's domains" message).
+
+Commit status: committed and pushed to `ccr-3799b463-p4pv7n`; not on `main` yet (needs the owner's approval for this change).
+
 ## 2026-10-23 - Advanced backups, Phase 6: Cloudflare R2 off-site copy, an R2 dashboard and a bill estimate
 
 Reason - owner (Bangla): asked how to set up the Shared Drive; the answer was that Shared Drives need paid Google Workspace, and the owner replied "no workspace, upload to R2, check what the bill could be there, and build a dashboard page for R2 that shows everything at a glance". This also settles the open question "R2 as an off-site place": it is now the first choice (Drive stays, for anyone who has Workspace).
