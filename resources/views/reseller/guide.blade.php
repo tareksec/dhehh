@@ -49,7 +49,7 @@
             document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
         })();
     </script>
-    @vite(['resources/css/app.css', 'resources/css/reseller-landing.css'])
+    @vite(['resources/css/reseller-landing.css'])
     <style>
         :root { --brand: {{ $brandColor }}; --on-brand: {{ $onBrandColor }}; }
     </style>
@@ -76,7 +76,7 @@
     <main id="top">
         {{-- Hero --}}
         <section class="nb-dots nb-border-b relative overflow-hidden">
-            <div class="mx-auto grid max-w-6xl items-center gap-12 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[1.15fr_0.85fr]">
+            <div class="mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
                 <div>
                     <div class="mb-6 sm:hidden">@include('reseller.partials.language-switch')</div>
                     <p class="nb-chip nb-pink">{{ __('Reseller program') }}</p>
@@ -139,7 +139,7 @@
         <section id="how" class="mx-auto max-w-6xl scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20">
             <h2 class="nb-h2">{{ __('How it works') }}</h2>
             <p class="mt-3 text-lg">{{ __('Four steps from applying to your first profit.') }}</p>
-            <ol class="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <ol class="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 @foreach ($steps as $i => $step)
                     <li class="nb-box nb-lift {{ $step['color'] }} flex flex-col p-6 {{ $i % 2 ? 'lg:translate-y-4' : '' }}">
                         <span class="nb-num" style="background: #111111; color: #ffffff">{{ $i + 1 }}</span>
@@ -154,7 +154,7 @@
         <section id="money" class="nb-sky nb-border-y scroll-mt-24">
             <div class="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
                 <h2 class="nb-h2">{{ __('Pricing and profit') }}</h2>
-                <div class="mt-10 grid gap-6 lg:grid-cols-3">
+                <div class="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <article class="nb-box nb-lift p-6">
                         <h3 class="text-xl font-bold">{{ __('Your price, your profit') }}</h3>
                         <p class="mt-3 text-base leading-7">{{ __('Every product shows your cost in the portal. You can sell at your cost or any price above it; the difference is your profit.') }}</p>
@@ -193,7 +193,7 @@
 
         {{-- Store --}}
         <section id="store" class="mx-auto max-w-6xl scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20">
-            <div class="grid items-center gap-12 lg:grid-cols-2">
+            <div class="grid grid-cols-1 items-center gap-12 lg:grid-cols-2">
                 <div>
                     <h2 class="nb-h2">{{ __('Your own store') }}</h2>
                     <p class="mt-4 text-lg leading-8">{{ __('Every approved reseller gets an online store with only the products they picked, at their prices. Your customers see your shop name on it, not the store\'s.') }}</p>
@@ -233,7 +233,7 @@
             <div class="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
                 <h2 class="nb-h2">{{ __('Orders and delivery') }}</h2>
                 <p class="mt-3 max-w-3xl text-lg">{{ __('Customers order on your store, or you place an order for them in the portal. You choose how it is delivered.') }}</p>
-                <div class="mt-10 grid items-start gap-6 {{ $ownCourierAvailable ? 'lg:grid-cols-2' : '' }}">
+                <div class="mt-10 grid grid-cols-1 items-start gap-6 {{ $ownCourierAvailable ? 'lg:grid-cols-2' : '' }}">
                     <article class="nb-box nb-lift p-6">
                         <h3 class="text-xl font-bold">{{ __('The store delivers') }}</h3>
                         <p class="mt-3 text-base leading-7">{{ __('The store packs the parcel and delivers it to your customer. Orders you place for a customer in the portal this way are cash on delivery, with nothing to pay in advance.') }}</p>
@@ -264,7 +264,7 @@
         <section id="faq" class="mx-auto max-w-6xl scroll-mt-24 px-4 py-16 sm:px-6 sm:py-20">
             <h2 class="nb-h2">{{ __('Questions resellers ask') }}</h2>
             <p class="mt-3 max-w-3xl text-lg">{{ __('Short answers to what new resellers ask first. They describe how the program really works.') }}</p>
-            <div class="mt-10 grid gap-6 md:grid-cols-2">
+            <div class="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2">
                 @foreach ($faq as $i => $item)
                     <article class="nb-box nb-lift {{ $item['color'] }} p-6" data-reseller-faq>
                         <div class="flex items-start gap-4">

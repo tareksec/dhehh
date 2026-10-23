@@ -16,6 +16,20 @@ Owner (Bangla): when an order is booked with a courier the grand total is sent a
 
 Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("ওকে মেইন এ পুশ কর").
 
+## 2026-10-23 (later) - Reseller landing page broken on a phone
+
+Owner (Bangla), with a phone screenshot of reseller.zamzamint.com: why is everything messed up, is the mobile layout not responsive, and it looks wrong on desktop too?
+
+**What the screenshot was:** the page's colours, borders, fonts and buttons were there but none of its layout (huge logo, the language switch twice, no padding, buttons stacked). I reproduced that exactly by removing `app.css` from the page: the layout classes (Tailwind utilities) came only from the site-wide `app.css`, and the neo-brutalist rules from `reseller-landing.css`. So at that moment the phone had loaded the second file and not the first. I could not find out why that one load failed: the live site serves both files correctly now (checked the real HTML and files from reseller.zamzamint.com, rendered at 412 px and 1280 px, the layout is right). The most likely cause is the moment of a deploy: `app.css` changes its file name on every deploy (its content changes whenever any Blade view changes), `reseller-landing.css` almost never does, and the screenshot was taken at 9:20 BD time, minutes before the new build's files were written (03:22 UTC). That is a guess, not something I could prove.
+
+**What I changed (so it cannot happen again, whatever the cause):** the landing page now has its own Tailwind build (`@import 'tailwindcss' source(none)` plus `@source` lines for the landing views) and does not load `app.css`. It is 24 KB instead of 252 KB, which also helps on a slow phone connection. Not fully immune: if the landing's own file changes in a deploy, someone who opens the page during that deploy could still get an old page with a new file name, but that now happens only when the landing itself changes, not on every deploy.
+
+**A second, real problem found on the way:** a sideways scroll at phone widths (the page was 444 px wide on a 390 px screen; the long store address in the "Your own store" picture widened a grid column). Fixed with `grid-cols-1` on every grid and `minmax(0, …)` on the hero's columns. Measured with Chromium at 280 / 320 / 360 / 375 / 390 / 412 / 600 / 768 / 1024 / 1280 px, English and Bangla (with the real Anek Bangla font served over HTTP): page width = screen width at all of them. Looked at the phone, tablet, desktop and dark-mode screenshots, with and without the website footer.
+
+**Verified:** `ResellerLandingPageTest` (2 new tests; I checked the grid test fails on the old markup), `ResellerGuidePageTest`, `ResellerPortalTest`, `TranslationParityTest`; `npm run build`. No new strings. **Needs the owner:** after deploy, open reseller.zamzamint.com on the phone once with a normal reload; if it ever shows the broken layout again, tell me roughly when and I will look at the deploy logs.
+
+Commit status: committed on `claude/reseller-module-status-v9tobe` and pushed to `main` on the owner's approval ("মেনে পুস কর", read as "main-এ পুশ কর").
+
 ## 2026-10-23 - Email Log (sent / failed / not sent, and why)
 
 Owner (Bangla): "ইমেইলের লগ পেজ তৈরি করেছ? ইমেইল পাঠানো হইছে ফেল হইছে সফল হইছে ফেল হইলে কেন হয় নাই" (did you build an email log page? email sent, failed, succeeded, and if it failed, why). I had not: only the SMS Log existed (another session). I answered that and built it the same way as the SMS Log.

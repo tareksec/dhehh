@@ -302,6 +302,58 @@ class ResellerLandingPageTest extends TestCase
         $this->assertStringContainsString("font-family: 'Anek Bangla'", (string) file_get_contents(resource_path('css/reseller-landing.css')));
     }
 
+    public function test_the_landing_page_carries_its_own_stylesheet_and_does_not_depend_on_the_global_app_css(): void
+    {
+        // Owner report 2026-10-23: on a phone the page came up with no layout because the global
+        // app.css (a new file name on every deploy) did not load while the landing stylesheet did.
+        $this->get($this->portal.'/')
+            ->assertOk()
+            ->assertSee('/build/assets/reseller-landing-', false)
+            ->assertDontSee('/build/assets/app-', false);
+
+        $css = (string) file_get_contents(resource_path('css/reseller-landing.css'));
+        $this->assertStringContainsString("@import 'tailwindcss' source(none);", $css);
+
+        // Every view the page is made of is scanned for utility classes.
+        $this->assertStringContainsString("@source '../views/reseller/guide.blade.php';", $css);
+        $this->assertStringContainsString("@source '../views/reseller/partials/*.blade.php';", $css);
+        $this->assertStringContainsString("@source '../views/storefront/partials/social-icon.blade.php';", $css);
+
+        foreach (array_merge(['guide'], array_map(fn ($file) => 'partials/'.basename($file, '.blade.php'), glob(resource_path('views/reseller/partials/*.blade.php')))) as $view) {
+            preg_match_all("/@include\\('([a-z.\\-]+)'/", (string) file_get_contents(resource_path('views/reseller/'.$view.'.blade.php')), $included);
+
+            foreach ($included[1] as $name) {
+                $this->assertTrue(
+                    str_starts_with($name, 'reseller.partials.') || $name === 'storefront.partials.social-icon',
+                    "reseller/{$view} includes [{$name}], which the landing stylesheet does not scan for classes: add it to the @source lines of resources/css/reseller-landing.css.",
+                );
+            }
+        }
+    }
+
+    public function test_every_grid_on_the_landing_page_starts_as_one_column_so_long_text_cannot_widen_a_phone(): void
+    {
+        // A grid column is 1fr = minmax(auto, 1fr): a long unbroken line (a store link, a long Bangla
+        // word) stretches it, and the whole page scrolls sideways on a phone. grid-cols-1 is
+        // minmax(0, 1fr), which lets the text truncate or wrap instead.
+        foreach (['guide.blade.php', 'partials/footer.blade.php'] as $view) {
+            preg_match_all('/class="([^"]*)"/', (string) file_get_contents(resource_path('views/reseller/'.$view)), $matches);
+
+            foreach ($matches[1] as $classes) {
+                $tokens = preg_split('/\s+/', trim($classes));
+
+                if (! in_array('grid', $tokens, true)) {
+                    continue;
+                }
+
+                $this->assertTrue(
+                    count(array_filter($tokens, fn ($token) => str_starts_with($token, 'grid-cols-'))) > 0,
+                    "A grid in reseller/{$view} has no base column count: [{$classes}]. Add grid-cols-1.",
+                );
+            }
+        }
+    }
+
     public function test_the_standard_banner_ships_with_the_erp(): void
     {
         $this->assertFileExists(public_path('images/reseller-program-banner.png'));
