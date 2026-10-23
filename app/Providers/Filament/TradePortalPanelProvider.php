@@ -75,7 +75,8 @@ class TradePortalPanelProvider extends PanelProvider
                 900 => 'oklch(0.25 0.07 262)',
                 950 => 'oklch(0.19 0.05 262)',
             ]])
-            ->font('Hind Siliguri', provider: LocalFontProvider::class)
+            // "Trade Text": Tiro Bangla for Bangla, Hind Siliguri for English; @font-face is in the theme.
+            ->font('Trade Text', provider: LocalFontProvider::class)
             // Light only: the owner works in daylight in the shop (BUILD-BRIEF.md "light theme").
             ->darkMode(false)
             ->maxContentWidth(Width::SevenExtraLarge)
@@ -106,7 +107,8 @@ class TradePortalPanelProvider extends PanelProvider
             ->renderHook(PanelsRenderHook::PAGE_HEADER_HEADING_BEFORE, fn (): View => view('filament.trade.back-button'))
             // Phones: the bottom tab bar with its menu sheet.
             ->renderHook(PanelsRenderHook::BODY_END, fn (): View => view('filament.trade.mobile-nav'))
-            ->renderHook(PanelsRenderHook::SIMPLE_PAGE_START, fn (): View => view('filament.trade.language-switch', ['simple' => true]))
+            ->renderHook(PanelsRenderHook::SIMPLE_LAYOUT_START, fn (): View => view('filament.trade.auth-side'))
+            ->renderHook(PanelsRenderHook::SIMPLE_PAGE_START,fn (): View => view('filament.trade.language-switch', ['simple' => true]))
             ->middleware([
                 RestrictPortalHosts::class,
                 PreventAdminPageCaching::class,

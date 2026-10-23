@@ -15,6 +15,7 @@ use App\Services\CompanySettingsService;
 use App\Services\TradePortalCompanies;
 use Filament\Facades\Filament;
 use Filament\Navigation\NavigationBuilder;
+use Filament\Navigation\NavigationGroup;
 use Filament\Navigation\NavigationItem;
 use Filament\Pages\Page;
 use Filament\Resources\Pages\ListRecords;
@@ -23,9 +24,9 @@ use Filament\Resources\Pages\ViewRecord;
 use Filament\Resources\Resource;
 
 /**
- * The Trade Portal menu: a short flat list in plain shop words. On wide
- * screens it is the top menu; on phones the daily pages are the bottom tab
- * bar and the rest are tiles in the Menu sheet
+ * The Trade Portal menu in plain shop words. On wide screens it is the top
+ * menu (daily pages, then a dropdown per group); on phones the daily pages
+ * are the bottom tab bar and the rest are tiles in the Menu sheet
  * (resources/views/filament/trade/mobile-nav.blade.php). An entry shows only
  * to people allowed to open it.
  */
@@ -58,12 +59,24 @@ class TradeNavigation
         ];
     }
 
+    /**
+     * The top menu on wide screens: the daily pages side by side, the rest
+     * in one dropdown per Menu-sheet group, so the bar stays on one line.
+     */
     public static function build(NavigationBuilder $builder): NavigationBuilder
     {
-        return $builder->items(array_map(fn (array $item): NavigationItem => NavigationItem::make($item['label'])
+        $items = static::items();
+        $link = fn (array $item): NavigationItem => NavigationItem::make($item['label'])
             ->icon($item['icon'])
             ->url($item['url'])
-            ->isActiveWhen(fn (): bool => $item['active']), static::items()));
+            ->isActiveWhen(fn (): bool => $item['active']);
+
+        return $builder
+            ->items(array_map($link, array_values(array_filter($items, fn (array $item): bool => $item['tab']))))
+            ->groups(array_map(
+                fn (array $group): NavigationGroup => NavigationGroup::make($group['label'])->items(array_map($link, $group['items'])),
+                static::groups($items),
+            ));
     }
 
     /** @return list<array{label: string, icon: string, url: string, active: bool, tab: bool, group: string|null}> */

@@ -141,7 +141,7 @@ class TradePortalTest extends TestCase
     public function test_the_portal_lives_on_the_main_domain_and_not_on_a_portal_host(): void
     {
         $this->get('/trade')->assertRedirect('/trade/login');
-        $this->get('/trade/login')->assertOk();
+        $this->get('/trade/login')->assertOk()->assertSee('class="trade-auth-side"', false);
 
         $ims = $this->company(['ims_enabled' => true, 'ims_domain' => 'ims-'.uniqid().'.test']);
         $this->get('http://'.$ims->ims_domain.'/trade')->assertRedirect('/investor');

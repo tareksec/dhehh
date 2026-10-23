@@ -2,6 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-23 - Trade Portal: Tiro Bangla, desktop menu, sign-in page; merge to main
+
+Owner request: use Tiro Bangla (Google Fonts link given) for Bangla; check the desktop dashboard (the top menu was broken); make the sign-in page professional; then push and merge into main (owner's explicit approval in the conversation, 2026-10-23).
+
+What changed: Bangla in Tiro Bangla (self-hosted, SIL OFL), desktop top menu on one line with three dropdown groups, a navy-panel sign-in page. Details in `CHANGELOG.md`.
+
+Checked in the browser on the throwaway preview DB: desktop 1366px and 1024px (menu on one line, dropdown opens over the page, no sideways scroll), sign-in at 1366px and 375px, signing in, phone pages after the font change (a clipped vowel sign in the bottom bar fixed). The preview copy's admin password was set to the `.env` one so the owner can sign in to the preview; nothing else in it changed.
+
+Needs Bangla review: the sign-in page's five lines ("আপনার ব্যবসা এক জায়গায়" and the three points).
+
+Full plain `php artisan test`: see the line below.
+
+Commit status: pending.
+
 ## 2026-10-23 - Trade Portal phone look (owner's reference design)
 
 Owner request: the portal's phone screens were not clear enough; make them like the owner's reference image (a clean app: navy hero card, soft-blue overview, round quick buttons, navy page header with a back button, floating bottom bar) so a person can see at once where each thing is. The owner said the desktop look is not the topic now.
