@@ -4,6 +4,8 @@ All notable production changes to Business Dashboard are documented here.
 
 ## [Unreleased]
 
+## [2.110.0] - 2026-10-23
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -18,7 +20,6 @@ All notable production changes to Business Dashboard are documented here.
 ### Technical Notes
 
 - Reseller landing page header: `StorefrontSiteConfigService::branding()` now holds the light/dark logo pair that `/site` (`branding`) already returned, and `ResellerGuideController` reads it for the page (`logos()`: Next.js row pair, else the company's `logoUrl()` / `darkLogoUrl(false)`; one `website()` lookup now feeds both the logos and the footer, each inside its own `ModuleGuard`). `guide.blade.php` draws `nb-logo--light` + `nb-logo--dark` only when a dark logo exists and swaps them with `.dark .nb-logo--*` rules in `reseller-landing.css`; the toggle (`data-theme-toggle`, `nb-btn--icon`) swaps the moon/sun icons with CSS and keeps its label in a small inline script. No new translation keys ("Apply", "Switch to dark mode" and "Switch to light mode" already exist). Tests: `ResellerLandingPageTest` (logo pair, single logo, company-logo fallback, toggle and saved choice).
-
 ## [2.109.0] - 2026-10-23
 
 **Release type:** Minor Feature Update
