@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Filament\Clusters\Settings;
 use App\Models\BackupRun;
 use App\Services\AppBackupService;
+use App\Services\BackupEncryptor;
 use App\Services\BackupSettingsService;
 use App\Services\DatabaseBackupService;
 use App\Services\GoogleDriveBackupService;
@@ -95,7 +96,8 @@ class Backups extends Page
                                 Toggle::make('googleDriveEnabled')
                                     ->label('Enable Google Drive backup'),
                                 Toggle::make('googleDriveAutoUpload')
-                                    ->label('Auto upload daily'),
+                                    ->label(__('Auto upload to Drive'))
+                                    ->helperText(__('Sends the hourly and daily database backups and the daily full app backup to Google Drive, encrypted, and deletes older copies there.')),
                                 TextInput::make('googleDriveFolderId')
                                     ->label('Google Drive Folder ID')
                                     ->placeholder('1AbCdEfGhIjKlMnOpQrStUvWxYz...')
@@ -125,6 +127,11 @@ class Backups extends Page
                             ->state(fn (): string => $this->googleDriveConfigured() ? 'Configured' : 'Not configured')
                             ->badge()
                             ->color(fn (): string => $this->googleDriveConfigured() ? 'success' : 'warning'),
+                        TextEntry::make('offsiteEncryptionStatus')
+                            ->label(__('Off-site encryption'))
+                            ->state(fn (): string => $this->offsiteEncryptionState()[0])
+                            ->badge()
+                            ->color(fn (): string => $this->offsiteEncryptionState()[1]),
                     ]),
 
                 Section::make('Full App Backups')
@@ -361,6 +368,18 @@ class Backups extends Page
         return collect(app(AppBackupService::class)->all())
             ->map(fn (array $file): array => [...$file, 'kind_label' => $this->kindLabel($file['kind'])])
             ->all();
+    }
+
+    /** @return array{0: string, 1: string} the label and badge colour for the encryption line */
+    public function offsiteEncryptionState(): array
+    {
+        if (app(BackupEncryptor::class)->isConfigured()) {
+            return [__('On: copies are encrypted before they are uploaded'), 'success'];
+        }
+
+        return config('backup.offsite.require_encryption', true)
+            ? [__('Off: nothing is uploaded until BACKUP_ENCRYPTION_KEY is set'), 'warning']
+            : [__('Off: copies are uploaded without encryption'), 'danger'];
     }
 
     public function googleDriveConfigured(): bool

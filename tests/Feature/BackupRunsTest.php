@@ -10,6 +10,7 @@ use App\Services\BackupRunRecorder;
 use App\Services\BackupSettingsService;
 use App\Services\DatabaseBackupService;
 use App\Services\GoogleDriveBackupService;
+use App\Services\OffsiteBackupService;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use RuntimeException;
+use Throwable;
 use Tests\TestCase;
 
 class BackupRunsTest extends TestCase
@@ -52,7 +54,7 @@ class BackupRunsTest extends TestCase
      */
     private function dumper(string $stdout, string $stderr = '', int $exitCode = 0): DatabaseBackupService
     {
-        return new class(app(BackupRunRecorder::class), $stdout, $stderr, $exitCode) extends DatabaseBackupService
+        return new class(app(BackupRunRecorder::class), app(OffsiteBackupService::class), $stdout, $stderr, $exitCode) extends DatabaseBackupService
         {
             /** @var array<int, string> */
             public array $command = [];
@@ -61,9 +63,9 @@ class BackupRunsTest extends TestCase
 
             public string $optionFileMode = '';
 
-            public function __construct(BackupRunRecorder $runs, private string $stdout, private string $stderr, private int $exitCode)
+            public function __construct(BackupRunRecorder $runs, OffsiteBackupService $offsite, private string $stdout, private string $stderr, private int $exitCode)
             {
-                parent::__construct($runs);
+                parent::__construct($runs, $offsite);
             }
 
             protected function runDump(array $command, callable $onOutput, callable $onError): int
@@ -321,7 +323,7 @@ class BackupRunsTest extends TestCase
 
     public function test_dump_output_is_streamed_from_a_real_process(): void
     {
-        $service = new class(app(BackupRunRecorder::class)) extends DatabaseBackupService
+        $service = new class(app(BackupRunRecorder::class), app(OffsiteBackupService::class)) extends DatabaseBackupService
         {
             public function stream(array $command, callable $onOutput, callable $onError): int
             {
@@ -452,13 +454,14 @@ class BackupRunsTest extends TestCase
         // The schedule is defined when the console kernel boots.
         $this->artisan('schedule:list')->expectsOutputToContain('backup:app')->assertSuccessful();
 
-        $hourly = $this->scheduledEvent('backup:database --kind=hourly');
+        $hourly = $this->scheduledEvent('backup:database --kind=hourly --auto-upload');
         $daily = $this->scheduledEvent('backup:app --kind=daily --auto-upload');
 
         $this->assertNotNull($hourly, 'the hourly database backup must be on the scheduler');
         $this->assertSame('5 * * * *', $hourly->expression);
         $this->assertTrue($hourly->withoutOverlapping);
-        $this->assertSame(30, $hourly->expiresAt);
+        $this->assertSame(60, $hourly->expiresAt);
+        $this->assertTrue($hourly->runInBackground);
         $this->assertTrue($hourly->onOneServer);
 
         $this->assertNotNull($daily, 'the daily full app backup must be on the scheduler');
@@ -481,9 +484,10 @@ class BackupRunsTest extends TestCase
 
         $this->assertNull($this->scheduledEvent('--kind=hourly'));
         $this->assertNull($this->scheduledEvent('backup:app'));
-        $daily = $this->scheduledEvent('backup:database --kind=daily');
+        $daily = $this->scheduledEvent('backup:database --kind=daily --auto-upload');
         $this->assertNotNull($daily);
-        $this->assertSame(30, $daily->expiresAt);
+        $this->assertSame(60, $daily->expiresAt);
+        $this->assertTrue($daily->runInBackground);
     }
 
     public function test_production_image_installs_the_mysql_client_that_provides_mysqldump(): void
@@ -531,7 +535,10 @@ class BackupRunsTest extends TestCase
         Config::set('backup.app.include_paths', []);
     }
 
-    /** A Google Drive stand-in that records the uploads it is asked for. */
+    /**
+     * A Google Drive stand-in: records uploads (keeping the bytes it was sent),
+     * lists whatever is in $remote and records deletes.
+     */
     private function fakeDrive(): GoogleDriveBackupService
     {
         $drive = new class extends GoogleDriveBackupService
@@ -539,16 +546,49 @@ class BackupRunsTest extends TestCase
             /** @var array<int, string> */
             public array $uploads = [];
 
-            public function upload(string $absolutePath, ?string $filename = null): array
+            /** @var array<string, string> name => bytes sent */
+            public array $sent = [];
+
+            /** @var array<int, array{id: string, name: string}> */
+            public array $remote = [];
+
+            /** @var array<int, string> */
+            public array $deleted = [];
+
+            public ?Throwable $failWith = null;
+
+            public function upload(string $absolutePath, ?string $filename = null, string $mimeType = 'application/zip'): array
             {
+                if ($this->failWith) {
+                    throw $this->failWith;
+                }
+
                 $this->uploads[] = $filename ?? basename($absolutePath);
+                $this->sent[end($this->uploads)] = (string) file_get_contents($absolutePath);
 
                 return ['id' => 'drive-file-id'];
+            }
+
+            public function listBackupFiles(): array
+            {
+                return $this->remote;
+            }
+
+            public function delete(string $fileId): void
+            {
+                $this->deleted[] = $fileId;
             }
         };
         $this->app->instance(GoogleDriveBackupService::class, $drive);
 
         return $drive;
+    }
+
+    private function driveSettings(bool $enabled = true, bool $auto = true): void
+    {
+        app(BackupSettingsService::class)->saveGoogleDrive([
+            'enabled' => $enabled, 'auto_upload' => $auto, 'folder_id' => 'folder', 'service_account_path' => '', 'service_account_json' => '',
+        ]);
     }
 
     public function test_app_backup_name_carries_its_kind_and_no_partial_file_is_left(): void
@@ -604,7 +644,7 @@ class BackupRunsTest extends TestCase
     {
         $this->appBackupSetup();
         Config::set('backup.app.include_paths', ['app']);
-        $service = new class(app(DatabaseBackupService::class), app(GoogleDriveBackupService::class), app(BackupRunRecorder::class)) extends AppBackupService
+        $service = new class(app(DatabaseBackupService::class), app(OffsiteBackupService::class), app(BackupRunRecorder::class)) extends AppBackupService
         {
             protected function addPath(\ZipArchive $zip, string $absolutePath, string $relativePath): void
             {
@@ -637,6 +677,7 @@ class BackupRunsTest extends TestCase
     public function test_auto_upload_follows_the_switches_on_the_backups_page(): void
     {
         $this->appBackupSetup();
+        Config::set('backup.encryption.key', 'test-encryption-key-123456');
         $drive = $this->fakeDrive();
         $settings = app(BackupSettingsService::class);
         $save = fn (bool $enabled, bool $auto) => $settings->saveGoogleDrive([
@@ -655,10 +696,10 @@ class BackupRunsTest extends TestCase
         // --auto-upload with both on: uploaded. --upload always uploads.
         $save(true, true);
         $this->artisan('backup:app', ['--kind' => 'daily', '--auto-upload' => true])
-            ->expectsOutputToContain('uploaded to Google Drive')
+            ->expectsOutputToContain('sent to Google Drive')
             ->assertExitCode(0);
         $this->assertCount(1, $drive->uploads);
-        $this->assertMatchesRegularExpression('/^app-backup-.*-daily\.zip$/', $drive->uploads[0]);
+        $this->assertMatchesRegularExpression('/^app-backup-.*-daily\.zip\.enc$/', $drive->uploads[0]);
 
         $save(false, false);
         $this->artisan('backup:app', ['--upload' => true])->assertExitCode(0);

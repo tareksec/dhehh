@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\BackupRun;
 use App\Services\AppBackupService;
-use App\Services\BackupSettingsService;
+use App\Services\OffsiteBackupService;
 use Illuminate\Console\Command;
 use Throwable;
 
@@ -12,12 +12,12 @@ class BackupApp extends Command
 {
     protected $signature = 'backup:app
         {--kind=manual : hourly, daily, predeploy or manual - each kind is kept and pruned on its own}
-        {--upload : Also upload the archive to Google Drive}
-        {--auto-upload : Upload to Google Drive only when "Auto upload daily" is switched on (Backups page)}';
+        {--upload : Also send an encrypted copy to Google Drive}
+        {--auto-upload : Send to Google Drive only when "Auto upload" is switched on (Backups page) for this kind}';
 
     protected $description = 'Create a private full app backup (files + a database backup), optionally uploading it to Google Drive';
 
-    public function handle(AppBackupService $backups, BackupSettingsService $settings): int
+    public function handle(AppBackupService $backups, OffsiteBackupService $offsite): int
     {
         $kind = (string) $this->option('kind');
 
@@ -27,11 +27,11 @@ class BackupApp extends Command
             return self::FAILURE;
         }
 
-        // "Auto upload" needs Drive switched on as well. If it is on but Drive is
-        // not set up, the upload step fails and the run is recorded as failed
-        // (with the reason) instead of silently leaving the archive on the server.
+        // "Auto upload" needs Drive switched on as well. If it is on but Drive or the
+        // encryption key is not set up, the upload step fails and the run is recorded
+        // as failed (with the reason) instead of silently leaving the archive on the server.
         $upload = (bool) $this->option('upload')
-            || ((bool) $this->option('auto-upload') && $settings->googleDriveEnabled() && $settings->googleDriveAutoUpload());
+            || ((bool) $this->option('auto-upload') && $offsite->shouldAutoUpload(BackupRun::SCOPE_APP, $kind));
 
         try {
             $backup = $backups->create($upload, $kind);
@@ -41,7 +41,7 @@ class BackupApp extends Command
             return self::FAILURE;
         }
 
-        $this->info("Full app backup created: {$backup['name']} ({$backup['size_human']})".($upload ? ' and uploaded to Google Drive' : ''));
+        $this->info("Full app backup created: {$backup['name']} ({$backup['size_human']})".($upload ? ' and sent to Google Drive' : ''));
 
         return self::SUCCESS;
     }

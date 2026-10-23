@@ -13,7 +13,7 @@ class AppBackupService
 {
     public function __construct(
         protected DatabaseBackupService $databases,
-        protected GoogleDriveBackupService $googleDrive,
+        protected OffsiteBackupService $offsite,
         protected BackupRunRecorder $runs,
     ) {}
 
@@ -87,7 +87,7 @@ class AppBackupService
         $backup['sha256'] = hash_file('sha256', $absolutePath);
 
         if ($uploadToGoogleDrive) {
-            $backup['google_drive'] = $this->googleDrive->upload($absolutePath, $filename);
+            $backup['google_drive'] = $this->offsite->send($absolutePath);
         }
 
         return $backup;

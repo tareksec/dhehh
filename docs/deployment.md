@@ -470,7 +470,9 @@ every hour at five past and a full app backup every day at `BACKUP_SCHEDULE_TIME
 **Without this scheduled task none of them run.** Separately, the **Post-deployment
 Command** `php artisan deploy:migrate` takes a `predeploy` database backup right
 before migrations that are pending (nothing pending, nothing backed up); if that
-backup fails the Super Admins are told and the migrations still run.
+backup fails the Super Admins are told and the migrations still run. With Google
+Drive and **Auto upload to Drive** on, each backup is also sent, encrypted, to
+Drive (`BACKUP_ENCRYPTION_KEY` must be set, and kept safe outside the server).
 
 Starting the scheduler after a long stop does not message old customers at
 once: abandoned carts older than 3 days (on top of the company's delay) get no

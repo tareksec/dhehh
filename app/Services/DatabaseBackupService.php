@@ -15,28 +15,45 @@ class DatabaseBackupService
 {
     public const DIRECTORY = 'backups/database';
 
-    public function __construct(protected BackupRunRecorder $runs) {}
+    public function __construct(
+        protected BackupRunRecorder $runs,
+        protected OffsiteBackupService $offsite,
+    ) {}
 
     /**
      * File name: database-backup-{date}-{connection}-{kind}.{sqlite|sql.gz}.
      * The kind is part of the name so each kind can be pruned on its own and
      * still be told apart when the database itself is what is being restored.
+     *
+     * With $upload the new file is also sent, encrypted, to Google Drive as
+     * part of the same recorded run, so a failed upload shows up in the backup
+     * history and raises the alert even though the local file exists.
      */
-    public function create(?string $connection = null, string $kind = BackupRun::KIND_MANUAL): array
+    public function create(?string $connection = null, string $kind = BackupRun::KIND_MANUAL, bool $upload = false): array
     {
         if (! in_array($kind, BackupRun::KINDS, true)) {
             throw new InvalidArgumentException('Backup kind must be one of: '.implode(', ', BackupRun::KINDS).'.');
         }
 
-        $backup = $this->runs->record(
-            BackupRun::SCOPE_DATABASE,
-            $kind,
-            fn (): array => $this->createFile($connection, $kind),
-        );
+        try {
+            return $this->runs->record(
+                BackupRun::SCOPE_DATABASE,
+                $kind,
+                function () use ($connection, $kind, $upload): array {
+                    $backup = $this->createFile($connection, $kind);
 
-        $this->prune();
+                    if ($upload) {
+                        $backup['google_drive'] = $this->offsite->send($backup['path']);
+                    }
 
-        return $backup;
+                    return $backup;
+                },
+            );
+        } finally {
+            // Also when the upload failed: Google Drive being down for a day must
+            // not let the local files pile up past their limit.
+            rescue(fn () => $this->prune());
+        }
     }
 
     public function all(): array

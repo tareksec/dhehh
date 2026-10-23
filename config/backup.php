@@ -56,6 +56,8 @@ return [
             'resources',
             'routes',
             'storage/app/public',
+            // Files kept off the public disk (KYC and other private documents).
+            'storage/app/private',
             '.env',
             'artisan',
             'composer.json',
@@ -69,6 +71,7 @@ return [
             'node_modules',
             'vendor',
             'storage/app/private/backups',
+            'storage/app/private/livewire-tmp',
             'storage/framework',
             'storage/logs',
             'database/database.sqlite',
@@ -76,7 +79,49 @@ return [
         ],
     ],
 
+    // Encrypts the copy that goes to Google Drive (see App\Services\BackupEncryptor).
+    // A passphrase of its own, NOT APP_KEY: APP_KEY sits in the .env inside the app
+    // backup, so a backup locked with it could not be opened after losing the server.
+    // Keep a copy of this key OUTSIDE the server (password manager, printed): without
+    // it the off-site copies cannot be opened by anyone. `openssl rand -base64 32`
+    // makes a good one. Local backup files on the server are not encrypted.
+    'encryption' => [
+        'key' => env('BACKUP_ENCRYPTION_KEY'),
+    ],
+
+    // What goes to Google Drive when "Auto upload" is switched on (Backups page).
+    'offsite' => [
+        // Backup kinds sent by --auto-upload. A daily full app archive already holds
+        // that day's dump, so the kinds only decide which stand-alone dumps also go.
+        'database_kinds' => array_values(array_filter(array_map('trim', explode(',', (string) env('BACKUP_OFFSITE_DATABASE_KINDS', 'hourly,daily,predeploy'))))),
+        'app_kinds' => array_values(array_filter(array_map('trim', explode(',', (string) env('BACKUP_OFFSITE_APP_KINDS', 'daily'))))),
+
+        // Nothing is uploaded unless BACKUP_ENCRYPTION_KEY is set. A dump holds every
+        // customer and the app archive holds the .env. Set false only if you accept
+        // plain copies on Google Drive.
+        'require_encryption' => (bool) env('BACKUP_OFFSITE_REQUIRE_ENCRYPTION', true),
+
+        // Copies kept on Drive per kind; older ones are deleted after each upload.
+        // Only files named like our backups are ever touched.
+        'keep' => [
+            'database' => [
+                'hourly' => (int) env('BACKUP_DRIVE_KEEP_HOURLY', 48),
+                'daily' => (int) env('BACKUP_DRIVE_KEEP_DAILY', 30),
+                'predeploy' => (int) env('BACKUP_DRIVE_KEEP_PREDEPLOY', 10),
+                'manual' => 10,
+            ],
+            'app' => [
+                'hourly' => 5,
+                'daily' => (int) env('BACKUP_DRIVE_APP_KEEP_DAILY', 7),
+                'predeploy' => 2,
+                'manual' => 5,
+            ],
+        ],
+    ],
+
     'google_drive' => [
+        // Bytes per upload request for big files (rounded to a multiple of 256 KiB).
+        'chunk_bytes' => (int) env('GOOGLE_DRIVE_BACKUP_CHUNK_BYTES', 8 * 1024 * 1024),
         'enabled' => env('GOOGLE_DRIVE_BACKUP_ENABLED', false),
         'auto_upload' => env('GOOGLE_DRIVE_BACKUP_AUTO_UPLOAD', false),
         'folder_id' => env('GOOGLE_DRIVE_BACKUP_FOLDER_ID'),

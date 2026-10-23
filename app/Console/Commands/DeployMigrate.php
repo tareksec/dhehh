@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\BackupRun;
 use App\Services\DatabaseBackupService;
 use App\Services\DeploymentErrorReporter;
+use App\Services\OffsiteBackupService;
 use Illuminate\Console\Command;
 use Throwable;
 
@@ -82,7 +83,11 @@ class DeployMigrate extends Command
         }
 
         try {
-            $backup = $backups->create(config('backup.app.database_connection'), BackupRun::KIND_PREDEPLOY);
+            // The most valuable copy to have off the server: a deploy may replace the
+            // container (and with it the local backup folder) right after this.
+            $upload = app(OffsiteBackupService::class)->shouldAutoUpload(BackupRun::SCOPE_DATABASE, BackupRun::KIND_PREDEPLOY);
+
+            $backup = $backups->create(config('backup.app.database_connection'), BackupRun::KIND_PREDEPLOY, $upload);
 
             $this->info("Database backup before migrating: {$backup['name']}");
         } catch (Throwable $exception) {

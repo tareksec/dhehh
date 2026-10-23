@@ -3552,5 +3552,11 @@
     "Backup history": "ব্যাকআপের ইতিহাস",
     "The last 20 backup attempts, newest first. A failed attempt shows the reason.": "সর্বশেষ ২০টি ব্যাকআপ চেষ্টা, নতুনটি আগে। ব্যর্থ হলে কারণ দেখানো হয়।",
     "No backups have been recorded yet.": "এখনো কোনো ব্যাকআপ রেকর্ড হয়নি।",
-    "Database backups are stored privately. Each type (hourly, daily, before deploy, manual) keeps its own latest files, so one type never pushes out another.": "ডেটাবেজ ব্যাকআপ ব্যক্তিগতভাবে সংরক্ষিত থাকে। প্রতিটি ধরন (ঘণ্টাভিত্তিক, দৈনিক, ডেপ্লয়ের আগে, ম্যানুয়াল) নিজের সর্বশেষ ফাইলগুলো রাখে, তাই এক ধরন অন্য ধরনকে সরিয়ে দেয় না।"
+    "Database backups are stored privately. Each type (hourly, daily, before deploy, manual) keeps its own latest files, so one type never pushes out another.": "ডেটাবেজ ব্যাকআপ ব্যক্তিগতভাবে সংরক্ষিত থাকে। প্রতিটি ধরন (ঘণ্টাভিত্তিক, দৈনিক, ডেপ্লয়ের আগে, ম্যানুয়াল) নিজের সর্বশেষ ফাইলগুলো রাখে, তাই এক ধরন অন্য ধরনকে সরিয়ে দেয় না।",
+    "Auto upload to Drive": "ড্রাইভে স্বয়ংক্রিয় আপলোড",
+    "Sends the hourly and daily database backups and the daily full app backup to Google Drive, encrypted, and deletes older copies there.": "ঘণ্টাভিত্তিক ও দৈনিক ডেটাবেজ ব্যাকআপ এবং দৈনিক পুরো-অ্যাপ ব্যাকআপ এনক্রিপ্ট করে Google Drive-এ পাঠায় এবং সেখানকার পুরনো কপি মুছে দেয়।",
+    "Off-site encryption": "অফসাইট এনক্রিপশন",
+    "On: copies are encrypted before they are uploaded": "চালু: আপলোডের আগে কপি এনক্রিপ্ট করা হয়",
+    "Off: nothing is uploaded until BACKUP_ENCRYPTION_KEY is set": "বন্ধ: BACKUP_ENCRYPTION_KEY সেট না করা পর্যন্ত কিছুই আপলোড হবে না",
+    "Off: copies are uploaded without encryption": "বন্ধ: কপি এনক্রিপশন ছাড়াই আপলোড হচ্ছে"
 }

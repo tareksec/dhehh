@@ -27,21 +27,25 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withSchedule(function (Schedule $schedule): void {
-        // Backups. The overlap locks expire (30 minutes for a dump, which stops at
-        // 15, see backup.database.timeout; 2 hours for the archive). The default
-        // lock lasts 24 hours, so one run killed by a container restart would
-        // block every backup for a day. Every run is recorded in backup_runs.
+        // Backups. The overlap locks expire (an hour for a dump, which stops at
+        // 15 minutes, see backup.database.timeout, plus its upload; 2 hours for
+        // the archive). The default lock lasts 24 hours, so one run killed by a
+        // container restart would block every backup for a day. Every run is
+        // recorded in backup_runs. --auto-upload sends the copy, encrypted, to
+        // Google Drive when Drive and "Auto upload" are on (Backups page) and the
+        // kind is in backup.offsite; the upload runs in the background with the
+        // dump so a slow Drive never holds up the other scheduled jobs.
         if (config('backup.hourly.enabled', true)) {
             // At five past, so it never starts together with the daily job.
-            $schedule->command('backup:database --kind=hourly')
+            $schedule->command('backup:database --kind=hourly --auto-upload')
                 ->hourlyAt(5)
-                ->withoutOverlapping(30)
+                ->withoutOverlapping(60)
+                ->runInBackground()
                 ->onOneServer();
         }
 
         if (config('backup.daily.full_app', true)) {
-            // Files + a database backup of the same kind; uploaded to Google Drive
-            // when "Auto upload daily" is on (Backups page). In the background
+            // Files + a database backup of the same kind. In the background
             // because zipping the uploads can take a while.
             $schedule->command('backup:app --kind=daily --auto-upload')
                 ->dailyAt((string) config('backup.schedule_time', '02:00'))
@@ -49,9 +53,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 ->runInBackground()
                 ->onOneServer();
         } else {
-            $schedule->command('backup:database --kind=daily')
+            $schedule->command('backup:database --kind=daily --auto-upload')
                 ->dailyAt((string) config('backup.schedule_time', '02:00'))
-                ->withoutOverlapping(30)
+                ->withoutOverlapping(60)
+                ->runInBackground()
                 ->onOneServer();
         }
         $schedule->command('storefront:send-abandoned-cart-reminders')
