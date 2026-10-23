@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [2.112.2] - 2026-10-23
+
 **Release type:** Patch/Fix Update
 
 ### Changed
@@ -9,7 +11,6 @@
 ### Technical Notes
 
 - `AmazonSes::canRemoveDomains()` (was `canRemoveOtherDomains()`) is the single check, used by the view and by the `deleteIdentity` action; the own-domain test `isOwnIdentity()` stays, but only for grouping the list. `AmazonSesPageTest` covers a settings manager (no button, both removals refused, no AWS call) and a super admin (button, both removals go through). Lang: one new key, one replaced.
-
 ## [2.112.1] - 2026-10-23
 
 **Release type:** Patch/Fix Update
