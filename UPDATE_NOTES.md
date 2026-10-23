@@ -14,7 +14,7 @@ Owner (Bangla): set it up so that typing the API key and the sender ID in their 
 
 **Verified:** `SmsGatewayUrlTest` (new, 10), `SmsDashboardTest`, `IntegrationsPageTest`, `SmsLogTest`, `TranslationParityTest`; full `php artisan test` before the push.
 
-Commit status: committed to `claude/order-management-features-nafks7`; not on `main` until the owner says so.
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
 
 ## 2026-10-23 (later) - The gateway URL had "Receiver" instead of {phone}
 
@@ -26,7 +26,7 @@ Owner sent a screenshot of the failure notice after the `88{phone}` fix. Its "Wh
 
 **Verified:** `SmsDashboardTest` (+3: the exact URL from the screenshot is not sent and logged, saving it is refused, the dashboard warns). Full `php artisan test` before the push.
 
-Commit status: committed to `claude/order-management-features-nafks7`; not on `main` until the owner says so.
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
 
 ## 2026-10-23 - Trade Portal: Tiro Bangla, desktop menu, sign-in page; merge to main
 
@@ -229,7 +229,7 @@ Owner (Bangla, with a phone screenshot of the SMS Log): after connecting the new
 
 **Verified:** `SmsDashboardTest` (+2, all nine number/template combinations send `number=8801728714614`), `SmsLogTest`, `IntegrationsPageTest`, `TranslationParityTest`. Full `php artisan test` before the push.
 
-Commit status: committed to `claude/order-management-features-nafks7`; not on `main` until the owner says so.
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
 
 ## 2026-10-23 - SMS Dashboard (counts, cost, BulkSMSBD balance)
 
@@ -247,7 +247,7 @@ Owner (Bangla): can a dashboard be made for the SMS gateway, with how many SMS c
 
 **Verified:** `SmsDashboardTest` (13), `SmsLogTest`, `IntegrationsPageTest`, `TranslationParityTest`, `MultiCompanyIsolationTest`, `ModuleGuardTest`, Pint on my files; browser check on a scratch SQLite database (desktop and 390px phone, no sideways scroll, real call to BulkSMSBD with a dummy key shows the 1011 advice). Full `php artisan test` before the push.
 
-Commit status: committed to `claude/order-management-features-nafks7`; not on `main` until the owner says so.
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
 
 ## 2026-10-23 - Courier COD is the due amount, and the order page has a Payment section
 
