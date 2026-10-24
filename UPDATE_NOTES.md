@@ -2,6 +2,16 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-24 - Trade Portal: command to remove Tasneem's QA test data
+
+Owner's cleanup list: the Trade Portal has no delete buttons, and the QA records of 23 Oct (all named `TEST-…`: 3 challans, TEST-Customer-001, 5 products, the TEST-Supplier-001 purchase with LC file TEST-LC-001, 2 serials, 6 cash book entries, the TEST-Expense-001 category) are still in the live company "Tasneem Knitting industry".
+
+What I did: built `php artisan trade:remove-test-data {company-slug}` instead of hand-written SQL, so every row goes through its model and the ERP's own hooks put the Bkash / Brac Bank balances, stock and dues right. It finds the records by the `TEST-` name only inside that company, shows them with the balances it would leave (dry run, rolled back), and with `--apply` backs the database up and removes them. It refuses if a test record is mixed with a real one, and it lists every ledger row left on the money accounts afterwards — that answers the owner's question about the ৳9,937.50 day start (Bkash opening ৳10,000): any row left there is shown, not deleted.
+
+Not done yet: **running it on the live server.** That is a permanent delete on production, so it waits for the owner's go. Steps on the server (Coolify terminal of the app): `php artisan trade:remove-test-data <tasneem-slug>` (read the list), then the same with `--apply`, then check the expected state in the owner's list (dues ৳31,490,000 over 21 customers, challans 004–025, Bkash ৳10,000, Brac Bank ৳0).
+
+Commit status: committed and pushed to `feature/trade-portal-test-data-cleanup`; not on `main`.
+
 ## 2026-10-23 (navbar) - IMS top bar logo size and per-company logo
 
 Owner (Bangla): the logo makes the IMS navbar too tall; and picking another company still shows the same logo. Fixed: logo capped in size, logo/name follow the chosen company (pushed to main as 49c577d4). Follow-up (owner: still two lines): on laptops the bar is now one 72px line — picker as an icon, only the other language shown, tighter pills; measured in a local preview: English needs 1202px, Bangla 1220px, so the two-line fallback is kept below 1240px. Status: committed and pushed to main.

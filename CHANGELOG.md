@@ -10,6 +10,14 @@ All notable production changes to Business Dashboard are documented here.
 
 - IMS office top bar on laptops (1024–1799px): one slim line instead of two — the company picker is a round icon, the language switch shows only the other language, the menu pills are tighter; only below 1240px does the menu still get its own line.
 
+### Added
+
+- **Trade Portal: a server command removes a company's QA test data before go-live.** `php artisan trade:remove-test-data {company-slug}` finds every customer, supplier, product and cost category named `TEST-…` in that one company, and what hangs on them (their challans and orders, purchases with the LC file, landed cost and serial numbers, payments, costs, money moves named `TEST-…`). Without `--apply` it only shows the list and the account balances it would leave, and changes nothing. With `--apply` it makes a database backup first, then removes them. It stops without removing anything if a test record is tied to a real one (a real item on a test challan, a test item on a real sale or purchase). Afterwards it lists every ledger row still on the cash and bank accounts, so a balance that does not match the opening can be explained.
+
+### Technical Notes
+
+- `App\Services\TradeTestDataCleanupService` (plan / remove in one transaction; a dry run rolls back) and `App\Console\Commands\RemoveTradeTestData`. Rows are deleted through their models so the existing hooks take out ledger rows, stock movements and customer / supplier balances; fund transfer ledger rows are deleted explicitly (the model has no hook). Test: `tests/Feature/TradeTestDataCleanupTest.php`.
+
 ## [2.111.2] - 2026-10-23
 
 **Release type:** Patch/Fix Update

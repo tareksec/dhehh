@@ -1,5 +1,5 @@
 # Core Platform
-> Last checked: 2026-10-23, the Trade Portal (phases 1–6, phone look, sign-in) merged with main, where the log pages moved onto one Settings → Logs page
+> Last checked: 2026-10-24, branch `feature/trade-portal-test-data-cleanup` (Trade Portal test-data cleanup command)
 
 ## What it does
 The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and five distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal, Trade Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated backups to Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
@@ -159,6 +159,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Console/Commands/NotifyLatestRelease.php` | Alerts super admins of newly installed application updates. |
 | `app/Console/Commands/MigrateCompanyData.php` | CLI tool to migrate data records across companies. |
 | `app/Console/Commands/MigrateCompanyStorage.php` | CLI tool to transfer physical media between storage disks. |
+| `app/Console/Commands/RemoveTradeTestData.php` | `trade:remove-test-data {company} [--prefix=TEST-] [--apply]`: removes a Trade Portal company's QA records named with the prefix and what hangs on them, via `App\Services\TradeTestDataCleanupService` (dry run by default, backup before `--apply`, refuses when test and real records are mixed, lists the ledger rows left on the money accounts). Test: `tests/Feature/TradeTestDataCleanupTest.php`. |
 | `bootstrap/app.php` | Defines scheduled cron jobs (backups, release notifications, cleanups). |
 
 ### Notifications & Observers
