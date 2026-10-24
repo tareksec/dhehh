@@ -12,6 +12,7 @@ use App\Models\InvestorPortalAccount;
 use App\Models\StorefrontSetting;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\EmailTemplateService;
 use App\Services\SmsTemplateService;
 use App\Services\StorefrontNotificationService;
 use App\Support\StorefrontApi\Phone;
@@ -210,6 +211,13 @@ class InviteService
 
         $setting = StorefrontSetting::primaryFor((int) $company->getKey());
 
-        return $setting !== null && $this->notifications->sendMailable($setting, $invite->contact, new ImsMessage($company->name, __('Your invitation'), [$text], $link), EmailLog::KIND_IMS_INVITATION);
+        $mail = app(EmailTemplateService::class)->mailableOr(
+            (int) $company->getKey(),
+            EmailTemplateService::IMS_INVITATION,
+            ['company' => $company->name, 'link' => $link, 'days' => InvestorInvite::VALID_DAYS],
+            new ImsMessage($company->name, __('Your invitation'), [$text], $link),
+        );
+
+        return $setting !== null && $this->notifications->sendMailable($setting, $invite->contact, $mail, EmailLog::KIND_IMS_INVITATION);
     }
 }

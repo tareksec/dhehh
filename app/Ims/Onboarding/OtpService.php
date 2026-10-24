@@ -8,6 +8,7 @@ use App\Models\EmailLog;
 use App\Models\InvestorOtpCode;
 use App\Models\StorefrontSetting;
 use App\Services\AuditLogService;
+use App\Services\EmailTemplateService;
 use App\Services\SmsTemplateService;
 use App\Services\EmailLogService;
 use App\Services\StorefrontNotificationService;
@@ -122,10 +123,17 @@ class OtpService
             return false;
         }
 
-        return $this->notifications->sendMailable($setting, $email, new ImsMessage(
-            $company->name,
-            __('Your code to join'),
-            [__('Your code is :code. It works for :minutes minutes and only once.', ['code' => $code, 'minutes' => InvestorOtpCode::VALID_MINUTES])],
-        ), EmailLog::KIND_IMS_CODE);
+        $mail = app(EmailTemplateService::class)->mailableOr(
+            (int) $company->getKey(),
+            EmailTemplateService::IMS_JOIN_CODE,
+            ['company' => $company->name, 'code' => $code, 'minutes' => InvestorOtpCode::VALID_MINUTES],
+            new ImsMessage(
+                $company->name,
+                __('Your code to join'),
+                [__('Your code is :code. It works for :minutes minutes and only once.', ['code' => $code, 'minutes' => InvestorOtpCode::VALID_MINUTES])],
+            ),
+        );
+
+        return $this->notifications->sendMailable($setting, $email, $mail, EmailLog::KIND_IMS_CODE);
     }
 }

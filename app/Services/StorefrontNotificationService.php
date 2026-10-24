@@ -428,18 +428,27 @@ class StorefrontNotificationService
 
     public function sendResellerPasswordResetEmail(StorefrontSetting $setting, string $email, string $companyName, string $url, int $minutes): bool
     {
-        return $this->deliver(
-            $setting,
-            $email,
+        // The owner's wording (Settings → Email Templates) when she has written it, else the built-in mail.
+        $mail = app(EmailTemplateService::class)->mailableOr(
+            (int) $setting->company_id,
+            EmailTemplateService::RESELLER_RESET,
+            ['company' => $companyName, 'link' => $url, 'minutes' => $minutes],
             new ResellerPasswordResetLink($companyName, $url, $minutes),
-            EmailLog::KIND_RESELLER_PASSWORD_RESET,
-            'Reseller password reset email failed',
         );
+
+        return $this->deliver($setting, $email, $mail, EmailLog::KIND_RESELLER_PASSWORD_RESET, 'Reseller password reset email failed');
     }
 
     public function sendLoginOtpEmail(StorefrontSetting $setting, string $email, string $companyName, string $code): bool
     {
-        return $this->deliver($setting, $email, new StorefrontLoginOtp($companyName, $code), EmailLog::KIND_LOGIN_CODE, 'Storefront login OTP email failed');
+        $mail = app(EmailTemplateService::class)->mailableOr(
+            (int) $setting->company_id,
+            EmailTemplateService::LOGIN_CODE,
+            ['company' => $companyName, 'code' => $code, 'minutes' => EmailTemplateService::LOGIN_CODE_MINUTES],
+            new StorefrontLoginOtp($companyName, $code),
+        );
+
+        return $this->deliver($setting, $email, $mail, EmailLog::KIND_LOGIN_CODE, 'Storefront login OTP email failed');
     }
 
     /**

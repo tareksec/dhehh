@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Services\OrderStatusEmailService;
 use App\Services\OrderStatusSmsService;
 use App\Services\OrderWhatsAppCardService;
 use App\Services\StorefrontMetaDispatchService;
@@ -35,6 +36,15 @@ class OrderStatusTransition extends Model
             try {
                 if (Schema::hasTable('sms_templates')) {
                     app(OrderStatusSmsService::class)->dispatchForTransition($transition);
+                }
+            } catch (Throwable $exception) {
+                report($exception);
+            }
+
+            // The customer's status email (Email Templates); same rule: never undo the change.
+            try {
+                if (Schema::hasTable('email_templates')) {
+                    app(OrderStatusEmailService::class)->dispatchForTransition($transition);
                 }
             } catch (Throwable $exception) {
                 report($exception);

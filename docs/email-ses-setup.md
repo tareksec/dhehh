@@ -4,6 +4,8 @@ The ERP sends email through an SMTP account saved **per site** (each company's B
 
 Email the ERP sends this way: customer login codes (storefront), reseller password-reset links, and — from the company's main site — investor and IMS emails (invitations, codes, notices, the owner's daily digest). If a site has no SMTP host saved, these fall back to the server's own mailer (`MAIL_*` in the environment; see the last section).
 
+The wording of these emails, and the order emails to customers, is written on **Settings → Email Templates** (see `docs/email-templates.md`). Until a message is written there, the codes, reset links and investor emails go out as plain text exactly as before, and order emails are not sent at all.
+
 ## 1. In AWS SES (once per region)
 
 1. Use the region the domains were verified in. SES identities and SMTP credentials belong to one region; the ERP must use that same region.

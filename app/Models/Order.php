@@ -6,6 +6,7 @@ use App\Jobs\PushWooCommerceOrderStatusJob;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\GeneratesSequentialNumber;
 use App\Services\CustomerRiskService;
+use App\Services\OrderStatusEmailService;
 use App\Services\OrderStatusSmsService;
 use App\Services\OrderWhatsAppCardService;
 use App\Services\OrderWorkflowService;
@@ -328,6 +329,11 @@ class Order extends Model
             try {
                 if (Schema::hasTable('sms_templates')) {
                     app(OrderStatusSmsService::class)->dispatchForOrderPlaced($order);
+                }
+
+                // The email with the owner's wording (Email Templates), when she has written one.
+                if (Schema::hasTable('email_templates')) {
+                    app(OrderStatusEmailService::class)->dispatchForOrderPlaced($order);
                 }
 
                 app(OrderWhatsAppCardService::class)->dispatchForOrderPlaced($order);

@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\EmailLog;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
+use App\Services\EmailTemplateService;
 use App\Services\SmsTemplateService;
 use App\Services\StorefrontNotificationService;
 use Illuminate\Bus\Queueable;
@@ -26,7 +27,10 @@ class SendImsMessageJob implements ShouldQueue
 
     public int $tries = 3;
 
-    /** @param  list<string>  $lines */
+    /**
+     * @param  list<string>  $lines
+     * @param  array{subject: string, text: string, html: string}|null  $template  the owner's own wording, already filled in (Email Templates)
+     */
     public function __construct(
         public int $companyId,
         public string $phone,
@@ -37,9 +41,10 @@ class SendImsMessageJob implements ShouldQueue
         public ?string $link = null,
         public ?string $pdfName = null,
         public ?string $pdfBase64 = null,
+        public ?array $template = null,
     ) {}
 
-    public function handle(SmsTemplateService $templates, StorefrontNotificationService $notifications): void
+    public function handle(SmsTemplateService $templates, StorefrontNotificationService $notifications, EmailTemplateService $emailTemplates): void
     {
         $company = Company::query()->find($this->companyId);
 
@@ -59,7 +64,11 @@ class SendImsMessageJob implements ShouldQueue
                 $setting = StorefrontSetting::primaryFor($this->companyId);
 
                 if ($setting !== null) {
-                    $notifications->sendMailable($setting, $this->email, new ImsMessage($company->name, $this->heading, $this->lines, $this->link, $this->pdfName, $this->pdfBase64), EmailLog::KIND_IMS_MESSAGE);
+                    $mail = $this->template !== null
+                        ? $emailTemplates->wrap($this->companyId, $this->template, $this->link, $this->pdfName, $this->pdfBase64)
+                        : new ImsMessage($company->name, $this->heading, $this->lines, $this->link, $this->pdfName, $this->pdfBase64);
+
+                    $notifications->sendMailable($setting, $this->email, $mail, EmailLog::KIND_IMS_MESSAGE);
                 }
             }
         } finally {

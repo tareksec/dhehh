@@ -1,5 +1,5 @@
 # Sales, Orders & Couriers
-> Last checked: 2026-10-23 (main merged with the Trade Portal's Delivery Challan)
+> Last checked: 2026-10-24 (the order email twin of the status SMS, and the Email the customer button; before it: main merged with the Trade Portal's Delivery Challan)
 
 ## What it does
 The Sales, Orders & Couriers module orchestrates customer acquisition, order fulfillment, multi-carrier parcel delivery, and delivery fraud prevention. It manages the full lifecycle of orders from draft quotations to confirmed, processing, delivered, or returned states, while tracking payments and stock reservations. It integrates with major Bangladeshi courier logistics APIs (Steadfast, Pathao, RedX, eCourier, and manual delivery), automating airway bill booking, webhook tracking, parcel barcode scanning, and driver handover sheets. For fraud mitigation, it runs an intelligent customer risk scoring engine that evaluates historical courier return ratios, first-time high COD thresholds, phone number reuse, and a dual-tier (global and tenant-scoped) customer blacklist.
@@ -51,6 +51,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Services/OrderSummaryCardImageService.php` | Draws the same card as a PNG on the server (Imagick + Pango, Bangla-safe) for the automatic WhatsApp card. |
 | `app/Services/OrderActivityFeedService.php` | Combines audit logs, status changes, and courier events into a unified order timeline. |
 | `app/Services/OrderStatusSmsService.php` | Texts the customer when an order is created (`order.placed`) and at each new stage, using the owner's SMS Templates wording. |
+| `app/Services/OrderStatusEmailService.php` | The same for email (Settings → Email Templates): `Order::created` and `OrderStatusTransition::created` queue `SendOrderEmailJob` only when that stage has a written template. |
 | `app/Services/OrderWhatsAppCardService.php` | Sends the summary card picture on WhatsApp (official Cloud API, approved image-header template) on order creation and each stage change. |
 | `app/Services/OrderWhatsAppSettings.php` | Company settings for the WhatsApp order card (on/off, channel, template), stored in `companies.settings`. |
 | `app/Services/ShippingFeeService.php` | Calculates inside/outside Dhaka shipping fees based on customer address and weight. |
@@ -93,6 +94,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Filament/Resources/Orders/Pages/EditOrder.php` | Edit page for adjusting order items, courier booking, and operational costs. |
 | `app/Filament/Resources/Orders/Pages/ViewOrder.php` | Infolist view with activity feed, fraud checks, and summary KPI cards. |
 | `app/Filament/Resources/Orders/Actions/ChangeOrderWorkflowAction.php` | Quick action dropdown to advance order workflow stages. |
+| `app/Filament/Resources/Orders/Actions/EmailCustomerAction.php` | "Email the customer" on the order page: mails one of the company's own email templates to the customer, with the order's values filled in. |
 | `app/Filament/Resources/Orders/Actions/CourierBookingFeedback.php` | Modal action to create an airway bill booking with the selected courier. |
 | `app/Filament/Resources/Orders/Actions/PutReturnedGoodsBackInStockAction.php` | Action allowing returned goods to be inspected and restored to inventory. |
 | `app/Filament/Resources/Quotations/QuotationResource.php` | Manages sales quotations and conversion into orders. |

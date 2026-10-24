@@ -283,14 +283,21 @@ class InvestorPortalAccountService
             'otp_attempts' => 0,
         ])->save();
 
-        $sent = $this->notifications->sendMailable($setting, $email, new ImsMessage(
-            (string) $company->name,
-            __('Reset your password'),
-            [
-                __('Your password reset code is :code. It works for :minutes minutes and only once.', ['code' => $code, 'minutes' => self::EMAIL_CODE_VALID_MINUTES]),
-                __('If you did not ask for this, you can ignore this e-mail. Your password stays the same.'),
-            ],
-        ), EmailLog::KIND_IMS_CODE);
+        $mail = app(EmailTemplateService::class)->mailableOr(
+            (int) $company->getKey(),
+            EmailTemplateService::INVESTOR_RESET,
+            ['company' => (string) $company->name, 'code' => $code, 'minutes' => self::EMAIL_CODE_VALID_MINUTES],
+            new ImsMessage(
+                (string) $company->name,
+                __('Reset your password'),
+                [
+                    __('Your password reset code is :code. It works for :minutes minutes and only once.', ['code' => $code, 'minutes' => self::EMAIL_CODE_VALID_MINUTES]),
+                    __('If you did not ask for this, you can ignore this e-mail. Your password stays the same.'),
+                ],
+            ),
+        );
+
+        $sent = $this->notifications->sendMailable($setting, $email, $mail, EmailLog::KIND_IMS_CODE);
 
         if (! $sent) {
             $this->clearCode($account);

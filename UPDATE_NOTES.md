@@ -2,7 +2,21 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-24 (latest) - Amazon SES page: phone layout
+## 2026-10-24 (latest) - Email Templates
+
+Owner (Bangla): "Email template তৈরির জন্য কিছুতো এড করো নাই". I asked what she wanted; answers: both fixed-message templates (like SMS Templates) and her own templates; order emails to customers, login code and password reset, and investor (IMS) emails; a branded HTML look.
+
+**What I did:** a new page **Settings → Email Templates** (`App\Filament\Pages\EmailTemplates`) with four tabs (Order emails, Codes & password reset, Investor emails, My templates), each message with subject, text, placeholders, Use suggested wording, Preview and Send a test. Table `email_templates`. `EmailTemplateService` renders and wraps in a branded layout (`resources/views/emails/branded.blade.php`). Order emails (`OrderStatusEmailService`, `SendOrderEmailJob`) are the twin of the status SMS with the same stages and exclusions and send nothing until a stage has a text. Login code, reseller reset, IMS join code, investor reset, invitation and IMS news use her template when written and otherwise the old plain mail unchanged. "Email the customer" on an order sends one of her own templates. Details in `CHANGELOG.md` and `docs/email-templates.md`.
+
+**Decisions I took without asking (say if you want them different):** (1) an order email is never sent for a stage with no text, as with SMS; (2) the order's own site's email account sends it, else the company's main site; (3) the layout colour is the main site's theme colour and the logo is the Company Settings logo; (4) the owner's own templates are used from the order page only for now (not bulk, not marketing); (5) the owner digest email and the test email are not templated; (6) one text per message, in the language she writes it (no per-language copy).
+
+**Checked:** `EmailTemplatesTest` (26 tests) and `TranslationParityTest`; the branded email rendered and looked at in a browser at phone and desktop width. The Email Templates page itself was not looked at in a browser, and nothing was sent through a real Amazon SES account: send a test from the page after deploy. Known limit: while Amazon SES is in its sandbox an order email only reaches a verified address.
+
+**Needs Bangla review (`lang/bn.json`):** the 61 new keys, in particular "Email Templates" = "ইমেইল টেমপ্লেট", "Order emails", "Codes & password reset", "Investor emails", "My templates", "Email the customer" = "কাস্টমারকে ইমেইল করুন", and the long explanations on the page.
+
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to that branch. Not pushed to `main`; that needs the owner's approval.
+
+## 2026-10-24 (previous) - Amazon SES page: phone layout
 
 Owner (Bangla, with two phone screenshots): "Amazon SES পেজের মোবাইল ওরিয়েন্টেশন ঠিক নেই, মোবাইলের লেআউট ঠিক কর", and use all the design skills.
 

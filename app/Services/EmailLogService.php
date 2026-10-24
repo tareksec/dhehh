@@ -45,6 +45,18 @@ class EmailLogService
 
     public const REASON_SES_REJECTED = 'ses_rejected';
 
+    /** The customer of an order has no email address (an order email was written for that stage). */
+    public const REASON_NO_EMAIL = 'no_email';
+
+    /** The customer asked not to be contacted. */
+    public const REASON_OPTED_OUT = 'opted_out';
+
+    /** An imported past order, a reseller store order or a Delivery Challan sale: the order emails do not fit it. */
+    public const REASON_EXCLUDED = 'excluded';
+
+    /** The same news was already mailed (a retried job, or a courier sending the same status twice). */
+    public const REASON_DUPLICATE = 'duplicate';
+
     /** @return array<string, string> reason key => what it means for the owner */
     public static function reasonLabels(): array
     {
@@ -64,6 +76,10 @@ class EmailLogService
             self::REASON_BOUNCE_SUPPRESSED => __('Amazon SES did not try: the address is on its suppression list after an earlier bounce or complaint.'),
             self::REASON_COMPLAINT => __('The recipient marked the message as spam.'),
             self::REASON_SES_REJECTED => __('Amazon SES rejected the message before sending it.'),
+            self::REASON_NO_EMAIL => __('The customer has no email address.'),
+            self::REASON_OPTED_OUT => __('The customer asked not to be contacted.'),
+            self::REASON_EXCLUDED => __('Not mailed: an imported past order, a reseller store order or a Delivery Challan sale.'),
+            self::REASON_DUPLICATE => __('Not mailed again: the same news had just been sent.'),
         ];
     }
 

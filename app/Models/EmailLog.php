@@ -43,6 +43,12 @@ class EmailLog extends Model
 
     public const KIND_OWNER_DIGEST = 'owner_digest';
 
+    /** An order email written on Settings → Email Templates (placed, confirmed, shipped ...). */
+    public const KIND_ORDER = 'order';
+
+    /** One of the owner's own templates, sent by hand from an order. */
+    public const KIND_TEMPLATE = 'template';
+
     public const KIND_TEST = 'test';
 
     public const KIND_OTHER = 'other';
