@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [2.115.0] - 2026-10-24
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -9,7 +11,6 @@
 ### Technical Notes
 
 - `App\Services\TradeTestDataCleanupService` (plan / remove in one transaction; a dry run rolls back) and `App\Console\Commands\RemoveTradeTestData`. Rows are deleted through their models so the existing hooks take out ledger rows, stock movements and customer / supplier balances; fund transfer ledger rows are deleted explicitly (the model has no hook). Test: `tests/Feature/TradeTestDataCleanupTest.php`. No migrations.
-
 ## [2.114.0] - 2026-10-24
 
 **Release type:** Minor Feature Update
