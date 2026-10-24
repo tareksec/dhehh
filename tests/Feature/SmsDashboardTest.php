@@ -10,6 +10,7 @@ use App\Models\StorefrontSetting;
 use App\Models\User;
 use App\Services\CompanyContext;
 use App\Services\SmsBalanceService;
+use App\Services\SmsTemplateService;
 use App\Services\SmsUsageService;
 use App\Services\StorefrontNotificationService;
 use App\Support\SmsSegments;
@@ -224,7 +225,8 @@ class SmsDashboardTest extends TestCase
 
         $this->assertFalse($result['ok']);
         $this->assertSame('bad_gateway_url', $result['reason']);
-        $this->assertSame('missing {phone}, {message}', $result['detail']);
+        // The detail names the site, so the owner knows which one of two sites to open.
+        $this->assertSame($this->setting->siteTypeLabel().': missing {phone}, {message}', $result['detail']);
         // The request shown to the owner makes the cause visible.
         $this->assertStringContainsString('number=Receiver', (string) $result['request']);
 
@@ -234,6 +236,76 @@ class SmsDashboardTest extends TestCase
         $this->assertSame('bad_gateway_url', $row->reason);
 
         Http::assertNothingSent();
+    }
+
+    /** The owner's case 2026-10-23: order texts went out but login codes did not, because two sites had two gateway settings. */
+    public function test_a_site_whose_gateway_address_cannot_work_sends_through_the_companys_other_working_site(): void
+    {
+        Http::fake(['bulksmsbd.net/*' => Http::response('{"response_code":202}')]);
+        $this->setting->update(['notification_credentials' => [
+            ...$this->setting->notification_credentials,
+            'sms_api_url' => 'http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number=Receiver&senderid=8809617643387&message=TestSMS',
+        ]]);
+        $nextjs = StorefrontSetting::query()->withoutGlobalScopes()->create([
+            'company_id' => $this->company->id,
+            'site_type' => StorefrontSetting::SITE_NEXTJS,
+            'notification_credentials' => [
+                'sms_api_url' => 'http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}',
+                'sms_api_key' => 'next-key',
+                'sms_sender_id' => '8809617643387',
+            ],
+        ]);
+        $notifications = app(StorefrontNotificationService::class);
+
+        // A login code asked for on the Blade site goes out through the Next.js site's working gateway.
+        $this->assertTrue($notifications->sendSms($this->setting->fresh(), '01728714614', 'Your code is 123456'));
+        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'api_key=next-key') && str_contains($request->url(), 'number=8801728714614'));
+        $this->assertSame(SmsLog::STATUS_SENT, SmsLog::withoutGlobalScopes()->latest('id')->firstOrFail()->status);
+
+        // The other way round too: the primary site's broken address does not stop the Blade site's working one.
+        $this->setting->update(['notification_credentials' => [...$this->setting->notification_credentials, 'sms_api_url' => 'http://bulksmsbd.net/api/smsapi?api_key={api_key}&number={phone}&message={message}']]);
+        $nextjs->update(['notification_credentials' => [...$nextjs->notification_credentials, 'sms_api_url' => 'http://bulksmsbd.net/api/smsapi?api_key={api_key}&number=Receiver&message=x']]);
+        Http::fake(['bulksmsbd.net/*' => Http::response('{"response_code":202}')]);
+
+        $this->assertTrue($notifications->sendSms($nextjs->fresh(), '01728714614', 'Your code is 654321'));
+        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'api_key=real-key'));
+    }
+
+    public function test_the_test_button_tests_the_site_being_edited_and_does_not_borrow_another_sites_gateway(): void
+    {
+        Http::fake(['bulksmsbd.net/*' => Http::response('{"response_code":202}')]);
+        $this->setting->update(['notification_credentials' => [
+            ...$this->setting->notification_credentials,
+            'sms_api_url' => 'http://bulksmsbd.net/api/smsapi?api_key={api_key}&number=Receiver&message=TestSMS',
+        ]]);
+        StorefrontSetting::query()->withoutGlobalScopes()->create([
+            'company_id' => $this->company->id,
+            'site_type' => StorefrontSetting::SITE_NEXTJS,
+            'notification_credentials' => ['sms_api_url' => 'http://bulksmsbd.net/api/smsapi?api_key={api_key}&number={phone}&message={message}', 'sms_api_key' => 'next-key'],
+        ]);
+
+        $result = app(StorefrontNotificationService::class)->sendSmsDetailed($this->setting->fresh(), '01728714614', 'hi', ownGatewayOnly: true);
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('bad_gateway_url', $result['reason']);
+        Http::assertNothingSent();
+    }
+
+    public function test_the_gateway_of_a_company_is_the_site_that_can_send_not_one_with_a_broken_address(): void
+    {
+        $this->setting->update(['notification_credentials' => [
+            ...$this->setting->notification_credentials,
+            'sms_api_url' => 'http://bulksmsbd.net/api/smsapi?api_key={api_key}&number=Receiver&message=TestSMS',
+        ]]);
+        $this->assertSame($this->setting->getKey(), app(SmsTemplateService::class)->gatewayFor((int) $this->company->getKey())?->getKey());
+
+        $nextjs = StorefrontSetting::query()->withoutGlobalScopes()->create([
+            'company_id' => $this->company->id,
+            'site_type' => StorefrontSetting::SITE_NEXTJS,
+            'notification_credentials' => ['sms_api_url' => 'http://bulksmsbd.net/api/smsapi?api_key={api_key}&number={phone}&message={message}'],
+        ]);
+
+        $this->assertSame($nextjs->getKey(), app(SmsTemplateService::class)->gatewayFor((int) $this->company->getKey(), $this->setting->fresh())?->getKey());
     }
 
     public function test_saving_a_gateway_url_without_the_placeholders_is_refused_and_a_good_one_is_saved(): void

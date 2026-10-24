@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Models\Investor;
 use App\Models\InvestorPortalAccount;
 use App\Notifications\ImsPortalNotification;
+use App\Services\EmailTemplateService;
 use App\Services\SmsTemplateService;
 use App\Support\ImsNumbers;
 use Illuminate\Support\Carbon;
@@ -68,7 +69,7 @@ class ImsNotifier
         $account = InvestorPortalAccount::query()->withoutGlobalScopes()->where('investor_id', $investor->getKey())->first();
         $locale = in_array($account?->locale, ['en', 'bn'], true) ? $account->locale : app()->getLocale();
 
-        [$title, $body, $smsValues] = $this->inLocale($locale, function () use ($event, $investor, $data, $company): array {
+        [$title, $body, $smsValues, $emailValues] = $this->inLocale($locale, function () use ($event, $investor, $data, $company): array {
             [$titleKey, $bodyKey] = self::MESSAGES[$event];
             $values = [
                 'amount' => isset($data['amount']) ? ImsNumbers::money($data['amount'], $company->currency ?: 'BDT') : '',
@@ -91,6 +92,15 @@ class ImsNotifier
                     'date' => $values['date'],
                     'company' => $company->name,
                 ],
+                // What the owner's email wording (Email Templates → Investor emails) can use.
+                [
+                    'name' => $investor->name,
+                    'amount' => $values['amount'],
+                    'project' => $values['project'],
+                    'date' => $values['date'],
+                    'title' => $values['title'],
+                    'company' => $company->name,
+                ],
             ];
         });
 
@@ -106,8 +116,11 @@ class ImsNotifier
 
         $email = ImsSettings::channelOn($company, $event, 'email') && filled($investor->email) ? (string) $investor->email : null;
 
+        // The owner's own wording for this news (branded email), else the built-in text above.
+        $template = $email !== null ? app(EmailTemplateService::class)->render((int) $company->getKey(), EmailTemplateService::imsKey($event), $emailValues) : null;
+
         if ($sms !== null || $email !== null) {
-            SendImsMessageJob::dispatch((int) $company->getKey(), (string) $investor->phone, $sms, $email, $title, [$body], $data['url'] ?? null, $data['pdf_name'] ?? null, $data['pdf_base64'] ?? null);
+            SendImsMessageJob::dispatch((int) $company->getKey(), (string) $investor->phone, $sms, $email, $title, [$body], $data['url'] ?? null, $data['pdf_name'] ?? null, $data['pdf_base64'] ?? null, $template);
         }
     }
 

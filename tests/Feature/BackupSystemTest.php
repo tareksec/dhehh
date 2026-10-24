@@ -75,7 +75,7 @@ class BackupSystemTest extends TestCase
             touch(Storage::disk('local')->path($path), now()->subMinutes(12 - $index)->timestamp);
         }
 
-        app(DatabaseBackupService::class)->cleanup();
+        app(DatabaseBackupService::class)->prune();
 
         $this->assertCount(10, app(DatabaseBackupService::class)->all());
     }
@@ -251,8 +251,10 @@ class BackupSystemTest extends TestCase
 
         Config::set('backup.google_drive.folder_id', 'drive-folder-id');
 
+        // A resumable upload: one request opens the session, a second sends the file.
         Http::fake([
-            'www.googleapis.com/upload/drive/v3/files*' => Http::response([
+            'www.googleapis.com/upload/drive/v3/files*' => Http::response('', 200, ['Location' => 'https://www.googleapis.com/upload/session/abc123']),
+            'www.googleapis.com/upload/session/*' => Http::response([
                 'id' => 'drive-file-id',
                 'name' => 'app-backup-test.zip',
             ], 200),
@@ -272,7 +274,14 @@ class BackupSystemTest extends TestCase
         );
 
         $this->assertSame('drive-file-id', $result['id']);
-        Http::assertSentCount(1);
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request): bool => $request->method() === 'POST'
+            && str_contains($request->url(), 'uploadType=resumable')
+            && $request['name'] === 'app-backup-test.zip'
+            && $request['parents'] === ['drive-folder-id']
+            && $request->header('X-Upload-Content-Length') === [(string) strlen('zip contents')]);
+        Http::assertSent(fn ($request): bool => $request->method() === 'PUT'
+            && $request->url() === 'https://www.googleapis.com/upload/session/abc123');
     }
 
     public function test_google_drive_backup_settings_are_saved_securely(): void

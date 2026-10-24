@@ -13,7 +13,7 @@
         <p class="text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">Account recovery</p>
         <h1 class="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Enter your reset code</h1>
         <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">
-            Enter the 6-digit code we texted you and choose a new password. The code expires in 15 minutes.
+            Enter the 6-digit code we texted you and choose a new password. The code expires in {{ \App\Services\CustomerAccountService::RESET_CODE_MINUTES }} minutes.
         </p>
 
         <form class="mt-5 space-y-5 rounded-lg border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-gray-900" method="POST" action="{{ $resetStoreUrl }}">

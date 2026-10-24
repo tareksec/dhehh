@@ -191,26 +191,29 @@ class AmazonSesPageTest extends TestCase
 
         $this->assertEquals(['shop.test' => true, 'hello@shop.test' => true, 'otherco.example' => false], $rows);
         $page->assertSee('used by other companies')->assertSee('otherco.example');
-        $this->assertFalse($page->instance()->canRemoveOtherDomains());
+        $this->assertFalse($page->instance()->canRemoveDomains());
+        $page->assertSee('Only a super admin can remove a domain or address.')->assertDontSee('mountAction(\'deleteIdentity\'');
 
-        // Crafted request: the other company's domain is refused without any AWS call.
+        // Crafted request: nothing is removed for a company user, not even this company's own domain, and AWS is not called.
         $this->fakeAws([]);
-        $page->callAction('deleteIdentity', arguments: ['identity' => 'otherco.example'])
-            ->assertNotified('Could not remove it');
+        $page->callAction('deleteIdentity', arguments: ['identity' => 'otherco.example'])->assertNotified('Could not remove it');
+        $page->callAction('deleteIdentity', arguments: ['identity' => 'shop.test'])->assertNotified('Could not remove it');
         $this->assertAllAwsCallsMade();
 
-        // Its own domain goes through.
-        $this->fakeAws([['DeleteEmailIdentity', $this->awsResult()], ...$refresh]);
-        $page->callAction('deleteIdentity', arguments: ['identity' => 'shop.test'])->assertNotified('Removed from Amazon SES');
-        $this->assertSame('shop.test', $this->awsCalls[0]['args']['EmailIdentity']);
-
-        // A super admin may remove any.
+        // A super admin sees the Remove buttons and may remove any domain.
         Auth::login(User::factory()->create(['role' => 'super_admin', 'is_active' => true]));
+        $this->fakeAws([...$refresh]);
+        $admin = Livewire::test(AmazonSes::class)->call('refresh');
+        $this->assertTrue($admin->instance()->canRemoveDomains());
+        $admin->assertDontSee('Only a super admin can remove a domain or address.')->assertSee('mountAction(\'deleteIdentity\'', false);
+
         $this->fakeAws([['DeleteEmailIdentity', $this->awsResult()], ...$refresh]);
-        $admin = Livewire::test(AmazonSes::class);
-        $this->assertTrue($admin->instance()->canRemoveOtherDomains());
         $admin->callAction('deleteIdentity', arguments: ['identity' => 'otherco.example'])->assertNotified('Removed from Amazon SES');
         $this->assertSame('otherco.example', $this->awsCalls[0]['args']['EmailIdentity']);
+
+        $this->fakeAws([['DeleteEmailIdentity', $this->awsResult()], ...$refresh]);
+        $admin->callAction('deleteIdentity', arguments: ['identity' => 'shop.test'])->assertNotified('Removed from Amazon SES');
+        $this->assertSame('shop.test', $this->awsCalls[0]['args']['EmailIdentity']);
     }
 
     public function test_a_domain_name_that_is_not_one_is_not_sent_to_amazon(): void
@@ -324,6 +327,24 @@ class AmazonSesPageTest extends TestCase
         $this->assertContains('ses_topic_arn', $keys);
         $source = (string) file_get_contents(app_path('Filament/Resources/StorefrontSettings/Pages/EditStorefrontSetting.php'));
         $this->assertStringContainsString('SES_CREDENTIAL_KEYS', $source, 'The Storefront Settings save must carry the AWS key over.');
+    }
+
+    /** Owner report 2026-10-24: on a phone the section titles were squeezed into a one-word column next to their buttons. */
+    public function test_the_page_carries_the_hooks_of_its_phone_layout(): void
+    {
+        $this->saveKey();
+        $this->fakeAws($this->refreshSteps());
+
+        $html = Livewire::test(AmazonSes::class)->call('refresh')->html();
+
+        $this->assertStringContainsString('zz-ses ', $html);
+        $this->assertStringContainsString('zz-ses-actions', $html);
+        $this->assertStringContainsString('sr-only', $html, 'The checklist icons carry a text for screen readers.');
+
+        // The rules that stack a section header on a phone live in the admin theme under the same names.
+        $css = (string) file_get_contents(resource_path('css/filament/admin/theme.css'));
+        $this->assertStringContainsString('.zz-ses .fi-section > .fi-section-header:has(> .fi-section-header-after-ctn)', $css);
+        $this->assertStringContainsString('.zz-ses .zz-ses-actions .fi-btn', $css);
     }
 
     /** @param  array<string, mixed>  $extra */

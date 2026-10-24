@@ -17,7 +17,7 @@ use Tests\TestCase;
 /**
  * "Forgot password?" by e-mail on the investor portal (IMS-V2/PLAN.md §4ক:
  * SMS + e-mail, owner 2026-10-19): the code goes to the e-mail on the
- * investor's record, lives 10 minutes, and the reply never tells whether an
+ * investor's record, lives 3 minutes, and the reply never tells whether an
  * address belongs to an account.
  */
 class EmailPasswordResetTest extends TestCase
@@ -81,7 +81,7 @@ class EmailPasswordResetTest extends TestCase
         $this->assertTrue(app(InvestorPortalAccountService::class)->sendResetCodeByEmail($account));
 
         $expires = $account->fresh()->otp_expires_at;
-        $this->assertTrue($expires->between(now()->addMinutes(9), now()->addMinutes(11)));
+        $this->assertTrue($expires->between(now()->addMinutes(2), now()->addMinutes(4)), 'an OTP never lives longer than three minutes');
     }
 
     public function test_an_unknown_or_shared_email_gets_the_same_reply_and_no_mail(): void

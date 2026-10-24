@@ -26,8 +26,8 @@ use Illuminate\Validation\ValidationException;
  * Every rule lives in CustomerAccountService, the same service the Blade
  * storefront uses: a registration reuses the CRM record of the same phone
  * (so the phone is proven with an SMS code first), a
- * wrong password is counted per identifier, a login code is valid for 10
- * minutes and five tries, a reset code for 15 minutes.
+ * wrong password is counted per identifier, a login code is valid for 3
+ * minutes and five tries, a reset code for 3 minutes (OtpLifetime).
  *
  * The API answers with a token instead of a cookie. The Next.js server keeps it
  * in an httpOnly cookie and sends it back as "X-Customer-Token"; it is never

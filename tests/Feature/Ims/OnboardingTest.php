@@ -85,7 +85,7 @@ class OnboardingTest extends TestCase
 
         $row = InvestorOtpCode::query()->sole();
         $row->forceFill(['code_hash' => Hash::make('123456')])->save();
-        $this->assertTrue($row->expires_at->between(now()->addMinutes(9), now()->addMinutes(11)));
+        $this->assertTrue($row->expires_at->between(now()->addMinutes(2), now()->addMinutes(4)), 'an OTP never lives longer than three minutes');
 
         foreach (range(1, 5) as $try) {
             $this->assertFalse($otp->verify($this->company, 'someone@example.test', '000000'));

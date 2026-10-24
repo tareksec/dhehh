@@ -1,0 +1,112 @@
+# Trade Portal — guide for an AI assistant
+
+Address: `https://app.zamzamint.com/trade` (path `/trade` on the main domain). Read [README](https://app.zamzamint.com/ai-guides/README.txt) first for the rules you must follow.
+Last checked against the code: 2026-10-24.
+
+## What it is
+
+A small, phone-first, Bangla-first portal for a trading shop that imports goods (machines and parts) on LC, sells them with a **Delivery Challan** (the sale paper), keeps stock, tracks who owes money, and keeps a cash book. It is made for a non-technical owner. Plain shop words are used: "Goods in" (মাল এলো), "Sales", "Dues" (বাকি).
+
+- Sign in with the same **email + password** as the ERP staff account. Only people with the `trade.access` permission get in, and only for a company that has the Trade Portal switched on.
+- A person whose role has only `trade.*` permissions (the role "Trade Owner") cannot open the ERP `/admin`. That is on purpose.
+- Language: Bangla by default. A language switch (Bangla / English) is in the top bar.
+- Light theme only. On a phone there is a bottom tab bar (Home, Sales, Stock, Dues) and a **Menu** button with the other pages as tiles. On a laptop the same pages are the top menu. A round back button in the page header goes one step back.
+- If the person may open more than one company, the Menu sheet lists the companies to switch between.
+
+## Menu map (what is where)
+
+Only pages the person is allowed to open are shown. Permission in brackets.
+
+| Menu | Where | What it is for |
+|---|---|---|
+| Home | tab bar | Greeting, today's sales card, "At a glance" (dues, cash and bank, low stock, open LCs), quick jobs, short lists |
+| Sales | tab bar (`trade.sales`) | List of Delivery Challans; write a new one; open one to print, receive money or cancel |
+| Stock | tab bar (`trade.stock`) | Items and how many are left; add an item with opening stock; correct a count |
+| Dues | tab bar (`trade.dues`) | Buyers who owe money; receive money |
+| Reports | Menu → Accounts and reports (`trade.reports`) | Nine reports, each on screen, Print, PDF, Excel |
+| Cash book | Menu → Accounts and reports (`trade.cashbook`) | Day or month view of money in and out; bank deposit, pay a supplier, other cost, receive money |
+| Balance sheet | Menu → Accounts and reports (`trade.cashbook`) | Simple balance sheet |
+| Cash and bank accounts | Menu → Accounts and reports (`trade.money_accounts`) | Cash box and bank accounts with their balance; add one with its opening money |
+| Goods in | Menu → Import and goods (`trade.purchases`) | Enter a purchase; press "Goods arrived" when the goods are in the shop |
+| LC files | Menu → Import and goods (`trade.lc`) | One file per import: details, stage, the five papers, landed cost |
+| Serial numbers | Menu → Import and goods (`trade.lc` or `trade.sales`) | Serial number of each machine: in the shop, or which challan and buyer |
+| Bring in old data | Menu → Setup (`trade.import`) | Upload old buyers with dues and old items with stock (CSV or Excel) |
+| Business profile | Menu → Setup (`trade.profile.manage`) | Addresses, TIN / BIN / IRC, bank accounts, signatory, letterhead |
+
+## First-time setup (do in this order)
+
+1. **Business profile**: company name, the two addresses (registered trade address and factory/letterhead address), TIN, BIN, IRC, bank accounts, signatory name and title, letterhead. The challan and the import papers print from these. The company has two BIN numbers in the sample papers (challan vs import papers); the profile keeps them separately, so check each one with the owner.
+2. **Cash and bank accounts**: add the cash box and each bank account, with the money in it at the start. Without this the cash book and the "Where the money went" choice on a challan have nothing to pick.
+3. **Bring in old data** (only if there is an old register): buyers with the old dues they owe, and items with the stock in hand. Upload a CSV or Excel file. Items without a code get a code starting `TRD-` plus the name.
+4. **Stock**: add any item that is not there yet (name, unit, opening stock).
+
+## Daily jobs, step by step
+
+### A. Sell something (write a Delivery Challan)
+1. Sales → new challan (the "write" button above the list).
+2. **Challan and buyer**: the SL no. is filled with the next number of the paper pad; change it if the pad is at another number. Date (cannot be in the future). Pick the buyer from the list, which fills name, phone and address; or leave the list empty and type a new buyer's name.
+3. **Goods**: one line per thing on the challan. Pick the item from stock so the stock goes down. Write description, quantity, unit, **price per unit** and remarks. Put a price only on lines sold for money; things given free with a machine need no price. The form shows the total.
+4. **Money**: advance (amount, date, note), cash paid (amount, date). If anything was paid, you must choose **Where the money went** (cash box or a bank account) so it shows in the cash book. Cheque no. and cheque bank if paid by cheque. "When the due will be paid" for terms such as "within the next 2 months". The form shows **Due = total − advance − cash**.
+5. **Signed by**: name, designation, phone (filled from the profile; collapsed).
+6. Save. Stock goes down, the due goes to the buyer's balance (it appears in Dues).
+7. On the challan's page: **Print** (A4 on the shop's letterhead like the paper pad), **Receive money**, **Cancel**.
+- A saved challan **cannot be edited**. To fix a mistake, Cancel it and write a new one.
+- Only items without variations and not "coming soon" appear in the item list. If an item is missing, add it in Stock first.
+
+### B. Receive money later
+Dues → find the buyer → Receive money, choose the challan (or the old due), amount, and where the money went. Or open the challan → Receive money. It shows in the cash book.
+
+### C. Goods arrive in the shop (buy)
+1. Goods in → new purchase: supplier (type a new supplier name with the + if needed), date, LC no. (optional), items with quantity and **buying price per unit**.
+2. Switch "The goods are already in the shop" **on** if they are already here (stock goes up now). Leave it **off** and press **Goods arrived** on the purchase later (stock goes up then). The button asks for confirmation and lists the items.
+- Landed costs (duty, freight etc.) are not entered here; they go in the LC file's landed cost worksheet.
+
+### D. Count correction
+Stock → open the item → Correct count, and enter the real number.
+
+### E. Money in and out (Cash book)
+Cash book → choose Day or Month. Buttons: **Bank deposit / move money**, **Pay a supplier**, **Other cost**, **Receive money** (goes to Dues). Pick the account each time. The balance sheet page summarises cash, bank, stock value, money owed to the shop and money the shop owes.
+
+### F. An import on LC (the longest job)
+1. First enter the PI as a purchase in **Goods in** (supplier, items, quantity). Do not press Goods arrived yet.
+2. LC files → new: choose that purchase. Fill the form in its sections: Purchase and PI (PI no. and date, LC value in USD, delivery terms, description of goods, "goods are used machines" switch, country of origin); Supplier; LC and bank (LC no. and date, opening bank, account, margin %, margin paid, the bank's trade office and BIN; you can fill the account from the Business profile); Insurance and inspection (insurance company, **marine cover note no. and date**, inspection agency and date); Shipment (ports, vessel, ETD / ETA, bill of lading, container, seal, packages, weights in KGS and CBM — weights belong to this shipment only); Shipping papers (commercial invoice no. and date, dates of the certificate, packing list, shipment advice, DRL); and **Where it stands**.
+3. **Stages** run in this order: PI received → LC opened → Under inspection → On vessel → Port clearance → Cleared. On the file's page use "Move to" for the next stage.
+4. **Documents at the bank** status: Awaiting docs, Discrepancy pending, Released (exact list is in the LC file form).
+5. The file's page prints five papers as A4 PDFs: **LC Opening Letter, Beneficiary's Certificate, Detail Packing List, Shipment Advice, Discrepancy Release Letter (DRL)**. If a paper still has empty required fields (for example the marine cover note no. and date for the Shipment Advice), the page shows an error listing exactly what is missing. Fill those fields in the LC file (edit) and print again.
+6. **Landed cost** (page of the LC file, `trade.landed_cost`): add cost lines (customs duty, insurance, C&F, truck fare, loading, etc., each with its source such as "C&F agent"), set the bank rate, see cost per unit and per item, then **Apply to stock buying price** when the figures are final.
+7. **Serial numbers** of machines are written on the LC file page; they can be chosen on a challan so each machine is tracked to its buyer.
+8. When the goods arrive, press **Goods arrived** on the purchase in Goods in.
+
+### G. Reports
+Reports → pick a tile → set the period (from / to) → read it on screen (table on a laptop, cards on a phone) or press **Print**, **PDF**, **Excel**. The nine reports: Daily sales, Monthly sales, Dues by age, Stock ledger, Owed to suppliers, Cash and bank, LC status, Landed cost per shipment, Shipment advice register.
+- **Print** uses the portal's language (Bangla prints correctly; use the browser's "Save as PDF" to keep it).
+- **PDF** is always in English (the PDF maker cannot shape Bangla).
+- **Excel** has real numbers.
+
+## Permissions (what each does)
+
+`trade.access` open the portal · `trade.profile.manage` edit the Business profile · `trade.sales` challans · `trade.purchases` Goods in · `trade.stock` Stock · `trade.dues` Dues · `trade.import` old data · `trade.lc` LC files and the five papers · `trade.reports` Reports · `trade.landed_cost` landed cost · `trade.cashbook` cash book and balance sheet · `trade.money_accounts` cash and bank accounts.
+The Super Admin edits these under Users → Roles in the ERP.
+
+## When the user is stuck — common cases
+
+| What the user says | Likely reason and what to tell them |
+|---|---|
+| "I can't sign in / wrong page" | Sign in at `https://app.zamzamint.com/trade` with the ERP email and password. If it says no access, the account lacks `trade.access` or the company's Trade Portal is switched off. Ask the Super Admin. |
+| "A menu is missing" | Their role lacks that permission (see table). Ask the Super Admin. |
+| "I see the wrong company / another company's name" | Open the Menu sheet and pick the company from the company list (shown only to people who may open more than one). |
+| "The item is not in the challan's item list" | It is missing from Stock, has variations, or is marked coming soon. Add it in Stock. |
+| "I wrote a wrong challan" | A challan cannot be edited. Open it → Cancel → write a new one. After cancelling, check Stock, Dues and the cash book to confirm the figures look right. |
+| "It asks 'Where the money went'" | Because an advance or cash amount is entered. Pick the cash box or bank account. If the list is empty, add accounts in Cash and bank accounts first. |
+| "A paper won't print, it lists missing fields" | Open the LC file → Edit → fill the listed fields → print again. |
+| "Bangla looks broken in the PDF" | The PDF button is English only. Use **Print** and save as PDF from the browser. |
+| "Stock did not go up" | The purchase is still "Waiting". Press **Goods arrived** in Goods in. |
+| "A red message appears after pressing a button" | The system refused the action for a business reason (for example not enough stock). Read the message to the user and explain; do not retry blindly. |
+| "The page is blank / error 500" | Note the time and what was pressed and tell the Super Admin. |
+
+## Facts that must not be guessed
+
+- Challans, purchases and LC files are created in the portal but are ordinary ERP records: the Super Admin can see them in the ERP too.
+- Stock goes down when the challan is saved, and up when a purchase is marked arrived (or created with "already in the shop" on).
+- The portal never shows another company's data.
+- Users cannot delete records. If test or wrong records must be removed, the Super Admin asks the developers.

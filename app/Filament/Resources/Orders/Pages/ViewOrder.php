@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Orders\Pages;
 
 use App\Filament\Resources\Orders\Actions\ChangeOrderWorkflowAction;
 use App\Filament\Resources\Orders\Actions\CourierBookingFeedback;
+use App\Filament\Resources\Orders\Actions\EmailCustomerAction;
 use App\Filament\Resources\Orders\Actions\PutReturnedGoodsBackInStockAction;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Models\CourierBooking;
@@ -71,6 +72,7 @@ class ViewOrder extends ViewRecord
                 ->visible(fn (): bool => $this->nextOrderId() !== null)
                 ->url(fn (): string => OrderResource::getUrl('view', ['record' => $this->nextOrderId()])),
             ChangeOrderWorkflowAction::make(),
+            EmailCustomerAction::make(),
             PutReturnedGoodsBackInStockAction::make(),
             ...$this->resellerOwnCourierActions(),
             Action::make('bookCourier')

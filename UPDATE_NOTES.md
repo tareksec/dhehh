@@ -2,7 +2,7 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-24 - Trade Portal: command to remove Tasneem's QA test data
+## 2026-10-24 (latest) - Trade Portal: command to remove Tasneem's QA test data
 
 Owner's cleanup list: the Trade Portal has no delete buttons, and the QA records of 23 Oct (all named `TEST-…`: 3 challans, TEST-Customer-001, 5 products, the TEST-Supplier-001 purchase with LC file TEST-LC-001, 2 serials, 6 cash book entries, the TEST-Expense-001 category) are still in the live company "Tasneem Knitting industry".
 
@@ -10,7 +10,249 @@ What I did: built `php artisan trade:remove-test-data {company-slug}` instead of
 
 Not done yet: **running it on the live server.** That is a permanent delete on production, so it waits for the owner's go. Steps on the server (Coolify terminal of the app): `php artisan trade:remove-test-data <tasneem-slug>` (read the list), then the same with `--apply`, then check the expected state in the owner's list (dues ৳31,490,000 over 21 customers, challans 004–025, Bkash ৳10,000, Brac Bank ৳0).
 
-Commit status: committed and pushed to `feature/trade-portal-test-data-cleanup`; not on `main`.
+Verified: `TradeTestDataCleanupTest` (4: dry run changes nothing; apply removes the test records and leaves the real sale, purchase, stock, dues and the opening balances; refuses when mixed; another company untouched). Full suite before the merge with main: 3194 passed, 5 failed — all in `SesTrackingTest`, because this computer's PHP cannot sign test certificates (`openssl_csr_sign`, no openssl config); not related to this change.
+
+Commit status: committed on `feature/trade-portal-test-data-cleanup`, merged with `origin/main`, pushed to `main` on the owner's approval ("afetr all main a push kore dio"). Not yet run on the live server.
+
+## 2026-10-24 - Email Templates
+
+Owner (Bangla): "Email template তৈরির জন্য কিছুতো এড করো নাই". I asked what she wanted; answers: both fixed-message templates (like SMS Templates) and her own templates; order emails to customers, login code and password reset, and investor (IMS) emails; a branded HTML look.
+
+**What I did:** a new page **Settings → Email Templates** (`App\Filament\Pages\EmailTemplates`) with four tabs (Order emails, Codes & password reset, Investor emails, My templates), each message with subject, text, placeholders, Use suggested wording, Preview and Send a test. Table `email_templates`. `EmailTemplateService` renders and wraps in a branded layout (`resources/views/emails/branded.blade.php`). Order emails (`OrderStatusEmailService`, `SendOrderEmailJob`) are the twin of the status SMS with the same stages and exclusions and send nothing until a stage has a text. Login code, reseller reset, IMS join code, investor reset, invitation and IMS news use her template when written and otherwise the old plain mail unchanged. "Email the customer" on an order sends one of her own templates. Details in `CHANGELOG.md` and `docs/email-templates.md`.
+
+**Decisions I took without asking (say if you want them different):** (1) an order email is never sent for a stage with no text, as with SMS; (2) the order's own site's email account sends it, else the company's main site; (3) the layout colour is the main site's theme colour and the logo is the Company Settings logo; (4) the owner's own templates are used from the order page only for now (not bulk, not marketing); (5) the owner digest email and the test email are not templated; (6) one text per message, in the language she writes it (no per-language copy).
+
+**Checked:** `EmailTemplatesTest` (26 tests) and `TranslationParityTest`; the branded email rendered and looked at in a browser at phone and desktop width. The Email Templates page itself was not looked at in a browser, and nothing was sent through a real Amazon SES account: send a test from the page after deploy. Known limit: while Amazon SES is in its sandbox an order email only reaches a verified address.
+
+**Needs Bangla review (`lang/bn.json`):** the 61 new keys, in particular "Email Templates" = "ইমেইল টেমপ্লেট", "Order emails", "Codes & password reset", "Investor emails", "My templates", "Email the customer" = "কাস্টমারকে ইমেইল করুন", and the long explanations on the page.
+
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` on the owner's approval ("মেইনে পুশ কর").
+
+## 2026-10-24 (previous) - Amazon SES page: phone layout
+
+Owner (Bangla, with two phone screenshots): "Amazon SES পেজের মোবাইল ওরিয়েন্টেশন ঠিক নেই, মোবাইলের লেআউট ঠিক কর", and use all the design skills.
+
+**Cause:** Filament puts a section's title and its `afterHeader` button in one row (`flex items-start gap-3`, title `flex-1`). On a phone the long button label won; the title column shrank to a single word. The domain and blocked-address rows were `flex-wrap` with `ms-auto` on the button, so the pieces landed on uneven lines.
+
+**What I did:** `resources/views/filament/pages/amazon-ses.blade.php` (rows, checklist, account grid) and `resources/css/filament/admin/theme.css` (a `zz-ses` block; header stacks under 40rem). Followed the Web Interface Guidelines (the installed `web-design-guidelines` skill; it was the only design skill in this session): no sideways scroll, text containers that break long names, `min-w-0` flex children, `text-wrap: balance` on titles, touch targets of 44px, `touch-action: manipulation`, icons with a text for screen readers, tabular numbers for the figures, a focusable scrollable policy box.
+
+**Verified:** rendered the real page through Livewire with faked AWS data (five domains incl. one waiting for DNS, a bounced address with a very long name) into the built theme CSS and looked at it with Playwright at 320, 390 and 1280 px, light and dark. `scrollWidth` equals the viewport everywhere. The real panel shell (sidebar, top bar) and Livewire/Alpine were not part of that preview. `AmazonSesPageTest` (+1), `TranslationParityTest`.
+
+Needs Bangla review (`lang/bn.json`): "Not checked yet" = "এখনো যাচাই করা হয়নি".
+
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` together with the Email Templates work, on the owner's approval.
+
+## 2026-10-24 (previous) - AI guides for the three portals
+
+Owner (Banglish): write documents for the Trade Portal and the IMS (Office and Investor) that an AI can read from a link, so non-technical users who get stuck can give the link to an AI and be guided. Not for people to read; no need to be short.
+
+**What I did:** `docs/ai-guides/` with `README.md` (portals, rules for the AI), `trade-portal.md`, `ims-office.md`, `ims-investor.md`. Written from the code (navigation classes, resources, panel providers, permissions doc), not from memory.
+
+**Not verified:** I could not sign in to the live sites, so no screen was compared with the guide. Parts taken from the plans rather than code: the IMS daily/monthly job times, default role table (`IMS-V2/ROLES.md`), investor sign-in/OTP wording. The Bangla menu words are not listed (only the English names) so nothing is invented.
+
+**Made public (owner request, Banglish: "make it public with a URL"):** the files moved to `public/ai-guides/*.txt` (plain text, so every AI can open them) and are served straight by the web server at `https://app.zamzamint.com/ai-guides/<name>.txt`, no login. They contain no secrets, only menu names and rules; the risk is limited to outsiders learning how the screens work. Keep real data out of them. They appear only after Coolify deploys `main`.
+
+Commit status: committed on `feature/ai-guide-public` and pushed to `main` on the owner's approval ("make it public").
+
+## 2026-10-24 - One-time codes work for three minutes at most
+
+Owner (Bangla): "keep the OTP code's validity at three minutes at most".
+
+**Found:** shop customer sign-up code 10 minutes and login code 10 (`CustomerAccountService`, the login one was a bare `10`), password-reset SMS code 15, IMS join code 10 (`InvestorOtpCode::VALID_MINUTES`), investor e-mailed reset code 10 (`EMAIL_CODE_VALID_MINUTES`); the investor SMS code was already 1 minute.
+
+**What changed:** one limit, `App\Support\OtpLifetime::MAX_MINUTES = 3`; every lifetime constant points at it (new `LOGIN_CODE_MINUTES` and `RESET_CODE_MINUTES` replace the bare numbers). The wording that told the user "10 / 15 minutes" (Blade storefront OTP and reset pages, login e-mail, reseller Apply and forgot-password, IMS JoinWithInvite) now reads the constants, so it cannot drift again. `docs/api/storefront-api.md`, `PROJECT_GUIDE.md` and the investor plan say 3 minutes. The reseller reset **link** (60 minutes, sent by staff) is not a code and was left alone: say if it should be shortened too.
+
+**Needs Bangla review (lang/bn.json):** three keys changed from a fixed number to `:minutes` ("The 6-digit code sent by SMS to :phone. It expires in :minutes minutes.", the reseller Apply one and "We sent a code to :contact. It works for :minutes minutes."). The Bangla text now shows the number in Latin digits (3), like the existing "We sent the code by SMS..." key. SMS wording the owner wrote on SMS Templates is the owner's own: if a template says "valid for 10 minutes", edit it.
+
+**Verified:** `OtpLifetimeTest` (new, 5), `Ims\OnboardingTest`, `Ims\EmailPasswordResetTest`, `StorefrontCustomerAuthTest`, `ResellerPortalPasswordResetTest`, `TranslationParityTest`; full `php artisan test` before the push.
+
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("ওকে ঠিক আছে, মেইন এ পুশ কর").
+
+## 2026-10-23 (previous) - Amazon SES: removing a domain or address is for a super admin only
+
+Owner (Bangla): "ডোমেইন মোছা শুধু সুপার অ্যাডমিনের জন্য করে দাও". This settles the open question from the several-companies-on-one-AWS-account work.
+
+**What I did:** the Remove button on Settings → Amazon SES shows only to a super admin (`canRemoveDomains()`); the `deleteIdentity` action refuses anyone else on the server before any AWS call, also for the company's own domain. Everyone else sees one line: "Only a super admin can remove a domain or address." Adding a domain or address, the suppression list and the tracking switch are unchanged (not asked). `docs/email-ses-setup.md` says so.
+
+**Verified:** `AmazonSesPageTest` (16) and `TranslationParityTest`. Not looked at in a browser.
+
+Needs Bangla review (`lang/bn.json`): "ডোমেইন বা ঠিকানা শুধু সুপার অ্যাডমিন মুছতে পারেন।" (replaces the old "not one of this company's domains" message).
+
+Commit status: committed on `ccr-3799b463-p4pv7n`, merged with `origin/main` and pushed to `main` on the owner's approval ("মেইনে পুশ কর").
+
+## 2026-10-23 (next) - Login codes (OTP) failed while order status texts worked
+
+Owner (Bangla), with a screenshot of Logs → SMS: "OTP messages do not come. Order status messages come." The screenshot showed two `Not sent: gateway` rows (15:08, 15:25) of kind "Other messages (login codes...)" for 01728714614, reason "The SMS gateway URL has no {phone} or no {message}", and the earlier test SMS (13:16) as Sent.
+
+**Cause:** SMS settings are saved per site (Blade storefront, Next.js site). Order texts pick the order's site, then the primary site, then the other, by "has a gateway", so they used the fixed one. A login code uses the site the visitor is on (the Blade storefront login, the reseller panel's forgot-password), and that site's setting still had the example words (`number=Receiver`). Nothing in the owner's view said which site was broken: the dashboard warning read only the primary site.
+
+**What changed:** `StorefrontNotificationService::workingGateway()`: a site whose saved gateway address cannot work now sends through the company's other site that has a working one (same rule order texts already followed). A site with no gateway keeps SMS off. `sendSmsDetailed(..., ownGatewayOnly: true)` is used by **Send test SMS**, so the test still checks the site being edited. `SmsTemplateService::gatewayFor()` prefers a site that can send. The SMS Log reason now names the site. I could not read the production database, so the two-site cause is inferred from the screenshot, not confirmed: if the company has only one site, the broken address is on that one and Save on Integrations fixes it (the page tidies it on save).
+
+**Needs Bangla review (lang/bn.json):** the changed key "The SMS gateway URL of the site named in the brackets has no {phone} or no {message}..." (the old key without "of the site named in the brackets" is gone).
+
+**Verified:** `SmsDashboardTest` (+3: fallback both ways, test button does not borrow, gatewayFor prefers a usable site), SMS and OTP related tests; full `php artisan test` before the push.
+
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
+
+## 2026-10-23 - Advanced backups, Phase 6: Cloudflare R2 off-site copy, an R2 dashboard and a bill estimate
+
+Reason - owner (Bangla): asked how to set up the Shared Drive; the answer was that Shared Drives need paid Google Workspace, and the owner replied "no workspace, upload to R2, check what the bill could be there, and build a dashboard page for R2 that shows everything at a glance". This also settles the open question "R2 as an off-site place": it is now the first choice (Drive stays, for anyone who has Workspace).
+
+What changed:
+- **R2 as an off-site place** through the S3 API (`R2BackupService`, `aws-sdk-php` which was already installed): Settings → R2 Backups → Configure (Account ID or endpoint, bucket, folder, Access Key ID, Secret Access Key encrypted, optional dollar→taka rate), **Test connection**, **Back up now**. `BackupDestination` is the shared contract; `OffsiteBackupService` encrypts once and sends the same file to every place that is on, trims each, and lets one place fail without losing the other (reported, noted in the history, its own health card). Only an error when no place got the file.
+- **R2 Backups page** (`R2Backups` + `r2-backups.blade.php`): status, stored size, free-allowance bar, estimated bill this month and when the schedule has filled the bucket, health cards, bill table, growth scenarios (2×/5×/10×) or typical-size examples while there is nothing to measure, copies by type against the keep limits, latest files, latest uploads/tests/failures. The bucket is read from R2 (one list request per 1,000 files), cached 10 minutes, **Refresh** reads again, a failed connection is shown on the page.
+- **Bill estimate** (`R2CostEstimator`): Cloudflare's Standard prices as read from <https://developers.cloudflare.com/r2/pricing/> on 2026-10-23 ($0.015/GB-month, $4.50/M Class A, $0.36/M Class B, free 10 GB / 1 M / 10 M per account, deletes and egress free) in `config/backup.r2.pricing`. Storage is the cost; operations are a few dozen an hour. Examples with the default schedule: 50 MB db + 500 MB archive ≈ 6.4 GB stored = $0.00; 200 MB + 2 GB ≈ 25.6 GB ≈ $0.23/month; 1 GB + 10 GB ≈ 128 GB ≈ $1.77/month.
+- `backup:restore --r2 | --offsite | --drive`, `backup:drill --r2 | --offsite | --drive`; the Sunday restore test checks the R2 copy at 03:50 and the Drive copy at 04:10 (was `--offsite` at 03:50).
+- New column `backup_runs.offsite_to` (migration `2026_10_23_120000`); backup health now has one card per auto-upload place (`offsite-r2`, `offsite-drive`); the `google_drive` key of a backup result is now `offsite`; `DatabaseBackupService::create()` / `AppBackupService::create()` take `$automatic` (a scheduled backup goes only to places with Auto upload on; a person reaches every place that is on, or, with none on, those that are set up); `AppBackupService::create()`'s `uploadToGoogleDrive` argument is now `upload`.
+- Docs: new chapter *Cloudflare R2: the off-site copy* in `docs/backup-restore.md` (setup, what is sent, failure behaviour, cost table, the page, restoring), the Drive chapter says Shared Drives need Workspace, *If the server is gone* covers R2, `docs/deployment.md`, env examples, codebase map.
+
+Decisions that were mine (change them if you disagree):
+- A **bucket of its own and a token limited to it**, not the Cloud Storage media buckets or their keys: the media token should not be able to delete backups, and a leaked backup token should reach nothing else. R2 therefore has its own credentials on its own page; nothing is read from *Cloud Storage*.
+- A blank folder means the default folder `erp-backups`, so the app can never list or trim the top of a shared bucket by accident (`BACKUP_R2_PREFIX=` in the environment can still choose none).
+- R2 comes first when a restore or restore test is not told which place to use.
+- The free 10 GB is account-wide: the estimate counts only the backup folder and says so; if the media buckets are on the same account they use the allowance too.
+- 1 GB is counted as 10⁹ bytes (the higher figure if Cloudflare counts in 1,024s). The bill page leaves out its own list requests (one per refresh).
+
+Verified here:
+- `R2BackupTest` (28) and `R2DashboardTest` (25) with an in-memory bucket (`tests/Support/FakeS3.php`), plus the updated `BackupRestoreTest`, `BackupDrillTest`, `BackupHealthTest`, `OffsiteBackupTest`: pass.
+- **Against a real S3 protocol implementation** (`moto` server, path-style, the app's own client settings): a 200 KB and a 12 MiB (three parts of 5 MiB) upload, listing, trimming that left a foreign file and an object outside the folder alone, download with SHA-256 equal, refusal of a key outside the folder, a missing bucket and an unreachable address with their messages.
+- The part-retry (resume after one failed part) and the abort after three failures are exercised with the in-memory bucket, which rejects the way the SDK's own handlers do; moto was not made to fail a part.
+- **The page in a real browser** (Chromium, the app on a scratch SQLite database, R2 pointed at the local S3 server with 19 sample files and history): configured, not set up (examples), the Configure form, a 390 px phone width and the Backups page. It showed three things the tests had not: the storage price printed as "$0.02" instead of $0.015 (the dollar formatter rounded it; now prices keep their precision and bills show to the cent), a clipped "Succ…" status in the uploads table, and a missing full stop after the price-list link. All three are fixed and covered by a test.
+- Full suite (plain `php artisan test`): 3182 passed, 6 skipped, 0 failed (then the 238 backup, R2, translation, migration and ModuleGuard tests again after small tidy-ups made while it ran).
+
+Not verified: **anything against Cloudflare R2 itself** (no account here): the SDK's checksum options are set the way Cloudflare documents for R2 but only a real bucket proves them; do **Test connection**, **Back up now** and `php artisan backup:drill --r2` once after setting it up. Whether Cloudflare asks for a payment card before R2 can be used at all (the page and docs say "may"); the free-tier numbers and prices come from one reading of the pricing page; multi-gigabyte uploads (parts are 16 MiB, S3 allows 10,000 parts, so the limit is about 160 GB); a phone-sized or dark-mode look of the page beyond one 390 px screenshot (new Tailwind classes need `npm run build`, which the deploy does).
+
+Found while the owner set up their first bucket: Cloudflare's bucket page shows the S3 address with the bucket name on the end (`https://ACCOUNT_ID.r2.cloudflarestorage.com/erpbackup`). Pasted into "Account ID or endpoint address" it would have been used as the endpoint, so files would have gone under `erpbackup/erp-backups/` inside the bucket and the list under `erp-backups/` would have stayed empty. `BackupSettingsService::r2Endpoint()` now keeps only the scheme and host (covered in `test_the_account_id_or_an_address_becomes_the_endpoint`).
+
+Found and left alone: `MoneyFormatter::number($amount, 0)` strips the zeros of whole numbers (`number(180, 0)` gives "18", `number(1200, 0)` gives "1,2") because it trims zeros after `number_format` even when there is no decimal point. No code calls it with 0 decimals today; the R2 page uses 2 decimals to stay clear of it.
+
+Needs Bangla review (`lang/bn.json`, 123 new keys; I am least sure of): "বাকেট" (bucket), "অফসাইট" (off-site), "ফ্রি সীমা" (free allowance), "প্রতি দশ লক্ষ :price" (per million), ":times গুণ বড়" (N times as big), "বন্ধ করা আছে" (switched off), "অটো আপলোড", "লেখা ও তালিকা (Class A)" / "পড়া ও যাচাই (Class B)", and the long explanatory sentences under *What will it cost?*.
+
+Owner still to do: **create the Cloudflare account, the private bucket and the limited API token (steps in `docs/backup-restore.md`), fill them in under Settings → R2 Backups → Configure, press Test connection and Back up now**; keep `BACKUP_ENCRYPTION_KEY` (and a copy outside the server) set, or nothing is uploaded; run `php artisan migrate --force` for `backup_runs.offsite_to`; add a dollar→taka rate if you want the estimate in taka; check the prices on Cloudflare's page and update `backup.r2.pricing` if they changed; decide whether the Cloud Storage (media) buckets share this Cloudflare account, because then they share the free 10 GB. Still open from before: alert channel (Telegram/email), retention numbers, what "hourly" should mean.
+
+Commit status: committed and pushed to the feature branch `ccr-4c1eb24d-2dzxxt` on top of the Phase 5 commit; not on `main` (needs the owner's approval).
+
+## 2026-10-23 - Advanced backups, Phase 5: `backup:restore` and the rebuild runbook
+
+Reason - owner (Bangla) "পরবর্তী কাজ কর" after Phase 4. This is the last phase of the plan. The open questions (R2 as a second off-site place, an alert channel other than Deploy Error Logs + the bell, key custody, retention numbers, hourly semantics) are still unanswered; nothing here depends on them.
+
+What changed:
+- **`php artisan backup:restore {file?} --drive --only= --confirm= --skip-rehearsal --skip-safety-backup --no-migrate`** (`RestoreBackup` over `BackupRestorer`). The file is a name in the backup folders, any path (a `.enc` is decrypted with `BACKUP_ENCRYPTION_KEY` or a typed key), a full app `.zip`, or `--drive` (newest database copy on Drive). Order: read the dump to the end + checksum, try it in a scratch database (the restore test, when set up), show age/target, **ask for the database name to be typed** (`--confirm=NAME` without a keyboard), safety copy (`prerestore`), maintenance mode, empty the database, load, table-count check, `migrate`, `optimize:clear`, back online. **A failed load/check loads the safety copy back and reopens the app.**
+- **Emptying the database first** is deliberate: a dump replaces only the tables it contains, so a table from a newer migration would stay and the next `migrate` would fail with "already exists" (the old manual steps had this flaw; fixed in the guide).
+- **From a full app archive** only `storage/app/public` + `storage/app/private` are copied back (added or replaced, never deleted; `..`/absolute names and linked folders/files refused; `backups` and `livewire-tmp` skipped). Code and `.env` are never overwritten.
+- New backup type **`prerestore`** (latest 5, never sent to Drive); `backup_runs.scope` `restore` (kind `database`/`files`/`both`) written after the restore; the "running" rows every dump carries are removed after a restore. The Backups page labels them ("Restore · Database and files", "Before restore").
+- `DatabaseBackupService::loadDump()` is the loader moved out of the restore test (same code, same messages, restore-test tests unchanged); `BackupRestoreDrill::rehearse()`; `OffsiteBackupService::fetch()` takes a key; `AppBackupService::isExcluded()` public; `BackupRunRecorder::recordFinished()` / `discardUnfinished()`.
+- **Runbook** in `docs/backup-restore.md`: *Restore a backup*, a failure table, *If the server is gone* (what must exist outside the server, getting the secrets back from the archive's `.env`, the two commands), *Restore by hand* (SQLite, MySQL), *What was tested*.
+
+Found by running it for real (not by the unit tests): the first live run **failed its own table-count check** ("325 tables but the dump defines 163") because `Schema::getTables()` with no argument lists every schema the MySQL user can see, not just the application's; the rollback from the safety copy then ran and left the database exactly as it was, which is how the rollback was proved. Fixed (`getTables($schema->getCurrentSchemaListing())`) and covered by a test that counts one database's own tables.
+
+Verified here:
+- `BackupRestoreTest` (47) with the 115 earlier backup, deploy and translation tests: 162 passed.
+- **Against a real MySQL 8.0.46** (MariaDB-style client, the whole ERP schema: 163 tables, 264 migrations; a least-privilege app user): a plain restore (a row added after the backup and a table created after it are gone; Bangla text intact; another database on the same server untouched); the refusals (no file, no `--confirm` without a keyboard, wrong answer, wrong key); an `openssl`-encrypted copy from outside the backup folder; a full archive (database + files), and files only (a changed file restored, a deleted private file back, a newer file kept, the modification time kept); a dump with a broken statement in the middle - stopped by the scratch-database try with nothing touched, and, with that skipped, **rolled back from the safety copy with the app reopened**; an app that was already in maintenance mode stays in it; the prompt (piped answers).
+- Not verified: `--drive` against a real Google Drive (fake in tests), MySQL 8.4, the Docker image, the live server, a restore of a multi-gigabyte dump (the import is streamed and `BACKUP_RESTORE_TIMEOUT` is 3600 s by default, but no big database was tried), and the Coolify terminal as the place to run it.
+
+Known and left alone: the first restore after a long time shows the dashboard "Backup health" card as overdue until the next hourly backup (the restored history is as old as the dump).
+
+Needs Bangla review (`lang/bn.json`): "রিস্টোরের আগে" (Before restore), "ফাইল" (Files), "ডেটাবেজ ও ফাইল" (Database and files).
+
+Owner still to do, on top of the earlier lists: **read "If the server is gone" and check you really have the three things outside the server** (GitHub access, the Drive folder, `BACKUP_ENCRYPTION_KEY`) plus Coolify and DNS logins; do a rehearsal of the real procedure on a spare Coolify app once (the one thing no test here could do); decide the open questions above.
+
+Full suite (plain `php artisan test`): 3125 passed, 6 skipped, 0 failed.
+
+Commit status: committed and pushed to the feature branch `ccr-4c1eb24d-2dzxxt` on top of the Phase 4 commit; not on `main` (needs the owner's approval).
+
+## 2026-10-23 - Advanced backups, Phase 4: restore test, backup health, overdue alert
+
+Reason - owner (Bangla) "ওকে পরবর্তী কাজ কর" after Phase 3. Still no answers to the open questions (alert channel, R2, key custody, hourly semantics); the defaults below are mine and are config values.
+
+What changed:
+- **Restore test (`backup:drill`):** loads the newest `.sql.gz` (or, with `--offsite`, the newest Drive copy after download + decrypt) into a scratch database `backup_drill_{time}_{random}` through the `mysql` client, checks table count against the dump and a non-empty `migrations`, drops the scratch database in a `finally`, and drops leftovers older than a day. Recorded in `backup_runs` as scope `drill` (kind `local` / `drive`) with a note; failure alerts through the existing reporter. Sundays 03:30 / 03:50, only when `BACKUP_DRILL_DB_USERNAME` is set. It needs its own MySQL user: `GRANT ALL ON \`backup\_drill\_%\`.*` only, so it cannot touch the live schema (recipe in `docs/backup-restore.md`).
+- **`BackupHealth` + dashboard card + `backup:check`:** the card (hourly, daily, Drive copy, restore test) is for `backups.manage`; `backup:check` every 30 minutes reports an overdue check once and again every 12 hours; limits `BACKUP_STALE_HOURLY_MINUTES` 150, `BACKUP_STALE_DAILY_HOURS` 30, drill 9 days (warning). "Nothing recorded yet" is *unknown*, not an alarm, until backups are older than the allowed age.
+- **`/health/backups?token=` (`BACKUP_HEALTH_TOKEN`):** 200 / 503 for an outside uptime monitor. **Why it exists:** if the Coolify `schedule:run` task is missing or dead, no backup runs and `backup:check` cannot run either, so nothing inside the app can say so. This address is judged when the monitor asks. Off (404) without a token.
+- New migration `add_offsite_and_note_to_backup_runs_table` (`offsite_at`, `note`); the recorder writes them only when the columns exist, because `deploy:migrate` takes its pre-migration backup before the migration runs. The history page shows restore tests and "Sent to Drive".
+- `DatabaseBackupService::verifyDump()`, `writeOptionFile()` and `binaryExists()` are now public (reused by the drill).
+
+Verified here: `BackupDrillTest` (14), `BackupHealthTest` (17) and the additions to `OffsiteBackupTest` pass with the earlier backup tests and the translation parity test. **Against a real MySQL 8.0.46** (MariaDB 10.11 client, as the image has): the whole ERP schema (162 tables, 264 migrations) was dumped, then restored by a user whose only grant is on `backup\_drill\_%` - passed in 8 s and left no scratch database; a dump with a broken statement, a wrong drill password and a day-old leftover database behaved as designed. The new migration ran on MySQL. The monitor endpoint and the card are covered by feature tests (the sandbox has no `APP_KEY`, so they were not hit by hand).
+
+Not verified: `--offsite` against a real Google Drive (download uses `alt=media`, `supportsAllDrives`; tested with a fake); MySQL 8.4; the Docker image build; anything on the live server; the card's look in a browser (it is a standard stats widget).
+
+Needs Bangla review (`lang/bn.json`): "রিস্টোর টেস্ট", "ব্যাকআপের অবস্থা", "দেরি হয়েছে", "নজর দিন", "সেট করা নেই", and the card sentences ("সর্বশেষ সফল ব্যাকআপটি ছিল :ago (:allowed-এর বেশি আগে)।" and the other ones added in Phase 4).
+
+Owner still to do, on top of Phase 3's list: create the drill MySQL user (SQL in `docs/backup-restore.md`) and set `BACKUP_DRILL_DB_USERNAME` / `_PASSWORD`; set `BACKUP_HEALTH_TOKEN` and **add an outside uptime monitor on `/health/backups?token=…`** (the only protection against a stopped scheduler); `migrate --force` for the new column. Still open: second off-site place (R2), a Telegram / email channel for alerts (today: Deploy Error Logs + bell), `backup:restore` and the runbook (Phase 5).
+
+Full suite (plain `php artisan test`): 3078 passed, 6 skipped, 0 failed (the `InvestorPortalStaffEntryTest` apostrophe flake from Phase 3 did not trigger this run; it is still a latent random failure).
+
+Commit status: committed and pushed to the feature branch `ccr-4c1eb24d-2dzxxt` on top of the Phase 3 commit; not on `main` (needs the owner's approval).
+
+## 2026-10-23 - Advanced backups, Phase 3: encrypted off-site copies on Google Drive
+
+Reason - owner (Bangla) "পরবর্তী কাজ কর" after Phase 2. The owner has still **not** answered the open questions (off-site place, retention numbers, key custody, alert channel, R2 media), so the choices below are defaults I picked and flagged; each is a config value, not a hard-coded rule.
+
+What changed:
+- **Off-site copy:** with Drive enabled and **Auto upload to Drive** on, the hourly database backup, the daily full app backup and the pre-deploy database backup are sent to the Drive folder as part of the same recorded run (`DatabaseBackupService::create(..., $upload)`, `AppBackupService`, `OffsiteBackupService`). `backup:database` got `--upload` / `--auto-upload`; the schedules pass `--auto-upload`; the hourly (and the database-only daily) job now runs in the background with a 60-minute lock. Which kinds go is `BACKUP_OFFSITE_DATABASE_KINDS` (hourly,daily,predeploy) / `BACKUP_OFFSITE_APP_KINDS` (daily). Manual backups go only when asked.
+- **Encryption:** only the Drive copy is encrypted, AES-256-CBC in the `openssl enc -pbkdf2` format, key `BACKUP_ENCRYPTION_KEY` (not `APP_KEY`, which is inside the archive). **Fail closed:** without the key nothing is uploaded and the run fails with a message saying so (`BACKUP_OFFSITE_REQUIRE_ENCRYPTION=false` removes the guard). `backup:decrypt` opens a copy; so does a plain `openssl enc -d ...` (command in `docs/backup-restore.md`). The Backups page shows an **Off-site encryption** line. The previous warning about the plaintext `.env` zip going to Drive no longer applies: it cannot be uploaded unencrypted unless the owner switches the guard off.
+- **Drive retention:** after each upload the folder is trimmed per scope and kind (48 hourly, 30 daily database, 10 pre-deploy, 7 daily archives; `BACKUP_DRIVE_KEEP_*`). Only files named like ours are ever deleted, and with the `drive.file` scope only those the service account created are visible. Old uploads without a kind in the name count as manual (keep 5 for archives, 10 for dumps), so older manual uploads beyond that are removed - say if the owner wants a larger number first.
+- **Chunked upload:** files over 8 MiB go in pieces with `Content-Range`, retried three times after asking Drive how much it holds.
+- **`storage/app/private` is now in the full app archive** (KYC and other private documents; `backups` and `livewire-tmp` excluded). The archive will be bigger by that amount; unknown on the live server.
+- Found while testing: a failed upload used to skip the local `prune()`, so Drive being down would have let local backups pile up; local pruning now runs in a `finally`.
+
+Verified here: `BackupEncryptionTest` (14) and `OffsiteBackupTest` (21) pass together with the 45 existing backup/deploy tests and the translation parity test. The file format was checked against the **real `openssl` command line** in both directions at every block boundary (0 to 5 MB, a passphrase with quotes and Bangla-free unicode); the chunk loop was run through the real HTTP client against a local emulator of Drive's resumable protocol (308 + `Range` with no `Location`, 700 KB in three pieces, identical bytes). Full suite (plain `php artisan test`): 3045 passed, 6 skipped, 1 failed - `InvestorPortalStaffEntryTest` "the preview opens the portal pages...", which passes on its own (18/18) and does not touch backups. Cause found (not fixed, it is not part of this work): the test builds the staff member with `User::factory()` (a random Faker name) and checks the banner with `assertSee(..., false)`, but Blade escapes an apostrophe ("Durward O'Reilly" renders as `O&#039;Reilly`), so it fails whenever Faker picks a name with an apostrophe; passing `true` as the escape argument fixes it.
+
+Not verified: a real Google Drive (no credentials here): the folder listing query (`corpora=allDrives`, `supportsAllDrives`), deleting in a Shared Drive and the permission a service account needs there are written from the API documentation and faked in tests - the first real run should be watched (Backup history and Deploy Error Logs). MySQL 8.4; the Docker image build; anything on the live server; how long a pre-deploy upload takes (it runs inside `deploy:migrate`, so a hanging Drive can delay the deploy command by up to the retry time).
+
+Needs Bangla review (`lang/bn.json`): "ড্রাইভে স্বয়ংক্রিয় আপলোড", "অফসাইট এনক্রিপশন" and the three status sentences "চালু: আপলোডের আগে কপি এনক্রিপ্ট করা হয়" / "বন্ধ: ..." (new in Phase 3), plus the Phase 1 and 2 ones listed below.
+
+Owner still to do: **generate `BACKUP_ENCRYPTION_KEY` (`openssl rand -base64 32`), put it in Coolify AND in a place outside the server** (without it the Drive copies are unreadable); use a **Shared Drive** folder with the service account as Content manager; the Phase 0 checks (`which mysqldump`, `df -h /app/storage`, the `schedule:run` task, database size, redeploy from the `Dockerfile` and `migrate --force`). Still open: second off-site place (R2), alert channel, restore command and automatic restore drill (Phases 4 and 5).
+
+Commit status: committed and pushed to the feature branch `ccr-4c1eb24d-2dzxxt` on top of the Phase 2 commit; not on `main` (needs the owner's approval).
+
+## 2026-10-23 - Advanced backups, Phase 2: hourly + daily schedules, auto upload, backup before migrating
+
+Reason - owner (Bangla) "ওকে পরবর্তী কাজ কর" after Phase 1. The owner still has **not** answered the six open questions or the pre-deploy question from the Phase 1 report, so the choices below are my defaults, each easy to change; please confirm or correct.
+
+What changed:
+- **Hourly:** `backup:database --kind=hourly` at five past every hour (off with `BACKUP_HOURLY_ENABLED=false`). A new file each hour, kept 48 (my reading of "প্রতি ঘণ্টায় আপডেট"; an overwritten single file would lose the good copy if the data went bad).
+- **Daily:** `backup:app --kind=daily --auto-upload` at `BACKUP_SCHEDULE_TIME` (02:00), in the background. The zip holds that day's database backup, so the separate daily database-only job was dropped (two daily dumps would have halved the 30-day history). `BACKUP_DAILY_FULL_APP=false` goes back to the database-only daily job.
+- **"Auto upload daily" works** (it read nothing before): uploads when Drive is enabled and the switch is on; if Drive is not set up the run fails loudly and alerts, the zip stays on the server. `GoogleDriveBackupService::upload()` is now the streamed resumable upload (the old one read the whole zip into memory).
+- **Before migrating:** `deploy:migrate` takes a `predeploy` database backup when migrations are pending. **Decision taken for the owner:** a failed backup is reported to the Super Admins and the migrations still run - the command's rule is that it never stops the app from starting. If the owner wants a failed backup to block the migration, that is a small change here (`DeployMigrate::backupBeforeMigrating`). Until the image has `mysqldump`, every deploy with pending migrations will report this backup as failed - that alert is correct, it is the reminder that backups are not working yet.
+- Full app archives: kind in the name, `.part` + rename, per-kind retention (`BACKUP_APP_KEEP_DAILY` 10, `BACKUP_APP_KEEP_PREDEPLOY` 3, manual `BACKUP_RETAIN_FILES` 10 - my numbers, chosen to keep today's disk use), the database dump is made first, stale `.part` files are cleaned.
+- Bug found and fixed by a test on the way: when adding files to the zip failed, the still-open `ZipArchive` was written later by PHP's garbage collection and left a `.part` file behind; the archive is now discarded (`unchangeAll()`) on failure.
+
+Verified here: backup, deploy-migrate, parity and related tests (45 in the three backup/deploy files) pass; the real `backup:database --kind=hourly` and `backup:app --kind=daily` commands were run against a local MySQL 8.0.46 (a 6.8 MB zip with the daily dump inside, `backup:verify` passed, and it worked although that database had no `backup_runs` table); `schedule:list` shows `5 * * * * backup:database --kind=hourly` and `0 2 * * * backup:app --kind=daily --auto-upload`. Full suite: 3010 passed, 6 skipped, 0 failed (32,053 assertions).
+
+Not verified: a real Google Drive upload (no credentials here; the two-step request flow is tested with a fake); the schedule actually firing on Coolify (needs the `schedule:run` task, see the Phase 1 notes); MySQL 8.4; how big the daily zip is on the live server.
+
+**Warning for the owner before switching "Auto upload daily" on:** the full app zip still contains `.env` (every password and key, `APP_KEY`) **unencrypted**, and it leaves out `storage/app/private`. With the switch on, that zip goes to Drive every day. Encryption (Phase 3) is not built yet. Also: files already on Drive are never deleted yet (no Drive retention), and the Drive folder should be on a Shared Drive (service accounts have no storage quota of their own).
+
+Still open for the owner (unchanged): the off-site place for hourly dumps, retention numbers, the encryption key, the alert channel (Telegram/email), whether R2 media needs its own backup, and the Phase 0 checks on the live server (`which mysqldump`, `df -h /app/storage`, the `schedule:run` Coolify task, database size).
+
+Commit status: committed and pushed to the feature branch `ccr-4c1eb24d-2dzxxt` on top of the Phase 1 commit; not on `main` (needs the owner's approval).
+
+## 2026-10-23 - Advanced backups, Phase 1: a dump that can be trusted every hour
+
+Reason - owner (Bangla): the whole app and the database should be backed up every day, and the database every hour (it holds no images, videos or files, so it is light); asked for a plan building on the early backup work. I read the code and wrote a five-phase plan in the chat (owner approved it: "ঠিক আছে শুরু কর"); this is Phase 1. The owner has **not** answered the plan's six open questions yet (off-site place, retention, "hourly" = a new file each hour, encryption key, alert channel, R2 media), so nothing here depends on them.
+
+What the code review found (all in `CHANGELOG.md` terms): the only schedule was `backup:database` daily at 02:00; the "Auto upload daily" switch is saved but read by nothing; every database backup kept only 10 files (ignoring `BACKUP_RETAIN_FILES`), so hourly backups would have left 10 hours of history and evicted the daily/pre-deploy ones; the MySQL dump was held in memory with a 120 s limit and the password on the command line; no image installs `mysqldump`; nothing recorded or reported a failure; `backup:verify` only knew SQLite.
+
+What changed (Phase 1 only):
+- Backup kinds `hourly | daily | predeploy | manual` in the file name, pruned per kind (`config/backup.php` `database.keep`).
+- MySQL dump streamed through gzip into a `.part` file, renamed only after mysqldump's "Dump completed" line; password via a 0600 option file; `--no-tablespaces`; SHA-256 of the file.
+- `backup_runs` table + `BackupRunRecorder`; Backups page has a **Backup history** section; a scheduled/pre-deploy backup that fails alerts the Super Admins once per run of failures.
+- `backup:database` is a real command (`--kind`, exit code 1 on failure); the daily schedule uses `--kind=daily` and a 30-minute overlap lock (the default 24 h lock would block a day of backups after one killed run).
+- `backup:verify` checks `.sql.gz` dumps (complete, has `migrations`, checksum matches).
+- `Dockerfile` installs `default-mysql-client`; `docs/backup-restore.md` rewritten for kinds, gz restore, retention variables.
+
+Verified here: `BackupRunsTest` (21) + `BackupSystemTest` (11) + translation parity, migration identifier length, ModuleGuard, multi-company isolation, navigation tests pass on PHP 8.4.27; full suite: 2999 passed, 6 skipped, 0 failed (31,996 assertions; run before the last one-line `--default-character-set=utf8mb4` addition, after which the backup, parity and BackupSystem tests were re-run: 34 passed). The new migration also ran cleanly on a real MySQL 8.0.46 database (explicit short index name). The dump was also run end to end against a real local MySQL 8.0.46 with both MySQL's own `mysqldump` and the MariaDB 10.11 client that `default-mysql-client` installs on Debian bookworm (what the `Dockerfile` gets): `caching_sha2_password`, a password full of `" \ # ; $`, Bangla text and a binary column restored with a bare `gunzip -c | mysql` came back identical byte for byte, a wrong password failed cleanly with no file left behind and no password in the message.
+
+Not verified: MySQL **8.4** (production) itself - 8.0.46 was what the sandbox could install; the Docker image build (no Docker daemon here; the `docker-image.yml` workflow builds it); anything on the live server. A first `php artisan backup:database --kind=manual` after the redeploy is the real test.
+
+Found, not fixed (belongs to later phases or needs the owner): (1) the Coolify post-deploy command `deploy:migrate` runs migrations **without** a pre-migrate backup, and `docs/deployment.md`'s "the deploy workflow creates a database backup" describes a server-deploy step that `.github/workflows/deploy.yml` does not have - the `predeploy` kind exists but nothing creates it automatically yet (Phase 2: decide whether `deploy:migrate` should back up first and whether a failed backup may block the deploy); (2) the full app backup still puts `.env` (all secrets) unencrypted in the zip and uploads it to Drive, leaves out `storage/app/private`, and `GoogleDriveBackupService::upload()` loads the whole zip into memory (Phase 3); (3) the Drive folder must be on a Shared Drive or uploads from a service account may fail with "Service Accounts do not have storage quota" (untested).
+
+Needs Bangla review (`lang/bn.json`): "ঘণ্টাভিত্তিক" (Hourly), "ডেপ্লয়ের আগে" (Before deploy), "পুরো অ্যাপ" (Full app), "ডেটাবেজ" (Database), and the two Backups-page sentences (history description, retention description).
+
+Owner / agent still to do (Phase 0, on the live server, in the app's Coolify terminal): `which mysqldump`; `df -h /app/storage | tail -1` (first column `overlay` = backups are deleted on every redeploy); `php artisan schedule:list` and that the Coolify task `php artisan schedule:run` (every minute) exists (the 2026-10-21 note says it was still to be added); database size and the biggest tables. Then redeploy from the `Dockerfile` image and run `php artisan migrate --force`.
+
+Commit status: committed and pushed to the feature branch `ccr-4c1eb24d-2dzxxt` (the branch this session was told to use); not on `main` (needs the owner's approval).
 
 ## 2026-10-23 (navbar) - IMS top bar logo size and per-company logo
 

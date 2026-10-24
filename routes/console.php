@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\User;
-use App\Services\DatabaseBackupService;
 use App\Support\AdminPassword;
 use Database\Seeders\DemoDataSeeder;
 use Illuminate\Foundation\Inspiring;
@@ -47,14 +46,6 @@ Artisan::command('admin:ensure-super {--email=} {--password=} {--name=ZamZam Adm
 
     return 0;
 })->purpose('Create or reset an active Super Admin user');
-
-Artisan::command('backup:database {--connection=}', function (DatabaseBackupService $backups) {
-    $backup = $backups->create($this->option('connection') ?: null);
-
-    $this->info("Database backup created: {$backup['name']}");
-
-    return 0;
-})->purpose('Create a private database backup');
 
 Artisan::command('demo:refresh {--database=}', function () {
     $database = $this->option('database')

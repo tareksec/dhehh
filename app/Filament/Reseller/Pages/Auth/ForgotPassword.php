@@ -22,7 +22,7 @@ use Illuminate\Validation\ValidationException;
 /**
  * "Forgot password?" on the portal sign-in page. Resellers sign in with their
  * phone, so this works like the storefront's own reset (same
- * CustomerAccountService): a 6-digit code by SMS, valid for 15 minutes, then
+ * CustomerAccountService): a 6-digit code by SMS, valid for 3 minutes (CustomerAccountService::RESET_CODE_MINUTES), then
  * a new password. Filament's default e-mail link flow is not used.
  *
  * Only an account that may enter the portal (pending or approved reseller of
@@ -62,7 +62,7 @@ class ForgotPassword extends RequestPasswordReset
                 ->visible($phoneStep),
             TextInput::make('code')
                 ->label(__('Reset code'))
-                ->helperText(fn (): string => __('The 6-digit code sent by SMS to :phone. It expires in 15 minutes.', ['phone' => (string) $this->phone]))
+                ->helperText(fn (): string => __('The 6-digit code sent by SMS to :phone. It expires in :minutes minutes.', ['phone' => (string) $this->phone, 'minutes' => CustomerAccountService::RESET_CODE_MINUTES]))
                 ->required()
                 ->maxLength(10)
                 ->visible($codeStep),

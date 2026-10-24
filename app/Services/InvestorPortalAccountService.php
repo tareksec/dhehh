@@ -12,6 +12,7 @@ use App\Models\StorefrontSetting;
 use App\Models\User;
 use App\Support\LoginClient;
 use App\Support\LoginThrottled;
+use App\Support\OtpLifetime;
 use App\Support\StorefrontApi\Phone;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -36,8 +37,8 @@ class InvestorPortalAccountService
 
     public const CODE_MAX_ATTEMPTS = 5;
 
-    /** A reset code sent by e-mail lives longer than the SMS one, as e-mail can be slow. */
-    public const EMAIL_CODE_VALID_MINUTES = 10;
+    /** A reset code sent by e-mail lives longer than the SMS one, as e-mail can be slow, but never past OtpLifetime::MAX_MINUTES. */
+    public const EMAIL_CODE_VALID_MINUTES = OtpLifetime::MAX_MINUTES;
 
     public function __construct(
         protected StorefrontNotificationService $notifications,
@@ -283,14 +284,21 @@ class InvestorPortalAccountService
             'otp_attempts' => 0,
         ])->save();
 
-        $sent = $this->notifications->sendMailable($setting, $email, new ImsMessage(
-            (string) $company->name,
-            __('Reset your password'),
-            [
-                __('Your password reset code is :code. It works for :minutes minutes and only once.', ['code' => $code, 'minutes' => self::EMAIL_CODE_VALID_MINUTES]),
-                __('If you did not ask for this, you can ignore this e-mail. Your password stays the same.'),
-            ],
-        ), EmailLog::KIND_IMS_CODE);
+        $mail = app(EmailTemplateService::class)->mailableOr(
+            (int) $company->getKey(),
+            EmailTemplateService::INVESTOR_RESET,
+            ['company' => (string) $company->name, 'code' => $code, 'minutes' => self::EMAIL_CODE_VALID_MINUTES],
+            new ImsMessage(
+                (string) $company->name,
+                __('Reset your password'),
+                [
+                    __('Your password reset code is :code. It works for :minutes minutes and only once.', ['code' => $code, 'minutes' => self::EMAIL_CODE_VALID_MINUTES]),
+                    __('If you did not ask for this, you can ignore this e-mail. Your password stays the same.'),
+                ],
+            ),
+        );
+
+        $sent = $this->notifications->sendMailable($setting, $email, $mail, EmailLog::KIND_IMS_CODE);
 
         if (! $sent) {
             $this->clearCode($account);

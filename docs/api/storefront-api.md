@@ -281,7 +281,7 @@ whatsapp_group{url,message}`.
 
 Same rules as the Blade storefront's account pages: the service behind both is `CustomerAccountService`
 (registration reuses the CRM record of the same phone, so earlier orders appear; a wrong password is
-counted per account; a login code is valid for 10 minutes and five tries; a reset code for 15 minutes),
+counted per account; a login code is valid for 3 minutes and five tries; a reset code for 3 minutes. No one-time code lives longer than 3 minutes: `App\Support\OtpLifetime`),
 `StorefrontOrderTrackingService` (the status history) and the review rules below. All of it is switched by
 **Customer accounts** in Storefront Settings (answer `403 customer_accounts_disabled` while off) — except
 order tracking, which works for everyone like the Blade `/track` page.
@@ -313,7 +313,7 @@ per visitor, not per website server.
 history) of the same phone, so the phone is proven first. When the store has an SMS gateway, the first
 `POST /account/register` (no `code`) texts a 6-digit code and answers `202 verification_required`; the
 website asks for the code and sends **the same form again with `code`** → `201` and the token. A wrong or
-expired code is `422 otp_invalid`; five wrong codes or 10 minutes throw the code away. Sending the form again
+expired code is `422 otp_invalid`; five wrong codes or 3 minutes throw the code away. Sending the form again
 without `code` within a minute keeps the code already sent (a "resend" after that sends a new one). With no
 SMS gateway, a brand-new number still signs up in one step, but a number that already has a customer
 record answers `422 verification_unavailable` (also when the SMS could not be sent).

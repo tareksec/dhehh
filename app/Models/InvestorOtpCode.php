@@ -3,10 +3,11 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Support\OtpLifetime;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * A six-digit one-time code (IMS-V2/PRD.md FR-04): 10 minutes, five wrong
+ * A six-digit one-time code (IMS-V2/PRD.md FR-04): 3 minutes at most (OtpLifetime), five wrong
  * tries, 60 seconds between sends. Only the code's hash is kept.
  */
 class InvestorOtpCode extends Model
@@ -15,7 +16,7 @@ class InvestorOtpCode extends Model
 
     public const PURPOSE_INVITE = 'invite';
 
-    public const VALID_MINUTES = 10;
+    public const VALID_MINUTES = OtpLifetime::MAX_MINUTES;
 
     public const MAX_ATTEMPTS = 5;
 

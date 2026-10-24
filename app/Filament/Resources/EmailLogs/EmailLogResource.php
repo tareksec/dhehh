@@ -77,6 +77,8 @@ class EmailLogResource extends Resource
             EmailLog::KIND_IMS_INVITATION => __('Investor invitation'),
             EmailLog::KIND_IMS_MESSAGE => __('Investor message'),
             EmailLog::KIND_OWNER_DIGEST => __('Owner daily digest'),
+            EmailLog::KIND_ORDER => __('Order email'),
+            EmailLog::KIND_TEMPLATE => __('Email from a template'),
             EmailLog::KIND_TEST => __('Test email'),
             EmailLog::KIND_OTHER => __('Other email'),
         ];

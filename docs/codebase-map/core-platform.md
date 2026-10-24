@@ -1,8 +1,8 @@
 # Core Platform
-> Last checked: 2026-10-24, branch `feature/trade-portal-test-data-cleanup` (Trade Portal test-data cleanup command)
+> Last checked: 2026-10-24, branch `feature/trade-portal-test-data-cleanup` (Trade Portal test-data cleanup command), merged with main (advanced backups Phase 6, Cloudflare R2)
 
 ## What it does
-The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and five distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal, Trade Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated backups to Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
+The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and five distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal, Trade Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated encrypted backups to Cloudflare R2 and/or Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
 
 ## Where to start
 - `app/Models/Concerns/BelongsToCompany.php` — Trait that automatically assigns the active company ID on model creation and registers `CompanyScope`.
@@ -27,6 +27,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Models/AppSetting.php` | Global system key-value storage with optional string encryption. |
 | `app/Models/DeploymentError.php` | Persistent log of caught deployment, migration, or module runtime errors. |
 | `app/Models/AuditLog.php` | Security audit trail recording model mutations, user actions, and IP addresses. |
+| `app/Models/BackupRun.php` | One backup attempt (scope database/app, kind hourly/daily/predeploy/prerestore/manual, status, file, size, SHA-256, error, `note`, `offsite_at` = when the off-site copy arrived, `offsite_to` = which places got it, e.g. `r2,drive`), a restore test (scope `drill`, kind `local`/`drive`/`r2`) or a restore (scope `restore`, kind `database`/`files`/`both`). Global, no `company_id`. |
 
 ### Concerns & Scopes
 | Path | What it does |
@@ -45,10 +46,22 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Services/CompanyDataMigrationService.php` | Exports and imports tenant-specific datasets across installations. |
 | `app/Services/CompanyDeletionService.php` | Safely purges or soft-deletes company data while enforcing integrity constraints. |
 | `app/Services/StorageSettingsService.php` | Configures S3, Cloudflare R2, and local filesystem credentials. |
-| `app/Services/BackupSettingsService.php` | Manages scheduled database backup schedules and retention rules. |
-| `app/Services/DatabaseBackupService.php` | Dumps database tables and compresses backups locally. |
-| `app/Services/GoogleDriveBackupService.php` | Uploads compressed database backups to Google Drive storage. |
-| `app/Services/AppBackupService.php` | Coordinates local backup creation, cleanup, and cloud synchronization. |
+| `app/Services/BackupSettingsService.php` | Backup settings that the admin can change on the Backups / R2 Backups pages: Google Drive (service account JSON encrypted) and Cloudflare R2 (`r2Account()` → `r2Endpoint()`, bucket, folder prefix, keys with the secret encrypted, dollar→taka rate); a saved value wins over the `BACKUP_R2_*` environment. |
+| `app/Services/DatabaseBackupService.php` | Database backups by kind: SQLite copy or MySQL `mysqldump` streamed through gzip (`.sql.gz`, atomic rename, SHA-256), per-kind `prune()` (also when the upload failed), `verifyRestore()` for SQLite and `.sql.gz`; `create($connection, $kind, $upload, $automatic)` sends the new file off-site inside the same recorded run; `loadDump()` streams a `.sql.gz` through the `mysql` client into a database (used by the restore test and by `backup:restore`). |
+| `app/Services/BackupRunRecorder.php` | Wraps a backup in a `backup_runs` row; recording errors never stop a backup; first failure of a scheduled kind alerts Super Admins via `DeploymentErrorReporter`. `recordFinished()` writes a run after the fact (a restore replaces the table) and `discardUnfinished()` drops the "running" rows a restored dump carries. |
+| `app/Services/BackupDestination.php` | The contract of an off-site place (`key()`, `label()`, `isEnabled()`, `autoUploadEnabled()`, `isConfigured()`, `assertReady()`, `upload()`, `listBackupFiles()`, `download()`, `delete()`), implemented by Google Drive and Cloudflare R2. |
+| `app/Services/R2BackupService.php` | Cloudflare R2 through the S3 API (`aws-sdk-php`, path-style endpoint, region `auto`, checksums only when required): one request for a small file, parts with resume and abort for a big one, stored size checked, listing limited to the folder, download to disk, delete; refuses ids outside the folder; `testConnection()`; errors explained in words. `withClient()` swaps the client (tests). |
+| `app/Services/R2UsageReport.php` | What is in the R2 backup folder (count, bytes, groups by scope and kind, latest files, other files), kept for 10 minutes in the cache; a failed read is a state, not an exception. |
+| `app/Services/R2CostEstimator.php` | The estimated R2 bill from `backup.r2.pricing`: `bill()` (storage, Class A, Class B, free allowance, taka), `operationsPerUpload()`, `monthToDate()` from `backup_runs`, `forecast()` of the full schedule, `scenarios()` (1×/2×/5×/10×), `example()` with typical sizes. |
+| `app/Services/GoogleDriveBackupService.php` | Google Drive service-account client (a `BackupDestination`): `upload()` (backup files) and `uploadStream()` (any file into a named folder) use the resumable upload, in 8 MiB pieces with retry for big files; `listBackupFiles()`, `download()` and `delete()` for the backup folder; access token cached per instance. |
+| `app/Services/OffsiteBackupService.php` | The off-site copy to every place that is on (R2 first, then Drive): `all()` / `destinations()` / `autoDestinations()` / `destination($key)`, `shouldAutoUpload($scope, $kind)` (some place on with Auto upload + kind in `backup.offsite`), `send($path, $automatic)` (refuses unencrypted unless `backup.offsite.require_encryption` is off; encrypts once to a staging file, uploads to each place, one place failing does not stop the other and is reported as `backup:offsite:{key}`, an error only when none got it), `latestDatabaseDump($place)` / `fetch()` (restore and restore test), `prune()` / `pruneDestination()` (the newest `backup.offsite.keep` copies per scope and kind, only files named like our backups; a failure is reported as `backup:offsite-prune`, never fails the backup). |
+| `app/Services/BackupRestoreDrill.php` | The restore test: verifies the newest dump (or the newest R2 / Drive copy, downloaded and decrypted), loads it through the `mysql` client into a scratch database `backup_drill_{time}_{random}` on the limited `backup_drill` connection, checks table count and `migrations`, always drops the scratch database, removes day-old leftovers; recorded as scope `drill`, kind `local` / `drive` / `r2`. |
+| `app/Services/BackupRestorer.php` | `backup:restore`'s engine: `prepare($file, $offsite)` (file / path / newest R2 or Drive copy, decrypts `.enc`, takes the dump out of a `.zip`), `check()`, `rehearse()` (scratch-database try via the restore test), `restore()` = safety copy (`prerestore`), maintenance mode, wipe, `loadDump()`, table-count check, migrate, caches, back online; rolls the safety copy back when the load fails; copies only `storage/app/public` + `storage/app/private` from an archive (zip-slip and links refused, nothing deleted); file lock against two restores; MySQL/MariaDB only. Every database / machine step is a small protected method for tests. |
+| `app/Services/BackupRestoreException.php` | A restore that failed after changing the database: `rolledBack` true / false / null and the `safetyFile`. |
+| `app/Services/BackupHealth.php` | Is each backup fresh? Checks (hourly, daily, one "Copy on …" per off-site place with Auto upload on, restore test) from `backup_runs` against `backup.health` limits; states ok / warning / danger / unknown and `overall()`. Used by the dashboard card, `backup:check` and `/health/backups`. |
+| `app/Services/BackupEncryptor.php` | Streams a file through AES-256-CBC in the `openssl enc -pbkdf2 -iter 100000 -md sha256` format (decryptable with plain `openssl`); key `BACKUP_ENCRYPTION_KEY` (not `APP_KEY`); wrong key / truncated / foreign files are refused and leave no output. |
+| `app/Services/AppBackupService.php` | Full app zip `app-backup-{date}-{kind}.zip` (files + a database backup of the same kind, made first), written to `.part` then renamed, per-kind `prune()`, optional encrypted off-site copy (`OffsiteBackupService`); records an app run. |
+| `app/Services/BackupFiles.php` | Deletes stale `.part` leftovers of killed backups from a backup folder. |
 | `app/Services/AppReleaseStateService.php` | Tracks release versions, deployment tags, and migration readiness. |
 | `app/Services/AppUpdateService.php` | Manages application update checks, Git pulls, and cache refreshing. |
 | `app/Services/AppUpdatePushService.php` | Dispatches deployment update notifications to administrators. |
@@ -120,7 +133,9 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Filament/Pages/CompanySettings.php` | Settings page for company profile, logo, timezone, currency, and address. |
 | `app/Filament/Pages/CloudStorageSettings.php` | Configures S3/R2 storage disks and credentials. |
 | `app/Filament/Pages/CoolifyDeploymentSettings.php` | Configures Coolify webhook deployment settings. |
-| `app/Filament/Pages/Backups.php` | Interface for manual database backups and download history. |
+| `app/Filament/Widgets/BackupHealthWidget.php` | Dashboard card "Backup health" for people who manage backups (`GuardsWidgetRendering`); one stat per `BackupHealth` check. |
+| `app/Filament/Pages/Backups.php` | Backups page: Drive settings, a Cloudflare R2 status section linking to the R2 page, full app and database backup lists (with kind), Backup history from `backup_runs` (restores, restore tests, "Sent to …"). |
+| `app/Filament/Pages/R2Backups.php` | R2 Backups dashboard (Settings cluster, `backups.manage`): status, stored size, free-allowance bar, estimated bill now and when the schedule has filled the bucket, health cards, bill table, growth scenarios / examples, copies by type, latest files, recent uploads; actions Refresh, Test connection, Back up now, Configure (account, bucket, folder, keys, rate). View: `resources/views/filament/pages/r2-backups.blade.php`. |
 | `app/Filament/Pages/AppVersions.php` | Shows current system version, commit, and update readiness. |
 | `app/Filament/Pages/ReleaseNotes.php` | Displays published software update release notes to users. |
 | `app/Filament/Auth/AdminLogin.php` | Custom Filament login page integrated with `LoginGate` and company detection. |
@@ -133,6 +148,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Http/Controllers/Admin/CompanySwitchController.php` | Handles admin switching active tenant context via session. |
 | `app/Http/Controllers/Admin/AppUpgradeController.php` | Triggers background Git pull and migration deployment. |
 | `app/Http/Controllers/Admin/BackupDownloadController.php` | Streams encrypted/compressed backup files to authorized super admins. |
+| `app/Http/Controllers/BackupHealthController.php` | `GET /health/backups`: 200 / 503 for an outside uptime monitor, behind `BACKUP_HEALTH_TOKEN` (404 without or with a wrong token). |
 | `app/Http/Controllers/Admin/LegacyAdminClusterRedirectController.php` | Redirects legacy unclustered URLs to their new Filament cluster routes. |
 | `app/Http/Controllers/InstallController.php` | Initial setup wizard for first-time installation and database configuration. |
 
@@ -153,14 +169,20 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 ### Console Commands & Schedules
 | Path | What it does |
 | --- | --- |
-| `app/Console/Commands/DeployMigrate.php` | Runs pending database migrations safely during automated deployment pipelines. |
-| `app/Console/Commands/VerifyDatabaseBackup.php` | Verifies backup archive integrity and checks cloud upload status. |
+| `app/Console/Commands/DeployMigrate.php` | Runs pending migrations on deploy (never fails the deploy); takes a `predeploy` database backup first when migrations are pending, a failed backup is reported and does not block. |
+| `app/Console/Commands/BackupApp.php` | `backup:app --kind= --upload --auto-upload`: full app backup; `--upload` sends the encrypted copy to every place that is on, `--auto-upload` only to the places with Auto upload on and only when the kind is in `backup.offsite.app_kinds`. |
+| `app/Console/Commands/BackupDatabase.php` | `backup:database --connection= --kind=hourly|daily|predeploy|manual --upload --auto-upload`; exit code 1 on failure. |
+| `app/Console/Commands/DrillBackup.php` | `backup:drill --file= --offsite --r2 --drive`: the restore test; scheduled Sundays 03:30 (03:50 for the R2 copy, 04:10 for the Drive copy, each only when that place has Auto upload on) when `BACKUP_DRILL_DB_USERNAME` is set. |
+| `app/Console/Commands/CheckBackupHealth.php` | `backup:check`: reports overdue checks to the Super Admins (once, then every 12 hours), exit code 1 when one is overdue; scheduled every 30 minutes. |
+| `app/Console/Commands/RestoreBackup.php` | `backup:restore {file?} --offsite --r2 --drive --only=database|files --confirm= --skip-rehearsal --skip-safety-backup --no-migrate`: replaces the database (and a `.zip`'s uploaded files); asks for the database name to be typed, `--confirm=` without a keyboard. Thin over `BackupRestorer`. |
+| `app/Console/Commands/DecryptBackup.php` | `backup:decrypt {file} --output= --force`: opens an off-site `.enc` copy with `BACKUP_ENCRYPTION_KEY` (or a prompted key). |
+| `app/Console/Commands/VerifyDatabaseBackup.php` | `backup:verify`: SQLite restore drill in a disposable file, or completeness + checksum check of a `.sql.gz` dump. |
 | `app/Console/Commands/CutRelease.php` | Automates release tagging, manifest updates, and git commit creation. |
 | `app/Console/Commands/NotifyLatestRelease.php` | Alerts super admins of newly installed application updates. |
 | `app/Console/Commands/MigrateCompanyData.php` | CLI tool to migrate data records across companies. |
 | `app/Console/Commands/MigrateCompanyStorage.php` | CLI tool to transfer physical media between storage disks. |
 | `app/Console/Commands/RemoveTradeTestData.php` | `trade:remove-test-data {company} [--prefix=TEST-] [--apply]`: removes a Trade Portal company's QA records named with the prefix and what hangs on them, via `App\Services\TradeTestDataCleanupService` (dry run by default, backup before `--apply`, refuses when test and real records are mixed, lists the ledger rows left on the money accounts). Test: `tests/Feature/TradeTestDataCleanupTest.php`. |
-| `bootstrap/app.php` | Defines scheduled cron jobs (backups, release notifications, cleanups). |
+| `bootstrap/app.php` | Defines scheduled cron jobs (hourly `backup:database --kind=hourly --auto-upload` at :05 and daily `backup:app --kind=daily --auto-upload`, both in the background, expiring overlap locks, release notifications, cleanups). |
 
 ### Notifications & Observers
 | Path | What it does |
@@ -184,7 +206,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | --- | --- |
 | `config/app.php` | Core Laravel settings, default timezone, application name, error isolation flags. |
 | `config/auth.php` | Authentication guards and password reset providers for admin, customer, and portal users. |
-| `config/backup.php` | Backup directory paths, dump binaries, disk destinations, and schedule time. |
+| `config/backup.php` | Daily schedule time, `hourly.enabled` / `daily.full_app` switches, per-kind retention (`database.keep`, `app.keep`; kinds hourly/daily/predeploy/prerestore/manual), `mysqldump` binary and timeout, `restore` (mysql client, import timeout, `file_paths` copied back from an archive), app-backup paths (including `storage/app/private`), `encryption.key`, `offsite` (kinds sent, `require_encryption`, Drive `keep`), `drill` (restore test), `health` (stale limits, monitor token), Google Drive. `config/database.php` has the `backup_drill` connection. |
 | `config/filesystems.php` | Disks definition (`local`, `public`, `company_media`, `s3`). |
 | `config/login_protection.php` | Rates, budgets, device cookie tokens, and lockout thresholds for `LoginGate`. |
 | `config/release.php` | Current release version metadata and update check endpoints. |
@@ -196,6 +218,8 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 - `database/migrations/*create_user_roles_table.php`
 - `database/migrations/*create_app_settings_table.php`
 - `database/migrations/*create_deployment_errors_table.php`
+- `database/migrations/*create_backup_runs_table.php`
+- `database/migrations/*add_offsite_and_note_to_backup_runs_table.php`
 - `database/migrations/*create_audit_logs_table.php`
 - `database/migrations/*add_company_id_to_*`
 
@@ -211,10 +235,18 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `tests/Feature/CoolifyDeploymentServiceTest.php` | Tests webhook payloads and signature verification for Coolify deployments. |
 | `tests/Feature/CoolifyDeploymentSettingsTest.php` | Tests the Coolify deployment configuration page. |
 | `tests/Feature/DeploymentErrorReporterTest.php` | Tests deduplication and logging of deployment errors. |
-| `tests/Feature/DeployMigrateCommandTest.php` | Tests safe execution of migrations during automated deployment. |
+| `tests/Feature/DeployMigrateCommandTest.php` | Tests safe execution of migrations during automated deployment, including the `predeploy` backup (taken when pending, never blocks). |
 | `tests/Feature/LoginGateTest.php` | Verifies pre-hash rate limiting, device cookies, and lockout rules. |
 | `tests/Feature/ModuleGuardTest.php` | Asserts that caught component exceptions return fallbacks and avoid 500 status codes. |
 | `tests/Feature/BackupSystemTest.php` | Tests database dump generation and cloud upload workflows. |
+| `tests/Feature/BackupEncryptionTest.php` | Tests the encryptor at every block boundary, interoperability with the real `openssl` command in both directions, wrong key / truncated / foreign files, short or missing key, `backup:decrypt`. |
+| `tests/Feature/BackupDrillTest.php` | Tests the restore test: refusal without a drill user, newest / named / Drive source, incomplete or unloadable dumps recorded and alerted once, staging cleanup, wrong or missing key, the streaming into a stand-in `mysql` client, the Sunday schedules. |
+| `tests/Feature/BackupRestoreTest.php` | Tests `backup:restore`: finding / decrypting / unpacking the file (name, path, `.enc`, newest Drive copy, archive), checks, the order of the steps with a safety copy, rollback when the load fails (and when that fails too), table-count check, failed migrations, an app already in maintenance mode, the lock, archive files (nothing deleted, zip-slip and links refused), the real wipe and counts on SQLite, the loader against a stand-in `mysql`, history rows, the `prerestore` kind, and the command (confirmation by typing the database name, flags, messages). |
+| `tests/Feature/BackupHealthTest.php` | Tests the health checks (fresh, overdue, never succeeded, switches, Drive copy, restore test), `backup:check` alerts and reminders, `/health/backups`, the dashboard card and the history. |
+| `tests/Feature/R2BackupTest.php` | Tests the R2 settings (secret encrypted, account id → endpoint, environment fallback), the service against an in-memory bucket (`tests/Support/FakeS3.php`: one request / parts / resume / abort / wrong size, listing across pages limited to the folder, download, refusal outside the folder, explained errors, connection test) and the multi-place `OffsiteBackupService` (same file to both, one place failing, all failing, Auto upload per place, manual to a set-up place, trimming, newest copy fetched and decrypted). |
+| `tests/Feature/R2DashboardTest.php` | Tests the bill maths (free allowance, per GB, per million operations, taka), operations per upload, the month so far, the full-schedule forecast and scenarios, the usage report (groups, cache, errors) and the R2 Backups page (access, set-up steps and examples, figures, taka, broken connection, Configure validation, Test connection, Back up now). |
+| `tests/Feature/OffsiteBackupTest.php` | Tests the auto-upload policy, the encryption guard, encrypted uploads and staging cleanup, Drive retention (only our files, per scope and kind), upload failures (run failed, alert, local prune still happens), `backup:database --upload/--auto-upload`, the pre-deploy copy, private files in the archive, the chunked upload / retry / give-up, folder listing and delete, and the encryption line on the Backups page. |
+| `tests/Feature/BackupRunsTest.php` | Tests backup kinds and per-kind pruning (database and app archives), `backup_runs` recording and failure alerts, the streamed gzip MySQL dump (fake dumper + a real process), `.sql.gz` verification, `backup:database` / `backup:app` / `backup:verify`, auto-upload switches, the hourly and daily schedules and their switches, and the history on the Backups page. |
 | `tests/Feature/ReleaseNotesTest.php` | Tests release notes rendering and version display. |
 | `tests/Feature/ReleaseCutterTest.php` | Tests semantic release creation script. |
 | `tests/Feature/ReleaseNotificationTest.php` | Tests notification dispatching when updates complete. |
@@ -238,6 +270,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
   - `POST admin/app-updates/sync` (name `admin.app-updates.sync`) -> `App\Http\Controllers\Admin\AppUpgradeController@synchronize`
   - `POST admin/app-upgrade` (name `admin.app-upgrade`) -> `App\Http\Controllers\Admin\AppUpgradeController@upgrade`
   - `GET|HEAD admin/backups/download/{filename}` (name `backups.download`) -> `App\Http\Controllers\Admin\BackupDownloadController`
+  - `GET|HEAD health/backups` (name `health.backups`) -> `App\Http\Controllers\BackupHealthController`
   - `GET|HEAD install` (name `install.create`) -> `App\Http\Controllers\InstallController@create`
   - `POST install` (name `install.store`) -> `App\Http\Controllers\InstallController@store`
 
@@ -248,6 +281,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 - `user_roles`: Custom role permissions table. Key columns: `id`, `name`, `slug`, `permissions` (JSON), `is_active`, `created_at`, `updated_at`.
 - `app_settings`: Global key-value store. Key columns: `id`, `key` (unique), `value`, `is_encrypted`, `created_at`, `updated_at`.
 - `deployment_errors`: Module and deployment crash tracker. Key columns: `id`, `source`, `message`, `details`, `context` (JSON), `occurred_at`, `created_at`, `updated_at`.
+- `backup_runs`: Backup attempts and restore tests (global). Key columns: `id`, `scope` (database|app|drill), `kind` (hourly|daily|predeploy|manual; for a drill local|drive), `status` (running|success|failed), `filename`, `size_bytes`, `sha256`, `error`, `note`, `started_at`, `finished_at`, `offsite_at`, `created_at`, `updated_at`.
 - `audit_logs`: User activity and data mutation audit log. Key columns: `id`, `company_id`, `user_id`, `action`, `auditable_type`, `auditable_id`, `old_values` (JSON), `new_values` (JSON), `ip_address`, `user_agent`, `created_at`, `updated_at`.
 
 ## Rules that matter
@@ -260,6 +294,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 - **Login Gate Protection**: All authentication attempts must be evaluated by `LoginGate::begin` prior to invoking bcrypt hashes to thwart DDoS credential stuffing. Enforced by `app/Services/LoginGate.php` and `app/Filament/Auth/AdminLogin.php`.
 - **Software License Key Format**: License keys must match the regex `^ZZERP-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$`. Enforced by `app/Services/LicenseActivationService.php`.
 - **Documentation Discrepancy (Filament Version)**: Legacy documents (e.g. `PROJECT_GUIDE.md`) refer to Filament 4; the actual codebase runs Filament 5 (`app/Providers/Filament/AdminPanelProvider.php`).
+- **Backups**: a backup's kind is the last part of its file name (`BackupRun::kindOfFile()`); each kind is pruned on its own (`config/backup.php` `database.keep` / `app.keep`), and a file with no kind counts as `manual`. The daily database dump is the one inside the daily full app backup. Only the copy sent to Google Drive is encrypted (`OffsiteBackupService`); the files on the server are not. Nothing is uploaded unencrypted unless `BACKUP_OFFSITE_REQUIRE_ENCRYPTION=false`, and Drive cleanup only ever deletes files named like our backups. Backup freshness is judged by `BackupHealth` from `backup_runs`; the scheduler cannot watch itself, so `/health/backups` is meant for an outside monitor. The restore test only ever creates and drops schemas matching `backup_drill_{14 digits}_{6 chars}`. A backup is only listed once complete (streamed to `.part`, renamed after mysqldump's "Dump completed" line). Recording in `backup_runs` must never stop a backup (the table may not exist yet before `migrate`). Enforced by `DatabaseBackupService` and `BackupRunRecorder`.
 
 ## Links to other modules
 - **catalog-inventory.md**: All catalog and inventory models rely on `BelongsToCompany` and `CompanyScope`.
@@ -274,7 +309,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 - `docs/roles-and-permissions.md` — Detailed breakdown of user roles and permission matrices.
 - `docs/deployment.md` — Coolify deployment guides and environment configuration.
 - `docs/login-protection.md` — Architectural design and tuning for `LoginGate` and brute-force defenses.
-- `docs/backup-restore.md` — Database backup workflows and Google Drive setup.
+- `docs/backup-restore.md` — Database backup workflows, schedules, Google Drive off-site copies with encryption, and restore steps.
 - `docs/release-policy.md` — Semantic versioning and release cutting policies.
 - `docs/update-safety.md` — Guidelines for error isolation and schema migration safety.
 - `03_STACK_UPGRADE_PLAN.md` — Architecture plan for multi-company isolation and framework upgrades.

@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\StorefrontSetting;
 use App\Support\LoginClient;
 use App\Support\LoginThrottled;
+use App\Support\OtpLifetime;
 use App\Support\StorefrontApi\Phone;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
@@ -37,7 +38,12 @@ class CustomerAccountService
     /** The phone belongs to an existing customer but no SMS gateway is set up to prove it. */
     public const VERIFY_UNAVAILABLE = 'unavailable';
 
-    public const REGISTRATION_CODE_MINUTES = 10;
+    /** Every OTP lives at most OtpLifetime::MAX_MINUTES (owner decision 2026-10-24). */
+    public const REGISTRATION_CODE_MINUTES = OtpLifetime::MAX_MINUTES;
+
+    public const LOGIN_CODE_MINUTES = OtpLifetime::MAX_MINUTES;
+
+    public const RESET_CODE_MINUTES = OtpLifetime::MAX_MINUTES;
 
     protected const REGISTRATION_CODE_MAX_ATTEMPTS = 5;
 
@@ -145,7 +151,7 @@ class CustomerAccountService
     }
 
     /**
-     * Texts a 6-digit sign-up code to $phone, valid for 10 minutes and five
+     * Texts a 6-digit sign-up code to $phone, valid for 3 minutes (REGISTRATION_CODE_MINUTES) and five
      * tries. Asking again within a minute keeps the code already sent, so
      * a double click or the website's "resend" can't flood the number.
      * Kept in the cache, not on a customer row: the number may have no
@@ -325,7 +331,7 @@ class CustomerAccountService
         $customer->forceFill([
             'login_otp_code' => Hash::make($code),
             'login_otp_channel' => $channel,
-            'login_otp_expires_at' => now()->addMinutes(10),
+            'login_otp_expires_at' => now()->addMinutes(self::LOGIN_CODE_MINUTES),
             'login_otp_sent_at' => now(),
             'login_otp_attempts' => 0,
         ])->save();
@@ -388,7 +394,7 @@ class CustomerAccountService
 
         $customer->forceFill([
             'password_reset_code' => Hash::make($code),
-            'password_reset_expires_at' => now()->addMinutes(15),
+            'password_reset_expires_at' => now()->addMinutes(self::RESET_CODE_MINUTES),
         ])->save();
 
         return $this->notifications->sendSms(

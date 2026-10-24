@@ -7,6 +7,7 @@ use App\Filament\Resources\Investors\RelationManagers\NomineesRelationManager;
 use App\Ims\Onboarding\InviteService;
 use App\Ims\Onboarding\OtpService;
 use App\Models\InvestorInvite;
+use App\Models\InvestorOtpCode;
 use App\Services\CompanyContext;
 use App\Services\InvestorPortalAccountService;
 use App\Support\ImsPassword;
@@ -104,7 +105,7 @@ class JoinWithInvite extends SimplePage
 
         return match ($this->step) {
             1 => __('We will send a 6-digit code to :contact.', ['contact' => $this->masked($invite)]),
-            2 => __('We sent a code to :contact. It works for 10 minutes.', ['contact' => $this->masked($invite)]),
+            2 => __('We sent a code to :contact. It works for :minutes minutes.', ['contact' => $this->masked($invite), 'minutes' => InvestorOtpCode::VALID_MINUTES]),
             default => __('Your details, your nominee and a password. Your NID pictures come next.'),
         };
     }
