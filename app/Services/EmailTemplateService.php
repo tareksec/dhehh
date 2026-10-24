@@ -9,6 +9,7 @@ use App\Models\Company;
 use App\Models\EmailTemplate;
 use App\Models\Order;
 use App\Models\StorefrontSetting;
+use App\Support\OtpLifetime;
 use Illuminate\Mail\Mailable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -56,9 +57,6 @@ class EmailTemplateService
     public const MAX_SUBJECT = 150;
 
     public const MAX_BODY = 5000;
-
-    /** Minutes a customer's login code works (CustomerAccountService). */
-    public const LOGIN_CODE_MINUTES = 10;
 
     /** @var array<string, array<string, mixed>>|null */
     protected ?array $definitions = null;
@@ -402,7 +400,7 @@ class EmailTemplateService
             'tracking' => 'SF123456789',
             'company' => $company,
             'code' => '483920',
-            'minutes' => '10',
+            'minutes' => (string) OtpLifetime::MAX_MINUTES,
             'link' => url('/'),
             'days' => '7',
             'amount' => '25,000',

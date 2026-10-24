@@ -14,7 +14,7 @@ Owner (Bangla): "Email template তৈরির জন্য কিছুতো 
 
 **Needs Bangla review (`lang/bn.json`):** the 61 new keys, in particular "Email Templates" = "ইমেইল টেমপ্লেট", "Order emails", "Codes & password reset", "Investor emails", "My templates", "Email the customer" = "কাস্টমারকে ইমেইল করুন", and the long explanations on the page.
 
-Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to that branch. Not pushed to `main`; that needs the owner's approval.
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` on the owner's approval ("মেইনে পুশ কর").
 
 ## 2026-10-24 (previous) - Amazon SES page: phone layout
 
@@ -28,7 +28,21 @@ Owner (Bangla, with two phone screenshots): "Amazon SES পেজের মো�
 
 Needs Bangla review (`lang/bn.json`): "Not checked yet" = "এখনো যাচাই করা হয়নি".
 
-Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to that branch. Not pushed to `main`; that needs the owner's approval.
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` together with the Email Templates work, on the owner's approval.
+
+## 2026-10-24 - One-time codes work for three minutes at most
+
+Owner (Bangla): "keep the OTP code's validity at three minutes at most".
+
+**Found:** shop customer sign-up code 10 minutes and login code 10 (`CustomerAccountService`, the login one was a bare `10`), password-reset SMS code 15, IMS join code 10 (`InvestorOtpCode::VALID_MINUTES`), investor e-mailed reset code 10 (`EMAIL_CODE_VALID_MINUTES`); the investor SMS code was already 1 minute.
+
+**What changed:** one limit, `App\Support\OtpLifetime::MAX_MINUTES = 3`; every lifetime constant points at it (new `LOGIN_CODE_MINUTES` and `RESET_CODE_MINUTES` replace the bare numbers). The wording that told the user "10 / 15 minutes" (Blade storefront OTP and reset pages, login e-mail, reseller Apply and forgot-password, IMS JoinWithInvite) now reads the constants, so it cannot drift again. `docs/api/storefront-api.md`, `PROJECT_GUIDE.md` and the investor plan say 3 minutes. The reseller reset **link** (60 minutes, sent by staff) is not a code and was left alone: say if it should be shortened too.
+
+**Needs Bangla review (lang/bn.json):** three keys changed from a fixed number to `:minutes` ("The 6-digit code sent by SMS to :phone. It expires in :minutes minutes.", the reseller Apply one and "We sent a code to :contact. It works for :minutes minutes."). The Bangla text now shows the number in Latin digits (3), like the existing "We sent the code by SMS..." key. SMS wording the owner wrote on SMS Templates is the owner's own: if a template says "valid for 10 minutes", edit it.
+
+**Verified:** `OtpLifetimeTest` (new, 5), `Ims\OnboardingTest`, `Ims\EmailPasswordResetTest`, `StorefrontCustomerAuthTest`, `ResellerPortalPasswordResetTest`, `TranslationParityTest`; full `php artisan test` before the push.
+
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("ওকে ঠিক আছে, মেইন এ পুশ কর").
 
 ## 2026-10-23 (previous) - Amazon SES: removing a domain or address is for a super admin only
 

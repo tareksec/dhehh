@@ -23,6 +23,7 @@ use App\Models\StorefrontSetting;
 use App\Models\User;
 use App\Models\UserRole;
 use App\Services\CompanyContext;
+use App\Services\CustomerAccountService;
 use App\Services\EmailLogService;
 use App\Services\EmailTemplateService;
 use App\Services\OrderStatusEmailService;
@@ -249,7 +250,7 @@ class EmailTemplatesTest extends TestCase
         $this->write([EmailTemplateService::LOGIN_CODE => ['subject' => 'Your :company code', 'body' => 'Use :code within :minutes minutes.']]);
         $this->assertTrue($notifications->sendLoginOtpEmail($this->site, 'buyer@example.test', 'Template Co', '482915'));
 
-        Mail::assertSent(TemplatedEmail::class, fn (TemplatedEmail $mail): bool => $mail->mailSubject === 'Your Template Co code' && str_contains($mail->textBody, 'Use 482915 within 10 minutes.'));
+        Mail::assertSent(TemplatedEmail::class, fn (TemplatedEmail $mail): bool => $mail->mailSubject === 'Your Template Co code' && str_contains($mail->textBody, 'Use 482915 within '.CustomerAccountService::LOGIN_CODE_MINUTES.' minutes.'));
         $this->assertStringNotContainsString('482915', json_encode(EmailLog::query()->get()->toArray()), 'A code is never kept in the log.');
     }
 

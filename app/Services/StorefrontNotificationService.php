@@ -444,7 +444,7 @@ class StorefrontNotificationService
         $mail = app(EmailTemplateService::class)->mailableOr(
             (int) $setting->company_id,
             EmailTemplateService::LOGIN_CODE,
-            ['company' => $companyName, 'code' => $code, 'minutes' => EmailTemplateService::LOGIN_CODE_MINUTES],
+            ['company' => $companyName, 'code' => $code, 'minutes' => CustomerAccountService::LOGIN_CODE_MINUTES],
             new StorefrontLoginOtp($companyName, $code),
         );
 

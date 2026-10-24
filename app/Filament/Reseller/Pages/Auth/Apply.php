@@ -74,7 +74,7 @@ class Apply extends BaseRegister
                 $this->getPasswordConfirmationFormComponent()->visible($detailsStep),
                 TextInput::make('code')
                     ->label(__('Verification code'))
-                    ->helperText(fn (): string => __('This number already belongs to a customer of the store, so we sent a 6-digit code by SMS to :phone. It expires in 10 minutes.', ['phone' => (string) $this->verifyingPhone]))
+                    ->helperText(fn (): string => __('This number already belongs to a customer of the store, so we sent a 6-digit code by SMS to :phone. It expires in :minutes minutes.', ['phone' => (string) $this->verifyingPhone, 'minutes' => CustomerAccountService::REGISTRATION_CODE_MINUTES]))
                     ->required()
                     ->rule('digits:6')
                     ->inputMode('numeric')
