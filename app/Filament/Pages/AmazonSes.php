@@ -10,6 +10,7 @@ use App\Services\CompanyContext;
 use App\Services\Ses\SesApiException;
 use App\Services\Ses\SesApiService;
 use App\Services\Ses\SesTrackingService;
+use App\Services\Ses\SesUsageService;
 use App\Services\StorefrontNotificationService;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -33,6 +34,10 @@ use Livewire\Attributes\Locked;
  * site's SMTP account (Integrations → Email Setup); this page only controls
  * the SES account behind it. The AWS key is kept per site, encrypted, with the
  * other notification credentials (StorefrontNotificationService::SES_CREDENTIAL_KEYS).
+ * Email usage (owner request 2026-10-24): what went out, what reached the
+ * recipient, the share of the free allowance used and an estimated cost, counted
+ * by SesUsageService from the Email Log; the free allowance and the price are
+ * typed in on this page because Amazon's API does not give them.
  */
 class AmazonSes extends Page
 {
@@ -63,6 +68,14 @@ class AmazonSes extends Page
     public array $overview = [];
 
     public bool $loaded = false;
+
+    /** 0 = this month, 1 = last month: the month the usage numbers are about. */
+    public int $monthsBack = 0;
+
+    /** Cost settings: the free emails each month and the price of 1,000 emails after that (typed, so strings). */
+    public ?string $freeLimit = null;
+
+    public ?string $pricePer1000 = null;
 
     public static function getNavigationLabel(): string
     {
@@ -192,6 +205,65 @@ class AmazonSes extends Page
             'ses_api_secret' => null,
             'ses_api_region' => data_get($setting?->notification_credentials, 'ses_api_region'),
         ]);
+
+        $costs = SesUsageService::settingsFor($setting);
+        $this->freeLimit = $costs['free_limit'] === null ? null : (string) $costs['free_limit'];
+        $this->pricePer1000 = $costs['price'] === null ? null : rtrim(rtrim(number_format($costs['price'], 4, '.', ''), '0'), '.');
+    }
+
+    // --- Usage and cost ---------------------------------------------------------------------------------
+
+    /** This month's (or last month's) usage, counted from the company's Email Log. */
+    public function usage(): array
+    {
+        $this->selectedCompany();
+
+        return app(SesUsageService::class)->report((int) $this->companyId, $this->monthsBack, SesUsageService::settingsFor($this->activeSetting()));
+    }
+
+    public function showMonth(int $monthsBack): void
+    {
+        $this->selectedCompany();
+        $this->monthsBack = max(0, min(1, $monthsBack));
+    }
+
+    /** Amazon does not tell the free allowance or the price, so the owner types them in. Empty clears one. */
+    public function saveCostSettings(): void
+    {
+        $this->validate([
+            'freeLimit' => ['nullable', 'integer', 'min:0', 'max:100000000'],
+            'pricePer1000' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+        ], [], [
+            'freeLimit' => __('Free emails each month'),
+            'pricePer1000' => __('Price per 1,000 emails after that (US dollars)'),
+        ]);
+
+        $setting = $this->setting();
+        $credentials = (array) $setting->notification_credentials;
+
+        if (filled($this->freeLimit)) {
+            $credentials['ses_free_limit'] = (int) $this->freeLimit;
+        } else {
+            unset($credentials['ses_free_limit']);
+        }
+
+        if (filled($this->pricePer1000)) {
+            $credentials['ses_price_per_1000'] = rtrim(rtrim(number_format((float) $this->pricePer1000, 4, '.', ''), '0'), '.') ?: '0';
+        } else {
+            unset($credentials['ses_price_per_1000']);
+        }
+
+        $setting->forceFill(['notification_credentials' => $credentials])->save();
+
+        app(AuditLogService::class)->record('ses.cost_settings_saved', $setting, [], [
+            'site' => $setting->getKey(),
+            'free_limit' => $credentials['ses_free_limit'] ?? null,
+            'price_per_1000' => $credentials['ses_price_per_1000'] ?? null,
+        ]);
+
+        $this->fillForm();
+
+        Notification::make()->title(__('Cost settings saved'))->success()->send();
     }
 
     /** The site being managed, after re-checking who is asking (every handler starts here). */

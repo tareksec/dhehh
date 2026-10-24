@@ -1,5 +1,20 @@
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Settings → Amazon SES: email usage, with a gauge and cards.** Owner request 2026-10-24 (the owner chose design "B" from three layouts). Section 2 now shows, for this month or last month: a gauge of the free monthly limit (emails left, the share used, when it starts again, and where the month will end at the current pace), four numbers (sent, delivered, problems, estimated cost), the emails by kind (orders, login and reset codes, IMS, owner digest, tests…) with delivered, waiting, bounced or spam and failed, the last four months with the free-limit use and cost of each, sent against delivered week by week, what became of every email, and Amazon's daily limit (sandbox or production, how many more may go today, speed, account health). It is built for a phone first: the two tables turn into stacked blocks, nothing runs off the screen at 320 px, and dark mode has its own colours.
+- **Cost settings on the same page.** Two numbers the owner types in: the free emails each month and the price of 1,000 emails after that (US dollars). Amazon's API gives neither and they can change, so nothing is assumed: until they are typed in the gauge asks for them and the cost reads "—". The cost is an estimate (emails past the free allowance × the price), not Amazon's bill. Saving is written to the Audit Log.
+
+### Technical Notes
+
+- `App\Services\Ses\SesUsageService` counts the company's `email_logs` rows whose `via` is an Amazon SES SMTP host (`smtp:email-smtp.%.amazonaws.com`), by status, kind, week and month, in a few indexed queries (`company_id`, `created_at`). "Sent" is what Amazon accepted (sent, delivered, bounced, complained); a failed email is not sent and not billed; skipped emails are not counted. Emails sent through the server's own default mailer are not counted. "Delivered", "Bounced" and "Marked as spam" need Amazon SES tracking (section 4); with tracking off the page says so and shows "—" for them.
+- The two cost numbers are kept as `ses_free_limit` and `ses_price_per_1000` in the site's `notification_credentials` (added to `StorefrontNotificationService::SES_CREDENTIAL_KEYS`, so saving Storefront Settings keeps them). No migration. The old "2. Your Amazon SES account" box is replaced by the daily-limit card of the new section, with the same facts (mode, sending on/paused, fastest rate, Amazon's view of the account).
+- The view is `resources/views/filament/pages/amazon-ses-usage.blade.php`; the gauge, bars and tables are plain CSS (`.zz-use-*` in `resources/css/filament/admin/theme.css`, no chart library). Deploy needs `npm run build`.
+- Not built from the design: the "Last 30 days" button, because the free allowance is per calendar month; "This month" and "Last month" are there.
+- `SesUsageServiceTest` (10) and five new `AmazonSesPageTest` cases. 72 new bilingual keys.
+
 ## [2.115.1] - 2026-10-24
 
 **Release type:** Patch/Fix Update

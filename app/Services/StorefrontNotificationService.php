@@ -45,9 +45,10 @@ class StorefrontNotificationService
 
     /**
      * notification_credentials keys of the Amazon SES connection and its event tracking (Settings → Amazon SES, not
-     * Storefront Settings): the AWS access key for the SES API, and the names the tracking set-up created.
+     * Storefront Settings): the AWS access key for the SES API, the names the tracking set-up created, and the two
+     * cost numbers the owner types in (free emails each month, price of 1,000 emails; see SesUsageService).
      */
-    public const SES_CREDENTIAL_KEYS = ['ses_api_key_id', 'ses_api_secret', 'ses_api_region', 'ses_config_set', 'ses_topic_arn', 'ses_tracking_enabled', 'ses_subscription_confirmed_at'];
+    public const SES_CREDENTIAL_KEYS = ['ses_api_key_id', 'ses_api_secret', 'ses_api_region', 'ses_config_set', 'ses_topic_arn', 'ses_tracking_enabled', 'ses_subscription_confirmed_at', 'ses_free_limit', 'ses_price_per_1000'];
 
     /** Reply code BulkSMSBD-style gateways send (inside an HTTP 200) when the SMS was accepted. */
     public const SMS_GATEWAY_SUCCESS_CODE = 202;

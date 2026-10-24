@@ -2,7 +2,27 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-24 (latest) - mysqldump on the Nixpacks build
+## 2026-10-24 (latest) - Amazon SES: email usage (design B)
+
+Owner (Bangla): show on the Amazon SES dashboard the cost of email transactions, how many were made and how many failed, the free limit and how much of it is used or left, and the send and receive counts, as cards, charts or whatever suits; she asked me to suggest designs or show temporary HTML. I made three layouts and a phone view as a canvas (A cards and bars, B big gauge, C report with tables). She chose **B**, asked for its phone layout (I made it), then "put B on the SES page".
+
+**What I did:** section 2 of Settings → Amazon SES (`resources/views/filament/pages/amazon-ses-usage.blade.php`) now follows design B: the free-limit gauge, four numbers (sent, delivered, problems, cost), emails by kind, the last four months with cost, sent against delivered by week, what became of the emails, Amazon's daily limit (the old account box, same facts), and a **Cost settings** form. `App\Services\Ses\SesUsageService` counts the company's Email Log rows that went through an Amazon SES SMTP host. Plain CSS in the admin theme (`.zz-use-*`), no chart library. Page tests: `SesUsageServiceTest` (10) and five new cases in `AmazonSesPageTest`.
+
+**Decisions I made because she did not answer my four questions** (change them if she wants otherwise):
+1. "Receive" = the email reached the recipient's mail server ("Delivered", from Amazon SES tracking). The ERP does not receive email through SES, so there is no inbound count.
+2. Free limit and cost count this company's emails only (company isolation). The AWS free allowance really counts the whole AWS account, so another company on the same account also uses it; the section says Amazon's limits are shared.
+3. The gauge is blue, turns amber from 80% and red once the free emails are used up. The cost is "emails past the free allowance × the price", an estimate.
+4. The free emails and the price of 1,000 emails are typed in by her (Amazon's API does not give them): nothing was invented, they start empty. The design's "Last 30 days" button is not built (the allowance is per calendar month); "This month" and "Last month" are.
+
+**Looks checked:** I rendered the real page HTML with sample numbers (about 2,100 emails this month and three earlier months) with the built admin theme in Chromium at 320, 390, 820 and 1280 px, light and dark: no horizontal overflow at any width, the tables become stacked blocks on a phone, the weekly captions fixed after the first look. Not verified: the page inside the live admin (sidebar, her colours), and real numbers from the live Email Log.
+
+**Needs Bangla review:** 72 new keys in `lang/bn.json`. The least certain: "On track" (ঠিক পথে আছে), "Close to the limit" (সীমার কাছাকাছি), "Waiting for a report" (রিপোর্টের অপেক্ষায়), ":amount without the free emails" (ফ্রি ইমেইল ছাড়া হত :amount), "emails over" (ইমেইল বেশি).
+
+**Still open:** emails sent through the server's own default mailer (no site SMTP host) are not counted, and the Email Log has no site column, so a company with two sites on different AWS accounts sees both together. Deploy needs `npm run build` (no migration).
+
+Commit status: committed and pushed to the branch `ccr-3799b463-p4pv7n`; **not on `main`** (waiting for the owner's approval).
+
+## 2026-10-24 - mysqldump on the Nixpacks build
 
 The agent running `trade:remove-test-data --apply` on the live server reported: the backup step fails because the server has no `mysqldump`, and `--no-backup` is refused in production, so nothing was removed (its dry run showed only TEST records). Cause: the live app is still built by Nixpacks; only the `Dockerfile` installed the MySQL client. Fix: `default-mysql-client` added to `nixpacks.toml` aptPkgs. Not built locally (no Nixpacks / Docker here). After the deploy: `which mysqldump` in the app's Coolify terminal must print a path; then `php artisan trade:remove-test-data <slug> --apply` can run. If the Nixpacks build fails on the new package, Coolify keeps the old container; tell me and I will change the package.
 
