@@ -16,6 +16,18 @@ Owner (Bangla): "keep the OTP code's validity at three minutes at most".
 
 Commit status: committed on `claude/order-management-features-nafks7`; not on `main`.
 
+## 2026-10-23 (latest) - Amazon SES: removing a domain or address is for a super admin only
+
+Owner (Bangla): "ডোমেইন মোছা শুধু সুপার অ্যাডমিনের জন্য করে দাও". This settles the open question from the several-companies-on-one-AWS-account work.
+
+**What I did:** the Remove button on Settings → Amazon SES shows only to a super admin (`canRemoveDomains()`); the `deleteIdentity` action refuses anyone else on the server before any AWS call, also for the company's own domain. Everyone else sees one line: "Only a super admin can remove a domain or address." Adding a domain or address, the suppression list and the tracking switch are unchanged (not asked). `docs/email-ses-setup.md` says so.
+
+**Verified:** `AmazonSesPageTest` (16) and `TranslationParityTest`. Not looked at in a browser.
+
+Needs Bangla review (`lang/bn.json`): "ডোমেইন বা ঠিকানা শুধু সুপার অ্যাডমিন মুছতে পারেন।" (replaces the old "not one of this company's domains" message).
+
+Commit status: committed on `ccr-3799b463-p4pv7n`, merged with `origin/main` and pushed to `main` on the owner's approval ("মেইনে পুশ কর").
+
 ## 2026-10-23 (next) - Login codes (OTP) failed while order status texts worked
 
 Owner (Bangla), with a screenshot of Logs → SMS: "OTP messages do not come. Order status messages come." The screenshot showed two `Not sent: gateway` rows (15:08, 15:25) of kind "Other messages (login codes...)" for 01728714614, reason "The SMS gateway URL has no {phone} or no {message}", and the earlier test SMS (13:16) as Sent.

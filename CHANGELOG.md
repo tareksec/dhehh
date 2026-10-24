@@ -1,10 +1,29 @@
 ## [Unreleased]
 
-**Release type:** Patch Update
+**Release type:** Minor Feature Update
 
 ### Changed
 
 - **Every one-time code (OTP) now works for three minutes at most.** Owner request 2026-10-24. Before, a shop customer's sign-up and login codes lived 10 minutes, a password-reset code 15, the code to join IMS 10 and an investor's e-mailed reset code 10. All of them now stop working after 3 minutes (a code that already lived shorter, the investor's SMS code at 1 minute, stays shorter), and asking again sends a new one. The texts beside the code box (Blade storefront, reseller apply and forgot-password pages, IMS join page, the login e-mail) say "3 minutes" from the same setting instead of a fixed number. An emailed reset link that staff send to a reseller is a link, not a code, and keeps its 60 minutes.
+
+### Technical Notes
+
+- `App\Support\OtpLifetime::MAX_MINUTES` (3) is the one place the limit is written; `CustomerAccountService::REGISTRATION_CODE_MINUTES` / `LOGIN_CODE_MINUTES` / `RESET_CODE_MINUTES`, `InvestorOtpCode::VALID_MINUTES` and `InvestorPortalAccountService::EMAIL_CODE_VALID_MINUTES` all point at it, and the interface texts use `:minutes` with those constants. The Next.js API's `expires_in_minutes` for the sign-up code is now 3 (`docs/api/storefront-api.md` updated). Tests: `OtpLifetimeTest` (5), `Ims\OnboardingTest` and `Ims\EmailPasswordResetTest` now expect about 3 minutes. No migrations.
+
+## [2.112.2] - 2026-10-23
+
+**Release type:** Patch/Fix Update
+
+### Changed
+
+- **Settings → Amazon SES: removing a domain or address from the AWS account is for a super admin only.** Owner decision 2026-10-23. Until now a company's own staff could remove that company's own domains; a removed domain stops email for every company that sends from it, and the AWS account is shared, so the button now shows to super admins only. Everyone else sees the list, can add a domain or address, and reads one line saying only a super admin can remove one. A request crafted by hand is refused on the server before any call to Amazon, even for the company's own domain.
+
+### Technical Notes
+
+- `AmazonSes::canRemoveDomains()` (was `canRemoveOtherDomains()`) is the single check, used by the view and by the `deleteIdentity` action; the own-domain test `isOwnIdentity()` stays, but only for grouping the list. `AmazonSesPageTest` covers a settings manager (no button, both removals refused, no AWS call) and a super admin (button, both removals go through). Lang: one new key, one replaced.
+## [2.112.1] - 2026-10-23
+
+**Release type:** Patch/Fix Update
 
 ### Fixed
 
@@ -12,9 +31,7 @@
 
 ### Technical Notes
 
-- `App\Support\OtpLifetime::MAX_MINUTES` (3) is the one place the limit is written; `CustomerAccountService::REGISTRATION_CODE_MINUTES` / `LOGIN_CODE_MINUTES` / `RESET_CODE_MINUTES`, `InvestorOtpCode::VALID_MINUTES` and `InvestorPortalAccountService::EMAIL_CODE_VALID_MINUTES` all point at it, and the interface texts use `:minutes` with those constants. The Next.js API's `expires_in_minutes` for the sign-up code is now 3 (`docs/api/storefront-api.md` updated). Tests: `OtpLifetimeTest` (5), `Ims\OnboardingTest` and `Ims\EmailPasswordResetTest` now expect about 3 minutes. No migrations.
 - `StorefrontNotificationService::smsUsable()` (address saved and has `{phone}` and `{message}`) and `workingGateway()` (the site itself, else the company's primary / Blade / Next.js site that is usable); `sendSmsDetailed()` takes `ownGatewayOnly` (the test button passes it) and sends through `workingGateway()` otherwise. `SmsTemplateService::gatewayFor()` prefers a usable site and falls back to a configured-but-broken one only when none works, so the log can still say what is wrong. The `bad_gateway_url` detail now starts with the site's label. Tests in `SmsDashboardTest`. No migrations.
-
 ## [2.112.0] - 2026-10-23
 
 **Release type:** Minor Feature Update

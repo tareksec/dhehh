@@ -141,8 +141,11 @@ class AmazonSes extends Page
             ->columns(3);
     }
 
-    /** Another company's domains on the same AWS account are shown, but only a super admin may remove them. */
-    public function canRemoveOtherDomains(): bool
+    /**
+     * Removing a domain or address from the AWS account is for a super admin only (owner decision 2026-10-23): a
+     * removed domain stops email for every company that sends from it, and the account is shared.
+     */
+    public function canRemoveDomains(): bool
     {
         return (bool) Auth::user()?->isSuperAdmin();
     }
@@ -473,9 +476,9 @@ class AmazonSes extends Page
                 $setting = $this->setting();
                 $name = (string) ($arguments['identity'] ?? '');
 
-                // Another company's domain on the same AWS account is not this company's to remove; only a super admin may.
-                if (! Auth::user()?->isSuperAdmin() && ! $this->isOwnIdentity($name, app(StorefrontNotificationService::class)->mailFromAddress($setting))) {
-                    Notification::make()->title(__('Could not remove it'))->body(__(':name is not one of this company\'s domains. Only a super admin can remove it.', ['name' => $name]))->danger()->send();
+                // The button is hidden for everyone else; this also refuses a request crafted by hand.
+                if (! $this->canRemoveDomains()) {
+                    Notification::make()->title(__('Could not remove it'))->body(__('Only a super admin can remove a domain or address.'))->danger()->send();
 
                     return;
                 }
