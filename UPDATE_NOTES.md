@@ -102,6 +102,10 @@ Owner (Bangla), with a screenshot of Logs → SMS: "OTP messages do not come. Or
 
 Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
 
+## 2026-10-24 - R2 bucket name field
+
+The bucket name rule in `R2Backups` trims before checking, so a pasted trailing/leading space is not an error. Account ID typos (0 vs 8) still pass the format check; Test connection catches them. Commit status: committed on `ccr-4c1eb24d-2dzxxt`, not merged to main.
+
 ## 2026-10-23 - Advanced backups, Phase 6: Cloudflare R2 off-site copy, an R2 dashboard and a bill estimate
 
 Reason - owner (Bangla): asked how to set up the Shared Drive; the answer was that Shared Drives need paid Google Workspace, and the owner replied "no workspace, upload to R2, check what the bill could be there, and build a dashboard page for R2 that shows everything at a glance". This also settles the open question "R2 as an off-site place": it is now the first choice (Drive stays, for anyone who has Workspace).
