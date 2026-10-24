@@ -12,6 +12,7 @@ use App\Models\StorefrontSetting;
 use App\Models\User;
 use App\Support\LoginClient;
 use App\Support\LoginThrottled;
+use App\Support\OtpLifetime;
 use App\Support\StorefrontApi\Phone;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -36,8 +37,8 @@ class InvestorPortalAccountService
 
     public const CODE_MAX_ATTEMPTS = 5;
 
-    /** A reset code sent by e-mail lives longer than the SMS one, as e-mail can be slow. */
-    public const EMAIL_CODE_VALID_MINUTES = 10;
+    /** A reset code sent by e-mail lives longer than the SMS one, as e-mail can be slow, but never past OtpLifetime::MAX_MINUTES. */
+    public const EMAIL_CODE_VALID_MINUTES = OtpLifetime::MAX_MINUTES;
 
     public function __construct(
         protected StorefrontNotificationService $notifications,

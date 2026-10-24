@@ -2,12 +2,17 @@
 
 **Release type:** Patch Update
 
+### Changed
+
+- **Every one-time code (OTP) now works for three minutes at most.** Owner request 2026-10-24. Before, a shop customer's sign-up and login codes lived 10 minutes, a password-reset code 15, the code to join IMS 10 and an investor's e-mailed reset code 10. All of them now stop working after 3 minutes (a code that already lived shorter, the investor's SMS code at 1 minute, stays shorter), and asking again sends a new one. The texts beside the code box (Blade storefront, reseller apply and forgot-password pages, IMS join page, the login e-mail) say "3 minutes" from the same setting instead of a fixed number. An emailed reset link that staff send to a reseller is a link, not a code, and keeps its 60 minutes.
+
 ### Fixed
 
 - **Login codes (OTP) did not arrive while order status texts did.** Owner report 2026-10-23, with the SMS Log showing "The SMS gateway URL has no {phone} or no {message}" for the owner's own number. A company with two sites (the Blade storefront and the Next.js site) keeps one SMS gateway setting per site; order texts used the working one, but a login code asked for on the other site used that site's setting, which still had the gateway's example words in it. A site whose saved gateway address cannot work now sends through the company's other site that has a working one (`StorefrontNotificationService::workingGateway()`), as order texts already did, so no login, recovery or reminder text is lost to a site that was never fixed. A site with no gateway at all keeps SMS off, and **Send test SMS** still tests only the site being edited. The SMS Log now names the site in the reason, for example "(Blade storefront (reseller store): missing {phone}, {message})", and the SMS Dashboard reads the price and balance from a site that can send.
 
 ### Technical Notes
 
+- `App\Support\OtpLifetime::MAX_MINUTES` (3) is the one place the limit is written; `CustomerAccountService::REGISTRATION_CODE_MINUTES` / `LOGIN_CODE_MINUTES` / `RESET_CODE_MINUTES`, `InvestorOtpCode::VALID_MINUTES` and `InvestorPortalAccountService::EMAIL_CODE_VALID_MINUTES` all point at it, and the interface texts use `:minutes` with those constants. The Next.js API's `expires_in_minutes` for the sign-up code is now 3 (`docs/api/storefront-api.md` updated). Tests: `OtpLifetimeTest` (5), `Ims\OnboardingTest` and `Ims\EmailPasswordResetTest` now expect about 3 minutes. No migrations.
 - `StorefrontNotificationService::smsUsable()` (address saved and has `{phone}` and `{message}`) and `workingGateway()` (the site itself, else the company's primary / Blade / Next.js site that is usable); `sendSmsDetailed()` takes `ownGatewayOnly` (the test button passes it) and sends through `workingGateway()` otherwise. `SmsTemplateService::gatewayFor()` prefers a usable site and falls back to a configured-but-broken one only when none works, so the log can still say what is wrong. The `bad_gateway_url` detail now starts with the site's label. Tests in `SmsDashboardTest`. No migrations.
 
 ## [2.112.0] - 2026-10-23

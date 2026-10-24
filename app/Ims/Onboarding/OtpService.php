@@ -8,14 +8,14 @@ use App\Models\EmailLog;
 use App\Models\InvestorOtpCode;
 use App\Models\StorefrontSetting;
 use App\Services\AuditLogService;
-use App\Services\SmsTemplateService;
 use App\Services\EmailLogService;
+use App\Services\SmsTemplateService;
 use App\Services\StorefrontNotificationService;
 use Illuminate\Support\Facades\Hash;
 
 /**
  * Six-digit one-time codes for joining IMS (IMS-V2/PRD.md FR-04, old IMS §6):
- * valid 10 minutes, five wrong tries, at most one send a minute and five an
+ * valid 3 minutes at most (InvestorOtpCode::VALID_MINUTES), five wrong tries, at most one send a minute and five an
  * hour per contact. Only the hash is kept. A phone gets the code by SMS (the
  * gateway's OTP format), an e-mail address by e-mail.
  */

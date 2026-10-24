@@ -2,6 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-24 - One-time codes work for three minutes at most
+
+Owner (Bangla): "keep the OTP code's validity at three minutes at most".
+
+**Found:** shop customer sign-up code 10 minutes and login code 10 (`CustomerAccountService`, the login one was a bare `10`), password-reset SMS code 15, IMS join code 10 (`InvestorOtpCode::VALID_MINUTES`), investor e-mailed reset code 10 (`EMAIL_CODE_VALID_MINUTES`); the investor SMS code was already 1 minute.
+
+**What changed:** one limit, `App\Support\OtpLifetime::MAX_MINUTES = 3`; every lifetime constant points at it (new `LOGIN_CODE_MINUTES` and `RESET_CODE_MINUTES` replace the bare numbers). The wording that told the user "10 / 15 minutes" (Blade storefront OTP and reset pages, login e-mail, reseller Apply and forgot-password, IMS JoinWithInvite) now reads the constants, so it cannot drift again. `docs/api/storefront-api.md`, `PROJECT_GUIDE.md` and the investor plan say 3 minutes. The reseller reset **link** (60 minutes, sent by staff) is not a code and was left alone: say if it should be shortened too.
+
+**Needs Bangla review (lang/bn.json):** three keys changed from a fixed number to `:minutes` ("The 6-digit code sent by SMS to :phone. It expires in :minutes minutes.", the reseller Apply one and "We sent a code to :contact. It works for :minutes minutes."). The Bangla text now shows the number in Latin digits (3), like the existing "We sent the code by SMS..." key. SMS wording the owner wrote on SMS Templates is the owner's own: if a template says "valid for 10 minutes", edit it.
+
+**Verified:** `OtpLifetimeTest` (new, 5), `Ims\OnboardingTest`, `Ims\EmailPasswordResetTest`, `StorefrontCustomerAuthTest`, `ResellerPortalPasswordResetTest`, `TranslationParityTest`; full `php artisan test` before the push.
+
+Commit status: committed on `claude/order-management-features-nafks7`; not on `main`.
+
 ## 2026-10-23 (next) - Login codes (OTP) failed while order status texts worked
 
 Owner (Bangla), with a screenshot of Logs → SMS: "OTP messages do not come. Order status messages come." The screenshot showed two `Not sent: gateway` rows (15:08, 15:25) of kind "Other messages (login codes...)" for 01728714614, reason "The SMS gateway URL has no {phone} or no {message}", and the earlier test SMS (13:16) as Sent.
