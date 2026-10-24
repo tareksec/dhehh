@@ -34,6 +34,8 @@
 
 ### Fixed
 
+- **R2 settings: a space pasted with the bucket name no longer shows "The bucket name field format is invalid".** The name is checked after the spaces are trimmed (it was already trimmed on save).
+
 - **Restoring a backup by hand could leave the database half old, half new.** The manual steps loaded a dump over the existing tables, so a table created by a newer update stayed behind and the next `migrate` failed with "table already exists". `backup:restore` empties the database first; the manual steps in the guide now say so.
 - **A full app backup that was interrupted left a broken zip in the list.** The archive is now written to a temporary file and only given its real name when complete; leftovers older than 6 hours are removed. The database backup is made first, so it still exists if the archive step fails (a full disk, for example).
 - **Uploading a backup to Google Drive loaded the whole file into memory** and used a 5 MB-style upload, which fails for a real backup. It is now streamed, and a large file goes in 8 MB pieces: a dropped connection costs one piece, which is retried (up to three tries, asking Drive where it stopped), instead of the whole upload.

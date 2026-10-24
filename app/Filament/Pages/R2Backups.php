@@ -147,7 +147,12 @@ class R2Backups extends Page
                 TextInput::make('bucket')
                     ->label(__('Bucket name'))
                     ->placeholder('zamzam-erp-backups')
-                    ->regex('/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/')
+                    // A space pasted along with the name is trimmed on save, so it is not an error.
+                    ->rules([fn (): \Closure => function (string $attribute, mixed $value, \Closure $fail): void {
+                        if (preg_match('/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/', trim((string) $value)) !== 1) {
+                            $fail(__('The :attribute field format is invalid.', ['attribute' => __('Bucket name')]));
+                        }
+                    }])
                     ->helperText(__('Lower-case letters, digits and hyphens. Not the bucket used for product images or customer files.'))
                     ->autocomplete(false),
                 TextInput::make('prefix')
