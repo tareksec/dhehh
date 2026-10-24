@@ -2,7 +2,21 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-24 (latest) - mysqldump on the Nixpacks build
+## 2026-10-24 (latest) - IMS: Fund Source lists empty for every company
+
+Bug report (live check 24 Oct): IMS Office → Create Investor Group, Receiving and Payout Fund Source always showed "No options available", although Tasneem (Bkash, Brac Bank, NCC Bank) and ZamZam International have active money accounts.
+
+Cause: the two selects (and the other IMS "paid from" pickers) read the `fund_sources` table. Its admin page was hidden in July (`d5a99991`) and nothing else ever creates a row, so the table is empty on live and every list was empty — for every company, not a company-scope problem.
+
+Fix: one shared picker, `FundSourceSelect`, lists the company's active Cash / Bank / Mobile Banking accounts from Finance > Accounts. When an account is picked, its fund source is used, or made the first time (named after the account), so the database columns, the services and the voucher booking stay as they were. No ERP account data, settings or migrations change; nothing is written until a form is saved.
+
+Check after deploy (the bug report's acceptance list): Tasneem lists Bkash, Brac Bank, NCC Bank; ZamZam International lists its seven Cash/Bank/Mobile accounts; Noor stays empty until it has a money account. Saving a test group with both picked will create one `fund_sources` row per picked account — expected.
+
+Verified: `InvestorGroupFundSourcePickerTest` (5), all IMS test files (group, cycle, exit, money flows, withdrawal, settlement, payout batch, capital), and the full suite: 3425 passed, 18 failed, 6 skipped. Of the 18, 2 were `PayoutBatchTest` / `InvestmentWithdrawalTest` before their update (now pass) and `ReleaseNotesTest` before the version bump (now passes); the other 15 (`BackupDrillTest`, `BackupRestoreTest`, `BackupRunsTest`, `R2BackupTest`, `SesTrackingTest`) fail the same way on clean `main` on this computer (no MySQL client, symlinks, openssl config) and are unrelated. Not looked at in a browser on live.
+
+Commit status: committed on `feature/ims-fund-source-accounts`, merged into `main` and pushed on the owner's approval ("Merge feature/ims-fund-source-accounts into main and push it").
+
+## 2026-10-24 - mysqldump on the Nixpacks build
 
 The agent running `trade:remove-test-data --apply` on the live server reported: the backup step fails because the server has no `mysqldump`, and `--no-backup` is refused in production, so nothing was removed (its dry run showed only TEST records). Cause: the live app is still built by Nixpacks; only the `Dockerfile` installed the MySQL client. Fix: `default-mysql-client` added to `nixpacks.toml` aptPkgs. Not built locally (no Nixpacks / Docker here). After the deploy: `which mysqldump` in the app's Coolify terminal must print a path; then `php artisan trade:remove-test-data <slug> --apply` can run. If the Nixpacks build fails on the new package, Coolify keeps the old container; tell me and I will change the package.
 

@@ -2,8 +2,8 @@
 
 namespace App\Filament\Resources\InvestorGroups\RelationManagers;
 
+use App\Filament\Forms\Components\FundSourceSelect;
 use App\Filament\Resources\InvestorGroups\InvestorGroupResource;
-use App\Models\FundSource;
 use App\Models\Investment;
 use App\Models\Investor;
 use App\Models\InvestorGroup;
@@ -143,10 +143,9 @@ class MembersRelationManager extends RelationManager
             ->modalDescription(__('Use this when the investor takes the deposit back before the group starts. A pending debit voucher (Investor Payout) is created in Finance for the full amount, and only then is the member marked withdrawn. The record is kept.'))
             ->schema([
                 DatePicker::make('withdrawn_at')->label(__('Withdrawn on'))->default(now())->maxDate(now())->required(),
-                Select::make('fund_source_id')->label(__('Paid from (fund source)'))
-                    ->options(fn (): array => FundSource::query()->where('is_active', true)->whereNotNull('account_id')->orderBy('name')->pluck('name', 'id')->all())
+                FundSourceSelect::make('fund_source_id')->label(__('Paid from (fund source)'))
                     ->default(fn (): ?int => $this->group()->payout_fund_source_id)
-                    ->searchable()->required(),
+                    ->required(),
                 Select::make('payment_method')->label(__('Payment Method'))
                     ->options(collect(Investment::PAYMENT_METHODS)->map(fn (string $label): string => __($label))->all())
                     ->default(fn (InvestorGroupMember $record): ?string => $record->payment_method)

@@ -3,12 +3,12 @@
 namespace App\Filament\Resources\InvestmentRecords;
 
 use App\Filament\Clusters\Investments;
+use App\Filament\Forms\Components\FundSourceSelect;
 use App\Filament\Resources\InvestmentProjects\InvestmentProjectResource;
 use App\Filament\Resources\InvestmentProjects\RelationManagers\DocumentsRelationManager;
 use App\Filament\Resources\InvestmentRecords\Pages\ViewInvestmentRecord;
 use App\Filament\Resources\InvestmentRecords\RelationManagers\SecurityInstrumentsRelationManager;
 use App\Filament\Resources\InvestmentRecords\RelationManagers\WitnessesRelationManager;
-use App\Models\FundSource;
 use App\Models\Investment;
 use App\Services\Investment\InvestmentWithdrawalService;
 use App\Support\ImsPanelLinks;
@@ -94,11 +94,9 @@ class InvestmentRecordResource extends Resource
             ->modalDescription(__('Use this when the investor has taken their principal back. A pending debit voucher (Investor Payout) is created in Finance for the full amount, and only then is the investment marked withdrawn. The investment stays in the records; it is not deleted.'))
             ->schema([
                 DatePicker::make('withdrawn_at')->label(__('Withdrawn on'))->default(now())->maxDate(now())->required(),
-                Select::make('fund_source_id')
+                FundSourceSelect::make('fund_source_id')
                     ->label(__('Paid from (fund source)'))
-                    ->options(fn (): array => FundSource::query()->where('is_active', true)->whereNotNull('account_id')->orderBy('name')->pluck('name', 'id')->all())
                     ->default(fn (Investment $record): ?int => $record->project?->payout_fund_source_id)
-                    ->searchable()
                     ->required(),
                 Select::make('payment_method')
                     ->label(__('Payment Method'))

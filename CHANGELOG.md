@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+## [2.115.2] - 2026-10-24
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **IMS: the Receiving / Payout Fund Source lists were empty for every company.** Found on live 24 Oct 2026 (IMS Office → Create Investor Group showed "No options available" for Tasneem and ZamZam International, which both have active Bkash / bank accounts). The lists read the old Fund Sources table, whose admin page was retired in July, so nothing ever filled it. Now they list the selected company's **active money accounts from Finance > Accounts** (Cash, Bank, Mobile Banking) by name; Shipment, Customer Due and Inventory accounts, inactive accounts and other companies' accounts are never offered. A new bank account appears at once, with no IMS step. The same fix applies to the other IMS money pickers that were empty for the same reason: the project's Receiving / Payout Fund Source, **Paid from** on withdrawing a group deposit or an investment, **Paid from** on a capital return, and the payout batch's **Fund source**. Deposits, payouts and withdrawals still book their vouchers against the account picked.
+
+### Technical Notes
+
+- New `App\Filament\Forms\Components\FundSourceSelect`: options from `FundSource::moneyAccountOptions()` (company-scoped `Account::manual()`, active, type cash / bank / mobile_banking); a stored `fund_sources.id` is shown as its account (`FundSource::accountIdFor()`), and the picked account is saved as its fund source (`FundSource::forAccount()`: reuses the account's existing fund source, else creates one named and typed after the account). The columns, services and voucher booking are unchanged (`receiving_fund_source_id` / `payout_fund_source_id` / `fund_source_id` still hold fund source ids). Used by `InvestorGroupResource`, `InvestmentProjectResource`, the group members' withdraw action, the investment withdraw action, `ListCapitalReturns` and `ListPayoutBatches`. The reseller payout picker (ERP, not IMS) is unchanged. A fund source that is not linked to an account (a capital type) can no longer be picked; none can be created anyway. No migrations, no new language keys. Tests: `InvestorGroupFundSourcePickerTest` (5); `PayoutBatchTest` and `InvestmentWithdrawalTest` now pick the account.
+
 ## [2.115.1] - 2026-10-24
 
 **Release type:** Patch/Fix Update

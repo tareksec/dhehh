@@ -1,5 +1,5 @@
 # Accounts & Finance
-> Last checked: 2026-10-23, branch `feature/trade-portal-cash-book` (Trade Portal cash book)
+> Last checked: 2026-10-24, branch `feature/ims-fund-source-accounts` (fund sources made from money accounts); before it 2026-10-23, `feature/trade-portal-cash-book` (Trade Portal cash book)
 
 ## What it does
 The Accounts & Finance module manages tenant-level financial accounting, multi-source cash flow, expenditure tracking, and automated financial reporting. It provides double-entry fund tracking across cash, bank, mobile banking, and digital wallet accounts through an immutable transaction ledger. It implements a structured multi-stage voucher approval system (pending, verified, approved, rejected, cancelled) with soft-delete trash governance. For day-to-day bookkeeping, it processes operational expenses, supplier payments, and AI/OCR-assisted optical expense receipt scanning. Additionally, it compiles profit-and-loss statements, cash flow audits, customer balance ledgers, and downloadable supplier payment reports.
@@ -22,7 +22,7 @@ The Accounts & Finance module manages tenant-level financial accounting, multi-s
 | `app/Models/Account.php` | Bank, cash, mobile banking, or virtual system account tracking live balances. |
 | `app/Models/Voucher.php` | Primary financial voucher tracking debit/credit amounts, approvals, and transaction types. |
 | `app/Models/VoucherAttachment.php` | File receipts and paper voucher scans attached to vouchers. |
-| `app/Models/FundSource.php` | Configurable funding source (bank account, petty cash, partner investment) linked to accounts. |
+| `app/Models/FundSource.php` | Funding source linked to an account; its admin page is retired, so IMS pickers list money accounts and make the account's fund source on first use (`moneyAccountOptions()`, `forAccount()`, `accountIdFor()`). |
 | `app/Models/FundTransfer.php` | Records movement of funds between two company accounts. |
 | `app/Models/TransactionLedger.php` | Immutable double-entry debit and credit ledger for each account. |
 | `app/Models/Expense.php` | Operational business expenses linked to approved vouchers and expense categories. |
@@ -58,7 +58,7 @@ The Accounts & Finance module manages tenant-level financial accounting, multi-s
 | `app/Filament/Resources/Vouchers/Pages/EditVoucher.php` | Edit page for adjusting pending voucher details before verification. |
 | `app/Filament/Resources/Vouchers/Pages/ViewVoucher.php` | Infolist displaying voucher metadata, audit trail, and print actions. |
 | `app/Filament/Resources/Vouchers/Pages/TrashedVouchers.php` | Dedicated page for viewing trashed vouchers with restore or force-delete options. |
-| `app/Filament/Resources/FundSources/FundSourceResource.php` | Configures company fund source channels and bank linkage. |
+| `app/Filament/Resources/FundSources/FundSourceResource.php` | Retired (no pages, hidden from navigation since July 2026); kept for its form/table definition only. |
 | `app/Filament/Resources/FundTransfers/FundTransferResource.php` | Manages transfer requests between internal bank and cash accounts. |
 | `app/Filament/Resources/TransactionLedgers/TransactionLedgerResource.php` | Read-only ledger audit trail showing debit, credit, balance, and reference links. |
 | `app/Filament/Resources/Expenses/ExpenseResource.php` | Registry of operational expenditures and category allocations. |

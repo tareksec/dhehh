@@ -286,10 +286,11 @@ class PayoutBatchTest extends TestCase
         $this->approvedAccount($alpha);
 
         Livewire::test(ListPayoutBatches::class)
-            ->callAction('newBatch', ['fund_source_id' => $this->fundSource->id])
+            ->callAction('newBatch', ['fund_source_id' => $this->fundSource->account_id]) // the picker lists accounts
             ->assertHasNoActionErrors();
         $batch = PayoutBatch::query()->firstOrFail();
         $this->assertSame(1, $batch->item_count);
+        $this->assertSame($this->fundSource->id, $batch->fund_source_id, 'the picked account is stored as its existing fund source');
 
         Livewire::test(ViewPayoutBatch::class, ['record' => $batch->getRouteKey()])->assertActionVisible('approve')->callAction('approve');
         $this->assertSame(PayoutBatch::STATUS_DRAFT, $batch->fresh()->status);
