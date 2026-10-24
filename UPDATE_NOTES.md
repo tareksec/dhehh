@@ -2,7 +2,15 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-24 (latest) - Trade Portal: command to remove Tasneem's QA test data
+## 2026-10-24 (latest) - mysqldump on the Nixpacks build
+
+The agent running `trade:remove-test-data --apply` on the live server reported: the backup step fails because the server has no `mysqldump`, and `--no-backup` is refused in production, so nothing was removed (its dry run showed only TEST records). Cause: the live app is still built by Nixpacks; only the `Dockerfile` installed the MySQL client. Fix: `default-mysql-client` added to `nixpacks.toml` aptPkgs. Not built locally (no Nixpacks / Docker here). After the deploy: `which mysqldump` in the app's Coolify terminal must print a path; then `php artisan trade:remove-test-data <slug> --apply` can run. If the Nixpacks build fails on the new package, Coolify keeps the old container; tell me and I will change the package.
+
+Still open for the owner: the live container is on Nixpacks, i.e. the old PHP 8.4.2 from the snapshot (see `docs/deployment.md`, Dockerfile switch). Switching the Build Pack to `Dockerfile` would fix both.
+
+Commit status: committed on `feature/trade-portal-test-data-cleanup` and pushed to `main` (the owner asked for the redeploy).
+
+## 2026-10-24 - Trade Portal: command to remove Tasneem's QA test data
 
 Owner's cleanup list: the Trade Portal has no delete buttons, and the QA records of 23 Oct (all named `TEST-…`: 3 challans, TEST-Customer-001, 5 products, the TEST-Supplier-001 purchase with LC file TEST-LC-001, 2 serials, 6 cash book entries, the TEST-Expense-001 category) are still in the live company "Tasneem Knitting industry".
 

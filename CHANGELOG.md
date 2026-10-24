@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **Database backups on the live server: `mysqldump` was missing.** Found when `trade:remove-test-data --apply` stopped at its backup step ("mysqldump not found"), so the Tasneem test data could not be removed. The live app is still built by Coolify's Nixpacks, and only the `Dockerfile` installed the MySQL client tools; `nixpacks.toml` now installs them too (`default-mysql-client`). After this deploy `php artisan backup:database` and every backup that needs a database dump work on the Nixpacks build as well.
+
+### Technical Notes
+
+- `nixpacks.toml` `[phases.setup] aptPkgs` gains `default-mysql-client`; `docs/deployment.md` updated. No code or migrations. Not built locally (no Nixpacks or Docker on this computer): the first Coolify deploy is the test — check `which mysqldump` in the app's terminal. The longer-term fix is still the planned switch of the Build Pack to `Dockerfile` (`docs/deployment.md`, "Dockerfile build and PHP security updates"), which also brings the PHP security update.
+
 ## [2.115.0] - 2026-10-24
 
 **Release type:** Minor Feature Update

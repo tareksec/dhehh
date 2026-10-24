@@ -669,11 +669,11 @@ It needs no account (Let's Encrypt certificates are free and automatic). It has 
 IMS v2 provides on-server Optical Character Recognition (OCR) for Bangladeshi National Identity (NID) cards during investor onboarding (`App\Ims\Kyc\NidOcr`, `IMS-V2/TRD.md` §7). This allows extracting NID numbers, dates of birth, and names locally without sending sensitive identity documents to third-party APIs.
 
 ### 1. Coolify / Nixpacks Build Configuration
-The repository includes `tesseract-ocr` and `tesseract-ocr-ben` in `nixpacks.toml`:
+The repository includes `tesseract-ocr` and `tesseract-ocr-ben` in `nixpacks.toml` (and, since 2026-10-24, `default-mysql-client` for `mysqldump`, which the database backups need — the Dockerfile installs the same package):
 
 ```toml
 [phases.setup]
-aptPkgs = ["...", "tesseract-ocr", "tesseract-ocr-ben"]
+aptPkgs = ["...", "tesseract-ocr", "tesseract-ocr-ben", "default-mysql-client"]
 ```
 
 When building with Nixpacks on Coolify:

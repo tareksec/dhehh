@@ -4,7 +4,9 @@ NIXPACKS_PHP_ROOT_DIR = "/app/public"
 NIXPACKS_PHP_FALLBACK_PATH = "/index.php"
 
 [phases.setup]
-aptPkgs = ["...", "tesseract-ocr", "tesseract-ocr-ben"]
+# default-mysql-client provides `mysqldump`, which the database backups
+# (App\Services\DatabaseBackupService) need — the same package the Dockerfile installs.
+aptPkgs = ["...", "tesseract-ocr", "tesseract-ocr-ben", "default-mysql-client"]
 
 
 # `php artisan deploy:migrate` (see App\Console\Commands\DeployMigrate) is
