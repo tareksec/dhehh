@@ -2,6 +2,18 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-10-24 (latest) - AI guides for the three portals
+
+Owner (Banglish): write documents for the Trade Portal and the IMS (Office and Investor) that an AI can read from a link, so non-technical users who get stuck can give the link to an AI and be guided. Not for people to read; no need to be short.
+
+**What I did:** `docs/ai-guides/` with `README.md` (portals, rules for the AI), `trade-portal.md`, `ims-office.md`, `ims-investor.md`. Written from the code (navigation classes, resources, panel providers, permissions doc), not from memory.
+
+**Not verified:** I could not sign in to the live sites, so no screen was compared with the guide. Parts taken from the plans rather than code: the IMS daily/monthly job times, default role table (`IMS-V2/ROLES.md`), investor sign-in/OTP wording. The Bangla menu words are not listed (only the English names) so nothing is invented.
+
+**How to share:** the repository is private, so the AI needs the file text (paste it) or a link the AI can open. Say if you want the guides published at a public address.
+
+Commit status: committed on `feature/ai-guide-docs` and pushed; not on `main`.
+
 ## 2026-10-24 - One-time codes work for three minutes at most
 
 Owner (Bangla): "keep the OTP code's validity at three minutes at most".
