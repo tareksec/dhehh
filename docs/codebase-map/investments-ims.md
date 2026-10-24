@@ -1,5 +1,5 @@
 # Investments & IMS v2
-> Last checked: 2026-10-22, feature/ims-office-mobile (office phone layout: bottom tab bar and sheets, home quick buttons, lists stacked as cards on phones in both IMS panels)
+> Last checked: 2026-10-24, feature/ims-fund-source-accounts (fund-source pickers list Finance money accounts via `FundSourceSelect`); before it 2026-10-22, feature/ims-office-mobile (office phone layout)
 
 ## What it does
 The Investments & IMS v2 module manages Islamic Mudarabah investment partnerships, syndicated investor pools, commercial project funding, and comprehensive investor relations. Built natively into the application following the retirement of the legacy external IMS, it provides two dedicated Filament 5 panels: the IMS Office back-office panel (`/office`) for investment managers, and the Investor Portal (`/investor`) for self-service investor access. It automates investor onboarding with NID OCR verification, digital agreement acceptance, syndicated investor group lifecycles, and automated daily profit proposals. Additionally, it features an investor transparency feed, scheduled monthly statement generation, capital return queues, bank statement reconciliation, and channel partner commission settlements.
@@ -86,6 +86,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `app/Filament/Resources/InvestmentProjects/InvestmentProjectResource.php` | Admin resource for projects, cost sheets, linked purchases, and settlements. |
 | `app/Filament/Resources/InvestmentRecords/InvestmentRecordResource.php` | Admin resource for individual capital placement contracts. |
 | `app/Filament/Resources/InvestorGroups/InvestorGroupResource.php` | Admin resource for managing syndicated pools, cycles, and member lists. |
+| `app/Filament/Forms/Components/FundSourceSelect.php` | Shared "fund source" picker for IMS forms and actions: lists the company's active Cash / Bank / Mobile Banking accounts and saves the picked account as its fund source (`FundSource::forAccount()`, made on first use). |
 | `app/Filament/Resources/InvestorDrafts/InvestorDraftResource.php` | Admin queue for reviewing new investor applications. |
 | `app/Filament/Resources/InvestorRequests/InvestorRequestResource.php` | Admin queue for capital withdrawal and reinvestment requests. |
 | `app/Filament/Ims/Office/Pages/Home.php` | IMS Office dashboard with daily KPIs, pending actions, and financial charts. |
