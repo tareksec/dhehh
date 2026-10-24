@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [2.114.0] - 2026-10-24
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -20,7 +22,6 @@
 - Email Templates: `email_templates` (company-scoped via `BelongsToCompany`, unique `(company_id, key)`; `key` = `order.placed`, `order.<stage>`, `code.customer_login`, `reset.reseller_password`, `code.ims_join`, `reset.investor_password`, `ims.invitation`, `ims.<event>`, or `custom.<ulid>` with `is_custom`), added to `MultiCompanyIsolationTest`. `EmailTemplateService` holds the definitions, `render()` (subject, text, escaped HTML), `brand()`, `wrap()` (a `TemplatedEmail`), `mailableOr()` (the template in the layout, else the built-in mailable passed in) and `save()` / `saveCustom()`. Call sites switched to `mailableOr()`: `StorefrontNotificationService::sendLoginOtpEmail()` and `sendResellerPasswordResetEmail()`, `OtpService`, `InviteService`, `InvestorPortalAccountService`; `ImsNotifier` renders the news template and passes it to `SendImsMessageJob` (new last argument `$template`). `OrderStatusEmailService` is hooked beside the SMS in `Order::created` and `OrderStatusTransition::created` (both inside the same try/report), queues `SendOrderEmailJob` (runs inside `CompanyContext::within()`, never retried) and picks the site's email account with `settingFor()`. Tests: `EmailTemplatesTest` (26). Docs: `docs/email-templates.md`. Codebase map updated. The login-code mail's `:minutes` is `CustomerAccountService::LOGIN_CODE_MINUTES`, so it follows the three-minute limit (`OtpLifetime`).
 - Amazon SES phone layout: the page root has the class `zz-ses` and the rules sit in `resources/css/filament/admin/theme.css` (heading `text-wrap: balance`, and under 40rem: the section header with an `afterHeader` action turns into a column, `margin-block: 0 !important` undoes Filament's negative margin for header buttons, buttons in a header and in a `zz-ses-actions` row are 100% wide, `.fi-btn` is 2.75rem high, section padding 1rem). Needs `npm run build`. Rows in the view are `flex-wrap` with the name `w-full sm:w-auto`. One new key, "Not checked yet" (en and bn). Test: `AmazonSesPageTest::test_the_page_carries_the_hooks_of_its_phone_layout`. Looked at in a browser at 320, 390 and 1280 px, light and dark: no sideways scroll.
 - Documentation only; no code, migrations or language keys. Written from the panel providers, navigation classes, resources and `docs/roles-and-permissions.md` as of 2026-10-24.
-
 ## [2.113.0] - 2026-10-24
 
 **Release type:** Minor Feature Update
