@@ -14,7 +14,7 @@ Owner (Bangla): "keep the OTP code's validity at three minutes at most".
 
 **Verified:** `OtpLifetimeTest` (new, 5), `Ims\OnboardingTest`, `Ims\EmailPasswordResetTest`, `StorefrontCustomerAuthTest`, `ResellerPortalPasswordResetTest`, `TranslationParityTest`; full `php artisan test` before the push.
 
-Commit status: committed on `claude/order-management-features-nafks7`; not on `main`.
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("ওকে ঠিক আছে, মেইন এ পুশ কর").
 
 ## 2026-10-23 (latest) - Amazon SES: removing a domain or address is for a super admin only
 
