@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [2.113.0] - 2026-10-24
+
 **Release type:** Minor Feature Update
 
 ### Changed
@@ -9,7 +11,6 @@
 ### Technical Notes
 
 - `App\Support\OtpLifetime::MAX_MINUTES` (3) is the one place the limit is written; `CustomerAccountService::REGISTRATION_CODE_MINUTES` / `LOGIN_CODE_MINUTES` / `RESET_CODE_MINUTES`, `InvestorOtpCode::VALID_MINUTES` and `InvestorPortalAccountService::EMAIL_CODE_VALID_MINUTES` all point at it, and the interface texts use `:minutes` with those constants. The Next.js API's `expires_in_minutes` for the sign-up code is now 3 (`docs/api/storefront-api.md` updated). Tests: `OtpLifetimeTest` (5), `Ims\OnboardingTest` and `Ims\EmailPasswordResetTest` now expect about 3 minutes. No migrations.
-
 ## [2.112.2] - 2026-10-23
 
 **Release type:** Patch/Fix Update
