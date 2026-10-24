@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [2.115.1] - 2026-10-24
+
 **Release type:** Patch/Fix Update
 
 ### Fixed
@@ -9,7 +11,6 @@
 ### Technical Notes
 
 - `nixpacks.toml` `[phases.setup] aptPkgs` gains `default-mysql-client`; `docs/deployment.md` updated. No code or migrations. Not built locally (no Nixpacks or Docker on this computer): the first Coolify deploy is the test — check `which mysqldump` in the app's terminal. The longer-term fix is still the planned switch of the Build Pack to `Dockerfile` (`docs/deployment.md`, "Dockerfile build and PHP security updates"), which also brings the PHP security update.
-
 ## [2.115.0] - 2026-10-24
 
 **Release type:** Minor Feature Update
