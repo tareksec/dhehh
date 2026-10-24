@@ -2,12 +2,12 @@
 
 namespace App\Filament\Ims\Office\Resources\CapitalReturns\Pages;
 
+use App\Filament\Forms\Components\FundSourceSelect;
 use App\Filament\Ims\Office\Resources\CapitalReturns\CapitalReturnResource;
 use App\Filament\Ims\Office\Widgets\MaturingCapital;
 use App\Ims\Capital\CapitalCalculator;
 use App\Ims\Capital\CapitalReturnService;
 use App\Ims\Capital\MaturityQueue;
-use App\Models\FundSource;
 use App\Models\Investment;
 use App\Models\InvestorGroupMember;
 use App\Support\ImsNumbers;
@@ -92,9 +92,7 @@ class ListCapitalReturns extends ListRecords
                             return __('Invested :amount, loss :loss, already paid back :returned — at most :left now.', ['amount' => ImsNumbers::money($f['amount']), 'loss' => ImsNumbers::money($f['loss']), 'returned' => ImsNumbers::money($f['returned']), 'left' => ImsNumbers::money($f['outstanding'])]);
                         }),
                     DatePicker::make('returned_on')->label(__('Paid on'))->default(now())->maxDate(now())->required(),
-                    Select::make('fund_source_id')->label(__('Paid from (fund source)'))
-                        ->options(fn (): array => FundSource::query()->where('is_active', true)->whereNotNull('account_id')->orderBy('name')->pluck('name', 'id')->all())
-                        ->searchable()->required(),
+                    FundSourceSelect::make('fund_source_id')->label(__('Paid from (fund source)'))->required(),
                     Select::make('method')->label(__('Payment Method'))->options(collect(Investment::PAYMENT_METHODS)->map(fn (string $label): string => __($label))->all())->required(),
                     TextInput::make('reference')->label(__('Payment reference (transaction ID)'))->maxLength(255),
                     FileUpload::make('proof')->label(__('Proof (screenshot or PDF)'))->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])->storeFiles(false),

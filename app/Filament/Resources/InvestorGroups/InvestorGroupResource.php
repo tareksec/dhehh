@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\InvestorGroups;
 
 use App\Filament\Clusters\Investments;
+use App\Filament\Forms\Components\FundSourceSelect;
 use App\Filament\Resources\InvestmentProjects\InvestmentProjectResource;
 use App\Filament\Resources\InvestorGroups\Pages\CreateInvestorGroup;
 use App\Filament\Resources\InvestorGroups\Pages\EditInvestorGroup;
@@ -122,11 +123,9 @@ class InvestorGroupResource extends Resource
                                 $fail(__('Investor, channel partner, and company shares must total exactly 100%.'));
                             }
                         }),
-                    Select::make('receiving_fund_source_id')->label(__('Receiving Fund Source'))
-                        ->relationship('receivingFundSource', 'name')->searchable()->preload()
+                    FundSourceSelect::make('receiving_fund_source_id')->label(__('Receiving Fund Source'))
                         ->helperText(__('Each deposit into the group is booked as a pending capital investment voucher here. Leave empty to book none.')),
-                    Select::make('payout_fund_source_id')->label(__('Payout Fund Source'))
-                        ->relationship('payoutFundSource', 'name')->searchable()->preload()
+                    FundSourceSelect::make('payout_fund_source_id')->label(__('Payout Fund Source'))
                         ->helperText(__('Copied into each project: payouts are booked from here when marked paid.')),
                 ])->columns(3),
         ]);

@@ -20,7 +20,21 @@ Owner (Bangla): show on the Amazon SES dashboard the cost of email transactions,
 
 **Still open:** emails sent through the server's own default mailer (no site SMTP host) are not counted, and the Email Log has no site column, so a company with two sites on different AWS accounts sees both together. Deploy needs `npm run build` (no migration).
 
-Commit status: committed and pushed to the branch `ccr-3799b463-p4pv7n`; **not on `main`** (waiting for the owner's approval).
+Commit status: committed on the branch `ccr-3799b463-p4pv7n`, merged with `origin/main` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
+
+## 2026-10-24 - IMS: Fund Source lists empty for every company
+
+Bug report (live check 24 Oct): IMS Office → Create Investor Group, Receiving and Payout Fund Source always showed "No options available", although Tasneem (Bkash, Brac Bank, NCC Bank) and ZamZam International have active money accounts.
+
+Cause: the two selects (and the other IMS "paid from" pickers) read the `fund_sources` table. Its admin page was hidden in July (`d5a99991`) and nothing else ever creates a row, so the table is empty on live and every list was empty — for every company, not a company-scope problem.
+
+Fix: one shared picker, `FundSourceSelect`, lists the company's active Cash / Bank / Mobile Banking accounts from Finance > Accounts. When an account is picked, its fund source is used, or made the first time (named after the account), so the database columns, the services and the voucher booking stay as they were. No ERP account data, settings or migrations change; nothing is written until a form is saved.
+
+Check after deploy (the bug report's acceptance list): Tasneem lists Bkash, Brac Bank, NCC Bank; ZamZam International lists its seven Cash/Bank/Mobile accounts; Noor stays empty until it has a money account. Saving a test group with both picked will create one `fund_sources` row per picked account — expected.
+
+Verified: `InvestorGroupFundSourcePickerTest` (5), all IMS test files (group, cycle, exit, money flows, withdrawal, settlement, payout batch, capital), and the full suite: 3425 passed, 18 failed, 6 skipped. Of the 18, 2 were `PayoutBatchTest` / `InvestmentWithdrawalTest` before their update (now pass) and `ReleaseNotesTest` before the version bump (now passes); the other 15 (`BackupDrillTest`, `BackupRestoreTest`, `BackupRunsTest`, `R2BackupTest`, `SesTrackingTest`) fail the same way on clean `main` on this computer (no MySQL client, symlinks, openssl config) and are unrelated. Not looked at in a browser on live.
+
+Commit status: committed on `feature/ims-fund-source-accounts`, merged into `main` and pushed on the owner's approval ("Merge feature/ims-fund-source-accounts into main and push it").
 
 ## 2026-10-24 - mysqldump on the Nixpacks build
 

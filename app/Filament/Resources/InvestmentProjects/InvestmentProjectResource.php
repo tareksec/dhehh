@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\InvestmentProjects;
 
 use App\Filament\Clusters\Investments;
+use App\Filament\Forms\Components\FundSourceSelect;
 use App\Filament\Resources\InvestmentProjects\Pages\CreateInvestmentProject;
 use App\Filament\Resources\InvestmentProjects\Pages\EditInvestmentProject;
 use App\Filament\Resources\InvestmentProjects\Pages\ListInvestmentProjects;
@@ -96,16 +97,12 @@ class InvestmentProjectResource extends Resource
                     ->hintAction(static::fieldHelp('companyContributionNoteHelp', 'Contribution Note', 'কেন company gap পূরণ করল — সংক্ষিপ্ত নোট (ঐচ্ছিক)।'))
                     ->maxLength(255)
                     ->visible(fn (Get $get): bool => (float) $get('company_contribution_amount') > 0),
-                Select::make('receiving_fund_source_id')
+                FundSourceSelect::make('receiving_fund_source_id')
                     ->label('Receiving Fund Source')
-                    ->hintAction(static::fieldHelp('receivingFundSourceHelp', 'Receiving Fund Source', 'ঐচ্ছিক। নির্বাচন করলে investor-দের প্রতিটি নতুন investment একটি pending capital investment voucher হিসেবে এই fund source-এ বুক হবে — কেউ verify/approve করবে বিদ্যমান Voucher workflow-এ। খালি রাখলে কোনো voucher তৈরি হবে না।'))
-                    ->relationship('receivingFundSource', 'name')
-                    ->searchable()->preload(),
-                Select::make('payout_fund_source_id')
+                    ->hintAction(static::fieldHelp('receivingFundSourceHelp', 'Receiving Fund Source', 'ঐচ্ছিক। নির্বাচন করলে investor-দের প্রতিটি নতুন investment একটি pending capital investment voucher হিসেবে এই fund source-এ বুক হবে — কেউ verify/approve করবে বিদ্যমান Voucher workflow-এ। খালি রাখলে কোনো voucher তৈরি হবে না।')),
+                FundSourceSelect::make('payout_fund_source_id')
                     ->label('Payout Fund Source')
-                    ->hintAction(static::fieldHelp('payoutFundSourceHelp', 'Payout Fund Source', 'ঐচ্ছিক। নির্বাচন করলে investor/channel-partner payout "Mark as Paid" করলে একটি pending investor payout voucher তৈরি হবে এই fund source থেকে।'))
-                    ->relationship('payoutFundSource', 'name')
-                    ->searchable()->preload(),
+                    ->hintAction(static::fieldHelp('payoutFundSourceHelp', 'Payout Fund Source', 'ঐচ্ছিক। নির্বাচন করলে investor/channel-partner payout "Mark as Paid" করলে একটি pending investor payout voucher তৈরি হবে এই fund source থেকে।')),
                 Select::make('status')
                     ->hintAction(static::fieldHelp('statusHelp', 'Project Status', 'Open = investment নেওয়া হচ্ছে; Running = deal চলছে; Closed = হিসাব প্রস্তুত এবং settlement করা যাবে। Settled status হাতে দেওয়া যায় না—Calculate & Settle action সফল হলে স্বয়ংক্রিয়ভাবে হয়।'))
                     ->options(fn (?InvestmentProject $record): array => $record?->status === 'settled' ? ['settled' => 'Settled'] : array_diff_key(InvestmentProject::STATUSES, ['settled' => true]))->default('open')->required(),
