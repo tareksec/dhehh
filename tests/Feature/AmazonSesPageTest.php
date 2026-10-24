@@ -329,6 +329,24 @@ class AmazonSesPageTest extends TestCase
         $this->assertStringContainsString('SES_CREDENTIAL_KEYS', $source, 'The Storefront Settings save must carry the AWS key over.');
     }
 
+    /** Owner report 2026-10-24: on a phone the section titles were squeezed into a one-word column next to their buttons. */
+    public function test_the_page_carries_the_hooks_of_its_phone_layout(): void
+    {
+        $this->saveKey();
+        $this->fakeAws($this->refreshSteps());
+
+        $html = Livewire::test(AmazonSes::class)->call('refresh')->html();
+
+        $this->assertStringContainsString('zz-ses ', $html);
+        $this->assertStringContainsString('zz-ses-actions', $html);
+        $this->assertStringContainsString('sr-only', $html, 'The checklist icons carry a text for screen readers.');
+
+        // The rules that stack a section header on a phone live in the admin theme under the same names.
+        $css = (string) file_get_contents(resource_path('css/filament/admin/theme.css'));
+        $this->assertStringContainsString('.zz-ses .fi-section > .fi-section-header:has(> .fi-section-header-after-ctn)', $css);
+        $this->assertStringContainsString('.zz-ses .zz-ses-actions .fi-btn', $css);
+    }
+
     /** @param  array<string, mixed>  $extra */
     private function saveKey(array $extra = []): void
     {

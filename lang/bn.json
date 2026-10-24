@@ -3054,6 +3054,7 @@
     "Reply target for handed-over chats (minutes)": "হস্তান্তর করা চ্যাটে উত্তরের সময়সীমা (মিনিট)",
     "A chat the AI hands to the team should get a first reply from a person within this time. Late chats are marked on the Needs attention page. 0 = no target.": "AI যে চ্যাট টিমের হাতে দেয়, তাতে এই সময়ের মধ্যে একজন মানুষের প্রথম উত্তর যাওয়া উচিত। দেরি হলে \"মনোযোগ দরকার\" পেজে চিহ্নিত হয়। ০ = কোনো সময়সীমা নেই।",
     "Needs attention": "মনোযোগ দরকার",
+    "Not checked yet": "এখনো যাচাই করা হয়নি",
     "Opened": "খোলা হয়েছে",
     "Waited": "অপেক্ষা",
     ":minutes min": ":minutes মিনিট",

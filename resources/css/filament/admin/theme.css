@@ -26,6 +26,55 @@
     padding-block: 5px;
 }
 
+/* Settings -> Amazon SES. Section headings break evenly and every button is a
+   comfortable touch target. On a phone the section header stacks (the title and
+   text take the whole width, the action button sits full width under them)
+   instead of squeezing the title into a one-word column next to the button, and
+   the section padding drops from 24px to 16px so the text has room. The
+   !important only undoes Filament's negative margin for buttons in a header,
+   which is meant for a side-by-side header. */
+.zz-ses .fi-section-header-heading {
+    text-wrap: balance;
+}
+
+.zz-ses .fi-section-header-description {
+    text-wrap: pretty;
+}
+
+.zz-ses .fi-btn {
+    touch-action: manipulation;
+}
+
+@media (max-width: 39.9375rem) {
+    .zz-ses .fi-section:not(.fi-section-not-contained) > .fi-section-header {
+        padding: 1rem;
+    }
+
+    .zz-ses .fi-section:not(.fi-section-not-contained):not(.fi-divided) > .fi-section-content-ctn > .fi-section-content {
+        padding: 1rem;
+    }
+
+    .zz-ses .fi-section > .fi-section-header:has(> .fi-section-header-after-ctn) {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .zz-ses .fi-section > .fi-section-header > .fi-section-header-after-ctn {
+        align-self: stretch;
+        margin-block: 0 !important;
+    }
+
+    .zz-ses .fi-section-header-after-ctn .fi-btn,
+    .zz-ses .zz-ses-actions .fi-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .zz-ses .fi-btn {
+        min-height: 2.75rem;
+    }
+}
+
 /* Inbox uses the native Filament surface language in a denser workspace. */
 .zz-inbox-page .fi-page-content,
 .zz-inbox {

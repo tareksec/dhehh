@@ -2,12 +2,17 @@
 
 **Release type:** Patch/Fix Update
 
+### Fixed
+
+- **Settings → Amazon SES now fits a phone.** Owner report 2026-10-24 (screenshots). On a phone the titles of "3. Domains and addresses that may send" and "5. Addresses Amazon will not send to" were squeezed into a column one word wide because the **Add a domain or address** / **Block an address** button took the room beside them, and each domain row broke into pieces (name, badge, kind and **Remove** on separate, uneven lines). Now, on a phone, a section title and its text take the whole width and the button sits full width under them; each domain and each blocked address has its name on a line of its own (it is never cut in the middle on a normal phone), with the status, the kind and the button on the line below; the section padding is 16px instead of 24px; every button is at least 44px high, and **Save and check**, **Remove the AWS key** and the tracking button are full width. The checklist keeps its icon in a column of its own so a long line wraps under the text, and its icons are real icons with a hidden text for screen readers ("Done", "Needs attention", "Not checked yet") instead of the ✓ ✗ ? characters; the account figures sit two to a row. On a tablet or a computer the page looks as before.
+
 ### Changed
 
 - **Settings → Amazon SES: removing a domain or address from the AWS account is for a super admin only.** Owner decision 2026-10-23. Until now a company's own staff could remove that company's own domains; a removed domain stops email for every company that sends from it, and the AWS account is shared, so the button now shows to super admins only. Everyone else sees the list, can add a domain or address, and reads one line saying only a super admin can remove one. A request crafted by hand is refused on the server before any call to Amazon, even for the company's own domain.
 
 ### Technical Notes
 
+- Amazon SES phone layout: the page root has the class `zz-ses` and the rules sit in `resources/css/filament/admin/theme.css` (heading `text-wrap: balance`, and under 40rem: the section header with an `afterHeader` action turns into a column, `margin-block: 0 !important` undoes Filament's negative margin for header buttons, buttons in a header and in a `zz-ses-actions` row are 100% wide, `.fi-btn` is 2.75rem high, section padding 1rem). Needs `npm run build`. Rows in the view are `flex-wrap` with the name `w-full sm:w-auto`. One new key, "Not checked yet" (en and bn). Test: `AmazonSesPageTest::test_the_page_carries_the_hooks_of_its_phone_layout`. Looked at in a browser at 320, 390 and 1280 px, light and dark: no sideways scroll.
 - `AmazonSes::canRemoveDomains()` (was `canRemoveOtherDomains()`) is the single check, used by the view and by the `deleteIdentity` action; the own-domain test `isOwnIdentity()` stays, but only for grouping the list. `AmazonSesPageTest` covers a settings manager (no button, both removals refused, no AWS call) and a super admin (button, both removals go through). Lang: one new key, one replaced.
 
 ## [2.112.1] - 2026-10-23

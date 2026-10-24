@@ -3054,6 +3054,7 @@
     "Reply target for handed-over chats (minutes)": "Reply target for handed-over chats (minutes)",
     "A chat the AI hands to the team should get a first reply from a person within this time. Late chats are marked on the Needs attention page. 0 = no target.": "A chat the AI hands to the team should get a first reply from a person within this time. Late chats are marked on the Needs attention page. 0 = no target.",
     "Needs attention": "Needs attention",
+    "Not checked yet": "Not checked yet",
     "Opened": "Opened",
     "Waited": "Waited",
     ":minutes min": ":minutes min",

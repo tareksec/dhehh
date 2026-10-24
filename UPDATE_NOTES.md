@@ -2,7 +2,21 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-23 (latest) - Amazon SES: removing a domain or address is for a super admin only
+## 2026-10-24 (latest) - Amazon SES page: phone layout
+
+Owner (Bangla, with two phone screenshots): "Amazon SES পেজের মোবাইল ওরিয়েন্টেশন ঠিক নেই, মোবাইলের লেআউট ঠিক কর", and use all the design skills.
+
+**Cause:** Filament puts a section's title and its `afterHeader` button in one row (`flex items-start gap-3`, title `flex-1`). On a phone the long button label won; the title column shrank to a single word. The domain and blocked-address rows were `flex-wrap` with `ms-auto` on the button, so the pieces landed on uneven lines.
+
+**What I did:** `resources/views/filament/pages/amazon-ses.blade.php` (rows, checklist, account grid) and `resources/css/filament/admin/theme.css` (a `zz-ses` block; header stacks under 40rem). Followed the Web Interface Guidelines (the installed `web-design-guidelines` skill; it was the only design skill in this session): no sideways scroll, text containers that break long names, `min-w-0` flex children, `text-wrap: balance` on titles, touch targets of 44px, `touch-action: manipulation`, icons with a text for screen readers, tabular numbers for the figures, a focusable scrollable policy box.
+
+**Verified:** rendered the real page through Livewire with faked AWS data (five domains incl. one waiting for DNS, a bounced address with a very long name) into the built theme CSS and looked at it with Playwright at 320, 390 and 1280 px, light and dark. `scrollWidth` equals the viewport everywhere. The real panel shell (sidebar, top bar) and Livewire/Alpine were not part of that preview. `AmazonSesPageTest` (+1), `TranslationParityTest`.
+
+Needs Bangla review (`lang/bn.json`): "Not checked yet" = "এখনো যাচাই করা হয়নি".
+
+Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to that branch. Not pushed to `main`; that needs the owner's approval.
+
+## 2026-10-23 (previous) - Amazon SES: removing a domain or address is for a super admin only
 
 Owner (Bangla): "ডোমেইন মোছা শুধু সুপার অ্যাডমিনের জন্য করে দাও". This settles the open question from the several-companies-on-one-AWS-account work.
 

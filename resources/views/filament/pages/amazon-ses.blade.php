@@ -4,22 +4,22 @@
             <p class="text-sm">{{ __('This company has no site yet. Add one in Site → Storefront Settings; the AWS key and the email account belong to a site.') }}</p>
         </x-filament::section>
     @else
-        <div class="space-y-6" wire:init="refresh">
+        <div class="zz-ses space-y-6" wire:init="refresh">
             {{-- 1. The AWS key --}}
             <x-filament::section :heading="__('1. Connect your AWS account')" :description="__('Emails still go out through the SMTP account in Integrations → Email Setup. This key lets the dashboard control the Amazon SES account behind it.')">
                 <form wire:submit="saveCredentials" class="space-y-4">
                     {{ $this->form }}
 
-                    <div class="flex flex-wrap items-center gap-3">
+                    <div class="zz-ses-actions flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                         <x-filament::button type="submit">{{ __('Save and check') }}</x-filament::button>
                         {{ $this->forgetKeyAction }}
                     </div>
                 </form>
 
                 <details class="mt-4 text-sm">
-                    <summary class="cursor-pointer font-medium">{{ __('Which AWS permissions does the key need?') }}</summary>
+                    <summary class="cursor-pointer py-2 font-medium">{{ __('Which AWS permissions does the key need?') }}</summary>
                     <p class="mt-2">{{ __('In AWS IAM create a separate user for the dashboard (not the SMTP user), give it this policy and create an access key for it. Nothing else is needed.') }}</p>
-                    <pre class="mt-2 overflow-x-auto rounded-lg bg-gray-50 p-3 text-xs dark:bg-white/5">{{ $this->iamPolicy() }}</pre>
+                    <pre tabindex="0" class="mt-2 max-w-full overflow-x-auto rounded-lg bg-gray-50 p-3 text-xs dark:bg-white/5">{{ $this->iamPolicy() }}</pre>
                 </details>
             </x-filament::section>
 
@@ -30,16 +30,23 @@
             @else
                 {{-- Checklist --}}
                 <x-filament::section :heading="__('Is email set up properly?')">
-                    <ul class="space-y-2 text-sm">
+                    <ul class="space-y-3 text-sm">
                         @foreach ($this->checklist() as $item)
-                            <li>
-                                <span class="font-semibold {{ $item['ok'] === true ? 'text-success-600 dark:text-success-400' : ($item['ok'] === false ? 'text-danger-600 dark:text-danger-400' : 'text-gray-500') }}">
-                                    {{ $item['ok'] === true ? '✓' : ($item['ok'] === false ? '✗' : '?') }}
-                                </span>
-                                {{ $item['label'] }}
-                                @if ($item['hint'])
-                                    <div class="ms-5 text-xs text-gray-500 dark:text-gray-400">{{ $item['hint'] }}</div>
+                            <li class="flex items-start gap-2.5">
+                                @if ($item['ok'] === true)
+                                    <x-filament::icon icon="heroicon-m-check-circle" aria-hidden="true" class="mt-0.5 h-5 w-5 shrink-0 text-success-600 dark:text-success-400" />
+                                @elseif ($item['ok'] === false)
+                                    <x-filament::icon icon="heroicon-m-x-circle" aria-hidden="true" class="mt-0.5 h-5 w-5 shrink-0 text-danger-600 dark:text-danger-400" />
+                                @else
+                                    <x-filament::icon icon="heroicon-m-question-mark-circle" aria-hidden="true" class="mt-0.5 h-5 w-5 shrink-0 text-gray-400" />
                                 @endif
+                                <div class="min-w-0 flex-1">
+                                    <span class="sr-only">{{ $item['ok'] === true ? __('Done') : ($item['ok'] === false ? __('Needs attention') : __('Not checked yet')) }}:</span>
+                                    {{ $item['label'] }}
+                                    @if ($item['hint'])
+                                        <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ $item['hint'] }}</p>
+                                    @endif
+                                </div>
                             </li>
                         @endforeach
                     </ul>
@@ -58,8 +65,8 @@
                 @if (! empty($overview['account']))
                     @php($account = $overview['account'])
                     <x-filament::section :heading="__('2. Your Amazon SES account')" :description="__('The limits and the health rating belong to the whole AWS account, so every company that uses it shares them.')">
-                        <dl class="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                            <div>
+                        <dl class="grid grid-cols-2 gap-4 text-sm lg:grid-cols-4">
+                            <div class="col-span-2 lg:col-span-1">
                                 <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Mode') }}</dt>
                                 <dd class="font-semibold">{{ $account['sandbox'] ? __('Sandbox: only verified addresses receive email') : __('Production: can send to anyone') }}</dd>
                             </div>
@@ -69,14 +76,14 @@
                             </div>
                             <div>
                                 <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Sent in the last 24 hours') }}</dt>
-                                <dd class="font-semibold">{{ number_format($account['sent_24h']) }} / {{ number_format($account['max_24h']) }}</dd>
+                                <dd class="font-semibold tabular-nums">{{ number_format($account['sent_24h']) }} / {{ number_format($account['max_24h']) }}</dd>
                             </div>
                             <div>
                                 <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Fastest rate') }}</dt>
                                 <dd class="font-semibold">{{ __(':count per second', ['count' => rtrim(rtrim(number_format($account['max_rate'], 1), '0'), '.')]) }}</dd>
                             </div>
                             @if ($account['enforcement'] !== '')
-                                <div class="sm:col-span-2 lg:col-span-4">
+                                <div class="col-span-2 lg:col-span-4">
                                     <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Amazon\'s view of the account') }}</dt>
                                     <dd class="font-semibold {{ $account['enforcement'] === 'HEALTHY' ? '' : 'text-danger-600 dark:text-danger-400' }}">
                                         {{ $account['enforcement'] === 'HEALTHY' ? __('Healthy') : $account['enforcement'] }}
@@ -111,9 +118,10 @@
                                             {{ __('Other domains and addresses in this AWS account (used by other companies)') }}
                                         </li>
                                     @endif
-                                    <li class="space-y-2 py-3 {{ $identity['own'] ? '' : 'opacity-75' }}">
-                                        <div class="flex flex-wrap items-center gap-2">
-                                            <span class="break-all font-semibold">{{ $identity['name'] }}</span>
+                                    <li class="py-3 {{ $identity['own'] ? '' : 'opacity-75' }}">
+                                        {{-- Phone: the name has a line to itself, then the status, the kind and the button. From sm up everything sits on one line. --}}
+                                        <div class="flex flex-wrap items-center gap-x-2 gap-y-2">
+                                            <span class="w-full min-w-0 break-all font-semibold sm:w-auto">{{ $identity['name'] }}</span>
                                             <x-filament::badge :color="$identity['verification'] === 'SUCCESS' ? 'success' : ($identity['verification'] === 'FAILED' ? 'danger' : 'warning')">
                                                 {{ match ($identity['verification']) {
                                                     'SUCCESS' => __('Verified'),
@@ -124,20 +132,18 @@
                                             </x-filament::badge>
                                             <span class="text-xs text-gray-500 dark:text-gray-400">{{ $identity['type'] === 'DOMAIN' ? __('Domain') : __('Address') }}</span>
                                             @if ($this->canRemoveDomains())
-                                                <span class="ms-auto">
-                                                    <x-filament::button color="danger" size="xs" outlined wire:click="mountAction('deleteIdentity', {{ \Illuminate\Support\Js::from(['identity' => $identity['name']]) }})">{{ __('Remove') }}</x-filament::button>
-                                                </span>
+                                                <x-filament::button class="ms-auto shrink-0" color="danger" size="xs" outlined wire:click="mountAction('deleteIdentity', {{ \Illuminate\Support\Js::from(['identity' => $identity['name']]) }})">{{ __('Remove') }}</x-filament::button>
                                             @endif
                                         </div>
                                         @if ($identity['verification'] !== 'SUCCESS' && $identity['dns_records'] !== [])
-                                            <div class="rounded-lg bg-gray-50 p-3 text-xs dark:bg-white/5">
+                                            <div class="mt-2 min-w-0 rounded-lg bg-gray-50 p-3 text-xs dark:bg-white/5">
                                                 <p class="mb-2">{{ __('Add these three CNAME records at the domain provider (where the domain\'s DNS is managed):') }}</p>
                                                 @foreach ($identity['dns_records'] as $record)
                                                     <div class="mb-2 break-all"><span class="font-semibold">{{ $record['type'] }}</span> · {{ __('Name') }}: <code>{{ $record['name'] }}</code><br>{{ __('Value') }}: <code>{{ $record['value'] }}</code></div>
                                                 @endforeach
                                             </div>
                                         @elseif ($identity['verification'] !== 'SUCCESS' && $identity['type'] !== 'DOMAIN')
-                                            <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('Amazon emailed a link to this address. Click it to finish.') }}</p>
+                                            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ __('Amazon emailed a link to this address. Click it to finish.') }}</p>
                                         @endif
                                     </li>
                                 @endforeach
@@ -158,10 +164,10 @@
                         @if (! empty($overview['errors']['tracking']))
                             <p class="mt-2 text-sm text-danger-600 dark:text-danger-400">{{ $overview['errors']['tracking'] }}</p>
                         @endif
-                        <div class="mt-3">{{ $this->disableTrackingAction }}</div>
+                        <div class="zz-ses-actions mt-3">{{ $this->disableTrackingAction }}</div>
                     @else
                         <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('Off. Needs this site to be reachable on a public https address, because Amazon posts the reports to it.') }}</p>
-                        <div class="mt-3">{{ $this->enableTrackingAction }}</div>
+                        <div class="zz-ses-actions mt-3">{{ $this->enableTrackingAction }}</div>
                     @endif
                 </x-filament::section>
 
@@ -177,13 +183,11 @@
                         @else
                             <ul class="divide-y divide-gray-200 text-sm dark:divide-white/10">
                                 @foreach ($overview['suppressed'] as $row)
-                                    <li class="flex flex-wrap items-center gap-2 py-2">
-                                        <span class="break-all font-semibold">{{ $row['email'] }}</span>
+                                    <li class="flex flex-wrap items-center gap-x-2 gap-y-2 py-3">
+                                        <span class="w-full min-w-0 break-all font-semibold sm:w-auto">{{ $row['email'] }}</span>
                                         <x-filament::badge :color="$row['reason'] === 'COMPLAINT' ? 'danger' : 'warning'">{{ $row['reason'] === 'COMPLAINT' ? __('Marked as spam') : __('Bounced') }}</x-filament::badge>
                                         <span class="text-xs text-gray-500 dark:text-gray-400">{{ $row['since'] }}</span>
-                                        <span class="ms-auto">
-                                            <x-filament::button color="gray" size="xs" outlined wire:click="mountAction('removeSuppressed', {{ \Illuminate\Support\Js::from(['email' => $row['email']]) }})">{{ __('Allow again') }}</x-filament::button>
-                                        </span>
+                                        <x-filament::button class="ms-auto shrink-0" color="gray" size="xs" outlined wire:click="mountAction('removeSuppressed', {{ \Illuminate\Support\Js::from(['email' => $row['email']]) }})">{{ __('Allow again') }}</x-filament::button>
                                     </li>
                                 @endforeach
                             </ul>
