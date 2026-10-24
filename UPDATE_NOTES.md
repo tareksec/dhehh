@@ -30,6 +30,18 @@ Needs Bangla review (`lang/bn.json`): "Not checked yet" = "এখনো যা�
 
 Commit status: committed on `ccr-3799b463-p4pv7n` and pushed to `main` together with the Email Templates work, on the owner's approval.
 
+## 2026-10-24 (previous) - AI guides for the three portals
+
+Owner (Banglish): write documents for the Trade Portal and the IMS (Office and Investor) that an AI can read from a link, so non-technical users who get stuck can give the link to an AI and be guided. Not for people to read; no need to be short.
+
+**What I did:** `docs/ai-guides/` with `README.md` (portals, rules for the AI), `trade-portal.md`, `ims-office.md`, `ims-investor.md`. Written from the code (navigation classes, resources, panel providers, permissions doc), not from memory.
+
+**Not verified:** I could not sign in to the live sites, so no screen was compared with the guide. Parts taken from the plans rather than code: the IMS daily/monthly job times, default role table (`IMS-V2/ROLES.md`), investor sign-in/OTP wording. The Bangla menu words are not listed (only the English names) so nothing is invented.
+
+**Made public (owner request, Banglish: "make it public with a URL"):** the files moved to `public/ai-guides/*.txt` (plain text, so every AI can open them) and are served straight by the web server at `https://app.zamzamint.com/ai-guides/<name>.txt`, no login. They contain no secrets, only menu names and rules; the risk is limited to outsiders learning how the screens work. Keep real data out of them. They appear only after Coolify deploys `main`.
+
+Commit status: committed on `feature/ai-guide-public` and pushed to `main` on the owner's approval ("make it public").
+
 ## 2026-10-24 - One-time codes work for three minutes at most
 
 Owner (Bangla): "keep the OTP code's validity at three minutes at most".
