@@ -6,9 +6,9 @@ These files are written **for an AI assistant**, not for people. A shop owner, a
 
 | Portal | Address | Who uses it | Guide |
 |---|---|---|---|
-| Trade Portal (shop, sales, stock, LC imports, cash book) | `https://app.zamzamint.com/trade` | Shop owner and staff of a trading company (first user: Tasneem Knitting Industry) | [trade-portal.md](trade-portal.md) |
-| IMS Office (back office of the investment system) | `https://zamzaminv.app/office` | Company staff who run investors, projects, profit and payouts | [ims-office.md](ims-office.md) |
-| Investor Portal | `https://zamzaminv.app/investor/` | Investors and channel partners | [ims-investor.md](ims-investor.md) |
+| Trade Portal (shop, sales, stock, LC imports, cash book) | `https://app.zamzamint.com/trade` | Shop owner and staff of a trading company (first user: Tasneem Knitting Industry) | [trade-portal.txt](https://app.zamzamint.com/ai-guides/trade-portal.txt) |
+| IMS Office (back office of the investment system) | `https://zamzaminv.app/office` | Company staff who run investors, projects, profit and payouts | [ims-office.txt](https://app.zamzamint.com/ai-guides/ims-office.txt) |
+| Investor Portal | `https://zamzaminv.app/investor/` | Investors and channel partners | [ims-investor.txt](https://app.zamzamint.com/ai-guides/ims-investor.txt) |
 
 All three are parts of one ERP system (Laravel + Filament). They share one database but each company's data is separate: a person only ever sees the company they work for or invest in.
 
@@ -34,3 +34,7 @@ Say in one or two lines what this portal is for, then ask: "Which page are you o
 - `docs/roles-and-permissions.md` — every permission.
 
 Keep these guides true to the code: when a menu, page or rule of a portal changes, change the matching guide in the same commit.
+
+## These files are public
+
+They are served as plain text at https://app.zamzamint.com/ai-guides/ (README.txt, trade-portal.txt, ims-office.txt, ims-investor.txt) so that anyone can hand the link to an AI. They live in the repository folder public/ai-guides. Never write a password, key, token, phone number, bank number or real person's data in them.

@@ -4,7 +4,7 @@
 
 ### Added
 
-- **AI guides for the Trade Portal, IMS Office and Investor Portal** (`docs/ai-guides/`). Owner request 2026-10-24. Four plain-language files written for an AI assistant: a person who is stuck on a screen gives the AI the guide's link and says where they are stuck, and the AI explains the next step. Each guide has the menu map, the daily jobs step by step, who may do what, and the common "I'm stuck" cases with the likely reason. `README.md` holds the rules the AI must follow (do not guess, never ask for passwords or codes, point to the Super Admin for permissions).
+- **AI guides for the Trade Portal, IMS Office and Investor Portal** (`public/ai-guides/`, public at `https://app.zamzamint.com/ai-guides/README.txt` and the three portal files). Owner request 2026-10-24; the guides are public plain text so a user can give the link straight to an AI. Four plain-language files written for an AI assistant: a person who is stuck on a screen gives the AI the guide's link and says where they are stuck, and the AI explains the next step. Each guide has the menu map, the daily jobs step by step, who may do what, and the common "I'm stuck" cases with the likely reason. `README.txt` holds the rules the AI must follow (do not guess, never ask for passwords or codes, point to the Super Admin for permissions).
 
 ### Technical Notes
 

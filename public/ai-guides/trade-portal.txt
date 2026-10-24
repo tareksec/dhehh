@@ -1,6 +1,6 @@
 # Trade Portal — guide for an AI assistant
 
-Address: `https://app.zamzamint.com/trade` (path `/trade` on the main domain). Read [README.md](README.md) first for the rules you must follow.
+Address: `https://app.zamzamint.com/trade` (path `/trade` on the main domain). Read [README](https://app.zamzamint.com/ai-guides/README.txt) first for the rules you must follow.
 Last checked against the code: 2026-10-24.
 
 ## What it is

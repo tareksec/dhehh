@@ -1,11 +1,11 @@
 # Investor Portal — guide for an AI assistant
 
-Address: `https://zamzaminv.app/investor/`. Read [README.md](README.md) first for the rules you must follow.
+Address: `https://zamzaminv.app/investor/`. Read [README](https://app.zamzamint.com/ai-guides/README.txt) first for the rules you must follow.
 Last checked against the code: 2026-10-24.
 
 ## What it is
 
-The self-service site of the **Investment Management System (IMS v2)** for investors and channel partners. An investor puts money into a group or project run on Islamic **Mudarabah** (profit sharing by agreed percentages) and uses this site to watch it: investments, profit, payouts, statements, project news, and to send requests or ask for help. The staff side is [IMS Office](ims-office.md).
+The self-service site of the **Investment Management System (IMS v2)** for investors and channel partners. An investor puts money into a group or project run on Islamic **Mudarabah** (profit sharing by agreed percentages) and uses this site to watch it: investments, profit, payouts, statements, project news, and to send requests or ask for help. The staff side is [IMS Office](https://app.zamzamint.com/ai-guides/ims-office.txt).
 
 The investor is usually not technical. Explain in short, calm sentences. Never ask for the password, the OTP code, the NID number or bank account numbers.
 
