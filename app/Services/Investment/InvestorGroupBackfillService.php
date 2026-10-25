@@ -6,6 +6,7 @@ use App\Models\Investment;
 use App\Models\InvestmentProject;
 use App\Models\InvestorGroup;
 use App\Models\InvestorGroupMember;
+use App\Services\AuditLogService;
 use App\Services\CompanyContext;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,11 @@ use RuntimeException;
  * project's own `investments` rows stay as they are and become the project's
  * snapshot, linked to a new group member that copies the same amount, date,
  * payment details and voucher. No voucher is booked.
+ *
+ * The project is renamed to its group code (`G2-P01`, owner 2026-10-25) so it
+ * reads like every later project of its group; the old code is kept in the
+ * audit log (`investor_group_backfilled`) and in the group's notes.
+ * `InvestorGroupBackfillUndoService` is the way back.
  *
  * Works on the current company (`CompanyContext`). Groups start Running with
  * automatic cycles OFF, so the scheduler never creates a pile of catch-up
@@ -60,6 +66,7 @@ class InvestorGroupBackfillService
                 'project' => $label,
                 'status' => $project->status,
                 'group_code' => 'G'.$nextNumber,
+                'new_project_code' => InvestmentProject::formatGroupProjectCode('G'.$nextNumber, 1),
                 'group_name' => 'Group-'.$nextNumber,
                 'running_since' => $project->start_date?->toDateString(),
                 'members' => $investments->count(),
@@ -142,7 +149,20 @@ class InvestorGroupBackfillService
             'running_since' => $project->start_date,
         ])->save();
 
-        $project->forceFill(['group_id' => $group->getKey(), 'sequence_in_group' => 1])->saveQuietly();
+        $previousCode = $project->project_code;
+
+        $project->forceFill([
+            'group_id' => $group->getKey(),
+            'sequence_in_group' => 1,
+            'project_code' => $row['new_project_code'],
+        ])->saveQuietly();
+
+        app(AuditLogService::class)->record('investor_group_backfilled', $group, null, [
+            'project_id' => $project->getKey(),
+            'previous_project_code' => $previousCode,
+            'project_code' => $row['new_project_code'],
+            'members' => $investments->count(),
+        ]);
 
         $memberTotal = round((float) $group->members()->sum('amount'), 2);
         $investmentTotal = round((float) Investment::query()->where('project_id', $project->getKey())->sum('amount'), 2);

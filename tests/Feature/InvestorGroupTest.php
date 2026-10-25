@@ -13,6 +13,7 @@ use App\Filament\Resources\InvestorGroups\Pages\ViewInvestorGroup;
 use App\Filament\Resources\InvestorGroups\RelationManagers\MembersRelationManager;
 use App\Filament\Resources\InvestorGroups\RelationManagers\ProjectsRelationManager;
 use App\Models\Account;
+use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\FundSource;
 use App\Models\Investment;
@@ -598,7 +599,13 @@ class InvestorGroupTest extends TestCase
         $running->refresh();
         $this->assertSame([$groups[0]->id, 1], [$settled->group_id, $settled->sequence_in_group]);
         $this->assertSame([$groups[1]->id, 1], [$running->group_id, $running->sequence_in_group]);
-        $this->assertSame($codesBefore, InvestmentProject::query()->orderBy('id')->pluck('project_code', 'id')->all(), 'existing project codes are never renamed');
+        // Owner 2026-10-25: a moved project takes its group's code; a project left out keeps its own.
+        $this->assertSame(
+            [$settled->id => 'G1-P01', $running->id => 'G2-P01'] + $codesBefore,
+            InvestmentProject::query()->orderBy('id')->pluck('project_code', 'id')->all(),
+            'a moved project is renamed to its group code, the others keep theirs',
+        );
+        $this->assertSame($codesBefore[$settled->id], AuditLog::query()->where('action', 'investor_group_backfilled')->where('auditable_id', $groups[0]->id)->firstOrFail()->new_values['previous_project_code'], 'the old code is kept in the audit log');
         $this->assertSame('settled', $settled->status);
 
         // Members copy the investments; every investment points at its member.

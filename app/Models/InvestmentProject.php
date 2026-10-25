@@ -96,7 +96,13 @@ class InvestmentProject extends Model
 
         $groupCode = InvestorGroup::withoutGlobalScopes()->whereKey($project->group_id)->value('group_code');
 
-        return $groupCode ? $groupCode.'-P'.str_pad((string) $project->sequence_in_group, 2, '0', STR_PAD_LEFT) : null;
+        return $groupCode ? static::formatGroupProjectCode($groupCode, (int) $project->sequence_in_group) : null;
+    }
+
+    /** The one place the `G1-P03` format is made (also used when the backfill renames a project). */
+    public static function formatGroupProjectCode(string $groupCode, int $sequence): string
+    {
+        return $groupCode.'-P'.str_pad((string) $sequence, 2, '0', STR_PAD_LEFT);
     }
 
     protected function sequentialNumberColumn(): string

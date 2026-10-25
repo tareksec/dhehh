@@ -1,5 +1,19 @@
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Investor Groups: a command to take the backfilled groups out again and start over.** Owner request 2026-10-25. `php artisan investments:undo-backfill-groups --company=<id>` (with `--dry-run` first, `--group=G2` for one group, `--include-empty` to also delete an empty test group) removes the groups that `investments:backfill-groups` made: each project is ungrouped and keeps its investments exactly as they are, the group and its copied members are deleted, and no voucher is booked or removed. It only removes a group that is still in the state the backfill left it (one project, no settlement, every member matching its investment, nothing pointing at it); any other group, such as a real group with its own members, is left alone and listed with the reason.
+
+### Changed
+
+- **Backfilled projects now take their group's code.** Owner request 2026-10-25 ("G1-P1"). When `investments:backfill-groups` moves a project into a group, the project is renamed to the group's code (`G2-P01`), like every later project of that group; before this its old code (`01/2026-INV-01`) was kept. The old code is kept in the group's notes and the audit log, and the undo command puts it back. The dry-run table shows the new code. Projects the backfill leaves out keep their codes.
+
+### Technical Notes
+
+- `App\Services\Investment\InvestorGroupBackfillUndoService` and `App\Console\Commands\UndoBackfillInvestorGroups`; `InvestmentProject::formatGroupProjectCode()` is the one place the `G1-P03` format is made. The backfill writes an `investor_group_backfilled` audit row (previous and new project code), the undo an `investor_group_backfill_undone` row. The undo runs in one transaction with a count and sum check on the project's investments, and refuses a group that has a second project, a settlement, a leaving date, a withdrawal notice, an investor request or draft, a reinvestment choice or a capital return pointing at it. No migrations. Tests: `InvestorGroupBackfillUndoTest` (new) and the backfill test in `InvestorGroupTest`.
+
 ## [2.115.1] - 2026-10-24
 
 **Release type:** Patch/Fix Update

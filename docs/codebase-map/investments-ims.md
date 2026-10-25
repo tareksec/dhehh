@@ -1,5 +1,5 @@
 # Investments & IMS v2
-> Last checked: 2026-10-22, feature/ims-office-mobile (office phone layout: bottom tab bar and sheets, home quick buttons, lists stacked as cards on phones in both IMS panels)
+> Last checked: 2026-10-25, claude/focused-davinci-ltfifx (group backfill renames the project to its group code; `investments:undo-backfill-groups` takes a backfilled group out again)
 
 ## What it does
 The Investments & IMS v2 module manages Islamic Mudarabah investment partnerships, syndicated investor pools, commercial project funding, and comprehensive investor relations. Built natively into the application following the retirement of the legacy external IMS, it provides two dedicated Filament 5 panels: the IMS Office back-office panel (`/office`) for investment managers, and the Investor Portal (`/investor`) for self-service investor access. It automates investor onboarding with NID OCR verification, digital agreement acceptance, syndicated investor group lifecycles, and automated daily profit proposals. Additionally, it features an investor transparency feed, scheduled monthly statement generation, capital return queues, bank statement reconciliation, and channel partner commission settlements.
@@ -67,6 +67,8 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `app/Ims/Support/SupportService.php` | Handles customer support tickets and live chat between investors and managers. |
 | `app/Ims/Transparency/ProjectUpdateService.php` | Publishes photographic updates and milestones for ongoing projects. |
 | `app/Services/Investment/SettlementService.php` | Calculates Mudarabah profit shares and executes project settlement disbursements. |
+| `app/Services/Investment/InvestorGroupBackfillService.php` | Moves ungrouped projects into groups (one group per project, project renamed to its group code, old code kept in the audit log). |
+| `app/Services/Investment/InvestorGroupBackfillUndoService.php` | The way back from the backfill: ungroups the project, keeps its investments, deletes the group and member copies, restores the old code; only for a group still in the backfill's state. |
 | `app/Services/Investment/PayoutProofService.php` | Attaches banking transaction receipts to completed payout batches. |
 | `app/Services/Investment/InvestmentWithdrawalService.php` | Coordinates formal capital withdrawal requests and ledger deductions. |
 | `app/Services/InvestorPortalService.php` | General portal business service resolving company contexts and dashboards. |
@@ -135,7 +137,8 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | Path | What it does |
 | --- | --- |
 | `app/Console/Commands/AdvanceInvestorGroups.php` | Scheduled hourly job rolling over investment group cycle states. |
-| `app/Console/Commands/BackfillInvestorGroups.php` | One-off CLI command to backfill legacy individual investments into groups. |
+| `app/Console/Commands/BackfillInvestorGroups.php` | One-off CLI command to backfill legacy individual investments into groups (each project becomes P1 of its group and takes its code, e.g. `G2-P01`). |
+| `app/Console/Commands/UndoBackfillInvestorGroups.php` | One-off CLI command (`investments:undo-backfill-groups`, dry-run first) that takes groups made by the backfill out again; refuses a group that has moved on. |
 | `app/Console/Commands/Ims/MakeProfitProposals.php` | Scheduled daily job (07:00) drafting profit distribution proposals from sales. |
 | `app/Console/Commands/Ims/SendMaturityReminders.php` | Scheduled daily job (08:00) sending capital maturity notices to investors. |
 | `app/Console/Commands/Ims/SendMonthlyStatements.php` | Scheduled monthly job (1st of month at 09:00) dispatching account statements. |
@@ -174,6 +177,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `tests/Feature/Ims/ProposalsAndJobsTest.php` | Tests daily automated profit proposal creation and scheduled jobs. |
 | `tests/Feature/Ims/TransparencyTest.php` | Tests project update feed posts, comments, and investor notifications. |
 | `tests/Feature/Ims/AllCompaniesImsTest.php` | Plan 18 A + B: every company on the group IMS domain, links carrying their company, the office picker and who may open which company. |
+| `tests/Feature/InvestorGroupBackfillUndoTest.php` | Tests the backfill's project-code rename and the undo (clean undo, real group left alone, moved-on groups refused, empty group only on request, command, company isolation). |
 | `tests/Feature/InvestorGroupCycleTest.php` | Tests group lifecycle progression (collecting, running, maturing, settled). |
 | `tests/Feature/InvestorBusinessSwitchTest.php` | Tests the business switcher: who is offered, the one-time token, staff preview and disabled accounts. |
 | `tests/Feature/InvestorPortalTest.php` | Tests investor portal authentication, dashboard metrics, and statement downloads. |

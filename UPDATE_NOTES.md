@@ -2,7 +2,23 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-24 (latest) - mysqldump on the Nixpacks build
+## 2026-10-25 (latest) - Start the investor groups again (undo command, G-codes on backfilled projects)
+
+Owner (Bangla), after the live backfill of Tasneem Knitting industry (company id 2) turned the five old projects into G2–G6 (G1 is a real group that was already there) and kept their old project codes (`01/2026-INV-01` …): "g1-p1 এরকম হবে", then "গ্রুপ সব ডিলিট করে নতুন করে আমার রান কি বল".
+
+What I did:
+- **Backfill now renames** the project to its group code (`G2-P01`, the existing format; the owner wrote "G1-P1" — if the owner wants no zero, `InvestmentProject::formatGroupProjectCode()` is the one place). The old code is in the group's notes and in an `investor_group_backfilled` audit row. The dry-run table has a "New code" column.
+- **New command `investments:undo-backfill-groups`** (`InvestorGroupBackfillUndoService`): `--dry-run` first, `--company=`, `--group=G2` (repeatable), `--include-empty`, `--force`. Removes only a group still in the backfill's state; the project's investments, vouchers and status are untouched; restores the old code from the audit log. A real group (G1), a group with a second project, a settlement, a leaving date, a withdrawal notice, request, draft, reinvestment choice or capital return is left alone and listed with the reason.
+
+**Numbering caveat:** the next group code is the company's highest number + 1, so while G1 (real) exists, a re-run gives G2–G6 again; the five projects can only become G1–G5 if G1 is deleted, which needs G1 to be empty (`--include-empty`). I do not know what G1 holds; the command will say.
+
+Run order on the server (after the deploy): `php artisan investments:undo-backfill-groups --company=2 --dry-run`, read it, then without `--dry-run` (type yes), then `php artisan investments:backfill-groups --company=2 --dry-run` and the real run.
+
+Verified: syntax only (`php -l`). This computer has PHP 8.3 and the project needs 8.4, so `composer install` and `php artisan test` cannot run here; `InvestorGroupBackfillUndoTest` (7 tests) and the changed backfill test in `InvestorGroupTest` are written but **not yet run** — CI on the branch is the check before this reaches `main`.
+
+Commit status: committed on `claude/focused-davinci-ltfifx`, pushed to that branch. Not on `main`.
+
+## 2026-10-24 - mysqldump on the Nixpacks build
 
 The agent running `trade:remove-test-data --apply` on the live server reported: the backup step fails because the server has no `mysqldump`, and `--no-backup` is refused in production, so nothing was removed (its dry run showed only TEST records). Cause: the live app is still built by Nixpacks; only the `Dockerfile` installed the MySQL client. Fix: `default-mysql-client` added to `nixpacks.toml` aptPkgs. Not built locally (no Nixpacks / Docker here). After the deploy: `which mysqldump` in the app's Coolify terminal must print a path; then `php artisan trade:remove-test-data <slug> --apply` can run. If the Nixpacks build fails on the new package, Coolify keeps the old container; tell me and I will change the package.
 

@@ -15,7 +15,7 @@ class BackfillInvestorGroups extends Command
         {--dry-run : Show what would happen and change nothing}
         {--force : Do not ask for confirmation}';
 
-    protected $description = 'Move existing investment projects into investor groups (one group per project, each project becomes Project 1). Dry-run first.';
+    protected $description = 'Move existing investment projects into investor groups (one group per project, each project becomes Project 1 and takes its group code, e.g. G2-P01). Dry-run first.';
 
     public function handle(InvestorGroupBackfillService $backfill, CompanyContext $context): int
     {
@@ -48,9 +48,9 @@ class BackfillInvestorGroups extends Command
 
                 if ($plan['rows'] !== []) {
                     $this->table(
-                        ['Project', 'Status', '→ Group', 'Running since', 'Members', 'Total', 'Active total'],
+                        ['Project', 'Status', '→ Group', 'New code', 'Running since', 'Members', 'Total', 'Active total'],
                         array_map(fn (array $row): array => [
-                            $row['project'], $row['status'], "{$row['group_code']} ({$row['group_name']})", $row['running_since'] ?? '-',
+                            $row['project'], $row['status'], "{$row['group_code']} ({$row['group_name']})", $row['new_project_code'], $row['running_since'] ?? '-',
                             $row['members'].' ('.$row['active_members'].' active)', number_format($row['total'], 2), number_format($row['active_total'], 2),
                         ], $plan['rows']),
                     );
