@@ -1,5 +1,5 @@
 # CRM & Omnichannel Messaging
-> Last checked: 2026-10-24 (Email Templates added: order emails, code/reset and IMS emails in a branded layout, the owner's own templates; SMS Dashboard added; gateway URL is built from the API key and sender ID boxes; a site with a broken gateway sends through the other working site; OTPs live 3 minutes at most)
+> Last checked: 2026-10-24 (Amazon SES page: email usage section, counted from the Email Log, with cost settings; Email Templates added: order emails, code/reset and IMS emails in a branded layout, the owner's own templates; SMS Dashboard added; gateway URL is built from the API key and sender ID boxes; a site with a broken gateway sends through the other working site; OTPs live 3 minutes at most)
 
 ## What it does
 The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, multi-channel chat conversations, automated follow-ups, and marketing broadcasts. It unifies customer communications across WhatsApp Cloud API, WhatsApp Web (QR Baileys bridge), Facebook Messenger, SMS gateways, and Telegram into a single real-time inbox. It incorporates an AI Inbox Control Plane featuring intelligent automated replies, multimodal image/voice note comprehension, intent qualification, cart link generation, and smart human hand-over queues (Agent Desk, Needs Attention, To Chase, Unanswered Questions). Additionally, it coordinates scheduled sales automation cadences, promotional SMS/Messenger broadcasts, quick-reply snippet management, and Firebase Cloud Messaging (FCM) web push notifications.
@@ -75,6 +75,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Services/Ses/SesApiService.php` | Amazon SES API: account, identities (DKIM records), suppression list; errors become plain messages. |
 | `app/Services/Ses/SesTrackingService.php` | Switches SES event tracking on/off (SNS topic, configuration set, https subscription) and builds the webhook address. |
 | `app/Services/Ses/SesEventService.php` | Applies an SES delivery/bounce/complaint event to the Email Log row of that message. |
+| `app/Services/Ses/SesUsageService.php` | Email usage for Settings → Amazon SES: one company's Email Log rows that went through an Amazon SES SMTP host, counted for a month by status, kind, week and the last four months, with the free-allowance state and an estimated cost. The free emails and the price of 1,000 emails are typed in by the owner (`ses_free_limit`, `ses_price_per_1000` in the site's `notification_credentials`). |
 | `app/Services/Ses/SnsMessageValidator.php` | Verifies the signature of an Amazon SNS message. |
 | `app/Services/Ses/AwsClientFactory.php` | Builds the AWS SDK clients (SES v2, SNS, STS); tests swap it for a mock. |
 | `app/Services/EmailLogService.php` | Writes the email log and turns a mail server's error text into a plain reason (wrong login, unverified address, limit, unreachable). |
@@ -106,7 +107,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Filament/Pages/Logs.php` | Settings → Logs: one page, one tab per log (SMS, audit, courier status/webhooks, Meta events, deploy errors, mobile crashes), each shown only to people who may open that log. |
 | `app/Livewire/LogTable.php` | Embeds one log resource's own table inside a Logs tab (View buttons become links to the resource's page). |
 | `app/Support/LogCatalog.php` | The list of logs on the Logs page and who may see each (the log resource's `canViewAny()`). |
-| `app/Filament/Pages/AmazonSes.php` | Settings → Amazon SES: the AWS key, account state, domains with DNS records, suppression list and the bounce/complaint tracking switch (`resources/views/filament/pages/amazon-ses.blade.php`). |
+| `app/Filament/Pages/AmazonSes.php` | Settings → Amazon SES: the AWS key, account state, domains with DNS records, suppression list and the bounce/complaint tracking switch (`resources/views/filament/pages/amazon-ses.blade.php`), and the email usage section with the cost settings (`resources/views/filament/pages/amazon-ses-usage.blade.php`, styles `.zz-use-*` in `resources/css/filament/admin/theme.css`). |
 | `app/Filament/Resources/EmailLogs/EmailLogResource.php` | Email log table (a tab on Settings → Logs, no sidebar entry of its own): every email and whether it was sent, failed or not sent, and why. |
 | `app/Filament/Pages/OrderWhatsAppCard.php` | Settings → Order WhatsApp card: switch on the automatic order card, pick the official channel and approved template. |
 | `app/Filament/Pages/PushNotificationSettings.php` | Configures Firebase Cloud Messaging credentials and web push permissions. |
@@ -173,7 +174,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `tests/Feature/CrmSalesAutomationTest.php` | Tests automated sales follow-up cadences and cart link generation. |
 | `tests/Feature/BroadcastTest.php` | Tests marketing campaign creation, audience filtering, and throttled sending. |
 | `tests/Feature/LeadConversionTest.php` | Tests converting leads into customer accounts and sales orders. |
-| `tests/Feature/SesApiServiceTest.php`, `SesTrackingTest.php`, `AmazonSesPageTest.php` | Amazon SES API service, tracking set-up and events (signed SNS messages), the webhook and the Amazon SES page, with Amazon faked (`tests/Feature/Concerns/FakesAws.php`). |
+| `tests/Feature/SesApiServiceTest.php`, `SesTrackingTest.php`, `AmazonSesPageTest.php`, `SesUsageServiceTest.php` | Amazon SES API service, tracking set-up and events (signed SNS messages), the webhook, the Amazon SES page (including its usage section and cost settings) and the usage counts, with Amazon faked (`tests/Feature/Concerns/FakesAws.php`). |
 | `tests/Feature/EmailLogTest.php` | Tests the email log: sent / failed / not sent rows, reason mapping, no code stored, company isolation and the page. |
 | `tests/Feature/LeadFollowUpReminderTest.php` | Tests scheduled staff notification alerts for pending lead activities. |
 | `tests/Feature/WhatsAppWebArchiveTest.php` | Tests message archiving and media downloading from the Baileys bridge. |

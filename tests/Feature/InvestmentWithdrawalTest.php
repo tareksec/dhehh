@@ -120,10 +120,11 @@ class InvestmentWithdrawalTest extends TestCase
         $investment = $this->investment('01711111111', '1479939603');
 
         Livewire::test(ViewInvestmentRecord::class, ['record' => $investment->getRouteKey()])
-            ->callAction('withdrawPrincipal', $this->data())
+            ->callAction('withdrawPrincipal', [...$this->data(), 'fund_source_id' => $this->fundSource->account_id]) // the picker lists accounts
             ->assertHasNoActionErrors();
 
         $this->assertTrue($investment->fresh()->isWithdrawn());
+        $this->assertSame($this->fundSource->id, $investment->fresh()->withdrawalVoucher->fund_source_id);
 
         $other = $this->investment('01722222222', '1901688455');
         $accountant = User::factory()->create(['role' => 'accountant', 'is_active' => true]);

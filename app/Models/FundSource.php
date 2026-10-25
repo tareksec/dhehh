@@ -53,6 +53,72 @@ class FundSource extends Model
         return $this->hasMany(Voucher::class);
     }
 
+    /**
+     * The current company's active money accounts (Finance > Accounts of type
+     * cash / bank / mobile banking), name by id. Fund-source pickers offer
+     * these: the Fund Sources page is retired, so the accounts are the list
+     * an admin actually maintains.
+     *
+     * @return array<int, string>
+     */
+    public static function moneyAccountOptions(): array
+    {
+        return Account::query()
+            ->manual()
+            ->where('is_active', true)
+            ->whereIn('type', array_keys(Account::MANUAL_TYPES))
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
+    }
+
+    /**
+     * The fund source that books against this money account, made the first
+     * time the account is picked. Null when the id is not an active money
+     * account of the current company.
+     */
+    public static function forAccount(int|string|null $accountId): ?self
+    {
+        if (blank($accountId)) {
+            return null;
+        }
+
+        $account = Account::query()
+            ->manual()
+            ->where('is_active', true)
+            ->whereIn('type', array_keys(Account::MANUAL_TYPES))
+            ->find($accountId);
+
+        if (! $account) {
+            return null;
+        }
+
+        return static::query()
+            ->where('account_id', $account->getKey())
+            ->orderByDesc('is_active')
+            ->orderBy('id')
+            ->first()
+            ?? static::query()->create([
+                'company_id' => $account->company_id,
+                'name' => $account->name,
+                'type' => $account->type,
+                'account_id' => $account->getKey(),
+                'is_active' => true,
+            ]);
+    }
+
+    /** The money account a stored fund source id books against, for showing it in a picker. */
+    public static function accountIdFor(int|string|null $fundSourceId): ?int
+    {
+        if (blank($fundSourceId)) {
+            return null;
+        }
+
+        $accountId = static::query()->whereKey($fundSourceId)->value('account_id');
+
+        return $accountId === null ? null : (int) $accountId;
+    }
+
     public function isAccountLinked(): bool
     {
         return in_array($this->type, self::ACCOUNT_LINKED_TYPES, true);

@@ -61,41 +61,8 @@
                     </x-filament::section>
                 @endif
 
-                {{-- 2. The account --}}
-                @if (! empty($overview['account']))
-                    @php($account = $overview['account'])
-                    <x-filament::section :heading="__('2. Your Amazon SES account')" :description="__('The limits and the health rating belong to the whole AWS account, so every company that uses it shares them.')">
-                        <dl class="grid grid-cols-2 gap-4 text-sm lg:grid-cols-4">
-                            <div class="col-span-2 lg:col-span-1">
-                                <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Mode') }}</dt>
-                                <dd class="font-semibold">{{ $account['sandbox'] ? __('Sandbox: only verified addresses receive email') : __('Production: can send to anyone') }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Sending') }}</dt>
-                                <dd class="font-semibold">{{ $account['sending_enabled'] ? __('On') : __('Paused by Amazon') }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Sent in the last 24 hours') }}</dt>
-                                <dd class="font-semibold tabular-nums">{{ number_format($account['sent_24h']) }} / {{ number_format($account['max_24h']) }}</dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Fastest rate') }}</dt>
-                                <dd class="font-semibold">{{ __(':count per second', ['count' => rtrim(rtrim(number_format($account['max_rate'], 1), '0'), '.')]) }}</dd>
-                            </div>
-                            @if ($account['enforcement'] !== '')
-                                <div class="col-span-2 lg:col-span-4">
-                                    <dt class="text-xs text-gray-500 dark:text-gray-400">{{ __('Amazon\'s view of the account') }}</dt>
-                                    <dd class="font-semibold {{ $account['enforcement'] === 'HEALTHY' ? '' : 'text-danger-600 dark:text-danger-400' }}">
-                                        {{ $account['enforcement'] === 'HEALTHY' ? __('Healthy') : $account['enforcement'] }}
-                                    </dd>
-                                    @if ($account['enforcement'] !== 'HEALTHY')
-                                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('Too many bounces or complaints put an account under review. Find the cause in the Email Log and remove bad addresses before Amazon pauses sending.') }}</p>
-                                    @endif
-                                </div>
-                            @endif
-                        </dl>
-                    </x-filament::section>
-                @endif
+                {{-- 2. Email usage, with the account's daily limit (owner request 2026-10-24) --}}
+                @include('filament.pages.amazon-ses-usage')
 
                 {{-- 3. Domains and addresses --}}
                 @if (isset($overview['identities']) || ! empty($overview['errors']['identities']))

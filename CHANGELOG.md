@@ -4,6 +4,8 @@
 
 ### Added
 
+- **Settings → Amazon SES: email usage, with a gauge and cards.** Owner request 2026-10-24 (the owner chose design "B" from three layouts). Section 2 now shows, for this month or last month: a gauge of the free monthly limit (emails left, the share used, when it starts again, and where the month will end at the current pace), four numbers (sent, delivered, problems, estimated cost), the emails by kind (orders, login and reset codes, IMS, owner digest, tests…) with delivered, waiting, bounced or spam and failed, the last four months with the free-limit use and cost of each, sent against delivered week by week, what became of every email, and Amazon's daily limit (sandbox or production, how many more may go today, speed, account health). It is built for a phone first: the two tables turn into stacked blocks, nothing runs off the screen at 320 px, and dark mode has its own colours.
+- **Cost settings on the same page.** Two numbers the owner types in: the free emails each month and the price of 1,000 emails after that (US dollars). Amazon's API gives neither and they can change, so nothing is assumed: until they are typed in the gauge asks for them and the cost reads "—". The cost is an estimate (emails past the free allowance × the price), not Amazon's bill. Saving is written to the Audit Log.
 - **Investor Groups: a command to take the backfilled groups out again and start over.** Owner request 2026-10-25. `php artisan investments:undo-backfill-groups --company=<id>` (with `--dry-run` first, `--group=G2` for one group, `--include-empty` to also delete an empty test group) removes the groups that `investments:backfill-groups` made: each project is ungrouped and keeps its investments exactly as they are, the group and its copied members are deleted, and no voucher is booked or removed. It only removes a group that is still in the state the backfill left it (one project, no settlement, every member matching its investment, nothing pointing at it); any other group, such as a real group with its own members, is left alone and listed with the reason.
 
 ### Changed
@@ -12,7 +14,24 @@
 
 ### Technical Notes
 
+- `App\Services\Ses\SesUsageService` counts the company's `email_logs` rows whose `via` is an Amazon SES SMTP host (`smtp:email-smtp.%.amazonaws.com`), by status, kind, week and month, in a few indexed queries (`company_id`, `created_at`). "Sent" is what Amazon accepted (sent, delivered, bounced, complained); a failed email is not sent and not billed; skipped emails are not counted. Emails sent through the server's own default mailer are not counted. "Delivered", "Bounced" and "Marked as spam" need Amazon SES tracking (section 4); with tracking off the page says so and shows "—" for them.
+- The two cost numbers are kept as `ses_free_limit` and `ses_price_per_1000` in the site's `notification_credentials` (added to `StorefrontNotificationService::SES_CREDENTIAL_KEYS`, so saving Storefront Settings keeps them). No migration. The old "2. Your Amazon SES account" box is replaced by the daily-limit card of the new section, with the same facts (mode, sending on/paused, fastest rate, Amazon's view of the account).
+- The view is `resources/views/filament/pages/amazon-ses-usage.blade.php`; the gauge, bars and tables are plain CSS (`.zz-use-*` in `resources/css/filament/admin/theme.css`, no chart library). Deploy needs `npm run build`.
+- Not built from the design: the "Last 30 days" button, because the free allowance is per calendar month; "This month" and "Last month" are there.
+- `SesUsageServiceTest` (10) and five new `AmazonSesPageTest` cases. 72 new bilingual keys.
 - `App\Services\Investment\InvestorGroupBackfillUndoService` and `App\Console\Commands\UndoBackfillInvestorGroups`; `InvestmentProject::formatGroupProjectCode()` is the one place the `G1-P03` format is made. The backfill writes an `investor_group_backfilled` audit row (previous and new project code), the undo an `investor_group_backfill_undone` row. The undo runs in one transaction with a count and sum check on the project's investments, and refuses a group that has a second project, a settlement, a leaving date, a withdrawal notice, an investor request or draft, a reinvestment choice or a capital return pointing at it. No migrations. Tests: `InvestorGroupBackfillUndoTest` (new) and the backfill test in `InvestorGroupTest`.
+
+## [2.115.2] - 2026-10-24
+
+**Release type:** Patch/Fix Update
+
+### Fixed
+
+- **IMS: the Receiving / Payout Fund Source lists were empty for every company.** Found on live 24 Oct 2026 (IMS Office → Create Investor Group showed "No options available" for Tasneem and ZamZam International, which both have active Bkash / bank accounts). The lists read the old Fund Sources table, whose admin page was retired in July, so nothing ever filled it. Now they list the selected company's **active money accounts from Finance > Accounts** (Cash, Bank, Mobile Banking) by name; Shipment, Customer Due and Inventory accounts, inactive accounts and other companies' accounts are never offered. A new bank account appears at once, with no IMS step. The same fix applies to the other IMS money pickers that were empty for the same reason: the project's Receiving / Payout Fund Source, **Paid from** on withdrawing a group deposit or an investment, **Paid from** on a capital return, and the payout batch's **Fund source**. Deposits, payouts and withdrawals still book their vouchers against the account picked.
+
+### Technical Notes
+
+- New `App\Filament\Forms\Components\FundSourceSelect`: options from `FundSource::moneyAccountOptions()` (company-scoped `Account::manual()`, active, type cash / bank / mobile_banking); a stored `fund_sources.id` is shown as its account (`FundSource::accountIdFor()`), and the picked account is saved as its fund source (`FundSource::forAccount()`: reuses the account's existing fund source, else creates one named and typed after the account). The columns, services and voucher booking are unchanged (`receiving_fund_source_id` / `payout_fund_source_id` / `fund_source_id` still hold fund source ids). Used by `InvestorGroupResource`, `InvestmentProjectResource`, the group members' withdraw action, the investment withdraw action, `ListCapitalReturns` and `ListPayoutBatches`. The reseller payout picker (ERP, not IMS) is unchanged. A fund source that is not linked to an account (a capital type) can no longer be picked; none can be created anyway. No migrations, no new language keys. Tests: `InvestorGroupFundSourcePickerTest` (5); `PayoutBatchTest` and `InvestmentWithdrawalTest` now pick the account.
 
 ## [2.115.1] - 2026-10-24
 

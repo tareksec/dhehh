@@ -12,6 +12,7 @@ use App\Services\Ses\SesTrackingService;
 use App\Services\StorefrontNotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
 use Livewire\Livewire;
 use Tests\Feature\Concerns\FakesAws;
@@ -345,6 +346,110 @@ class AmazonSesPageTest extends TestCase
         $css = (string) file_get_contents(resource_path('css/filament/admin/theme.css'));
         $this->assertStringContainsString('.zz-ses .fi-section > .fi-section-header:has(> .fi-section-header-after-ctn)', $css);
         $this->assertStringContainsString('.zz-ses .zz-ses-actions .fi-btn', $css);
+    }
+
+    /** Owner request 2026-10-24: the page counts the company's Email Log, only the Amazon SES emails and only its own. */
+    public function test_the_usage_section_counts_this_companys_amazon_emails_and_asks_for_the_price(): void
+    {
+        $this->saveKey();
+        $this->fakeAws($this->refreshSteps());
+        $this->logEmail('delivered', times: 2);
+        $this->logEmail('failed');
+        $this->logEmail('sent', via: 'smtp:smtp.gmail.com');
+
+        $other = Company::query()->create(['name' => 'Other Co', 'slug' => 'other-co', 'invoice_prefix' => 'OTH', 'currency' => 'BDT', 'timezone' => 'UTC', 'is_active' => true]);
+        $this->logEmail('delivered', company: $other);
+
+        $page = Livewire::test(AmazonSes::class)->call('refresh');
+        $page->assertSee('2. Email usage')
+            ->assertSee('Order emails')
+            ->assertSee('Not set')
+            ->assertSee('Type the price in Cost settings, below.')
+            ->assertSee('Delivery tracking is off');
+
+        $totals = $page->instance()->usage()['totals'];
+        $this->assertSame(2, $totals['sent'], 'Another company\'s email and another SMTP host are not counted.');
+        $this->assertSame(1, $totals['failed']);
+    }
+
+    public function test_the_cost_settings_are_saved_checked_and_cleared(): void
+    {
+        $this->saveKey();
+        $this->fakeAws($this->refreshSteps());
+        $this->logEmail('delivered', times: 2);
+
+        $page = Livewire::test(AmazonSes::class)->call('refresh')
+            ->set('freeLimit', '100')
+            ->set('pricePer1000', '0.10')
+            ->call('saveCostSettings')
+            ->assertHasNoErrors()
+            ->assertNotified('Cost settings saved');
+
+        $credentials = $this->setting->fresh()->notification_credentials;
+        $this->assertSame(100, $credentials['ses_free_limit']);
+        $this->assertSame('0.1', $credentials['ses_price_per_1000']);
+        $this->assertSame('x', $credentials['mail_password'], 'The email account is untouched.');
+        $this->assertSame('AKIADASH', $credentials['ses_api_key_id']);
+
+        $page->call('refresh')
+            ->assertSee('On track')
+            ->assertSee('emails left')
+            ->assertSee('less than $0.01 without the free emails');
+        $this->assertSame(98, $page->instance()->usage()['free']['left']);
+
+        $page->set('freeLimit', 'many')->set('pricePer1000', '-2')->call('saveCostSettings')
+            ->assertHasErrors(['freeLimit', 'pricePer1000']);
+        $this->assertSame(100, $this->setting->fresh()->notification_credentials['ses_free_limit'], 'A refused value changes nothing.');
+
+        $page->set('freeLimit', '')->set('pricePer1000', '')->call('saveCostSettings')->assertHasNoErrors();
+        $credentials = $this->setting->fresh()->notification_credentials;
+        $this->assertArrayNotHasKey('ses_free_limit', $credentials);
+        $this->assertArrayNotHasKey('ses_price_per_1000', $credentials);
+    }
+
+    public function test_the_month_can_be_switched_to_last_month_and_no_further(): void
+    {
+        $this->fakeAws($this->refreshSteps());
+
+        $page = Livewire::test(AmazonSes::class)->assertSet('monthsBack', 0)->call('showMonth', 1)->assertSet('monthsBack', 1);
+        $page->call('showMonth', 7)->assertSet('monthsBack', 1)->call('showMonth', -3)->assertSet('monthsBack', 0);
+    }
+
+    public function test_the_usage_section_works_before_the_aws_key_is_saved(): void
+    {
+        $this->logEmail('delivered');
+
+        Livewire::test(AmazonSes::class)->call('refresh')
+            ->assertSee('2. Email usage')
+            ->assertSee('Save the key and press Refresh.');
+    }
+
+    public function test_the_usage_styles_live_in_the_admin_theme(): void
+    {
+        $css = (string) file_get_contents(resource_path('css/filament/admin/theme.css'));
+
+        foreach (['.zz-use-ring-fill', '.zz-use-sentbar', '.zz-use-delbar', '.zz-use-stack', '.dark .zz-use', '.zz-use-n[data-label]::before'] as $selector) {
+            $this->assertStringContainsString($selector, $css);
+        }
+
+        $view = (string) file_get_contents(resource_path('views/filament/pages/amazon-ses-usage.blade.php'));
+        $this->assertStringContainsString('role="table"', $view);
+        $this->assertStringContainsString('aria-label', $view);
+    }
+
+    private function logEmail(string $status, int $times = 1, ?string $via = 'smtp:email-smtp.ap-southeast-1.amazonaws.com', ?Company $company = null): void
+    {
+        for ($i = 0; $i < $times; $i++) {
+            DB::table('email_logs')->insert([
+                'company_id' => ($company ?? $this->company)->getKey(),
+                'kind' => 'order',
+                'recipient' => 'buyer@example.test',
+                'via' => $via,
+                'status' => $status,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
     }
 
     /** @param  array<string, mixed>  $extra */

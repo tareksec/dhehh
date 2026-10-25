@@ -2,15 +2,14 @@
 
 namespace App\Filament\Resources\PayoutBatches\Pages;
 
+use App\Filament\Forms\Components\FundSourceSelect;
 use App\Filament\Resources\PayoutBatches\PayoutBatchResource;
-use App\Models\FundSource;
 use App\Models\InvestorBankAccount;
 use App\Services\Investment\PayoutBatchService;
 use App\Support\MoneyFormatter;
 use Filament\Actions\Action;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
@@ -52,9 +51,8 @@ class ListPayoutBatches extends ListRecords
                             ->required()
                             ->visible($payables['eligible']->isNotEmpty()),
                         Text::make(__('No payout is ready for a batch.'))->visible($payables['eligible']->isEmpty()),
-                        Select::make('fund_source_id')
+                        FundSourceSelect::make('fund_source_id')
                             ->label(__('Fund source'))
-                            ->options(fn (): array => FundSource::query()->where('is_active', true)->whereNotNull('account_id')->orderBy('name')->pluck('name', 'id')->all())
                             ->helperText(__('The payout voucher is booked from this fund source. Left empty, the projects\' payout fund source is used when they all share one; otherwise no voucher is booked.')),
                         DatePicker::make('payout_date')->label(__('Payout date'))->default(now()->toDateString()),
                         Textarea::make('notes')->label(__('Notes'))->maxLength(2000),
