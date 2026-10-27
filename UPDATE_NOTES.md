@@ -2,7 +2,24 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-25 (latest) - Start the investor groups again (undo command, G-codes on backfilled projects)
+## 2026-10-27 (latest) - Social Content Planner: plan written (no code yet)
+
+Owner (Bangla) sent two GitHub repos and asked "can we implement this?": `HarunRRayhan/content-machine` and `Panniantong/Agent-Reach`. Then asked for a step-by-step plan.
+
+- **Content Machine** (Laravel 13 + Inertia/React, MIT, publishes through the paid PostSyncer service): worth bringing in as an ERP module, not as a copy. The Laravel backend ideas port; the React UI, workspace tenancy and PostgreSQL parts do not. Plan: `19_SOCIAL_CONTENT_PLANNER_PLAN.md`.
+- **Agent Reach** (Python CLI that lets an AI agent read login-walled sites with a stealth browser and the user's copied logins): **not for the ERP**. Company-isolated credentials do not fit it, it needs a desktop Chrome, and Facebook/Instagram channels are marked "experimental" with a ban risk. Fine on the owner's own computer with a secondary account for research. Nothing was added for it.
+
+Owner decisions (2026-10-27, in the plan §2): PostSyncer first and Meta Graph later; every company; Facebook, Instagram, TikTok and YouTube (so video is in scope); a user with the approve permission may approve their own post; the Coolify queue worker is running.
+
+Found while planning: the default queue connection has `retry_after = 90` and the documented worker has a 60 s timeout. A video publish can take minutes, so it would be handed to a second worker and could go out twice. The plan therefore needs a **second Coolify worker on its own `social` queue connection**. The owner has to add that service before publishing is switched on.
+
+**Not decided, not invented** (plan §2): default roles for the new social permissions, one language per post versus bilingual, whether a person may type a price into a caption, the PostSyncer plan and its limits, video size and length limits, and the TikTok / YouTube fields (read from PostSyncer's documentation at the start of Phase 2).
+
+**Verification:** documentation only, nothing to run. This computer has PHP 8.3 and the project's lock file needs 8.4 (Symfony 8), so `composer install` and `php artisan test` cannot run here. A static PHP 8.4 build from a third-party host was not downloaded: the tool refused to run an unknown external binary, and the owner has not approved it. Code written for this module in this environment can only be checked with `php -l` until that is decided; CI on the branch would be the real test run.
+
+Commit status: committed on the designated branch `ccr-91b5e504-q154a8` and pushed to it. Not on `main`.
+
+## 2026-10-25 - Start the investor groups again (undo command, G-codes on backfilled projects)
 
 Owner (Bangla), after the live backfill of Tasneem Knitting industry (company id 2) turned the five old projects into G2–G6 (G1 is a real group that was already there) and kept their old project codes (`01/2026-INV-01` …): "g1-p1 এরকম হবে", then "গ্রুপ সব ডিলিট করে নতুন করে আমার রান কি বল".
 

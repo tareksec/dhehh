@@ -20,6 +20,7 @@
 - Not built from the design: the "Last 30 days" button, because the free allowance is per calendar month; "This month" and "Last month" are there.
 - `SesUsageServiceTest` (10) and five new `AmazonSesPageTest` cases. 72 new bilingual keys.
 - `App\Services\Investment\InvestorGroupBackfillUndoService` and `App\Console\Commands\UndoBackfillInvestorGroups`; `InvestmentProject::formatGroupProjectCode()` is the one place the `G1-P03` format is made. The backfill writes an `investor_group_backfilled` audit row (previous and new project code), the undo an `investor_group_backfill_undone` row. The undo runs in one transaction with a count and sum check on the project's investments, and refuses a group that has a second project, a settlement, a leaving date, a withdrawal notice, an investor request or draft, a reinvestment choice or a capital return pointing at it. No migrations. Tests: `InvestorGroupBackfillUndoTest` (new) and the backfill test in `InvestorGroupTest`.
+- Planning document only, no code and no migration: `19_SOCIAL_CONTENT_PLANNER_PLAN.md` describes a Social Content Planner (write, approve, schedule and publish organic posts to Facebook, Instagram, TikTok and YouTube through PostSyncer, for every company). Owner decisions of 2026-10-27 are recorded in it. Deploy note for when it is built: publishing needs a second Coolify queue worker on its own `social` queue connection (`retry_after` above the job timeout), because the default connection's `retry_after` is 90 seconds and a video publish can run for minutes.
 
 ## [2.115.2] - 2026-10-24
 
