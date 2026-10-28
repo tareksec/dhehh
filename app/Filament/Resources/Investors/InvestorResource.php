@@ -18,6 +18,7 @@ use App\Models\Investment;
 use App\Models\InvestmentDocument;
 use App\Models\InvestmentProject;
 use App\Models\Investor;
+use App\Services\Investment\InvestorDeletionService;
 use App\Services\CompanyContext;
 use App\Services\CompanyStorageService;
 use App\Support\CompanyScopedUnique;
@@ -342,6 +343,44 @@ class InvestorResource extends Resource
                                 ->title(__('Channel partner set for :count investors', ['count' => $assigned]))
                                 ->body($skipped > 0 ? __(':count investors were left unchanged because they already have a channel partner.', ['count' => $skipped]) : null)
                                 ->status($skipped > 0 ? 'warning' : 'success')
+                                ->send();
+                        })
+                        ->deselectRecordsAfterCompletion(),
+                    BulkAction::make('deleteInvestors')
+                        ->label(__('Delete investors'))
+                        ->icon(Heroicon::OutlinedTrash)
+                        ->color('danger')
+                        ->visible(fn (): bool => auth()->user()?->hasPermission('investments.manage') ?? false)
+                        ->requiresConfirmation()
+                        ->modalHeading(__('Delete the selected investors?'))
+                        ->modalDescription(__('Deletes each selected investor with their investments, group memberships, nominees, paper copies and portal login. An investor with a withdrawal, a payout, a capital return, a voucher or an investment in a settled project is kept and listed. This cannot be undone.'))
+                        ->schema([
+                            TextInput::make('confirm')
+                                ->label(__('Type DELETE to confirm'))
+                                ->required()
+                                ->in(['DELETE'])
+                                ->validationMessages(['in' => __('Type DELETE in capital letters.')]),
+                        ])
+                        ->action(function (Collection $records): void {
+                            abort_unless(auth()->user()?->hasPermission('investments.manage'), 403);
+
+                            $service = app(InvestorDeletionService::class);
+                            $deleted = 0;
+                            $kept = [];
+
+                            foreach ($records as $investor) {
+                                try {
+                                    $service->delete($investor);
+                                    $deleted++;
+                                } catch (\Throwable $exception) {
+                                    $kept[] = $exception instanceof \RuntimeException ? $exception->getMessage() : "{$investor->name}: ".__('could not be deleted');
+                                }
+                            }
+
+                            Notification::make()
+                                ->title(__(':count investors deleted', ['count' => $deleted]))
+                                ->body($kept === [] ? null : __(':count investors were kept: :list', ['count' => count($kept), 'list' => implode('; ', array_slice($kept, 0, 10))]))
+                                ->status($kept === [] ? 'success' : 'warning')
                                 ->send();
                         })
                         ->deselectRecordsAfterCompletion(),

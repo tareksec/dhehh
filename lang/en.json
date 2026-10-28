@@ -4574,5 +4574,18 @@
     "Open the Email Log": "Open the Email Log",
     "Of :total emails: :delivered delivered, :waiting waiting for a report, :problems bounced or spam, :failed failed to send": "Of :total emails: :delivered delivered, :waiting waiting for a report, :problems bounced or spam, :failed failed to send",
     "Cost settings": "Cost settings",
-    "Amazon sets its own prices and they can change, so these two numbers are yours to keep up to date. The cost shown is an estimate, not Amazon's bill.": "Amazon sets its own prices and they can change, so these two numbers are yours to keep up to date. The cost shown is an estimate, not Amazon's bill."
+    "Amazon sets its own prices and they can change, so these two numbers are yours to keep up to date. The cost shown is an estimate, not Amazon's bill.": "Amazon sets its own prices and they can change, so these two numbers are yours to keep up to date. The cost shown is an estimate, not Amazon's bill.",
+    "Delete investors": "Delete investors",
+    "Delete the selected investors?": "Delete the selected investors?",
+    "Deletes each selected investor with their investments, group memberships, nominees, paper copies and portal login. An investor with a withdrawal, a payout, a capital return, a voucher or an investment in a settled project is kept and listed. This cannot be undone.": "Deletes each selected investor with their investments, group memberships, nominees, paper copies and portal login. An investor with a withdrawal, a payout, a capital return, a voucher or an investment in a settled project is kept and listed. This cannot be undone.",
+    "Type DELETE to confirm": "Type DELETE to confirm",
+    "Type DELETE in capital letters.": "Type DELETE in capital letters.",
+    ":count investors deleted": ":count investors deleted",
+    ":count investors were kept: :list": ":count investors were kept: :list",
+    "could not be deleted": "could not be deleted",
+    "has a withdrawn investment": "has a withdrawn investment",
+    "has money booked in the accounts (a voucher)": "has money booked in the accounts (a voucher)",
+    "has a profit payout": "has a profit payout",
+    "has a capital return": "has a capital return",
+    "is in a settled project": "is in a settled project"
 }

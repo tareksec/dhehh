@@ -4574,5 +4574,18 @@
     "Open the Email Log": "ইমেইল লগ খুলুন",
     "Of :total emails: :delivered delivered, :waiting waiting for a report, :problems bounced or spam, :failed failed to send": ":total ইমেইলের মধ্যে: :delivered ডেলিভারি হয়েছে, :waiting রিপোর্টের অপেক্ষায়, :problems বাউন্স বা স্প্যাম, :failed পাঠানো যায়নি",
     "Cost settings": "খরচের সেটিংস",
-    "Amazon sets its own prices and they can change, so these two numbers are yours to keep up to date. The cost shown is an estimate, not Amazon's bill.": "দাম Amazon নিজে ঠিক করে এবং তা বদলাতে পারে, তাই এই দুটি সংখ্যা আপনাকেই হালনাগাদ রাখতে হবে। দেখানো খরচ একটি আনুমানিক হিসাব, Amazon-এর বিল নয়।"
+    "Amazon sets its own prices and they can change, so these two numbers are yours to keep up to date. The cost shown is an estimate, not Amazon's bill.": "দাম Amazon নিজে ঠিক করে এবং তা বদলাতে পারে, তাই এই দুটি সংখ্যা আপনাকেই হালনাগাদ রাখতে হবে। দেখানো খরচ একটি আনুমানিক হিসাব, Amazon-এর বিল নয়।",
+    "Delete investors": "ইনভেস্টর মুছুন",
+    "Delete the selected investors?": "নির্বাচিত ইনভেস্টরদের মুছবেন?",
+    "Deletes each selected investor with their investments, group memberships, nominees, paper copies and portal login. An investor with a withdrawal, a payout, a capital return, a voucher or an investment in a settled project is kept and listed. This cannot be undone.": "নির্বাচিত প্রতিটি ইনভেস্টরকে তাঁর বিনিয়োগ, গ্রুপের সদস্যপদ, নমিনি, কাগজের কপি ও পোর্টাল লগইনসহ মুছে ফেলে। যাঁর উইথড্র, লাভের পেমেন্ট, মূলধন ফেরত, ভাউচার বা সেটেলড প্রজেক্টে বিনিয়োগ আছে তাঁকে রেখে দেওয়া হয় ও তালিকায় দেখানো হয়। এটা আর ফেরানো যায় না।",
+    "Type DELETE to confirm": "নিশ্চিত করতে DELETE লিখুন",
+    "Type DELETE in capital letters.": "বড় হাতের অক্ষরে DELETE লিখুন।",
+    ":count investors deleted": ":count জন ইনভেস্টর মোছা হয়েছে",
+    ":count investors were kept: :list": ":count জন ইনভেস্টরকে রাখা হয়েছে: :list",
+    "could not be deleted": "মোছা যায়নি",
+    "has a withdrawn investment": "এর একটি উইথড্র হওয়া বিনিয়োগ আছে",
+    "has money booked in the accounts (a voucher)": "এর টাকা হিসাবে বুক করা আছে (ভাউচার)",
+    "has a profit payout": "এর লাভের পেমেন্ট আছে",
+    "has a capital return": "এর মূলধন ফেরত আছে",
+    "is in a settled project": "এ সেটেলড প্রজেক্টে আছে"
 }

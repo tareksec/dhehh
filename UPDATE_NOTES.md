@@ -2,7 +2,17 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-25 (latest) - Start the investor groups again (undo command, G-codes on backfilled projects)
+## 2026-10-28 (latest) - Investors list: bulk delete
+
+Owner (Bangla): the imported investors lack nominee details and the same person appears in two rows; the owner wants to remove all investors and import again. Asked how to fix nominees; the answer was "add a select-and-delete option to the investor list, I will run the commands in the terminal". Done: bulk action **Delete investors** (type DELETE) on Investors, via `InvestorDeletionService`. Kept and named: investors with a withdrawn investment, a voucher on a deposit, a payout, a capital return or an investment in a settled project. Files on the private disk (NID scans) stay. Re-importing: a group takes imports only while it is Open, so the sequence is: delete the investors, undo the backfill (`investments:undo-backfill-groups`), delete the old projects if they are empty, create the groups Open, import into them (nominee columns are in the sample CSV), then Start each group.
+
+**Needs Bangla review:** the 13 new keys (Delete investors … is in a settled project).
+
+Verified: syntax only (`php -l`); PHP 8.3 here, project needs 8.4, so `InvestorBulkDeleteTest` (3) is written but **not run**.
+
+Commit status: committed on `claude/focused-davinci-ltfifx`; not on `main` yet.
+
+## 2026-10-25 - Start the investor groups again (undo command, G-codes on backfilled projects)
 
 Owner (Bangla), after the live backfill of Tasneem Knitting industry (company id 2) turned the five old projects into G2–G6 (G1 is a real group that was already there) and kept their old project codes (`01/2026-INV-01` …): "g1-p1 এরকম হবে", then "গ্রুপ সব ডিলিট করে নতুন করে আমার রান কি বল".
 

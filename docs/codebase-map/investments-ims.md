@@ -1,5 +1,5 @@
 # Investments & IMS v2
-> Last checked: 2026-10-25, claude/focused-davinci-ltfifx (group backfill renames the project to its group code; `investments:undo-backfill-groups` takes a backfilled group out again); before it 2026-10-24, feature/ims-fund-source-accounts (fund-source pickers list Finance money accounts via `FundSourceSelect`)
+> Last checked: 2026-10-28, claude/focused-davinci-ltfifx (Investors list bulk delete via `InvestorDeletionService`; backfill renames projects to their group code; `investments:undo-backfill-groups`)
 
 ## What it does
 The Investments & IMS v2 module manages Islamic Mudarabah investment partnerships, syndicated investor pools, commercial project funding, and comprehensive investor relations. Built natively into the application following the retirement of the legacy external IMS, it provides two dedicated Filament 5 panels: the IMS Office back-office panel (`/office`) for investment managers, and the Investor Portal (`/investor`) for self-service investor access. It automates investor onboarding with NID OCR verification, digital agreement acceptance, syndicated investor group lifecycles, and automated daily profit proposals. Additionally, it features an investor transparency feed, scheduled monthly statement generation, capital return queues, bank statement reconciliation, and channel partner commission settlements.
@@ -67,6 +67,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `app/Ims/Support/SupportService.php` | Handles customer support tickets and live chat between investors and managers. |
 | `app/Ims/Transparency/ProjectUpdateService.php` | Publishes photographic updates and milestones for ongoing projects. |
 | `app/Services/Investment/SettlementService.php` | Calculates Mudarabah profit shares and executes project settlement disbursements. |
+| `app/Services/Investment/InvestorDeletionService.php` | Deletes an investor with their investments, memberships and paper rows for the Investors list's bulk **Delete investors**; keeps any investor with a withdrawal, voucher, payout, capital return or settled project. |
 | `app/Services/Investment/InvestorGroupBackfillService.php` | Moves ungrouped projects into groups (one group per project, project renamed to its group code, old code kept in the audit log). |
 | `app/Services/Investment/InvestorGroupBackfillUndoService.php` | The way back from the backfill: ungroups the project, keeps its investments, deletes the group and member copies, restores the old code; only for a group still in the backfill's state. |
 | `app/Services/Investment/PayoutProofService.php` | Attaches banking transaction receipts to completed payout batches. |
@@ -178,6 +179,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `tests/Feature/Ims/ProposalsAndJobsTest.php` | Tests daily automated profit proposal creation and scheduled jobs. |
 | `tests/Feature/Ims/TransparencyTest.php` | Tests project update feed posts, comments, and investor notifications. |
 | `tests/Feature/Ims/AllCompaniesImsTest.php` | Plan 18 A + B: every company on the group IMS domain, links carrying their company, the office picker and who may open which company. |
+| `tests/Feature/InvestorBulkDeleteTest.php` | Tests the bulk delete (investments and memberships go, confirmation word needed, paid investors kept). |
 | `tests/Feature/InvestorGroupBackfillUndoTest.php` | Tests the backfill's project-code rename and the undo (clean undo, real group left alone, moved-on groups refused, empty group only on request, command, company isolation). |
 | `tests/Feature/InvestorGroupCycleTest.php` | Tests group lifecycle progression (collecting, running, maturing, settled). |
 | `tests/Feature/InvestorBusinessSwitchTest.php` | Tests the business switcher: who is offered, the one-time token, staff preview and disabled accounts. |
