@@ -110,7 +110,7 @@ class StockMovement extends Model
             // caused it — every other movement (admin edits, purchases,
             // sales, WooCommerce sync, ...) does need to reach the website.
             if ($movement->reference_type !== CompanyApiKey::class && $movement->product) {
-                app(WebsiteWebhookDispatcher::class)->dispatchProductUpdated($movement->product);
+                app(WebsiteWebhookDispatcher::class)->dispatchProductUpdated($movement->product, ['stock']);
             }
         });
 

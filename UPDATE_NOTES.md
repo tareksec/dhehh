@@ -2,7 +2,27 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-25 (latest) - Start the investor groups again (undo command, G-codes on backfilled projects)
+## 2026-10-29 (latest) - Full product control of the Tasneem website from the ERP
+
+Owner request (dev prompt of 29 Oct 2026): create/edit a product in the ERP and have it publish/update on tasneemknitindustry.com — the full product, not only price/stock — plus a webhook delivery log, because sync failures stayed invisible for a month.
+
+What I did (ERP side; the website side is on the website repo's branch of the same name):
+- Webhooks `product.created`, `product.updated` (full product + `changed_fields`, any synced field), `product.deleted`. "Archive" = turning **Active** off, sent as `product.updated` with `is_active: false`.
+- Website API: `POST /products` and full-field `PATCH /products/{sku}` (name, brand, category, description, specifications, images, is_active, status, price, sale_price, stock). Stock still goes through the ledger; API changes are still never echoed back.
+- New **Specifications** section on the product form (`products.specifications`).
+- **Webhook delivery log** on Settings → Integrations → Website API, with Send again.
+
+Decisions I made: a category sent by the website that the ERP does not have is created (by name); image URLs are downloaded, never hot-linked; `product.created` waits 5 s so the opening stock is in it. The working price/stock sync is unchanged for its receivers (same field names; the website applies price and stock on every `product.updated` as before).
+
+Not done here: the catalog mapping (the owner must first decide which price wins on the three matched machines — website ৳50,000 higher on all three) and the live acceptance tests, which need this branch on `main` (Coolify deploy) and the website deployed.
+
+**Needs Bangla review:** 17 new keys, least certain: "Webhook queued again" (ওয়েবহুক আবার পাঠানোর জন্য রাখা হয়েছে), "Delivered" (পৌঁছেছে).
+
+Verified: PHP 8.4 (`C:\Users\bird\dev\tools\php-8.4\php.exe artisan test`). The affected files pass (`WebsiteWebhookDispatchTest`, `WebsiteApiProductTest`, `IntegrationsPageTest`, `MultiCompanyIsolationTest`, `WebsiteApiAuthTest`). Full suite on this Windows computer: 3466 passed, 6 skipped, 14 failed — all 14 are local-environment failures unrelated to this change (Backup*/R2Backup: no MySQL client binaries, symlink permission, file lock; SesTracking: OpenSSL CSR config). CI on Linux is the check before `main`. The website side was tested end to end against a throwaway local MariaDB with signed ERP-shaped webhooks (create, stock-only update keeps the name, name/price/photo edit, resend, archive, delete, unmapped SKU, legacy payload, bad signature) and a mock ERP for the website → ERP PATCH.
+
+Commit status: committed on `feature/website-full-product-sync`, pushed to that branch. Not on `main`.
+
+## 2026-10-25 - Start the investor groups again (undo command, G-codes on backfilled projects)
 
 Owner (Bangla), after the live backfill of Tasneem Knitting industry (company id 2) turned the five old projects into G2–G6 (G1 is a real group that was already there) and kept their old project codes (`01/2026-INV-01` …): "g1-p1 এরকম হবে", then "গ্রুপ সব ডিলিট করে নতুন করে আমার রান কি বল".
 

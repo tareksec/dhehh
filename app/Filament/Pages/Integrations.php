@@ -6,6 +6,7 @@ use App\Filament\Clusters\Settings;
 use App\Jobs\DispatchWebsiteWebhookJob;
 use App\Livewire\MetaEventLogTable;
 use App\Livewire\WebsiteApiKeysTable;
+use App\Livewire\WebsiteWebhookDeliveriesTable;
 use App\Models\Company;
 use App\Models\Order;
 use App\Models\SmsLog;
@@ -760,7 +761,7 @@ class Integrations extends Page
         // Dispatched directly (not via WebsiteWebhookDispatcher::dispatch()),
         // which deliberately skips delivery while "Send webhooks" is off —
         // a connectivity test needs to work before the integration goes live.
-        DispatchWebsiteWebhookJob::dispatch($url, $secret, 'ping', []);
+        DispatchWebsiteWebhookJob::dispatch($url, $secret, 'ping', [], $company->getKey());
 
         Notification::make()
             ->title('Test webhook queued')
@@ -1339,6 +1340,9 @@ class Integrations extends Page
                                     ->helperText('Off by default — turn on once the webhook URL and secret above are saved and your website is ready to receive them.')
                                     ->columnSpanFull(),
                                 SchemaActions::make([$this->testWebsiteWebhookAction()])
+                                    ->columnSpanFull(),
+                                SchemaLivewire::make(WebsiteWebhookDeliveriesTable::class)
+                                    ->key('websiteWebhookDeliveriesTable')
                                     ->columnSpanFull(),
                             ]),
 

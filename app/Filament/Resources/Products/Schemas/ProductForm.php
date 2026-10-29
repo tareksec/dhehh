@@ -354,6 +354,21 @@ class ProductForm
                     ])
                     ->collapsible()
                     ->persistCollapsed(),
+
+                Section::make(__('Specifications'))
+                    ->columnSpanFull()
+                    ->description(__('Technical details shown on the company website, such as Gauge, Cylinder Diameter, Feeders or Origin. Sent to the website with the rest of the product.'))
+                    ->schema([
+                        KeyValue::make('specifications')
+                            ->hiddenLabel()
+                            ->keyLabel(__('Specification'))
+                            ->valueLabel(__('Value'))
+                            ->addActionLabel(__('Add specification'))
+                            ->reorderable()
+                            ->columnSpanFull(),
+                    ])
+                    ->collapsible()
+                    ->persistCollapsed(),
             ]);
     }
 

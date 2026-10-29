@@ -4574,5 +4574,22 @@
     "Open the Email Log": "Open the Email Log",
     "Of :total emails: :delivered delivered, :waiting waiting for a report, :problems bounced or spam, :failed failed to send": "Of :total emails: :delivered delivered, :waiting waiting for a report, :problems bounced or spam, :failed failed to send",
     "Cost settings": "Cost settings",
-    "Amazon sets its own prices and they can change, so these two numbers are yours to keep up to date. The cost shown is an estimate, not Amazon's bill.": "Amazon sets its own prices and they can change, so these two numbers are yours to keep up to date. The cost shown is an estimate, not Amazon's bill."
+    "Amazon sets its own prices and they can change, so these two numbers are yours to keep up to date. The cost shown is an estimate, not Amazon's bill.": "Amazon sets its own prices and they can change, so these two numbers are yours to keep up to date. The cost shown is an estimate, not Amazon's bill.",
+    "Specifications": "Specifications",
+    "Technical details shown on the company website, such as Gauge, Cylinder Diameter, Feeders or Origin. Sent to the website with the rest of the product.": "Technical details shown on the company website, such as Gauge, Cylinder Diameter, Feeders or Origin. Sent to the website with the rest of the product.",
+    "Specification": "Specification",
+    "Add specification": "Add specification",
+    "Webhook delivery log": "Webhook delivery log",
+    "Every notification sent to your website, newest first. A failed delivery shows the HTTP status or error your website returned.": "Every notification sent to your website, newest first. A failed delivery shows the HTTP status or error your website returned.",
+    "Event": "Event",
+    "HTTP status": "HTTP status",
+    "Attempts": "Attempts",
+    "Response": "Response",
+    "Error": "Error",
+    "URL": "URL",
+    "Send again": "Send again",
+    "This webhook URL is no longer saved on any site": "This webhook URL is no longer saved on any site",
+    "Webhook queued again": "Webhook queued again",
+    "No webhook deliveries yet": "No webhook deliveries yet",
+    "Deliveries appear here once \"Send webhooks\" is on and something changes, or after \"Send test webhook\".": "Deliveries appear here once \"Send webhooks\" is on and something changes, or after \"Send test webhook\"."
 }

@@ -6,6 +6,7 @@ use App\Models\Concerns\BelongsToCompany;
 use App\Services\ResellerPricing;
 use App\Services\WebsiteWebhookDispatcher;
 use App\Support\StorefrontListingCache;
+use App\Support\WebsiteProductPayload;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
@@ -62,6 +63,7 @@ class Product extends Model
         'variant_attributes',
         'has_variants',
         'category_id',
+        'specifications',
     ];
 
     protected $casts = [
@@ -78,6 +80,7 @@ class Product extends Model
         'gallery_images' => 'array',
         'variant_attributes' => 'array',
         'has_variants' => 'boolean',
+        'specifications' => 'array',
     ];
 
     protected static function booted(): void
@@ -92,6 +95,12 @@ class Product extends Model
             $product->slug = static::uniqueSlug($product);
         });
 
+        static::created(function (Product $product): void {
+            if (! $product->suppressWebsiteWebhook) {
+                app(WebsiteWebhookDispatcher::class)->dispatchProductCreated($product);
+            }
+        });
+
         static::saved(function (Product $product): void {
             StorefrontListingCache::forgetCompany($product->company_id);
 
@@ -100,11 +109,21 @@ class Product extends Model
             // writes the derived total through a query-builder mass update,
             // which never fires this hook anyway) — StockMovement::booted()
             // is the single dispatch point for stock-driven webhooks.
-            if (! $product->suppressWebsiteWebhook && $product->wasChanged(['price', 'sale_price'])) {
-                app(WebsiteWebhookDispatcher::class)->dispatchProductUpdated($product);
+            // On insert getChanges() is empty, so this never doubles
+            // the product.created above.
+            $changed = array_values(array_intersect(array_keys($product->getChanges()), WebsiteProductPayload::SYNCED_FIELDS));
+
+            if (! $product->suppressWebsiteWebhook && $changed !== []) {
+                app(WebsiteWebhookDispatcher::class)->dispatchProductUpdated(
+                    $product,
+                    WebsiteWebhookDispatcher::changedProductFields($changed),
+                );
             }
         });
-        static::deleted(fn (Product $product) => StorefrontListingCache::forgetCompany($product->company_id));
+        static::deleted(function (Product $product): void {
+            StorefrontListingCache::forgetCompany($product->company_id);
+            app(WebsiteWebhookDispatcher::class)->dispatchProductDeleted($product);
+        });
     }
 
     public function category()
@@ -270,6 +289,9 @@ class Product extends Model
     {
         foreach (self::COMING_SOON_PURCHASE_PRODUCTS as $name) {
             $product = self::query()->firstOrNew(['name' => $name]);
+
+            // Internal cost lines for purchases, never a website product.
+            $product->suppressWebsiteWebhook = true;
 
             $product->fill([
                 'sku' => $product->sku ?: self::comingSoonSku($name),

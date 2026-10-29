@@ -4574,5 +4574,22 @@
     "Open the Email Log": "ইমেইল লগ খুলুন",
     "Of :total emails: :delivered delivered, :waiting waiting for a report, :problems bounced or spam, :failed failed to send": ":total ইমেইলের মধ্যে: :delivered ডেলিভারি হয়েছে, :waiting রিপোর্টের অপেক্ষায়, :problems বাউন্স বা স্প্যাম, :failed পাঠানো যায়নি",
     "Cost settings": "খরচের সেটিংস",
-    "Amazon sets its own prices and they can change, so these two numbers are yours to keep up to date. The cost shown is an estimate, not Amazon's bill.": "দাম Amazon নিজে ঠিক করে এবং তা বদলাতে পারে, তাই এই দুটি সংখ্যা আপনাকেই হালনাগাদ রাখতে হবে। দেখানো খরচ একটি আনুমানিক হিসাব, Amazon-এর বিল নয়।"
+    "Amazon sets its own prices and they can change, so these two numbers are yours to keep up to date. The cost shown is an estimate, not Amazon's bill.": "দাম Amazon নিজে ঠিক করে এবং তা বদলাতে পারে, তাই এই দুটি সংখ্যা আপনাকেই হালনাগাদ রাখতে হবে। দেখানো খরচ একটি আনুমানিক হিসাব, Amazon-এর বিল নয়।",
+    "Specifications": "স্পেসিফিকেশন",
+    "Technical details shown on the company website, such as Gauge, Cylinder Diameter, Feeders or Origin. Sent to the website with the rest of the product.": "কোম্পানির ওয়েবসাইটে দেখানো কারিগরি তথ্য, যেমন গেজ, সিলিন্ডার ডায়া, ফিডার বা উৎপত্তি দেশ। পণ্যের বাকি তথ্যের সাথে ওয়েবসাইটে পাঠানো হয়।",
+    "Specification": "স্পেসিফিকেশন",
+    "Add specification": "স্পেসিফিকেশন যোগ করুন",
+    "Webhook delivery log": "ওয়েবহুক পাঠানোর লগ",
+    "Every notification sent to your website, newest first. A failed delivery shows the HTTP status or error your website returned.": "আপনার ওয়েবসাইটে পাঠানো প্রতিটি নোটিফিকেশন, নতুনটি আগে। ব্যর্থ হলে আপনার ওয়েবসাইট যে HTTP স্ট্যাটাস বা এরর ফেরত দিয়েছে তা দেখানো হয়।",
+    "Event": "ইভেন্ট",
+    "HTTP status": "HTTP স্ট্যাটাস",
+    "Attempts": "চেষ্টা",
+    "Response": "রেসপন্স",
+    "Error": "এরর",
+    "URL": "URL",
+    "Send again": "আবার পাঠান",
+    "This webhook URL is no longer saved on any site": "এই ওয়েবহুক URL এখন আর কোনো সাইটে সেভ করা নেই",
+    "Webhook queued again": "ওয়েবহুক আবার পাঠানোর জন্য রাখা হয়েছে",
+    "No webhook deliveries yet": "এখনো কোনো ওয়েবহুক পাঠানো হয়নি",
+    "Deliveries appear here once \"Send webhooks\" is on and something changes, or after \"Send test webhook\".": "\"Send webhooks\" চালু থাকলে কিছু বদলালে, অথবা \"Send test webhook\" চাপার পর, পাঠানো ওয়েবহুক এখানে দেখা যাবে।"
 }

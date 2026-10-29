@@ -8,12 +8,14 @@ use App\Jobs\DispatchWebsiteWebhookJob;
 use App\Jobs\RetryStorefrontMetaEventJob;
 use App\Livewire\MetaEventLogTable;
 use App\Livewire\WebsiteApiKeysTable;
+use App\Livewire\WebsiteWebhookDeliveriesTable;
 use App\Models\Company;
 use App\Models\CompanyApiKey;
 use App\Models\CourierProvider;
 use App\Models\MetaAdAccount;
 use App\Models\StorefrontMetaEvent;
 use App\Models\StorefrontSetting;
+use App\Models\WebsiteWebhookDelivery;
 use App\Models\User;
 use App\Models\UserRole;
 use App\Services\CompanyContext;
@@ -731,6 +733,48 @@ class IntegrationsPageTest extends TestCase
             RetryStorefrontMetaEventJob::class,
             fn ($job): bool => $job->metaEventId === $event->getKey(),
         );
+    }
+
+    public function test_website_webhook_delivery_log_lists_deliveries_and_can_send_one_again(): void
+    {
+        $company = $this->makeCompany();
+        $this->actingAs($this->makeSuperAdmin($company))
+            ->withSession(['current_company_id' => $company->getKey(), 'current_company_selection_explicit' => true]);
+
+        StorefrontSetting::query()->create([
+            'company_id' => $company->getKey(),
+            'website_api_credentials' => [
+                'webhook_url' => 'https://example.test/api/webhooks/erp',
+                'webhook_secret' => 'saved-secret',
+                'is_enabled' => true,
+            ],
+        ]);
+
+        $delivery = WebsiteWebhookDelivery::query()->create([
+            'company_id' => $company->getKey(),
+            'event' => 'product.updated',
+            'sku' => 'TEST-SYNC-001',
+            'url' => 'https://example.test/api/webhooks/erp',
+            'status' => WebsiteWebhookDelivery::STATUS_FAILED,
+            'response_status' => 404,
+            'attempts' => 2,
+            'payload' => ['sku' => 'TEST-SYNC-001', 'price' => 10],
+        ]);
+
+        Queue::fake();
+
+        Livewire::test(Integrations::class)->assertSee('Webhook delivery log');
+
+        Livewire::test(WebsiteWebhookDeliveriesTable::class)
+            ->assertSee('TEST-SYNC-001')
+            ->assertSee('404')
+            ->callTableAction('resend', $delivery)
+            ->assertNotified('Webhook queued again');
+
+        Queue::assertPushed(DispatchWebsiteWebhookJob::class, fn (DispatchWebsiteWebhookJob $job): bool => $job->secret === 'saved-secret'
+            && $job->event === 'product.updated'
+            && $job->data === ['sku' => 'TEST-SYNC-001', 'price' => 10]
+            && $job->companyId === $company->getKey());
     }
 
     protected function assertBlank(mixed $value): void

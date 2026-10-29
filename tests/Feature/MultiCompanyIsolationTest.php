@@ -19,6 +19,7 @@ use App\Models\ChaseMark;
 use App\Models\ChatOrderLink;
 use App\Models\Company;
 use App\Models\CompanyApiKey;
+use App\Models\WebsiteWebhookDelivery;
 use App\Models\CompanyFaq;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Container;
@@ -169,7 +170,7 @@ class MultiCompanyIsolationTest extends TestCase
             Lead::class, Quotation::class, QuotationItem::class,
             AiInstructionVersion::class, AttentionItem::class, Conversation::class, ConversationChannel::class, ConversationModeEvent::class,
             ChaseMark::class, ChatOrderLink::class, CompanyFaq::class, KnowledgeDocument::class, QuickReply::class,
-            CompanyApiKey::class, StorefrontCustomerToken::class,
+            CompanyApiKey::class, StorefrontCustomerToken::class, WebsiteWebhookDelivery::class,
             InvestmentProject::class, Investor::class, InvestorDraft::class, InvestorPortalAccount::class, InvestorBankAccount::class, AgreementTemplate::class, AgreementAcceptance::class, InvestorRequest::class, PayoutBatch::class, PayoutBatchItem::class, InvestorGroup::class, InvestorGroupMember::class,
             Investment::class, ProjectCostItem::class, ExchangeRate::class,
             InvestorSecurityInstrument::class, InvestmentWitness::class, InvestmentDocument::class,

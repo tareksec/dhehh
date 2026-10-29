@@ -35,6 +35,36 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/Product" }
                   meta: { $ref: "#/components/schemas/PageMeta" }
+    post:
+      summary: Create a product from the website
+      description: >
+        Image URLs are downloaded into the ERP's own storage. No
+        product.created webhook is sent back to the website that created it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/ProductWrite"
+                - type: object
+                  required: [sku, name, price]
+                  properties:
+                    sku: { type: string, maxLength: 100 }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Product" }
+                  failed_images:
+                    type: array
+                    items: { type: string }
+        "409": { description: "A product with this SKU already exists (error: sku_exists)" }
+        "422": { description: Validation failed }
 
   /products/{sku}:
     get:
@@ -52,12 +82,13 @@ paths:
                   data: { $ref: "#/components/schemas/Product" }
         "404": { description: No product with that SKU }
     patch:
-      summary: Update price, sale price, and/or stock
+      summary: Update any product field (price, sale price, stock, name, images ...)
       description: >
         `stock` is a target value, not a delta. On our side it is reconciled
         as a StockMovement ledger entry (an auditable adjustment), never a
         raw overwrite — you don't need to do anything differently for that,
-        just send the number your dashboard shows.
+        just send the number your dashboard shows. Send `images` only when the
+        photos changed.
       parameters:
         - $ref: "#/components/parameters/Sku"
       requestBody:
@@ -65,12 +96,10 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                price: { type: number, format: float }
-                sale_price: { type: number, format: float, nullable: true }
-                stock: { type: integer, minimum: 0 }
-              minProperties: 1
+              allOf:
+                - $ref: "#/components/schemas/ProductWrite"
+                - type: object
+                  minProperties: 1
       responses:
         "200":
           description: OK
@@ -80,6 +109,10 @@ paths:
                 type: object
                 properties:
                   data: { $ref: "#/components/schemas/Product" }
+                  failed_images:
+                    type: array
+                    description: Present only when an image URL could not be downloaded.
+                    items: { type: string }
         "422": { description: No fields provided, or validation failed }
         "404": { description: No product with that SKU }
 
@@ -200,16 +233,58 @@ components:
         current_page: { type: integer }
         last_page: { type: integer }
         total: { type: integer }
+    Specification:
+      type: object
+      properties:
+        label: { type: string }
+        value: { type: string }
     Product:
       type: object
       properties:
         sku: { type: string }
         name: { type: string }
+        slug: { type: string }
+        brand: { type: string, nullable: true }
+        category:
+          type: object
+          nullable: true
+          properties:
+            name: { type: string }
+            slug: { type: string }
+        description: { type: string, nullable: true, description: HTML }
+        specifications:
+          type: array
+          items: { $ref: "#/components/schemas/Specification" }
         price: { type: number }
         sale_price: { type: number, nullable: true }
         stock: { type: integer }
         is_active: { type: boolean }
+        status: { type: string, enum: [available, coming_soon] }
+        image: { type: string, format: uri, nullable: true }
+        images:
+          type: array
+          description: Featured image first, then the gallery.
+          items: { type: string, format: uri }
         updated_at: { type: string, format: date-time }
+    ProductWrite:
+      type: object
+      properties:
+        name: { type: string, maxLength: 255 }
+        price: { type: number, minimum: 0 }
+        sale_price: { type: number, nullable: true, minimum: 0 }
+        stock: { type: integer, minimum: 0 }
+        brand: { type: string, nullable: true }
+        category: { type: string, nullable: true, description: Category name; created when missing }
+        description: { type: string, nullable: true }
+        specifications:
+          type: array
+          items: { $ref: "#/components/schemas/Specification" }
+        images:
+          type: array
+          maxItems: 11
+          items: { type: string, format: uri }
+        is_active: { type: boolean }
+        status: { type: string, enum: [available, coming_soon] }
     OrderCreateRequest:
       type: object
       required: [external_reference, customer, items]
@@ -258,8 +333,9 @@ x-webhooks-note: >
   ZamZam ERP also PUSHES events to a webhook URL you configure (Settings →
   Integrations → Website API → Webhook delivery URL). Events: "order.status_updated"
   (fired whenever an order's status or delivery status changes — one-way,
-  ERP to website only) and "product.updated" (price, sale price, or stock
-  changed), and "lead.status_updated" (a lead you submitted with an
+  ERP to website only), "product.created" / "product.updated" (the full
+  Product above plus changed_fields, the fields that change touched),
+  "product.deleted" (sku, name, deleted_at), and "lead.status_updated" (a lead you submitted with an
   external_reference changed status — data: id, external_reference, status,
   updated_at). Every delivery is a POST with header
   "X-ZamZam-Signature: hash_hmac('sha256', <raw request body>, <your webhook secret>)"

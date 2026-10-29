@@ -1,5 +1,5 @@
 # API & Integrations
-> Last checked: 2026-10-20, commit 0e5316d
+> Last checked: 2026-10-29, commit a2d3059f (branch feature/website-full-product-sync)
 
 ## What it does
 The API & Integrations module manages machine-to-machine integrations, headless commerce endpoints, external e-commerce synchronizations, and inbound carrier/payment webhooks. It serves the `/api/v1/storefront/*` headless REST API powering the decoupled Next.js web application, providing cart quotations, server-side checkout, order tracking, and customer account portals. It exposes the `/api/v1/*` website API for external corporate sites to sync catalog SKUs, submit sales leads, and push orders using tenant Bearer API keys. Additionally, it handles bidirectional WooCommerce catalog imports and order status synchronization, Nuport order imports, outbound website change webhooks, and CSRF-exempt webhook endpoints for logistics couriers and online payment gateways.
@@ -34,7 +34,7 @@ The API & Integrations module manages machine-to-machine integrations, headless 
 ### API Controllers (`routes/api.php`)
 | Path | What it does |
 | --- | --- |
-| `app/Http/Controllers/Api/V1/ProductController.php` | External website API: lists products, views SKUs, and updates price/stock via PATCH. |
+| `app/Http/Controllers/Api/V1/ProductController.php` | External website API: lists and shows the full product, creates products (POST) and updates any product field via PATCH. |
 | `app/Http/Controllers/Api/V1/OrderController.php` | External website API: submits new customer orders and queries order status. |
 | `app/Http/Controllers/Api/V1/LeadController.php` | External website API: ingests inquiries and leads from contact forms. |
 | `app/Http/Controllers/Api/V1/StorefrontController.php` | Next.js API: serves site metadata, categories, products, slides, collections, and pages. |
@@ -57,7 +57,7 @@ The API & Integrations module manages machine-to-machine integrations, headless 
 ### Services
 | Path | What it does |
 | --- | --- |
-| `app/Services/WebsiteWebhookDispatcher.php` | Prepares and queues signed outbound webhook events to external consumer systems. |
+| `app/Services/WebsiteWebhookDispatcher.php` | Prepares and queues signed outbound webhook events (product.created/updated/deleted, order, lead, storefront) to external consumer systems. |
 | `app/Services/WooCommerceImportService.php` | Fetches products, variants, images, and categories from WooCommerce via REST. |
 | `app/Services/WooCommerceOrderSyncService.php` | Pushes updated ERP delivery statuses back to remote WooCommerce instances. |
 | `app/Services/NuportOrderImportService.php` | Imports sales orders and customer records from Nuport export formats. |
@@ -72,7 +72,7 @@ The API & Integrations module manages machine-to-machine integrations, headless 
 | `app/Support/StorefrontApi/RichText.php` | Sanitizes and renders HTML rich text content for headless CMS consumers. |
 | `app/Support/StorefrontApi/Signing.php` | Signs order tracking tokens to permit customer access without passwords. |
 | `app/Support/StorefrontApi/TrackingSummary.php` | Formats shipping stages and carrier consignment updates for the API. |
-| `app/Support/WooCommerceDescription.php` | Parses and cleans HTML descriptions imported from WooCommerce products. |
+| `app/Support/WebsiteProductPayload.php` | The full product shape shared by the website API responses and the product webhooks. | Parses and cleans HTML descriptions imported from WooCommerce products. |
 
 ### Jobs & Commands
 | Path | What it does |
@@ -98,10 +98,10 @@ The API & Integrations module manages machine-to-machine integrations, headless 
 | `tests/Feature/StorefrontApiCheckoutTest.php` | Tests `/api/v1/storefront/checkout` quote calculation and order placement. |
 | `tests/Feature/StorefrontApiAccountTest.php` | Tests `/api/v1/storefront/account` authentication, OTPs, and order lookups. |
 | `tests/Feature/WebsiteApiAuthTest.php` | Verifies Bearer key validation and company context resolution on `/api/v1/*`. |
-| `tests/Feature/WebsiteApiProductTest.php` | Tests `/api/v1/products` listing, show, and PATCH price/stock updates. |
+| `tests/Feature/WebsiteApiProductTest.php` | Tests `/api/v1/products` listing, show, POST create and full-field PATCH updates. |
 | `tests/Feature/WebsiteApiOrderTest.php` | Tests `/api/v1/orders` external submission and retrieval. |
 | `tests/Feature/WebsiteApiLeadTest.php` | Tests `/api/v1/leads` inquiry submission. |
-| `tests/Feature/WebsiteWebhookDispatchTest.php` | Tests HMAC signature and outbound delivery of website webhooks. |
+| `tests/Feature/WebsiteWebhookDispatchTest.php` | Tests HMAC signature, product.created/updated/deleted dispatch, changed_fields and the delivery log. |
 | `tests/Feature/WooCommerceImportTest.php` | Tests product, category, and image importing from WooCommerce mock APIs. |
 | `tests/Feature/WooCommerceOrderWebhookTest.php` | Tests inbound WooCommerce order webhooks creating ERP orders. |
 | `tests/Feature/WooCommerceOrderStatusPushTest.php` | Tests pushing ERP order status transitions back to WooCommerce. |
@@ -157,7 +157,7 @@ The API & Integrations module manages machine-to-machine integrations, headless 
   - `POST webhooks/mobile-crash-reports` (name `mobile-crash-reports.store`) -> `App\Http\Controllers\MobileCrashReportController@store`
 
 ## Data
-- `company_api_keys`: External credentials table. Columns: `id`, `company_id`, `label`, `scope` (`website`, `sync`), `key_prefix`, `key_hash`, `last_used_at`, `revoked_at`, `created_by`, `created_at`, `updated_at`.
+- `website_webhook_deliveries`: Website webhook delivery log. Columns: `id`, `company_id`, `event`, `sku`, `url`, `status` (`delivered`, `failed`), `response_status`, `attempts`, `response_excerpt`, `error`, `payload`, `created_at`, `updated_at`. Columns: `id`, `company_id`, `label`, `scope` (`website`, `sync`), `key_prefix`, `key_hash`, `last_used_at`, `revoked_at`, `created_by`, `created_at`, `updated_at`.
 - `storefront_settings`: Next.js site flag and API configuration. Key integration columns: `id`, `company_id`, `site_type` (`blade`, `nextjs`), `nextjs_site_enabled`, `nextjs_site_domain`, `nextjs_site_domain_verified`, `website_api_credentials`, `woocommerce_base_url`, `woocommerce_credentials`, `online_payment_enabled`, `online_payment_gateway`, `payment_credentials`, `is_published`, `created_at`, `updated_at`.
 - `orders`: Shared sales order table populated by external API submissions and WooCommerce webhooks. Key integration columns: `id`, `company_id`, `order_number`, `source`, `external_reference`, `status` (`pending`, `processing`, `completed`, `cancelled`), `delivery_status`, `total_amount`, `created_at`, `updated_at`.
 
@@ -166,6 +166,7 @@ The API & Integrations module manages machine-to-machine integrations, headless 
 - **Headless Mode Gate**: Next.js endpoints under `/api/v1/storefront/*` are strictly blocked with 403 Forbidden unless the tenant has configured a `nextjs` site record in `StorefrontSetting` via `EnsureNextjsSiteEnabled`. Enforced by `app/Http/Middleware/EnsureNextjsSiteEnabled.php`.
 - **Server-to-Server Rate Limiting**: The Next.js storefront API uses rate limiting grouped by API key (`throttle:storefront-api`), rather than by client IP address, because all requests originate from the same Next.js server node. Enforced by `routes/api.php` and `app/Providers/AppServiceProvider.php`.
 - **Webhook Loop Suppression**: When products or orders are updated from an external source (e.g. `PATCH /api/v1/products/{sku}` or WooCommerce sync), `$model->suppressWebsiteWebhook = true` or `Order::$suppressWooCommercePush = true` is set before saving to prevent echoing the update back out in an endless loop. Enforced by `app/Models/Product.php`, `app/Models/Order.php`, and `app/Services/WooCommerceOrderSyncService.php`.
+- **Full Product Webhooks**: `product.created` (delayed ~5 s, payload rebuilt at send time from `productId`), `product.updated` (full product + `changed_fields`) and `product.deleted` come from `Product::booted()` / `StockMovement::booted()`; while a `product.created` is pending (`website-webhook:product-created:{id}` cache key, non-sync queues only) other product changes ride on it instead of going out separately. Products created or changed through the website API are saved with `suppressWebsiteWebhook`. Every delivery with a company is logged to `website_webhook_deliveries`. Enforced by `app/Services/WebsiteWebhookDispatcher.php` and `app/Jobs/DispatchWebsiteWebhookJob.php`.
 - **CSRF Exclusion for Public Webhooks**: All carrier and payment webhook endpoints are explicitly listed in `bootstrap/app.php`'s `validateCsrfTokens(except: [...])` array so external servers can post payloads without session cookies. Enforced by `bootstrap/app.php`.
 - **Legacy IMS Sync Retirement**: The legacy IMS sync API (`/api/v1/sync/*`) was permanently decommissioned on 2026-10-19; all legacy sync endpoints return 404. Documented in `routes/api.php`.
 

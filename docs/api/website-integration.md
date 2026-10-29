@@ -16,10 +16,13 @@ companies in this ERP.
 
 ## What this integration does
 
-- **Products & stock — two-way, real-time.** Your website can read current
-  price/stock, and can also write price/stock changes back (e.g. from your
-  own admin dashboard). ERP-side changes are pushed to you immediately via
-  webhook.
+- **Products — two-way, real-time, the full product.** Your website can read
+  each product (name, brand, category, description, specifications, images,
+  price, stock, active/inactive), create products (`POST /products`) and
+  write any of those fields back (`PATCH /products/{sku}`). Products created,
+  edited or deleted in the ERP are pushed to you immediately via webhook
+  (`product.created`, `product.updated`, `product.deleted`), so the ERP can
+  run the website catalog.
 - **Orders — website → ERP.** A checkout on your website creates a Sales
   Order in ZamZam ERP.
 - **Inquiries — website → ERP.** A contact/inquiry form submission creates a
@@ -59,6 +62,18 @@ endpoint. Two things worth calling out:
   Send the number your dashboard currently shows; ZamZam ERP reconciles the
   difference internally as an auditable stock-ledger entry. You never need to
   calculate or send a delta yourself.
+- **Product fields.** `POST /products` needs `sku`, `name` and `price`;
+  `PATCH` takes any subset. Optional: `sale_price`, `stock`, `brand`,
+  `category` (a name — found, or created when the ERP has none of that name),
+  `description` (HTML), `specifications` (a list of `{label, value}`),
+  `images` (up to 11 public image URLs; the first is the featured image, the
+  rest the gallery — the ERP downloads JPG/PNG/WebP/GIF up to 5 MB each and
+  lists any it could not fetch in `failed_images`), `is_active` and `status`
+  (`available`, `coming_soon`). Send `images` only when the photos changed:
+  an URL that is already one of the product's own ERP images is kept as it is,
+  any other URL is downloaded again. A `POST` for an existing SKU answers
+  `409` (`sku_exists`). Changes you make through the API are never echoed back
+  to you as webhooks.
 - **`POST /orders`'s `external_reference` makes retries safe.** Use your own
   order id/number. Re-posting the same value returns the existing order
   instead of creating a duplicate — so if a request times out and you're not
@@ -85,8 +100,28 @@ X-ZamZam-Signature: <hex-encoded HMAC-SHA256 of the raw request body>
 }
 ```
 
-Events sent: `order.status_updated`, `product.updated`,
-`lead.status_updated`, `storefront.updated` and `ping` (test webhook only).
+Events sent: `order.status_updated`, `product.created`, `product.updated`,
+`product.deleted`, `lead.status_updated`, `storefront.updated` and `ping`
+(test webhook only).
+
+`product.created` and `product.updated` carry the full product — the same
+shape `GET /products/{sku}` returns (`sku`, `name`, `slug`, `brand`,
+`category` `{name, slug}`, `description`, `specifications` `[{label, value}]`,
+`price`, `sale_price`, `stock`, `is_active`, `status`, `image`, `images`,
+`updated_at`; image fields are absolute URLs) — plus `changed_fields`, the
+fields that change touched (`["stock"]` for a stock movement, `["name",
+"image", "images"]` for a renamed product with new photos, every field on
+`product.created`). Apply `price` and `stock` always; apply the other fields
+only when they are in `changed_fields`, so an unrelated change never
+overwrites content you keep on the website. An ERP admin "archiving" a
+product turns `is_active` off (sent as `product.updated`); `product.deleted`
+(`sku`, `name`, `deleted_at`) means the product was removed from the ERP.
+`product.created` is sent about 5 seconds after the product is saved, with the
+product as it is then (opening stock included).
+
+Every delivery is logged on **Settings → Integrations → Website API →
+Webhook delivery log** (event, SKU, result, HTTP status, attempts, the first
+500 characters of your response) with **Send again** for a failed one.
 
 `storefront.updated` (empty `data` except `updated_at`) means storefront content
 changed — settings (home page, header, footer, menus), hero slides, pages,

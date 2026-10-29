@@ -34,6 +34,7 @@ Route::prefix('v1')
     ->middleware(['throttle:120,1', ResolveCompanyFromApiKey::class])
     ->group(function (): void {
         Route::get('products', [ProductController::class, 'index']);
+        Route::post('products', [ProductController::class, 'store']);
         Route::get('products/{sku}', [ProductController::class, 'show']);
         Route::patch('products/{sku}', [ProductController::class, 'update']);
 
