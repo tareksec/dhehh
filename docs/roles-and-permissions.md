@@ -60,6 +60,13 @@ ai_tools.image_generation.review
 ai_tools.video_generation
 ai_tools.video_generation.review
 ai_tools.content_creation
+social.view
+social.create
+social.update
+social.delete
+social.approve
+social.publish
+social.settings
 investments.view
 investments.manage
 investments.settle
@@ -128,6 +135,17 @@ and the built-in Manager role hold `ai_tools.menu`,
 `ai_tools.image_generation`, `ai_tools.image_generation.review`,
 `ai_tools.video_generation`, and `ai_tools.video_generation.review`; grant
 them to any custom role from the role editor.
+
+`social.*` gates the Social Posts module (Social → Posts, Calendar, Settings;
+plan `19_SOCIAL_CONTENT_PLANNER_PLAN.md`). `social.view` sees posts,
+`social.create` writes and edits drafts, `social.update` edits ready and
+scheduled posts, `social.delete` archives and deletes, `social.approve`
+approves a post (the person who wrote it may approve it, owner decision
+2026-10-27), `social.publish` schedules, publishes now, retries and reconciles,
+and `social.settings` opens Social Settings and changes the platform tokens.
+**No built-in role holds any of them yet** — the owner has not said who gets
+what — so only Super Admin (via `*`) can use the module until they are granted
+to a role from the role editor.
 
 ### Trade Portal (`/trade`, 2026-10-22)
 

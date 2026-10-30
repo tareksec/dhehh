@@ -2,7 +2,31 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-27 (latest) - Social Content Planner: plan written (no code yet)
+## 2026-10-30 (latest) - Social Content Planner: Phase 1 built (Facebook + Instagram, text and one picture)
+
+Owner (Bangla): "PHP 8.4 ইনস্টল করে টেস্ট চালাও", then pasted the previous session's summary, whose next step was to start Phase 1 once the environment could run tests.
+
+**Environment first.** This session's setup script had failed on `add-apt-repository` (`No module named 'apt_pkg'`: `python3` points at 3.13 and `apt_pkg` exists only for 3.12). I ran it by hand with `/usr/bin/python3.12 /usr/bin/add-apt-repository -y ppa:ondrej/php`, installed PHP 8.4.27 with the extensions (incl. imagick), then `composer install` and `npm ci && npm run build`. The full suite passed before any change: 3,465 tests, 6 skipped. The owner still has to fix the line in the environment's setup script (use `/usr/bin/python3.12 /usr/bin/add-apt-repository ...`); I had no tool to edit it. `composer install` republished Filament assets under `public/`; I reverted that (`git checkout -- public/`).
+
+**What was built** (plan `19_SOCIAL_CONTENT_PLANNER_PLAN.md`, §12 lists the choices):
+- Tables `social_posts` and `social_post_media`; models `SocialPost`, `SocialPostMedia` (both company-scoped, in `MultiCompanyIsolationTest`).
+- Permissions `social.*` (no built-in role has them, only Super Admin), `docs/roles-and-permissions.md` updated.
+- `App\Services\Social\*`: planner, approval, publishing (schedule / publish now / retry / reconcile), media URL resolver (JPEG conversion, reachability check), settings (encrypted token), `SocialPublishRunner` + `SocialPublishProgress` (lease, checkpoints, `uncertain`), `MetaPagePublisher` behind a `SocialPublisher` interface; publishing calls added to `MetaGraphService`.
+- `PublishSocialPostJob` and `SocialQueueHeartbeatJob` on a new `social` queue connection; `social:publish-due` every minute; heartbeat every five minutes (`bootstrap/app.php`).
+- Filament: Social cluster, `SocialPostResource` (tabs, Send for approval / Approve / Take approval back / Schedule / Take off the schedule / Publish now / Retry / Reconcile / Archive), `SocialSettings` (Page id, Instagram id, token, Test connection, worker status).
+- Docs: `docs/codebase-map/social-content.md` + index line, `docs/deployment.md` (second worker), plan §12.
+
+**Limits, said plainly.** One picture per post; no video, carousel, calendar page, AI drafts, TikTok or YouTube. The Instagram 100-posts-per-day counter is not built (Meta's own error would show). Never run against the real Meta API: the plan's Phase 0 (a hand-made Facebook post and Instagram photo with the owner's app and token, to see which permissions Meta really needs) is the owner's step. Meta is faked in every test.
+
+**Needs the owner before anything goes live:** a Page access token and the Page / Instagram ids per company in Social → Settings; the **second Coolify worker** (`php artisan queue:work social --queue=social --timeout=900 --tries=1 --sleep=1 --max-time=3600`); who gets the `social.*` permissions; the Phase 0 tests.
+
+**Needs Bangla review:** the 134 new keys are my own translations (e.g. "মিলিয়ে নিন" for Reconcile, "অনুমোদনের অপেক্ষায়" for Waiting approval, "দেখে নিতে হবে" for Needs checking); please read them once.
+
+**Verification:** `SocialPostPublishingTest` (31) and `SocialPostResourceTest` (16) pass; `TranslationParityTest`, `MultiCompanyIsolationTest`, `MigrationIdentifierLengthTest` pass; the full `php artisan test` passed: 3,511 tests (6 skipped), 39,778 assertions, up from 3,465 before this work (the 16th `SocialPostResourceTest` case, the picture upload, was added after that run and passed on its own).
+
+Commit status: committed on the designated branch `ccr-91b5e504-q154a8` and pushed to it. Not on `main`, no pull request.
+
+## 2026-10-27 - Social Content Planner: plan written (no code yet)
 
 Owner (Bangla) sent two GitHub repos and asked "can we implement this?": `HarunRRayhan/content-machine` and `Panniantong/Agent-Reach`. Then asked for a step-by-step plan.
 

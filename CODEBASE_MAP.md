@@ -1,5 +1,5 @@
 # Business-Dashboard Codebase Map
-> Last checked: 2026-10-20, commit 0e5316d
+> Last checked: 2026-10-30, branch ccr-91b5e504-q154a8
 
 Business-Dashboard is a multi-tenant enterprise resource planning (ERP), e-commerce, and investment management system built on Laravel 12 and Filament 5. It manages business operations for multiple independent companies across wholesale inventory, retail order fulfillment, Bangladeshi courier logistics (Steadfast, Pathao, RedX, eCourier), double-entry financial accounting, omnichannel messaging (WhatsApp, Messenger, SMS), Islamic Mudarabah investment syndicates (IMS v2), reseller dropshipping portals, headless Next.js and server-rendered Blade storefronts, and generative AI marketing suites.
 
@@ -22,6 +22,7 @@ Business-Dashboard is a multi-tenant enterprise resource planning (ERP), e-comme
 | **CRM & Omnichannel Messaging** | Leads, unified Inbox, WhatsApp Cloud & Web (QR bridge), SMS gateways, Telegram alerts, and the AI Inbox Control Plane. | `app/Services/Crm`, `app/Services/WhatsAppWeb`, `app/Filament/Clusters/Crm.php`, `app/Filament/Pages` | [crm-messaging.md](docs/codebase-map/crm-messaging.md) |
 | **Investments & IMS v2** | Mudarabah investment pools, IMS Office (`/office`), Investor Portal (`/investor`), NID OCR KYC, profit proposals, and statements. | `app/Ims`, `app/Filament/Ims`, `app/Filament/Investor`, `app/Filament/Clusters/Investments.php` | [investments-ims.md](docs/codebase-map/investments-ims.md) |
 | **AI & Marketing Tools** | Tool Menu, generative image/video studios, content governance, prompt enhancement, Meta Ads dashboard, and AI landing pages. | `app/Services/ImageGeneration`, `app/Services/VideoGeneration`, `app/Filament/Clusters/AiTools.php`, `app/Filament/Clusters/Ads.php` | [ai-marketing-tools.md](docs/codebase-map/ai-marketing-tools.md) |
+| **Social Content Planner** | Organic Facebook/Instagram posts per company: write, approve, schedule, publish, reconcile; its own `social` queue and worker. | `app/Services/Social`, `app/Filament/Resources/SocialPosts`, `app/Jobs`, `app/Console/Commands` | [social-content.md](docs/codebase-map/social-content.md) |
 | **Non-Laravel Apps & Folders** | Android POS wrapper, mobile shell, Baileys WhatsApp microservice, n8n workflows, design systems, and CI/CD pipelines. | `android/`, `whatsapp-bridge/`, `n8n Workflows/`, `ERP Frontend Design System/`, `.github/` | [other-apps.md](docs/codebase-map/other-apps.md) |
 
 ## Cross-cutting rules

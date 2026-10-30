@@ -43,6 +43,19 @@ return [
             'after_commit' => false,
         ],
 
+        // Publishing to social platforms (19_SOCIAL_CONTENT_PLANNER_PLAN.md §4). A publish can take minutes, so this
+        // connection's retry_after is far above the job timeout (900 s): the default connection's 90 s would hand the
+        // same job to a second worker while the first still runs, and the post could go out twice. Served by its own
+        // worker: php artisan queue:work social --queue=social --timeout=900 --tries=1 --sleep=1 --max-time=3600
+        'social' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => 'social',
+            'retry_after' => (int) env('SOCIAL_QUEUE_RETRY_AFTER', 1800),
+            'after_commit' => false,
+        ],
+
         'beanstalkd' => [
             'driver' => 'beanstalkd',
             'host' => env('BEANSTALKD_QUEUE_HOST', 'localhost'),

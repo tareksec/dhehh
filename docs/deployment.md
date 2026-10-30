@@ -500,6 +500,22 @@ php artisan queue:work --sleep=1 --tries=3 --max-time=3600
 
 Use Supervisor or your hosting panel to keep the worker alive.
 
+### Second worker for social publishing
+
+The Social module (Social → Posts) publishes to Facebook and Instagram on its own queue connection, `social`
+(`config/queue.php`), with `retry_after` of 1800 seconds. The default connection's 90 seconds would hand a
+publish that takes minutes to a second worker while the first is still running, and the post could go out twice.
+So it needs **its own worker process**, the same image with this start command (on Coolify: a second service from
+the same repo):
+
+```bash
+php artisan queue:work social --queue=social --timeout=900 --tries=1 --sleep=1 --max-time=3600
+```
+
+The `social` connection always uses the database `jobs` table, whatever `QUEUE_CONNECTION` is, so it needs no Redis.
+The scheduler (`schedule:run` every minute) queues due posts with `social:publish-due` and a heartbeat job every five
+minutes; Social → Settings refuses to switch publishing on until it has seen that heartbeat from the worker.
+
 ### Redis on Coolify (recommended queue + cache + session backend)
 
 The app ships with `predis/predis` (a pure-PHP Redis client — no server

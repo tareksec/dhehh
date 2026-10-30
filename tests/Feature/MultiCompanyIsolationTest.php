@@ -116,6 +116,8 @@ use App\Models\SettlementPayout;
 use App\Models\Shipment;
 use App\Models\SmsLog;
 use App\Models\SmsTemplate;
+use App\Models\SocialPost;
+use App\Models\SocialPostMedia;
 use App\Models\StatementDispatch;
 use App\Models\StockMovement;
 use App\Models\StorefrontCartRecord;
@@ -176,6 +178,7 @@ class MultiCompanyIsolationTest extends TestCase
             InvestorCycleElection::class, InvestmentWithdrawalNotice::class, ProjectSettlement::class,
             SettlementPayout::class, ChannelPartner::class, ChannelPartnerPayout::class,
             MetaAdAccount::class, MetaAdCampaign::class, MetaAdSet::class, MetaAd::class, MetaAdProposal::class, MetaAudience::class,
+            SocialPost::class, SocialPostMedia::class,
             Offer::class, OfferItem::class, ProductReview::class,
             Broadcast::class, Media::class, GeneratedImage::class, GeneratedVideo::class,
             ExpenseScan::class, ExpenseScanItem::class,

@@ -1,6 +1,6 @@
 # 19 — Social Content Planner (Module Plan)
 
-Status: **Plan only, nothing built yet.** Owner decisions confirmed 2026-10-27 (§2). The publish path was revised the same day (Meta Graph API first, PostSyncer later) after the owner found PostSyncer expensive. Written after reviewing the open-source repo [HarunRRayhan/content-machine](https://github.com/HarunRRayhan/content-machine) (MIT, Laravel 13 + Inertia/React, a personal content pipeline that publishes through PostSyncer) at the owner's request ("এটা ইমপ্লিমেন্ট করা যায় কিনা?"). Intended as the pre-execution reference for the build, the same way documents 11, 12 and 14 were used.
+Status: **Phase 1 built 2026-10-30** (text and one picture to a Facebook Page and Instagram; see §12). Phases 0 (the owner's real Meta/YouTube/TikTok tests and the second Coolify worker) and 2 to 5 are not done. Owner decisions confirmed 2026-10-27 (§2). The publish path was revised the same day (Meta Graph API first, PostSyncer later) after the owner found PostSyncer expensive. Written after reviewing the open-source repo [HarunRRayhan/content-machine](https://github.com/HarunRRayhan/content-machine) (MIT, Laravel 13 + Inertia/React, a personal content pipeline that publishes through PostSyncer) at the owner's request ("এটা ইমপ্লিমেন্ট করা যায় কিনা?"). Intended as the pre-execution reference for the build, the same way documents 11, 12 and 14 were used.
 
 The ERP has no tool for **organic** social posts: Meta Ads (doc 14 and the Ads cluster) only buys ads, and the Inbox only answers messages. This module adds: write a post, get it approved, schedule it or publish it now to Facebook, Instagram, TikTok and YouTube, and see what happened.
 
@@ -217,3 +217,17 @@ Per `CLAUDE.md`: tests create their own records under `RefreshDatabase`, run as 
 - `TranslationParityTest`, `ModuleGuardTest`, `MigrationIdentifierLengthTest`, `MultiCompanyIsolationTest`.
 
 **Where tests can run:** the project needs PHP 8.4 (its lock file pulls Symfony 8). The cloud computer used for planning has PHP 8.3, so `composer install` and `php artisan test` cannot run there. Code written there is checked with `php -l` only, and CI on the branch is the real test run before anything reaches `main`.
+
+## 12. What Phase 1 built (2026-10-30)
+
+Built to this plan, with these choices where the plan left room:
+
+- **One picture per post.** Text posts and single-picture posts to a Facebook Page, and single-picture posts to Instagram. Several pictures (a carousel), video, TikTok and YouTube are later phases; the planner refuses a post that asks for them.
+- **Approval is tied to the exact content.** `social_posts.approved_fingerprint` stores a hash of the text, language, platforms, options and attached files at approval. Any later change voids the approval (the edit page takes it back at once; the publish job and the scheduler refuse a stale one).
+- **Lease columns** `lease_token` and `lease_expires_at` on `social_posts` implement "the job holds a lease". A run claims the post with an atomic `queued -> running` update; every checkpoint write checks the token. `social:publish-due` also recovers runs a stopped worker left behind: the platform that was mid-call becomes `uncertain`.
+- **Uncertain outcomes.** A transport failure (no answer) or a 5xx from Meta on a create call leaves that platform `uncertain`; it is never replayed. **Retry refuses** while any platform is uncertain; **Reconcile** (give the platform's post id, or confirm it is absent) is the only way out. Instagram's container step follows the same rule.
+- **Worker heartbeat.** `SocialQueueHeartbeatJob` runs on the `social` queue every five minutes; Social Settings will not switch publishing on until it has been seen (§10).
+- **Permissions** `social.*` exist, but **no built-in role holds them** except Super Admin (`*`), until the owner says who gets what (§6).
+- **Not built, on purpose:** the calendar page (Phase 1b), the sidebar badge, the Instagram 100-posts-per-24-hours counter (Meta's own error is shown instead), per-platform captions, bilingual posts.
+- **Still open for the owner:** the Phase 0 tests (a real Facebook post and Instagram photo by hand to see which token and permissions work, one YouTube upload, the TikTok application) and adding the second Coolify worker. Nothing is switched on for any company until Social Settings has a token and the worker has been seen.
+- Tests: `SocialPostPublishingTest` (31) and `SocialPostResourceTest` (16); Meta is always faked.

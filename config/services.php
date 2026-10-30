@@ -33,6 +33,12 @@ return [
         'max_media_bytes' => (int) env('META_MAX_MEDIA_BYTES', 26214400),
     ],
 
+    // Social Content Planner (19_SOCIAL_CONTENT_PLANNER_PLAN.md): how long an Instagram media container is awaited.
+    'social' => [
+        'instagram_poll_attempts' => (int) env('SOCIAL_INSTAGRAM_POLL_ATTEMPTS', 10),
+        'instagram_poll_seconds' => (int) env('SOCIAL_INSTAGRAM_POLL_SECONDS', 3),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

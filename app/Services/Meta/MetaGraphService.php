@@ -541,6 +541,147 @@ class MetaGraphService
         return is_array($body) ? preg_match_all('/\{\{\s*\d+\s*\}\}/', (string) ($body['text'] ?? '')) : 0;
     }
 
+    /**
+     * Organic publishing (19_SOCIAL_CONTENT_PLANNER_PLAN.md). The Page / Instagram token used here is the
+     * company's own Social token, never a Messenger or Ads token (least privilege).
+     *
+     * Every call that CREATES something goes through publishRequest(): one attempt, no automatic retry.
+     * If the answer is lost the caller cannot know whether the post exists, so it must not replay the call.
+     * Reads are safe to repeat and use request() with its normal retry.
+     *
+     * @return array{id: string, name: string}
+     */
+    public function pageProfile(string $pageId, string $accessToken): array
+    {
+        $profile = $this->request('GET', rawurlencode($pageId), $accessToken, ['fields' => 'id,name']);
+
+        return ['id' => (string) ($profile['id'] ?? $pageId), 'name' => (string) ($profile['name'] ?? '')];
+    }
+
+    /** @return array{id: string, username: string} */
+    public function instagramProfile(string $instagramAccountId, string $accessToken): array
+    {
+        $profile = $this->request('GET', rawurlencode($instagramAccountId), $accessToken, ['fields' => 'id,username']);
+
+        return ['id' => (string) ($profile['id'] ?? $instagramAccountId), 'username' => (string) ($profile['username'] ?? '')];
+    }
+
+    /** A text post on the Page. Returns the post id (`pageId_postId`). */
+    public function createPagePost(string $pageId, string $accessToken, string $message): string
+    {
+        $response = $this->publishRequest(rawurlencode($pageId).'/feed', $accessToken, ['message' => $message]);
+
+        return $this->requiredId($response, 'id', 'Facebook did not return a post id.');
+    }
+
+    /** A photo post on the Page; Meta fetches the picture from the public URL. Returns the post id. */
+    public function createPagePhotoPost(string $pageId, string $accessToken, string $imageUrl, string $message): string
+    {
+        $response = $this->publishRequest(rawurlencode($pageId).'/photos', $accessToken, [
+            'url' => $imageUrl,
+            'caption' => $message,
+            'published' => true,
+        ]);
+
+        return $this->requiredId($response, isset($response['post_id']) ? 'post_id' : 'id', 'Facebook did not return a post id.');
+    }
+
+    /** Step 1 of an Instagram post: a media container. Returns the container id. */
+    public function createInstagramImageContainer(string $instagramAccountId, string $accessToken, string $imageUrl, string $caption): string
+    {
+        $response = $this->publishRequest(rawurlencode($instagramAccountId).'/media', $accessToken, [
+            'image_url' => $imageUrl,
+            'caption' => $caption,
+        ]);
+
+        return $this->requiredId($response, 'id', 'Instagram did not return a media container id.');
+    }
+
+    /** IN_PROGRESS, FINISHED, ERROR, EXPIRED or PUBLISHED. A read, so it may be repeated. */
+    public function instagramContainerStatus(string $containerId, string $accessToken): string
+    {
+        $response = $this->request('GET', rawurlencode($containerId), $accessToken, ['fields' => 'status_code']);
+
+        return strtoupper((string) ($response['status_code'] ?? ''));
+    }
+
+    /** Step 2 of an Instagram post: publish the finished container. Returns the Instagram media id. */
+    public function publishInstagramContainer(string $instagramAccountId, string $accessToken, string $containerId): string
+    {
+        $response = $this->publishRequest(rawurlencode($instagramAccountId).'/media_publish', $accessToken, [
+            'creation_id' => $containerId,
+        ]);
+
+        return $this->requiredId($response, 'id', 'Instagram did not return a media id.');
+    }
+
+    /** Best effort: the public link of a published Instagram media, or null. */
+    public function instagramPermalink(string $mediaId, string $accessToken): ?string
+    {
+        try {
+            $response = $this->request('GET', rawurlencode($mediaId), $accessToken, ['fields' => 'permalink'], retry: false);
+        } catch (MetaGraphException) {
+            return null;
+        }
+
+        return filled($response['permalink'] ?? null) ? (string) $response['permalink'] : null;
+    }
+
+    /**
+     * One attempt, no retry. A transport failure (timeout, dropped connection) is reported with
+     * responseReceived = false: the request may have been processed even though no answer arrived.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function publishRequest(string $path, string $accessToken, array $data): array
+    {
+        if (blank($accessToken)) {
+            throw new MetaGraphException('The social access token is missing. Save the Page access token in Social → Settings.');
+        }
+
+        try {
+            $response = Http::acceptJson()
+                ->withToken($accessToken)
+                ->connectTimeout(5)
+                ->timeout(60)
+                ->post($this->url($path), $data);
+        } catch (Throwable) {
+            throw new MetaGraphException('No answer came back from Meta, so it is not known whether the post went out.', null, null, false);
+        }
+
+        if (! $response->successful()) {
+            $exception = $this->exceptionFromResponse($response);
+
+            if ($exception->graphCode === 190) {
+                throw new MetaGraphException(
+                    'The social access token has expired or is invalid. Save a new Page access token in Social → Settings.',
+                    190,
+                    $response->status(),
+                );
+            }
+
+            throw $exception;
+        }
+
+        $json = $response->json();
+
+        return is_array($json) ? $json : [];
+    }
+
+    /** @param  array<string, mixed>  $response */
+    protected function requiredId(array $response, string $key, string $message): string
+    {
+        $id = $response[$key] ?? null;
+
+        if (! is_string($id) && ! is_int($id)) {
+            // Meta said yes but gave no id: the post may exist, so the outcome is not known.
+            throw new MetaGraphException($message.' Check the Page before trying again.', null, null, false);
+        }
+
+        return (string) $id;
+    }
+
     protected function request(string $method, string $path, string $accessToken, array $data = [], bool $retry = true): array
     {
         if (blank($accessToken)) {

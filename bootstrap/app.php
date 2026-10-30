@@ -6,6 +6,7 @@ use App\Http\Middleware\RestrictPortalHosts;
 use App\Http\Middleware\SetResellerPortalLocale;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetCurrentCompany;
+use App\Jobs\SocialQueueHeartbeatJob;
 use App\Models\BackupRun;
 use App\Services\GoogleDriveBackupService;
 use App\Services\OffsiteBackupService;
@@ -107,6 +108,9 @@ return Application::configure(basePath: dirname(__DIR__))
             ->onOneServer();
         $schedule->command('crm:process-sales-follow-ups')->everyFiveMinutes()->withoutOverlapping()->onOneServer();
         $schedule->command('crm:revert-conversations')->everyMinute()->withoutOverlapping()->onOneServer();
+        // Social Content Planner: queue due posts every minute; the heartbeat shows the dedicated `social` worker is alive.
+        $schedule->command('social:publish-due')->everyMinute()->withoutOverlapping()->onOneServer();
+        $schedule->job(new SocialQueueHeartbeatJob)->everyFiveMinutes()->onOneServer();
         $schedule->command('storefront:retry-meta-events')
             ->everyTenMinutes()
             ->withoutOverlapping()
