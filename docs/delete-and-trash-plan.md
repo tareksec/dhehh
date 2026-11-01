@@ -39,7 +39,7 @@ The name shown is the resource's record title; when it is only the model label, 
 
 ## 3. Where things stand (checked 2026-11-01)
 
-**Soft-delete models (7):** `Order`, `Voucher` (own Trash), `Expense`, `FeedPost` (generic Trash, done in T1), `OrderPayment`, `FeedComment`, `InvestorNominee` (soft-deleted, **no Trash page yet** — phase T2).
+**Soft-delete models (7):** `Order`, `Voucher` (own Trash), `Expense`, `FeedPost` (generic Trash, T1), `OrderPayment` (Trash inside the order's Payments History, T2). `FeedComment` and `InvestorNominee` are soft-deleted too but are **not something a user deletes with a Delete button**, so they get no Trash (see the T2 row).
 
 **Hard-delete models that have a Delete button** (72 Delete buttons in 67 files, checked 2026-11-01). My proposal for each group, for the owner to confirm:
 
@@ -62,7 +62,7 @@ Each phase ends with the full test suite on PHP 8.4, a look at the Trash page an
 | Phase | What | Status |
 |---|---|---|
 | T1 | Name prompt on every Filament delete; generic Trash page; Expenses and Office Feed; type-the-name on Voucher and Order trash; rule in `CLAUDE.md` / `AGENTS.md`; this plan | **built** (this commit) |
-| T2 | Trash pages for the models already soft-deleted: `OrderPayment` (inside the order), `FeedComment`, `InvestorNominee` | planned |
+| T2 | Trash for the models that were already soft-deleted: **`OrderPayment`** — a "Trash (n)" button on the order's Payments History (Edit page): deleted payments, Restore (the paid amount and the account balance come back), Delete permanently (name asked). Reusable for any table inside a record: `App\Filament\Concerns\HasTrashView`. **Left as they are, on purpose:** `FeedComment` is deleted by its own writer in the Investor portal (the office only *hides* comments), so an office Restore would undo the writer's choice; `InvestorNominee` rows are the history of a nominee list that is replaced as a whole, and restoring one would break the "shares add up to 100%" rule. Both stay as soft-deleted history. | **built** (this commit) |
 | T3 | Catalog + Storefront content (no money effect): Category, Offer, ProductCarousel, ProductReview, CourierProvider, StorefrontSlide / Page / PaymentMethod, CompanyFaq, QuickReply | planned |
 | T4 | People & CRM: Customer, Supplier, Lead, Quotation, ConversationChannel, ResellerLevel | planned |
 | T5 | Products, StockPool, Purchase (stock effect) | planned |
@@ -76,7 +76,7 @@ Each phase ends with the full test suite on PHP 8.4, a look at the Trash page an
 3. Unique rules (`slug`, `sku`, phone, email, number): decide whether a trashed row still blocks the value; use `CompanyScopedUnique` / `Rule::unique(...)->withoutTrashed()` accordingly.
 4. Every place that lists, counts, exports, searches or serves the model by API: trashed rows must not appear (the global scope hides them) and history that points at a trashed row must still show it (`->withTrashed()` on those relations).
 5. Money / stock: write the reverse effect on `deleted` and the re-apply on `restored`, and test both (see `Expense`, `Order`).
-6. Resource: `canRestore*()`, `canForceDelete*()`; the `TrashedThings` page; `'trash'` before `'view'` in `getPages()`; `TrashedRecords::linkAction()` in the list header; `getRecordTitle()` if there is no name column.
+6. A table inside a record (relation manager) uses `HasTrashView` instead of a page. Resource: `canRestore*()`, `canForceDelete*()`; the `TrashedThings` page; `'trash'` before `'view'` in `getPages()`; `TrashedRecords::linkAction()` in the list header; `getRecordTitle()` if there is no name column.
 7. Tests: delete needs the name, lands in Trash, restore, delete permanently, a person without the permission cannot open the Trash.
 8. Bilingual keys, `CHANGELOG.md`, `UPDATE_NOTES.md`, codebase map.
 

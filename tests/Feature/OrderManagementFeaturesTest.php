@@ -201,6 +201,78 @@ class OrderManagementFeaturesTest extends TestCase
         $this->assertEquals(150, (float) $order->fresh()->paid_amount);
     }
 
+    public function test_a_deleted_payment_goes_to_the_orders_trash_and_comes_back_on_restore(): void
+    {
+        [$company] = $this->signIn();
+        $cash = $this->account($company, 'Cash', 'cash');
+        $order = $this->order($company);
+        $payment = OrderPayment::query()->create([
+            'order_id' => $order->getKey(),
+            'account_id' => $cash->getKey(),
+            'type' => OrderPayment::TYPE_PARTIAL,
+            'amount' => 150,
+            'paid_at' => now()->toDateString(),
+        ]);
+        $this->assertEquals(150, (float) $order->fresh()->paid_amount);
+
+        $name = 'Payment #'.$payment->getKey().' (150.00)';
+        $params = ['ownerRecord' => $order, 'pageClass' => EditOrder::class];
+
+        // The wrong name deletes nothing.
+        Livewire::test(PaymentsRelationManager::class, $params)
+            ->callTableAction('delete', $payment, data: ['confirmation' => 'something else'])
+            ->assertHasTableActionErrors(['confirmation']);
+        $this->assertNotSoftDeleted($payment);
+
+        // The right name moves it to Trash and the order and the account lose the payment.
+        Livewire::test(PaymentsRelationManager::class, $params)
+            ->callTableAction('delete', $payment, data: ['confirmation' => $name])
+            ->assertHasNoTableActionErrors();
+        $this->assertSoftDeleted($payment);
+        $this->assertEquals(0, (float) $order->fresh()->paid_amount);
+        $this->assertEquals(0, (float) $cash->fresh()->current_balance);
+
+        // It is not in the list, it is in the Trash, and Restore puts everything back.
+        Livewire::test(PaymentsRelationManager::class, $params)
+            ->assertCanNotSeeTableRecords([$payment])
+            ->set('showTrash', true)
+            ->assertCanSeeTableRecords([$payment])
+            ->callTableAction('restore', $payment)
+            ->assertHasNoTableActionErrors();
+        $this->assertNotSoftDeleted($payment);
+        $this->assertEquals(150, (float) $order->fresh()->paid_amount);
+        $this->assertEquals(150, (float) $cash->fresh()->current_balance);
+    }
+
+    public function test_a_trashed_payment_is_deleted_permanently_only_after_typing_its_name(): void
+    {
+        [$company] = $this->signIn();
+        $cash = $this->account($company, 'Cash', 'cash');
+        $order = $this->order($company);
+        $payment = OrderPayment::query()->create([
+            'order_id' => $order->getKey(),
+            'account_id' => $cash->getKey(),
+            'type' => OrderPayment::TYPE_PARTIAL,
+            'amount' => 150,
+            'paid_at' => now()->toDateString(),
+        ]);
+        $payment->delete();
+
+        $params = ['ownerRecord' => $order, 'pageClass' => EditOrder::class];
+
+        Livewire::test(PaymentsRelationManager::class, $params)
+            ->set('showTrash', true)
+            ->callTableAction('forceDelete', $payment, data: ['confirmation' => 'something else'])
+            ->assertHasTableActionErrors(['confirmation']);
+        $this->assertSoftDeleted($payment);
+
+        Livewire::test(PaymentsRelationManager::class, $params)
+            ->set('showTrash', true)
+            ->callTableAction('forceDelete', $payment, data: ['confirmation' => 'Payment #'.$payment->getKey().' (150.00)'])
+            ->assertHasNoTableActionErrors();
+        $this->assertModelMissing($payment);
+    }
+
     public function test_order_list_shows_call_and_whatsapp_links_under_the_phone(): void
     {
         [$company] = $this->signIn();

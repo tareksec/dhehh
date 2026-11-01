@@ -4596,5 +4596,7 @@
     "Please try again.": "Please try again.",
     ":number deleted permanently": ":number deleted permanently",
     "Order is no longer in trash": "Order is no longer in trash",
-    "This order will be moved to Trash. You can restore it, or delete it permanently, from the Trash button on the Orders list. Its stock and customer balance effects are released until it is restored.": "This order will be moved to Trash. You can restore it, or delete it permanently, from the Trash button on the Orders list. Its stock and customer balance effects are released until it is restored."
+    "This order will be moved to Trash. You can restore it, or delete it permanently, from the Trash button on the Orders list. Its stock and customer balance effects are released until it is restored.": "This order will be moved to Trash. You can restore it, or delete it permanently, from the Trash button on the Orders list. Its stock and customer balance effects are released until it is restored.",
+    "Back to the list": "Back to the list",
+    "This payment will be moved to Trash. The order's paid and due amounts and the account balance update at once. Open Trash above this table to restore it, or to delete it permanently.": "This payment will be moved to Trash. The order's paid and due amounts and the account balance update at once. Open Trash above this table to restore it, or to delete it permanently."
 }

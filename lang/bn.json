@@ -4596,5 +4596,7 @@
     "Please try again.": "অনুগ্রহ করে আবার চেষ্টা করুন।",
     ":number deleted permanently": ":number স্থায়ীভাবে ডিলিট হয়েছে",
     "Order is no longer in trash": "অর্ডারটি আর ট্র্যাশে নেই",
-    "This order will be moved to Trash. You can restore it, or delete it permanently, from the Trash button on the Orders list. Its stock and customer balance effects are released until it is restored.": "এই অর্ডার ট্র্যাশে যাবে। অর্ডার তালিকার ট্র্যাশ বাটন থেকে আপনি এটি ফিরিয়ে আনতে পারবেন, অথবা স্থায়ীভাবে ডিলিট করতে পারবেন। ফিরিয়ে আনার আগ পর্যন্ত এর স্টক ও কাস্টমার ব্যালেন্সের প্রভাব সরে থাকবে।"
+    "This order will be moved to Trash. You can restore it, or delete it permanently, from the Trash button on the Orders list. Its stock and customer balance effects are released until it is restored.": "এই অর্ডার ট্র্যাশে যাবে। অর্ডার তালিকার ট্র্যাশ বাটন থেকে আপনি এটি ফিরিয়ে আনতে পারবেন, অথবা স্থায়ীভাবে ডিলিট করতে পারবেন। ফিরিয়ে আনার আগ পর্যন্ত এর স্টক ও কাস্টমার ব্যালেন্সের প্রভাব সরে থাকবে।",
+    "Back to the list": "তালিকায় ফিরে যান",
+    "This payment will be moved to Trash. The order's paid and due amounts and the account balance update at once. Open Trash above this table to restore it, or to delete it permanently.": "এই পেমেন্ট ট্র্যাশে যাবে। অর্ডারের পরিশোধিত ও বাকির অঙ্ক এবং অ্যাকাউন্টের ব্যালেন্স সাথে সাথে বদলে যাবে। এটি ফিরিয়ে আনতে বা স্থায়ীভাবে ডিলিট করতে এই টেবিলের উপরের ট্র্যাশ খুলুন।"
 }

@@ -2,7 +2,22 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-01 (latest) - Delete asks for the name, then Trash (T1)
+## 2026-11-01 (latest) - Trash for order payments (T2)
+
+Owner (Bangla): "T2 শুরু করো" (phase T2 of `docs/delete-and-trash-plan.md`: Trash for the models that were already soft-deleted).
+
+What I did:
+- **Order payments**: the Payments History table on the order's Edit page has a "Trash (n)" button (new trait `HasTrashView`, reusable for any table inside a record). Delete asks for `Payment #12 (150.00)`, the payment goes to that Trash, the order's paid / due amounts and the account balance update; Restore brings them back; Delete permanently asks for the name again.
+- **Feed comments and investor nominees: no Trash, on purpose.** Reading the code: no Delete button reaches either. A comment is deleted by its own writer in the Investor portal (the office only *hides* comments), so an office Restore would undo the writer's choice. The nominees of an investor are replaced as a whole list (the old rows are kept as history), and restoring one would break the "shares add up to 100%" rule. The plan says so; if the owner wants the office to *see* these (read-only), that is a separate small feature.
+- Plan, `CLAUDE.md`, `PROJECT_GUIDE.md` and the codebase map updated.
+
+**Needs Bangla review:** the 2 new keys ("Back to the list" and the payment Delete description).
+
+**Verified:** `php -l` and Pint on the changed files; `TranslationParityTest` run and passing. **Not run:** the two new `OrderManagementFeaturesTest` cases and the rest of the suite (PHP 8.3 here, the project needs 8.4), and no browser look. The first thing to check by eye: the "Trash" button on an order's Payments History and that the paid amount on the Edit page refreshes after Restore.
+
+Commit status: committed on `claude/upbeat-franklin-hy6fhr`, pushed to that branch. Not on `main`.
+
+## 2026-11-01 - Delete asks for the name, then Trash (T1)
 
 Owner (Bangla): when Delete is pressed, the record's name must be offered for copying into a field, so the warning is stronger before deleting; after Confirm the record goes to the Trash page, where it can be restored or deleted permanently.
 
