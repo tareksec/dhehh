@@ -1,5 +1,5 @@
 # Core Platform
-> Last checked: 2026-10-24, branch `feature/trade-portal-test-data-cleanup` (Trade Portal test-data cleanup command), merged with main (advanced backups Phase 6, Cloudflare R2)
+> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (ⓘ instruction-icon foundation: `InfoTip`, `InfoTipAudit`, guard test), after main with the Trade Portal test-data cleanup command
 
 ## What it does
 The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and five distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal, Trade Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated encrypted backups to Cloudflare R2 and/or Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
@@ -81,6 +81,8 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Support/ModuleHealth.php` | Health check probes evaluating database tables and service availability. |
 | `app/Support/PanelErrorPages.php` | Detects panel errors and renders graceful module failure views. |
 | `app/Support/GuardedViewManager.php` | Restores Laravel blade view state after an inner view component throws an error. |
+| `app/Support/InfoTip.php` | Instruction text in an ⓘ icon (owner request 2026-11-01): registers `->infoTip()` on fields, infolist entries and sections (called from `AppServiceProvider`), plus `icon()`, `html()`, `heading()`; Blade component `resources/views/components/info-tip.blade.php`. Rule in `CLAUDE.md`, plan `docs/info-icon-instructions-plan.md`. |
+| `app/Support/InfoTipAudit.php` | Pure-PHP tokenizer scanner that finds plain `helperText` / `description` / `hint` / `hintIconTooltip` instruction text and `->infoTip()` calls without `__()`; behind `scripts/info-tip-audit.php` and `tests/Unit/InfoTipGuardTest.php` (baseline `tests/Fixtures/info-tip-baseline.json`). |
 | `app/Support/AppDeployment.php` | Reads current deployment metadata, Git commit hashes, and build timestamps. |
 | `app/Support/AppRelease.php` | Reads published release notes and changelog versions. |
 | `app/Support/ReleaseCutter.php` | Utility script automating semantic version release tagging. |

@@ -63,6 +63,7 @@ use App\Services\StorageSettingsService;
 use App\Support\DefaultTableSort;
 use App\Support\FileUploadClearAction;
 use App\Support\GuardedViewManager;
+use App\Support\InfoTip;
 use App\Support\ModuleHealth;
 use App\Support\MoneyFormatter;
 use Filament\Auth\Http\Controllers\LogoutController;
@@ -142,6 +143,10 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('storefront-auth', fn (Request $request): Limit => Limit::perMinute(20)->by(
             'storefront-auth:'.sha1((string) $request->bearerToken()).':'.($request->input('client_ip') ?: $request->ip())
         ));
+
+        // ->infoTip('text') on fields, entries and sections: instruction text in
+        // an ⓘ icon (CLAUDE.md "Instruction text goes in an ⓘ icon").
+        InfoTip::register();
 
         TextColumn::macro('moneyWithoutTrailingZeroes', function (string|\BackedEnum|\Closure|null $currency = null, int|\Closure $divideBy = 0, string|\BackedEnum|\Closure|null $locale = null, int|\Closure|null $decimalPlaces = null): static {
             $this->formatStateUsing(static function (TextColumn $column, $state) use ($currency, $divideBy, $decimalPlaces): ?string {

@@ -2,7 +2,27 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-25 (latest) - Start the investor groups again (undo command, G-codes on backfilled projects)
+## 2026-11-01 (latest) - Instruction text in an ⓘ icon: plan, agent rule, foundation (Phase 0)
+
+Owner (Bangla), item 14: every title and subtitle in the ERP has instruction comments under it, some very long; they must go inside an ⓘ icon that shows the text on hover, like the fields of Ads → Meta Ad Accounts; in Bangla and English, in the ERP, IMS, Reseller dashboard and Trade dashboard; arrange the work in phases step by step so there are no mistakes; and the agent rules must say that every next new piece of work writes its instruction comments inside the ⓘ icon, for the whole system.
+
+What I did (Phase 0 only; **no existing screen was changed**):
+- **Agent rule** in `CLAUDE.md` ("Instruction text goes in an ⓘ icon") and `AGENTS.md`, plus a how-to in `PROJECT_GUIDE.md` section 9.
+- **Plan** `docs/info-icon-instructions-plan.md`: real numbers from the code (561 plain texts in 127 files: Trade 22, Reseller 13, IMS Office 4, Investor 5, ERP admin 517; plus ~390 grey lines in Blade views, counted in Phase 2), where the ⓘ goes for each kind of text, what stays visible, Phases 1–5 (Trade pilot → Reseller → IMS → ERP in batches → clean-up and lock), the file-by-file conversion procedure, risks and five questions for the owner.
+- **Helper** `App\Support\InfoTip`: `->infoTip(__('…'))` on fields, infolist entries and sections; `InfoTip::heading()` for page headings; `<x-info-tip>` for Blade. Built on Filament 5's own hint icon / `Icon` component after reading its source (the section macro keeps `headerActions()` because Filament passes those through `afterHeader`).
+- **Mistake-proofing:** `php scripts/info-tip-audit.php` (what is left, per panel and file) and `tests/Unit/InfoTipGuardTest.php` (a file may never get more plain instruction text than `tests/Fixtures/info-tip-baseline.json`; an `->infoTip()` must be inside `__()`).
+
+**Decisions I made** (change them if the owner wants otherwise; the plan lists them as questions): "Trade Dashboard" = the Trade portal `/trade`; the Investor portal and the admin Investments screens are part of "IMS"; warnings that protect data and modal confirmations / empty-table messages stay visible for now; the ERP admin has **no language switch** (Trade, Reseller, IMS Office and Investor do), so a Bangla ⓘ in the ERP needs Phase 4.0 (the optional admin language switch of the i18n plan) first.
+
+**Needs Bangla review:** none (no new visible string; the tooltip text is its own accessible label).
+
+**Verified:** `php -l` on every new PHP file; `InfoTipAuditTest` (10) and `InfoTipGuardTest` (3) **run and passing** (13 tests, 47 assertions, standalone PHPUnit — they need only PHP); the guard was also shown to fail when a plain `helperText` or an `->infoTip()` without `__()` is added. **Not run:** `tests/Feature/InfoTipTest.php` (7 cases for the Filament and Blade helpers), the full `php artisan test` and `npm run build` — this computer has PHP 8.3 and the project needs 8.4 (Symfony 8 does not parse), so the app cannot boot here; CI on the branch decides. The environment's setup script fails at `add-apt-repository` (`apt_pkg` missing under the Python 3.13 that `python3` now points to) so PHP 8.4 / `ext-imagick` were never installed. Not looked at in a browser either (no app): that is the Phase 1 gate.
+
+**Next:** the owner answers the five questions in the plan (section 8); then Phase 1 (Trade portal, 22 texts) with screenshots for approval.
+
+Commit status: committed on `claude/upbeat-franklin-hy6fhr`, pushed to that branch. Not on `main`.
+
+## 2026-10-25 - Start the investor groups again (undo command, G-codes on backfilled projects)
 
 Owner (Bangla), after the live backfill of Tasneem Knitting industry (company id 2) turned the five old projects into G2–G6 (G1 is a real group that was already there) and kept their old project codes (`01/2026-INV-01` …): "g1-p1 এরকম হবে", then "গ্রুপ সব ডিলিট করে নতুন করে আমার রান কি বল".
 

@@ -56,6 +56,18 @@ These rules are mandatory for any AI agent working in this repository.
 - Never hardcode Bangla in Blade/PHP (only in `lang/bn.json`); admin-entered content stays admin-managed and is translated per the plan's Phase 4, not in lang files.
 - If a correct Bangla translation is uncertain, still add the key (English text as the value) and list it under "Needs Bangla review" in `UPDATE_NOTES.md`.
 
+## Instruction text goes in an ⓘ icon (owner request 2026-11-01)
+
+Applies to **every screen and every new piece of work, in all panels** — ERP admin (`/admin`), IMS Office (`/office`), Investor portal (`/investor`), Reseller portal (`/portal`), Trade portal (`/trade`). Full plan, phases and the conversion procedure: `docs/info-icon-instructions-plan.md`.
+
+- **The instruction / help / explanation text under a page title, subtitle, section heading or field label is never printed as a line of grey text.** It is written inside an ⓘ (information-circle) icon that shows the text on hover (tap on a touch screen), like the fields of Ads → Meta Ad Accounts. Every new task you write follows this — do not wait for the conversion phases.
+- **Use only the shared helpers** (`App\Support\InfoTip`, registered in `AppServiceProvider`): `->infoTip(__('English text'))` on fields, infolist entries and `Section` (instead of `->helperText()` / `->description()` / `->hint()`); `InfoTip::heading($title, $text)` in `getHeading()` for a page; `<x-info-tip :text="__('English text')" />` in a custom Blade view. A text that depends on state is a closure (`fn (Get $get): ?string => …`); empty = no icon. Never add a new `hintIcon()->hintIconTooltip('…')`, `hintAction()` + help modal, hand-made tooltip, or `<p class="text-gray-500">` instruction.
+- **Bilingual in the same commit.** The text goes through `__()` and into both `lang/en.json` and `lang/bn.json` (the bilingual rule above applies unchanged; no Bangla typed in PHP/Blade). The ⓘ then reads in Bangla or English with the panel's language.
+- **Moving an existing text into an ⓘ: copy it exactly.** No shortening or rewording without the owner. Long texts stay long.
+- **What stays visible** (not an ⓘ): live values and status built from the record or form state, validation errors, row data (`TextColumn::description()`, stat captions), callouts and notifications, modal confirmations and empty-table messages, sign-in/welcome greetings. Anything else you leave visible on purpose is marked `// info-tip:keep (reason)` on the line above or the same line.
+- **Enforced:** `tests/Unit/InfoTipGuardTest.php` fails if a file gets more plain instruction text than `tests/Fixtures/info-tip-baseline.json` allows, or if an `->infoTip()` text is not inside `__()`. `php scripts/info-tip-audit.php` lists what is left (`--panel=trade`, `--file=…`, `--dynamic`, `--blocks`). After converting a screen, run `php scripts/info-tip-audit.php --write-baseline`.
+- A change that touches a screen also runs `php artisan test --filter=InfoTip` and, for converted screens, is looked at in Bangla and English at 1366 px and 360 px (hover and tap).
+
 ## Multi-company isolation
 
 - Every new company-owned model must use `BelongsToCompany` + `CompanyScope` and be added to `MultiCompanyIsolationTest::test_every_company_owned_model_uses_the_company_scope_contract`.

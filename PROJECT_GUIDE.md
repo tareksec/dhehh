@@ -1594,6 +1594,16 @@ At minimum, persist:
 5. Ensure reports and CSV exports expose the field where relevant.
 6. Add tests in `PurchaseTest` and `ReportsTest`.
 
+### Add instruction text to a screen (ⓘ icon, owner request 2026-11-01)
+
+Help / instruction text under a page title, subtitle, section heading or field label goes inside an ⓘ icon in every panel (ERP `/admin`, IMS `/office`, Investor `/investor`, Reseller `/portal`, Trade `/trade`), the way Ads → Meta Ad Accounts shows it. Hover (tap on a phone) opens the text.
+
+1. Field / infolist entry / `Section`: `->infoTip(__('English text'))`. Page heading: `getHeading()` returns `InfoTip::heading(__('Title'), __('English text'))`. Custom Blade view: `<x-info-tip :text="__('English text')" />`. A state-dependent text is a closure; empty = no icon. Helper: `app/Support/InfoTip.php`, Blade component `resources/views/components/info-tip.blade.php`.
+2. Add the key to `lang/en.json` and `lang/bn.json`.
+3. Text that must stay visible (live status, warnings the owner wants shown) is marked `// info-tip:keep (reason)`.
+4. Verify: `php scripts/info-tip-audit.php --file=<your file>` lists nothing; `php artisan test --filter=InfoTip` and `--filter=TranslationParityTest`; look at the screen in Bangla and English at 1366 px and 360 px (hover and tap). After converting existing text run `php scripts/info-tip-audit.php --write-baseline`.
+5. The rule, the phased conversion of the existing screens and the guard: `CLAUDE.md`, `docs/info-icon-instructions-plan.md`, `tests/Unit/InfoTipGuardTest.php`.
+
 ## 10. Testing Checklist
 
 Before handoff:
