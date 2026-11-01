@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [2.119.0] - 2026-11-01
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -21,7 +23,6 @@
 - Courier amount: `CourierService::codMismatch()` (an active booking, `CourierBooking::ACTIVE_STATUSES`, whose `cod_amount` differs from `Order::courierCodAmount()`), `changesCodByItself()` (manual driver only) and `recordCodChange()` (booking COD and margin, one `CourierStatusLog` line, an `AuditLog` row `courier_cod_changed` shown in the order activity). The red box is the first section of `OrderInfolist`, `EditOrder::afterSave()` shows the warning, the actions are `courierAmountUpdated` and `shortShipment` on `ViewOrder`. Tests: `CourierCodMismatchTest`, `ShortShipmentTest`.
 - Fewer pieces sent: `ShortShipmentService` (`preview()` for the live figure, `apply()` in one transaction, audit action `short_shipment`). No schema change: the order's own quantities are lowered, so the existing order sync does the totals, stock and customer balance.
 - PDF card: `OrderSummaryCardService::buildForPdf()` (+ `tracking_url` in `build()`), `OrderSummaryCardImageService::renderCardWithLinks()` (a `track_button` row is drawn as the button and its box is returned; the PNG renderer's layout is already as tall as its content), `OrderSummaryCardPdfService` (writes a one-page PDF by hand: the picture as a Flate-compressed RGB image, 0.5 pt per pixel, a URI link annotation over the button; checked with poppler `pdfinfo -url`), `Admin\OrderSummaryCardPdfController`, route `orders.summary-card.pdf`. Tests: `OrderSummaryCardPdfTest`, `InvoiceEmptyFieldsTest`. 34 new bilingual keys; no migrations.
-
 ## [2.118.0] - 2026-11-01
 
 **Release type:** Minor Feature Update
