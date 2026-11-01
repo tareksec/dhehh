@@ -24,7 +24,9 @@ use App\Services\CompanyContext;
 use App\Services\CompanySettingsService;
 use App\Services\DynamicColorService;
 use App\Services\ProductSetupService;
+use App\Support\ModuleGuard;
 use Filament\Actions\Action;
+use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -43,6 +45,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
@@ -470,6 +473,21 @@ class AdminPanelProvider extends PanelProvider
             ->renderHook(
                 PanelsRenderHook::USER_MENU_PROFILE_AFTER,
                 fn (): HtmlString => new HtmlString(view('filament.partials.mobile-notifications-menu-item')->render()),
+            )
+            // Phone-width bottom bar (owner request 2026-11-01): Dashboard and
+            // the company switch, a "+" that opens the quick-create popups,
+            // Orders and Products. Hidden from the large screens by its own
+            // CSS; drawn only for a signed-in user, and inside ModuleGuard so
+            // a failure here can never take a page down.
+            ->renderHook(
+                PanelsRenderHook::LAYOUT_END,
+                fn (): HtmlString => new HtmlString(ModuleGuard::run(
+                    'admin.bottom-navigation.mount',
+                    fn (): string => Filament::auth()->check()
+                        ? Blade::render('<livewire:admin-bottom-navigation />')
+                        : '',
+                    '',
+                )),
             )
             ->renderHook(
                 PanelsRenderHook::CONTENT_BEFORE,

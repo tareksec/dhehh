@@ -1080,3 +1080,31 @@ html:not(.zz-sidebar-navigation-ready) .zz-sidebar-menu-parent.fi-sidebar-route-
 .zz-inbox-composer .fi-icon-btn {
     border-radius: 999px;
 }
+
+/*
+ * The phone bottom bar (resources/views/filament/partials/admin-bottom-navigation.blade.php,
+ * App\Livewire\AdminBottomNavigation) is fixed to the bottom of the screen
+ * below the large breakpoint, where the sidebar is hidden. It carries what the
+ * header used to: the company switch moves into it, so the header's own
+ * dropdown steps aside (only while the bar is really on the page — if the bar
+ * fails to load, the header switcher stays), and the page gets room so its last
+ * lines are never hidden behind the bar.
+ */
+.zz-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.zz-bottom-nav .fi-dropdown,
+.zz-bottom-nav .fi-dropdown-trigger {
+    width: 100%;
+}
+
+@media (max-width: 1023px) {
+    body:has(.zz-bottom-nav) .fi-main-ctn {
+        padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+    }
+
+    body:has(.zz-bottom-nav) .zz-company-switcher {
+        display: none;
+    }
+}

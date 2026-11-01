@@ -2,6 +2,30 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-11-01 (latest) - Admin bottom bar with a "+" quick-create (phones and tablets)
+
+Owner (Bangla, item 8): put the ERP dashboard header's navigation icon buttons at the bottom as a bottom navigation; in the middle a "+" button that offers Create a new order, Add a new product, Add a new purchase, Add a new expense, each opening a popup where the form can be filled in; on the left the Dashboard and company-switch icons, on the right the Orders and Products icons.
+
+What I did (branch `feature/admin-bottom-navigation`, from `main` at 288e7fb):
+- **The bar:** `App\Livewire\AdminBottomNavigation`, mounted by a `LAYOUT_END` render hook in `AdminPanelProvider` (signed-in users only, inside `ModuleGuard`). Left: Dashboard, company switch (list of the user's companies, plus All Companies for a super admin; posts to the existing `admin.company.switch` route). Middle: a raised "+". Right: Orders, Products. The tab of the page you are on is highlighted. It follows the reseller portal's bottom bar (`lg:hidden`, `z-20`, page bottom padding in `theme.css`).
+- **The "+" menu and popups:** four `CreateAction`s that reuse the resources' own forms (`OrderResource::form()`, `ProductResource::form()`, `PurchaseResource::form()`, `ExpenseResource::form()`, schema operation `create`) and the Create pages' rules: order = database transaction + "Not enough stock" check for Confirmed / Processing / Completed + first payment account; product = price from sale price + opening stock from the form's stock field. A choice the user may not use is hidden (`Resource::canCreate()`); after saving, the user lands on that resource's list with a "created" notice.
+- **Shared rule:** `App\Support\CompanySwitcher::for()` decides who gets a company switcher and which company is active; the top bar's dropdown (`company-switcher.blade.php`) now uses it too, output unchanged.
+- 19 new keys in `lang/en.json` and `lang/bn.json`.
+
+Decisions to confirm:
+1. **Phones and tablets only (below 1024px).** That is where the sidebar is hidden and the header's menu button is shown; large screens keep the sidebar and the top bar unchanged. If the owner wants the bar on large screens too, it is the one `lg:hidden` class.
+2. **The header's menu (hamburger) button stays.** It is the only way to the other modules (Finance, Reports, Settings…) on a phone, so it is not moved into the bar. The top bar's company dropdown does move: it is hidden on phones while the bar is on the page (and comes back if the bar fails to load).
+3. **"Purchase" in Bangla is "ক্রয়"** (the app's existing word), so the menu says "নতুন ক্রয় যোগ করুন".
+4. **A short order stops with a notice only.** When a Confirmed / Processing / Completed order is short of stock, the popup lists the short products and offers "Open full order form" (which can add the missing stock and place the order); the "Add stock and place order" step itself is not repeated in the popup. A Draft order never needs it.
+5. **All Companies mode:** a record made from the popup goes to the default company, exactly as the Create pages do today (no extra block was added).
+
+Needs Bangla review: the 19 new keys (menu entries "নতুন অর্ডার তৈরি করুন", "নতুন প্রোডাক্ট যোগ করুন", "নতুন ক্রয় যোগ করুন", "নতুন খরচ যোগ করুন", the "... added" notices, "দ্রুত তৈরি করুন", "কোম্পানি পরিবর্তন করুন").
+
+Verified: `AdminBottomNavigationTest` 14 passed, `TranslationParityTest` passed, Pint clean. In a real browser (Playwright, 390×844 phone viewport, throwaway sqlite database, never demo or live): the bar sits at the bottom with the tabs in order Dashboard · Company · + · Orders · Products; the "+" menu lists the four entries; all four popups open; an expense and an order (customer, product, live grand total) were created through the popups, each ending on its list with a notice; switching company from the bar works; tapping Orders / Products navigates without a reload and moves the highlight; the sidebar still opens over the bar; a 1280px viewport shows no bar and the old top bar switcher. The full `php artisan test` run was still going when this was first committed (817 passed, 0 failed up to that point); its final result is recorded in the next commit on this branch.
+
+Two bugs the browser found that the Livewire tests could not (both fixed and pinned): (a) an `@if` around the whole view made Livewire take the `<nav>` as the component root, so the popups sat outside the component and never appeared (`test_the_popups_live_inside_the_livewire_component_not_beside_it`); (b) the "+" menu's Alpine state threw "quickOpen is not defined" when a saved popup navigated away, fixed by `wire:ignore` on the `<nav>`.
+
+Commit status: committed on `feature/admin-bottom-navigation`; not pushed, not on `main`.
 ## 2026-11-01 (latest) - Supplier Report: one account page for each product
 
 Owner (Bangla): redo the Report module so that a supplier's account shows every product separately: at what price how many pieces were sold, how many damaged, how many in stock, how many short; each product on its own page; the account must be crystal clear with no gap.

@@ -1,5 +1,5 @@
 # Core Platform
-> Last checked: 2026-10-24, branch `feature/trade-portal-test-data-cleanup` (Trade Portal test-data cleanup command), merged with main (advanced backups Phase 6, Cloudflare R2)
+> Last checked: 2026-11-01, branch `feature/admin-bottom-navigation` (admin phone bottom bar with quick-create popups), on main 288e7fb
 
 ## What it does
 The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and five distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal, Trade Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated encrypted backups to Cloudflare R2 and/or Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
@@ -90,11 +90,13 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Support/LoginThrottled.php` | Represents rate-limiting and lockout states for login candidates. |
 | `app/Support/CompanyScopedUnique.php` | Database validation rule asserting uniqueness scoped to `company_id`. |
 | `app/Support/CompanyMedia.php` | Media resolution helper ensuring assets belong to the proper company disk. |
+| `app/Support/CompanySwitcher.php` | One rule for the admin company switcher: who gets one (a super admin, or a user with more than one company), the companies listed, which is active (`all` for a super admin viewing every company) and its name. Used by the top bar's dropdown and the phone bottom bar. |
 
 ### Filament Providers, Clusters, Resources, Pages & Widgets
 | Path | What it does |
 | --- | --- |
 | `app/Providers/Filament/AdminPanelProvider.php` | Configures the primary admin panel (`/admin`, ID: `admin`). |
+| `app/Livewire/AdminBottomNavigation.php` | The admin panel's phone/tablet bottom bar (below `lg`, mounted by a `LAYOUT_END` hook in `AdminPanelProvider`, inside `ModuleGuard`): Dashboard and company switch on the left, a raised "+" in the middle, Orders and Products on the right. The "+" menu opens four `CreateAction` popups (`createOrder`, `createProduct`, `createPurchase`, `createExpense`) that reuse each resource's own form (`Resource::form()` with operation `create`) and Create-page rules (order: transaction, stock-shortage check, first payment account; product: opening stock), each gated by the resource's `canCreate()`; a save lands on that resource's list. |
 | `app/Providers/Filament/ImsOfficePanelProvider.php` | Configures the IMS office management panel (`/office`, ID: `office`). |
 | `app/Providers/Filament/InvestorPanelProvider.php` | Configures the external investor portal (`/investor`, ID: `investor`). |
 | `app/Providers/Filament/ResellerPanelProvider.php` | Configures the reseller program portal (`/portal`, ID: `reseller`). |
@@ -200,6 +202,9 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `resources/views/filament/pages/backups.blade.php` | View template rendering backup listings and download triggers. |
 | `resources/views/filament/pages/app-versions.blade.php` | View template showing version status and changelog cards. |
 | `resources/views/filament/pages/release-notes.blade.php` | View template for user-facing release notes. |
+| `resources/views/filament/partials/admin-bottom-navigation.blade.php` | The phone bottom bar and its popups' Livewire partial. The root `<div>` must be the first element drawn (Livewire's root), the `<nav>` is `wire:ignore`, the popups sit outside the `<nav>`. |
+| `resources/views/filament/partials/admin-bottom-navigation-tab.blade.php` | One link tab (Dashboard / Orders / Products) of that bar. |
+| `resources/views/filament/partials/company-switcher.blade.php` | The top bar's company dropdown (large screens; hidden on phones while the bottom bar is on the page). |
 
 ### Config
 | Path | What it does |
@@ -229,6 +234,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `tests/Feature/MultiCompanyIsolationTest.php` | Asserts that every company-owned model enforces `BelongsToCompany` and respects `CompanyScope`. |
 | `tests/Feature/CompanySettingsTest.php` | Tests company profile saving, timezone handling, and currency configuration. |
 | `tests/Feature/CompanySelectionPersistenceTest.php` | Verifies active company selection persistence across user sessions. |
+| `tests/Feature/AdminBottomNavigationTest.php` | The phone bottom bar: tab order, links and highlight, `lg:hidden`, company switch only for multi-company users, the popups' Livewire partial inside the component, and creating an order, product, purchase and expense through the four popups (with validation, the stock-shortage stop and permission gating). |
 | `tests/Feature/CompanyScopedUniquenessTest.php` | Tests unique constraint validation within individual tenant boundaries. |
 | `tests/Feature/CompanyStorageServiceTest.php` | Verifies tenant media isolation across configured storage disks. |
 | `tests/Feature/CompanyStorageMigrationTest.php` | Validates file migration between local and remote cloud disks. |

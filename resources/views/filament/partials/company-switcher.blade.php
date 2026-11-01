@@ -1,21 +1,15 @@
 @php
-    use App\Services\CompanyContext;
-    use Illuminate\Support\Facades\Schema;
-
     $user = auth()->user();
-    $canRender = $user && Schema::hasTable('companies');
-    $companies = $canRender ? $user->accessibleCompanies()->get() : collect();
-    $context = app(CompanyContext::class);
-    $sessionCompany = session('current_company_id');
-    $selectedCompany = $context->isAllCompanies()
-        ? 'all'
-        : ($context->id() ?: ($sessionCompany ?: ($user?->isSuperAdmin() ? 'all' : '')));
-    $selectedCompanyName = $selectedCompany === 'all'
-        ? 'All Companies'
-        : ($companies->firstWhere('id', (int) $selectedCompany)?->name ?? $companies->first()?->name ?? 'Select company');
+    $switcher = \App\Support\CompanySwitcher::for($user);
+
+    if ($switcher) {
+        $companies = $switcher['companies'];
+        $selectedCompany = $switcher['selected'];
+        $selectedCompanyName = $switcher['selectedName'];
+    }
 @endphp
 
-@if ($canRender && ($user->isSuperAdmin() || $companies->count() > 1))
+@if ($switcher)
     <div class="zz-company-switcher">
         <x-filament::dropdown
             placement="bottom-start"
