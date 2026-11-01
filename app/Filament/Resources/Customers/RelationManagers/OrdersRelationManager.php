@@ -11,7 +11,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
 
 /**
  * Every order this customer has placed with us, newest first: the date, what was in it, the stage it is in and

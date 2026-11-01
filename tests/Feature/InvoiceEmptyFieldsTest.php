@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -38,7 +39,7 @@ class InvoiceEmptyFieldsTest extends TestCase
 
     public function test_the_printed_invoice_leaves_out_what_is_empty(): void
     {
-        app(CompanySettingsService::class)->saveInvoice(['show_slip' => true, 'show_images' => true, 'show_weight' => true], \App\Models\Company::defaultCompany());
+        app(CompanySettingsService::class)->saveInvoice(['show_slip' => true, 'show_images' => true, 'show_weight' => true], Company::defaultCompany());
         $order = $this->bareOrder();
 
         $html = $this->actingAs($this->admin())->get(route('orders.print', $order))->assertOk()->getContent();
