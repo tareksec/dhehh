@@ -62,6 +62,75 @@ final class WooCommerceDescription
         return $clean !== '' ? $clean : null;
     }
 
+    /** What the importer used to store: the tags removed, nothing else changed. */
+    public static function legacyPlainText(?string $source): ?string
+    {
+        $text = trim(strip_tags((string) $source));
+
+        return $text !== '' ? $text : null;
+    }
+
+    /**
+     * A value that stays the same when only punctuation, spacing, line breaks
+     * or HTML entities differ (WordPress turns quotes into curly quotes and
+     * "&" into "&#038;" when it shows a page). Used to recognise an
+     * unedited import, never to display anything.
+     */
+    public static function fingerprint(?string $value): string
+    {
+        $text = html_entity_decode(strip_tags((string) $value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+        return mb_strtolower((string) preg_replace('/[^\p{L}\p{N}\p{M}]+/u', '', $text));
+    }
+
+    /**
+     * Decides whether a product's stored description may be replaced by the
+     * formatted version of the WordPress text. Only a description nobody has
+     * touched is replaced: empty (when `$fillBlank`), or still exactly the
+     * plain text the old importer saved. Anything written or saved in the
+     * editor (it contains HTML) or typed by hand stays as it is.
+     *
+     * Reasons: no-source, fill, blank, repair, already-fixed, formatted,
+     * nothing-to-fix, edited.
+     *
+     * @return array{action: 'update'|'keep', reason: string, html: ?string}
+     */
+    public static function decide(?string $current, ?string $source, bool $fillBlank = false): array
+    {
+        $html = self::toHtml($source);
+
+        // Nothing a visitor can read (empty, or only a non-breaking space).
+        $visible = html_entity_decode(strip_tags((string) $html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+        if ($html === null || trim(str_replace("\u{00A0}", ' ', $visible)) === '') {
+            return ['action' => 'keep', 'reason' => 'no-source', 'html' => null];
+        }
+
+        $current = trim((string) $current);
+
+        if ($current === '') {
+            return $fillBlank
+                ? ['action' => 'update', 'reason' => 'fill', 'html' => $html]
+                : ['action' => 'keep', 'reason' => 'blank', 'html' => $html];
+        }
+
+        if (str_contains($current, '<')) {
+            return ['action' => 'keep', 'reason' => $current === $html ? 'already-fixed' : 'formatted', 'html' => $html];
+        }
+
+        // One plain paragraph: formatting would change nothing.
+        if ($html === '<p>'.htmlspecialchars($current, ENT_NOQUOTES | ENT_SUBSTITUTE, 'UTF-8').'</p>') {
+            return ['action' => 'keep', 'reason' => 'nothing-to-fix', 'html' => $html];
+        }
+
+        if (self::fingerprint($current) === self::fingerprint($source)) {
+            return ['action' => 'update', 'reason' => 'repair', 'html' => $html];
+        }
+
+        return ['action' => 'keep', 'reason' => 'edited', 'html' => $html];
+    }
+
     /** Wraps the loose text between block elements into paragraphs, like wpautop. */
     private static function addParagraphs(string $html): string
     {

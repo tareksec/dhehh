@@ -2,7 +2,77 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-25 (latest) - Start the investor groups again (undo command, G-codes on backfilled projects)
+## 2026-11-01 (latest) - Supplier Report: one account page for each product
+
+Owner (Bangla): redo the Report module so that a supplier's account shows every product separately: at what price how many pieces were sold, how many damaged, how many in stock, how many short; each product on its own page; the account must be crystal clear with no gap.
+
+What I did (worktree `zz-supplier-pages`, branch `feature/supplier-report-product-pages`, from `origin/main`):
+- `SupplierReportService`: new `product_pages` (units account, sold-at-prices list, where the sales came from, purchase lines, profit workings, stock today). Damage ledger entries and negative stock adjustments now leave the oldest lot FIFO and show as their own lines; a positive adjustment is a lot of its own; what no lot can cover is listed as "not matched", never put on a supplier.
+- Screen: overview as before, then a section per product (`#product-<id>`; the products overview links to it).
+- PDF: cover (supplier, summary, profit, purchase dates), a page for the products overview, then one page per product. Amounts plain, "Amounts in BDT" in the header.
+- 37 new keys in `lang/en.json` and `lang/bn.json`.
+
+Things the owner should know:
+- Gross and net profit now also subtract the landed cost of units damaged after arrival, so a product with such damage reads lower than the earlier report.
+- The "Difference" line (system stock vs what the report knows) can be non-zero. In my check data it was 15 for a product whose imported (Nuport) sales never took stock out. That is a real gap in the data, shown red with its reason, not hidden.
+- Revenue is units × order line price; order discount, shipping, VAT are not in it.
+- Needs Bangla review: the new Bangla wording (units account, "Check" = "মিলিয়ে দেখা", the stock-difference note).
+
+Verified: `SupplierReportTest` 16 passed; screen and PDF checked in the browser on a throwaway sqlite database (never demo or live). Full `php artisan test` (on Windows, frontend built): 3458 passed, 5 skipped, 15 failed. The 15 are `BackupDrillTest`, `BackupEncryptionTest`, `BackupRestoreTest`, `BackupRunsTest`, `R2BackupTest` and `SesTrackingTest`: they need a `mysql` client binary and an openssl certificate that this Windows machine does not have. The same 15 fail on a clean `origin/main` (checked with my changes stashed), so none comes from this change.
+
+Commit status: committed on `feature/supplier-report-product-pages` and pushed to `main` on the owner's approval of 2026-11-01.
+## 2026-11-01 (latest) - SMS system on/off switch (Integrations → SMS Gateway)
+
+Owner (Bangla, item 10 of a list; the word came out as "গুগল বাটন", read as "টগল বাটন"): "এসএমএস সিস্টেম অন অফ করার জন্য টগল বাটন এড করতে হবে".
+
+What I did:
+- **New switch "SMS system"** at the top of Integrations → SMS Gateway, per site (the page edits one site at a time, like the gateway fields). Stored as `sms_enabled` in `notification_credentials`; a site that never saved it is on. Off means nothing is sent from that site; the gateway URL, key and sender ID stay saved.
+- **Everything goes through the switch:** `smsConfigured()` and `smsUsable()` now need it on, so sign-up and password codes, investor portal, broadcasts, reseller messages and `gatewayFor()` treat an off site as having no gateway; `deliverSms()` also refuses with reason `sms_off`, so a caller that does not ask first still sends nothing.
+- **SMS Log:** order and project messages meeting an off site are logged as skipped, reason "SMS is switched off…". Codes and reminders are not logged as failures. "Send test SMS" says SMS is switched off.
+- Tests: `SmsDashboardTest` +3, `SmsLogTest` +2, `IntegrationsPageTest` +1. Focused run (SMS dashboard, SMS log, gateway, Integrations page, translation parity): 85 passed.
+
+**Decision to confirm:** the switch is **per site**, because the gateway is per site. A company with a Blade site and a Next.js site must switch off both to silence the company; with one off and one on, the company's messages (order status, project messages) still leave through the site that is on. If the owner wants one company-wide master switch, say so.
+
+**Behaviour while off (same as having no gateway):** a customer who signs in with a phone number gets no SMS code (an email address still works); a phone number that already has a customer record cannot be proven for sign-up or a reseller application, so it is refused until SMS is on; a brand-new number still signs up directly.
+
+**Needs Bangla review (6 new keys):** "SMS system", the switch's help text, the warning line under it, "SMS is switched off for this site", "Switch the SMS system on, press Save changes, then send the test again.", and the SMS Log reason "SMS is switched off. Switch it on in Integrations → SMS Gateway.".
+
+**Lost work, not part of this change:** the earlier uncommitted "message templates inside Integrations → SMS Gateway" move (`SmsTemplatesForm`, branch `feature/sms-templates-in-gateway`) was in a scratch worktree that no longer exists, so that work is not on disk. `main` still has the Settings → SMS Templates page. This switch was built on a fresh branch from `origin/main` and does not depend on it. The move can be rebuilt from the session transcript if the owner still wants it.
+
+Verified: Pint clean; the focused tests above. Full `php artisan test` run before handoff (result below in the final message). Not viewed in a browser, and no real SMS was sent.
+
+Commit status: not committed; branch `feature/sms-toggle` (worktree `zz-sms-toggle`), waiting for the owner's approval.
+
+## 2026-11-01 - Product descriptions imported from WordPress: repair the old imports, never overwrite edited text
+
+Owner report: descriptions imported from the old WordPress / WooCommerce site "came in as plain text with inaccurate formatting".
+
+Cause (found on the live dashboard, 45 products of ZamZam International): before 2026-10-11 `WooCommerceImportService` ran `strip_tags()` on the description. Paragraph tags, headings, bold, links and tables vanished and list items ran together. The product editor and the Blade product page then showed one block of text (the plain-text path of `RichText::html()` / `show.blade.php` also drops single line breaks). Commit `0dc20019` already made the importer keep the formatting (`WooCommerceDescription`), but the products imported earlier stayed broken, and every re-import still overwrote the description, wiping later edits.
+
+What changed (the converter is the existing `WooCommerceDescription`; checked against the 34 products of the old site: the text is kept for all of them):
+
+- `app/Support/WooCommerceDescription.php`: new `decide()` (the single "may this description be replaced" rule), `fingerprint()` and `legacyPlainText()`.
+- `app/Services/WooCommerceImportService.php`: an existing product's description is only replaced while it is still the untouched plain text of an older import (or empty).
+- `app/Services/WooCommerceDescriptionRepairService.php` + `app/Console/Commands/RepairWooCommerceDescriptions.php` (new): `php artisan woocommerce:repair-descriptions {company-slug} [--apply] [--sku=...] [--base-url=...] [--fill-blank] [--report=file.json]`. Dry run unless `--apply`. Reads the old site's public Store API (`/wp-json/wc/store/v1/products`), matches by SKU then slug, backs up every replaced text to `storage/app/private/description-repair/`.
+- Tests: `tests/Feature/WooCommerceDescriptionDecideTest.php` (3), `tests/Feature/WooCommerceDescriptionRepairTest.php` (10), `tests/Feature/WooCommerceImportTest.php` (3 new cases).
+
+Dry run against the live data on 2026-10-31 (read-only; nothing written to the dashboard), report `product-description-dry-run.md`: 34 products on the old site, 32 live products would be fixed (their text matches the old site's exactly once spacing/entities are ignored), 2 have one flat paragraph on WordPress itself (nothing to restore), 11 are not on the old site by SKU or slug (10 ERP-only products with no description, and `WOO-8OFKVXOT` / `k801-handheld-turbo`, which has text but is not published on WordPress).
+
+Open points for the owner:
+
+- Nothing has been written to the live products yet. Deploy first, then on the server run the dry run, look at the list, then `--apply`. Do it before zamzamint.com is pointed at the Next.js site (the repair needs the WordPress shop to answer, or `--base-url=` for a copy).
+- Three products (`ZMU41`, `ZMJS270`, and `ZMS607` with the placeholder "Description Here") are a single flat paragraph on WordPress itself, so there is no structure to restore; they need rewriting by hand if they should look structured. For `ZMU41` the repair only turns the stored `&gt;` / `&lt;` into real characters.
+- Saving a description does not call the website webhook, so the Next.js site shows the repaired text when its own cache refreshes.
+- Behaviour change: a re-import no longer replaces a description that already holds editor HTML, so text changed later on the old site does not reach an already formatted ERP description.
+
+Needs Bangla review: none (no screen text added; the command prints English, like the other commands).
+
+Verification (2026-11-01, plain `php artisan test`, in a worktree of `origin/main` with this change): `WooCommerceDescriptionDecideTest` 3, `WooCommerceDescriptionRepairTest` 10 and `WooCommerceImportTest` and the other WooCommerce tests all pass (29 tests in the filtered run). Full suite: 3373 passed, 5 skipped, 109 failed. None of the 109 touches products or the import: they are portal / IMS / Trade / Reseller page tests (HTTP 500, the Vite manifest of the copied `public/build` has no entry for the newer Filament themes) and backup tests (no `mysql` / `mysqldump` client on this Windows machine). `ResellerLandingPageTest`, `BackupRunsTest` and `AllCompaniesImsTest` (30 failures in the full run) fail the same 30 on clean `origin/main`; the other failing classes were not re-run there.
+
+Commit status: committed on `fix/woocommerce-description-repair`, merged into `main` on the owner's approval ("মেইনে মারজ করে দেও") and pushed to `origin/main` on the owner's approval ("হ্যাঁ, পুশ করো"). Nothing is run on the live products yet: deploy, then dry run on the server, then `--apply`. Files: `app/Support/WooCommerceDescription.php`, `app/Services/WooCommerceImportService.php`, `tests/Feature/WooCommerceImportTest.php`, `CHANGELOG.md`, `UPDATE_NOTES.md`, `PROJECT_GUIDE.md` (changed); `app/Services/WooCommerceDescriptionRepairService.php`, `app/Console/Commands/RepairWooCommerceDescriptions.php`, `tests/Feature/WooCommerceDescriptionDecideTest.php`, `tests/Feature/WooCommerceDescriptionRepairTest.php` (new).
+
+
+## 2026-10-25 - Start the investor groups again (undo command, G-codes on backfilled projects)
 
 Owner (Bangla), after the live backfill of Tasneem Knitting industry (company id 2) turned the five old projects into G2–G6 (G1 is a real group that was already there) and kept their old project codes (`01/2026-INV-01` …): "g1-p1 এরকম হবে", then "গ্রুপ সব ডিলিট করে নতুন করে আমার রান কি বল".
 

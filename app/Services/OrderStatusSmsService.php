@@ -154,7 +154,7 @@ class OrderStatusSmsService
         // in a row must not text the customer twice.
         $skip = match (true) {
             blank($message) => 'no_wording',
-            $setting === null => 'no_gateway',
+            $setting === null => $this->templates->noGatewayReason($companyId, $order->siteSetting()),
             ! Cache::add('order-status-sms:'.$transition->getKey(), true, now()->addDays(2)),
             ! Cache::add("order-status-sms:{$order->getKey()}:{$stage}", true, now()->addMinutes(5)) => 'duplicate',
             default => null,
@@ -199,7 +199,7 @@ class OrderStatusSmsService
 
         $skip = match (true) {
             blank($message) => 'no_wording',
-            $setting === null => 'no_gateway',
+            $setting === null => $this->templates->noGatewayReason($companyId, $order->siteSetting()),
             ! Cache::add('order-placed-sms:'.$order->getKey(), true, now()->addDays(2)) => 'duplicate',
             default => null,
         };

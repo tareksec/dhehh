@@ -15,29 +15,40 @@ use Illuminate\Support\Collection;
 
 /**
  * Supplier-wise report: everything from buying a supplier's goods to selling
- * them (owner request 2026-10-18).
+ * them (owner request 2026-10-18), one account page per product (owner
+ * request 2026-11-01).
  *
  * Rules the figures follow:
  *  - Only `received` purchases count; the date range filters the purchase date.
  *  - Landed cost = item subtotal + the purchase's China-to-BD costs allocated
  *    to the item (the same figure PurchaseWorkflowService stores as
  *    allocated_cost / landed_unit_cost). Purchase discount and VAT are not in it.
- *  - Sales are not tied to a purchase, so a product's accounted sales are
- *    handed to its received units first-in-first-out: opening stock first,
- *    then purchases by date. Sales are counted up to today whatever the range.
+ *  - Sales are not tied to a purchase, so a product's stock leaves its received
+ *    units first-in-first-out: opening stock first, then purchases by date.
+ *    What leaves is, oldest event first: accounted sales (with their price),
+ *    "damage" stock entries (customer-return, shipment, warehouse damage) and
+ *    stock adjustments that took pieces out. Positive stock adjustments are a
+ *    last lot of their own. Events count up to today whatever the date range.
+ *  - Every product's units close exactly: billed - short - damaged on arrival
+ *    = received good = sold + damaged after arrival + taken out by adjustments
+ *    + in stock. Events that no recorded lot could cover are listed apart
+ *    ("unmatched"), never hidden inside a supplier's figures.
  *  - Gross profit = sales - landed cost of the units sold - landed cost of the
- *    short and damaged units (the supplier's loss).
+ *    short and damaged units (the supplier's loss) - landed cost of units
+ *    damaged after arrival.
  *  - Net profit = gross profit - costs after arrival (the purchase's product
  *    cost lines, plus Meta ad spend linked to the product). Those costs are
  *    counted in proportion to the units sold, the same way the cost of goods is.
  */
 class SupplierReportService
 {
+    public const DAMAGE_UNSPECIFIED = 'unspecified';
+
     /** @var list<string> */
     private const SUM_FIELDS = [
-        'ordered', 'short', 'damaged', 'sellable', 'sold', 'in_stock',
+        'ordered', 'short', 'damaged', 'sellable', 'sold', 'damaged_after', 'adjusted_out', 'in_stock',
         'purchase_value', 'import_cost', 'landed_cost',
-        'revenue', 'cogs', 'loss', 'gross_profit',
+        'revenue', 'cogs', 'loss', 'loss_after', 'gross_profit',
         'extra_cost', 'ad_cost', 'net_profit',
     ];
 
@@ -57,6 +68,16 @@ class SupplierReportService
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
+    }
+
+    /**
+     * Where damaged pieces came from, as the report labels them.
+     *
+     * @return array<string, string>
+     */
+    public static function damageLabels(): array
+    {
+        return StockMovement::damageSources() + [self::DAMAGE_UNSPECIFIED => __('Source not recorded')];
     }
 
     /**
@@ -114,18 +135,20 @@ class SupplierReportService
             'summary' => $this->summary($batches, $purchases),
             'purchases' => $this->purchaseRows($batches),
             'products' => $this->productRows($batches),
+            'product_pages' => $this->productPages($batches, $layers),
             'batches' => $batches->values()->all(),
             'cost_labels' => $batches->flatMap(fn (array $row) => array_keys($row['cost_lines']))->unique()->values()->all(),
+            'damage_labels' => self::damageLabels(),
             'generated_at' => now(),
         ];
     }
 
     /**
-     * Every received unit of the given products, oldest first, with the sales
-     * handed to it first-in-first-out.
+     * Every received unit of the given products, oldest first, with the
+     * sales, damage and adjustments handed to it first-in-first-out.
      *
      * @param  list<int>  $productIds
-     * @return array<int, array{layers: list<array<string, mixed>>, sold_total: int}>
+     * @return array<int, array<string, mixed>>
      */
     private function fifoLayers(array $productIds): array
     {
@@ -133,7 +156,17 @@ class SupplierReportService
             return [];
         }
 
-        $byProduct = array_fill_keys($productIds, ['layers' => [], 'sold_total' => 0]);
+        $stock = Product::query()->whereIn('id', $productIds)->pluck('stock', 'id');
+        $byProduct = [];
+
+        foreach ($productIds as $productId) {
+            $byProduct[$productId] = [
+                'layers' => [],
+                'sold_total' => 0,
+                'stock' => (int) ($stock[$productId] ?? 0),
+                'unmatched' => ['sold' => 0, 'revenue' => 0.0, 'damaged' => 0, 'adjusted_out' => 0],
+            ];
+        }
 
         StockMovement::query()
             ->whereIn('product_id', $productIds)
@@ -143,7 +176,7 @@ class SupplierReportService
             ->pluck('quantity', 'product_id')
             ->each(function ($quantity, $productId) use (&$byProduct): void {
                 if ((int) $quantity > 0) {
-                    $byProduct[(int) $productId]['layers'][] = ['item_id' => null, 'qty' => (int) $quantity, 'sold' => 0, 'revenue' => 0.0];
+                    $byProduct[(int) $productId]['layers'][] = $this->layer('opening', (int) $quantity);
                 }
             });
 
@@ -156,43 +189,112 @@ class SupplierReportService
             ->get()
             ->each(function (Purchase $purchase) use (&$byProduct): void {
                 foreach ($purchase->items as $item) {
-                    $byProduct[(int) $item->product_id]['layers'][] = [
-                        'item_id' => $item->getKey(),
-                        'qty' => $item->sellableQuantity(),
-                        'sold' => 0,
-                        'revenue' => 0.0,
-                    ];
+                    $byProduct[(int) $item->product_id]['layers'][] = $this->layer(
+                        'purchase',
+                        $item->sellableQuantity(),
+                        $item->getKey(),
+                        (int) $purchase->supplier_id,
+                    );
                 }
             });
 
-        $sales = OrderItem::query()
+        $movements = StockMovement::query()
+            ->whereIn('product_id', $productIds)
+            ->whereIn('type', ['damage', 'adjustment'])
+            ->get();
+
+        foreach ($movements->where('type', 'adjustment')->where('quantity', '>', 0)->groupBy('product_id') as $productId => $added) {
+            $byProduct[(int) $productId]['layers'][] = $this->layer('adjustment', (int) $added->sum('quantity'));
+        }
+
+        $events = collect();
+
+        OrderItem::query()
             ->whereIn('product_id', $productIds)
             ->whereHas('order', fn ($order) => $order->whereIn('status', Order::ACCOUNTED_STATUSES))
             ->with('order')
             ->get()
-            ->sort(fn (OrderItem $a, OrderItem $b): int => [$a->order?->order_date?->timestamp ?? 0, $a->getKey()]
-                <=> [$b->order?->order_date?->timestamp ?? 0, $b->getKey()]);
+            ->each(function (OrderItem $sale) use ($events): void {
+                $events->push([
+                    'at' => $sale->order?->order_date?->timestamp ?? 0,
+                    'rank' => 0,
+                    'id' => $sale->getKey(),
+                    'type' => 'sale',
+                    'product_id' => (int) $sale->product_id,
+                    'quantity' => (int) $sale->quantity,
+                    'price' => (float) $sale->unit_price,
+                ]);
+            });
 
-        foreach ($sales as $sale) {
-            $productId = (int) $sale->product_id;
-            $remaining = (int) $sale->quantity;
-            $price = (float) $sale->unit_price;
-            $byProduct[$productId]['sold_total'] += $remaining;
+        foreach ($movements as $movement) {
+            $isDamage = $movement->type === 'damage';
+
+            if (! $isDamage && (int) $movement->quantity >= 0) {
+                continue;
+            }
+
+            $events->push([
+                'at' => $movement->created_at?->timestamp ?? 0,
+                'rank' => $isDamage ? 1 : 2,
+                'id' => $movement->getKey(),
+                'type' => $isDamage ? 'damage' : 'adjustment',
+                'product_id' => (int) $movement->product_id,
+                'quantity' => abs((int) $movement->quantity),
+                'source' => $movement->damage_source ?: self::DAMAGE_UNSPECIFIED,
+            ]);
+        }
+
+        foreach ($events->sort(fn (array $a, array $b): int => [$a['at'], $a['rank'], $a['id']] <=> [$b['at'], $b['rank'], $b['id']]) as $event) {
+            $productId = $event['product_id'];
+            $left = $event['quantity'];
+
+            if ($event['type'] === 'sale') {
+                $byProduct[$productId]['sold_total'] += $left;
+            }
 
             foreach ($byProduct[$productId]['layers'] as $index => $layer) {
-                if ($remaining <= 0) {
+                if ($left <= 0) {
                     break;
                 }
 
-                $take = min($layer['qty'] - $layer['sold'], $remaining);
+                $take = min($layer['qty'] - $layer['sold'] - $layer['damaged'] - $layer['adjusted_out'], $left);
 
                 if ($take <= 0) {
                     continue;
                 }
 
-                $byProduct[$productId]['layers'][$index]['sold'] += $take;
-                $byProduct[$productId]['layers'][$index]['revenue'] += $take * $price;
-                $remaining -= $take;
+                $target = &$byProduct[$productId]['layers'][$index];
+
+                if ($event['type'] === 'sale') {
+                    $key = number_format($event['price'], 2, '.', '');
+                    $target['sold'] += $take;
+                    $target['revenue'] += $take * $event['price'];
+                    $target['prices'][$key] = [
+                        'price' => $event['price'],
+                        'pieces' => ($target['prices'][$key]['pieces'] ?? 0) + $take,
+                        'amount' => ($target['prices'][$key]['amount'] ?? 0.0) + $take * $event['price'],
+                    ];
+                } elseif ($event['type'] === 'damage') {
+                    $target['damaged'] += $take;
+                    $target['damage_sources'][$event['source']] = ($target['damage_sources'][$event['source']] ?? 0) + $take;
+                } else {
+                    $target['adjusted_out'] += $take;
+                }
+
+                unset($target);
+                $left -= $take;
+            }
+
+            if ($left > 0) {
+                $unmatched = &$byProduct[$productId]['unmatched'];
+
+                match ($event['type']) {
+                    'sale' => $this->addUnmatchedSale($unmatched, $left, $event['price']),
+                    'damage' => $unmatched['damaged'] += $left,
+                    default => $unmatched['adjusted_out'] += $left,
+                };
+
+                unset($unmatched);
             }
         }
 
@@ -200,10 +302,38 @@ class SupplierReportService
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    private function layer(string $kind, int $quantity, ?int $itemId = null, ?int $supplierId = null): array
+    {
+        return [
+            'kind' => $kind,
+            'item_id' => $itemId,
+            'supplier_id' => $supplierId,
+            'qty' => $quantity,
+            'sold' => 0,
+            'revenue' => 0.0,
+            'prices' => [],
+            'damaged' => 0,
+            'damage_sources' => [],
+            'adjusted_out' => 0,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $unmatched
+     */
+    private function addUnmatchedSale(array &$unmatched, int $quantity, float $price): void
+    {
+        $unmatched['sold'] += $quantity;
+        $unmatched['revenue'] += $quantity * $price;
+    }
+
+    /**
      * One row per purchase item of the report.
      *
      * @param  Collection<int, Purchase>  $purchases
-     * @param  array<int, array{layers: list<array<string, mixed>>, sold_total: int}>  $layers
+     * @param  array<int, array<string, mixed>>  $layers
      * @return Collection<int, array<string, mixed>>
      */
     private function batchRows(Collection $purchases, array $layers, Collection $adSpend): Collection
@@ -215,14 +345,16 @@ class SupplierReportService
 
             foreach ($purchase->items as $item) {
                 $productId = (int) $item->product_id;
+                $sellable = $item->sellableQuantity();
                 $layer = collect($layers[$productId]['layers'] ?? [])->firstWhere('item_id', $item->getKey())
-                    ?? ['qty' => $item->sellableQuantity(), 'sold' => 0, 'revenue' => 0.0];
+                    ?? $this->layer('purchase', $sellable, $item->getKey());
 
                 $quantity = max((int) $item->quantity, 1);
                 $landedCost = (float) $item->subtotal + (float) $item->allocated_cost;
                 $landedUnit = $landedCost / $quantity;
-                $sellable = $item->sellableQuantity();
                 $sold = (int) $layer['sold'];
+                $damagedAfter = (int) $layer['damaged'];
+                $adjustedOut = (int) $layer['adjusted_out'];
                 $soldShare = $sellable > 0 ? $sold / $sellable : 0.0;
 
                 $itemsQuantity = max((int) $itemsByProduct[$item->product_id]->sum('quantity'), 1);
@@ -246,10 +378,12 @@ class SupplierReportService
                 $revenue = (float) $layer['revenue'];
                 $cogs = $sold * $landedUnit;
                 $loss = ((int) $item->short_quantity + (int) $item->damaged_quantity) * $landedUnit;
+                $lossAfter = $damagedAfter * $landedUnit;
                 $extraCost = array_sum($costLines);
-                $grossProfit = $revenue - $cogs - $loss;
+                $grossProfit = $revenue - $cogs - $loss - $lossAfter;
 
                 $rows->push([
+                    'item_id' => $item->getKey(),
                     'purchase_id' => $purchase->getKey(),
                     'purchase_number' => $purchase->purchase_number,
                     'purchase_date' => $purchase->purchase_date,
@@ -261,14 +395,19 @@ class SupplierReportService
                     'damaged' => (int) $item->damaged_quantity,
                     'sellable' => $sellable,
                     'sold' => $sold,
-                    'in_stock' => $sellable - $sold,
+                    'damaged_after' => $damagedAfter,
+                    'damage_sources' => $layer['damage_sources'],
+                    'adjusted_out' => $adjustedOut,
+                    'in_stock' => $sellable - $sold - $damagedAfter - $adjustedOut,
                     'unit_cost' => (float) $item->unit_cost,
                     'purchase_value' => (float) $item->subtotal,
                     'import_cost' => (float) $item->allocated_cost,
                     'landed_cost' => $landedCost,
                     'revenue' => $revenue,
+                    'prices' => $layer['prices'],
                     'cogs' => $cogs,
                     'loss' => $loss,
+                    'loss_after' => $lossAfter,
                     'gross_profit' => $grossProfit,
                     'cost_lines' => $costLines,
                     'extra_cost' => $extraCost,
@@ -321,6 +460,90 @@ class SupplierReportService
                     'sku' => $first['sku'],
                     'purchases' => $rows->pluck('purchase_id')->unique()->count(),
                     ...$this->totals($rows),
+                ];
+            })
+            ->sortBy('product')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * One account per product: this supplier's lots, how many pieces went
+     * where and at what price, and how the product's stock stands today.
+     *
+     * @param  Collection<int, array<string, mixed>>  $batches
+     * @param  array<int, array<string, mixed>>  $layers
+     * @return list<array<string, mixed>>
+     */
+    private function productPages(Collection $batches, array $layers): array
+    {
+        return $batches
+            ->groupBy('product_id')
+            ->map(function (Collection $rows, $productId) use ($layers): array {
+                $productId = (int) $productId;
+                $first = $rows->first();
+                $totals = $this->totals($rows);
+                $info = $layers[$productId] ?? ['layers' => [], 'sold_total' => 0, 'stock' => 0, 'unmatched' => ['sold' => 0, 'revenue' => 0.0, 'damaged' => 0, 'adjusted_out' => 0]];
+                $shownItems = $rows->pluck('item_id')->all();
+
+                $prices = [];
+                $damageSources = [];
+
+                foreach ($rows as $row) {
+                    foreach ($row['prices'] as $key => $price) {
+                        $prices[$key] = [
+                            'price' => $price['price'],
+                            'pieces' => ($prices[$key]['pieces'] ?? 0) + $price['pieces'],
+                            'amount' => ($prices[$key]['amount'] ?? 0.0) + $price['amount'],
+                        ];
+                    }
+
+                    foreach ($row['damage_sources'] as $source => $pieces) {
+                        $damageSources[$source] = ($damageSources[$source] ?? 0) + $pieces;
+                    }
+                }
+
+                uasort($prices, fn (array $a, array $b): int => $b['price'] <=> $a['price']);
+
+                $otherLayers = collect($info['layers'])->reject(fn (array $layer): bool => in_array($layer['item_id'], $shownItems, true));
+                $otherSold = (int) $otherLayers->sum('sold');
+                $otherInStock = (int) $otherLayers->sum(fn (array $layer): int => $layer['qty'] - $layer['sold'] - $layer['damaged'] - $layer['adjusted_out']);
+                $reportedStock = $totals['in_stock'] + $otherInStock;
+
+                return [
+                    'product_id' => $productId,
+                    'product' => $first['product'],
+                    'sku' => $first['sku'],
+                    'batches' => $rows->values()->all(),
+                    'totals' => $totals,
+                    'units' => [
+                        'billed' => $totals['ordered'],
+                        'short' => $totals['short'],
+                        'damaged' => $totals['damaged'],
+                        'received' => $totals['sellable'],
+                        'sold' => $totals['sold'],
+                        'damaged_after' => $totals['damaged_after'],
+                        'damage_sources' => $damageSources,
+                        'adjusted_out' => $totals['adjusted_out'],
+                        'in_stock' => $totals['in_stock'],
+                        'difference' => $totals['ordered'] - $totals['short'] - $totals['damaged'] - $totals['sold']
+                            - $totals['damaged_after'] - $totals['adjusted_out'] - $totals['in_stock'],
+                    ],
+                    'prices' => array_values($prices),
+                    'sales_split' => [
+                        'all' => (int) $info['sold_total'],
+                        'this_supplier' => $totals['sold'],
+                        'other_lots' => $otherSold,
+                        'unmatched' => (int) $info['unmatched']['sold'],
+                    ],
+                    'unmatched' => $info['unmatched'],
+                    'stock_check' => [
+                        'this_supplier' => $totals['in_stock'],
+                        'other_lots' => $otherInStock,
+                        'reported' => $reportedStock,
+                        'system' => (int) $info['stock'],
+                        'difference' => (int) $info['stock'] - $reportedStock,
+                    ],
                 ];
             })
             ->sortBy('product')

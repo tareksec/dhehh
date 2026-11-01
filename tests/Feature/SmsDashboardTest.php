@@ -17,6 +17,7 @@ use App\Support\SmsSegments;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
@@ -269,6 +270,83 @@ class SmsDashboardTest extends TestCase
 
         $this->assertTrue($notifications->sendSms($nextjs->fresh(), '01728714614', 'Your code is 654321'));
         Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'api_key=real-key'));
+    }
+
+    public function test_a_site_that_never_saved_the_sms_switch_is_on_and_only_an_explicit_off_stops_it(): void
+    {
+        $notifications = app(StorefrontNotificationService::class);
+
+        foreach ([null, '', true, 1, '1', 'true'] as $on) {
+            $this->setting->update(['notification_credentials' => [...$this->setting->notification_credentials, 'sms_enabled' => $on]]);
+            $this->assertTrue($notifications->smsEnabled($this->setting->fresh()), 'sms_enabled='.var_export($on, true));
+        }
+
+        foreach ([false, 0, '0', 'false'] as $off) {
+            $this->setting->update(['notification_credentials' => [...$this->setting->notification_credentials, 'sms_enabled' => $off]]);
+            $this->assertFalse($notifications->smsEnabled($this->setting->fresh()), 'sms_enabled='.var_export($off, true));
+        }
+
+        $this->setting->update(['notification_credentials' => Arr::except($this->setting->notification_credentials, ['sms_enabled'])]);
+        $this->assertTrue($notifications->smsConfigured($this->setting->fresh()));
+    }
+
+    public function test_switching_sms_off_stops_every_send_and_keeps_the_gateway_saved(): void
+    {
+        Http::fake(['bulksmsbd.net/*' => Http::response('{"response_code":202}')]);
+        $this->setting->update(['notification_credentials' => [...$this->setting->notification_credentials, 'sms_enabled' => false]]);
+        $notifications = app(StorefrontNotificationService::class);
+        $off = $this->setting->fresh();
+
+        $this->assertFalse($notifications->smsConfigured($off), 'Callers that ask "can this site text?" must be told no.');
+        $this->assertTrue($notifications->smsHasGateway($off));
+        $this->assertFalse($notifications->smsUsable($off));
+        $this->assertFalse($notifications->sendSms($off, '01728714614', 'Your code is 123456'));
+        $this->assertSame('sms_off', $notifications->sendSmsDetailed($off, '01728714614', 'hi')['reason']);
+        $this->assertSame('sms_off', $notifications->sendSmsDetailed($off, '01728714614', 'hi', ownGatewayOnly: true)['reason']);
+
+        Http::assertNothingSent();
+        $this->assertSame(0, SmsLog::withoutGlobalScopes()->count(), 'A switched-off site does not fill the SMS log with failures.');
+        $this->assertSame('real-key', $off->notification_credentials['sms_api_key']);
+
+        $this->setting->update(['notification_credentials' => [...$this->setting->notification_credentials, 'sms_enabled' => true]]);
+        $this->assertTrue($notifications->sendSms($this->setting->fresh(), '01728714614', 'Your code is 123456'));
+    }
+
+    public function test_a_switched_off_site_is_never_borrowed_and_never_borrows(): void
+    {
+        Http::fake(['bulksmsbd.net/*' => Http::response('{"response_code":202}')]);
+        $nextjs = StorefrontSetting::query()->withoutGlobalScopes()->create([
+            'company_id' => $this->company->id,
+            'site_type' => StorefrontSetting::SITE_NEXTJS,
+            'notification_credentials' => [
+                'sms_api_url' => 'http://bulksmsbd.net/api/smsapi?api_key={api_key}&type=text&number={phone}&senderid={sender_id}&message={message}',
+                'sms_api_key' => 'next-key',
+                'sms_sender_id' => '8809617643387',
+            ],
+        ]);
+        $notifications = app(StorefrontNotificationService::class);
+        $templates = app(SmsTemplateService::class);
+        $companyId = (int) $this->company->getKey();
+
+        // Blade off, Next.js on: the company's messages go through the Next.js gateway; the Blade site itself sends nothing.
+        $this->setting->update(['notification_credentials' => [...$this->setting->notification_credentials, 'sms_enabled' => false]]);
+        $this->assertSame($nextjs->getKey(), $templates->gatewayFor($companyId, $this->setting->fresh())?->getKey());
+        $this->assertFalse($notifications->sendSms($this->setting->fresh(), '01728714614', 'Your code is 123456'));
+        Http::assertNothingSent();
+
+        // Next.js has a broken address and Blade (valid) is off: the broken site does not fall back to the off one.
+        $nextjs->update(['notification_credentials' => [...$nextjs->notification_credentials, 'sms_api_url' => 'http://bulksmsbd.net/api/smsapi?api_key={api_key}&number=Receiver&message=x']]);
+        $result = $notifications->sendSmsDetailed($nextjs->fresh(), '01728714614', 'hi');
+        $this->assertSame('bad_gateway_url', $result['reason']);
+        Http::assertNothingSent();
+
+        // Every site off: no gateway to pick, and the log reason says SMS is off, not that nothing is set.
+        $nextjs->update(['notification_credentials' => [...$nextjs->notification_credentials, 'sms_enabled' => false]]);
+        $this->assertNull($templates->gatewayFor($companyId));
+        $this->assertSame('sms_off', $templates->noGatewayReason($companyId));
+        $this->assertSame('no_gateway', $templates->noGatewayReason((int) Company::query()->create([
+            'name' => 'Empty Co', 'slug' => 'empty-co', 'invoice_prefix' => 'EMP', 'currency' => 'BDT', 'timezone' => 'UTC', 'is_active' => true,
+        ])->id));
     }
 
     public function test_the_test_button_tests_the_site_being_edited_and_does_not_borrow_another_sites_gateway(): void

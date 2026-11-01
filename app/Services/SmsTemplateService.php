@@ -393,4 +393,21 @@ class SmsTemplateService
 
         return null;
     }
+
+    /**
+     * Why gatewayFor() found no site: 'sms_off' when a site has a gateway saved but SMS is switched off there,
+     * else 'no_gateway'. The SMS log shows it, so the owner is told to switch SMS on, not to fill in a gateway.
+     */
+    public function noGatewayReason(int $companyId, ?StorefrontSetting $preferred = null): string
+    {
+        $candidates = array_filter([$preferred, StorefrontSetting::primaryFor($companyId), StorefrontSetting::bladeFor($companyId), StorefrontSetting::nextjsFor($companyId)]);
+
+        foreach ($candidates as $setting) {
+            if ($this->notifications->smsHasGateway($setting) && ! $this->notifications->smsEnabled($setting)) {
+                return 'sms_off';
+            }
+        }
+
+        return 'no_gateway';
+    }
 }
