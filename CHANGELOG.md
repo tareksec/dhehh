@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [2.118.0] - 2026-11-01
+
 **Release type:** Minor Feature Update
 
 ### Changed
@@ -12,7 +14,6 @@
 - `SupplierReportService::build()` has a new `product_pages` key (one entry per product: `units`, `prices`, `sales_split`, `stock_check`, `batches`, `totals`), and the summary, purchase, product and batch rows gain `damaged_after`, `adjusted_out` and `loss_after`; `in_stock` is now sellable − sold − damaged after arrival − adjusted out, and `gross_profit` also subtracts `loss_after`. The FIFO loop handles sales (by order date, with their unit price), `damage` movements and negative `adjustment` movements in one date-ordered pass; what no recorded lot can cover is kept in `unmatched` and never put on a supplier. The units line `units.difference` is 0 by construction; `stock_check.difference` (system stock − the lots the report knows) is shown, not hidden: it is not 0 for returned orders not checked yet, imported (Nuport) order history, which never touched stock, or pooled stock. No migration.
 - Pieces damaged on arrival or short stay as before (purchase-item fields); the on-screen cards and the PDF follow the same rows. The PDF stays English (dompdf cannot shape Bangla) and amounts are plain numbers with "Amounts in BDT" in the header. Revenue is still units × the order line's unit price: order discount, shipping, VAT and packaging fees are not in it.
 - Tests: `SupplierReportTest` 16 (7 new: per-product accounts and tie-out, price list, damage and adjustments, positive adjustment lot, unmatched sales and stock difference, PDF page count, screen sections). 37 new bilingual keys.
-
 ## [2.117.0] - 2026-11-01
 
 **Release type:** Minor Feature Update
