@@ -87,7 +87,7 @@ class ResellerPayoutRequest extends Model
 
     public function reseller(): BelongsTo
     {
-        return $this->belongsTo(Customer::class, 'customer_id');
+        return $this->belongsTo(Customer::class, 'customer_id')->withTrashed();
     }
 
     /** The Finance debit voucher booked when this was marked paid. */

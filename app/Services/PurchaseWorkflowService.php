@@ -64,7 +64,7 @@ class PurchaseWorkflowService
     public function syncPreviousSupplierBalance(Purchase $purchase): void
     {
         if ($purchase->wasChanged('supplier_id')) {
-            Supplier::find($purchase->getOriginal('supplier_id'))?->syncCurrentBalance();
+            Supplier::withTrashed()->find($purchase->getOriginal('supplier_id'))?->syncCurrentBalance();
         }
     }
 

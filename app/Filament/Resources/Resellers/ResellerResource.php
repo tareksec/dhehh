@@ -3,8 +3,10 @@
 namespace App\Filament\Resources\Resellers;
 
 use App\Filament\Clusters\Resellers;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\Resellers\Pages\EditReseller;
 use App\Filament\Resources\Resellers\Pages\ListResellers;
+use App\Filament\Resources\Resellers\Pages\TrashedResellers;
 use App\Filament\Resources\Resellers\Pages\ViewReseller;
 use App\Filament\Resources\Resellers\RelationManagers\OrdersRelationManager;
 use App\Filament\Resources\Resellers\RelationManagers\ProductsRelationManager;
@@ -30,6 +32,8 @@ use Illuminate\Support\Facades\Auth;
  */
 class ResellerResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = Customer::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingStorefront;
@@ -73,6 +77,7 @@ class ResellerResource extends Resource
     {
         return [
             'index' => ListResellers::route('/'),
+            'trash' => TrashedResellers::route('/trash'),
             'view' => ViewReseller::route('/{record}'),
             'edit' => EditReseller::route('/{record}/edit'),
         ];

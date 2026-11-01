@@ -11,6 +11,7 @@ use App\Services\CompanyContext;
 use App\Services\Crm\ConversationMessengerService;
 use App\Services\Crm\LeadConversionService;
 use App\Services\Crm\SalesFollowUpService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -148,10 +149,9 @@ class ChatOrderController extends Controller
         if ($link->lead) {
             $customer = app(LeadConversionService::class)->convertToCustomer($link->lead);
         } else {
-            $customer = Customer::query()
+            $customer = Customer::matchOrRestore(fn (Builder $query) => $query
                 ->where('company_id', $link->company_id)
-                ->where('phone', $data['phone'])
-                ->first()
+                ->where('phone', $data['phone']))
                 ?? Customer::query()->create([
                     'company_id' => $link->company_id,
                     'name' => $data['name'],

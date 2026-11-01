@@ -90,6 +90,6 @@ class ResellerCommission extends Model
 
     public function reseller(): BelongsTo
     {
-        return $this->belongsTo(Customer::class, 'customer_id');
+        return $this->belongsTo(Customer::class, 'customer_id')->withTrashed();
     }
 }

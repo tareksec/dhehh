@@ -37,7 +37,9 @@ class TlsAskController extends Controller
 
         [$company, $label] = $subdomain;
 
+        // withoutGlobalScopes() also drops the Trash filter: a reseller in Trash gets no certificate.
         return Customer::withoutGlobalScopes()
+            ->withoutTrashed()
             ->where('company_id', $company->getKey())
             ->where('reseller_subdomain', $label)
             ->where('reseller_status', 'approved')

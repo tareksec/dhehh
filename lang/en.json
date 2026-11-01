@@ -4602,5 +4602,6 @@
     "This is already used, possibly by an item in Trash. Use another one, or restore or permanently delete the one in Trash.": "This is already used, possibly by an item in Trash. Use another one, or restore or permanently delete the one in Trash.",
     "This company already has a payment method of this type, and it is in Trash. Restore it from Trash instead of adding another.": "This company already has a payment method of this type, and it is in Trash. Restore it from Trash instead of adding another.",
     "This company already has a payment method of this type. Edit the existing one instead of adding another.": "This company already has a payment method of this type. Edit the existing one instead of adding another.",
-    "Trash": "Trash"
+    "Trash": "Trash",
+    "A customer with this phone number already exists, so this one cannot be restored. Delete it permanently, or change the other customer's phone first.": "A customer with this phone number already exists, so this one cannot be restored. Delete it permanently, or change the other customer's phone first."
 }

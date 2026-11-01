@@ -589,6 +589,7 @@ class Company extends Model
         }
 
         $reseller = Customer::withoutGlobalScopes()
+            ->withoutTrashed()
             ->where('reseller_custom_domain', $host)
             ->whereNotNull('reseller_custom_domain_verified_at')
             ->where('reseller_status', 'approved')

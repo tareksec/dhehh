@@ -75,6 +75,7 @@ class ResellerPricing
 
         $reseller = $company->reseller_module_enabled
             ? Customer::withoutGlobalScopes()
+                ->withoutTrashed()
                 ->where('company_id', $company->getKey())
                 ->where('reseller_status', 'approved')
                 ->find($resellerId)

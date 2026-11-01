@@ -1,5 +1,5 @@
 # Sales, Orders & Couriers
-> Last checked: 2026-10-24 (the order email twin of the status SMS, and the Email the customer button; before it: main merged with the Trade Portal's Delivery Challan)
+> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (delete = Trash, phase T4a: customers, resellers and suppliers are soft-deleted); before it: 2026-10-24 (the order email twin of the status SMS, and the Email the customer button; before it: main merged with the Trade Portal's Delivery Challan)
 
 ## What it does
 The Sales, Orders & Couriers module orchestrates customer acquisition, order fulfillment, multi-carrier parcel delivery, and delivery fraud prevention. It manages the full lifecycle of orders from draft quotations to confirmed, processing, delivered, or returned states, while tracking payments and stock reservations. It integrates with major Bangladeshi courier logistics APIs (Steadfast, Pathao, RedX, eCourier, and manual delivery), automating airway bill booking, webhook tracking, parcel barcode scanning, and driver handover sheets. For fraud mitigation, it runs an intelligent customer risk scoring engine that evaluates historical courier return ratios, first-time high COD thresholds, phone number reuse, and a dual-tier (global and tenant-scoped) customer blacklist.
@@ -26,7 +26,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Models/OrderStatusTransition.php` | Audit trail of order status changes, recording previous/next status and user ID. |
 | `app/Models/Quotation.php` | Price quotation estimates with validity expiry and conversion to confirmed orders. |
 | `app/Models/QuotationItem.php` | Items attached to a price quotation. |
-| `app/Models/Customer.php` | Customer profiles recording contact details, delivery addresses, and lifetime order values. |
+| `app/Models/Customer.php` | Customer profiles recording contact details, delivery addresses, and lifetime order values. Soft-deleted (T4a): the Customers resource (non-resellers) has a Trash page; a customer in Trash keeps orders / payments / balance, cannot sign in, and is restored by an order from the same phone (`RestoresFromTrashWhenTheyReturn`). Every `belongsTo(Customer)` is `->withTrashed()` except the login token's. |
 | `app/Models/CustomerPayment.php` | General customer payment receipts credited towards outstanding account dues. |
 | `app/Models/CustomerBlacklist.php` | Fraud prevention blacklist matching phone, email, address, or IP across companies. |
 | `app/Models/CustomerRiskProfile.php` | Cached customer risk score, delivery success ratios, and return history. |

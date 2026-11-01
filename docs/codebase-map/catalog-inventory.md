@@ -1,5 +1,5 @@
 # Catalog & Inventory
-> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (delete = Trash, phase T3: soft deletes on this module's catalog / storefront / CRM rows); before it: 2026-10-25, branch `feature/trade-portal-landed-cost` (Trade Portal landed cost and machine serials)
+> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (T4a: suppliers soft-deleted; delete = Trash, phase T3: soft deletes on this module's catalog / storefront / CRM rows); before it: 2026-10-25, branch `feature/trade-portal-landed-cost` (Trade Portal landed cost and machine serials)
 
 ## What it does
 The Catalog & Inventory module manages products, variants, categories, digital media assets, and stock lifecycle across warehouses and companies. It implements an immutable stock movement ledger where on-hand quantities are strictly computed from transactional movements (opening, purchase, sale, return, damage, adjustment, and internal transfers). It provides multi-company physical inventory sharing through Stock Pools, allowing different companies to sell from the same physical stock without inventory drift. For purchasing and supply chain operations, it tracks suppliers, import purchase orders with detailed China-to-BD landed costs, shipping containers, and customs tracking. Additionally, it provides batch operations for bulk stock updates, product setup onboarding, and CSV import/export capabilities.
@@ -29,7 +29,7 @@ The Catalog & Inventory module manages products, variants, categories, digital m
 | `app/Models/PurchaseItem.php` | Line items associated with a purchase order, tracking unit costs and quantities. |
 | `app/Models/Container.php` | Shipping container tracking departure, arrival, and shipping line status. |
 | `app/Models/Shipment.php` | Logistics shipment linking purchases to containers and transport modes. |
-| `app/Models/Supplier.php` | Vendor records tracking balances, purchase history, and payment ledgers. |
+| `app/Models/Supplier.php` | Vendor records tracking balances, purchase history, and payment ledgers. Soft-deleted (T4a, Trash page): purchases and payments keep pointing at a supplier in Trash (`->withTrashed()`), its balance still re-syncs, and the supplier CSV import restores a match from Trash. |
 | `app/Models/SupplierPayment.php` | Financial payment vouchers issued to suppliers against purchases. |
 | `app/Models/ProductCarousel.php` | Curated product groupings displayed in storefront slider carousels. Soft-deleted (T3). |
 | `app/Models/ProductReview.php` | Customer product reviews with approval statuses and ratings. Soft-deleted (T3): a review in Trash still counts as "already reviewed" (unique customer + product + order). |

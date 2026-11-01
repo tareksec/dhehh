@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Suppliers\Pages;
 
+use App\Filament\Resources\Pages\TrashedRecords;
 use App\Filament\Resources\Suppliers\SupplierResource;
 use App\Models\Supplier;
 use App\Services\SupplierCsvService;
@@ -74,6 +75,8 @@ class ListSuppliers extends ListRecords
                 ->url(route('suppliers.export.csv'))
                 ->openUrlInNewTab()
                 ->visible(fn (): bool => auth()->user()?->canPerformModelAbility('viewAny', Supplier::class)),
+
+            TrashedRecords::linkAction(SupplierResource::class),
 
             CreateAction::make(),
         ];

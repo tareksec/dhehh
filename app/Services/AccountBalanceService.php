@@ -41,7 +41,9 @@ class AccountBalanceService
 
     public function customerDue(?int $companyId): float
     {
+        // A raw table query does not see the Trash filter: customers in Trash are left out, like in every other dues figure.
         return (float) DB::table('customers')
+            ->whereNull('deleted_at')
             ->when($companyId !== null, fn ($query) => $query->where('company_id', $companyId))
             ->where('current_balance', '>', 0)
             ->sum('current_balance');

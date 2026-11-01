@@ -12,6 +12,7 @@ use App\Models\StorefrontPayment;
 use App\Models\StorefrontPaymentMethod;
 use App\Models\StorefrontSetting;
 use Closure;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -174,7 +175,8 @@ class StorefrontCheckoutService
             return $this->startAdvancePayment($company, $setting, $data, $items, $quote, $decision, $paymentUrls, $attempt, $cart);
         }
 
-        $customer = Customer::query()->whereIn('phone', $this->policies->phoneVariants($data['phone']))->first();
+        // A customer in Trash is still a returning customer (the order below brings them back).
+        $customer = Customer::matchIncludingTrash(fn (Builder $query) => $query->whereIn('phone', $this->policies->phoneVariants($data['phone'])));
         $decision = $this->eligibility->decide(
             $company,
             $setting,
@@ -339,9 +341,8 @@ class StorefrontCheckoutService
 
             $this->assertStock($items);
 
-            $customer = Customer::query()
-                ->whereIn('phone', $this->policies->phoneVariants($data['phone']))
-                ->first() ?? new Customer(['phone' => $data['phone']]);
+            $customer = Customer::matchOrRestore(fn (Builder $query) => $query->whereIn('phone', $this->policies->phoneVariants($data['phone'])))
+                ?? new Customer(['phone' => $data['phone']]);
 
             $customer->fill([
                 'name' => $data['name'],

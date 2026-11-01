@@ -11,6 +11,8 @@ use App\Models\OrderItem;
 use App\Models\OrderPayment;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use Closure;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -1146,10 +1148,15 @@ class NuportOrderImportService
         $key = $local ?? 'raw:'.Str::lower($rawPhone).'|'.Str::lower($name);
 
         if (! array_key_exists($key, $this->customerCache)) {
+            // A customer in Trash is still the same person: a real import brings them back, a dry run only counts them.
+            $find = fn (Closure $constrain): ?Customer => $createMissing
+                ? Customer::matchOrRestore($constrain)
+                : Customer::matchIncludingTrash($constrain);
+
             $customer = match (true) {
-                $local !== null => Customer::query()->whereIn('phone', [$local, '+88'.$local, '88'.$local])->orderBy('id')->first(),
-                $rawPhone !== '' => Customer::query()->where('phone', $rawPhone)->where('name', $name)->orderBy('id')->first(),
-                $name !== '' => Customer::query()->whereNull('phone')->where('name', $name)->orderBy('id')->first(),
+                $local !== null => $find(fn (Builder $query) => $query->whereIn('phone', [$local, '+88'.$local, '88'.$local])),
+                $rawPhone !== '' => $find(fn (Builder $query) => $query->where('phone', $rawPhone)->where('name', $name)),
+                $name !== '' => $find(fn (Builder $query) => $query->whereNull('phone')->where('name', $name)),
                 default => null,
             };
 

@@ -99,7 +99,7 @@ class Lead extends Model
 
     public function convertedCustomer(): BelongsTo
     {
-        return $this->belongsTo(Customer::class, 'converted_customer_id');
+        return $this->belongsTo(Customer::class, 'converted_customer_id')->withTrashed();
     }
 
     public function convertedOrder(): BelongsTo

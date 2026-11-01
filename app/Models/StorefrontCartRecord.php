@@ -69,7 +69,7 @@ class StorefrontCartRecord extends Model
 
     public function reseller(): BelongsTo
     {
-        return $this->belongsTo(Customer::class, 'reseller_customer_id');
+        return $this->belongsTo(Customer::class, 'reseller_customer_id')->withTrashed();
     }
 
     public function itemCount(): int

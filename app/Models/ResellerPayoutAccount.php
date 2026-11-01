@@ -35,7 +35,7 @@ class ResellerPayoutAccount extends Model
 
     public function reseller(): BelongsTo
     {
-        return $this->belongsTo(Customer::class, 'customer_id');
+        return $this->belongsTo(Customer::class, 'customer_id')->withTrashed();
     }
 
     /** e.g. "bKash — 01711112222 (Personal)". */

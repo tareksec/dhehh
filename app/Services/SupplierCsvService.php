@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Supplier;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -78,7 +79,7 @@ class SupplierCsvService
             fclose($handle);
 
             throw ValidationException::withMessages([
-                'csv' => 'Missing required CSV columns: ' . implode(', ', $missingHeadings),
+                'csv' => 'Missing required CSV columns: '.implode(', ', $missingHeadings),
             ]);
         }
 
@@ -136,7 +137,7 @@ class SupplierCsvService
         $email = $this->nullableString($data['email'] ?? null);
         $phone = $this->nullableString($data['phone'] ?? null);
         $companyName = $this->nullableString($data['company_name'] ?? null);
-        $supplier = $this->findExistingSupplier($email, $phone, $companyName) ?? new Supplier();
+        $supplier = $this->findExistingSupplier($email, $phone, $companyName) ?? new Supplier;
 
         $supplier->fill([
             'name' => $name,
@@ -156,7 +157,7 @@ class SupplierCsvService
     protected function findExistingSupplier(?string $email, ?string $phone, ?string $companyName): ?Supplier
     {
         if ($email) {
-            $supplier = Supplier::query()->where('email', $email)->first();
+            $supplier = Supplier::matchOrRestore(fn (Builder $query) => $query->where('email', $email));
 
             if ($supplier) {
                 return $supplier;
@@ -164,7 +165,7 @@ class SupplierCsvService
         }
 
         if ($phone) {
-            $supplier = Supplier::query()->where('phone', $phone)->first();
+            $supplier = Supplier::matchOrRestore(fn (Builder $query) => $query->where('phone', $phone));
 
             if ($supplier) {
                 return $supplier;
@@ -172,7 +173,7 @@ class SupplierCsvService
         }
 
         if ($companyName) {
-            return Supplier::query()->where('company_name', $companyName)->first();
+            return Supplier::matchOrRestore(fn (Builder $query) => $query->where('company_name', $companyName));
         }
 
         return null;

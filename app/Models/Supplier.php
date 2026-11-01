@@ -3,13 +3,15 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\RestoresFromTrashWhenTheyReturn;
 use App\Models\Concerns\ValidatesEmailAddress;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Supplier extends Model
 {
-    use BelongsToCompany, ValidatesEmailAddress;
+    use BelongsToCompany, RestoresFromTrashWhenTheyReturn, SoftDeletes, ValidatesEmailAddress;
 
     protected $fillable = [
         'company_id',

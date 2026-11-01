@@ -6,9 +6,9 @@ use App\Filament\Resources\Expenses\ExpenseResource;
 use App\Filament\Resources\Expenses\Pages\ListExpenses;
 use App\Filament\Resources\Expenses\Pages\TrashedExpenses;
 use App\Models\Account;
-use App\Models\Customer;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
+use App\Models\StockMovement;
 use App\Models\User;
 use App\Services\CompanyContext;
 use App\Support\TypeToConfirmDelete;
@@ -135,6 +135,6 @@ class DeleteTypeNameAndTrashTest extends TestCase
         $this->actingAs($this->admin);
 
         $this->assertNotNull(TypeToConfirmDelete::trashUrl(Expense::class));
-        $this->assertNull(TypeToConfirmDelete::trashUrl(Customer::class), 'Customers are not soft-deleted yet.');
+        $this->assertNull(TypeToConfirmDelete::trashUrl(StockMovement::class), 'A stock movement is a ledger row: it stays a permanent delete.');
     }
 }

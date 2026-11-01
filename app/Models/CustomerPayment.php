@@ -69,7 +69,7 @@ class CustomerPayment extends Model
             $payment->customer?->syncCurrentBalance();
 
             if ($payment->wasChanged('customer_id')) {
-                Customer::find($payment->getOriginal('customer_id'))?->syncCurrentBalance();
+                Customer::withTrashed()->find($payment->getOriginal('customer_id'))?->syncCurrentBalance();
             }
         });
 
@@ -86,7 +86,7 @@ class CustomerPayment extends Model
 
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Customer::class)->withTrashed();
     }
 
     public function account(): BelongsTo

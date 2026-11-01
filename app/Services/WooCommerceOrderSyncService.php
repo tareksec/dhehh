@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\StorefrontSetting;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -198,7 +199,7 @@ class WooCommerceOrderSyncService
         // (CheckoutController::createOrder()) — phone is the natural key
         // customers are actually deduplicated on across this app.
         $customer = $phone !== ''
-            ? Customer::query()->whereIn('phone', $this->checkoutPolicies->phoneVariants($phone))->first()
+            ? Customer::matchOrRestore(fn (Builder $query) => $query->whereIn('phone', $this->checkoutPolicies->phoneVariants($phone)))
             : null;
 
         $customer ??= new Customer(['phone' => $phone !== '' ? $phone : null]);

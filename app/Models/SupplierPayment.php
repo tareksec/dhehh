@@ -74,7 +74,7 @@ class SupplierPayment extends Model
             $payment->supplier?->syncCurrentBalance();
 
             if ($payment->wasChanged('supplier_id')) {
-                Supplier::find($payment->getOriginal('supplier_id'))?->syncCurrentBalance();
+                Supplier::withTrashed()->find($payment->getOriginal('supplier_id'))?->syncCurrentBalance();
             }
         });
 
@@ -91,7 +91,7 @@ class SupplierPayment extends Model
 
     public function supplier(): BelongsTo
     {
-        return $this->belongsTo(Supplier::class);
+        return $this->belongsTo(Supplier::class)->withTrashed();
     }
 
     public function account(): BelongsTo

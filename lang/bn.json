@@ -4602,5 +4602,6 @@
     "This is already used, possibly by an item in Trash. Use another one, or restore or permanently delete the one in Trash.": "এটি আগে থেকেই ব্যবহৃত হচ্ছে, হয়তো ট্র্যাশের কোনো আইটেমে। অন্য একটি ব্যবহার করুন, অথবা ট্র্যাশের আইটেমটি ফিরিয়ে আনুন বা স্থায়ীভাবে ডিলিট করুন।",
     "This company already has a payment method of this type, and it is in Trash. Restore it from Trash instead of adding another.": "এই কোম্পানির এই ধরনের একটি পেমেন্ট মেথড আগে থেকেই আছে, এবং সেটি ট্র্যাশে আছে। নতুন যোগ না করে ট্র্যাশ থেকে ওটি ফিরিয়ে আনুন।",
     "This company already has a payment method of this type. Edit the existing one instead of adding another.": "এই কোম্পানির এই ধরনের একটি পেমেন্ট মেথড আগে থেকেই আছে। নতুন যোগ না করে বিদ্যমানটি সম্পাদনা করুন।",
-    "Trash": "ট্র্যাশ"
+    "Trash": "ট্র্যাশ",
+    "A customer with this phone number already exists, so this one cannot be restored. Delete it permanently, or change the other customer's phone first.": "এই ফোন নম্বরে আরেকজন কাস্টমার আছে, তাই একে ফিরিয়ে আনা যাচ্ছে না। এটিকে স্থায়ীভাবে ডিলিট করুন, অথবা আগে অন্য কাস্টমারের ফোন নম্বর বদলান।"
 }

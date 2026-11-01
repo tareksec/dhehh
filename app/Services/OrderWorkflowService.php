@@ -60,7 +60,7 @@ class OrderWorkflowService
     public function syncPreviousCustomerBalance(Order $order): void
     {
         if ($order->wasChanged('customer_id')) {
-            Customer::find($order->getOriginal('customer_id'))?->syncCurrentBalance();
+            Customer::withTrashed()->find($order->getOriginal('customer_id'))?->syncCurrentBalance();
         }
     }
 

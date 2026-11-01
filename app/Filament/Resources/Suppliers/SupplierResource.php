@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\Suppliers;
 
 use App\Filament\Clusters\Purchasing;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\Suppliers\Pages\CreateSupplier;
 use App\Filament\Resources\Suppliers\Pages\EditSupplier;
 use App\Filament\Resources\Suppliers\Pages\ListSuppliers;
+use App\Filament\Resources\Suppliers\Pages\TrashedSuppliers;
 use App\Filament\Resources\Suppliers\Pages\ViewSupplier;
 use App\Filament\Resources\Suppliers\Schemas\SupplierForm;
 use App\Filament\Resources\Suppliers\Schemas\SupplierInfolist;
@@ -19,6 +21,8 @@ use Filament\Tables\Table;
 
 class SupplierResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = Supplier::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingStorefront;
@@ -48,6 +52,7 @@ class SupplierResource extends Resource
     {
         return [
             'index' => ListSuppliers::route('/'),
+            'trash' => TrashedSuppliers::route('/trash'),
             'create' => CreateSupplier::route('/create'),
             'view' => ViewSupplier::route('/{record}'),
             'edit' => EditSupplier::route('/{record}/edit'),

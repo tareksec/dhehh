@@ -1,5 +1,5 @@
 # Reseller Program & Portal
-> Last checked: 2026-10-23, reseller landing page (portal host front page, website footer, header logo pair and dark-mode toggle, Bangla switch, Anek Bangla, own Tailwind stylesheet) and the website banner button
+> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (delete = Trash, phase T4a: customers, resellers and suppliers are soft-deleted); before it: 2026-10-23, reseller landing page (portal host front page, website footer, header logo pair and dark-mode toggle, Bangla switch, Anek Bangla, own Tailwind stylesheet) and the website banner button
 
 ## What it does
 The Reseller Program & Portal module enables wholesale multi-vendor dropshipping, affiliate storefronts, commission earnings, and reseller account management. Approved resellers log into a dedicated Filament 5 portal (`/portal`) to browse wholesale catalogs, place customer dropship orders, track commission earnings, and request payout withdrawals to mobile banking or bank accounts. It allows resellers to launch their own branded affiliate stores on company subdomains (e.g. `shop.company.com`) or verified custom domains with automatic on-demand SSL issuance. The module supports customizable variation selling prices, security deposit ledgers, own-courier merchant account fulfillment, and self-service password recovery workflows.
@@ -19,7 +19,7 @@ The Reseller Program & Portal module enables wholesale multi-vendor dropshipping
 ### Models
 | Path | What it does |
 | --- | --- |
-| `app/Models/Customer.php` | Authenticatable reseller entity when `reseller_status = 'approved'`, storing balances and domains. |
+| `app/Models/Customer.php` | Authenticatable reseller entity when `reseller_status = 'approved'`, storing balances and domains. Soft-deleted (T4a; the Resellers resource has its own Trash page): a reseller in Trash cannot sign in, serves no store and gets no certificate (`withoutTrashed()` in `TlsAskController`, `Company::forResellerCustomDomainHost`, `ResellerPricing::restoreFromSession`); its slug, subdomain and domain stay reserved and its money rows are kept. |
 | `app/Models/ResellerProduct.php` | Pivot table tracking custom reseller retail prices and storefront visibility overrides. |
 | `app/Models/ResellerCommission.php` | Ledger entry for earned dropship commission margins linked to orders. |
 | `app/Models/ResellerDepositEntry.php` | Security deposit transaction record tracking credits, deductions, and balance after. |

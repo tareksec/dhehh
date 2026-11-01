@@ -495,7 +495,7 @@ class Order extends Model
 
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Customer::class)->withTrashed();
     }
 
     /**
@@ -505,7 +505,7 @@ class Order extends Model
      */
     public function reseller(): BelongsTo
     {
-        return $this->belongsTo(Customer::class, 'reseller_customer_id');
+        return $this->belongsTo(Customer::class, 'reseller_customer_id')->withTrashed();
     }
 
     /**

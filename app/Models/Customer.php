@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\RestoresFromTrashWhenTheyReturn;
 use App\Models\Concerns\ValidatesEmailAddress;
 use App\Services\CompanyContext;
 use App\Services\ResellerNotificationService;
@@ -17,8 +18,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Also doubles as the storefront customer-login Authenticatable (guard
@@ -34,7 +37,7 @@ use Illuminate\Support\Str;
  */
 class Customer extends Model implements AuthenticatableContract, FilamentUser, HasName
 {
-    use Authenticatable, BelongsToCompany, ValidatesEmailAddress;
+    use Authenticatable, BelongsToCompany, RestoresFromTrashWhenTheyReturn, SoftDeletes, ValidatesEmailAddress;
 
     public const TYPES = [
         'regular' => 'Regular',
@@ -115,6 +118,28 @@ class Customer extends Model implements AuthenticatableContract, FilamentUser, H
 
         static::saved(function (Customer $customer): void {
             $customer->syncCurrentBalance();
+        });
+
+        // A customer in Trash keeps its phone. If someone signed up (or was added) with the same
+        // number meanwhile, bringing the old record back would leave two customers on one phone,
+        // so the Trash page says so instead (owner default 2026-11-01).
+        static::restoring(function (Customer $customer): void {
+            if (blank($customer->phone)) {
+                return;
+            }
+
+            $taken = static::withoutGlobalScopes()
+                ->withoutTrashed()
+                ->where('company_id', $customer->company_id)
+                ->where('phone', $customer->phone)
+                ->whereKeyNot($customer->getKey())
+                ->exists();
+
+            if ($taken) {
+                throw ValidationException::withMessages([
+                    'phone' => __('A customer with this phone number already exists, so this one cannot be restored. Delete it permanently, or change the other customer\'s phone first.'),
+                ]);
+            }
         });
 
         // The approval SMS (wording set in Reseller Settings; empty = not sent).

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Customers\Pages;
 
 use App\Filament\Resources\Customers\CustomerResource;
+use App\Filament\Resources\Pages\TrashedRecords;
 use App\Models\Customer;
 use App\Services\CustomerCsvService;
 use Filament\Actions\Action;
@@ -74,6 +75,8 @@ class ListCustomers extends ListRecords
                 ->url(route('customers.export.csv'))
                 ->openUrlInNewTab()
                 ->visible(fn (): bool => auth()->user()?->canPerformModelAbility('viewAny', Customer::class)),
+
+            TrashedRecords::linkAction(CustomerResource::class),
 
             CreateAction::make(),
         ];

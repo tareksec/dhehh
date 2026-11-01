@@ -72,6 +72,7 @@ class BroadcastService
 
         if (in_array($broadcast->audience_type, ['customers', 'both'], true)) {
             Customer::query()->withoutGlobalScopes()
+                ->withoutTrashed()
                 ->where('company_id', $broadcast->company_id)
                 ->whereNull('opted_out_at')
                 ->whereNotNull('phone')

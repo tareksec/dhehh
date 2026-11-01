@@ -7,6 +7,7 @@ use App\Models\Lead;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Quotation;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class LeadConversionService
@@ -26,10 +27,9 @@ class LeadConversionService
             if ($lead->converted_customer_id) {
                 return $lead->convertedCustomer;
             }
-            $existing = Customer::query()
+            $existing = Customer::matchOrRestore(fn (Builder $query) => $query
                 ->where('company_id', $lead->company_id)
-                ->where('phone', $lead->phone)
-                ->first();
+                ->where('phone', $lead->phone));
 
             $customer = $existing ?? Customer::query()->create([
                 'company_id' => $lead->company_id,

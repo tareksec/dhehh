@@ -2,7 +2,33 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-01 (latest) - Trash for catalog and storefront content (T3)
+## 2026-11-01 (latest) - Trash for customers, resellers and suppliers (T4a)
+
+Owner (Bangla): "T4 শুরু করো" (phase T4 of `docs/delete-and-trash-plan.md`). T4 is big and touches money, so I split it in two commits: **T4a (this one): customers, resellers, suppliers** — the records that carry balances — and **T4b: leads, quotations, conversation channels, reseller levels** (still to do; channels need every webhook and job to skip a channel in Trash).
+
+What I did:
+- **Customers, resellers (same table) and suppliers now go to Trash.** Migration `2026_11_01_130000_add_soft_deletes_to_customers_and_suppliers`; `SoftDeletes` on both models; a Trash page and "Trash (n)" button for Customers, Resellers and Suppliers; Restore / Delete permanently follow `canDelete()`.
+- **Money is not touched while a person is in Trash.** Orders, payments, vouchers, purchases and the reseller money rows (deposits, profits, withdrawals) stay and keep the name (30 relations got `->withTrashed()`); a payment taken meanwhile still moves the balance; Restore brings the person back as they were. The order and purchase edit forms still show a customer / supplier in Trash (tested).
+- **A customer in Trash cannot sign in** (storefront login, API token, reseller portal), and a **reseller in Trash serves no store and gets no certificate**; their slug, subdomain and domain stay reserved.
+- **My default from last time (owner took it by saying go): a customer in Trash keeps their phone.** In practice: an order (storefront, Next.js API, WooCommerce, chat order), a lead conversion or a CSV / Nuport import row for that number **restores the customer** instead of adding a second one (`RestoresFromTrashWhenTheyReturn`, `matchOrRestore`). A live customer with the same number always wins. A storefront **sign-up** makes a fresh account (a customer in Trash has none); then Restore of the old record is **refused** with a message while the number is in use. Suppliers in Trash come back the same way through the supplier CSV import.
+- **Raw leaks closed:** `AccountBalanceService::customerDue` is a raw table query (no Trash filter): fixed. Certificates (`TlsAskController`), reseller custom domains, the reseller session and broadcast audiences now skip customers in Trash.
+- **Dues figures leave customers in Trash out** (same as when a deleted customer disappeared). This is the one money-visible effect; see the question below.
+- **A T1 test of mine** (`DeleteTypeNameAndTrashTest`) asserted that Customer has no Trash. It now uses `StockMovement`.
+- Docs: CHANGELOG, plan (T4a built, T4b open, new questions 7 and 8), codebase map (sales-orders-couriers, reseller, catalog-inventory, core-platform, crm-messaging), CLAUDE.md / PROJECT_GUIDE.md (the `matchOrRestore` rule).
+
+**New owner questions (not decided by me):**
+7. Should a customer or supplier with an **unpaid balance** be blocked from Trash, or stay counted in the dues reports while in Trash? Today (as before with a hard delete) their balance drops out of the totals.
+8. When a customer in Trash **orders again**, they are restored at once. Is that right, or should such an order be refused / flagged for staff?
+
+**Needs Bangla review (1 new key):** "A customer with this phone number already exists, so this one cannot be restored. …".
+
+**Verified (run, not read):** `PeopleTrashTest` (18), each fix checked by removing it and watching its test fail (6 mutations); the existing customer / supplier / CSV / lead / chat-order / broadcast tests; the full suite on PHP 8.4: 3547 passed, 6 skipped, 0 failed. Browser (Chromium, throwaway database, English and Bangla, 1366 px and 360 px): the bulk Delete modal asks for the number, a wrong number is refused, the right one moves the rows to Trash, the "Trash (n)" button and the Customers / Suppliers Trash pages work, no sideways scroll at 360 px. **Not looked at in the browser:** the Resellers Trash page by eye (it loads at 360 px; tests cover it), the ⓘ hover.
+
+**Known, not mine:** the Trash page's wide table scrolls sideways inside its card at 1366 px (the live Customers list does the same), so Restore sits at the far right. Model labels such as "Customers" / "supplier" are untranslated in the modal heading and the "New …" button (the resources have no translated model label).
+
+Commit status: committed on `claude/upbeat-franklin-hy6fhr`, pushed to that branch. Not on `main`.
+
+## 2026-11-01 - Trash for catalog and storefront content (T3)
 
 Owner (Bangla): "পরের ধাপ T3 কর" (phase T3 of `docs/delete-and-trash-plan.md`). I took the two defaults I had proposed: Courier Providers stay out, and a row in Trash keeps its slug / name.
 

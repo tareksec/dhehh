@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\Customers;
 
 use App\Filament\Clusters\Sales;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\Customers\Pages\CreateCustomer;
 use App\Filament\Resources\Customers\Pages\EditCustomer;
 use App\Filament\Resources\Customers\Pages\ListCustomers;
+use App\Filament\Resources\Customers\Pages\TrashedCustomers;
 use App\Filament\Resources\Customers\Pages\ViewCustomer;
 use App\Filament\Resources\Customers\Schemas\CustomerForm;
 use App\Filament\Resources\Customers\Schemas\CustomerInfolist;
@@ -20,6 +22,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 class CustomerResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = Customer::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserGroup;
@@ -60,6 +64,7 @@ class CustomerResource extends Resource
     {
         return [
             'index' => ListCustomers::route('/'),
+            'trash' => TrashedCustomers::route('/trash'),
             'create' => CreateCustomer::route('/create'),
             'view' => ViewCustomer::route('/{record}'),
             'edit' => EditCustomer::route('/{record}/edit'),

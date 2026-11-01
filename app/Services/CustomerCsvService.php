@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Customer;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -80,7 +81,7 @@ class CustomerCsvService
             fclose($handle);
 
             throw ValidationException::withMessages([
-                'csv' => 'Missing required CSV columns: ' . implode(', ', $missingHeadings),
+                'csv' => 'Missing required CSV columns: '.implode(', ', $missingHeadings),
             ]);
         }
 
@@ -137,7 +138,7 @@ class CustomerCsvService
 
         $email = $this->nullableString($data['email'] ?? null);
         $phone = $this->nullableString($data['phone'] ?? null);
-        $customer = $this->findExistingCustomer($email, $phone) ?? new Customer();
+        $customer = $this->findExistingCustomer($email, $phone) ?? new Customer;
 
         $customer->fill([
             'name' => $name,
@@ -158,7 +159,7 @@ class CustomerCsvService
     protected function findExistingCustomer(?string $email, ?string $phone): ?Customer
     {
         if ($email) {
-            $customer = Customer::query()->where('email', $email)->first();
+            $customer = Customer::matchOrRestore(fn (Builder $query) => $query->where('email', $email));
 
             if ($customer) {
                 return $customer;
@@ -166,7 +167,7 @@ class CustomerCsvService
         }
 
         if ($phone) {
-            return Customer::query()->where('phone', $phone)->first();
+            return Customer::matchOrRestore(fn (Builder $query) => $query->where('phone', $phone));
         }
 
         return null;
