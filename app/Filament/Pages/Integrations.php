@@ -260,6 +260,8 @@ class Integrations extends Page
     {
         $credentials = Arr::only((array) $setting?->notification_credentials, $this->ownedNotificationKeys());
         $credentials['mail_encryption'] ??= 'tls';
+        // A site that never saved the SMS switch is on.
+        $credentials['sms_enabled'] = $setting === null || app(StorefrontNotificationService::class)->smsEnabled($setting);
 
         return $credentials;
     }
@@ -895,6 +897,16 @@ class Integrations extends Page
         $notifications = app(StorefrontNotificationService::class);
         $phone = trim((string) ($data['phone'] ?? ''));
 
+        if ($setting !== null && $notifications->smsHasGateway($setting) && ! $notifications->smsEnabled($setting)) {
+            Notification::make()
+                ->title(__('SMS is switched off for this site'))
+                ->body(__('Switch the SMS system on, press Save changes, then send the test again.'))
+                ->warning()
+                ->send();
+
+            return;
+        }
+
         if ($setting === null || ! $notifications->smsConfigured($setting)) {
             Notification::make()
                 ->title(__('The SMS gateway is not saved yet'))
@@ -1402,6 +1414,18 @@ class Integrations extends Page
                                 Placeholder::make('sms_gateway_note')
                                     ->hiddenLabel()
                                     ->content(__('One SMS gateway per site. It sends login OTP codes, password recovery codes, abandoned-cart reminders, and (from the company\'s main site) CRM and lead follow-up SMS.'))
+                                    ->columnSpanFull(),
+                                Toggle::make('notification_credentials.sms_enabled')
+                                    ->label(__('SMS system'))
+                                    ->onColor('success')
+                                    ->offColor('danger')
+                                    ->live()
+                                    ->helperText(__('On: the system sends SMS through this site\'s gateway. Off: no SMS leaves this site (order and project messages, login and password codes, reminders, broadcasts). The gateway details below stay saved. Press Save changes to apply.'))
+                                    ->columnSpanFull(),
+                                Placeholder::make('sms_off_notice')
+                                    ->hiddenLabel()
+                                    ->content(__('SMS is switched off for this site. Nothing is sent until you switch it on and save. Customers who sign in with an email still get their codes by email.'))
+                                    ->visible(fn (Get $get): bool => ! $get('notification_credentials.sms_enabled'))
                                     ->columnSpanFull(),
                                 TextInput::make('notification_credentials.sms_api_url')
                                     ->label(__('SMS gateway URL template'))

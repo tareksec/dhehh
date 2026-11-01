@@ -38,7 +38,7 @@ use Symfony\Component\Mime\Email;
 class StorefrontNotificationService
 {
     /** notification_credentials keys edited on Settings → Integrations → SMS Gateway (not on Storefront Settings). */
-    public const SMS_CREDENTIAL_KEYS = ['sms_api_url', 'sms_api_key', 'sms_sender_id', 'sms_price_per_sms', 'sms_low_balance_alert'];
+    public const SMS_CREDENTIAL_KEYS = ['sms_enabled', 'sms_api_url', 'sms_api_key', 'sms_sender_id', 'sms_price_per_sms', 'sms_low_balance_alert'];
 
     /** notification_credentials keys edited on Settings → Integrations → Email Setup (not on Storefront Settings). */
     public const MAIL_CREDENTIAL_KEYS = ['mail_host', 'mail_port', 'mail_encryption', 'mail_username', 'mail_password', 'mail_from_address', 'mail_from_name'];
@@ -79,17 +79,35 @@ class StorefrontNotificationService
 
     public function __construct(protected MetaGraphService $meta) {}
 
+    /**
+     * Whether SMS is switched on for this site (Integrations → SMS Gateway). A site that never saved the switch is
+     * on, so the sites that existed before the switch keep sending; only an explicit "off" stops them.
+     */
+    public function smsEnabled(StorefrontSetting $setting): bool
+    {
+        $value = data_get($setting->notification_credentials, 'sms_enabled');
+
+        return $value === null || $value === '' || filter_var($value, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    /** Whether this site has a gateway saved and SMS is switched on, so it is allowed to send. */
     public function smsConfigured(StorefrontSetting $setting): bool
+    {
+        return $this->smsHasGateway($setting) && $this->smsEnabled($setting);
+    }
+
+    /** Whether a gateway address is saved on this site, switched on or not. */
+    public function smsHasGateway(StorefrontSetting $setting): bool
     {
         return filled(data_get($setting->notification_credentials, 'sms_api_url'));
     }
 
-    /** Whether the gateway address saved on this site can send: it has {phone} and {message} to fill in. */
+    /** Whether the gateway address saved on this site can send: SMS is on and it has {phone} and {message} to fill in. */
     public function smsUsable(StorefrontSetting $setting): bool
     {
         $template = trim((string) data_get($setting->notification_credentials, 'sms_api_url'));
 
-        return $template !== '' && self::smsTemplateMissing($template) === [];
+        return $this->smsEnabled($setting) && $template !== '' && self::smsTemplateMissing($template) === [];
     }
 
     /**
@@ -177,7 +195,7 @@ class StorefrontNotificationService
     /**
      * Sends one SMS and says what the gateway answered, so the SMS log and the "Send test SMS" button can
      * show why a message did not leave (no balance, wrong sender ID, IP not whitelisted ...), not only that it did not.
-     * `reason` is null when the SMS was accepted, else no_gateway, bad_gateway_url, no_api_key, gateway_unreachable or gateway_refused.
+     * `reason` is null when the SMS was accepted, else no_gateway, sms_off, bad_gateway_url, no_api_key, gateway_unreachable or gateway_refused.
      * `segments` is how many SMS parts the text is billed as.
      *
      * `request` is the gateway address that was called with the API key and the text hidden, so a refused number or
@@ -252,6 +270,11 @@ class StorefrontNotificationService
 
         if ($urlTemplate === '') {
             return ['ok' => false, 'reason' => 'no_gateway', 'code' => null, 'meaning' => null, 'detail' => null];
+        }
+
+        // The owner switched SMS off for this site: nothing is sent, whichever caller got here.
+        if (! $this->smsEnabled($setting)) {
+            return ['ok' => false, 'reason' => 'sms_off', 'code' => null, 'meaning' => null, 'detail' => null];
         }
 
         // Without {phone} and {message} the gateway gets a fixed number and text, so it would only ever answer

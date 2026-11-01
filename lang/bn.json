@@ -4611,5 +4611,11 @@
     "A difference is stock the report cannot place on a supplier, for example returned orders not checked yet, imported order history or pooled stock.": "পার্থক্য মানে যে স্টক রিপোর্ট কোনো সাপ্লায়ারের নামে বসাতে পারেনি, যেমন এখনো যাচাই না হওয়া রিটার্ন অর্ডার, ইমপোর্ট করা পুরনো অর্ডার বা পুল করা স্টক।",
     "one page for each product follows": "প্রতিটি প্রোডাক্টের আলাদা পেজ পরে আছে",
     "Source not recorded": "উৎস লেখা নেই",
-    "Amounts in :currency": "সব অঙ্ক :currency-তে"
+    "Amounts in :currency": "সব অঙ্ক :currency-তে",
+    "SMS system": "SMS সিস্টেম",
+    "On: the system sends SMS through this site's gateway. Off: no SMS leaves this site (order and project messages, login and password codes, reminders, broadcasts). The gateway details below stay saved. Press Save changes to apply.": "চালু থাকলে সিস্টেম এই সাইটের গেটওয়ে দিয়ে SMS পাঠায়। বন্ধ থাকলে এই সাইট থেকে কোনো SMS যায় না (অর্ডার ও প্রজেক্টের মেসেজ, লগইন ও পাসওয়ার্ডের কোড, রিমাইন্ডার, ব্রডকাস্ট)। নিচের গেটওয়ের তথ্য সেভ করা থাকে। কার্যকর করতে Save changes চাপুন।",
+    "SMS is switched off for this site. Nothing is sent until you switch it on and save. Customers who sign in with an email still get their codes by email.": "এই সাইটের SMS বন্ধ আছে। চালু করে সেভ না করা পর্যন্ত কিছুই পাঠানো হবে না। যেসব গ্রাহক ইমেইল দিয়ে সাইন ইন করেন, তাঁরা এখনও ইমেইলে কোড পাবেন।",
+    "SMS is switched off for this site": "এই সাইটের SMS বন্ধ আছে",
+    "Switch the SMS system on, press Save changes, then send the test again.": "SMS সিস্টেম চালু করুন, Save changes চাপুন, তারপর আবার টেস্ট পাঠান।",
+    "SMS is switched off. Switch it on in Integrations → SMS Gateway.": "SMS বন্ধ আছে। ইন্টিগ্রেশন → SMS Gateway থেকে চালু করুন।"
 }

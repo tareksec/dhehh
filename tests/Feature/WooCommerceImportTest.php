@@ -177,6 +177,121 @@ class WooCommerceImportTest extends TestCase
         $this->assertSame(2, ProductVariant::withoutGlobalScopes()->where('product_id', $product->getKey())->count());
     }
 
+    public function test_import_keeps_the_description_formatting(): void
+    {
+        $company = $this->createCompanyWithWooCredentials('woo-format');
+
+        Http::fake([
+            'old-shop.example.test/wp-json/wc/v3/products*' => Http::response([[
+                'name' => 'Solar Fan',
+                'sku' => 'WOO-SOLAR-FAN',
+                'slug' => 'solar-fan',
+                'regular_price' => '1500',
+                'description' => '<h3>Features</h3><p>Stay <b>cool</b>.</p><ul><li>Dual charging</li><li>3000mAh battery</li></ul>',
+                'categories' => [],
+                'images' => [],
+            ]]),
+        ]);
+
+        app(WooCommerceImportService::class)->importProducts($company, downloadImages: false);
+
+        $product = Product::withoutGlobalScopes()->where('sku', 'WOO-SOLAR-FAN')->firstOrFail();
+
+        $this->assertSame(
+            '<h3>Features</h3><p>Stay <strong>cool</strong>.</p><ul><li>Dual charging</li><li>3000mAh battery</li></ul>',
+            $product->description,
+        );
+    }
+
+    public function test_resync_never_overwrites_a_description_the_team_edited(): void
+    {
+        $company = $this->createCompanyWithWooCredentials('woo-resync');
+
+        $payload = [[
+            'name' => 'Synced Light',
+            'sku' => 'WOO-SYNC-01',
+            'slug' => 'synced-light',
+            'regular_price' => '400',
+            'description' => '<p>Old site text.</p><ul><li>One</li><li>Two</li></ul>',
+            'categories' => [],
+            'images' => [],
+        ]];
+
+        Http::fake(['old-shop.example.test/wp-json/wc/v3/products*' => Http::response($payload)]);
+
+        app(WooCommerceImportService::class)->importProducts($company, downloadImages: false);
+
+        $product = Product::withoutGlobalScopes()->where('sku', 'WOO-SYNC-01')->firstOrFail();
+
+        // The team rewrites the description in the editor (saved as HTML)...
+        $product->forceFill(['description' => '<p>Written by the owner.</p>'])->save();
+
+        // ...and a plain-text description typed by hand is protected as well.
+        $plain = Product::withoutGlobalScopes()->create([
+            'company_id' => $company->getKey(),
+            'name' => 'Hand Typed',
+            'slug' => 'hand-typed',
+            'sku' => 'WOO-SYNC-02',
+            'unit' => 'pcs',
+            'price' => 10,
+            'sale_price' => 10,
+            'cost_price' => 0,
+            'stock' => 0,
+            'reorder_level' => 0,
+            'vat_rate' => 0,
+            'description' => 'Typed by hand, not from the old site.',
+        ]);
+
+        Http::fake(['old-shop.example.test/wp-json/wc/v3/products*' => Http::response([
+            $payload[0],
+            [...$payload[0], 'name' => 'Hand Typed', 'sku' => 'WOO-SYNC-02', 'slug' => 'hand-typed'],
+        ])]);
+
+        app(CompanyContext::class)->clear();
+        app(WooCommerceImportService::class)->importProducts($company, downloadImages: false);
+
+        $this->assertSame('<p>Written by the owner.</p>', $product->fresh()->description);
+        $this->assertSame('Typed by hand, not from the old site.', $plain->fresh()->description);
+    }
+
+    public function test_resync_upgrades_a_description_left_as_plain_text_by_the_old_importer(): void
+    {
+        $company = $this->createCompanyWithWooCredentials('woo-legacy');
+
+        Product::withoutGlobalScopes()->create([
+            'company_id' => $company->getKey(),
+            'name' => 'Legacy Fan',
+            'slug' => 'legacy-fan',
+            'sku' => 'WOO-LEGACY-01',
+            'unit' => 'pcs',
+            'price' => 10,
+            'sale_price' => 10,
+            'cost_price' => 0,
+            'stock' => 0,
+            'reorder_level' => 0,
+            'vat_rate' => 0,
+            // What the old importer saved: tags stripped, list items run together.
+            'description' => 'Main featuresDual chargingLong battery',
+        ]);
+
+        Http::fake(['old-shop.example.test/wp-json/wc/v3/products*' => Http::response([[
+            'name' => 'Legacy Fan',
+            'sku' => 'WOO-LEGACY-01',
+            'slug' => 'legacy-fan',
+            'regular_price' => '10',
+            'description' => '<p><b>Main features</b></p><ul><li>Dual charging</li><li>Long battery</li></ul>',
+            'categories' => [],
+            'images' => [],
+        ]])]);
+
+        app(WooCommerceImportService::class)->importProducts($company, downloadImages: false);
+
+        $this->assertSame(
+            '<p><strong>Main features</strong></p><ul><li>Dual charging</li><li>Long battery</li></ul>',
+            Product::withoutGlobalScopes()->where('sku', 'WOO-LEGACY-01')->firstOrFail()->description,
+        );
+    }
+
     public function test_two_companies_can_each_import_a_category_with_the_same_slug(): void
     {
         // Regression test: categories.slug used to have a database-wide unique

@@ -4611,5 +4611,11 @@
     "A difference is stock the report cannot place on a supplier, for example returned orders not checked yet, imported order history or pooled stock.": "A difference is stock the report cannot place on a supplier, for example returned orders not checked yet, imported order history or pooled stock.",
     "one page for each product follows": "one page for each product follows",
     "Source not recorded": "Source not recorded",
-    "Amounts in :currency": "Amounts in :currency"
+    "Amounts in :currency": "Amounts in :currency",
+    "SMS system": "SMS system",
+    "On: the system sends SMS through this site's gateway. Off: no SMS leaves this site (order and project messages, login and password codes, reminders, broadcasts). The gateway details below stay saved. Press Save changes to apply.": "On: the system sends SMS through this site's gateway. Off: no SMS leaves this site (order and project messages, login and password codes, reminders, broadcasts). The gateway details below stay saved. Press Save changes to apply.",
+    "SMS is switched off for this site. Nothing is sent until you switch it on and save. Customers who sign in with an email still get their codes by email.": "SMS is switched off for this site. Nothing is sent until you switch it on and save. Customers who sign in with an email still get their codes by email.",
+    "SMS is switched off for this site": "SMS is switched off for this site",
+    "Switch the SMS system on, press Save changes, then send the test again.": "Switch the SMS system on, press Save changes, then send the test again.",
+    "SMS is switched off. Switch it on in Integrations → SMS Gateway.": "SMS is switched off. Switch it on in Integrations → SMS Gateway."
 }
