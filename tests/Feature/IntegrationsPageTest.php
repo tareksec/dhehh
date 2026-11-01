@@ -815,6 +815,43 @@ class IntegrationsPageTest extends TestCase
         $this->assertSame('cart_reminder', $credentials['whatsapp_template_name']);
     }
 
+    public function test_sms_gateway_tab_has_an_on_off_switch_that_is_on_by_default_and_keeps_the_gateway_when_off(): void
+    {
+        $company = $this->makeCompany();
+        $setting = StorefrontSetting::withoutGlobalScopes()->create([
+            'company_id' => $company->getKey(),
+            'site_type' => StorefrontSetting::SITE_BLADE,
+            'notification_credentials' => ['sms_api_url' => 'http://sms.example.test/send?to={phone}&msg={message}', 'sms_api_key' => 'sms-secret', 'whatsapp_template_name' => 'cart_reminder'],
+        ]);
+        $this->actingAs($this->makeSuperAdmin($company))
+            ->withSession(['current_company_id' => $company->getKey(), 'current_company_selection_explicit' => true]);
+
+        // A site that never saved the switch shows it on, and no warning.
+        Livewire::test(Integrations::class)
+            ->assertSet('data.notification_credentials.sms_enabled', true)
+            ->assertDontSee(__('SMS is switched off for this site. Nothing is sent until you switch it on and save. Customers who sign in with an email still get their codes by email.'))
+            ->set('data.notification_credentials.sms_enabled', false)
+            ->assertSee(__('SMS is switched off for this site. Nothing is sent until you switch it on and save. Customers who sign in with an email still get their codes by email.'))
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertSet('data.notification_credentials.sms_enabled', false);
+
+        $credentials = $setting->fresh()->notification_credentials;
+        $this->assertFalse($credentials['sms_enabled']);
+        $this->assertSame('sms-secret', $credentials['sms_api_key']);
+        $this->assertSame('cart_reminder', $credentials['whatsapp_template_name']);
+        $this->assertFalse(app(StorefrontNotificationService::class)->smsConfigured($setting->fresh()));
+
+        Livewire::test(Integrations::class)
+            ->assertSet('data.notification_credentials.sms_enabled', false)
+            ->set('data.notification_credentials.sms_enabled', true)
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertTrue($setting->fresh()->notification_credentials['sms_enabled']);
+        $this->assertTrue(app(StorefrontNotificationService::class)->smsConfigured($setting->fresh()));
+    }
+
     public function test_saving_storefront_settings_keeps_the_sms_gateway_and_email_setup_set_on_integrations(): void
     {
         $company = $this->makeCompany();

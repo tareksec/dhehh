@@ -2,7 +2,29 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-01 (latest) - Product descriptions imported from WordPress: repair the old imports, never overwrite edited text
+## 2026-11-01 (latest) - SMS system on/off switch (Integrations → SMS Gateway)
+
+Owner (Bangla, item 10 of a list; the word came out as "গুগল বাটন", read as "টগল বাটন"): "এসএমএস সিস্টেম অন অফ করার জন্য টগল বাটন এড করতে হবে".
+
+What I did:
+- **New switch "SMS system"** at the top of Integrations → SMS Gateway, per site (the page edits one site at a time, like the gateway fields). Stored as `sms_enabled` in `notification_credentials`; a site that never saved it is on. Off means nothing is sent from that site; the gateway URL, key and sender ID stay saved.
+- **Everything goes through the switch:** `smsConfigured()` and `smsUsable()` now need it on, so sign-up and password codes, investor portal, broadcasts, reseller messages and `gatewayFor()` treat an off site as having no gateway; `deliverSms()` also refuses with reason `sms_off`, so a caller that does not ask first still sends nothing.
+- **SMS Log:** order and project messages meeting an off site are logged as skipped, reason "SMS is switched off…". Codes and reminders are not logged as failures. "Send test SMS" says SMS is switched off.
+- Tests: `SmsDashboardTest` +3, `SmsLogTest` +2, `IntegrationsPageTest` +1. Focused run (SMS dashboard, SMS log, gateway, Integrations page, translation parity): 85 passed.
+
+**Decision to confirm:** the switch is **per site**, because the gateway is per site. A company with a Blade site and a Next.js site must switch off both to silence the company; with one off and one on, the company's messages (order status, project messages) still leave through the site that is on. If the owner wants one company-wide master switch, say so.
+
+**Behaviour while off (same as having no gateway):** a customer who signs in with a phone number gets no SMS code (an email address still works); a phone number that already has a customer record cannot be proven for sign-up or a reseller application, so it is refused until SMS is on; a brand-new number still signs up directly.
+
+**Needs Bangla review (6 new keys):** "SMS system", the switch's help text, the warning line under it, "SMS is switched off for this site", "Switch the SMS system on, press Save changes, then send the test again.", and the SMS Log reason "SMS is switched off. Switch it on in Integrations → SMS Gateway.".
+
+**Lost work, not part of this change:** the earlier uncommitted "message templates inside Integrations → SMS Gateway" move (`SmsTemplatesForm`, branch `feature/sms-templates-in-gateway`) was in a scratch worktree that no longer exists, so that work is not on disk. `main` still has the Settings → SMS Templates page. This switch was built on a fresh branch from `origin/main` and does not depend on it. The move can be rebuilt from the session transcript if the owner still wants it.
+
+Verified: Pint clean; the focused tests above. Full `php artisan test` run before handoff (result below in the final message). Not viewed in a browser, and no real SMS was sent.
+
+Commit status: not committed; branch `feature/sms-toggle` (worktree `zz-sms-toggle`), waiting for the owner's approval.
+
+## 2026-11-01 - Product descriptions imported from WordPress: repair the old imports, never overwrite edited text
 
 Owner report: descriptions imported from the old WordPress / WooCommerce site "came in as plain text with inaccurate formatting".
 
@@ -29,6 +51,7 @@ Needs Bangla review: none (no screen text added; the command prints English, lik
 Verification (2026-11-01, plain `php artisan test`, in a worktree of `origin/main` with this change): `WooCommerceDescriptionDecideTest` 3, `WooCommerceDescriptionRepairTest` 10 and `WooCommerceImportTest` and the other WooCommerce tests all pass (29 tests in the filtered run). Full suite: 3373 passed, 5 skipped, 109 failed. None of the 109 touches products or the import: they are portal / IMS / Trade / Reseller page tests (HTTP 500, the Vite manifest of the copied `public/build` has no entry for the newer Filament themes) and backup tests (no `mysql` / `mysqldump` client on this Windows machine). `ResellerLandingPageTest`, `BackupRunsTest` and `AllCompaniesImsTest` (30 failures in the full run) fail the same 30 on clean `origin/main`; the other failing classes were not re-run there.
 
 Commit status: committed on `fix/woocommerce-description-repair`, merged into `main` on the owner's approval ("মেইনে মারজ করে দেও") and pushed to `origin/main` on the owner's approval ("হ্যাঁ, পুশ করো"). Nothing is run on the live products yet: deploy, then dry run on the server, then `--apply`. Files: `app/Support/WooCommerceDescription.php`, `app/Services/WooCommerceImportService.php`, `tests/Feature/WooCommerceImportTest.php`, `CHANGELOG.md`, `UPDATE_NOTES.md`, `PROJECT_GUIDE.md` (changed); `app/Services/WooCommerceDescriptionRepairService.php`, `app/Console/Commands/RepairWooCommerceDescriptions.php`, `tests/Feature/WooCommerceDescriptionDecideTest.php`, `tests/Feature/WooCommerceDescriptionRepairTest.php` (new).
+
 
 ## 2026-10-25 - Start the investor groups again (undo command, G-codes on backfilled projects)
 

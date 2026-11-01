@@ -244,6 +244,39 @@ class SmsLogTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_the_test_sms_button_says_so_when_sms_is_switched_off(): void
+    {
+        $this->switchSmsOff();
+
+        Livewire::test(Integrations::class)
+            ->call('testSms', ['phone' => '01712345678'])
+            ->assertNotified(__('SMS is switched off for this site'));
+
+        Http::assertNothingSent();
+        $this->assertSame(0, SmsLog::query()->count());
+    }
+
+    public function test_an_order_sms_is_logged_as_sms_off_not_as_a_missing_gateway_when_the_owner_switched_sms_off(): void
+    {
+        $this->write([SmsTemplateService::ORDER_PLACED => 'Order :order received']);
+        $this->switchSmsOff();
+        Queue::fake();
+        $order = $this->order();
+
+        $this->assertFalse(app(OrderStatusSmsService::class)->sendPlaced($order->id));
+
+        $row = SmsLog::query()->where('order_id', $order->id)->latest('id')->firstOrFail();
+        $this->assertSame(SmsLog::STATUS_SKIPPED, $row->status);
+        $this->assertSame('sms_off', $row->reason);
+        $this->assertArrayHasKey('sms_off', SmsLogService::reasonLabels());
+        Http::assertNothingSent();
+
+        // Switched on again, the same kind of message goes out.
+        $this->gateway('8809617643387');
+        $second = $this->order();
+        $this->assertTrue(app(OrderStatusSmsService::class)->sendPlaced($second->id));
+    }
+
     public function test_a_user_id_not_found_reply_tells_the_owner_to_recopy_the_api_key(): void
     {
         $this->reply('{"response_code":1011,"error_message":"User Id not found"}');
@@ -303,6 +336,13 @@ class SmsLogTest extends TestCase
     {
         StorefrontSetting::query()->withoutGlobalScopes()->where('company_id', $this->company->id)->get()
             ->each(fn (StorefrontSetting $setting) => $setting->update(['notification_credentials' => []]));
+    }
+
+    /** The owner's SMS switch (Integrations → SMS Gateway) turned off on every site of the company; the gateway stays saved. */
+    private function switchSmsOff(): void
+    {
+        StorefrontSetting::query()->withoutGlobalScopes()->where('company_id', $this->company->id)->get()
+            ->each(fn (StorefrontSetting $setting) => $setting->update(['notification_credentials' => [...$setting->notification_credentials, 'sms_enabled' => false]]));
     }
 
     private function gateway(string $senderId, string $apiKey = 'key'): void
