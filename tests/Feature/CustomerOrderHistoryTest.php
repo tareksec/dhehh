@@ -7,6 +7,7 @@ use App\Filament\Resources\Customers\Pages\ViewCustomer;
 use App\Filament\Resources\Customers\RelationManagers\OrdersRelationManager;
 use App\Filament\Resources\Customers\Widgets\CustomerPurchaseSummaryWidget;
 use App\Filament\Resources\Orders\Schemas\OrderInfolist;
+use App\Models\Account;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\CustomerPayment;
@@ -86,7 +87,8 @@ class CustomerOrderHistoryTest extends TestCase
 
         OrderPayment::query()->create(['order_id' => $first->id, 'type' => OrderPayment::TYPE_ADVANCE, 'method' => 'cash', 'amount' => 50, 'paid_at' => '2026-09-01']);
         $buyer->refresh();
-        CustomerPayment::query()->create(['customer_id' => $buyer->id, 'amount' => 100, 'method' => 'cash', 'payment_date' => '2026-10-10']);
+        $cash = Account::query()->create(['name' => 'Cash', 'type' => 'cash', 'opening_balance' => 0]);
+        CustomerPayment::query()->create(['customer_id' => $buyer->id, 'account_id' => $cash->id, 'amount' => 100, 'method' => 'cash', 'payment_date' => '2026-10-10']);
 
         $summary = app(CustomerOrderSummaryService::class)->for($buyer->refresh());
 

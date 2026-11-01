@@ -27,18 +27,21 @@ class OrderSummaryCardPdfTest extends TestCase
 
     private const TRACKING_CODE = 'SF-SECRET-CODE-7788';
 
+    private int $orders = 0;
+
     private function orderWithProducts(int $products, ?string $trackingTemplate = 'https://track.example.test/t/{tracking_id}'): Order
     {
+        $this->orders++;
         $customer = Customer::query()->create(['name' => 'Card Buyer', 'phone' => '01712345678', 'address' => 'House 5, Road 2, Dhaka']);
         $order = Order::query()->create(['customer_id' => $customer->id, 'order_date' => '2026-10-30', 'status' => 'draft']);
 
         foreach (range(1, $products) as $number) {
-            $product = Product::query()->create(['name' => "Card Product {$number}", 'sku' => "CARD-{$number}", 'price' => 100, 'sale_price' => 100, 'stock' => 50]);
+            $product = Product::query()->create(['name' => "Card Product {$number}", 'sku' => "CARD-{$this->orders}-{$number}", 'price' => 100, 'sale_price' => 100, 'stock' => 50]);
             OrderItem::query()->create(['order_id' => $order->id, 'product_id' => $product->id, 'quantity' => 1, 'unit_price' => 100]);
         }
 
-        $provider = CourierProvider::query()->create([
-            'name' => 'Card Courier', 'driver' => 'steadfast', 'is_active' => true,
+        $provider = CourierProvider::query()->firstOrCreate(['name' => 'Card Courier'], [
+            'driver' => 'steadfast', 'is_active' => true,
             'settings' => array_filter(['tracking_url' => $trackingTemplate]),
         ]);
         CourierBooking::query()->create([
