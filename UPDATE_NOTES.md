@@ -2,7 +2,27 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-25 (latest) - Start the investor groups again (undo command, G-codes on backfilled projects)
+## 2026-11-01 (latest) - Supplier Report: one account page for each product
+
+Owner (Bangla): redo the Report module so that a supplier's account shows every product separately: at what price how many pieces were sold, how many damaged, how many in stock, how many short; each product on its own page; the account must be crystal clear with no gap.
+
+What I did (worktree `zz-supplier-pages`, branch `feature/supplier-report-product-pages`, from `origin/main`):
+- `SupplierReportService`: new `product_pages` (units account, sold-at-prices list, where the sales came from, purchase lines, profit workings, stock today). Damage ledger entries and negative stock adjustments now leave the oldest lot FIFO and show as their own lines; a positive adjustment is a lot of its own; what no lot can cover is listed as "not matched", never put on a supplier.
+- Screen: overview as before, then a section per product (`#product-<id>`; the products overview links to it).
+- PDF: cover (supplier, summary, profit, purchase dates), a page for the products overview, then one page per product. Amounts plain, "Amounts in BDT" in the header.
+- 37 new keys in `lang/en.json` and `lang/bn.json`.
+
+Things the owner should know:
+- Gross and net profit now also subtract the landed cost of units damaged after arrival, so a product with such damage reads lower than the earlier report.
+- The "Difference" line (system stock vs what the report knows) can be non-zero. In my check data it was 15 for a product whose imported (Nuport) sales never took stock out. That is a real gap in the data, shown red with its reason, not hidden.
+- Revenue is units × order line price; order discount, shipping, VAT are not in it.
+- Needs Bangla review: the new Bangla wording (units account, "Check" = "মিলিয়ে দেখা", the stock-difference note).
+
+Verified: `SupplierReportTest` 16 passed; screen and PDF checked in the browser on a throwaway sqlite database (never demo or live). Full `php artisan test` (on Windows, frontend built): 3458 passed, 5 skipped, 15 failed. The 15 are `BackupDrillTest`, `BackupEncryptionTest`, `BackupRestoreTest`, `BackupRunsTest`, `R2BackupTest` and `SesTrackingTest`: they need a `mysql` client binary and an openssl certificate that this Windows machine does not have. The same 15 fail on a clean `origin/main` (checked with my changes stashed), so none comes from this change.
+
+Commit status: committed on `feature/supplier-report-product-pages` and pushed to `main` on the owner's approval of 2026-11-01.
+
+## 2026-10-25 - Start the investor groups again (undo command, G-codes on backfilled projects)
 
 Owner (Bangla), after the live backfill of Tasneem Knitting industry (company id 2) turned the five old projects into G2–G6 (G1 is a real group that was already there) and kept their old project codes (`01/2026-INV-01` …): "g1-p1 এরকম হবে", then "গ্রুপ সব ডিলিট করে নতুন করে আমার রান কি বল".
 
