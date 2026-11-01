@@ -1,5 +1,23 @@
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **A bottom bar on phones and tablets: Dashboard, company switch, "+", Orders, Products.** Owner request 2026-11-01. Below the large-screen width, where the menu button replaces the sidebar, a bar is fixed to the bottom of every admin page. Left: **Dashboard** and the **company switch** (it shows the open company; tapping it opens a list with All Companies for super admins and every company the person may open). Middle: a raised **+** button. Right: **Orders** and **Products**. The page being viewed is highlighted. A person sees only what their role allows: no Orders or Products slot without the right to open that list, and the + leaves out whatever they may not create. The company drop-down in the header is hidden on phones while the bar is there, since it now lives in the bar. On large screens nothing changes.
+- **"+" creates an order, product, purchase or expense in a pop-up, without leaving the page.** Owner request 2026-11-01. The + button lists **Create a new order**, **Add a new product**, **Add a new purchase** and **Add a new expense**. The choice opens a pop-up with that page's own form, titled with the open company. Saving closes the pop-up and shows the usual "Created" message; on the Dashboard or a list page the figures and rows refresh in place so the new record shows at once, and the person keeps their scroll position and filters. The ✕ button or **Cancel** closes the pop-up without saving.
+
+### Changed
+
+- **The company drop-down in the header no longer shows hard-coded English.** "All Companies", "Select company" and "Current company" now go through the language files (Bangla and English).
+
+### Technical Notes
+
+- No schema change, no new route, no new setting. The bar is `App\Support\AdminBottomNav` (data, permissions via `Resource::canViewAny()` / `canCreate()`, drawn inside `ModuleGuard`) with the views `resources/views/filament/admin/bottom-nav.blade.php` and `bottom-nav-script.blade.php`, hooked in `AdminPanelProvider` (`LAYOUT_END` for the bar, `SCRIPTS_AFTER` for the script). The company list is shared with the header drop-down through `App\Support\CompanySwitcherState`; switching still posts to `admin.company.switch`.
+- The pop-up is an iframe (name `zz-quick-create`) on the resource's own Create page with `?embed=1` (path and query only, so it always loads on the host the person uses). Nothing is re-implemented, so the order stock check and payment account, the product's opening stock and the purchase rules apply exactly as on the full page. Inside it the page is marked `html.zz-embedded` (`resources/css/filament/admin/theme.css` hides the menu, header, breadcrumbs and title); the bar and the app updater are left out of the embedded page, and pull-to-refresh is off there so a pull cannot reload a half-filled form.
+- Saving: the server answers a saved form with a redirect; inside the pop-up that redirect is intercepted (`Livewire.interceptRequest` → `onRedirect`), the next page is not loaded, and the opener is told by `postMessage` (origin and source checked). Filament leaves a redirect response's "Created" notice in the session, so the opener shows it by dispatching `notificationsSent`; on the Dashboard and the list pages (`refreshPaths`) it also refreshes the page's Livewire components (`$wire.$refresh()`, not a navigation: the app updater blocks every `livewire:navigate` while an upgrade is pending, and a refresh keeps scroll and filters). Cancel (`history.back()` / `Livewire.navigate()`) is turned into "close" so it cannot move the opener's own history.
+- Needs `npm run build` (new rules in the admin theme). Tests: `AdminBottomNavTest` 8 (slot order and links, current page highlight, roles Sales / Inventory / Accountant / look-only, embedded page has no bar or updater, login page has none, company list and single-company case). 8 new keys in `lang/en.json` and `lang/bn.json`.
+
 ## [2.119.0] - 2026-11-01
 
 **Release type:** Minor Feature Update

@@ -4810,5 +4810,13 @@
     "The amount to collect is now :amount.": "এখন নেওয়ার অ্যামাউন্ট :amount।",
     "This order can no longer be cut down to the pieces sent.": "এই অর্ডার আর পাঠানো পিসের সমান করা যাবে না।",
     "Every ordered piece is marked as sent, so there is nothing to change.": "অর্ডারের সব পিস পাঠানো ধরা হয়েছে, তাই বদলানোর কিছু নেই।",
-    "At least one piece must have been sent. To stop the whole order, cancel it instead.": "অন্তত এক পিস পাঠানো হতে হবে। পুরো অর্ডার বন্ধ করতে চাইলে অর্ডার বাতিল করুন।"
+    "At least one piece must have been sent. To stop the whole order, cancel it instead.": "অন্তত এক পিস পাঠানো হতে হবে। পুরো অর্ডার বন্ধ করতে চাইলে অর্ডার বাতিল করুন।",
+    "Create a new order": "নতুন অর্ডার তৈরি করুন",
+    "Add a new product": "নতুন প্রোডাক্ট যোগ করুন",
+    "Add a new purchase": "নতুন ক্রয় যোগ করুন",
+    "Add a new expense": "নতুন খরচ যোগ করুন",
+    "All Companies": "সব কোম্পানি",
+    "Select company": "কোম্পানি বাছুন",
+    "Current company": "বর্তমান কোম্পানি",
+    "Loading…": "লোড হচ্ছে…"
 }

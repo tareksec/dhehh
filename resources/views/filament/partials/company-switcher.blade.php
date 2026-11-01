@@ -1,21 +1,14 @@
 @php
-    use App\Services\CompanyContext;
-    use Illuminate\Support\Facades\Schema;
+    use App\Support\CompanySwitcherState;
 
     $user = auth()->user();
-    $canRender = $user && Schema::hasTable('companies');
-    $companies = $canRender ? $user->accessibleCompanies()->get() : collect();
-    $context = app(CompanyContext::class);
-    $sessionCompany = session('current_company_id');
-    $selectedCompany = $context->isAllCompanies()
-        ? 'all'
-        : ($context->id() ?: ($sessionCompany ?: ($user?->isSuperAdmin() ? 'all' : '')));
-    $selectedCompanyName = $selectedCompany === 'all'
-        ? 'All Companies'
-        : ($companies->firstWhere('id', (int) $selectedCompany)?->name ?? $companies->first()?->name ?? 'Select company');
+    $state = CompanySwitcherState::for($user);
+    $companies = $state['companies'] ?? collect();
+    $selectedCompany = $state['selected'] ?? '';
+    $selectedCompanyName = $state['selectedName'] ?? '';
 @endphp
 
-@if ($canRender && ($user->isSuperAdmin() || $companies->count() > 1))
+@if ($state && $state['canSwitch'])
     <div class="zz-company-switcher">
         <x-filament::dropdown
             placement="bottom-start"
@@ -29,7 +22,7 @@
                 >
                     <button
                         type="button"
-                        aria-label="Current company"
+                        aria-label="{{ __('Current company') }}"
                         class="fi-input fi-input-has-inline-suffix zz-company-switcher-trigger"
                     >
                         <span class="zz-company-switcher-trigger-label">
@@ -40,7 +33,7 @@
             </x-slot>
 
             <x-filament::dropdown.list>
-                @if ($user->isSuperAdmin())
+                @if ($state['canSelectAll'])
                     <form method="POST" action="{{ route('admin.company.switch') }}">
                         @csrf
                         <input type="hidden" name="company_id" value="all">
@@ -50,7 +43,7 @@
                             :color="$selectedCompany === 'all' ? 'primary' : 'gray'"
                             class="{{ $selectedCompany === 'all' ? 'fi-selected' : '' }}"
                         >
-                            All Companies
+                            {{ __('All Companies') }}
                         </x-filament::dropdown.list.item>
                     </form>
                 @endif

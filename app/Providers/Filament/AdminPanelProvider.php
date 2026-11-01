@@ -24,6 +24,8 @@ use App\Services\CompanyContext;
 use App\Services\CompanySettingsService;
 use App\Services\DynamicColorService;
 use App\Services\ProductSetupService;
+use App\Support\AdminBottomNav;
+use App\Support\ModuleGuard;
 use Filament\Actions\Action;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -315,7 +317,8 @@ class AdminPanelProvider extends PanelProvider
                             const inAppWebView = !! window.Capacitor
                                 || /; wv\)/.test(navigator.userAgent);
 
-                            if (! inAppWebView || window.__zzPullToRefresh) {
+                            // The bottom bar's pop-up (iframe) shows a form: a pull must never reload it.
+                            if (! inAppWebView || window.name === 'zz-quick-create' || window.__zzPullToRefresh) {
                                 return;
                             }
                             window.__zzPullToRefresh = true;
@@ -451,8 +454,20 @@ class AdminPanelProvider extends PanelProvider
                 fn (): HtmlString => new HtmlString(view('filament.partials.category-icon-search')->render()),
             )
             ->renderHook(
+                PanelsRenderHook::SCRIPTS_AFTER,
+                fn (): HtmlString => new HtmlString(ModuleGuard::renderView('admin.bottom-nav-script', view('filament.admin.bottom-nav-script')) ?? ''),
+            )
+            ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn (): HtmlString => new HtmlString(view('filament.partials.app-updater')->render()),
+                // The bottom bar's pop-up shows a Create page; the page that opened it already watches for updates.
+                fn (): HtmlString => AdminBottomNav::isEmbedded()
+                    ? new HtmlString('')
+                    : new HtmlString(view('filament.partials.app-updater')->render()),
+            )
+            // Phone bottom bar: Dashboard + company switch, "+" (create in a pop-up), Orders + Products.
+            ->renderHook(
+                PanelsRenderHook::LAYOUT_END,
+                fn (): HtmlString => AdminBottomNav::html(),
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,

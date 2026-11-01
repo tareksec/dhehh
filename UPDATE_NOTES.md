@@ -2,6 +2,34 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-11-01 (latest) - Admin phone bottom bar with a "+" create pop-up
+
+Owner (Bangla, item 8 of a list): put the ERP dashboard header's navigation menu icon button as a bottom navigation; in the middle a plus button that offers Create a New Order, Add a New Product, Add a New Purchase and Add a New Expense, each opening a pop-up where the form is filled right there; on the left the Dashboard and the company switch icons, on the right the Orders and Products icons.
+
+What I did (branch `claude/wonderful-mendel-939e6h`):
+- **The bar** (`App\Support\AdminBottomNav`, views `filament/admin/bottom-nav` and `bottom-nav-script`, hooked in `AdminPanelProvider`): fixed to the bottom below the `lg` breakpoint (where Filament shows its menu button instead of the sidebar). Left: Dashboard, company switch (shows the open company; opens a sheet with All Companies for super admins and every company the person may open, posting to the existing `admin.company.switch`). Middle: a raised "+". Right: Orders, Products. The open page is highlighted.
+- **Permissions:** a slot or a "+" entry is drawn only when the person may open that list (`canViewAny()`) or create that record (`canCreate()`); with nothing to create the "+" is left out. The bar is drawn inside `ModuleGuard`.
+- **The pop-up** is the resource's own Create page in an iframe (`?embed=1`, path and query only). I did not copy the forms: the order's stock-shortage check and payment account, the product's opening stock and the purchase rules are the real page code. Inside the pop-up the page loses the menu, header, breadcrumbs and title (only the Save button stays); saving closes the pop-up and the usual "Created" message shows (on the Dashboard and list pages the page's components are refreshed in place, not navigated, so the new record appears and scroll and filters stay); the X button or Cancel closes it without saving and does not touch the opener's history.
+- The header company drop-down is hidden on phones while the bar is on the page (it lives in the bar now); on large screens nothing changed. It now builds its data from `CompanySwitcherState` and its three hard-coded English texts go through `__()`.
+- 8 new keys in `lang/en.json` and `lang/bn.json`; `AdminBottomNavTest` (8 tests); code map `docs/codebase-map/core-platform.md` updated.
+
+Decisions to confirm with the owner:
+- **The header's menu (hamburger) button is still there.** The bar has exactly the five slots the owner listed, so there is no slot for "all the other menus" (Finance, Reports, Settings...). If the hamburger were removed, those pages could not be reached on a phone. Options: keep it (as now), or add a sixth "Menu" slot to the bar.
+- The bar shows below `lg` (1024px), so on tablets too; on a desktop the sidebar stays.
+- A new record made while "All Companies" is selected goes to the default company, exactly as on the full Create page; the pop-up's title shows which company is open.
+
+Needs Bangla review (8 new keys): "Create a new order" (নতুন অর্ডার তৈরি করুন), "Add a new product", "Add a new purchase" (ক্রয়), "Add a new expense" (খরচ), "All Companies" (সব কোম্পানি), "Select company", "Current company", "Loading…".
+
+Verified: `AdminBottomNavTest` 8 passed. In a real browser (Chromium, 390px phone and 1280px desktop) on a throwaway sqlite database in the scratchpad (never demo or live): the bar and its five slots, the "+" sheet, the company sheet and switching, the four pop-ups opening with their real forms, **an expense and a product saved from the pop-up** (records in the right company; the product's opening stock of 7 was set; no JS errors; the "Created" message shown and the new row in the list on 4 of 4 runs after the final change), Cancel closing the pop-up without touching the opener's history, the bar hidden on desktop, and the Inbox page still reaching its end above the bar.
+Not checked in a browser: saving an **order** or a **purchase** from the pop-up (their forms open; the save path is the same redirect interception as the other two), and the Android app shell.
+
+Found on the way, a real bug that is NOT part of this change: the plain Create Product page crashes with `NOT NULL constraint failed: products.cost_price` when **Cost Price is left blank** (`ProductForm` → `TextInput::make('cost_price')` has no `required()` and no default, the column is NOT NULL). Reproduced with a Livewire test on the page itself, so it is the same with or without the pop-up. A blank cost price should probably save as 0 (also for the variation rows, around `ProductForm.php` line 294). Left alone; the owner should decide.
+
+How the first version went wrong, so nobody repeats it: the pop-up's after-save refresh first used `Livewire.navigate(sameUrl)`. In my test database the user had an upgrade pending, and `app-updater.js` blocks every `livewire:navigate` in that state (it opens the "Upgrade App" dialog), so the refresh did nothing and the "Created" message only appeared when a poll happened to arrive. It now refreshes the components with `$wire.$refresh()` and dispatches `notificationsSent`, which are not navigations.
+
+Full suite: plain `php artisan test` (no `--env`, frontend built, Linux): 3550 passed, 2 skipped, 0 failed (648 s). It ran before the last edit (the pop-up's after-save refresh in `bottom-nav-script.blade.php`, one function); after that edit the 8 test files that render the admin panel or the new classes (`AdminBottomNavTest`, `CompanySelectionPersistenceTest`, `ModuleGuardTest`, `TranslationParityTest`, `AdminNavigationClustersTest`, `MobileDatabaseNotificationsMenuItemTest`, `MultiCompanyIsolationTest`, `ResellerPortalBottomNavTest`) were run again: 59 passed. Pint passes on the changed PHP.
+
+Commit status: committed on `claude/wonderful-mendel-939e6h` and pushed to that branch; `main` is untouched (it moves only on the owner's explicit approval). `npm run build` is needed on deploy (new admin theme rules). The unrelated modified files under `public/` (file-mode changes only) are not part of the commit.
 ## 2026-11-01 (latest) - Supplier Report: one account page for each product
 
 Owner (Bangla): redo the Report module so that a supplier's account shows every product separately: at what price how many pieces were sold, how many damaged, how many in stock, how many short; each product on its own page; the account must be crystal clear with no gap.

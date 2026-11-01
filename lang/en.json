@@ -4810,5 +4810,13 @@
     "The amount to collect is now :amount.": "The amount to collect is now :amount.",
     "This order can no longer be cut down to the pieces sent.": "This order can no longer be cut down to the pieces sent.",
     "Every ordered piece is marked as sent, so there is nothing to change.": "Every ordered piece is marked as sent, so there is nothing to change.",
-    "At least one piece must have been sent. To stop the whole order, cancel it instead.": "At least one piece must have been sent. To stop the whole order, cancel it instead."
+    "At least one piece must have been sent. To stop the whole order, cancel it instead.": "At least one piece must have been sent. To stop the whole order, cancel it instead.",
+    "Create a new order": "Create a new order",
+    "Add a new product": "Add a new product",
+    "Add a new purchase": "Add a new purchase",
+    "Add a new expense": "Add a new expense",
+    "All Companies": "All Companies",
+    "Select company": "Select company",
+    "Current company": "Current company",
+    "Loading…": "Loading…"
 }

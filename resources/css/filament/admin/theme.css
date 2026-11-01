@@ -1080,3 +1080,49 @@ html:not(.zz-sidebar-navigation-ready) .zz-sidebar-menu-parent.fi-sidebar-route-
 .zz-inbox-composer .fi-icon-btn {
     border-radius: 999px;
 }
+
+/*
+ * Phone bottom bar (App\Support\AdminBottomNav, resources/views/filament/admin/bottom-nav.blade.php).
+ * It is fixed to the bottom of the screen below the large breakpoint, where
+ * Filament swaps the sidebar for a menu button; give the page room so its last
+ * lines are never hidden behind it. The company switch now lives in the bar, so
+ * the header drop-down gives its room back to the search and the user menu.
+ * Both rules apply only while the bar is on the page (`:has`), so a page where
+ * the bar failed to draw keeps its header switcher.
+ */
+@media (max-width: 1023px) {
+    body:has([data-admin-bottom-nav]) .fi-main-ctn {
+        padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+    }
+
+    body:has([data-admin-bottom-nav]) .zz-company-switcher {
+        display: none;
+    }
+}
+
+/*
+ * Inside the bottom bar's pop-up (an iframe named zz-quick-create, marked
+ * `zz-embedded` by bottom-nav-script.blade.php) only the Create form is left:
+ * no menu, header, breadcrumbs or page title (the pop-up has its own title bar
+ * and close button). The Save button in the page header stays, and sticks to
+ * the top of the pop-up instead of 4rem down where the header used to be.
+ */
+html.zz-embedded .fi-topbar,
+html.zz-embedded .fi-sidebar,
+html.zz-embedded .fi-main-sidebar,
+html.zz-embedded .fi-sidebar-close-overlay,
+html.zz-embedded .fi-layout-sidebar-toggle-btn-ctn,
+html.zz-embedded .fi-breadcrumbs,
+html.zz-embedded .fi-header-heading,
+html.zz-embedded .fi-header-subheading,
+html.zz-embedded [data-admin-bottom-nav] {
+    display: none !important;
+}
+
+html.zz-embedded .fi-page-header-main-ctn > .fi-header {
+    top: 0;
+}
+
+html.zz-embedded .fi-header-actions-ctn .fi-ac {
+    justify-content: flex-end;
+}

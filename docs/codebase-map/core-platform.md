@@ -1,5 +1,5 @@
 # Core Platform
-> Last checked: 2026-10-24, branch `feature/trade-portal-test-data-cleanup` (Trade Portal test-data cleanup command), merged with main (advanced backups Phase 6, Cloudflare R2)
+> Last checked: 2026-11-01, branch `claude/wonderful-mendel-939e6h` (admin phone bottom bar with the "+" create pop-up), on top of commit 288e7fb
 
 ## What it does
 The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and five distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal, Trade Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated encrypted backups to Cloudflare R2 and/or Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
@@ -90,6 +90,8 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Support/LoginThrottled.php` | Represents rate-limiting and lockout states for login candidates. |
 | `app/Support/CompanyScopedUnique.php` | Database validation rule asserting uniqueness scoped to `company_id`. |
 | `app/Support/CompanyMedia.php` | Media resolution helper ensuring assets belong to the proper company disk. |
+| `app/Support/AdminBottomNav.php` | The admin panel's phone bottom bar (below `lg`): Dashboard + company switch, a raised "+" (Create a new order / Add a new product / purchase / expense), Orders + Products. `html()` is the `LAYOUT_END` hook (inside `ModuleGuard`), `data()` builds the slots from `Resource::canViewAny()` / `canCreate()`, `isEmbedded()` (`?embed=1`) leaves the bar and the app updater out of the pop-up. `FRAME_NAME` = `zz-quick-create`. |
+| `app/Support/CompanySwitcherState.php` | Which companies the signed-in person may open, which one is open and whether there is anything to switch to; shared by the header drop-down and the bottom bar (`POST admin.company.switch`). |
 
 ### Filament Providers, Clusters, Resources, Pages & Widgets
 | Path | What it does |
@@ -200,6 +202,9 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `resources/views/filament/pages/backups.blade.php` | View template rendering backup listings and download triggers. |
 | `resources/views/filament/pages/app-versions.blade.php` | View template showing version status and changelog cards. |
 | `resources/views/filament/pages/release-notes.blade.php` | View template for user-facing release notes. |
+| `resources/views/filament/admin/bottom-nav.blade.php` | The bottom bar, the "+" sheet, the company sheet and the pop-up (an iframe on the resource's own Create page); Alpine component `zzQuickCreate`. |
+| `resources/views/filament/admin/bottom-nav-script.blade.php` | `SCRIPTS_AFTER` script: defines `zzQuickCreate()` for the opener; inside the pop-up (`window.name === 'zz-quick-create'`) marks the page `zz-embedded`, turns the save redirect into a `postMessage` "saved" (`Livewire.interceptRequest`) and Cancel into "close". The `zz-embedded` rules (hide menu, header, breadcrumbs, title) are in `resources/css/filament/admin/theme.css`. |
+| `resources/views/filament/partials/company-switcher.blade.php` | The header company drop-down (hidden on phones while the bottom bar is on the page), now built from `CompanySwitcherState`. |
 
 ### Config
 | Path | What it does |
@@ -229,6 +234,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `tests/Feature/MultiCompanyIsolationTest.php` | Asserts that every company-owned model enforces `BelongsToCompany` and respects `CompanyScope`. |
 | `tests/Feature/CompanySettingsTest.php` | Tests company profile saving, timezone handling, and currency configuration. |
 | `tests/Feature/CompanySelectionPersistenceTest.php` | Verifies active company selection persistence across user sessions. |
+| `tests/Feature/AdminBottomNavTest.php` | The admin bottom bar: slot order and links, current-page highlight, what each role may create, no bar or updater inside the pop-up or on the login page, company list and single-company case. |
 | `tests/Feature/CompanyScopedUniquenessTest.php` | Tests unique constraint validation within individual tenant boundaries. |
 | `tests/Feature/CompanyStorageServiceTest.php` | Verifies tenant media isolation across configured storage disks. |
 | `tests/Feature/CompanyStorageMigrationTest.php` | Validates file migration between local and remote cloud disks. |
