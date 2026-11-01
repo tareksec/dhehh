@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\ValidatesEmailAddress;
+use App\Reports\SupplierStatement;
+use App\Services\SupplierAccountService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -59,11 +61,39 @@ class Supplier extends Model
         return $this->hasMany(SupplierPayment::class);
     }
 
+    public function receipts(): HasMany
+    {
+        return $this->hasMany(PurchaseReceipt::class);
+    }
+
+    /** This supplier's account as of today, worked out once per loaded record. */
+    public function accountStatement(): SupplierStatement
+    {
+        return once(fn (): SupplierStatement => app(SupplierAccountService::class)->statement($this));
+    }
+
+    /** True once goods came in through Goods Receipts: the supplier then has an account (see SupplierAccountService). */
+    public function hasConsignmentAccount(): bool
+    {
+        return $this->receipts()->exists();
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(SupplierOrder::class);
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
+    }
+
     public function syncCurrentBalance(): void
     {
+        // Cash paid into the supplier account belongs to that account, not to the purchase invoices.
         $balance = (float) $this->opening_balance + (float) $this->purchases()
             ->where('status', 'received')
-            ->sum('due_amount') - (float) $this->payments()->sum('amount');
+            ->sum('due_amount') - (float) $this->payments()->where('for_supplier_account', false)->sum('amount');
 
         if ($this->current_balance != $balance) {
             $this->forceFill(['current_balance' => $balance])->saveQuietly();

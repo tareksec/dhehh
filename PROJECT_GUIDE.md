@@ -1140,35 +1140,43 @@ Reports page:
 ```text
 app/Filament/Pages/Reports.php
 resources/views/filament/pages/reports.blade.php
-app/Services/ReportService.php
+app/Reports/            (ReportDefinition, ReportColumn, ReportFilters, ReportFormatter, ReportRegistry, SupplierStatement, Definitions/*)
+app/Services/ReportService.php          (dashboard queries and the shared sales/purchase/expense queries)
+app/Services/ReportExportService.php   (CSV, Excel, print data)
 ```
 
-The Reports page uses native Filament filter inputs, tabs, metric sections, and a dynamic Filament table. CSV and PDF exports are table header actions, empty results use the table empty state, and the Blade view contains no page-local CSS.
+Each report is one `ReportDefinition` class (columns + rows) listed in `ReportRegistry`. The screen table, CSV (UTF-8 BOM), Excel (openspout), PDF and the printable page all read the same definition, so they cannot differ. To add a report: write the definition, add it to `ReportRegistry`, add its labels to `lang/en.json` and `lang/bn.json`. A definition can have an account block (`summary()`), an "as of" date (`usesAsOfDate()`) and require a supplier (`requiresSupplier()`).
 
-Available report/export types:
+The Reports page uses native Filament filter inputs, date presets, tabs, metric sections, a totals strip and a dynamic Filament table. Export buttons (CSV, Excel, Print, PDF) are table header actions and need `reports.export`; the Blade view contains no page-local CSS.
 
-- `sales`
-- `purchases`
-- `profit`
-- `stock`
-- `low-stock`
-- `customer-dues`
-- `supplier-dues`
-- `expenses`
-- `ledger`
+Available reports (`report_type`):
+
+- Sales: `sales`, `profit`, `customer-dues`
+- Purchasing: `purchases`, `supplier-dues`
+- Inventory: `stock`, `low-stock`
+- Accounts: `expenses`, `ledger`
+- Suppliers: `supplier-account` (one supplier, as of a date, with the account block), `supplier-accounts` (all suppliers)
 
 Purchase report special behavior:
 
-- Shows China to BD cost total.
+- Shows China to BD cost total and Landed Cost Total.
 - Dynamically shows custom cost field labels as columns.
-- CSV export includes fixed China-to-BD cost columns.
-- CSV export includes dynamic custom cost columns.
+- CSV/Excel include the fixed China-to-BD cost columns.
 
-CSV export route:
+Export routes:
 
 ```text
-GET /admin/reports/export/{type}
+GET /admin/reports/export/{type}        CSV
+GET /admin/reports/export/{type}/xlsx   Excel
+GET /admin/reports/export/{type}/pdf    PDF
+GET /admin/reports/print/{type}         printable page (?print=1 opens the print dialog)
 ```
+
+All four check `reports.export` and write a `report_exported` audit row. Query string: `date_from`, `date_to` (for "as of" reports only `date_to`), `supplier_id`.
+
+### Supplier Account
+
+Full description in `docs/supplier-account.md`. In short: Goods Receipts (received / short / damage / buy price / cartons), Supplier Orders (goods a supplier gives his own customers from our stock, with the advance he collected), Account Entries, expenses and supplier payments tied to a supplier, and the Supplier Account report that works out `value received - goods taken - customer advance - (cash + shipping + ad cost)`. Key files: `app/Services/SupplierAccountService.php`, `PurchaseReceiptService.php`, `SupplierOrderService.php`, `SupplierWorkbookImportService.php`; models `PurchaseReceipt(Item)`, `SupplierOrder(Item)`, `SupplierAccountAdjustment`.
 
 ### Users, Roles, Permissions, Audit
 

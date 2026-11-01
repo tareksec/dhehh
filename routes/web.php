@@ -19,6 +19,8 @@ use App\Http\Controllers\Admin\PurchaseDocumentController;
 use App\Http\Controllers\Admin\PushDeviceController;
 use App\Http\Controllers\Admin\ReportExportController;
 use App\Http\Controllers\Admin\ReportPdfController;
+use App\Http\Controllers\Admin\ReportPrintController;
+use App\Http\Controllers\Admin\ReportXlsxController;
 use App\Http\Controllers\Admin\SupplierCsvController;
 use App\Http\Controllers\Admin\SupplierReportPdfController;
 use App\Http\Controllers\Admin\VoucherAttachmentDownloadController;
@@ -684,6 +686,14 @@ Route::middleware('auth')
 Route::middleware('auth')
     ->get('/admin/reports/export/{type}/pdf', ReportPdfController::class)
     ->name('reports.export.pdf');
+
+Route::middleware('auth')
+    ->get('/admin/reports/export/{type}/xlsx', ReportXlsxController::class)
+    ->name('reports.export.xlsx');
+
+Route::middleware('auth')
+    ->get('/admin/reports/print/{type}', ReportPrintController::class)
+    ->name('reports.print');
 
 Route::middleware('auth')
     ->get('/admin/reports/supplier/{supplier}/pdf', SupplierReportPdfController::class)

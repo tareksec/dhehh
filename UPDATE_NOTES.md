@@ -2,7 +2,53 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-01 (latest) - Message templates moved into Integrations → SMS Gateway (rebuilt)
+## 2026-11-01 (latest) - Supplier Account reports and a restructured Report module
+
+Owner request (2026-10-26, plan `C:\Users\user\.claude\plans\enumerated-kindling-karp.md`, phases P0 to P7): use what was worked out in the Shahin Khan workbook to arrange the Report module. Owner answers: goods the supplier gives his own customers leave **our** stock and are entered through a **separate order form for the supplier**; the old workbook is imported once, so receipts carry the **receive date, cartons and pieces**; the nine existing reports are restructured too. The work was built uncommitted while the owner waited for the GitHub limit; on 2026-11-01 the owner said "commit and push, and push to main".
+
+How it reached main: the shared working tree sat on `feature/ai-inbox-control-plane` (344 commits behind `main`) and held other sessions' uncommitted work. So the report work was re-applied on a clean checkout of `origin/main` (worktree `zz-supplier-account`, branch `feature/supplier-account-reports`) and only its own hunks of the shared files (`routes/web.php`, `lang/*.json`, `User.php`, `MultiCompanyIsolationTest.php`, `CHANGELOG.md`, `PROJECT_GUIDE.md`) were taken. Nothing of the other sessions' work (PayStation, mail settings, WooCommerce repair) is in this change.
+
+Rule built into the ERP (`docs/supplier-account.md`): supplier still gets from us = value of goods received - (pieces he took x buy price) - customer advance he collected - (cash + shipping + ad cost we gave).
+
+What changed:
+
+- **P0 Reports foundation.** `app/Reports/*`: one `ReportDefinition` per report (columns + rows) feeds the screen, CSV (UTF-8 BOM), Excel, PDF and a printable page (Bangla-safe, like the investor reports). The nine existing reports are ported; screen/export column drift is gone; every label goes through `__()`; totals strip; date presets; bad or reversed dates are tolerated. `Reports::REPORTS` is removed.
+- **P1 Goods Receipt** (`purchase_receipts`, `purchase_receipt_items`, `PurchaseReceiptService`): received / short / damage / cartons / buy price; stock = received - short - damage. Standalone: it does not touch the Purchase (invoice) flow.
+- **P2 Supplier Order** (`supplier_orders`, `supplier_order_items`, `SupplierOrderService`, `products.supplier_id`). Deliberately **not** a mode of `Order`: a separate model keeps supplier orders out of sales, profit, customer dues, courier, notifications, webhooks and fraud checks without touching any of them.
+- **P3 Costs**: `expenses.supplier_id` + `supplier_cost_type` (shipping / ad); `supplier_payments.for_supplier_account` (cash into the account, may exceed the invoice payable, excluded from `Supplier::syncCurrentBalance`).
+- **P4 Statement**: `SupplierAccountService::statement()`, `SupplierStatement`, reports **Supplier Account** (As of date) and **Supplier Accounts**; Supplier page section and shortcuts.
+- **P5 Product page** (`SupplierProductAccount`) and `order_items.discount_amount`; the Nuport import now keeps the line discount, and a newer export refreshes returned pieces and discount of orders already imported.
+- **P6 Workbook import** (`SupplierWorkbookImportService`, command `supplier-account:import-workbook`, Goods Receipts header action) and `supplier_account_adjustments` (**Account Entries**) for the cash/shipping/ad totals of the workbook. History is saved with `books_stock` off so stock and account balances never move.
+
+Meeting what `main` already had (decided while porting, owner please read):
+
+- **Two supplier reports now exist.** `main` has the purchase-based **Supplier Report** (`SupplierReportService`: short and damaged pieces on Purchase lines, costs after arrival, one page per product). This change adds the receipt-based **Supplier Account** (Goods Receipts, Supplier Orders, Account Entries). They share no tables and do not read each other's data, so nothing breaks, but the same goods must not be entered both as a Purchase line and as a Goods Receipt. The owner should decide which one the daily work uses, or whether they should be joined later.
+- `main` already had `order_items.returned_quantity` (`2026_10_20_100000`, Nuport import). Migration `2026_10_26_000400` therefore only adds `discount_amount` (renamed `add_discount_amount_to_order_items_table`), and `NuportOrderImportService` keeps `main`'s returned-pieces logic and adds the line discount plus the refresh of both on a newer export.
+- Languages: 222 keys added to both `lang/en.json` and `lang/bn.json`; keys `main` already had keep `main`'s wording.
+
+Open points for the owner:
+
+- **Match products before the real import.** Run the preview on Goods Receipts -> Import supplier workbook with the supplier chosen; unmatched names are listed with suggestions. Give a two-column CSV (workbook name, ERP SKU) for the rest. Products with variants are matched by **variant SKU**.
+- The workbook has no real receive date or carton per delivery for most goods: the import makes one **opening receipt** per supplier (date = earliest date in the workbook, or the date chosen), carton count = the workbook's "Received Ctn.". Real dates go in through new receipts from now on.
+- "Full Paid" customer rows have no amount in the workbook, so they add 0 to the advance (note on the order). New supplier orders carry real prices: enter the full amount as the advance when the customer paid in full.
+- Row dates the workbook holds as a date with day and month possibly swapped (a "01/11/2026" read as 1 Nov) are listed in the preview as future dates when they fall after today.
+- Bills row sums differ from the notes in column L for Love Rose, Mini Quran and Love Forever Combo (already open). The import follows the product tabs' "Taken" rows.
+- Nuport-imported orders and history receipts move no stock, so the **Difference** column of the account shows them until the physical stock is entered. Decide whether imported orders should ever move stock.
+- Not built: pieces still in shipment at the supplier, Meta ad spend pulled into ad cost, several suppliers per product, shared stock pools, a supplier login to place his own orders.
+
+Checked against the real workbook (`Shahin Vai - Product Details v13.xlsx`, preview in an in-memory test DB, nothing saved): the import's figures equal the workbook's own Summary: value received 8,053,929, goods taken 521,181, customer advance 508,000, balance 2,025,600.20 (the file's current shipping is 4,600,482; cash is blank). All 19 products read; they are not matched to ERP products yet.
+
+Files created: `app/Reports/`, `app/Filament/Resources/{PurchaseReceipts,SupplierOrders,SupplierAccountAdjustments}/`, `app/Filament/Pages/SupplierProductAccount.php`, `app/Filament/Concerns/ShowsModelValidationErrors.php`, `app/Models/{PurchaseReceipt,PurchaseReceiptItem,SupplierOrder,SupplierOrderItem,SupplierAccountAdjustment}.php`, `app/Services/{PurchaseReceiptService,SupplierOrderService,SupplierAccountService,SupplierWorkbookImportService}.php`, `app/Support/SafeDelete.php`, `app/Console/Commands/ImportSupplierWorkbook.php`, `app/Http/Controllers/Admin/{ReportXlsxController,ReportPrintController}.php`, `resources/views/reports/print.blade.php`, `resources/views/filament/pages/supplier-product-account.blade.php`, migrations `2026_10_26_000100` to `000500`, `docs/supplier-account.md`, six new test files.
+
+Files changed: `app/Filament/Pages/Reports.php`, `app/Services/{ReportService,ReportExportService,NuportOrderImportService}.php`, `app/Http/Controllers/Admin/{ReportExportController,ReportPdfController}.php`, `resources/views/{filament/pages/reports,reports/pdf}.blade.php`, `app/Models/{Product,Supplier,Expense,SupplierPayment,OrderItem,User}.php`, `app/Filament/Resources/{Products/Schemas/ProductForm,Expenses/Schemas/ExpenseForm,SupplierPayments/Schemas/SupplierPaymentForm,Suppliers/Schemas/SupplierInfolist,Suppliers/Pages/ViewSupplier}.php`, `routes/web.php`, `lang/{en,bn}.json`, `tests/Feature/{ReportsTest,NuportOrderImportTest,MultiCompanyIsolationTest}.php`, `CHANGELOG.md`, `PROJECT_GUIDE.md`, `UPDATE_NOTES.md`.
+
+Needs Bangla review: all keys added by this change, in particular the account lines ("Less: goods the supplier took from our stock", "Supplier still gets from us", "NOT FINAL: buy price missing for :count products."), "Cash into the supplier account", "Takes the pieces out of our stock", the import messages and "Account Entries".
+
+Verification: plain `php artisan test`, run on the clean checkout of `origin/main` plus this change (after rebasing onto the favicon and storefront-i18n commits that reached `main` the same day). Targeted files all pass: `ReportsTest`, `PurchaseReceiptStockTest`, `PurchaseReceiptResourceTest`, `SupplierOrderTest`, `SupplierAccountCostsTest`, `SupplierAccountStatementTest`, `SupplierWorkbookImportTest`, `NuportOrderImportTest`, `MultiCompanyIsolationTest`, `TranslationParityTest`, `MigrationIdentifierLengthTest`, `SupplierReportTest` (122 passed, re-run after the last rebase onto `main`). Full suite (run in five parallel parts): 3,393 passed, 5 skipped, 108 failed. None of the 108 is in code this change touches. They are environment problems of the test machine: 432 "Unable to locate file in Vite manifest" errors (`filament/ims/theme.css`, `filament/trade/theme.css`, `reseller-landing.css`: the `public/build` copied into the worktree is older than those themes; `Ims*`, `Trade*`, `Reseller*`, `InvestorPortal*` tests), the Backup tests (no `mysql` / `mysqldump` client on this Windows machine), and `SesTrackingTest` (OpenSSL certificate generation on Windows). They were not re-run on an untouched `origin/main`. Pint is clean on the files of this change; it only reports `routes/web.php` for two style points `main` already has (the unqualified `\App\Http\Controllers\TlsAskController` and the import order), which were left alone.
+
+Commit status: committed on branch `feature/supplier-account-reports` and pushed to `main` on the owner's approval of 2026-11-01 ("commit and push, and push to main"). The shared working tree (`feature/ai-inbox-control-plane`) still holds the same report files uncommitted; they are now on `main`, so drop them there before that branch is merged.
+
+## 2026-11-01 - Message templates moved into Integrations → SMS Gateway (rebuilt)
 
 Owner (Bangla): "add the template-creation option in the admin, and keep it in the SMS gateway"; later: "redo what was lost, commit and push to the feature branch".
 

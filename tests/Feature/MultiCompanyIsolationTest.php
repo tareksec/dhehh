@@ -104,6 +104,8 @@ use App\Models\ProjectUpdate;
 use App\Models\ProjectUpdatePhoto;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
+use App\Models\PurchaseReceipt;
+use App\Models\PurchaseReceiptItem;
 use App\Models\QuickReply;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
@@ -129,6 +131,9 @@ use App\Models\StorefrontPaymentMethod;
 use App\Models\StorefrontSetting;
 use App\Models\StorefrontSlide;
 use App\Models\Supplier;
+use App\Models\SupplierAccountAdjustment;
+use App\Models\SupplierOrder;
+use App\Models\SupplierOrderItem;
 use App\Models\SupplierPayment;
 use App\Models\SupportMessage;
 use App\Models\SupportThread;
@@ -156,7 +161,8 @@ class MultiCompanyIsolationTest extends TestCase
             CustomerRiskProfile::class, CustomerRiskEvent::class, CustomerRiskReview::class, FraudCheck::class,
             Order::class, OrderItem::class, OrderPayment::class, OrderCost::class,
             DeliveryChallan::class, DeliveryChallanItem::class, LcFile::class, LandedCostLine::class, MachineSerial::class,
-            Product::class, Purchase::class, PurchaseItem::class,
+            Product::class, Purchase::class, PurchaseItem::class, PurchaseReceipt::class, PurchaseReceiptItem::class,
+            SupplierOrder::class, SupplierOrderItem::class, SupplierAccountAdjustment::class,
             StockMovement::class, Supplier::class, SupplierPayment::class, TransactionLedger::class,
             Container::class, Shipment::class, StorefrontPage::class, StorefrontSetting::class,
             ProductCarousel::class, StorefrontPayment::class, StorefrontPaymentMethod::class,

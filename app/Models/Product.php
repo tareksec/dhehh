@@ -36,6 +36,7 @@ class Product extends Model
     protected $fillable = [
         'company_id',
         'stock_pool_id',
+        'supplier_id',
         'name',
         'slug',
         'description',
@@ -43,6 +44,7 @@ class Product extends Model
         'barcode',
         'hs_code',
         'unit',
+        'pcs_per_carton',
         'weight_kg',
         'brand',
         'cost_price',
@@ -152,6 +154,12 @@ class Product extends Model
     public function stockPool(): BelongsTo
     {
         return $this->belongsTo(StockPool::class);
+    }
+
+    /** The supplier this product is mainly bought from (drives the supplier account). */
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class);
     }
 
     /** True when this product is the pool member whose ledger holds the real stock (see StockPool). */

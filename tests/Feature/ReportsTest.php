@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Pages\Reports as ReportsPage;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Category;
@@ -17,11 +16,14 @@ use App\Models\PurchaseItem;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Reports\ReportFilters;
+use App\Reports\ReportRegistry;
 use App\Services\ReportExportService;
 use App\Services\ReportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
+use ZipArchive;
 
 class ReportsTest extends TestCase
 {
@@ -71,13 +73,189 @@ class ReportsTest extends TestCase
 
         $this->seedReportData();
 
-        foreach (ReportsPage::REPORTS as $type => $report) {
+        foreach (ReportRegistry::all() as $type => $report) {
             $this->actingAs($user)
                 ->get("/admin/reports/reports?report_type={$type}&date_from=2026-06-03&date_to=2026-06-03")
                 ->assertOk()
-                ->assertSee($report['title'])
+                ->assertSee($report->title())
                 ->assertSee('class="fi-ta', false);
         }
+    }
+
+    public function test_every_report_exports_csv_xlsx_and_print(): void
+    {
+        $user = User::factory()->create();
+
+        $this->seedReportData();
+
+        $supplier = Supplier::query()->first();
+
+        foreach (ReportRegistry::all() as $type => $report) {
+            $query = 'date_from=2026-06-03&date_to=2026-06-03';
+
+            // A report about one supplier is refused without one, and works with one.
+            if ($report->requiresSupplier()) {
+                $this->actingAs($user)->get("/admin/reports/export/{$type}?{$query}")->assertStatus(422);
+                $query .= "&supplier_id={$supplier->id}";
+            }
+
+            $csv = $this->actingAs($user)->get("/admin/reports/export/{$type}?{$query}");
+            $csv->assertOk();
+            $csv->assertDownload($report->filename().'.csv');
+
+            $this->actingAs($user)
+                ->get("/admin/reports/export/{$type}/xlsx?{$query}")
+                ->assertOk()
+                ->assertDownload($report->filename().'.xlsx');
+
+            $this->actingAs($user)
+                ->get("/admin/reports/print/{$type}?{$query}")
+                ->assertOk()
+                ->assertSee($report->title());
+        }
+    }
+
+    public function test_every_report_row_carries_every_column_key(): void
+    {
+        $this->seedReportData();
+
+        $filters = ReportFilters::make('2026-06-03', '2026-06-03');
+
+        foreach (ReportRegistry::all() as $type => $report) {
+            $keys = array_map(fn ($column): string => $column->key, $report->columns($filters));
+
+            foreach ($report->rows($filters) as $row) {
+                foreach ($keys as $key) {
+                    $this->assertArrayHasKey($key, $row, "{$type} row is missing column {$key}");
+                }
+            }
+        }
+    }
+
+    public function test_csv_starts_with_a_utf8_byte_order_mark_so_excel_reads_bangla(): void
+    {
+        $user = User::factory()->create();
+
+        $this->seedReportData();
+
+        $content = $this->actingAs($user)
+            ->get('/admin/reports/export/sales?date_from=2026-06-03&date_to=2026-06-03')
+            ->streamedContent();
+
+        $this->assertStringStartsWith("\xEF\xBB\xBF", $content);
+    }
+
+    public function test_xlsx_export_is_a_real_workbook_with_numbers_and_an_audit_row(): void
+    {
+        $user = User::factory()->create();
+
+        $this->seedReportData();
+
+        $content = $this->actingAs($user)
+            ->get('/admin/reports/export/sales/xlsx?date_from=2026-06-03&date_to=2026-06-03')
+            ->streamedContent();
+
+        $this->assertStringStartsWith('PK', $content);
+
+        $path = tempnam(sys_get_temp_dir(), 'xlsx');
+        file_put_contents($path, $content);
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($path) === true);
+        $sheet = (string) $zip->getFromName('xl/worksheets/sheet1.xml');
+        $shared = (string) $zip->getFromName('xl/sharedStrings.xml');
+        $zip->close();
+        unlink($path);
+
+        $this->assertStringContainsString('INV-REPORT-1', $sheet.$shared);
+        $this->assertStringContainsString('Invoice', $sheet.$shared);
+
+        $this->assertSame('xlsx', AuditLog::query()
+            ->where('action', 'report_exported')
+            ->latest('id')
+            ->firstOrFail()
+            ->new_values['format']);
+    }
+
+    public function test_print_view_shows_formatted_rows_totals_and_auto_prints(): void
+    {
+        $user = User::factory()->create();
+
+        $this->seedReportData();
+
+        $this->actingAs($user)
+            ->get('/admin/reports/print/sales?date_from=2026-06-03&date_to=2026-06-03&print=1')
+            ->assertOk()
+            ->assertSee('INV-REPORT-1')
+            ->assertSee('৳ 200')
+            ->assertSee('Total')
+            ->assertSee('window.print', false);
+
+        $this->actingAs($user)
+            ->get('/admin/reports/print/sales?date_from=2026-06-03&date_to=2026-06-03')
+            ->assertOk()
+            ->assertDontSee("addEventListener('load'", false);
+    }
+
+    public function test_reports_page_shows_totals_and_date_presets(): void
+    {
+        $user = User::factory()->create();
+
+        $this->seedReportData();
+
+        $this->actingAs($user)
+            ->get('/admin/reports/reports?date_from=2026-06-03&date_to=2026-06-03')
+            ->assertOk()
+            ->assertSee('Totals')
+            ->assertSee('Last 7 days')
+            ->assertSee('This month');
+    }
+
+    public function test_bad_or_reversed_date_range_never_breaks_the_page_or_exports(): void
+    {
+        $user = User::factory()->create();
+
+        $this->seedReportData();
+
+        $this->actingAs($user)
+            ->get('/admin/reports/reports?date_from=not-a-date&date_to=2026-13-99')
+            ->assertOk();
+
+        $this->actingAs($user)
+            ->get('/admin/reports/export/sales?date_from=garbage&date_to=garbage')
+            ->assertOk();
+
+        [$from, $to] = app(ReportService::class)->dateRange('2026-06-10', '2026-06-03');
+
+        $this->assertSame('2026-06-03', $from->toDateString());
+        $this->assertSame('2026-06-10', $to->toDateString());
+
+        $reversed = $this->actingAs($user)
+            ->get('/admin/reports/export/sales?date_from=2026-06-10&date_to=2026-06-03')
+            ->streamedContent();
+
+        $this->assertStringContainsString('INV-REPORT-1', $reversed);
+    }
+
+    public function test_sales_staff_cannot_export_xlsx_or_print(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'sales_staff',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)->get('/admin/reports/export/sales/xlsx')->assertForbidden();
+        $this->actingAs($user)->get('/admin/reports/export/sales/pdf')->assertForbidden();
+        $this->actingAs($user)->get('/admin/reports/print/sales')->assertForbidden();
+    }
+
+    public function test_unknown_report_type_is_a_404_for_every_export(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->get('/admin/reports/export/nope')->assertNotFound();
+        $this->actingAs($user)->get('/admin/reports/export/nope/xlsx')->assertNotFound();
+        $this->actingAs($user)->get('/admin/reports/export/nope/pdf')->assertNotFound();
+        $this->actingAs($user)->get('/admin/reports/print/nope')->assertNotFound();
     }
 
     public function test_profit_report_uses_order_item_cost_snapshot(): void

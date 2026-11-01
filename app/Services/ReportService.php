@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\Supplier;
 use App\Models\TransactionLedger;
+use App\Reports\ReportFilters;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -20,12 +21,17 @@ use Illuminate\Support\LazyCollection;
 
 class ReportService
 {
+    /**
+     * A bad or reversed range never throws: unreadable dates become today and
+     * a "to" before "from" is swapped.
+     *
+     * @return array{0: CarbonInterface, 1: CarbonInterface}
+     */
     public function dateRange(?string $from = null, ?string $to = null): array
     {
-        return [
-            $from ? Carbon::parse($from)->startOfDay() : now()->startOfDay(),
-            $to ? Carbon::parse($to)->endOfDay() : now()->endOfDay(),
-        ];
+        $filters = ReportFilters::make($from, $to);
+
+        return [$filters->from, $filters->to];
     }
 
     public function dashboardSummary(): array

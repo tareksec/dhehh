@@ -92,6 +92,20 @@ class ProductForm
                             ->required()
                             ->maxLength(50),
 
+                        Select::make('supplier_id')
+                            ->label(__('Main supplier'))
+                            ->relationship('supplier', 'name', fn ($query) => $query->where('is_active', true))
+                            ->searchable(['name', 'phone', 'company_name'])
+                            ->preload()
+                            ->helperText(__('The supplier this product is bought from. Its goods count in that supplier\'s account.')),
+
+                        TextInput::make('pcs_per_carton')
+                            ->label(__('Pcs per carton'))
+                            ->numeric()
+                            ->integer()
+                            ->minValue(1)
+                            ->helperText(__('Fills the carton size when goods are received.')),
+
                         TextInput::make('weight_kg')
                             ->label('Weight (kg)')
                             ->numeric()

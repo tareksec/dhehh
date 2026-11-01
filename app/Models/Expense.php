@@ -14,10 +14,22 @@ class Expense extends Model
 {
     use BelongsToCompany, GeneratesSequentialNumber, SoftDeletes;
 
+    /** What ZamZam paid on a supplier's behalf; both count in that supplier's account. */
+    public const SUPPLIER_COST_SHIPPING = 'shipping';
+
+    public const SUPPLIER_COST_AD = 'ad';
+
+    public const SUPPLIER_COST_TYPES = [
+        self::SUPPLIER_COST_SHIPPING => 'Shipping',
+        self::SUPPLIER_COST_AD => 'Ad cost',
+    ];
+
     protected $fillable = [
         'company_id',
         'expense_number',
         'expense_category_id',
+        'supplier_id',
+        'supplier_cost_type',
         'account_id',
         'amount',
         'expense_date',
@@ -40,6 +52,15 @@ class Expense extends Model
         });
 
         static::saving(function (Expense $expense): void {
+            // A supplier and a cost type only make sense together.
+            if (blank($expense->supplier_id)) {
+                $expense->supplier_cost_type = null;
+            } elseif (! array_key_exists((string) $expense->supplier_cost_type, self::SUPPLIER_COST_TYPES)) {
+                throw ValidationException::withMessages([
+                    'supplier_cost_type' => __('Please choose what this cost is for the supplier.'),
+                ]);
+            }
+
             if ($expense->exists && $expense->isDirty('expense_number')) {
                 throw ValidationException::withMessages([
                     'expense_number' => 'Expense number is generated automatically and cannot be changed.',
@@ -86,6 +107,11 @@ class Expense extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class);
     }
 
     /** The AI Expense Scan whose photo is this expense's proof, if it came from one. */

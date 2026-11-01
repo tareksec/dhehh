@@ -25,10 +25,35 @@
         <div class="meta">{{ $company['name'] }}</div>
         <div class="brand">{{ $title }}</div>
         <div class="meta">
-            {{ $export['date_from']->format($company['date_format'] ?? 'd M Y') }} to {{ $export['date_to']->format($company['date_format'] ?? 'd M Y') }}
-            | Generated {{ now()->format('d M Y, h:i A') }}
+            @if ($export['as_of'] ?? false)
+                {{ __('As of :date', ['date' => $export['date_to']->format($company['date_format'] ?? 'd M Y')]) }}
+            @elseif ($export['uses_dates'] ?? true)
+                {{ $export['date_from']->format($company['date_format'] ?? 'd M Y') }} {{ __('to') }} {{ $export['date_to']->format($company['date_format'] ?? 'd M Y') }}
+            @else
+                {{ __('As of :date', ['date' => now()->format($company['date_format'] ?? 'd M Y')]) }}
+            @endif
+            | {{ __('Generated :time', ['time' => now()->format('d M Y, h:i A')]) }}
         </div>
     </div>
+
+    @if (! empty($export['summary']))
+        <table style="margin-bottom: 14px;">
+            <thead>
+                <tr><th colspan="2">{{ $export['summary_title'] }}</th></tr>
+            </thead>
+            <tbody>
+                @foreach ($export['summary'] as $line)
+                    <tr>
+                        <td style="{{ $line['strong'] ? 'font-weight: 700;' : '' }}">
+                            {{ $line['label'] }}
+                            @if ($line['note'])<br><span class="meta">{{ $line['note'] }}</span>@endif
+                        </td>
+                        <td style="text-align: right; {{ $line['strong'] ? 'font-weight: 700;' : '' }}">{{ \App\Support\MoneyFormatter::number($line['value']) }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @endif
 
     <table>
         <thead>
@@ -47,12 +72,12 @@
                 </tr>
             @empty
                 <tr>
-                    <td class="empty" colspan="{{ count($export['headings']) }}">No data found.</td>
+                    <td class="empty" colspan="{{ count($export['headings']) }}">{{ __('No data found.') }}</td>
                 </tr>
             @endforelse
         </tbody>
     </table>
 
-    <div class="footer">{{ $company['name'] }} PDF Export</div>
+    <div class="footer">{{ __(':company PDF Export', ['company' => $company['name']]) }}</div>
 </body>
 </html>

@@ -640,9 +640,17 @@ class NuportOrderImportService
                 ? 0
                 : max(0, min($quantity, (int) round($this->money($row['cancelledreturneddamagedqty'] ?? ''))));
 
-            $plan['lines'][] = $resolved + ['quantity' => $quantity, 'unit_price' => $unitPrice, 'returned_quantity' => $returned];
+            $lineAfterDiscount = $this->money($row['priceafterdiscount'] ?? $row['totalprice'] ?? '');
+
+            $plan['lines'][] = $resolved + [
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+                'returned_quantity' => $returned,
+                // The discount on the line itself, when Nuport shows a price after discount.
+                'discount_amount' => trim((string) ($row['priceafterdiscount'] ?? '')) !== '' ? round(max($quantity * $unitPrice - $lineAfterDiscount, 0), 2) : 0.0,
+            ];
             $linesTotal += $quantity * $unitPrice;
-            $afterDiscountTotal += $this->money($row['priceafterdiscount'] ?? $row['totalprice'] ?? '');
+            $afterDiscountTotal += $lineAfterDiscount;
         }
 
         if (isset($plan['unmatched'])) {
@@ -1230,6 +1238,7 @@ class NuportOrderImportService
                         'unit_price' => $line['unit_price'],
                         'unit_cost' => $line['unit_cost'],
                         'subtotal' => $line['quantity'] * $line['unit_price'],
+                        'discount_amount' => $line['discount_amount'],
                         'is_upsell' => false,
                     ]);
                 }
@@ -1243,8 +1252,9 @@ class NuportOrderImportService
     }
 
     /**
-     * Refreshes an order imported earlier from a newer export. Items, notes
-     * and the customer stay as they are.
+     * Refreshes an order imported earlier from a newer export. Items (apart
+     * from their returned pieces and line discount), notes and the customer
+     * stay as they are.
      *
      * @param  array<string, mixed>  $plan
      */
@@ -1254,6 +1264,7 @@ class NuportOrderImportService
             $order->fill($this->refreshAttributes($plan));
             $changed = $order->isDirty();
             $order->saveQuietly();
+            $changed = $this->syncItemFigures($order, $plan) || $changed;
 
             $order->syncTotalsStockAndCustomerBalance();
             $paymentChanged = $this->syncPayment($order->refresh(), $plan);
@@ -1277,7 +1288,73 @@ class NuportOrderImportService
             ->where('status', $plan['booking']['status'])
             ->exists();
 
-        return $order->isDirty() || abs($current - $payment) > 0.005 || $bookingMissing;
+        return $order->isDirty() || abs($current - $payment) > 0.005 || $bookingMissing || $this->itemFiguresDiffer($order, $plan);
+    }
+
+    /**
+     * Brings the returned pieces and line discount of an order's items in line
+     * with a newer export, matching each planned line to an item of the same
+     * product, variant and quantity. Returns whether anything changed.
+     *
+     * @param  array<string, mixed>  $plan
+     */
+    protected function syncItemFigures(Order $order, array $plan): bool
+    {
+        $changed = false;
+
+        foreach ($this->matchItems($order, $plan) as [$item, $line]) {
+            $item->fill([
+                'returned_quantity' => $line['returned_quantity'],
+                'discount_amount' => $line['discount_amount'],
+            ]);
+
+            if ($item->isDirty()) {
+                $item->saveQuietly();
+                $changed = true;
+            }
+        }
+
+        return $changed;
+    }
+
+    /** @param  array<string, mixed>  $plan */
+    protected function itemFiguresDiffer(Order $order, array $plan): bool
+    {
+        foreach ($this->matchItems($order, $plan) as [$item, $line]) {
+            if (
+                (int) $item->returned_quantity !== (int) $line['returned_quantity']
+                || abs((float) $item->discount_amount - (float) $line['discount_amount']) > 0.005
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $plan
+     * @return array<int, array{0: OrderItem, 1: array<string, mixed>}>
+     */
+    protected function matchItems(Order $order, array $plan): array
+    {
+        $items = $order->items()->get();
+        $matched = [];
+
+        foreach ($plan['lines'] as $line) {
+            $item = $items->first(fn (OrderItem $candidate): bool => (int) $candidate->product_id === (int) $line['product_id']
+                && (int) $candidate->product_variant_id === (int) ($line['variant_id'] ?? 0)
+                && (int) $candidate->quantity === (int) $line['quantity']);
+
+            if (! $item) {
+                continue;
+            }
+
+            $items = $items->reject(fn (OrderItem $candidate): bool => $candidate->is($item));
+            $matched[] = [$item, $line];
+        }
+
+        return $matched;
     }
 
     /**

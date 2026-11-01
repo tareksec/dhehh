@@ -24,6 +24,7 @@ class OrderItem extends Model
         'reseller_base_price',
         'reseller_retail_price',
         'subtotal',
+        'discount_amount',
         'is_upsell',
     ];
 

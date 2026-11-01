@@ -385,6 +385,41 @@ class NuportOrderImportTest extends TestCase
         $this->assertEqualsWithDelta(850.0, (float) $edited->total_amount, 0.001);
     }
 
+    public function test_returned_pieces_and_the_line_discount_are_kept_on_the_items_and_follow_a_newer_export(): void
+    {
+        $head = ['Sales Amount' => '1180.00', 'Delivery Fee' => '0.00', 'Payments/Paid Amount' => '1180.00'];
+        $service = app(NuportOrderImportService::class);
+
+        $first = $this->csv($this->order('SO-7001', $head, [
+            ['sku' => 'ZMTFX05B', 'name' => 'X05 Fan - Black', 'qty' => 2, 'unit' => 500],
+            ['sku' => 'ZMKMQ', 'name' => 'Key Chain', 'qty' => 10, 'unit' => 20, 'discount' => 20, 'returned' => 3],
+        ]));
+
+        $this->assertSame(1, $service->run($first, dryRun: false)['created']);
+
+        $order = Order::query()->where('external_reference', 'SO-7001')->firstOrFail();
+        $chain = $order->items()->where('product_id', $this->keyChain->id)->firstOrFail();
+        $fan = $order->items()->where('product_id', $this->fan->id)->firstOrFail();
+
+        $this->assertSame(3, $chain->returned_quantity);
+        $this->assertEqualsWithDelta(20.0, (float) $chain->discount_amount, 0.001);
+        $this->assertSame(0, $fan->returned_quantity);
+        $this->assertEqualsWithDelta(0.0, (float) $fan->discount_amount, 0.001);
+
+        // A newer export: two more key chains came back.
+        $second = $this->csv($this->order('SO-7001', $head, [
+            ['sku' => 'ZMTFX05B', 'name' => 'X05 Fan - Black', 'qty' => 2, 'unit' => 500],
+            ['sku' => 'ZMKMQ', 'name' => 'Key Chain', 'qty' => 10, 'unit' => 20, 'discount' => 20, 'returned' => 5],
+        ]));
+
+        $this->assertSame(1, $service->run($second, dryRun: true)['refreshed']);
+        $this->assertSame(3, $chain->fresh()->returned_quantity);
+
+        $this->assertSame(1, $service->run($second, dryRun: false)['refreshed']);
+        $this->assertSame(5, $chain->fresh()->returned_quantity);
+        $this->assertSame(1, $service->run($second, dryRun: false)['unchanged']);
+    }
+
     public function test_the_shipping_fee_in_the_file_is_kept_even_when_it_is_zero(): void
     {
         $this->import($this->order('SO-6101', [

@@ -23,6 +23,7 @@ class SupplierPayment extends Model
         'amount',
         'payment_date',
         'method',
+        'for_supplier_account',
         'reference',
         'note',
     ];
@@ -30,6 +31,7 @@ class SupplierPayment extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'payment_date' => 'date',
+        'for_supplier_account' => 'boolean',
     ];
 
     protected static function booted(): void
@@ -51,7 +53,9 @@ class SupplierPayment extends Model
             $existingAmount = $payment->exists ? (float) $payment->getOriginal('amount') : 0;
             $availablePayable = (float) ($supplier?->current_balance ?? 0) + $existingAmount;
 
-            if ((float) $payment->amount > $availablePayable) {
+            // Cash into the supplier account is not paid against a purchase invoice, so
+            // the invoice payable is no limit; it can be paid ahead of the goods.
+            if (! $payment->for_supplier_account && (float) $payment->amount > $availablePayable) {
                 throw ValidationException::withMessages([
                     'amount' => __('Supplier payment cannot be greater than the current supplier payable.'),
                 ]);
