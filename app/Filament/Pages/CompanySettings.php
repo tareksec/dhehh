@@ -65,6 +65,7 @@ class CompanySettings extends Page
             'name' => $profile['name'],
             'logo' => $profile['logo'],
             'dark_logo' => $profile['dark_logo'],
+            'favicon' => $profile['favicon'] ?? null,
             'address' => $profile['address'],
             'phone' => $profile['phone'],
             'email' => $profile['email'],
@@ -166,6 +167,8 @@ class CompanySettings extends Page
                     ->schema([
                         $this->logoUpload('logo', 'Light logo'),
                         $this->logoUpload('dark_logo', 'Dark logo'),
+                        $this->logoUpload('favicon', 'Favicon')
+                            ->helperText('Small square icon shown in the browser tab of the ERP. Recommended: 64x64px or larger square PNG.'),
                     ])
                     ->columns(2),
 
@@ -258,6 +261,7 @@ class CompanySettings extends Page
             'name' => $state['name'],
             'logo' => $state['logo'] ?? null,
             'dark_logo' => $state['dark_logo'] ?? null,
+            'favicon' => $state['favicon'] ?? null,
             'address' => $state['address'] ?? null,
             'phone' => $state['phone'] ?? null,
             'email' => $state['email'] ?? null,

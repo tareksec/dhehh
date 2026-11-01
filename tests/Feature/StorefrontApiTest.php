@@ -55,6 +55,23 @@ class StorefrontApiTest extends TestCase
             ->assertJsonPath('error', 'invalid_api_key');
     }
 
+    public function test_site_branding_comes_from_the_next_js_site_row_with_a_favicon(): void
+    {
+        $this->company->forceFill(['logo' => 'company-logo.png'])->save();
+        StorefrontSetting::query()->where('company_id', $this->company->getKey())->update([
+            'logo' => 'site-logo.png',
+            'logo_dark' => 'site-logo-dark.png',
+            'favicon' => 'site-favicon.png',
+        ]);
+
+        $branding = $this->api('site')->assertOk()->json('data.branding');
+
+        $this->assertStringContainsString('site-logo.png', (string) $branding['logo_url']);
+        $this->assertStringContainsString('site-logo-dark.png', (string) $branding['logo_dark_url']);
+        $this->assertStringContainsString('site-favicon.png', (string) $branding['favicon_url']);
+        $this->assertStringNotContainsString('company-logo.png', json_encode($branding));
+    }
+
     public function test_the_api_answers_403_until_the_owner_enables_the_next_js_site(): void
     {
         [, $disabledToken] = $this->makeCompany('Retail Co', 'retail-co', 'retail.example.test', enabled: false);
