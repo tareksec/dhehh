@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [2.116.0] - 2026-11-01
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -29,7 +31,6 @@
 - `WooCommerceImportService` no longer writes `description` for an existing product unless `decide()` says update (an empty description is filled, as for a new product). `WooCommerceDescriptionRepairService` (`plan()` writes nothing, `apply()` re-reads and re-checks each product) and `woocommerce:repair-descriptions` are company scoped. No migration. Run it before zamzamint.com is pointed at the Next.js site, while the WordPress shop still answers (or pass `--base-url=` for a copy of it).
 - Saving a description does not call the website webhook (only price changes do); the Next.js site shows the repaired text when its own cache of the product refreshes.
 - Tests: `WooCommerceDescriptionDecideTest` (3), `WooCommerceDescriptionRepairTest` (10), and three new cases in `WooCommerceImportTest`.
-
 ## [2.115.2] - 2026-10-24
 
 **Release type:** Patch/Fix Update
