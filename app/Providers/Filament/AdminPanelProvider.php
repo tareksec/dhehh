@@ -94,6 +94,7 @@ class AdminPanelProvider extends PanelProvider
             ->brandName(fn (): string => app(CompanySettingsService::class)->name($this->brandCompany()))
             ->brandLogo(fn (): ?string => app(CompanySettingsService::class)->logoUrl($this->brandCompany()))
             ->darkModeBrandLogo(fn (): ?string => app(CompanySettingsService::class)->darkLogoUrl(company: $this->brandCompany()))
+            ->favicon(fn (): ?string => app(CompanySettingsService::class)->faviconUrl($this->brandCompany()))
             ->brandLogoHeight('2.25rem')
             ->colors([
                 // Base/fallback palette — used for "All Companies" (no single

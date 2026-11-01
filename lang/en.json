@@ -1927,5 +1927,8 @@
     "Show \"Seen\" and \"typing...\" while the AI answers": "Show \"Seen\" and \"typing...\" while the AI answers",
     "The customer sees the message marked as seen and a typing sign until the answer arrives (Messenger and WhatsApp).": "The customer sees the message marked as seen and a typing sign until the answer arrives (Messenger and WhatsApp).",
     "Send product cards on Messenger": "Send product cards on Messenger",
-    "After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only.": "After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only."
+    "After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only.": "After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only.",
+    "Favicon": "Favicon",
+    "Small square icon shown in the browser tab. Recommended: 64x64px or larger square PNG/ICO/SVG. If empty, the browser default is used.": "Small square icon shown in the browser tab. Recommended: 64x64px or larger square PNG/ICO/SVG. If empty, the browser default is used.",
+    "Small square icon shown in the browser tab of the ERP. Recommended: 64x64px or larger square PNG.": "Small square icon shown in the browser tab of the ERP. Recommended: 64x64px or larger square PNG."
 }

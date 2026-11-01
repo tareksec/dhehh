@@ -1,9 +1,14 @@
 @php
-    $logoUrl = ($data['show_logo'] ?? false) ? \App\Support\CompanyMedia::publicUrl($setting->logo, $company) : null;
+    $showLogo = (bool) ($data['show_logo'] ?? false);
+    $logoUrl = $showLogo ? \App\Support\CompanyMedia::publicUrl($setting->logo, $company) : null;
+    $logoDarkUrl = $showLogo ? \App\Support\CompanyMedia::publicUrl($setting->logo_dark, $company) : null;
 @endphp
 <div>
     @if ($logoUrl)
-        <img class="mb-3 h-8 w-auto" src="{{ $logoUrl }}" alt="{{ $company->name }}">
+        <img class="mb-3 h-8 w-auto {{ $logoDarkUrl ? 'dark:hidden' : '' }}" src="{{ $logoUrl }}" alt="{{ $company->name }}">
+        @if ($logoDarkUrl)
+            <img class="mb-3 hidden h-8 w-auto dark:block" src="{{ $logoDarkUrl }}" alt="{{ $company->name }}">
+        @endif
     @else
         <div class="text-lg font-semibold tracking-tight">{{ $company->name }}</div>
     @endif

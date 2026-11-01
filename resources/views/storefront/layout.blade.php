@@ -152,6 +152,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="{{ $description }}">
+    @if ($faviconUrl = \App\Support\CompanyMedia::publicUrl($setting->favicon, $company))
+        <link rel="icon" href="{{ $faviconUrl }}">
+    @endif
     @if (isset($previewSlug))
         {{-- Preview URLs (/storefront/{slug}/...) must never compete with the live domain in search results. --}}
         <meta name="robots" content="noindex, nofollow">

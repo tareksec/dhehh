@@ -755,6 +755,22 @@ class StorefrontSettingResource extends Resource
                         ->hintAction(static::selectFromMediaHubAction())
                         ->downloadable()
                         ->openable(),
+                    FileUpload::make('favicon')
+                        ->label('Favicon')
+                        ->helperText('Small square icon shown in the browser tab. Recommended: 64x64px or larger square PNG/ICO/SVG. If empty, the browser default is used.')
+                        ->image()
+                        ->maxSize(512)
+                        ->acceptedFileTypes(['image/png', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/svg+xml', 'image/webp'])
+                        ->disk(fn (): string => CompanyMedia::publicDiskName())
+                        ->directory(fn (Get $get, ?StorefrontSetting $record): string => CompanyMedia::publicDirectory('storefront/logos', $record, $get('company_id')))
+                        ->fetchFileInformation(false)
+                        ->getUploadedFileUsing(CompanyMedia::publicFileMetadataCallback())
+                        ->getOpenableFileUrlUsing(CompanyMedia::publicFileUrlCallback())
+                        ->getDownloadableFileUrlUsing(CompanyMedia::publicFileUrlCallback())
+                        ->disabled(fn (Get $get, ?StorefrontSetting $record): bool => ! CompanyMedia::canResolve($record, $get('company_id')))
+                        ->hintAction(static::selectFromMediaHubAction())
+                        ->downloadable()
+                        ->openable(),
                     Text::make('Homepage banners are managed in Storefront → Hero Slides (images, product links, scheduling, and mobile variants all live there).')
                         ->columnSpanFull(),
                 ])

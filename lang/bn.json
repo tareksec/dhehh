@@ -1927,5 +1927,8 @@
     "Show \"Seen\" and \"typing...\" while the AI answers": "AI উত্তর লেখার সময় \"Seen\" ও \"টাইপ করছে...\" দেখান",
     "The customer sees the message marked as seen and a typing sign until the answer arrives (Messenger and WhatsApp).": "উত্তর না আসা পর্যন্ত কাস্টমার দেখে যে মেসেজটি দেখা হয়েছে এবং টাইপ করার চিহ্ন (Messenger ও WhatsApp)।",
     "Send product cards on Messenger": "Messenger-এ প্রোডাক্ট কার্ড পাঠান",
-    "After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only.": "প্রোডাক্টের নাম আছে এমন উত্তরের পর Messenger-এর কাস্টমার ছবি, দাম ও একটি বাটনসহ সোয়াইপ করার মতো কার্ডের সারি পাবে। ছবি নেই এমন প্রোডাক্টের কার্ড হয় না। বন্ধ: শুধু লেখা।"
+    "After an answer that names products, Messenger customers also get a swipeable row of cards with the photo, the price and a button. Products without a photo get no card. Off: text only.": "প্রোডাক্টের নাম আছে এমন উত্তরের পর Messenger-এর কাস্টমার ছবি, দাম ও একটি বাটনসহ সোয়াইপ করার মতো কার্ডের সারি পাবে। ছবি নেই এমন প্রোডাক্টের কার্ড হয় না। বন্ধ: শুধু লেখা।",
+    "Favicon": "ফেভিকন",
+    "Small square icon shown in the browser tab. Recommended: 64x64px or larger square PNG/ICO/SVG. If empty, the browser default is used.": "ব্রাউজারের ট্যাবে দেখানো ছোট চৌকো আইকন। প্রস্তাবিত: ৬৪x৬৪ পিক্সেল বা বড় চৌকো PNG/ICO/SVG। খালি থাকলে ব্রাউজারের ডিফল্ট আইকন দেখাবে।",
+    "Small square icon shown in the browser tab of the ERP. Recommended: 64x64px or larger square PNG.": "ERP-এর ব্রাউজার ট্যাবে দেখানো ছোট চৌকো আইকন। প্রস্তাবিত: ৬৪x৬৪ পিক্সেল বা বড় চৌকো PNG।"
 }

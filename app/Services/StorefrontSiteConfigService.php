@@ -43,6 +43,7 @@ class StorefrontSiteConfigService
             'branding' => [
                 'logo_url' => Media::url($setting->logo, $this->company),
                 'logo_dark_url' => Media::url($setting->logo_dark, $this->company),
+                'favicon_url' => Media::url($setting->favicon, $this->company),
             ],
             'theme' => [
                 'mode' => $setting->theme_mode,

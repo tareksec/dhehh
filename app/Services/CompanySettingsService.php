@@ -147,6 +147,7 @@ class CompanySettingsService
 
             $settings = $company->settings ?? [];
             $settings['dark_logo'] = trim((string) ($data['dark_logo'] ?? ''));
+            $settings['favicon'] = trim((string) ($data['favicon'] ?? ''));
             $settings['date_format'] = trim((string) ($data['date_format'] ?? 'd M Y'));
 
             if (isset($data['shipping_zones'])) {
@@ -206,6 +207,17 @@ class CompanySettingsService
         }
 
         return $this->publicUrl($this->value(self::DARK_LOGO)) ?: ($fallbackToLight ? $this->logoUrl() : null);
+    }
+
+    public function faviconUrl(?Company $company = null): ?string
+    {
+        $company ??= $this->currentCompany();
+
+        if ($company) {
+            return $this->publicUrl(((array) $company->settings)['favicon'] ?? null, $company);
+        }
+
+        return null;
     }
 
     public function logoPath(?Company $company = null): ?string
@@ -336,6 +348,7 @@ class CompanySettingsService
             'name' => $this->name($company),
             'logo' => $company->logo,
             'dark_logo' => $settings['dark_logo'] ?? null,
+            'favicon' => $settings['favicon'] ?? null,
             'logo_url' => $this->logoUrl($company),
             'dark_logo_url' => $this->darkLogoUrl(company: $company),
             'logo_path' => $this->logoPath($company),

@@ -393,6 +393,7 @@ class StorefrontSetting extends Model
         'appearance_card_hover',
         'logo',
         'logo_dark',
+        'favicon',
         'customer_accounts_enabled',
         'whatsapp_number',
         'phone_number',
