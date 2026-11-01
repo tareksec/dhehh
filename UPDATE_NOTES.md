@@ -2,7 +2,29 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-01 (latest) - Trash for order payments (T2)
+## 2026-11-01 (latest) - Trash for catalog and storefront content (T3)
+
+Owner (Bangla): "পরের ধাপ T3 কর" (phase T3 of `docs/delete-and-trash-plan.md`). I took the two defaults I had proposed: Courier Providers stay out, and a row in Trash keeps its slug / name.
+
+What I did:
+- **Nine models now go to Trash when deleted:** categories, offers / collections, product carousels, product reviews, hero slides, custom pages, checkout payment methods, FAQs, quick replies. Migration `2026_11_01_120000_add_soft_deletes_to_catalog_and_storefront_tables` (a `deleted_at` column each; unique indexes untouched). Each resource has a Trash page and a "Trash (n)" button; Restore and Delete permanently (name typed again). New trait `TrashFollowsDelete` makes the Trash permissions follow `canDelete()` / `canDeleteAny()` (Expenses now uses it too).
+- **Places where a row in Trash would have leaked or collided, fixed:** Inbox quick replies, reseller payment methods, menu / footer pickers (pages, categories), the slide checklist (`->withoutTrashed()`); category slug generators, the product CSV import and the duplicate-review checks (`withTrashed()`); the "one Cash on Delivery per company" check still counts a trashed one and now says so; old orders still show a trashed payment method's name; the reseller-only payment-method list in Reseller Settings removes a row for good (it is an editor list, not a Delete button).
+- **Left out on purpose:** Courier Providers (a wrong delete can break bookings), Media (it deletes the file), Storefront Settings (a site row, waits for the owner).
+- **A bug of mine from T1, found now that PHP 8.4 runs here:** `OrderTrashWorkflowTest` passed the confirmation in a way Filament's test macro does not accept. Fixed.
+- Trash page title is now title case ("Categories trash") and its breadcrumb says "Trash" instead of "List" (found in the browser).
+- Rule in `CLAUDE.md`, `PROJECT_GUIDE.md`, the plan, three codebase-map files (and `Last checked`), CHANGELOG.
+
+**Needs Bangla review (4 new keys):** "This is already used, possibly by an item in Trash. …", "This company already has a payment method of this type, and it is in Trash. …", "This company already has a payment method of this type. Edit the existing one …", and "Trash". Plus the 2 from T2 ("Back to the list", the payment Delete description).
+
+**Environment:** the session's setup script still fails (`add-apt-repository` needs `/usr/bin/python3.12`, the default is 3.13). I could not change the environment from here, so I installed PHP 8.4 and ran `npm ci && npm run build` by hand in this container. A new session starts without them until the script is fixed.
+
+**Verified (run, not read):** the full suite on PHP 8.4: 3529 passed, 6 skipped, 0 failed (the suite ran before two small last edits: the Trash page title and the "Trash" key; the 123 tests that touch them were re-run and pass). `CatalogTrashTest` (24); the Inbox and reseller cases were checked by removing the fix and watching them fail. Pint clean on the changed files except `PurchaseForm.php`, which already had style issues (only one line of it is mine). The migration ran on a throwaway SQLite database. **In a real browser (Chromium, throwaway database, English and Bangla, 1366 px and 360 px):** Categories list with "Trash (n)", the Delete modal with the copyable name badge (a Bangla name too), a wrong name refused with the error, the right name moving it to Trash, the Trash page, Restore with its confirmation. **Not looked at:** the other eight resources' Trash pages by eye (they share the same page class, and each has a test), hover on the ⓘ, a MySQL 8.4 run of the migration (the branch's CI does that).
+
+**Small known thing, not mine:** the Delete modal heading says "category মুছে ফেলুন" because the Category resource has no translated model label; other resources are the same. It is a separate small fix if you want it.
+
+Commit status: committed on `claude/upbeat-franklin-hy6fhr`, pushed to that branch. Not on `main`.
+
+## 2026-11-01 - Trash for order payments (T2)
 
 Owner (Bangla): "T2 শুরু করো" (phase T2 of `docs/delete-and-trash-plan.md`: Trash for the models that were already soft-deleted).
 
@@ -13,7 +35,7 @@ What I did:
 
 **Needs Bangla review:** the 2 new keys ("Back to the list" and the payment Delete description).
 
-**Verified:** `php -l` and Pint on the changed files; `TranslationParityTest` run and passing. **Not run:** the two new `OrderManagementFeaturesTest` cases and the rest of the suite (PHP 8.3 here, the project needs 8.4), and no browser look. The first thing to check by eye: the "Trash" button on an order's Payments History and that the paid amount on the Edit page refreshes after Restore.
+**Update (T3): the two new `OrderManagementFeaturesTest` cases and the whole suite were run on PHP 8.4 in T3 and pass.** Original note: **Verified:** `php -l` and Pint on the changed files; `TranslationParityTest` run and passing. **Not run:** the two new `OrderManagementFeaturesTest` cases and the rest of the suite (PHP 8.3 here, the project needs 8.4), and no browser look. The first thing to check by eye: the "Trash" button on an order's Payments History and that the paid amount on the Edit page refreshes after Restore.
 
 Commit status: committed on `claude/upbeat-franklin-hy6fhr`, pushed to that branch. Not on `main`.
 

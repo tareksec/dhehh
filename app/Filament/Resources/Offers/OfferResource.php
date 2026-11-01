@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\Offers;
 
 use App\Filament\Clusters\Storefront;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\Offers\Pages\CreateOffer;
 use App\Filament\Resources\Offers\Pages\EditOffer;
 use App\Filament\Resources\Offers\Pages\ListOffers;
+use App\Filament\Resources\Offers\Pages\TrashedOffers;
 use App\Filament\Resources\Offers\Schemas\OfferForm;
 use App\Filament\Resources\Offers\Tables\OffersTable;
 use App\Models\Offer;
@@ -18,6 +20,8 @@ use Illuminate\Support\Facades\Auth;
 
 class OfferResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = Offer::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedGift;
@@ -58,10 +62,16 @@ class OfferResource extends Resource
         return Auth::user()?->isSuperAdmin() ?? false;
     }
 
+    public static function canDeleteAny(): bool
+    {
+        return Auth::user()?->isSuperAdmin() ?? false;
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => ListOffers::route('/'),
+            'trash' => TrashedOffers::route('/trash'),
             'create' => CreateOffer::route('/create'),
             'edit' => EditOffer::route('/{record}/edit'),
         ];

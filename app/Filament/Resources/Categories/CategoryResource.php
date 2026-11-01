@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\Categories;
 
 use App\Filament\Clusters\Inventory;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\Categories\Pages\CreateCategory;
 use App\Filament\Resources\Categories\Pages\EditCategory;
 use App\Filament\Resources\Categories\Pages\ListCategories;
+use App\Filament\Resources\Categories\Pages\TrashedCategories;
 use App\Filament\Resources\Categories\Pages\ViewCategory;
 use App\Filament\Resources\Categories\Schemas\CategoryForm;
 use App\Filament\Resources\Categories\Schemas\CategoryInfolist;
@@ -19,6 +21,8 @@ use Filament\Tables\Table;
 
 class CategoryResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = Category::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTag;
@@ -55,6 +59,7 @@ class CategoryResource extends Resource
     {
         return [
             'index' => ListCategories::route('/'),
+            'trash' => TrashedCategories::route('/trash'),
             'create' => CreateCategory::route('/create'),
             'view' => ViewCategory::route('/{record}'),
             'edit' => EditCategory::route('/{record}/edit'),

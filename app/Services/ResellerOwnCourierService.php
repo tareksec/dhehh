@@ -57,7 +57,7 @@ class ResellerOwnCourierService
             ->first()
             ?->reseller_payment_method_ids;
 
-        return StorefrontPaymentMethod::withoutGlobalScopes()
+        return StorefrontPaymentMethod::withoutGlobalScopes()->withoutTrashed()
             ->where('company_id', $company->getKey())
             ->where('type', StorefrontPaymentMethod::TYPE_MANUAL)
             ->where('is_active', true)

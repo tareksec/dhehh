@@ -1,5 +1,5 @@
 # Catalog & Inventory
-> Last checked: 2026-10-25, branch `feature/trade-portal-landed-cost` (Trade Portal landed cost and machine serials)
+> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (delete = Trash, phase T3: soft deletes on this module's catalog / storefront / CRM rows); before it: 2026-10-25, branch `feature/trade-portal-landed-cost` (Trade Portal landed cost and machine serials)
 
 ## What it does
 The Catalog & Inventory module manages products, variants, categories, digital media assets, and stock lifecycle across warehouses and companies. It implements an immutable stock movement ledger where on-hand quantities are strictly computed from transactional movements (opening, purchase, sale, return, damage, adjustment, and internal transfers). It provides multi-company physical inventory sharing through Stock Pools, allowing different companies to sell from the same physical stock without inventory drift. For purchasing and supply chain operations, it tracks suppliers, import purchase orders with detailed China-to-BD landed costs, shipping containers, and customs tracking. Additionally, it provides batch operations for bulk stock updates, product setup onboarding, and CSV import/export capabilities.
@@ -21,7 +21,7 @@ The Catalog & Inventory module manages products, variants, categories, digital m
 | --- | --- |
 | `app/Models/Product.php` | Product entity with pricing tiers, MOQ, preorder settings, and company scoping. |
 | `app/Models/ProductVariant.php` | Product variant entity storing distinct SKUs, attribute sets, and variant-level stock. |
-| `app/Models/Category.php` | Hierarchical product taxonomy with company-scoped slugs and icons. |
+| `app/Models/Category.php` | Hierarchical product taxonomy with company-scoped slugs and icons. Soft-deleted (T3): a category in Trash keeps its slug and its products keep their link. |
 | `app/Models/Media.php` | Central media library records tracking uploaded image files, hashes, and mime types. |
 | `app/Models/StockMovement.php` | Transactional inventory movement record (sale, return, damage, transfer, adjustment). |
 | `app/Models/StockPool.php` | Shared stock group linking products across companies to a physical source product. |
@@ -31,8 +31,8 @@ The Catalog & Inventory module manages products, variants, categories, digital m
 | `app/Models/Shipment.php` | Logistics shipment linking purchases to containers and transport modes. |
 | `app/Models/Supplier.php` | Vendor records tracking balances, purchase history, and payment ledgers. |
 | `app/Models/SupplierPayment.php` | Financial payment vouchers issued to suppliers against purchases. |
-| `app/Models/ProductCarousel.php` | Curated product groupings displayed in storefront slider carousels. |
-| `app/Models/ProductReview.php` | Customer product reviews with approval statuses and ratings. |
+| `app/Models/ProductCarousel.php` | Curated product groupings displayed in storefront slider carousels. Soft-deleted (T3). |
+| `app/Models/ProductReview.php` | Customer product reviews with approval statuses and ratings. Soft-deleted (T3): a review in Trash still counts as "already reviewed" (unique customer + product + order). |
 
 ### Services
 | Path | What it does |
@@ -64,7 +64,7 @@ The Catalog & Inventory module manages products, variants, categories, digital m
 | `app/Filament/Resources/Products/Pages/ViewProduct.php` | Infolist page displaying product specifications and stock summaries. |
 | `app/Filament/Resources/Products/Pages/BulkUpdateStock.php` | Bulk inventory update tool allowing rapid tabular stock level adjustments. |
 | `app/Filament/Resources/Products/Widgets/ProductStatsOverview.php` | Dashboard widget showing total catalog count, out-of-stock items, and low-stock counts. |
-| `app/Filament/Resources/Categories/CategoryResource.php` | Category taxonomy management with hierarchy and icon selection. |
+| `app/Filament/Resources/Categories/CategoryResource.php` | Category taxonomy management with hierarchy and icon selection. Has a Trash page (`Pages/TrashedCategories.php`, T3). |
 | `app/Filament/Resources/StockMovements/StockMovementResource.php` | Stock movement ledger resource for manual adjustments and historical audit. |
 | `app/Filament/Resources/StockPools/StockPoolResource.php` | Resource for creating and managing cross-company shared inventory pools. |
 | `app/Filament/Resources/StockPools/Pages/BulkLinkStockPools.php` | Tool for rapidly linking corresponding products into stock pools. |
@@ -146,7 +146,7 @@ The Catalog & Inventory module manages products, variants, categories, digital m
 ## Data
 - `products`: Product catalog table. Key columns: `id`, `company_id`, `stock_pool_id`, `name`, `slug`, `sku`, `price`, `sale_price`, `cost_price`, `stock`, `reorder_level`, `moq`, `has_variants`, `is_active`, `category_id`, `barcode`, `unit`, `brand`, `vat_rate`, `status`, `gallery_images` (JSON), `variant_attributes` (JSON), `tier_prices` (JSON), `is_preorder`, `preorder_advance_percent`, `weight_kg`, `video_path`, `created_at`, `updated_at`.
 - `product_variants`: Variant SKU table. Key columns: `id`, `company_id`, `product_id`, `sku`, `options` (JSON), `cost_price`, `sale_price`, `stock`, `images` (JSON), `is_active`, `sort_order`, `weight_kg`, `reseller_suggested_price`, `created_at`, `updated_at`.
-- `categories`: Category taxonomy. Key columns: `id`, `company_id`, `name`, `slug`, `description`, `is_active`, `image`, `icon`, `tagline`, `created_at`, `updated_at`.
+- `categories`: Category taxonomy. Key columns: `id`, `company_id`, `name`, `slug`, `description`, `is_active`, `image`, `icon`, `tagline`, `created_at`, `updated_at`, `deleted_at` (T3).
 - `media`: Centralized media library. Key columns: `id`, `company_id`, `path`, `original_filename`, `mime_type`, `size`, `uploaded_by`, `created_at`, `updated_at`.
 - `stock_movements`: Immutable inventory movement ledger. Key columns: `id`, `company_id`, `product_id`, `product_variant_id`, `type`, `quantity`, `reference_type`, `reference_id`, `note`, `reason`, `damage_source`, `created_at`, `updated_at`.
 - `stock_pools`: Cross-tenant inventory pool. Key columns: `id`, `source_product_id`, `created_at`, `updated_at`.

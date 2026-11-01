@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\StorefrontSlides\Pages;
 
+use App\Filament\Resources\Pages\TrashedRecords;
 use App\Filament\Resources\StorefrontSlides\StorefrontSlideResource;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
@@ -19,6 +20,7 @@ class ListStorefrontSlides extends ListRecords
     {
         return [
             $this->paginationDisplayAction(),
+            TrashedRecords::linkAction(StorefrontSlideResource::class),
             CreateAction::make(),
         ];
     }

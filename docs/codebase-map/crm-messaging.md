@@ -1,5 +1,5 @@
 # CRM & Omnichannel Messaging
-> Last checked: 2026-10-24 (Amazon SES page: email usage section, counted from the Email Log, with cost settings; Email Templates added: order emails, code/reset and IMS emails in a branded layout, the owner's own templates; SMS Dashboard added; gateway URL is built from the API key and sender ID boxes; a site with a broken gateway sends through the other working site; OTPs live 3 minutes at most)
+> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (delete = Trash, phase T3: soft deletes on this module's catalog / storefront / CRM rows); before it: 2026-10-24 (Amazon SES page: email usage section, counted from the Email Log, with cost settings; Email Templates added: order emails, code/reset and IMS emails in a branded layout, the owner's own templates; SMS Dashboard added; gateway URL is built from the API key and sender ID boxes; a site with a broken gateway sends through the other working site; OTPs live 3 minutes at most)
 
 ## What it does
 The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, multi-channel chat conversations, automated follow-ups, and marketing broadcasts. It unifies customer communications across WhatsApp Cloud API, WhatsApp Web (QR Baileys bridge), Facebook Messenger, SMS gateways, and Telegram into a single real-time inbox. It incorporates an AI Inbox Control Plane featuring intelligent automated replies, multimodal image/voice note comprehension, intent qualification, cart link generation, and smart human hand-over queues (Agent Desk, Needs Attention, To Chase, Unanswered Questions). Additionally, it coordinates scheduled sales automation cadences, promotional SMS/Messenger broadcasts, quick-reply snippet management, and Firebase Cloud Messaging (FCM) web push notifications.
@@ -32,7 +32,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Models/EmailLog.php` | One row per email: sent, failed or not sent, with the reason and the mail server's own answer (never the message text or a code); with Amazon SES tracking on, a sent row becomes delivered, bounced or complained. |
 | `app/Models/Broadcast.php` | Marketing broadcast campaign entity targeting filtered customer segments. |
 | `app/Models/BroadcastRecipient.php` | Individual recipient delivery status tracker for a broadcast campaign. |
-| `app/Models/QuickReply.php` | Pre-saved response shortcuts for common customer inquiries. |
+| `app/Models/QuickReply.php` | Pre-saved response shortcuts for common customer inquiries. Soft-deleted (T3): the Inbox does not offer a quick reply that is in Trash. |
 | `app/Models/PushDevice.php` | Browser and mobile device FCM registration tokens for web push alerts. |
 
 ### Services
@@ -89,7 +89,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Filament/Resources/Leads/LeadResource.php` | Sales lead management, pipeline stages, activity logging, and order conversion. |
 | `app/Filament/Resources/ConversationChannels/ConversationChannelResource.php` | Channel configuration (Cloud API, Web QR, Messenger, Telegram, SMS). |
 | `app/Filament/Resources/Broadcasts/BroadcastResource.php` | Marketing broadcast campaign builder with audience filters and scheduling. |
-| `app/Filament/Resources/QuickReplies/QuickReplyResource.php` | Canned response snippet manager with keyboard shortcuts. |
+| `app/Filament/Resources/QuickReplies/QuickReplyResource.php` | Canned response snippet manager with keyboard shortcuts. Trash page `Pages/TrashedQuickReplies.php` (T3); FAQs (`CompanyFaqResource`) have `Pages/TrashedCompanyFaqs.php`. |
 | `app/Filament/Pages/Inbox.php` | Live unified messaging inbox for real-time customer communication. |
 | `app/Filament/Pages/AgentDesk.php` | Dedicated queue view for human agents managing assigned chats and order requests. |
 | `app/Filament/Pages/NeedsAttention.php` | Prioritized inbox view showing frustrated customers and unhandled questions. |

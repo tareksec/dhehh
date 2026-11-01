@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\StorefrontPaymentMethods;
 
 use App\Filament\Clusters\Storefront;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\StorefrontPaymentMethods\Pages\CreateStorefrontPaymentMethod;
 use App\Filament\Resources\StorefrontPaymentMethods\Pages\EditStorefrontPaymentMethod;
 use App\Filament\Resources\StorefrontPaymentMethods\Pages\ListStorefrontPaymentMethods;
+use App\Filament\Resources\StorefrontPaymentMethods\Pages\TrashedStorefrontPaymentMethods;
 use App\Models\StorefrontPaymentMethod;
 use App\Services\CompanyContext;
 use App\Support\CompanyScopedUnique;
@@ -32,6 +34,8 @@ use Illuminate\Validation\Rules\Unique;
 
 class StorefrontPaymentMethodResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = StorefrontPaymentMethod::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCreditCard;
@@ -75,14 +79,17 @@ class StorefrontPaymentMethodResource extends Resource
 
                                 $companyId = $get('company_id') ?? $record?->company_id ?? app(CompanyContext::class)->id();
 
-                                $exists = StorefrontPaymentMethod::withoutGlobalScopes()
+                                // withoutGlobalScopes() on purpose: a method in Trash still counts, so a Restore can never make a second one.
+                                $existing = StorefrontPaymentMethod::withoutGlobalScopes()
                                     ->where('company_id', $companyId)
                                     ->where('type', $value)
                                     ->when($record, fn ($query) => $query->whereKeyNot($record->getKey()))
-                                    ->exists();
+                                    ->first();
 
-                                if ($exists) {
-                                    $fail('This company already has a payment method of this type. Edit the existing one instead of adding another.');
+                                if ($existing?->trashed()) {
+                                    $fail(__('This company already has a payment method of this type, and it is in Trash. Restore it from Trash instead of adding another.'));
+                                } elseif ($existing) {
+                                    $fail(__('This company already has a payment method of this type. Edit the existing one instead of adding another.'));
                                 }
                             };
                         }),
@@ -90,6 +97,7 @@ class StorefrontPaymentMethodResource extends Resource
                         ->required()
                         ->maxLength(255)
                         ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule, ?Model $record): Unique => CompanyScopedUnique::rule()($rule, $record)->where('reseller_only', 0))
+                        ->validationMessages(['unique' => __('This is already used, possibly by an item in Trash. Use another one, or restore or permanently delete the one in Trash.')])
                         ->placeholder('e.g. Rocket (Send Money), Bank Transfer')
                         ->helperText('Shown to the customer as the option label at checkout.'),
                     TextInput::make('account_number')
@@ -169,10 +177,16 @@ class StorefrontPaymentMethodResource extends Resource
         return Auth::user()?->canManageSettings() ?? false;
     }
 
+    public static function canDeleteAny(): bool
+    {
+        return Auth::user()?->canManageSettings() ?? false;
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => ListStorefrontPaymentMethods::route('/'),
+            'trash' => TrashedStorefrontPaymentMethods::route('/trash'),
             'create' => CreateStorefrontPaymentMethod::route('/create'),
             'edit' => EditStorefrontPaymentMethod::route('/{record}/edit'),
         ];

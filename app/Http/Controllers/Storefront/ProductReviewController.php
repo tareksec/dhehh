@@ -84,7 +84,8 @@ class ProductReviewController extends Controller
 
         $customer = Auth::guard('customer')->user();
 
-        $exists = ProductReview::query()
+        // A review the owner moved to Trash still counts: one review per product and order.
+        $exists = ProductReview::withTrashed()
             ->where('order_id', $order->getKey())
             ->where('product_id', $data['product_id'])
             ->where('customer_id', $customer->getKey())

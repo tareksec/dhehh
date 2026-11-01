@@ -35,7 +35,8 @@ class OrderTrashWorkflowTest extends TestCase
             ->assertTableBulkActionHasLabel('delete', 'Move to trash')
             ->assertTableBulkActionHasIcon('delete', 'heroicon-o-trash')
             ->mountTableBulkAction('delete', [$order])
-            ->callMountedTableBulkAction(data: ['confirmation' => '1'])
+            ->setTableBulkActionData(['confirmation' => '1'])
+            ->callMountedTableBulkAction()
             ->assertHasNoTableBulkActionErrors();
 
         $this->assertSoftDeleted('orders', ['id' => $order->getKey()]);
@@ -86,7 +87,8 @@ class OrderTrashWorkflowTest extends TestCase
             ->assertMountedActionModalSee('Company A Customer')
             ->assertMountedActionModalDontSee('TRASH-B-0001')
             ->assertMountedActionModalDontSee('Company B Customer')
-            ->callMountedTableAction(data: ['confirmation' => '1'])
+            ->setTableActionData(['confirmation' => '1'])
+            ->callMountedTableAction()
             ->assertHasNoTableActionErrors();
 
         $this->assertDatabaseMissing('orders', ['id' => $orderA->getKey()]);

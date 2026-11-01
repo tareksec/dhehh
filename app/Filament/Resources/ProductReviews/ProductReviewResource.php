@@ -3,7 +3,9 @@
 namespace App\Filament\Resources\ProductReviews;
 
 use App\Filament\Clusters\Storefront;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\ProductReviews\Pages\ListProductReviews;
+use App\Filament\Resources\ProductReviews\Pages\TrashedProductReviews;
 use App\Models\ProductReview;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -16,11 +18,15 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
 class ProductReviewResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = ProductReview::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedStar;
@@ -135,10 +141,33 @@ class ProductReviewResource extends Resource
         return Auth::user()?->isSuperAdmin() ?? false;
     }
 
+    public static function canDeleteAny(): bool
+    {
+        return Auth::user()?->isSuperAdmin() ?? false;
+    }
+
+    /** Several reviews share a customer name, so the Delete prompt names the review by customer and product. */
+    public static function hasRecordTitle(): bool
+    {
+        return true;
+    }
+
+    public static function getRecordTitle(?Model $record): string|Htmlable|null
+    {
+        if (! $record instanceof ProductReview) {
+            return null;
+        }
+
+        $product = $record->product?->name ?? __('Review').' #'.$record->getKey();
+
+        return filled($record->customer_name) ? $record->customer_name.' — '.$product : $product;
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => ListProductReviews::route('/'),
+            'trash' => TrashedProductReviews::route('/trash'),
         ];
     }
 }

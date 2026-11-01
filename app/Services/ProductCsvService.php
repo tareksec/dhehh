@@ -326,14 +326,28 @@ class ProductCsvService
 
         $slug = Str::slug($name) ?: 'category-'.substr(md5($name), 0, 10);
 
-        return Category::query()->firstOrCreate(
-            ['slug' => $slug],
-            [
-                'name' => $name,
-                'description' => null,
-                'is_active' => true,
-            ],
-        );
+        $existing = Category::query()->where('slug', $slug)->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        // A category in Trash still holds its slug and is not brought back by an import:
+        // the import gets a new category with the next free slug instead.
+        $unique = $slug;
+        $suffix = 2;
+
+        while (Category::withTrashed()->where('slug', $unique)->exists()) {
+            $unique = "{$slug}-{$suffix}";
+            $suffix++;
+        }
+
+        return Category::query()->create([
+            'slug' => $unique,
+            'name' => $name,
+            'description' => null,
+            'is_active' => true,
+        ]);
     }
 
     protected function productRow(Product $product): array

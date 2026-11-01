@@ -109,6 +109,31 @@ class QuickReplyTest extends TestCase
             ->assertSet('replyBody', "দাম ৫০০ টাকা।\nধন্যবাদ।");
     }
 
+    public function test_inbox_does_not_insert_a_quick_reply_that_is_in_trash(): void
+    {
+        $conversation = Conversation::query()->create([
+            'provider' => 'manual', 'contact_name' => 'QR Lead 4', 'status' => 'open', 'last_message_at' => now(),
+        ]);
+        $quickReply = QuickReply::query()->create([
+            'company_id' => $this->company->id, 'shortcut' => 'old-offer', 'body' => 'Offer ended', 'is_active' => true,
+        ]);
+        $quickReply->delete();
+
+        Livewire::test(Inbox::class)
+            ->call('selectConversation', $conversation->getKey())
+            ->set('showQuickReplyPanel', true)
+            ->call('insertQuickReply', $quickReply->getKey())
+            ->assertSet('replyBody', '');
+
+        $quickReply->restore();
+
+        Livewire::test(Inbox::class)
+            ->call('selectConversation', $conversation->getKey())
+            ->set('showQuickReplyPanel', true)
+            ->call('insertQuickReply', $quickReply->getKey())
+            ->assertSet('replyBody', 'Offer ended');
+    }
+
     public function test_inbox_insert_quick_reply_ignores_an_inactive_or_foreign_company_snippet(): void
     {
         $conversation = Conversation::query()->create([

@@ -7,12 +7,14 @@ use App\Models\Concerns\NotifiesWebsiteOfStorefrontChanges;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class Offer extends Model
 {
     use BelongsToCompany;
     use NotifiesWebsiteOfStorefrontChanges;
+    use SoftDeletes;
 
     public const TYPE_SINGLE = 'single';
 

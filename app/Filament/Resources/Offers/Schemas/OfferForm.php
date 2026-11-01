@@ -69,6 +69,7 @@ class OfferForm
                         ->maxLength(120)
                         ->alphaDash()
                         ->unique(table: 'offers', column: 'slug', ignoreRecord: true, modifyRuleUsing: fn ($rule, Get $get) => $rule->where('company_id', $get('company_id')))
+                        ->validationMessages(['unique' => __('This is already used, possibly by an item in Trash. Use another one, or restore or permanently delete the one in Trash.')])
                         ->helperText(fn (Get $get): string => $get('type') === Offer::TYPE_COLLECTION
                             ? __('Only an identifier for this collection — it has no public page.')
                             : 'Used in the public URL: /offers/your-slug'),

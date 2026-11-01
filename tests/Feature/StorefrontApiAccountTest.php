@@ -554,6 +554,27 @@ class StorefrontApiAccountTest extends TestCase
         $this->assertSame('approved', $detail['review']['status']);
     }
 
+    public function test_a_review_the_owner_moved_to_trash_still_counts_as_reviewed(): void
+    {
+        Queue::fake();
+        $this->product('Item', 'item');
+        $token = $this->register()->assertCreated()->json('data.token');
+        $number = $this->placeOrder(['phone' => '01712345678'], $token)->assertCreated()->json('data.order.order_number');
+        Order::query()->where('order_number', $number)->update(['status' => Order::STATUS_COMPLETED]);
+        $review = ['product_slug' => 'item', 'rating' => 5, 'comment' => 'Very good'];
+
+        $this->api('POST', '/account/orders/'.$number.'/reviews', $review, $token)->assertCreated();
+        ProductReview::query()->sole()->update(['status' => ProductReview::STATUS_APPROVED]);
+        ProductReview::query()->sole()->delete();
+
+        // Gone from the product page...
+        $this->api('GET', '/products/item')->assertOk()->assertJsonCount(0, 'data.reviews');
+        // ...but one review per product and order still holds: a clear answer, not a database error.
+        $this->api('POST', '/account/orders/'.$number.'/reviews', $review, $token)
+            ->assertStatus(409)->assertJsonPath('error', 'already_reviewed');
+        $this->assertSame(1, ProductReview::onlyTrashed()->count());
+    }
+
     public function test_a_customer_cannot_review_somebody_elses_order(): void
     {
         Queue::fake();

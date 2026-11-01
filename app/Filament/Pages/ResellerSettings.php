@@ -513,7 +513,8 @@ class ResellerSettings extends Page
             if (StorefrontPayment::query()->where('storefront_payment_method_id', $method->getKey())->exists()) {
                 $method->update(['is_active' => false]);
             } else {
-                $method->delete();
+                // Removed from this list by the editor, not deleted with a Delete button: gone for good, so the name is free again.
+                $method->forceDelete();
             }
         }
 

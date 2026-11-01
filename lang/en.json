@@ -4598,5 +4598,9 @@
     "Order is no longer in trash": "Order is no longer in trash",
     "This order will be moved to Trash. You can restore it, or delete it permanently, from the Trash button on the Orders list. Its stock and customer balance effects are released until it is restored.": "This order will be moved to Trash. You can restore it, or delete it permanently, from the Trash button on the Orders list. Its stock and customer balance effects are released until it is restored.",
     "Back to the list": "Back to the list",
-    "This payment will be moved to Trash. The order's paid and due amounts and the account balance update at once. Open Trash above this table to restore it, or to delete it permanently.": "This payment will be moved to Trash. The order's paid and due amounts and the account balance update at once. Open Trash above this table to restore it, or to delete it permanently."
+    "This payment will be moved to Trash. The order's paid and due amounts and the account balance update at once. Open Trash above this table to restore it, or to delete it permanently.": "This payment will be moved to Trash. The order's paid and due amounts and the account balance update at once. Open Trash above this table to restore it, or to delete it permanently.",
+    "This is already used, possibly by an item in Trash. Use another one, or restore or permanently delete the one in Trash.": "This is already used, possibly by an item in Trash. Use another one, or restore or permanently delete the one in Trash.",
+    "This company already has a payment method of this type, and it is in Trash. Restore it from Trash instead of adding another.": "This company already has a payment method of this type, and it is in Trash. Restore it from Trash instead of adding another.",
+    "This company already has a payment method of this type. Edit the existing one instead of adding another.": "This company already has a payment method of this type. Edit the existing one instead of adding another.",
+    "Trash": "Trash"
 }

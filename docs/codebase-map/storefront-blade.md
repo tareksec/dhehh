@@ -1,5 +1,5 @@
 # Storefront (Blade)
-> Last checked: 2026-10-20, commit 0e5316d
+> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (delete = Trash, phase T3: soft deletes on this module's catalog / storefront / CRM rows); before it: 2026-10-20, commit 0e5316d
 
 ## What it does
 The Storefront (Blade) module powers the server-rendered customer-facing e-commerce storefront, reseller affiliate shops, promotional landing pages, and customer self-service accounts. It manages visual storefront design elements including home page section builders, multi-theme layouts (default, marketplace-pro, noor-solar), promotional banner slides, dynamic navigation menus, and modular footer blocks. It provides a multi-step checkout workflow with automated shipping fee calculation (inside/outside Dhaka), VAT handling, and risk-gated payment eligibility. The module integrates online payment gateways (ZiniPay, PayStation, and manual accounts), tracks Meta Conversions API (CAPI) server events, and automates abandoned cart recovery. Additionally, it handles customer complaints, order tracking, and dynamic multi-tenant SEO assets (sitemaps, robots.txt, schema markup).
@@ -20,10 +20,10 @@ The Storefront (Blade) module powers the server-rendered customer-facing e-comme
 | Path | What it does |
 | --- | --- |
 | `app/Models/StorefrontSetting.php` | Tenant storefront configuration for design, site type, payment keys, delivery fees, and Meta CAPI. |
-| `app/Models/StorefrontSlide.php` | Promotional carousel slides with responsive desktop and mobile image banners. |
-| `app/Models/StorefrontPage.php` | Custom CMS content pages (Terms, Privacy Policy, About Us, Refund Policy). |
+| `app/Models/StorefrontSlide.php` | Promotional carousel slides with responsive desktop and mobile image banners. Soft-deleted (T3); the cached slide list is cleared on delete and on restore. |
+| `app/Models/StorefrontPage.php` | Custom CMS content pages (Terms, Privacy Policy, About Us, Refund Policy). Soft-deleted (T3): a page in Trash keeps its slug. |
 | `app/Models/StorefrontPayment.php` | Online gateway transaction records tracking payment ID, gateway fee, and verification status. |
-| `app/Models/StorefrontPaymentMethod.php` | Configurable payment methods (COD, bKash manual, Nagad manual, bank deposit). |
+| `app/Models/StorefrontPaymentMethod.php` | Configurable payment methods (COD, bKash manual, Nagad manual, bank deposit). Soft-deleted (T3): not offered while in Trash, still named on old orders (`StorefrontPayment::paymentMethod()` is `withTrashed()`); a company's single COD / gateway row still counts while in Trash. |
 | `app/Models/StorefrontComplaint.php` | Customer after-sales complaints and inquiries submitted from order tracking. |
 | `app/Models/StorefrontCartRecord.php` | Persisted customer shopping cart sessions used for abandoned cart analysis and recovery. |
 | `app/Models/StorefrontCheckoutAttempt.php` | Audit log of submitted checkout payloads and risk evaluation outcomes. |
@@ -80,9 +80,9 @@ The Storefront (Blade) module powers the server-rendered customer-facing e-comme
 | --- | --- |
 | `app/Filament/Clusters/Storefront.php` | Navigation cluster grouping storefront settings, slides, pages, and payments. |
 | `app/Filament/Resources/StorefrontSettings/StorefrontSettingResource.php` | Configuration resource for branding, themes, payment credentials, and policies. |
-| `app/Filament/Resources/StorefrontSlides/StorefrontSlideResource.php` | Manages hero carousel banners and promotional slides. |
-| `app/Filament/Resources/StorefrontPages/StorefrontPageResource.php` | CMS editor for custom content pages with rich text formatting. |
-| `app/Filament/Resources/StorefrontPaymentMethods/StorefrontPaymentMethodResource.php` | Manages manual payment instructions (bKash/Nagad merchant accounts). |
+| `app/Filament/Resources/StorefrontSlides/StorefrontSlideResource.php` | Manages hero carousel banners and promotional slides. Trash page `Pages/TrashedStorefrontSlides.php` (T3). |
+| `app/Filament/Resources/StorefrontPages/StorefrontPageResource.php` | CMS editor for custom content pages with rich text formatting. Trash page `Pages/TrashedStorefrontPages.php` (T3). |
+| `app/Filament/Resources/StorefrontPaymentMethods/StorefrontPaymentMethodResource.php` | Manages manual payment instructions (bKash/Nagad merchant accounts). Trash page `Pages/TrashedStorefrontPaymentMethods.php` (T3). |
 | `app/Filament/Resources/StorefrontPayments/StorefrontPaymentResource.php` | Transaction log of all online and manual payment attempts. |
 | `app/Filament/Resources/StorefrontComplaints/StorefrontComplaintResource.php` | Customer support complaint inbox with status resolution actions. |
 | `app/Filament/Resources/StorefrontCartRecords/StorefrontCartRecordResource.php` | Abandoned cart monitor displaying cart values, items, and customer phone numbers. |

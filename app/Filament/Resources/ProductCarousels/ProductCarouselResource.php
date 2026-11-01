@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\ProductCarousels;
 
 use App\Filament\Clusters\Storefront;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\ProductCarousels\Pages\CreateProductCarousel;
 use App\Filament\Resources\ProductCarousels\Pages\EditProductCarousel;
 use App\Filament\Resources\ProductCarousels\Pages\ListProductCarousels;
+use App\Filament\Resources\ProductCarousels\Pages\TrashedProductCarousels;
 use App\Models\ProductCarousel;
 use App\Services\CompanyContext;
 use BackedEnum;
@@ -28,6 +30,8 @@ use Illuminate\Support\Facades\Schema as SchemaFacade;
 
 class ProductCarouselResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = ProductCarousel::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleGroup;
@@ -153,10 +157,16 @@ class ProductCarouselResource extends Resource
         return SchemaFacade::hasTable('product_carousels') && (Auth::user()?->canManageSettings() ?? false);
     }
 
+    public static function canDeleteAny(): bool
+    {
+        return SchemaFacade::hasTable('product_carousels') && (Auth::user()?->canManageSettings() ?? false);
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => ListProductCarousels::route('/'),
+            'trash' => TrashedProductCarousels::route('/trash'),
             'create' => CreateProductCarousel::route('/create'),
             'edit' => EditProductCarousel::route('/{record}/edit'),
         ];

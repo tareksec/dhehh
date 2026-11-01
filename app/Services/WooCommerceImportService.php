@@ -353,7 +353,7 @@ class WooCommerceImportService
         $unique = $slug;
         $suffix = 2;
 
-        while (Category::query()->where('slug', $unique)->exists()) {
+        while (Category::withTrashed()->where('slug', $unique)->exists()) {
             $unique = "{$slug}-{$suffix}";
             $suffix++;
         }

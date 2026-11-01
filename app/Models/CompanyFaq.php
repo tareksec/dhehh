@@ -4,11 +4,13 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class CompanyFaq extends Model
 {
     use BelongsToCompany;
+    use SoftDeletes;
 
     protected $fillable = ['company_id', 'question', 'answer', 'keywords', 'is_active'];
 

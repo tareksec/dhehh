@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * One admin-manageable checkout payment option. A company can have any
@@ -17,6 +18,7 @@ use Illuminate\Database\Eloquent\Model;
 class StorefrontPaymentMethod extends Model
 {
     use BelongsToCompany;
+    use SoftDeletes;
 
     public const TYPE_COD = 'cod';
 

@@ -39,9 +39,9 @@ The name shown is the resource's record title; when it is only the model label, 
 
 ## 3. Where things stand (checked 2026-11-01)
 
-**Soft-delete models (7):** `Order`, `Voucher` (own Trash), `Expense`, `FeedPost` (generic Trash, T1), `OrderPayment` (Trash inside the order's Payments History, T2). `FeedComment` and `InvestorNominee` are soft-deleted too but are **not something a user deletes with a Delete button**, so they get no Trash (see the T2 row).
+**Soft-delete models (16):** `Order`, `Voucher` (own Trash), `Expense`, `FeedPost` (generic Trash, T1), `OrderPayment` (Trash inside the order's Payments History, T2), and since T3 `Category`, `Offer`, `ProductCarousel`, `ProductReview`, `StorefrontSlide`, `StorefrontPage`, `StorefrontPaymentMethod`, `CompanyFaq`, `QuickReply` (each with a Trash page). `FeedComment` and `InvestorNominee` are soft-deleted too but are **not something a user deletes with a Delete button**, so they get no Trash (see the T2 row).
 
-**Hard-delete models that have a Delete button** (72 Delete buttons in 67 files, checked 2026-11-01). My proposal for each group, for the owner to confirm:
+**Hard-delete models that have a Delete button** (72 Delete buttons in 67 files, checked 2026-11-01; the Catalog and Storefront groups below were converted in T3 except `CourierProvider` and `Media`, and `StorefrontSetting`, which is a site row and waits for the owner). My proposal for each group, for the owner to confirm:
 
 | Group | Models | Proposal |
 |---|---|---|
@@ -63,7 +63,7 @@ Each phase ends with the full test suite on PHP 8.4, a look at the Trash page an
 |---|---|---|
 | T1 | Name prompt on every Filament delete; generic Trash page; Expenses and Office Feed; type-the-name on Voucher and Order trash; rule in `CLAUDE.md` / `AGENTS.md`; this plan | **built** (this commit) |
 | T2 | Trash for the models that were already soft-deleted: **`OrderPayment`** — a "Trash (n)" button on the order's Payments History (Edit page): deleted payments, Restore (the paid amount and the account balance come back), Delete permanently (name asked). Reusable for any table inside a record: `App\Filament\Concerns\HasTrashView`. **Left as they are, on purpose:** `FeedComment` is deleted by its own writer in the Investor portal (the office only *hides* comments), so an office Restore would undo the writer's choice; `InvestorNominee` rows are the history of a nominee list that is replaced as a whole, and restoring one would break the "shares add up to 100%" rule. Both stay as soft-deleted history. | **built** (this commit) |
-| T3 | Catalog + Storefront content (no money effect): Category, Offer, ProductCarousel, ProductReview, CourierProvider, StorefrontSlide / Page / PaymentMethod, CompanyFaq, QuickReply | planned |
+| T3 | Catalog + Storefront content (no money effect): **Category, Offer / Collection, ProductCarousel, ProductReview, StorefrontSlide, StorefrontPage, StorefrontPaymentMethod, CompanyFaq, QuickReply** — each gets `SoftDeletes`, a Trash page and a "Trash (n)" button. A row in Trash keeps its unique slug / name (the unique indexes are unchanged), so a Restore can never collide; forms say "possibly by an item in Trash". A product keeps its category link while the category is in Trash. Lists / pickers that strip global scopes skip Trash; history keeps it (`StorefrontPayment::paymentMethod()`). **Left out on purpose: `CourierProvider`** (a wrong delete there can break bookings; it stays a permanent delete until the owner decides). **`Media` stays permanent** (it deletes the file in storage). | **built** (this commit) |
 | T4 | People & CRM: Customer, Supplier, Lead, Quotation, ConversationChannel, ResellerLevel | planned |
 | T5 | Products, StockPool, Purchase (stock effect) | planned |
 | T6 | Finance (payments, accounts) and IMS — only after the owner decides | open |
@@ -89,6 +89,6 @@ Each phase ends with the full test suite on PHP 8.4, a look at the Trash page an
 5. **Who may use Trash?** Today: whoever may delete that kind of record (Expenses: Super Admin only, like their delete).
 6. **Stock movements:** should bulk delete of stock movements exist at all? Deleting a ledger row changes stock history.
 
-## 6. Not verified yet
+## 6. Verification status (2026-11-01)
 
-Written and linted without the app running: this machine has PHP 8.3 and the project needs 8.4 (the app does not boot). Verified by execution: `TypeToConfirmDeleteTest`, `TranslationParityTest`, `InfoTipGuardTest`, `InfoTipAuditTest`. Not run: `DeleteTypeNameAndTrashTest`, the nine existing tests changed to pass the confirmation, the full suite, a browser check of the modal and the Trash pages. The branch's CI and a run on PHP 8.4 decide.
+PHP 8.4 was installed in the working container by hand during T3 (the environment's setup script still fails: `add-apt-repository` needs the system Python 3.12, not 3.13), and `npm ci && npm run build` was run, so the test suite can boot. **Run and passing on PHP 8.4:** `DeleteTypeNameAndTrashTest` (5), `TypeToConfirmDeleteTest` (10), the two T2 payment cases in `OrderManagementFeaturesTest`, `OrderTrashWorkflowTest` (6, after a fix to how T1 passed the confirmation), `CatalogTrashTest` (24), the new cases in `QuickReplyTest`, `ResellerPaymentMethodsTest` and `StorefrontApiAccountTest`, `TranslationParityTest`, the ⓘ guard tests. The full suite result is in `UPDATE_NOTES.md`. **Not done:** a look in the browser at the modal and the Trash pages in Bangla and English at 1366 px and 360 px, which each phase still owes before the owner's go-ahead.

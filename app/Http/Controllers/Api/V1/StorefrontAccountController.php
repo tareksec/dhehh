@@ -223,7 +223,8 @@ class StorefrontAccountController extends Controller
             return $this->fail('product_not_in_order', 404);
         }
 
-        $already = ProductReview::query()
+        // A review the owner moved to Trash still counts: one review per product and order.
+        $already = ProductReview::withTrashed()
             ->where('order_id', $order->getKey())
             ->where('product_id', $item->product_id)
             ->where('customer_id', $customer->getKey())

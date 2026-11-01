@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\QuickReplies;
 
 use App\Filament\Clusters\Crm;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\QuickReplies\Pages\CreateQuickReply;
 use App\Filament\Resources\QuickReplies\Pages\EditQuickReply;
 use App\Filament\Resources\QuickReplies\Pages\ListQuickReplies;
+use App\Filament\Resources\QuickReplies\Pages\TrashedQuickReplies;
 use App\Models\QuickReply;
 use BackedEnum;
 use Filament\Forms\Components\Textarea;
@@ -21,6 +23,8 @@ use Filament\Tables\Table;
 
 class QuickReplyResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = QuickReply::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBookmark;
@@ -69,6 +73,7 @@ class QuickReplyResource extends Resource
     {
         return [
             'index' => ListQuickReplies::route('/'),
+            'trash' => TrashedQuickReplies::route('/trash'),
             'create' => CreateQuickReply::route('/create'),
             'edit' => EditQuickReply::route('/{record}/edit'),
         ];

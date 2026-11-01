@@ -71,8 +71,9 @@ class StorefrontPayment extends Model
         return $this->storefrontSetting ?? StorefrontSetting::bladeFor((int) $this->company_id);
     }
 
+    /** A payment made with a method that was later moved to Trash still shows that method. */
     public function paymentMethod()
     {
-        return $this->belongsTo(StorefrontPaymentMethod::class, 'storefront_payment_method_id');
+        return $this->belongsTo(StorefrontPaymentMethod::class, 'storefront_payment_method_id')->withTrashed();
     }
 }

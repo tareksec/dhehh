@@ -1,5 +1,5 @@
 # Core Platform
-> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (delete = type the name, then Trash: `TypeToConfirmDelete`, generic `TrashedRecords` page, `HasTrashView` for relation managers); before it the same day, the ⓘ instruction-icon foundation (`InfoTip`, `InfoTipAudit`, guard test), after main with the Trade Portal test-data cleanup command
+> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (delete = type the name, then Trash: `TypeToConfirmDelete`, generic `TrashedRecords` page, `HasTrashView` for relation managers, `TrashFollowsDelete` for resources; T3 gave the catalog / storefront rows a Trash); before it the same day, the ⓘ instruction-icon foundation (`InfoTip`, `InfoTipAudit`, guard test), after main with the Trade Portal test-data cleanup command
 
 ## What it does
 The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and five distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal, Trade Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated encrypted backups to Cloudflare R2 and/or Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
@@ -21,7 +21,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | --- | --- |
 | `app/Models/Company.php` | Multi-tenant company entity storing profile, settings, currency, domains, and storage disk. |
 | `app/Models/CompanyApiKey.php` | API credentials for external integrations scoped to a specific company. |
-| `app/Models/CompanyFaq.php` | Company-specific FAQs displayed on customer storefronts and portals. |
+| `app/Models/CompanyFaq.php` | Company-specific FAQs displayed on customer storefronts and portals. Soft-deleted (T3). |
 | `app/Models/User.php` | System user model implementing `FilamentUser`, handling roles, permissions, and panel access. |
 | `app/Models/UserRole.php` | Role definitions with customizable JSON permission arrays. |
 | `app/Models/AppSetting.php` | Global system key-value storage with optional string encryption. |
@@ -85,6 +85,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Support/InfoTipAudit.php` | Pure-PHP tokenizer scanner that finds plain `helperText` / `description` / `hint` / `hintIconTooltip` instruction text and `->infoTip()` calls without `__()`; behind `scripts/info-tip-audit.php` and `tests/Unit/InfoTipGuardTest.php` (baseline `tests/Fixtures/info-tip-baseline.json`). |
 | `app/Support/TypeToConfirmDelete.php` | "Type the name to delete" (owner request 2026-11-01): wires a name prompt (copyable name badge + input; a bulk delete asks for the number of records) into every Filament `DeleteAction` / `DeleteBulkAction` / `ForceDeleteAction` / `ForceDeleteBulkAction` from `AppServiceProvider`; `apply()` / `applyToSelection()` / `countFields()` for hand-made delete actions; `matches()`, `recordName()`, `trashUrl()`. Rule in `CLAUDE.md`, plan `docs/delete-and-trash-plan.md`. |
 | `app/Filament/Resources/Pages/TrashedRecords.php` | Generic Trash page for a resource whose model uses `SoftDeletes`: the resource's own table limited to trashed rows, Restore / Delete permanently (row and bulk), and `linkAction()` for the list page's "Trash (n)" button. Used by Expenses and the Office Feed; Vouchers and Orders keep their own. |
+| `app/Filament/Concerns/TrashFollowsDelete.php` | Trait for a Resource that has a Trash page: `canRestore*()` / `canForceDelete*()` follow `canDelete()` / `canDeleteAny()`. Used by Expenses and the nine T3 resources (categories, offers, carousels, reviews, slides, pages, payment methods, FAQs, quick replies). |
 | `app/Filament/Concerns/HasTrashView.php` | Trait for a relation manager whose rows are soft-deleted: `showTrash` switch, "Trash (n)" header action, Restore / Delete permanently row actions. Used by the order Payments History. |
 | `app/Support/AppDeployment.php` | Reads current deployment metadata, Git commit hashes, and build timestamps. |
 | `app/Support/AppRelease.php` | Reads published release notes and changelog versions. |

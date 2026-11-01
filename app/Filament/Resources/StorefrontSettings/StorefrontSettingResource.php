@@ -1289,7 +1289,7 @@ class StorefrontSettingResource extends Resource
                                         ->options(function (?StorefrontSetting $record): array {
                                             $companyId = $record?->company_id ?: app(CompanyContext::class)->company()?->getKey();
 
-                                            return $companyId ? StorefrontPage::withoutGlobalScopes()
+                                            return $companyId ? StorefrontPage::withoutGlobalScopes()->withoutTrashed()
                                                 ->where('company_id', $companyId)
                                                 ->when($record, fn ($query) => $query->forSite($record))
                                                 ->where('is_published', true)
@@ -1462,7 +1462,7 @@ class StorefrontSettingResource extends Resource
                     ->label('Category')
                     ->visible(fn (Get $get): bool => $get('type') === 'category')
                     ->required(fn (Get $get): bool => $get('type') === 'category')
-                    ->options(fn (Get $get, ?StorefrontSetting $record) => Category::withoutGlobalScopes()
+                    ->options(fn (Get $get, ?StorefrontSetting $record) => Category::withoutGlobalScopes()->withoutTrashed()
                         ->where('company_id', $companyId($get, $record))
                         ->where('is_active', true)
                         ->orderBy('name')
@@ -1471,7 +1471,7 @@ class StorefrontSettingResource extends Resource
                     ->label('Page')
                     ->visible(fn (Get $get): bool => $get('type') === 'page')
                     ->required(fn (Get $get): bool => $get('type') === 'page')
-                    ->options(fn (Get $get, ?StorefrontSetting $record) => StorefrontPage::withoutGlobalScopes()
+                    ->options(fn (Get $get, ?StorefrontSetting $record) => StorefrontPage::withoutGlobalScopes()->withoutTrashed()
                         ->where('company_id', $companyId($get, $record))
                         ->when($record, fn ($query) => $query->forSite($record))
                         ->where('is_published', true)
@@ -1635,7 +1635,7 @@ class StorefrontSettingResource extends Resource
             'Domain added' => filled($record->siteDomain()),
             'Domain verified' => $record->isNextjs() ? (bool) $record->nextjs_site_domain_verified : (bool) $record->company?->domain_verified,
             'Logo uploaded' => filled($record->logo),
-            'Hero slide added' => StorefrontSlide::withoutGlobalScopes()
+            'Hero slide added' => StorefrontSlide::withoutGlobalScopes()->withoutTrashed()
                 ->where('company_id', $record->company_id)
                 ->forSite($record)
                 ->where('is_active', true)
@@ -1689,7 +1689,7 @@ class StorefrontSettingResource extends Resource
 
     public static function pageCount(StorefrontSetting $record): int
     {
-        return StorefrontPage::withoutGlobalScopes()
+        return StorefrontPage::withoutGlobalScopes()->withoutTrashed()
             ->where('company_id', $record->company_id)
             ->forSite($record)
             ->where('is_published', true)

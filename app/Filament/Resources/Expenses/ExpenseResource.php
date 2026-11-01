@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Expenses;
 
 use App\Filament\Clusters\Finance;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\Expenses\Pages\CreateExpense;
 use App\Filament\Resources\Expenses\Pages\EditExpense;
 use App\Filament\Resources\Expenses\Pages\ListExpenses;
@@ -22,6 +23,9 @@ use Illuminate\Support\Facades\Auth;
 
 class ExpenseResource extends Resource
 {
+    // Whoever may delete an expense may bring it back or delete it for good from the Trash page.
+    use TrashFollowsDelete;
+
     protected static ?string $model = Expense::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedReceiptPercent;
@@ -60,27 +64,6 @@ class ExpenseResource extends Resource
     public static function canDeleteAny(): bool
     {
         return Auth::user()?->canDeleteSensitiveRecords() ?? false;
-    }
-
-    // Whoever may delete an expense may bring it back or delete it for good from the Trash page.
-    public static function canRestore(Model $record): bool
-    {
-        return static::canDelete($record);
-    }
-
-    public static function canRestoreAny(): bool
-    {
-        return static::canDeleteAny();
-    }
-
-    public static function canForceDelete(Model $record): bool
-    {
-        return static::canDelete($record);
-    }
-
-    public static function canForceDeleteAny(): bool
-    {
-        return static::canDeleteAny();
     }
 
     public static function getPages(): array

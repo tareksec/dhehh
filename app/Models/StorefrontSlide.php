@@ -8,6 +8,7 @@ use App\Support\StorefrontThemeRegistry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
@@ -15,6 +16,7 @@ class StorefrontSlide extends Model
 {
     use BelongsToCompany;
     use NotifiesWebsiteOfStorefrontChanges;
+    use SoftDeletes;
 
     protected $fillable = [
         'company_id',

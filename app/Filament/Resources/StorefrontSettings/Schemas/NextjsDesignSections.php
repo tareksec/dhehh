@@ -324,7 +324,7 @@ final class NextjsDesignSections
             ->modalSubmitActionLabel(__('Load the starter footer'))
             ->action(function (Set $set, ?StorefrontSetting $record): void {
                 $companyId = self::companyId($record);
-                $pages = $companyId ? StorefrontPage::withoutGlobalScopes()
+                $pages = $companyId ? StorefrontPage::withoutGlobalScopes()->withoutTrashed()
                     ->where('company_id', $companyId)
                     ->when($record, fn ($query) => $query->forSite($record))
                     ->where('is_published', true)
@@ -386,7 +386,7 @@ final class NextjsDesignSections
     {
         $companyId = self::companyId($record);
 
-        return $companyId ? Category::withoutGlobalScopes()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get() : collect();
+        return $companyId ? Category::withoutGlobalScopes()->withoutTrashed()->where('company_id', $companyId)->where('is_active', true)->orderBy('name')->get() : collect();
     }
 
     private static function block(string $type, ?string $titleKey = 'title'): Block
@@ -718,7 +718,7 @@ final class NextjsDesignSections
                     ->label(__('Page'))
                     ->visible(fn (Get $get): bool => $get('type') === 'page')
                     ->required(fn (Get $get): bool => $get('type') === 'page')
-                    ->options(fn (?StorefrontSetting $record): array => self::companyId($record) ? StorefrontPage::withoutGlobalScopes()
+                    ->options(fn (?StorefrontSetting $record): array => self::companyId($record) ? StorefrontPage::withoutGlobalScopes()->withoutTrashed()
                         ->where('company_id', self::companyId($record))
                         ->when($record, fn ($query) => $query->forSite($record))
                         ->where('is_published', true)
@@ -745,7 +745,7 @@ final class NextjsDesignSections
     /** @return \Closure(?StorefrontSetting): array<int, string> */
     public static function categoryOptions(): \Closure
     {
-        return fn (?StorefrontSetting $record): array => self::companyId($record) ? Category::withoutGlobalScopes()
+        return fn (?StorefrontSetting $record): array => self::companyId($record) ? Category::withoutGlobalScopes()->withoutTrashed()
             ->where('company_id', self::companyId($record))
             ->where('is_active', true)
             ->orderBy('name')

@@ -6,6 +6,7 @@ use App\Filament\Concerns\OptimizesUploadedImages;
 use App\Filament\Concerns\SelectableFromMediaHub;
 use App\Filament\Forms\Components\CategoryIconPicker;
 use App\Support\CompanyMedia;
+use App\Support\CompanyScopedUnique;
 use App\Support\StorefrontCategoryIcons;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Textarea;
@@ -25,7 +26,10 @@ class CategoryForm
                 TextInput::make('name')
                     ->required(),
                 TextInput::make('slug')
-                    ->required(),
+                    ->required()
+                    // A category in Trash still holds its slug, so Restore never collides.
+                    ->unique(ignoreRecord: true, modifyRuleUsing: CompanyScopedUnique::rule())
+                    ->validationMessages(['unique' => __('This is already used, possibly by an item in Trash. Use another one, or restore or permanently delete the one in Trash.')]),
                 Textarea::make('description')
                     ->columnSpanFull(),
                 TextInput::make('tagline')

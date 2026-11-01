@@ -65,7 +65,12 @@ abstract class TrashedRecords extends ListRecords
 
     public function getTitle(): string|Htmlable
     {
-        return __(':label trash', ['label' => static::getResource()::getPluralModelLabel()]);
+        return __(':label trash', ['label' => static::getResource()::getTitleCasePluralModelLabel()]);
+    }
+
+    public function getBreadcrumb(): ?string
+    {
+        return __('Trash');
     }
 
     public function getHeading(): string|Htmlable
@@ -107,6 +112,8 @@ abstract class TrashedRecords extends ListRecords
                 TextColumn::make('deleted_at')->label(__('Moved to trash at'))->dateTime()->sortable(),
             ])
             ->defaultSort('deleted_at', 'desc')
+            // Drag-to-reorder belongs to the live list, not to the Trash.
+            ->reorderable(condition: false)
             ->recordUrl(null)
             ->recordAction(null)
             ->headerActions([])

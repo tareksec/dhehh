@@ -5,9 +5,11 @@ namespace App\Filament\Resources\StorefrontPages;
 use App\Filament\Clusters\Storefront;
 use App\Filament\Concerns\OptimizesUploadedImages;
 use App\Filament\Concerns\SelectableFromMediaHub;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\StorefrontPages\Pages\CreateStorefrontPage;
 use App\Filament\Resources\StorefrontPages\Pages\EditStorefrontPage;
 use App\Filament\Resources\StorefrontPages\Pages\ListStorefrontPages;
+use App\Filament\Resources\StorefrontPages\Pages\TrashedStorefrontPages;
 use App\Models\StorefrontPage;
 use App\Models\StorefrontSetting;
 use App\Services\CompanyContext;
@@ -38,6 +40,7 @@ class StorefrontPageResource extends Resource
 {
     use OptimizesUploadedImages;
     use SelectableFromMediaHub;
+    use TrashFollowsDelete;
 
     protected static ?string $model = StorefrontPage::class;
 
@@ -88,6 +91,7 @@ class StorefrontPageResource extends Resource
                         ->maxLength(120)
                         ->alphaDash()
                         ->unique(table: 'storefront_pages', column: 'slug', ignoreRecord: true, modifyRuleUsing: fn ($rule, $get) => $rule->where('company_id', $get('company_id')))
+                        ->validationMessages(['unique' => __('This is already used, possibly by an item in Trash. Use another one, or restore or permanently delete the one in Trash.')])
                         ->helperText('Used in the public URL: /pages/your-slug'),
                     Textarea::make('excerpt')
                         ->rows(2)
@@ -198,10 +202,16 @@ class StorefrontPageResource extends Resource
         return SchemaFacade::hasTable('storefront_pages') && (Auth::user()?->isSuperAdmin() ?? false);
     }
 
+    public static function canDeleteAny(): bool
+    {
+        return SchemaFacade::hasTable('storefront_pages') && (Auth::user()?->isSuperAdmin() ?? false);
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => ListStorefrontPages::route('/'),
+            'trash' => TrashedStorefrontPages::route('/trash'),
             'create' => CreateStorefrontPage::route('/create'),
             'edit' => EditStorefrontPage::route('/{record}/edit'),
         ];

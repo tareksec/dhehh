@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\CompanyFaqs;
 
 use App\Filament\Clusters\Crm;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\CompanyFaqs\Pages\CreateCompanyFaq;
 use App\Filament\Resources\CompanyFaqs\Pages\EditCompanyFaq;
 use App\Filament\Resources\CompanyFaqs\Pages\ListCompanyFaqs;
+use App\Filament\Resources\CompanyFaqs\Pages\TrashedCompanyFaqs;
 use App\Models\CompanyFaq;
 use BackedEnum;
 use Filament\Forms\Components\Textarea;
@@ -21,6 +23,8 @@ use Filament\Tables\Table;
 
 class CompanyFaqResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = CompanyFaq::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedQuestionMarkCircle;
@@ -71,6 +75,7 @@ class CompanyFaqResource extends Resource
     {
         return [
             'index' => ListCompanyFaqs::route('/'),
+            'trash' => TrashedCompanyFaqs::route('/trash'),
             'create' => CreateCompanyFaq::route('/create'),
             'edit' => EditCompanyFaq::route('/{record}/edit'),
         ];

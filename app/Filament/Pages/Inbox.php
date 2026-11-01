@@ -369,7 +369,7 @@ class Inbox extends Page
             return collect();
         }
 
-        return QuickReply::withoutGlobalScopes()
+        return QuickReply::withoutGlobalScopes()->withoutTrashed()
             ->where('company_id', $conversation->company_id)
             ->where('is_active', true)
             ->orderBy('shortcut')
@@ -390,7 +390,7 @@ class Inbox extends Page
             return;
         }
 
-        $quickReply = QuickReply::withoutGlobalScopes()
+        $quickReply = QuickReply::withoutGlobalScopes()->withoutTrashed()
             ->where('company_id', $conversation->company_id)
             ->where('is_active', true)
             ->find($quickReplyId);

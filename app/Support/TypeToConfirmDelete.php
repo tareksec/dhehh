@@ -43,7 +43,7 @@ final class TypeToConfirmDelete
 
     /** Attributes tried, in order, when the resource has no record title of its own. */
     private const NAME_ATTRIBUTES = [
-        'name', 'title', 'label', 'subject',
+        'name', 'title', 'label', 'subject', 'heading',
         'order_number', 'voucher_number', 'expense_number', 'invoice_number', 'number',
         'code', 'sku', 'slug', 'email', 'phone',
     ];

@@ -7,12 +7,14 @@ use App\Models\Concerns\NotifiesWebsiteOfStorefrontChanges;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class StorefrontPage extends Model
 {
     use BelongsToCompany;
     use NotifiesWebsiteOfStorefrontChanges;
+    use SoftDeletes;
 
     protected $fillable = [
         'company_id',

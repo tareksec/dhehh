@@ -91,6 +91,20 @@ class ResellerPaymentMethodsTest extends TestCase
         $this->assertSame([], $this->offered());
     }
 
+    public function test_a_store_method_in_trash_is_not_offered_to_resellers_and_returns_on_restore(): void
+    {
+        $this->asAdmin();
+        $this->assertSame([$this->bkash->getKey(), $this->nagad->getKey()], $this->offered());
+
+        $this->bkash->delete();
+
+        $this->assertSame([$this->nagad->getKey()], $this->offered());
+
+        $this->bkash->restore();
+
+        $this->assertSame([$this->bkash->getKey(), $this->nagad->getKey()], $this->offered());
+    }
+
     public function test_a_deactivated_store_method_is_not_offered_even_when_ticked(): void
     {
         $this->asAdmin();

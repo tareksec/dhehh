@@ -5,9 +5,11 @@ namespace App\Filament\Resources\StorefrontSlides;
 use App\Filament\Clusters\Storefront;
 use App\Filament\Concerns\OptimizesUploadedImages;
 use App\Filament\Concerns\SelectableFromMediaHub;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\StorefrontSlides\Pages\CreateStorefrontSlide;
 use App\Filament\Resources\StorefrontSlides\Pages\EditStorefrontSlide;
 use App\Filament\Resources\StorefrontSlides\Pages\ListStorefrontSlides;
+use App\Filament\Resources\StorefrontSlides\Pages\TrashedStorefrontSlides;
 use App\Models\Product;
 use App\Models\StorefrontSetting;
 use App\Models\StorefrontSlide;
@@ -40,6 +42,7 @@ class StorefrontSlideResource extends Resource
 {
     use OptimizesUploadedImages;
     use SelectableFromMediaHub;
+    use TrashFollowsDelete;
 
     protected static ?string $model = StorefrontSlide::class;
 
@@ -310,10 +313,16 @@ class StorefrontSlideResource extends Resource
         return Auth::user()?->isSuperAdmin() ?? false;
     }
 
+    public static function canDeleteAny(): bool
+    {
+        return Auth::user()?->isSuperAdmin() ?? false;
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => ListStorefrontSlides::route('/'),
+            'trash' => TrashedStorefrontSlides::route('/trash'),
             'create' => CreateStorefrontSlide::route('/create'),
             'edit' => EditStorefrontSlide::route('/{record}/edit'),
         ];

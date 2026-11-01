@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * A saved text snippet staff insert into an Inbox reply - the WhatsApp
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Model;
 class QuickReply extends Model
 {
     use BelongsToCompany;
+    use SoftDeletes;
 
     protected $table = 'company_quick_replies';
 

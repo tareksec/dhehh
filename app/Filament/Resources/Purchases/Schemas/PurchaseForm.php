@@ -246,7 +246,7 @@ class PurchaseForm
                                                 $originalSlug = $slug;
                                                 $suffix = 2;
 
-                                                while (Category::query()->where('slug', $slug)->exists()) {
+                                                while (Category::withTrashed()->where('slug', $slug)->exists()) {
                                                     $slug = "{$originalSlug}-{$suffix}";
                                                     $suffix++;
                                                 }

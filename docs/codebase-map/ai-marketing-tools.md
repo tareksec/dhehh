@@ -1,5 +1,5 @@
 # AI & Marketing Tools
-> Last checked: 2026-10-20, commit 0e5316d
+> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (offers: soft deletes and Trash, T3); before it: 2026-10-20, commit 0e5316d
 
 ## What it does
 The AI & Marketing Tools module provides a suite of generative AI and digital advertising capabilities designed for e-commerce growth. It features a unified Tool Menu accessing AI image and video generation engines across multiple third-party providers (Google Imagen, OpenAI DALL-E, Stability AI, OpenRouter, and custom endpoints) with mandatory content governance and approval workflows. It includes a prompt enhancement engine that enriches ad prompts with industry-specific e-commerce guides. For performance marketing, it integrates with the Meta Marketing API, featuring a live Meta Ads dashboard, automated campaign creation, an AI ad copy assistant, and audience synchronization. Additionally, it automates high-converting combo offer landing page generation with structured block content and promotional pricing.
@@ -83,7 +83,7 @@ The AI & Marketing Tools module provides a suite of generative AI and digital ad
 | `app/Filament/Pages/MetaAdsAiAssistant.php` | Interactive chat assistant drafting full advertising campaign structures. |
 | `app/Filament/Pages/MetaEventsManager.php` | Health monitor for Meta Conversions API (CAPI) events and pixel match quality. |
 | `app/Filament/Resources/MetaAdAccounts/MetaAdAccountResource.php` | Manages connected Meta advertising accounts and access tokens. |
-| `app/Filament/Resources/Offers/OfferResource.php` | Manages combo product offers and AI-generated landing pages. |
+| `app/Filament/Resources/Offers/OfferResource.php` | Manages combo product offers and AI-generated landing pages. Offers and collections are soft-deleted (T3, `Offer` model, Trash page `Pages/TrashedOffers.php`); a collection in Trash stops applying its deal prices and keeps its slug. |
 
 ### Jobs, Commands & Config
 | Path | What it does |
