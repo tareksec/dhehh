@@ -108,7 +108,22 @@ class OrderSummaryCardImageService
      */
     public function renderCard(array $card): string
     {
+        return $this->renderCardWithLinks($card)['png'];
+    }
+
+    /**
+     * The card as a PNG plus where its clickable buttons are. A row with the key "track_button" (only the PDF card
+     * has one, see OrderSummaryCardService::buildForPdf()) is drawn as a highlighted button in the place the tracking
+     * code would sit, and its value (the courier's tracking page) comes back in "links" with the button's box in
+     * pixels, so OrderSummaryCardPdfService can put a link over it. The card is as tall as its content needs.
+     *
+     * @param  array<string, mixed>  $card  OrderSummaryCardService::build() or buildForPdf()
+     * @return array{png: string, width: int, height: int, links: list<array{x: float, y: float, w: float, h: float, url: string}>}
+     */
+    public function renderCardWithLinks(array $card): array
+    {
         $this->useFonts();
+        $links = [];
 
         $w = self::WIDTH;
         $pad = 56;
@@ -180,7 +195,12 @@ class OrderSummaryCardImageService
         $cardsY = $bandY + 76 + 6 + 34;
         $valueW = $cardW - $cardPad * 2 - $labelW;
 
-        $rowHeight = function (array $row) use ($height, $cardW, $cardPad, $valueW): float {
+        $buttonH = 62;
+        $rowHeight = function (array $row) use ($height, $cardW, $cardPad, $valueW, $buttonH): float {
+            if ($row['key'] === 'track_button') {
+                return $buttonH + 14;
+            }
+
             if ($row['key'] === 'address') {
                 return $height($row['label'], 23, false) + $height((string) $row['value'], 27, false, $cardW - $cardPad * 2) + 14;
             }
@@ -191,13 +211,24 @@ class OrderSummaryCardImageService
         $payRowH = 58;
         $cardH = 70 + max($rowsHeight($card['order_rows']) + $payRowH, $rowsHeight($card['customer_rows'])) + 6;
 
-        $drawCard = function (float $x, string $title, array $rows, ?array $payment) use ($rect, $text, $height, $cardsY, $cardW, $cardH, $cardPad, $labelW, $valueW): void {
+        $drawCard = function (float $x, string $title, array $rows, ?array $payment) use ($rect, $text, $height, $cardsY, $cardW, $cardH, $cardPad, $labelW, $valueW, $buttonH, &$links): void {
             $rect($x, $cardsY, $cardW, $cardH, self::SOFT, 18, self::LINE);
             $rect($x + $cardPad, $cardsY + 22, 6, 26, self::ACCENT, 3);
             $text(mb_strtoupper($title), 22, true, self::NAVY, $x + $cardPad + 20, $cardsY + 22 + (26 - $height('A', 22, true)) / 2, 'left', null, 2);
             $ry = $cardsY + 70;
 
             foreach ($rows as $row) {
+                // The courier tracking button: it sits where the tracking code would, and the code itself is not shown.
+                if ($row['key'] === 'track_button') {
+                    $buttonW = $cardW - $cardPad * 2;
+                    $rect($x + $cardPad, $ry, $buttonW, $buttonH, self::ACCENT, $buttonH / 2);
+                    $text((string) $row['label'], 28, true, '#ffffff', $x + $cardPad + $buttonW / 2, $ry + ($buttonH - $height((string) $row['label'], 28, true)) / 2, 'center');
+                    $links[] = ['x' => (float) ($x + $cardPad), 'y' => (float) $ry, 'w' => (float) $buttonW, 'h' => (float) $buttonH, 'url' => (string) $row['value']];
+                    $ry += $buttonH + 14;
+
+                    continue;
+                }
+
                 if ($row['key'] === 'address') {
                     $label = $text($row['label'], 23, false, self::MUTED, $x + $cardPad, $ry);
                     $value = $text((string) $row['value'], 27, false, self::INK, $x + $cardPad, $ry + $label['h'], 'left', $cardW - $cardPad * 2);
@@ -352,7 +383,14 @@ class OrderSummaryCardImageService
         $rect(0, $y, $w, 14, self::NAVY);
         $y += 14;
 
-        return $this->compose($ops, (int) ceil($y));
+        $cardHeight = (int) ceil($y);
+
+        return [
+            'png' => $this->compose($ops, $cardHeight),
+            'width' => self::WIDTH,
+            'height' => $cardHeight,
+            'links' => $links,
+        ];
     }
 
     /**

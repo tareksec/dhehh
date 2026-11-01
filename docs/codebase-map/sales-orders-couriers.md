@@ -48,6 +48,8 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Services/OrderStatusWorkflowService.php` | Enforces valid status transitions and triggers SMS notifications on stage changes. Processing / Shipping orders may also go back to an earlier open stage (`Order::stepBackWorkflowStages()`); a step back resets the delivery state, leaves the courier booking alone and sends no customer message (`OrderStatusTransition::isStepBack()`). |
 | `app/Services/OrderStockCheckService.php` | Checks inventory levels before confirming an order to prevent overselling. |
 | `app/Services/OrderSummaryCardService.php` | Builds the shareable order summary card data (logo, contact, order and customer details, items with pictures, totals, payment state); the browser draws it on the order page. |
+| `app/Services/OrderSummaryCardPdfService.php` | The summary card as a one-page PDF: the card picture (as tall as its products need) plus a link over the courier tracking button; the code is not shown. Opened from the order page (`orders.summary-card.pdf`). |
+| `app/Services/ShortShipmentService.php` | "Fewer pieces sent": per-line pieces really sent, the new courier amount (current minus the price of the pieces left out), cuts the order's quantities in one transaction and records how the customer confirmed. |
 | `app/Services/OrderSummaryCardImageService.php` | Draws the same card as a PNG on the server (Imagick + Pango, Bangla-safe) for the automatic WhatsApp card. |
 | `app/Services/OrderActivityFeedService.php` | Combines audit logs, status changes, and courier events into a unified order timeline. |
 | `app/Services/OrderStatusSmsService.php` | Texts the customer when an order is created (`order.placed`) and at each new stage, using the owner's SMS Templates wording. |
@@ -62,7 +64,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Services/CustomerCsvService.php` | Exports customer contact databases and processes CSV imports. |
 | `app/Services/CustomerDueAlertService.php` | Identifies customers with overdue payment balances and triggers alerts. |
 | `app/Services/CourierManager.php` | Factory resolving carrier adapter instances based on provider configurations. |
-| `app/Services/CourierService.php` | Business service executing consignment creation, cancellation, and fee balance syncing. |
+| `app/Services/CourierService.php` | Business service executing consignment creation, cancellation, and fee balance syncing. `codMismatch()` / `recordCodChange()`: the booking's COD against what the order now needs, shown as a red box on the order page. |
 | `app/Services/CourierAlertService.php` | Raises alerts for stuck shipments, delayed deliveries, and abnormal return rates. |
 | `app/Services/DeliveryChallanService.php` | Trade Portal Delivery Challan: one transaction makes the `DeliveryChallan` (+ items), an order with `source = trade_challan` (completed, delivered, no shipping fee), order lines for product lines (stock leaves; short stock refused by item name) and the advance / cash paid as `OrderPayment`s; `receivePayment()`, `receiveOldDue()` (a `CustomerPayment`), `cancel()` (order cancelled, stock back), `nextNumber()` (pad SL no.). Order-status SMS skip `trade_challan` orders. |
 | `app/Services/NuportOrderImportService.php` | Copies past orders out of a Nuport CSV export (orders, lines, payments, status, sales channel, returned pieces, finished courier bookings) without touching stock or accounts; run from the Orders list or `orders:import-nuport`. Orders still open in Nuport can come in as live orders (`Order::SOURCE_NUPORT_OPEN`) that take stock. |
@@ -180,6 +182,10 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `tests/Feature/SalesOrderTest.php` | Tests order creation, total calculations, and line item persistence. |
 | `tests/Feature/OrderStatusWorkflowTest.php` | Tests order stage progression, transitions, and stock reservation. |
 | `tests/Feature/OrderStepBackTest.php` | Tests going back to an earlier stage: which stages, delivery state reset, courier booking untouched, no customer message, scan stays forward-only. |
+| `tests/Feature/CourierCodMismatchTest.php` | Tests the courier-amount check after booking and recording the new amount. |
+| `tests/Feature/ShortShipmentTest.php` | Tests fewer pieces sent: the new amount, the order and stock, refusals. |
+| `tests/Feature/OrderSummaryCardPdfTest.php` | Tests the PDF card: tracking button instead of the code, page size, link, taller with more products. |
+| `tests/Feature/InvoiceEmptyFieldsTest.php` | Tests that empty invoice fields are hidden and filled ones shown. |
 | `tests/Feature/CustomerOrderHistoryTest.php` | Tests the customer page's money numbers, order history list and the order page's customer link. |
 | `tests/Feature/CourierIntegrationTest.php` | Tests courier booking creation, airway bill generation, and webhooks. |
 | `tests/Feature/DeliveryChallanServiceTest.php` | Tests the Delivery Challan against the owner's paper: totals, stock, due, later payments, cancel, numbering, old due. |

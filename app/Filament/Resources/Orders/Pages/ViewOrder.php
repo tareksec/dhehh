@@ -7,6 +7,7 @@ use App\Filament\Resources\Orders\Actions\CourierBookingFeedback;
 use App\Filament\Resources\Orders\Actions\EmailCustomerAction;
 use App\Filament\Resources\Orders\Actions\PutReturnedGoodsBackInStockAction;
 use App\Filament\Resources\Orders\OrderResource;
+use App\Filament\Resources\Orders\Schemas\OrderInfolist;
 use App\Models\CourierBooking;
 use App\Models\CourierProvider;
 use App\Models\CustomerRiskProfile;
@@ -19,6 +20,8 @@ use App\Services\CourierService;
 use App\Services\CustomerRiskService;
 use App\Services\OrderSummaryCardService;
 use App\Services\ResellerOwnCourierService;
+use App\Services\ShortShipmentService;
+use App\Support\MoneyFormatter;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Placeholder;
@@ -27,6 +30,8 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Filament\Schemas\Components\Utilities\Get;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
@@ -129,6 +134,8 @@ class ViewOrder extends ViewRecord
                     CourierBookingFeedback::run($action, fn () => app(CourierService::class)->updateStatus($this->record->latestCourierBooking, CourierBooking::STATUS_RETURNED, 'Marked returned from order detail.'), __('Marked returned'));
                     $this->record->refresh();
                 }),
+            $this->courierAmountAction(),
+            $this->shortShipmentAction(),
             Action::make('orderSummaryCard')
                 ->label(__('Order summary card'))
                 ->icon('heroicon-o-share')
@@ -140,11 +147,161 @@ class ViewOrder extends ViewRecord
                 ]))
                 ->modalSubmitAction(false)
                 ->modalCancelActionLabel(__('Close')),
+            Action::make('orderSummaryCardPdf')
+                ->label(__('Order summary card (PDF)'))
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('gray')
+                ->url(fn () => route('orders.summary-card.pdf', ['order' => $this->record]))
+                ->openUrlInNewTab(),
             Action::make('print')
                 ->url(fn () => route('orders.print', ['order' => $this->record, 'print' => 1]))
                 ->openUrlInNewTab(),
             EditAction::make(),
         ];
+    }
+
+    /**
+     * The courier still has the amount it was booked with (items added, a payment came in, a discount was given).
+     * For our own manual delivery the app changes it; for a courier company staff change it with the courier (their
+     * APIs have no call for it) and confirm here, so the booking and the activity show what the courier really has.
+     */
+    protected function courierAmountAction(): Action
+    {
+        $mismatch = fn (): ?array => app(CourierService::class)->codMismatch($this->record);
+
+        return Action::make('courierAmountUpdated')
+            ->label(fn (): string => ($mismatch()['automatic'] ?? false) ? __('Update courier amount') : __('Courier amount updated'))
+            ->icon('heroicon-o-banknotes')
+            ->color('warning')
+            ->visible(fn (): bool => $mismatch() !== null && (Auth::user()?->hasPermission('sales.update') ?? false))
+            ->modalHeading(__('Change the amount the courier collects'))
+            ->modalDescription(function () use ($mismatch): string {
+                $found = $mismatch();
+
+                return $found === null ? '' : OrderInfolist::codMismatchMessage($this->record)
+                    .' '.($found['automatic']
+                        ? __('This delivery is our own, so the amount is changed here.')
+                        : __('Press the button only after the courier has the new amount: the courier companies take the amount when the parcel is booked and the app cannot change it for them.'));
+            })
+            ->schema([
+                Textarea::make('note')
+                    ->label(__('Note (who at the courier agreed)'))
+                    ->rows(2)
+                    ->maxLength(500),
+            ])
+            ->modalSubmitActionLabel(__('Save the new amount'))
+            ->action(function (array $data) use ($mismatch): void {
+                $found = $mismatch();
+
+                if ($found === null) {
+                    Notification::make()->info()->title(__('The courier already has the right amount.'))->send();
+
+                    return;
+                }
+
+                app(CourierService::class)->recordCodChange(
+                    $found['booking'],
+                    $found['needed'],
+                    filled($data['note'] ?? null) ? 'COD changed with the courier: '.trim((string) $data['note']) : null,
+                );
+                $this->record->refresh();
+
+                Notification::make()->success()->title(__('Courier amount saved'))->send();
+            });
+    }
+
+    /**
+     * Fewer pieces went out than were ordered and the customer confirmed it (video call / unboxing video): the order
+     * is cut down to the pieces sent and the new amount for the courier is worked out and shown (ShortShipmentService).
+     */
+    protected function shortShipmentAction(): Action
+    {
+        $service = fn (): ShortShipmentService => app(ShortShipmentService::class);
+
+        return Action::make('shortShipment')
+            ->label(__('Fewer pieces sent'))
+            ->icon('heroicon-o-scale')
+            ->color('gray')
+            ->visible(fn (): bool => (Auth::user()?->hasPermission('sales.update') ?? false) && $service()->allowedFor($this->record))
+            ->modalHeading(__('Cut the order down to the pieces sent'))
+            ->modalDescription(__('Use this when fewer pieces went out than were ordered and the customer confirmed it on a video call or from the unboxing video. Enter the pieces that were really sent. The order, the customer\'s due and the stock follow, and the new amount for the courier to collect is worked out below.'))
+            ->schema(function () use ($service): array {
+                $this->record->loadMissing('items.product');
+                $fields = [];
+
+                foreach ($this->record->items as $item) {
+                    $fields[] = TextInput::make('sent.'.$item->getKey())
+                        ->label(trim(($item->product?->name ?? __('Item')).($item->variant_label ? ' ('.$item->variant_label.')' : '')))
+                        ->helperText(__('Ordered :quantity at :price each', [
+                            'quantity' => $item->quantity,
+                            'price' => MoneyFormatter::currency((float) $item->unit_price, $this->record->company?->currency ?: 'BDT'),
+                        ]))
+                        ->numeric()
+                        ->integer()
+                        ->minValue(0)
+                        ->maxValue((int) $item->quantity)
+                        ->default((int) $item->quantity)
+                        ->required()
+                        ->live(onBlur: true);
+                }
+
+                return [
+                    ...$fields,
+                    Placeholder::make('short_result')
+                        ->label(__('Amount for the courier to collect'))
+                        ->content(function (Get $get) use ($service): HtmlString {
+                            $preview = $service()->preview($this->record, (array) ($get('sent') ?? []));
+                            $currency = $this->record->company?->currency ?: 'BDT';
+                            $money = fn (float $amount): string => e(MoneyFormatter::currency($amount, $currency));
+
+                            if ($preview['missing_pieces'] === 0) {
+                                return new HtmlString('<span>'.e(__('Every piece is marked as sent, so nothing changes.')).'</span>');
+                            }
+
+                            return new HtmlString(
+                                '<div><strong>'.$money($preview['new_cod']).'</strong> '
+                                .e(__('(now :current, minus :missing for :pieces piece(s) left out)', [
+                                    'current' => MoneyFormatter::currency($preview['current_cod'], $currency),
+                                    'missing' => MoneyFormatter::currency($preview['missing_value'], $currency),
+                                    'pieces' => $preview['missing_pieces'],
+                                ])).'</div>'
+                            );
+                        }),
+                    Textarea::make('note')
+                        ->label(__('How the customer confirmed'))
+                        ->placeholder(__('For example: video call on 1 Nov, the customer showed what arrived'))
+                        ->required()
+                        ->rows(2)
+                        ->maxLength(500),
+                ];
+            })
+            ->modalSubmitActionLabel(__('Cut the order down'))
+            ->action(function (array $data) use ($service): void {
+                try {
+                    $applied = $service()->apply($this->record, (array) ($data['sent'] ?? []), (string) ($data['note'] ?? ''));
+                } catch (ValidationException $exception) {
+                    Notification::make()->danger()->title(collect($exception->errors())->flatten()->implode(' '))->send();
+
+                    return;
+                }
+
+                $this->record->refresh();
+                $currency = $this->record->company?->currency ?: 'BDT';
+                $booking = $this->record->latestCourierBooking;
+                $live = $booking && in_array($booking->status, CourierBooking::ACTIVE_STATUSES, true);
+
+                Notification::make()
+                    ->success()
+                    ->title(__('The order now matches the pieces sent'))
+                    ->body($live
+                        ? __('Tell the courier (tracking :tracking) to collect :amount, then press "Courier amount updated".', [
+                            'tracking' => $booking->tracking_id ?: '—',
+                            'amount' => MoneyFormatter::currency($applied['new_cod'], $currency),
+                        ])
+                        : __('The amount to collect is now :amount.', ['amount' => MoneyFormatter::currency($applied['new_cod'], $currency)]))
+                    ->persistent($live)
+                    ->send();
+            });
     }
 
     /**

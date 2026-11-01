@@ -11,8 +11,10 @@ use App\Models\CustomerRiskReview;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\StorefrontPayment;
+use App\Services\CourierService;
 use App\Services\OrderActivityFeedService;
 use App\Services\ResellerOwnCourierService;
+use App\Support\MoneyFormatter;
 use App\Support\PhoneLinks;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -47,11 +49,48 @@ class OrderInfolist
             : null;
     }
 
+    /** The warning under "The courier has the old amount": what the courier will collect, what is needed, what to do. */
+    public static function codMismatchMessage(Order $record): string
+    {
+        $mismatch = app(CourierService::class)->codMismatch($record);
+
+        if ($mismatch === null) {
+            return '';
+        }
+
+        $currency = $record->company?->currency ?: 'BDT';
+        $booking = $mismatch['booking'];
+
+        return __(':courier (tracking :tracking) will collect :booked, but this order now needs :needed (:difference). :action', [
+            'courier' => $booking->provider?->name ?: __('The courier'),
+            'tracking' => $booking->tracking_id ?: '—',
+            'booked' => MoneyFormatter::currency($mismatch['booked'], $currency),
+            'needed' => MoneyFormatter::currency($mismatch['needed'], $currency),
+            'difference' => ($mismatch['difference'] > 0 ? '+' : '−').MoneyFormatter::currency(abs($mismatch['difference']), $currency),
+            'action' => $mismatch['automatic']
+                ? __('Press "Update courier amount" at the top to change it.')
+                : __('Tell the courier the new amount, then press "Courier amount updated" at the top.'),
+        ]);
+    }
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->columns(1)
             ->components([
+                // The courier still has an old amount to collect (owner request 2026-11-01): pieces were added, a payment
+                // came in or a discount was given after the parcel was booked.
+                Section::make(__('The courier has the old amount'))
+                    ->columnSpanFull()
+                    ->icon('heroicon-o-exclamation-triangle')
+                    ->iconColor('danger')
+                    ->visible(fn (Order $record): bool => app(CourierService::class)->codMismatch($record) !== null)
+                    ->schema([
+                        Text::make(fn (Order $record): string => self::codMismatchMessage($record))
+                            ->weight(FontWeight::Bold)
+                            ->color('danger'),
+                    ]),
+
                 Section::make('Invoice')
                     ->columnSpanFull()
                     ->schema([

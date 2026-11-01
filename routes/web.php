@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\InvestorContractDownloadController;
 use App\Http\Controllers\Admin\InvestorPortalOpenController;
 use App\Http\Controllers\Admin\LegacyAdminClusterRedirectController;
 use App\Http\Controllers\Admin\OrderPdfController;
+use App\Http\Controllers\Admin\OrderSummaryCardPdfController;
 use App\Http\Controllers\Admin\ProductCsvController;
 use App\Http\Controllers\Admin\PurchaseCsvController;
 use App\Http\Controllers\Admin\PurchaseDocumentController;
@@ -652,6 +653,11 @@ Route::middleware('auth')->get('/admin/orders/print-bulk', function (Request $re
 Route::middleware('auth')
     ->get('/admin/orders/{order}/pdf', OrderPdfController::class)
     ->name('orders.pdf');
+
+// The order summary card as a PDF page with a courier tracking button.
+Route::middleware('auth')
+    ->get('/admin/orders/{order}/summary-card.pdf', OrderSummaryCardPdfController::class)
+    ->name('orders.summary-card.pdf');
 
 // Printable courier handover sheet (parcels booked through one courier on one
 // day). CourierProvider is company-scoped, so another company's id is a 404.

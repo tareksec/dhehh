@@ -112,6 +112,24 @@ Owner (Banglish): write documents for the Trade Portal and the IMS (Office and I
 
 Commit status: committed on `feature/ai-guide-public` and pushed to `main` on the owner's approval ("make it public").
 
+## 2026-11-01 (next) - Courier amount after booking, invoice, PDF summary card, fewer pieces sent
+
+Owner (Bangla), points 3, 4, 5, 6, 7 and 9 (there was no 8).
+
+**3 – the customer adds pieces after the parcel was booked.** I could not make the app change the amount at the courier: the clients here (`SteadfastCourierClient`, `PathaoCourierClient`, `RedxCourierClient`, `ECourierClient`) have no call that edits a booking, and a web search found no public update-COD endpoint for Steadfast or Pathao (RedX has a generic `PATCH /parcels`, shown only for cancelling). So I did not invent one. Built instead: a check on every active booking (`CourierService::codMismatch()`: booked amount against `Order::courierCodAmount()`, which also catches a payment or discount made after booking), a red box on the order page and a warning after saving on the Edit page, and **Courier amount updated** (records the new amount, who/why, in the booking history and the order activity once staff have told the courier). For the Manual (own) delivery the same button changes the amount itself. **Open question for the owner:** if a courier's merchant panel or API does have an "edit COD" step, send me its documentation and I will call it from this same button.
+
+**4 – invoice.** Empty fields are hidden on the printed invoice, its courier slip and the PDF (see CHANGELOG). **Decision I made:** the Weight and Image columns also disappear when no product has anything to show, and the PDF got a Delivery Charge row when there is one.
+
+**5, 6, 7 – summary card.** New PDF version (`Order summary card (PDF)` on the order page). The tracking code is not shown; a highlighted orange "Track your parcel" button sits where it was and links to the courier's tracking page, built from the courier provider's **Tracking URL Template** (nothing hardcoded; no template = no button and no tracking line, so each courier's template has to be filled in on Courier Providers). The card height already grew with the number of products in both the browser and the server drawing, so for point 6 the PDF page just takes the card's height (checked: one product 1393 px, four products 1771 px). **Decision I made:** the browser card and the WhatsApp picture keep the tracking code, because a picture cannot carry a link; only the PDF has the button. The PDF is the card picture on one page with a link over the button, so Bangla is drawn as correctly as on the WhatsApp card.
+
+**9 – fewer pieces sent.** `Fewer pieces sent` on the order page: enter the pieces really sent per product, the new amount for the courier is shown at once (current amount minus the price of the pieces left out), saving cuts the order to those pieces (stock and customer due follow) and records how the customer confirmed. **Decisions I made:** a fixed discount, VAT and delivery charge stay as they are (they are amounts, not rates), so the reduction is exactly the price of the missing pieces; the cut is made on the order's own quantities (no new table), so the order then shows what was really sold; a short shipment needs a note on how the customer confirmed.
+
+**Needs Bangla review (`lang/bn.json`, 34 new keys):** all the courier amount texts ("কুরিয়ারের কাছে পুরনো অ্যামাউন্ট আছে", "কুরিয়ারের অ্যামাউন্ট আপডেট হয়েছে"…), "কম পিস পাঠানো হয়েছে", "অর্ডার পাঠানো পিসের সমান করুন", "আপনার পার্সেল ট্র্যাক করুন", "অর্ডার সামারি কার্ড (PDF)".
+
+**Verified:** `TranslationParityTest` (run). The PDF writer was run on its own and checked with poppler (`pdfinfo`: one page, 540 x 885.5 pt, the link `https://…` present; the page rendered with the button in place), and the card was drawn for one and four products with the real renderer (Pango installed from the Ubuntu repository). **Not run:** the Feature tests (`InvoiceEmptyFieldsTest`, `OrderSummaryCardPdfTest`, `CourierCodMismatchTest`, `ShortShipmentTest`, and the earlier `OrderStepBackTest`, `CustomerOrderHistoryTest`) and the full suite: this container has PHP 8.3 and the app needs PHP 8.4 (Symfony 8), and installing it needs a third-party package source that was not approved.
+
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to that feature branch only; not on `main`.
+
 ## 2026-11-01 - Customer page from the order, and orders can go back a stage
 
 Owner (Bangla), two points:

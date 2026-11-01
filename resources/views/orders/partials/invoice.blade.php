@@ -56,8 +56,10 @@
     $customerName = $order->customer?->name ?? $order->customer_name;
     $customerPhone = $order->customer?->phone;
     $customerAddress = $order->customer?->address;
-    $showImages = (bool) ($invoice['show_images'] ?? true);
-    $showWeight = (bool) ($invoice['show_weight'] ?? true);
+    // A column nobody filled in is not printed (owner rule 2026-11-01: a field that is empty is hidden, a filled one shows).
+    $showImages = (bool) ($invoice['show_images'] ?? true) && $order->items->contains(fn ($item): bool => filled($item->product?->image));
+    $showWeight = (bool) ($invoice['show_weight'] ?? true) && $order->items->contains(fn ($item): bool => (bool) $item->unitWeightKg());
+    $hasBillTo = filled($customerName) || filled($customerPhone) || filled($customerAddress);
     $showBarcode = (bool) ($invoice['show_barcode'] ?? true);
     $barcodeSvg = $showBarcode ? Code128::svg($order->order_number) : '';
     $columnCount = 5 + ($showImages ? 1 : 0) + ($showWeight ? 1 : 0);
@@ -82,8 +84,12 @@
 
         <div class="inv-meta">
             <div class="bill-to">
-                <p class="label">Bill To:</p>
-                <p class="name">{{ $customerName }}</p>
+                @if ($hasBillTo)
+                    <p class="label">Bill To:</p>
+                @endif
+                @if (filled($customerName))
+                    <p class="name">{{ $customerName }}</p>
+                @endif
                 @if ($customerPhone)
                     <p class="phone">{{ $customerPhone }}</p>
                 @endif
@@ -102,7 +108,9 @@
                 @if ($parcelId)
                     <p>Parcel ID: <strong>{{ $parcelId }}</strong></p>
                 @endif
-                <p>Date: <strong>{{ $invoiceDate }}</strong></p>
+                @if (filled($invoiceDate))
+                    <p>Date: <strong>{{ $invoiceDate }}</strong></p>
+                @endif
             </div>
         </div>
 
@@ -255,8 +263,12 @@
                     </div>
                     <div class="slip-body">
                         <div class="bill-to">
-                            <p class="label">Bill To:</p>
-                            <p class="name">{{ $customerName }}</p>
+                            @if ($hasBillTo)
+                                <p class="label">Bill To:</p>
+                            @endif
+                            @if (filled($customerName))
+                                <p class="name">{{ $customerName }}</p>
+                            @endif
                             @if ($customerPhone)
                                 <p class="phone">{{ $customerPhone }}</p>
                             @endif
@@ -275,7 +287,9 @@
                             @if ($parcelId)
                                 <p>Parcel ID: <strong>{{ $parcelId }}</strong></p>
                             @endif
-                            <p>Date: <strong>{{ $invoiceDate }}</strong></p>
+                            @if (filled($invoiceDate))
+                                <p>Date: <strong>{{ $invoiceDate }}</strong></p>
+                            @endif
                             <div class="slip-due">Due Amount: {{ $money($due) }}</div>
                         </div>
                     </div>

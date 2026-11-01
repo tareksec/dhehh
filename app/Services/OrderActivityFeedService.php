@@ -82,6 +82,18 @@ class OrderActivityFeedService
             'viewed' => "Order viewed by {$actor}.",
             'printed' => "Order printed by {$actor}.",
             'deleted' => "Order deleted by {$actor}.",
+            'courier_cod_changed' => sprintf(
+                'Amount for the courier to collect changed from %s to %s by %s.',
+                MoneyFormatter::number((float) ($log->old_values['cod_amount'] ?? 0)),
+                MoneyFormatter::number((float) ($log->new_values['cod_amount'] ?? 0)),
+                $actor,
+            ),
+            'short_shipment' => sprintf(
+                'Order cut down to the pieces sent by %s (amount to collect now %s)%s.',
+                $actor,
+                MoneyFormatter::number((float) ($log->new_values['amount_to_collect'] ?? 0)),
+                filled($log->new_values['note'] ?? null) ? ': '.$log->new_values['note'] : '',
+            ),
             'updated' => match (true) {
                 array_key_exists('status', $log->new_values ?? []) => sprintf(
                     'Order status changed to %s by %s.',

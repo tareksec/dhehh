@@ -31,8 +31,15 @@
     @php
         $company = $company ?? ['name' => config('app.name', 'Business Dashboard'), 'currency' => 'BDT'];
         $invoice = $invoice ?? \App\Services\CompanySettingsService::INVOICE_DEFAULTS;
-        $showImages = (bool) ($invoice['show_images'] ?? true);
-        $showWeight = (bool) ($invoice['show_weight'] ?? true);
+        // A field nobody filled in is not printed (owner rule 2026-11-01): empty columns, lines and total rows are left out.
+        $showImages = (bool) ($invoice['show_images'] ?? true) && collect($productImages ?? [])->contains(fn ($path): bool => ! empty($path));
+        $showWeight = (bool) ($invoice['show_weight'] ?? true) && $order->items->contains(fn ($item): bool => (bool) $item->unitWeightKg());
+        $customerName = $order->customer?->name ?? $order->customer_name;
+        $customerPhone = $order->customer?->phone;
+        $customerEmail = $order->customer?->email;
+        $customerAddress = $order->customer?->address;
+        $invoiceDate = optional($order->order_date)->format($company['date_format'] ?? 'd M Y');
+        $shippingFee = (float) $order->shipping_fee;
         $invoiceLogoPath = $company['logo_path'] ?? $company['dark_logo_path'] ?? null;
         $currency = $company['currency'] ?? 'BDT';
         $subTotal = (float) $order->subtotal;
@@ -47,7 +54,7 @@
         $buyerView = $order->showsResellerPricesToBuyer();
         if ($buyerView) {
             $subTotal = $grandTotal = $due = $order->buyerTotal();
-            $discount = $vat = $paid = 0.0;
+            $discount = $vat = $paid = $shippingFee = 0.0;
         }
         if ($order->showsResellerBranding()) {
             $invoiceLogoPath = $resellerLogoPath ?? null;
@@ -71,7 +78,9 @@
         <div class="invoice">
             <h2>Invoice</h2>
             <div><strong>{{ $order->order_number }}</strong></div>
-            <div class="muted">{{ optional($order->order_date)->format($company['date_format'] ?? 'd M Y') }}</div>
+            @if (filled($invoiceDate))
+                <div class="muted">{{ $invoiceDate }}</div>
+            @endif
             @if (! empty($invoice['hotline']))
                 <div>Hotline: {{ $invoice['hotline'] }}</div>
             @endif
@@ -81,12 +90,15 @@
         </div>
     </div>
 
-    <div class="panel">
-        <strong>Bill To:</strong><br>
-        {{ $order->customer?->name ?? $order->customer_name }}<br>
-        <span class="muted">{{ $order->customer?->phone }}</span><br>
-        <span class="muted">{{ $order->customer?->email }}</span>
-    </div>
+    @if (filled($customerName) || filled($customerPhone) || filled($customerEmail) || filled($customerAddress))
+        <div class="panel">
+            <strong>Bill To:</strong>
+            @if (filled($customerName))<br>{{ $customerName }}@endif
+            @if (filled($customerPhone))<br><span class="muted">{{ $customerPhone }}</span>@endif
+            @if (filled($customerEmail))<br><span class="muted">{{ $customerEmail }}</span>@endif
+            @if (filled($customerAddress))<br><span class="muted">{{ $customerAddress }}</span>@endif
+        </div>
+    @endif
 
     <table>
         <thead>
@@ -123,14 +135,19 @@
 
     <table class="totals">
         <tr><td>Subtotal</td><td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($subTotal) }}</td></tr>
-        @unless ($buyerView)
+        @if ($discount > 0)
             <tr><td>Discount</td><td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($discount) }}</td></tr>
+        @endif
+        @if ($vat > 0)
             <tr><td>VAT</td><td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($vat) }}</td></tr>
-        @endunless
+        @endif
+        @if ($shippingFee > 0)
+            <tr><td>Delivery Charge</td><td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($shippingFee) }}</td></tr>
+        @endif
         <tr class="grand"><td>Total</td><td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($grandTotal) }}</td></tr>
-        @unless ($buyerView)
+        @if ($paid > 0)
             <tr><td>Paid</td><td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($paid) }}</td></tr>
-        @endunless
+        @endif
         <tr><td>Due</td><td class="right">{{ $currency }} {{ \App\Support\MoneyFormatter::number($due) }}</td></tr>
     </table>
 
@@ -152,9 +169,9 @@
             </div>
             <h2>Courier Cut-Slip</h2>
             <p>Invoice: {{ $order->order_number }}</p>
-            <p>Customer: {{ $order->customer?->name ?? $order->customer_name }}</p>
-            <p>Phone: {{ $order->customer?->phone }}</p>
-            <p>Address: {{ $order->customer?->address }}</p>
+            @if (filled($customerName))<p>Customer: {{ $customerName }}</p>@endif
+            @if (filled($customerPhone))<p>Phone: {{ $customerPhone }}</p>@endif
+            @if (filled($customerAddress))<p>Address: {{ $customerAddress }}</p>@endif
             <p>COD: {{ $currency }} {{ \App\Support\MoneyFormatter::number($due) }}</p>
             @if ($buyerView && $order->reseller_parcel_id)
                 <p>Parcel ID: {{ $order->reseller_parcel_id }}{{ $order->reseller_courier_name ? ' ('.$order->reseller_courier_name.')' : '' }}</p>

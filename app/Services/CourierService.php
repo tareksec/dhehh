@@ -60,6 +60,95 @@ class CourierService
     }
 
     /**
+     * Whether the amount the courier was asked to collect no longer matches what the order needs (owner request
+     * 2026-11-01): pieces were added to the order after the booking, a payment came in, a discount was given. The
+     * courier collects the amount it was booked with, so the parcel would reach the customer with the old figure.
+     *
+     * Null while the booking still agrees with the order, when there is no booking the courier still has to act on
+     * (cancelled, failed, delivered, returned), and for a reseller's own courier, which is not ours to book.
+     *
+     * @return array{booking: CourierBooking, booked: float, needed: float, difference: float, automatic: bool}|null
+     */
+    public function codMismatch(Order $order): ?array
+    {
+        if ($order->reseller_own_courier || ! in_array($order->status, Order::ACCOUNTED_STATUSES, true)) {
+            return null;
+        }
+
+        $booking = $order->latestCourierBooking;
+
+        if (! $booking || ! in_array($booking->status, CourierBooking::ACTIVE_STATUSES, true)) {
+            return null;
+        }
+
+        $booked = round((float) $booking->cod_amount, 2);
+        $needed = $order->courierCodAmount();
+
+        if (abs($booked - $needed) < 0.01) {
+            return null;
+        }
+
+        return [
+            'booking' => $booking,
+            'booked' => $booked,
+            'needed' => $needed,
+            'difference' => round($needed - $booked, 2),
+            'automatic' => $this->changesCodByItself($booking),
+        ];
+    }
+
+    /**
+     * True when the app itself can change the amount a booking collects: our own manual delivery. The courier
+     * companies (Steadfast, Pathao, RedX, eCourier) take the amount when the parcel is booked and their APIs we use
+     * offer no call to change it afterwards, so for them staff change it with the courier and then confirm here.
+     */
+    public function changesCodByItself(CourierBooking $booking): bool
+    {
+        return $booking->provider?->driver === CourierProvider::DRIVER_MANUAL;
+    }
+
+    /**
+     * Writes down the amount the courier collects now: the booking's COD, its margin figures and one line in the
+     * booking's history and the order's activity. It does not call the courier: either the booking is our own manual
+     * delivery, or staff have just told the courier the new amount.
+     */
+    public function recordCodChange(CourierBooking $booking, float $amount, ?string $note = null): CourierBooking
+    {
+        $amount = round(max($amount, 0), 2);
+        $from = round((float) $booking->cod_amount, 2);
+
+        if ($from === $amount) {
+            return $booking;
+        }
+
+        $booking->loadMissing(['order.company', 'provider']);
+        $booking->forceFill(['cod_amount' => $amount])->save();
+
+        if ($booking->order && $booking->provider) {
+            $this->applyMargin($booking, $booking->order, $booking->provider);
+        }
+
+        $currency = $booking->order?->company?->currency ?: 'BDT';
+        // Written in English like every other booking history line, whoever's language the screen is in.
+        $this->logStatus($booking, $booking->status, $booking->status, $note ?: sprintf(
+            'Amount to collect changed from %s to %s.',
+            MoneyFormatter::currency($from, $currency),
+            MoneyFormatter::currency($amount, $currency),
+        ));
+
+        if ($booking->order) {
+            app(AuditLogService::class)->record(
+                'courier_cod_changed',
+                $booking->order,
+                ['cod_amount' => $from],
+                ['cod_amount' => $amount, 'tracking_id' => $booking->tracking_id],
+            );
+        }
+
+        return $booking->refresh();
+    }
+
+    /**
      * Default state for the "Book courier" / "Book Steadfast" popups
      * (ViewOrder + OrdersTable). Applied via `->fillForm()` rather than
      * per-field `->default()` because Filament skips a component's default

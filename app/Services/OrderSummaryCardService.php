@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CourierBooking;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Support\MoneyFormatter;
@@ -44,6 +45,7 @@ class OrderSummaryCardService
      *     note: ?string,
      *     labels: array<string, string>,
      *     text: string,
+     *     tracking_url: ?string,
      *     customer_phone: ?string,
      *     file_name: string,
      * }
@@ -157,12 +159,68 @@ class OrderSummaryCardService
                 'thanks' => __('Thank you for your order!'),
             ],
             'text' => $text,
+            'tracking_url' => $this->trackingUrl($order, $buyerView),
             // Customer's number with the country code (8801…): the Android
             // app opens WhatsApp straight in this customer's chat with the
             // card image attached.
             'customer_phone' => PhoneLinks::internationalDigits($order->customer?->phone),
             'file_name' => 'order-'.str($order->order_number)->slug().'.png',
         ];
+    }
+
+    /**
+     * The card for the PDF (owner request 2026-11-01). Same data, with two differences: the courier's tracking code
+     * is not shown, and in the place where it sat there is a button ("Track your parcel") that opens the courier's
+     * own tracking page. The page address is the Tracking URL Template of the courier provider (Courier Providers →
+     * the provider → Tracking URL Template); with no template, or no booking, the row is simply left out.
+     *
+     * @return array<string, mixed> build() plus 'tracking_url'; the 'tracking' row is a 'track_button' row or gone
+     */
+    public function buildForPdf(Order $order): array
+    {
+        $card = $this->build($order);
+        $url = $card['tracking_url'];
+        $rows = [];
+
+        foreach ($card['order_rows'] as $row) {
+            if ($row['key'] !== 'tracking') {
+                $rows[] = $row;
+
+                continue;
+            }
+
+            if (filled($url)) {
+                $rows[] = ['key' => 'track_button', 'label' => __('Track your parcel'), 'value' => (string) $url];
+            }
+        }
+
+        $card['order_rows'] = $rows;
+        $card['file_name'] = 'order-'.str($order->order_number)->slug().'.pdf';
+
+        return $card;
+    }
+
+    /**
+     * Where the customer can follow this parcel: the courier provider's Tracking URL Template with the booking's
+     * tracking ID in it. Null when the order has no live courier booking or the provider has no template (a
+     * reseller's own-courier order has no booking of ours, so it has none either).
+     */
+    protected function trackingUrl(Order $order, bool $buyerView): ?string
+    {
+        $booking = $order->latestCourierBooking;
+
+        if ($buyerView || ! $booking?->provider || blank($booking->tracking_id)
+            || in_array($booking->status, [CourierBooking::STATUS_CANCELLED, CourierBooking::STATUS_FAILED], true)) {
+            return null;
+        }
+
+        try {
+            $url = app(CourierManager::class)->adapter($booking->provider)->trackingUrl($booking);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return filled($url) && preg_match('#^https?://#i', (string) $url) ? (string) $url : null;
     }
 
     /**

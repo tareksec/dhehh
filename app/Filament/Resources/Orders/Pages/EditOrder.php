@@ -7,8 +7,11 @@ use App\Filament\Resources\Orders\Actions\ChangeOrderWorkflowAction;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Filament\Resources\Orders\Pages\Concerns\HandlesStockShortages;
 use App\Filament\Resources\Orders\Pages\Concerns\ReportsStockErrors;
+use App\Filament\Resources\Orders\Schemas\OrderInfolist;
+use App\Services\CourierService;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Livewire\Attributes\On;
 
@@ -35,6 +38,27 @@ class EditOrder extends EditRecord
     protected function beforeSave(): void
     {
         $this->haltWhenStockIsShort();
+    }
+
+    /**
+     * Items, discount or payments changed on an order whose parcel is already booked: the courier still has the old
+     * amount to collect, so say so right after the save instead of leaving it to be noticed at the doorstep.
+     */
+    protected function afterSave(): void
+    {
+        $this->record->refresh();
+        $mismatch = app(CourierService::class)->codMismatch($this->record);
+
+        if ($mismatch === null) {
+            return;
+        }
+
+        Notification::make()
+            ->warning()
+            ->persistent()
+            ->title(__('The courier still has the old amount'))
+            ->body(OrderInfolist::codMismatchMessage($this->record))
+            ->send();
     }
 
     protected function submitAfterAddingStock(): void
