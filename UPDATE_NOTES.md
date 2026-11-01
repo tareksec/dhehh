@@ -2,7 +2,35 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-10-25 (latest) - Start the investor groups again (undo command, G-codes on backfilled projects)
+## 2026-11-01 (latest) - Product descriptions imported from WordPress: repair the old imports, never overwrite edited text
+
+Owner report: descriptions imported from the old WordPress / WooCommerce site "came in as plain text with inaccurate formatting".
+
+Cause (found on the live dashboard, 45 products of ZamZam International): before 2026-10-11 `WooCommerceImportService` ran `strip_tags()` on the description. Paragraph tags, headings, bold, links and tables vanished and list items ran together. The product editor and the Blade product page then showed one block of text (the plain-text path of `RichText::html()` / `show.blade.php` also drops single line breaks). Commit `0dc20019` already made the importer keep the formatting (`WooCommerceDescription`), but the products imported earlier stayed broken, and every re-import still overwrote the description, wiping later edits.
+
+What changed (the converter is the existing `WooCommerceDescription`; checked against the 34 products of the old site: the text is kept for all of them):
+
+- `app/Support/WooCommerceDescription.php`: new `decide()` (the single "may this description be replaced" rule), `fingerprint()` and `legacyPlainText()`.
+- `app/Services/WooCommerceImportService.php`: an existing product's description is only replaced while it is still the untouched plain text of an older import (or empty).
+- `app/Services/WooCommerceDescriptionRepairService.php` + `app/Console/Commands/RepairWooCommerceDescriptions.php` (new): `php artisan woocommerce:repair-descriptions {company-slug} [--apply] [--sku=...] [--base-url=...] [--fill-blank] [--report=file.json]`. Dry run unless `--apply`. Reads the old site's public Store API (`/wp-json/wc/store/v1/products`), matches by SKU then slug, backs up every replaced text to `storage/app/private/description-repair/`.
+- Tests: `tests/Feature/WooCommerceDescriptionDecideTest.php` (3), `tests/Feature/WooCommerceDescriptionRepairTest.php` (10), `tests/Feature/WooCommerceImportTest.php` (3 new cases).
+
+Dry run against the live data on 2026-10-31 (read-only; nothing written to the dashboard), report `product-description-dry-run.md`: 34 products on the old site, 32 live products would be fixed (their text matches the old site's exactly once spacing/entities are ignored), 2 have one flat paragraph on WordPress itself (nothing to restore), 11 are not on the old site by SKU or slug (10 ERP-only products with no description, and `WOO-8OFKVXOT` / `k801-handheld-turbo`, which has text but is not published on WordPress).
+
+Open points for the owner:
+
+- Nothing has been written to the live products yet. Deploy first, then on the server run the dry run, look at the list, then `--apply`. Do it before zamzamint.com is pointed at the Next.js site (the repair needs the WordPress shop to answer, or `--base-url=` for a copy).
+- Three products (`ZMU41`, `ZMJS270`, and `ZMS607` with the placeholder "Description Here") are a single flat paragraph on WordPress itself, so there is no structure to restore; they need rewriting by hand if they should look structured. For `ZMU41` the repair only turns the stored `&gt;` / `&lt;` into real characters.
+- Saving a description does not call the website webhook, so the Next.js site shows the repaired text when its own cache refreshes.
+- Behaviour change: a re-import no longer replaces a description that already holds editor HTML, so text changed later on the old site does not reach an already formatted ERP description.
+
+Needs Bangla review: none (no screen text added; the command prints English, like the other commands).
+
+Verification (2026-11-01, plain `php artisan test`, in a worktree of `origin/main` with this change): `WooCommerceDescriptionDecideTest` 3, `WooCommerceDescriptionRepairTest` 10 and `WooCommerceImportTest` and the other WooCommerce tests all pass (29 tests in the filtered run). Full suite: 3373 passed, 5 skipped, 109 failed. None of the 109 touches products or the import: they are portal / IMS / Trade / Reseller page tests (HTTP 500, the Vite manifest of the copied `public/build` has no entry for the newer Filament themes) and backup tests (no `mysql` / `mysqldump` client on this Windows machine). `ResellerLandingPageTest`, `BackupRunsTest` and `AllCompaniesImsTest` (30 failures in the full run) fail the same 30 on clean `origin/main`; the other failing classes were not re-run there.
+
+Commit status: committed on `fix/woocommerce-description-repair` and merged into the local `main` on the owner's approval ("মেইনে মারজ করে দেও"). **Not pushed** - push needs a separate approval. Files: `app/Support/WooCommerceDescription.php`, `app/Services/WooCommerceImportService.php`, `tests/Feature/WooCommerceImportTest.php`, `CHANGELOG.md`, `UPDATE_NOTES.md`, `PROJECT_GUIDE.md` (changed); `app/Services/WooCommerceDescriptionRepairService.php`, `app/Console/Commands/RepairWooCommerceDescriptions.php`, `tests/Feature/WooCommerceDescriptionDecideTest.php`, `tests/Feature/WooCommerceDescriptionRepairTest.php` (new).
+
+## 2026-10-25 - Start the investor groups again (undo command, G-codes on backfilled projects)
 
 Owner (Bangla), after the live backfill of Tasneem Knitting industry (company id 2) turned the five old projects into G2–G6 (G1 is a real group that was already there) and kept their old project codes (`01/2026-INV-01` …): "g1-p1 এরকম হবে", then "গ্রুপ সব ডিলিট করে নতুন করে আমার রান কি বল".
 

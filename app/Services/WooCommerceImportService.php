@@ -116,15 +116,8 @@ class WooCommerceImportService
         $regularPrice = $this->toPrice($payload['regular_price'] ?? null) ?? $this->toPrice($payload['price'] ?? null) ?? 0.0;
         $salePrice = $this->toPrice($payload['sale_price'] ?? null) ?? $regularPrice;
 
-        // Full description first — the short description alone loses most of
-        // the product information written on the old site. Kept as HTML (what
-        // the product form's rich editor stores) so headings, lists, bold,
-        // links, tables and line breaks come across as written.
-        $description = WooCommerceDescription::toHtml((string) (($payload['description'] ?? '') ?: ($payload['short_description'] ?? '')));
-
         $attributes = [
             'name' => $name,
-            'description' => $description,
             'price' => $regularPrice,
             'sale_price' => $salePrice,
             'is_active' => true,
@@ -138,6 +131,23 @@ class WooCommerceImportService
 
         if ($brand = $this->resolveBrand($payload)) {
             $attributes['brand'] = $brand;
+        }
+
+        // Full description first — the short description alone loses most of
+        // the product information written on the old site. Kept as HTML (what
+        // the product form's rich editor stores) so headings, lists, bold,
+        // links, tables and line breaks come across as written. A description
+        // the team already has is only replaced while it is still the
+        // untouched plain text of an older import, so a re-sync never
+        // overwrites hand-written text.
+        $description = WooCommerceDescription::decide(
+            $product?->description,
+            (string) (($payload['description'] ?? '') ?: ($payload['short_description'] ?? '')),
+            fillBlank: true,
+        );
+
+        if ($description['action'] === 'update') {
+            $attributes['description'] = $description['html'];
         }
 
         $isNew = ! $product;
