@@ -65,6 +65,18 @@ class OrderStatusTransition extends Model
         });
     }
 
+    /**
+     * The order went back to an earlier open stage (Shipping to Processing, Processing to Confirmed...), a
+     * correction the customer is not told about: no SMS, no e-mail, no WhatsApp card, no Meta event.
+     */
+    public function isStepBack(): bool
+    {
+        $from = Order::openStageRank($this->from_status, $this->from_delivery_status);
+        $to = Order::openStageRank($this->to_status, $this->to_delivery_status);
+
+        return $from !== null && $to !== null && $to < $from;
+    }
+
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);

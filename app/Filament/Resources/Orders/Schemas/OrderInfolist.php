@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Orders\Schemas;
 
+use App\Filament\Resources\Customers\CustomerResource;
+use App\Filament\Resources\Resellers\ResellerResource;
 use App\Models\CourierBooking;
 use App\Models\Customer;
 use App\Models\CustomerRiskProfile;
@@ -22,6 +24,29 @@ use Filament\Support\Enums\TextSize;
 
 class OrderInfolist
 {
+    /**
+     * The page of the order's customer, or null when there is none or the signed-in user may not open it.
+     * A customer who applied to be a reseller lives in the Resellers list instead (CustomerResource hides them).
+     */
+    public static function customerUrl(Order $record): ?string
+    {
+        $customer = $record->customer;
+
+        if (! $customer) {
+            return null;
+        }
+
+        if (($customer->reseller_status ?? 'none') !== 'none') {
+            return ResellerResource::canViewAny() && ResellerResource::canView($customer)
+                ? ResellerResource::getUrl('view', ['record' => $customer])
+                : null;
+        }
+
+        return CustomerResource::canView($customer)
+            ? CustomerResource::getUrl('view', ['record' => $customer])
+            : null;
+    }
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -31,7 +56,12 @@ class OrderInfolist
                     ->columnSpanFull()
                     ->schema([
                         TextEntry::make('order_number')->label('Invoice Number'),
-                        TextEntry::make('customer.name')->label('Customer'),
+                        // The name opens the customer's page: details, every order and the money cards (owner request 2026-11-01).
+                        TextEntry::make('customer.name')
+                            ->label('Customer')
+                            ->url(fn (Order $record): ?string => self::customerUrl($record))
+                            ->color(fn (Order $record): ?string => self::customerUrl($record) !== null ? 'primary' : null)
+                            ->icon(fn (Order $record): ?string => self::customerUrl($record) !== null ? 'heroicon-o-user-circle' : null),
                         TextEntry::make('customer.customer_type')
                             ->label('Customer Type')
                             ->badge()

@@ -67,6 +67,11 @@ class StorefrontMetaDispatchService
 
     public function dispatchForTransition(OrderStatusTransition $transition): void
     {
+        // An order sent back to an earlier stage is a correction, not a new event for Meta.
+        if ($transition->isStepBack()) {
+            return;
+        }
+
         $order = Order::withoutGlobalScopes()
             ->with('storefrontSetting', 'company.storefrontSetting')
             ->find($transition->order_id);

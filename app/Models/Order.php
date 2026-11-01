@@ -101,11 +101,21 @@ class Order extends Model
         self::STAGE_REFUNDED,
     ];
 
+    /**
+     * The open stages in the order an order passes through them. An order in one of these may also be moved back
+     * to an earlier one (owner request 2026-11-01); nothing after Shipping goes back.
+     */
+    public const OPEN_STAGE_ORDER = [
+        self::STAGE_CONFIRMED => 1,
+        self::STAGE_PROCESSING => 2,
+        self::STAGE_SHIPPING => 3,
+    ];
+
     public const WORKFLOW_TRANSITIONS = [
         self::STATUS_DRAFT => [self::STAGE_CONFIRMED, self::STAGE_CANCELLED],
         self::STATUS_CONFIRMED => [self::STAGE_PROCESSING, self::STAGE_SHIPPING, self::STAGE_DELIVERED, self::STAGE_COMPLETED, self::STAGE_CANCELLED, self::STAGE_RETURNED],
-        self::STATUS_PROCESSING => [self::STAGE_SHIPPING, self::STAGE_DELIVERED, self::STAGE_COMPLETED, self::STAGE_CANCELLED, self::STAGE_RETURNED],
-        self::STAGE_SHIPPING => [self::STAGE_DELIVERED, self::STAGE_RETURNED, self::STAGE_CANCELLED],
+        self::STATUS_PROCESSING => [self::STAGE_CONFIRMED, self::STAGE_SHIPPING, self::STAGE_DELIVERED, self::STAGE_COMPLETED, self::STAGE_CANCELLED, self::STAGE_RETURNED],
+        self::STAGE_SHIPPING => [self::STAGE_CONFIRMED, self::STAGE_PROCESSING, self::STAGE_DELIVERED, self::STAGE_RETURNED, self::STAGE_CANCELLED],
         self::STATUS_COMPLETED => [self::STAGE_RETURNED, self::STAGE_REFUNDED],
         self::STATUS_RETURNED => [self::STAGE_REFUNDED],
         self::STATUS_CANCELLED => [],
@@ -892,6 +902,78 @@ class Order extends Model
         return collect($this->allowedWorkflowStages())
             ->mapWithKeys(fn (string $stage): array => [$stage => self::WORKFLOW_STAGES[$stage]])
             ->all();
+    }
+
+    /**
+     * Where an open order stands in the flow: 1 Confirmed, 2 Processing, 3 Shipping (a live courier parcel),
+     * or null for a draft and for anything finished. Mirrors workflowStage() for the open stages.
+     */
+    public static function openStageRank(?string $status, ?string $deliveryStatus): ?int
+    {
+        if (! in_array($status, [self::STATUS_CONFIRMED, self::STATUS_PROCESSING], true)) {
+            return null;
+        }
+
+        if (in_array($deliveryStatus, self::SHIPPING_DELIVERY_STATUSES, true)) {
+            return self::OPEN_STAGE_ORDER[self::STAGE_SHIPPING];
+        }
+
+        return self::OPEN_STAGE_ORDER[$status];
+    }
+
+    /**
+     * The earlier open stages this order may go back to (a Processing order back to Confirmed, a Shipping
+     * one back to Processing or Confirmed). Empty for an order that is not in an open stage.
+     *
+     * @return list<string>
+     */
+    public function stepBackWorkflowStages(): array
+    {
+        $rank = self::openStageRank($this->status, $this->delivery_status);
+
+        if ($rank === null) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            $this->allowedWorkflowStages(),
+            fn (string $stage): bool => (self::OPEN_STAGE_ORDER[$stage] ?? PHP_INT_MAX) < $rank,
+        ));
+    }
+
+    /**
+     * The stages the order may move on to: allowedWorkflowStages() without the ones that go back.
+     * The parcel scan station uses this, so a scan never undoes a stage by accident.
+     *
+     * @return list<string>
+     */
+    public function allowedForwardWorkflowStages(): array
+    {
+        return array_values(array_diff($this->allowedWorkflowStages(), $this->stepBackWorkflowStages()));
+    }
+
+    /**
+     * The Change status choices. An order that can go back gets two groups, "Go back to" and "Move forward to",
+     * so a click on the wrong line cannot undo a stage unnoticed; any other order gets the plain list.
+     *
+     * @return array<string, string|array<string, string>>
+     */
+    public function groupedWorkflowStageOptions(): array
+    {
+        $back = $this->stepBackWorkflowStages();
+
+        if ($back === []) {
+            return collect($this->allowedWorkflowStageOptions())->map(fn (string $label): string => __($label))->all();
+        }
+
+        $labelled = fn (array $stages): array => collect($stages)
+            ->mapWithKeys(fn (string $stage): array => [$stage => __(self::WORKFLOW_STAGES[$stage])])
+            ->all();
+
+        return [
+            __('Go back to') => $labelled($back),
+            __('Move forward to') => $labelled($this->allowedForwardWorkflowStages()),
+        ];
     }
 
     public function clearStatusTransitionContext(): void

@@ -79,7 +79,7 @@
 
             @forelse ($orders as $order)
                 @php
-                    $canMove = in_array($this->stage, $order->allowedWorkflowStages(), true);
+                    $canMove = in_array($this->stage, $order->allowedForwardWorkflowStages(), true);
                 @endphp
                 <div class="flex items-center gap-3 py-2 {{ ! $loop->first ? 'border-t border-gray-200 dark:border-white/10' : '' }}" wire:key="scan-{{ $order->id }}">
                     <div class="min-w-0 flex-1">

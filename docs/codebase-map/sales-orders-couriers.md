@@ -45,7 +45,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | Path | What it does |
 | --- | --- |
 | `app/Services/OrderWorkflowService.php` | Coordinates order status flows, stock reservation checks, and payment reconciliations. |
-| `app/Services/OrderStatusWorkflowService.php` | Enforces valid status transitions and triggers SMS notifications on stage changes. |
+| `app/Services/OrderStatusWorkflowService.php` | Enforces valid status transitions and triggers SMS notifications on stage changes. Processing / Shipping orders may also go back to an earlier open stage (`Order::stepBackWorkflowStages()`); a step back resets the delivery state, leaves the courier booking alone and sends no customer message (`OrderStatusTransition::isStepBack()`). |
 | `app/Services/OrderStockCheckService.php` | Checks inventory levels before confirming an order to prevent overselling. |
 | `app/Services/OrderSummaryCardService.php` | Builds the shareable order summary card data (logo, contact, order and customer details, items with pictures, totals, payment state); the browser draws it on the order page. |
 | `app/Services/OrderSummaryCardImageService.php` | Draws the same card as a PNG on the server (Imagick + Pango, Bangla-safe) for the automatic WhatsApp card. |
@@ -58,6 +58,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Services/CustomerRiskService.php` | Calculates risk scores from return ratios, duplicate orders, and blacklist hits. |
 | `app/Services/CustomerRiskSettingsService.php` | Manages risk factor thresholds and score deduction weights. |
 | `app/Services/CustomerAccountService.php` | Calculates customer balance dues and payment summaries. |
+| `app/Services/CustomerOrderSummaryService.php` | The customer page's numbers: accounted orders (confirmed / processing / completed), total purchased, paid on orders + the customer's own payments, current due, first and last order date. |
 | `app/Services/CustomerCsvService.php` | Exports customer contact databases and processes CSV imports. |
 | `app/Services/CustomerDueAlertService.php` | Identifies customers with overdue payment balances and triggers alerts. |
 | `app/Services/CourierManager.php` | Factory resolving carrier adapter instances based on provider configurations. |
@@ -99,6 +100,8 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Filament/Resources/Orders/Actions/PutReturnedGoodsBackInStockAction.php` | Action allowing returned goods to be inspected and restored to inventory. |
 | `app/Filament/Resources/Quotations/QuotationResource.php` | Manages sales quotations and conversion into orders. |
 | `app/Filament/Resources/Customers/CustomerResource.php` | Customer directory, risk badges, address book, and order histories. |
+| `app/Filament/Resources/Customers/Widgets/CustomerPurchaseSummaryWidget.php` | The four cards on the customer page: Orders, Total purchased, Total paid, Current due. |
+| `app/Filament/Resources/Customers/RelationManagers/OrdersRelationManager.php` | Order History on the customer page (read-only): date, invoice, items, stage, money, newest first. The order page's customer name links here (`OrderInfolist::customerUrl()`). |
 | `app/Filament/Resources/CustomerPayments/CustomerPaymentResource.php` | Logs customer payments and allocates credits across orders. |
 | `app/Filament/Resources/CustomerBlacklists/CustomerBlacklistResource.php` | Manages global and company-specific blacklist entries (Super Admin only). |
 | `app/Filament/Resources/CustomerRiskProfiles/CustomerRiskProfileResource.php` | Displays computed customer risk scores and warning flags. |
@@ -176,6 +179,8 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | --- | --- |
 | `tests/Feature/SalesOrderTest.php` | Tests order creation, total calculations, and line item persistence. |
 | `tests/Feature/OrderStatusWorkflowTest.php` | Tests order stage progression, transitions, and stock reservation. |
+| `tests/Feature/OrderStepBackTest.php` | Tests going back to an earlier stage: which stages, delivery state reset, courier booking untouched, no customer message, scan stays forward-only. |
+| `tests/Feature/CustomerOrderHistoryTest.php` | Tests the customer page's money numbers, order history list and the order page's customer link. |
 | `tests/Feature/CourierIntegrationTest.php` | Tests courier booking creation, airway bill generation, and webhooks. |
 | `tests/Feature/DeliveryChallanServiceTest.php` | Tests the Delivery Challan against the owner's paper: totals, stock, due, later payments, cancel, numbering, old due. |
 | `tests/Feature/NuportOrderImportTest.php` | Tests the Nuport order import: mapping, statuses, SKU mapping, sales channel, returned pieces, courier bookings. |

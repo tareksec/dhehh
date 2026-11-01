@@ -87,11 +87,17 @@ class OrderStatusSmsService
 
     /**
      * The stage the customer is told about, or null for a change they are not
-     * texted about: not a stage with wording, or the order stayed in the same
-     * stage (a parcel going from "picked up" to "in transit" is still Shipping).
+     * texted about: not a stage with wording, the order stayed in the same
+     * stage (a parcel going from "picked up" to "in transit" is still Shipping),
+     * or the order went back to an earlier stage.
      */
     public function stageFor(OrderStatusTransition $transition): ?string
     {
+        // Going back to an earlier stage is a correction; the customer is not texted "confirmed" again after "shipped".
+        if ($transition->isStepBack()) {
+            return null;
+        }
+
         $stage = $this->tracking->statusEventStage($transition);
 
         if (! in_array($stage, SmsTemplateService::ORDER_STAGES, true)

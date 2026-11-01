@@ -48,6 +48,14 @@ class OrderStatusWorkflowService
             }
 
             $attributes = $this->attributesForStage($current, $stage);
+            // The courier booking follows the stage the order moves to. Going back is the exception: the booking
+            // is the courier's own record, so it stays as it is and only the order's delivery state is reset.
+            $bookingAttributes = $attributes;
+
+            if ($this->isStepBackFromShipping($current, $stage)) {
+                $attributes['delivery_status'] = $this->deliveryStatusAfterStepBack($current);
+            }
+
             $current->statusTransitionStage = $stage;
             $current->statusTransitionReason = filled($reason) ? trim((string) $reason) : null;
             $current->statusTransitionSource = $source;
@@ -56,7 +64,7 @@ class OrderStatusWorkflowService
             $this->ensureStockFor($current, $attributes['status'] ?? $current->status);
 
             try {
-                $this->syncLatestCourierBooking($current, $attributes, $reason, $stage);
+                $this->syncLatestCourierBooking($current, $bookingAttributes, $reason, $stage);
                 $current->forceFill($attributes)->save();
             } catch (ValidationException $exception) {
                 // A stock or courier rule rejected the change under a key
@@ -128,6 +136,26 @@ class OrderStatusWorkflowService
             ],
             Order::STAGE_REFUNDED => ['status' => Order::STATUS_REFUNDED],
         };
+    }
+
+    /** A Shipping order sent back to Processing or Confirmed: the parcel is no longer counted as on its way. */
+    protected function isStepBackFromShipping(Order $order, string $stage): bool
+    {
+        return $order->workflowStage() === Order::STAGE_SHIPPING
+            && in_array($stage, [Order::STAGE_CONFIRMED, Order::STAGE_PROCESSING], true);
+    }
+
+    /**
+     * The delivery state of an order that went back from Shipping: Booked while a courier booking is still live
+     * (the parcel stays booked, it just is not moving), otherwise Not Booked, as before the "Shipping" click.
+     */
+    protected function deliveryStatusAfterStepBack(Order $order): string
+    {
+        $booking = $order->latestCourierBooking()->first();
+
+        return $booking && ! in_array($booking->status, [CourierBooking::STATUS_CANCELLED, CourierBooking::STATUS_FAILED], true)
+            ? CourierBooking::STATUS_BOOKED
+            : CourierBooking::STATUS_NOT_BOOKED;
     }
 
     protected function syncLatestCourierBooking(Order $order, array $attributes, ?string $reason, string $stage): void

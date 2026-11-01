@@ -23,11 +23,14 @@ class ChangeOrderWorkflowAction
             ->visible(fn (Order $record): bool => filled($record->allowedWorkflowStages())
                 && (Auth::user()?->hasPermission('sales.update') ?? false))
             ->modalHeading(fn (Order $record): string => "Change status for {$record->order_number}")
-            ->modalDescription('Shipping and delivery stages also update the storefront delivery status. Stock and customer dues follow the order status.')
+            ->modalDescription(fn (Order $record): string => __('Shipping and delivery stages also update the storefront delivery status. Stock and customer dues follow the order status.')
+                .($record->stepBackWorkflowStages() !== []
+                    ? ' '.__('Going back to an earlier stage does not send the customer a message.')
+                    : ''))
             ->schema(fn (Order $record): array => [
                 Select::make('stage')
-                    ->label('Next stage')
-                    ->options($record->allowedWorkflowStageOptions())
+                    ->label('Move to')
+                    ->options($record->groupedWorkflowStageOptions())
                     ->required()
                     ->live()
                     ->native(false),

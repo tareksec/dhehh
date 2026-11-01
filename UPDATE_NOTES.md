@@ -112,6 +112,22 @@ Owner (Banglish): write documents for the Trade Portal and the IMS (Office and I
 
 Commit status: committed on `feature/ai-guide-public` and pushed to `main` on the owner's approval ("make it public").
 
+## 2026-11-01 - Customer page from the order, and orders can go back a stage
+
+Owner (Bangla), two points:
+1. "On the order view page, clicking the customer's name should open the customer's details: their information, the list of what they ordered on which date, and cards showing how much of our goods they have taken so far and how much they have paid."
+2. "An order in confirmed, processing, in transit or shipped may go back to the earlier status if the user wants, and forward of course."
+
+**What I did (1):** the customer name on `OrderInfolist` is a link (`customerUrl()`: Customer page, Reseller page for a customer who applied to be a reseller, nothing when the user may not open it). `ViewCustomer` has four cards (`CustomerPurchaseSummaryWidget`: Orders, Total purchased, Total paid, Current due) and an **Order History** list (`Customers\RelationManagers\OrdersRelationManager`: date, invoice, items, stage, total / paid / due, newest first). Numbers come from `CustomerOrderSummaryService`. **Decision I made:** totals count confirmed, processing and completed orders only, the same orders the customer's due uses; cancelled, returned, refunded and draft orders show in the list but not in the totals. Total paid = paid on those orders + the customer's own payments (`CustomerPayment`), which are separate ledgers, so nothing counts twice.
+
+**What I did (2):** Processing can go back to Confirmed; Shipping can go back to Processing or Confirmed. I read the owner's "in transit" and "shipped" as the one **Shipping** stage this ERP has (the stage a courier parcel in transit puts an order in). Delivered, Completed, Cancelled, Returned and Refunded do not go back. **Decisions I made:** (a) a step back sends the customer no SMS, no e-mail, no WhatsApp card and no Meta event, because "your order is confirmed" arriving after "shipped" would only confuse; (b) stepping back from Shipping resets the order's delivery state to Booked while a courier booking is live, otherwise Not Booked, and leaves the courier's booking record alone; if the courier later reports the parcel moving, the order moves forward again by itself, as before; (c) the parcel scan page stays forward-only; (d) going back needs no reason. Change status shows "Go back to" and "Move forward to" groups.
+
+**Needs Bangla review (`lang/bn.json`, 18 new keys):** "যে ধাপে নেবেন" (Move to), "আগের ধাপে ফেরত" (Go back to), "সামনের ধাপে" (Move forward to), "মোট কেনা" (Total purchased), "মোট পরিশোধ" (Total paid), "বর্তমান বাকি" (Current due), "অর্ডারের ইতিহাস" (Order History) and the card description lines.
+
+**Verified:** not yet. This container has PHP 8.3 and no PHP 8.4 (the environment setup script failed), so `php artisan test` could not be run when this was committed. The new tests (`OrderStepBackTest`, `CustomerOrderHistoryTest`) and the full suite still have to be run before anything goes to `main`.
+
+Commit status: committed on `claude/order-management-features-nafks7` and pushed to that feature branch only; not on `main`.
+
 ## 2026-10-24 - One-time codes work for three minutes at most
 
 Owner (Bangla): "keep the OTP code's validity at three minutes at most".

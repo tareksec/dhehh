@@ -129,6 +129,13 @@ class ScanParcels extends Page
         $moved = 0;
         $skipped = [];
         foreach ($this->orders() as $order) {
+            // A scan only moves a parcel on; going back to an earlier stage is done from the order itself.
+            if (in_array($this->stage, $order->stepBackWorkflowStages(), true)) {
+                $skipped[] = $order->order_number.': '.__('A scan only moves an order forward. Use Change status on the order to go back.');
+
+                continue;
+            }
+
             try {
                 app(OrderStatusWorkflowService::class)->transition($order, $this->stage, null, 'scan');
                 $moved++;
