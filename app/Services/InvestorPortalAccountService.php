@@ -379,7 +379,7 @@ class InvestorPortalAccountService
 
         if ($company !== null) {
             // BulkSMSBD's OTP format: "Your {Brand/Company Name} OTP is XXXX". The owner can only choose the
-            // brand (SMS Templates); the text is English whatever the investor's language, as the format is.
+            // brand (SMS Gateway → Message templates); the text is English whatever the investor's language, as the format is.
             $message = (string) $this->templates->render(
                 (int) $company->getKey(),
                 $purpose === 'reset' ? SmsTemplateService::RESET_INVESTOR_PASSWORD : SmsTemplateService::OTP_INVESTOR_LOGIN,

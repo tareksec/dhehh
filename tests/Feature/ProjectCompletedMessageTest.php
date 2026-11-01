@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Events\InvestorGroupProjectCompleted;
-use App\Filament\Pages\SmsTemplates;
+use App\Livewire\SmsTemplatesForm;
 use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\Customer;
@@ -200,7 +200,7 @@ class ProjectCompletedMessageTest extends TestCase
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        Livewire::test(SmsTemplates::class)
+        Livewire::test(SmsTemplatesForm::class)
             ->assertSet('data.sms_investor_project_closed', null)
             ->set('data.sms_investor_project_closed', '  Congratulations :name!  ')
             ->call('save')
@@ -208,7 +208,7 @@ class ProjectCompletedMessageTest extends TestCase
 
         $this->assertSame('Congratulations :name!', app(SmsTemplateService::class)->body($this->company->id, SmsTemplateService::PROJECT_CLOSED));
 
-        Livewire::test(SmsTemplates::class)
+        Livewire::test(SmsTemplatesForm::class)
             ->set('data.sms_investor_project_closed', '')
             ->call('save')
             ->assertHasNoErrors();

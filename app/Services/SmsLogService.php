@@ -25,7 +25,7 @@ class SmsLogService
     public static function reasonLabels(): array
     {
         return [
-            'no_wording' => __('No wording is written for this message on the SMS Templates page.'),
+            'no_wording' => __('No wording is written for this message under Message templates (Settings → Integrations → SMS Gateway).'),
             'no_phone' => __('The customer has no phone number.'),
             'opted_out' => __('The number is on the opt-out list.'),
             'no_gateway' => __('No SMS gateway is set. Fill in Integrations → SMS Gateway.'),

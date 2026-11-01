@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Pages\SmsTemplates;
 use App\Jobs\SendOrderPlacedSmsJob;
+use App\Livewire\SmsTemplatesForm;
 use App\Models\Company;
 use App\Models\CourierBooking;
 use App\Models\CourierProvider;
@@ -21,6 +21,7 @@ use App\Models\User;
 use App\Services\CompanyContext;
 use App\Services\CustomerAccountService;
 use App\Services\Investment\SettlementService;
+use App\Services\OrderStatusSmsService;
 use App\Services\OrderStatusWorkflowService;
 use App\Services\SmsTemplateService;
 use App\Support\BulkSmsBdPolicy;
@@ -34,7 +35,7 @@ use Livewire\Livewire;
 use Tests\TestCase;
 
 /**
- * The SMS Templates page and what hangs off it (owner request 2026-10-17):
+ * The message templates (Integrations → SMS Gateway) and what hangs off them (owner request 2026-10-17):
  * order status messages, sign-in / password-reset codes and the investors'
  * project status messages. Order and project messages send nothing until the
  * owner writes them; code messages fall back to the built-in wording.
@@ -136,7 +137,7 @@ class SmsTemplatesTest extends TestCase
         Queue::assertPushed(SendOrderPlacedSmsJob::class, fn (SendOrderPlacedSmsJob $job): bool => $job->orderId === $order->id
             && $job->delay !== null);
 
-        app(\App\Services\OrderStatusSmsService::class)->sendPlaced($order->id);
+        app(OrderStatusSmsService::class)->sendPlaced($order->id);
 
         $sent = $this->sent();
         $this->assertCount(1, $sent);
@@ -144,7 +145,7 @@ class SmsTemplatesTest extends TestCase
         $this->assertSame("Hi Template Customer, we got order {$order->order_number} (Template Product x2). Total 200, due 200. Status: Draft. - Template Co", $sent[0]['msg']);
 
         // A retried job never texts the same order twice.
-        app(\App\Services\OrderStatusSmsService::class)->sendPlaced($order->id);
+        app(OrderStatusSmsService::class)->sendPlaced($order->id);
         $this->assertCount(1, $this->sent());
     }
 
@@ -161,7 +162,7 @@ class SmsTemplatesTest extends TestCase
         Queue::assertNothingPushed();
 
         $quiet = Order::query()->create(['customer_id' => Customer::query()->create(['name' => 'Quiet', 'phone' => '01733333333', 'opted_out_at' => now()])->id, 'status' => Order::STATUS_DRAFT]);
-        app(\App\Services\OrderStatusSmsService::class)->sendPlaced($quiet->id);
+        app(OrderStatusSmsService::class)->sendPlaced($quiet->id);
         Http::assertNothingSent();
     }
 
@@ -286,7 +287,7 @@ class SmsTemplatesTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         $key = SmsTemplateService::orderKey(Order::STAGE_DELIVERED);
 
-        Livewire::test(SmsTemplates::class)
+        Livewire::test(SmsTemplatesForm::class)
             ->assertSee(__('Order status'))
             ->assertSee(__('Investor login code'))
             ->assertSee(__('Profit settled'))
@@ -297,7 +298,7 @@ class SmsTemplatesTest extends TestCase
 
         $this->assertSame('Delivered :order', app(SmsTemplateService::class)->body($this->company->id, $key));
 
-        Livewire::test(SmsTemplates::class)
+        Livewire::test(SmsTemplatesForm::class)
             ->assertSet('data.sms_order_delivered', 'Delivered :order')
             ->set('data.sms_order_delivered', '')
             ->call('save')
@@ -311,7 +312,7 @@ class SmsTemplatesTest extends TestCase
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        Livewire::test(SmsTemplates::class)
+        Livewire::test(SmsTemplatesForm::class)
             ->set('data.sms_otp_investor_login', 'Welcome to the portal')
             ->call('save')
             ->assertHasErrors(['data.sms_otp_investor_login']);
@@ -324,7 +325,7 @@ class SmsTemplatesTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         $quote = "Dear :name, it's confirmed";
 
-        Livewire::test(SmsTemplates::class)
+        Livewire::test(SmsTemplatesForm::class)
             ->set('data.sms_otp_customer_login', 'Your code is :code, valid 10 minutes')
             ->set('data.sms_order_confirmed', $quote)
             ->set('data.sms_order_shipping', str_repeat('a', 470))
@@ -333,7 +334,7 @@ class SmsTemplatesTest extends TestCase
 
         $this->assertSame([], app(SmsTemplateService::class)->bodies($this->company->id));
 
-        Livewire::test(SmsTemplates::class)
+        Livewire::test(SmsTemplatesForm::class)
             ->set('data.sms_otp_customer_login', 'Your Template Shop OTP is :code.')
             ->set('data.sms_order_confirmed', 'Dear :name, your order is confirmed.')
             ->call('save')
@@ -356,7 +357,7 @@ class SmsTemplatesTest extends TestCase
             }
         }
 
-        Livewire::test(SmsTemplates::class)
+        Livewire::test(SmsTemplatesForm::class)
             ->callFormComponentAction('sms_order_shipping', 'suggest_sms_order_shipping')
             ->assertSet('data.sms_order_shipping', SmsTemplateService::SUGGESTED_ORDER[Order::STAGE_SHIPPING]);
     }
@@ -365,13 +366,13 @@ class SmsTemplatesTest extends TestCase
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        Livewire::test(SmsTemplates::class)->assertDontSee('masking name');
+        Livewire::test(SmsTemplatesForm::class)->assertDontSee('masking name');
 
         $setting = StorefrontSetting::bladeFor($this->company->id);
         $setting->notification_credentials = [...$setting->notification_credentials, 'sms_sender_id' => 'TEMPLATECO'];
         $setting->save();
 
-        Livewire::test(SmsTemplates::class)->assertSee('masking name');
+        Livewire::test(SmsTemplatesForm::class)->assertSee('masking name');
     }
 
     public function test_every_company_has_its_own_templates(): void

@@ -101,7 +101,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `app/Filament/Pages/SalesFollowUps.php` | Monitor for active and completed automated sales follow-up sequences. |
 | `app/Filament/Pages/ConnectWhatsAppBusinessApp.php` | Embedded Meta Cloud API onboarding wizard for coexisting official WhatsApp channels. |
 | `app/Filament/Pages/WhatsAppWebLogin.php` | Displays live QR code for scanning and linking WhatsApp Web Baileys bridge. |
-| `app/Filament/Pages/SmsTemplates.php` | Admin editor for system notification SMS templates. |
+| `app/Livewire/SmsTemplatesForm.php` | Editor for the system SMS wording (order status, OTP / password reset, investor projects); embedded in Integrations → SMS Gateway → Message templates. |
 | `app/Filament/Pages/EmailTemplates.php` | Settings → Email Templates: subject and body for every order, code/reset and IMS email, the owner's own templates, with Preview, Send a test and Use suggested wording. |
 | `app/Filament/Resources/SmsLogs/SmsLogResource.php` | SMS log table (a tab on Settings → Logs, no sidebar entry of its own): every order SMS and why it was or was not sent; one-column phone layout. |
 | `app/Filament/Pages/Logs.php` | Settings → Logs: one page, one tab per log (SMS, audit, courier status/webhooks, Meta events, deploy errors, mobile crashes), each shown only to people who may open that log. |
@@ -151,7 +151,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `resources/views/filament/pages/ai-inbox-report.blade.php` | Analytics dashboard view for AI customer engagement metrics. |
 | `resources/views/filament/pages/whats-app-web-login.blade.php` | QR code scanning screen for linking the Baileys bridge. |
 | `resources/views/filament/pages/connect-whats-app-business-app.blade.php` | Meta Cloud API Embedded Signup wizard view. |
-| `resources/views/filament/pages/sms-templates.blade.php` | SMS notification template editor view. |
+| `resources/views/livewire/sms-templates-form.blade.php` | View of the SMS template editor component. |
 | `resources/views/filament/pages/email-templates.blade.php` | Email Templates page view (warns when no email account is set up). |
 | `resources/views/filament/pages/email-template-preview.blade.php` | The Preview modal: subject and the branded mail in a sandboxed iframe. |
 | `resources/views/emails/branded.blade.php` | The branded email layout (logo or name, a line in the site's colour, body, optional button, contact footer); table-based with inline styles. |
@@ -183,7 +183,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 ## Routes and panels
 - **Panels**:
   - `admin` panel:
-    - CRM Cluster (`admin/crm/*`): Leads, Inbox, Agent Desk, Needs Attention, To Chase, Unanswered Questions, AI Inbox Report, Conversation Channels, Broadcasts, Quick Replies, Sales Automation, Sales Follow-Ups, SMS Templates, Push Notification Settings. Settings cluster: SMS Templates, Email Templates.
+    - CRM Cluster (`admin/crm/*`): Leads, Inbox, Agent Desk, Needs Attention, To Chase, Unanswered Questions, AI Inbox Report, Conversation Channels, Broadcasts, Quick Replies, Sales Automation, Sales Follow-Ups, Push Notification Settings. Settings cluster: Email Templates (the SMS templates are in Integrations → SMS Gateway).
 - **Webhook & Media Routes**:
   - `GET|HEAD webhooks/meta` (name `webhooks.meta.verify`) -> `App\Http\Controllers\MetaWebhookController@verify`
   - `POST webhooks/meta` (name `webhooks.meta.handle`) -> `App\Http\Controllers\MetaWebhookController@handle`

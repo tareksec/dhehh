@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Filament\Clusters\Settings;
 use App\Jobs\DispatchWebsiteWebhookJob;
 use App\Livewire\MetaEventLogTable;
+use App\Livewire\SmsTemplatesForm;
 use App\Livewire\WebsiteApiKeysTable;
 use App\Models\Company;
 use App\Models\Order;
@@ -36,6 +37,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions as SchemaActions;
 use Filament\Schemas\Components\Livewire as SchemaLivewire;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
@@ -1507,9 +1509,18 @@ class Integrations extends Page
                                     ->helperText(__('The SMS Dashboard shows a red warning when the BulkSMSBD balance is below this amount. Leave empty for no warning.')),
                                 Placeholder::make('sms_gateway_wording_note')
                                     ->hiddenLabel()
-                                    ->content(__('This URL only delivers messages. The wording of each SMS is written on Settings → SMS Templates, and your branding comes from the sender ID and the wording you write there.'))
+                                    ->content(__('This URL only delivers messages. The wording of each SMS is written below, under Message templates, and your branding comes from the sender ID and the wording you write there.'))
                                     ->columnSpanFull(),
                                 SchemaActions::make([$this->testSmsAction()])
+                                    ->columnSpanFull(),
+                                Section::make(__('Message templates'))
+                                    ->description(__('The wording of the SMS the system sends: order status, OTP and password reset codes, and investor project messages. Templates belong to the company, so every site uses the same ones. They have their own Save templates button.'))
+                                    ->icon(Heroicon::OutlinedChatBubbleBottomCenterText)
+                                    ->schema([
+                                        SchemaLivewire::make(SmsTemplatesForm::class)
+                                            ->key('smsTemplatesForm')
+                                            ->columnSpanFull(),
+                                    ])
                                     ->columnSpanFull(),
                             ])
                             ->columns(2),

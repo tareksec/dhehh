@@ -9,7 +9,7 @@ use App\Models\StorefrontSetting;
 use App\Support\BulkSmsBdPolicy;
 
 /**
- * The wording of every SMS the owner can set (SMS Templates page, owner request
+ * The wording of every SMS the owner can set (SMS Gateway tab, Message templates, owner request
  * 2026-10-17).
  *
  * A template is plain text with :placeholders (the same style as the older

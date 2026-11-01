@@ -236,7 +236,7 @@ class SettlementService
 
         app(AuditLogService::class)->record('settlement_confirmed', $settlement, ['status' => 'draft'], ['status' => 'confirmed', 'confirmed_by' => $userId]);
 
-        // "Profit settled" SMS to the project's investors, when the owner has written one (SMS Templates).
+        // "Profit settled" SMS to the project's investors, when the owner has written one (SMS Gateway → Message templates).
         $project = $settlement->project;
 
         // A loss taken from capital: the group's next project carries the smaller capital.

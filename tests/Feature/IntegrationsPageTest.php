@@ -7,17 +7,20 @@ use App\Filament\Resources\StorefrontSettings\Pages\EditStorefrontSetting;
 use App\Jobs\DispatchWebsiteWebhookJob;
 use App\Jobs\RetryStorefrontMetaEventJob;
 use App\Livewire\MetaEventLogTable;
+use App\Livewire\SmsTemplatesForm;
 use App\Livewire\WebsiteApiKeysTable;
 use App\Models\Company;
 use App\Models\CompanyApiKey;
 use App\Models\CourierProvider;
 use App\Models\MetaAdAccount;
+use App\Models\Order;
 use App\Models\StorefrontMetaEvent;
 use App\Models\StorefrontSetting;
 use App\Models\User;
 use App\Models\UserRole;
 use App\Services\CompanyContext;
 use App\Services\Crm\AiSettingsService;
+use App\Services\SmsTemplateService;
 use App\Services\StorefrontNotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -850,6 +853,40 @@ class IntegrationsPageTest extends TestCase
 
         $this->assertTrue($setting->fresh()->notification_credentials['sms_enabled']);
         $this->assertTrue(app(StorefrontNotificationService::class)->smsConfigured($setting->fresh()));
+    }
+
+    public function test_sms_gateway_tab_holds_the_message_templates_for_the_company(): void
+    {
+        $company = $this->makeCompany();
+        $setting = StorefrontSetting::withoutGlobalScopes()->create([
+            'company_id' => $company->getKey(),
+            'site_type' => StorefrontSetting::SITE_BLADE,
+            'notification_credentials' => ['sms_api_key' => 'sms-secret'],
+        ]);
+        $this->actingAs($this->makeSuperAdmin($company))
+            ->withSession(['current_company_id' => $company->getKey(), 'current_company_selection_explicit' => true]);
+
+        Livewire::test(Integrations::class)
+            ->assertSee(__('SMS Gateway'))
+            ->assertSee(__('Message templates'));
+
+        // The templates live here only: there is no separate SMS Templates page any more.
+        $this->assertFalse(class_exists('App\\Filament\\Pages\\SmsTemplates'));
+
+        // A template saved with its own button is a company setting: the page's Save changes neither needs nor drops it.
+        Livewire::test(SmsTemplatesForm::class)
+            ->set('data.sms_order_delivered', 'Delivered :order')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        Livewire::test(Integrations::class)
+            ->set('data.notification_credentials.sms_sender_id', 'ZamZam')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('Delivered :order', app(SmsTemplateService::class)->body($company->getKey(), SmsTemplateService::orderKey(Order::STAGE_DELIVERED)));
+        $this->assertSame('ZamZam', $setting->fresh()->notification_credentials['sms_sender_id']);
+        $this->assertSame('sms-secret', $setting->fresh()->notification_credentials['sms_api_key']);
     }
 
     public function test_saving_storefront_settings_keeps_the_sms_gateway_and_email_setup_set_on_integrations(): void

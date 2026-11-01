@@ -1,77 +1,57 @@
 <?php
 
-namespace App\Filament\Pages;
+namespace App\Livewire;
 
-use App\Filament\Clusters\Settings;
+use App\Filament\Pages\Integrations;
 use App\Models\Company;
 use App\Services\AuditLogService;
 use App\Services\CompanyContext;
 use App\Services\SmsTemplateService;
 use App\Support\BulkSmsBdPolicy;
-use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Actions\Concerns\InteractsWithActions;
+use Filament\Actions\Contracts\HasActions;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
-use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Concerns\InteractsWithSchemas;
+use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Contracts\View\View;
 use Illuminate\Validation\ValidationException;
+use Livewire\Component;
 
 /**
- * Where the owner writes the SMS the system sends (owner request 2026-10-17):
- * order status messages, sign-in / password-reset codes and the investors'
- * project status messages. The sending itself is in SmsTemplateService,
- * OrderStatusSmsService and InvestorProjectMessageService; the SMS gateway is
- * set on Integrations → SMS Gateway. Every message follows the BulkSMSBD rules
- * (BulkSmsBdPolicy): a code message can only change its brand, and a message that
- * breaks a rule is not saved.
+ * Where the owner writes the SMS the system sends (owner request 2026-10-17,
+ * moved into the SMS Gateway tab 2026-10-18): order status messages, sign-in /
+ * password-reset codes and the investors' project status messages. Embedded on
+ * Settings → Integrations → SMS Gateway, same Filament\Schemas\Components\Livewire
+ * pattern as WebsiteApiKeysTable there, with its own Save button.
+ *
+ * The sending is in SmsTemplateService, OrderStatusSmsService and
+ * InvestorProjectMessageService. Every message follows the BulkSMSBD rules
+ * (BulkSmsBdPolicy): a code message can only change its brand, and a message
+ * that breaks a rule is not saved. The templates belong to the company, so
+ * every site's gateway uses the same ones.
  */
-class SmsTemplates extends Page
+class SmsTemplatesForm extends Component implements HasActions, HasSchemas
 {
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChatBubbleBottomCenterText;
-
-    protected static ?string $cluster = Settings::class;
-
-    protected static ?int $navigationSort = 2;
-
-    protected string $view = 'filament.pages.sms-templates';
+    use InteractsWithActions;
+    use InteractsWithSchemas;
 
     /** @var array<string, mixed>|null */
     public ?array $data = [];
 
-    public static function getNavigationLabel(): string
+    /** The form field of a message (a key has dots, which a form path cannot). */
+    public static function field(string $key): string
     {
-        return __('SMS Templates');
-    }
-
-    public function getTitle(): string
-    {
-        return __('SMS Templates');
-    }
-
-    public static function canAccess(): bool
-    {
-        $user = Auth::user();
-        $context = app(CompanyContext::class);
-
-        if (! $user?->canManageSettings()) {
-            return false;
-        }
-
-        if ($context->isAllCompanies()) {
-            return $user->isSuperAdmin();
-        }
-
-        $company = $context->company();
-
-        return (bool) ($company && $user->canAccessCompany((int) $company->getKey()));
+        return 'sms_'.str_replace('.', '_', $key);
     }
 
     public function company(): ?Company
@@ -79,12 +59,6 @@ class SmsTemplates extends Page
         $context = app(CompanyContext::class);
 
         return $context->isAllCompanies() ? null : $context->company();
-    }
-
-    /** The form field of a message (a key has dots, which a form path cannot). */
-    public static function field(string $key): string
-    {
-        return 'sms_'.str_replace('.', '_', $key);
     }
 
     public function mount(): void
@@ -118,7 +92,8 @@ class SmsTemplates extends Page
                     ->schema([
                         Text::make(fn (): string => __('Your SMS sender ID (:sender) is a masking name. BulkSMSBD sends masking SMS only in Bangla (error 1012), so an English message, including the OTP format, is refused by the gateway. A numeric sender ID sends English messages.', ['sender' => (string) $this->senderId()]))
                             ->visible(fn (): bool => BulkSmsBdPolicy::isMaskingSender($this->senderId())),
-                    ]),
+                    ])
+                    ->compact(),
                 Tabs::make('sms_templates')
                     ->columnSpanFull()
                     ->tabs([
@@ -139,12 +114,6 @@ class SmsTemplates extends Page
                             ->schema([
                                 Text::make(__('Sent by SMS to every investor of a project when it changes status. A status you leave empty sends nothing. A group\'s next project is announced when the previous one is completed.')),
                                 ...$this->fieldsFor($templates, SmsTemplateService::GROUP_PROJECT),
-                            ]),
-                        Tab::make(__('IMS news'))
-                            ->icon(Heroicon::OutlinedBellAlert)
-                            ->schema([
-                                Text::make(__('IMS v2 news to investors by SMS. The portal always shows the news; an SMS goes out only for the messages you write here and switch on in the IMS office (IMS settings).')),
-                                ...$this->fieldsFor($templates, SmsTemplateService::GROUP_IMS),
                             ]),
                     ]),
             ]);
@@ -215,7 +184,8 @@ class SmsTemplates extends Page
     {
         $company = $this->company();
 
-        abort_unless($company !== null && static::canAccess(), 404);
+        // The Integrations page's own rule: settings managers of this company (a Super Admin for all companies).
+        abort_unless($company !== null && Integrations::canAccess(), 404);
 
         $templates = app(SmsTemplateService::class);
         $data = $this->form->getState();
@@ -240,5 +210,10 @@ class SmsTemplates extends Page
         app(AuditLogService::class)->record('sms_templates.saved', $company, $before, $templates->bodies((int) $company->getKey()));
 
         Notification::make()->title(__('SMS templates saved'))->success()->send();
+    }
+
+    public function render(): View
+    {
+        return view('livewire.sms-templates-form');
     }
 }

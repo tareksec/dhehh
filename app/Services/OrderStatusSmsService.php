@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
 
 /**
  * Texts the customer when their order reaches a new stage, with the wording
- * the owner wrote for that stage on the SMS Templates page (owner request
+ * the owner wrote for that stage on the SMS Gateway tab (Message templates) (owner request
  * 2026-10-17). A stage with no wording sends nothing, so the SMS only starts
  * once the owner has written one.
  *

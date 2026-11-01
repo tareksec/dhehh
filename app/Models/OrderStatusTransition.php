@@ -32,7 +32,7 @@ class OrderStatusTransition extends Model
     protected static function booted(): void
     {
         static::created(function (OrderStatusTransition $transition): void {
-            // The customer's status SMS (SMS Templates); a failure here must never undo the status change.
+            // The customer's status SMS (SMS Gateway → Message templates); a failure here must never undo the status change.
             try {
                 if (Schema::hasTable('sms_templates')) {
                     app(OrderStatusSmsService::class)->dispatchForTransition($transition);

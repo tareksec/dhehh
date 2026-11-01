@@ -54,7 +54,7 @@ class InvestmentProject extends Model
             $project->project_code ??= static::groupProjectCode($project) ?? static::nextProjectCode((int) $project->company_id);
         });
 
-        // The investors' status SMS (SMS Templates) for a project outside a group; a group's projects
+        // The investors' status SMS (SMS Gateway → Message templates) for a project outside a group; a group's projects
         // are texted by the group cycle, and "settled" by the settlement's confirmation.
         static::updated(function (self $project): void {
             $key = match ($project->status) {

@@ -14,7 +14,7 @@ use Throwable;
 /**
  * The SMS to the investors of a project when the project changes status
  * (started, completed, profit settled), with the wording the owner wrote on
- * the SMS Templates page (owner request 2026-10-17; the "completed" message is
+ * the SMS Gateway tab (Message templates) (owner request 2026-10-17; the "completed" message is
  * the one of 16_INVESTOR_GROUPS_PLAN.md §3.8).
  *
  * While a status has no wording nothing is sent. One message per investor per

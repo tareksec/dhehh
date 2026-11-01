@@ -2,7 +2,26 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-01 (latest) - Admin bottom bar with a "+" quick-create (phones and tablets)
+## 2026-11-01 (latest) - Message templates moved into Integrations → SMS Gateway (rebuilt)
+
+Owner (Bangla): "add the template-creation option in the admin, and keep it in the SMS gateway"; later: "redo what was lost, commit and push to the feature branch".
+
+Why it is a rebuild: the first version of this move (2026-10-18, branch `feature/sms-templates-in-gateway`) was never committed and its scratch worktree was deleted. I restored the component, its view, the page edits and the test edits from the session transcript and applied them on top of current `origin/main` (v2.118.0, with the SMS on/off switch), adjusting the SMS Gateway tab to its new layout.
+
+What changed (worktree `zz-sms-toggle`, branch `feature/sms-templates-in-gateway`, from `origin/main`):
+- New Livewire component `App\Livewire\SmsTemplatesForm` + view `livewire/sms-templates-form.blade.php`: the three tabs (Order status / OTP & password reset / Investor projects), the BulkSMSBD rules box, the masking-sender notice, the counter and "Use suggested wording". Its own **Save templates** button, because templates are per company while the gateway fields are per site; the Integrations page's Save changes does not touch them.
+- `Integrations` → SMS Gateway tab: a **Message templates** section after the "Send test SMS" button, embedded with `SchemaLivewire` (same pattern as the API keys table).
+- The standalone `SmsTemplates` page and its view are deleted, so the Settings menu has no SMS Templates entry. Data is unchanged (same `sms_templates` table, same keys, same audit action).
+- Texts that named the old page now name the new place: Investor Portal Settings pointer, the note under the gateway URL, the SMS Log "no wording" reason, the BulkSMSBD 1012 hint. Code comments and `docs/codebase-map/crm-messaging.md` updated.
+- Tests: `SmsTemplatesTest` and `ProjectCompletedMessageTest` drive the component; `IntegrationsPageTest` +1 (the tab holds the section, the old page class is gone, a template saved separately survives Save changes).
+
+**Needs Bangla review (3 new keys + 4 reworded, `lang/bn.json`):** "Message templates", the section description, "Save templates", the Investor Portal Settings pointer, the note under the gateway URL, the SMS Log "no wording" reason, the BulkSMSBD 1012 hint. Five old keys were removed ("SMS Templates" and the four old wordings).
+
+Verified: Pint clean. Focused run (translation parity, BulkSMSBD policy, SMS templates, project completed message, Integrations page, SMS log, SMS dashboard, investor portal, admin navigation clusters, multi-company isolation): 153 passed, 12 failed. All 12 are in `InvestorPortalTest` and fail with "Unable to locate file in Vite manifest: resources/css/filament/ims/theme.css": this worktree's copied `public/build` has no IMS theme, an environment problem, not this change. The full suite was not run here (about 75 minutes on this machine); CI on the branch decides. Not viewed in a browser, no real SMS sent, no live data touched.
+
+Commit status: committed on branch `feature/sms-templates-in-gateway` and pushed to that branch only (owner approval 2026-11-01). Not merged to `main`.
+
+## 2026-11-01 - Admin bottom bar with a "+" quick-create (phones and tablets)
 
 Owner (Bangla, item 8): put the ERP dashboard header's navigation icon buttons at the bottom as a bottom navigation; in the middle a "+" button that offers Create a new order, Add a new product, Add a new purchase, Add a new expense, each opening a popup where the form can be filled in; on the left the Dashboard and company-switch icons, on the right the Orders and Products icons.
 
@@ -26,7 +45,8 @@ Verified: `AdminBottomNavigationTest` 14 passed, `TranslationParityTest` passed,
 Two bugs the browser found that the Livewire tests could not (both fixed and pinned): (a) an `@if` around the whole view made Livewire take the `<nav>` as the component root, so the popups sat outside the component and never appeared (`test_the_popups_live_inside_the_livewire_component_not_beside_it`); (b) the "+" menu's Alpine state threw "quickOpen is not defined" when a saved popup navigated away, fixed by `wire:ignore` on the `<nav>`.
 
 Commit status: committed and pushed to `feature/admin-bottom-navigation`; not on `main` (the owner decides when `main` moves).
-## 2026-11-01 (latest) - Supplier Report: one account page for each product
+## 2026-11-01 - Supplier Report: one account page for each product
+
 
 Owner (Bangla): redo the Report module so that a supplier's account shows every product separately: at what price how many pieces were sold, how many damaged, how many in stock, how many short; each product on its own page; the account must be crystal clear with no gap.
 
@@ -45,7 +65,7 @@ Things the owner should know:
 Verified: `SupplierReportTest` 16 passed; screen and PDF checked in the browser on a throwaway sqlite database (never demo or live). Full `php artisan test` (on Windows, frontend built): 3458 passed, 5 skipped, 15 failed. The 15 are `BackupDrillTest`, `BackupEncryptionTest`, `BackupRestoreTest`, `BackupRunsTest`, `R2BackupTest` and `SesTrackingTest`: they need a `mysql` client binary and an openssl certificate that this Windows machine does not have. The same 15 fail on a clean `origin/main` (checked with my changes stashed), so none comes from this change.
 
 Commit status: committed on `feature/supplier-report-product-pages` and pushed to `main` on the owner's approval of 2026-11-01.
-## 2026-11-01 (latest) - SMS system on/off switch (Integrations → SMS Gateway)
+## 2026-11-01 - SMS system on/off switch (Integrations → SMS Gateway)
 
 Owner (Bangla, item 10 of a list; the word came out as "গুগল বাটন", read as "টগল বাটন"): "এসএমএস সিস্টেম অন অফ করার জন্য টগল বাটন এড করতে হবে".
 

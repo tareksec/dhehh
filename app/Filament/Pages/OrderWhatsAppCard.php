@@ -29,7 +29,7 @@ use Throwable;
  * order is created and again at every new stage. It goes through the official
  * WhatsApp Cloud API with an approved template that has an image header; the
  * sending is in OrderWhatsAppCardService, the picture is drawn by
- * OrderSummaryCardImageService. The SMS is separate (SMS Templates).
+ * OrderSummaryCardImageService. The SMS is separate (SMS Gateway → Message templates).
  */
 class OrderWhatsAppCard extends Page
 {

@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Changed
+
+- **The SMS message templates are now in Settings → Integrations → SMS Gateway**, under **Message templates**, below the gateway URL, API key, sender ID and the SMS on/off switch (owner request: "add the template option in the admin, keep it in the SMS gateway"). The separate Settings → SMS Templates page is gone. Everything else is the same: order status, OTP and password reset codes, and investor project messages, each with its BulkSMSBD checks, the character / SMS-part counter and the "Use suggested wording" button. The templates belong to the company, so every site's gateway uses the same ones, and they have their own **Save templates** button (the gateway fields keep the page's Save changes).
+- Messages that used to point at the old page now point at the new place: the SMS Log reason "No wording is written for this message…", the BulkSMSBD error 1012 hint (masking sender ID sends Bangla only), the note under the gateway URL and the pointer on Investor Portal Settings.
+
+### Technical Notes
+
+- The form moved from the `SmsTemplates` page to the Livewire component `App\Livewire\SmsTemplatesForm`, embedded in the SMS Gateway tab with `SchemaLivewire` like `WebsiteApiKeysTable`. It has no `<form>` of its own because it sits inside the Integrations form, and saving needs `Integrations::canAccess()` with a chosen company. Form field names (`data.sms_*`), the `sms_templates` table and the audit action `sms_templates.saved` are unchanged, so nothing is migrated.
+- Tests: `SmsTemplatesTest` and `ProjectCompletedMessageTest` now drive the component; `IntegrationsPageTest` has a new case (the tab holds the section, the old page class is gone, a saved template survives the page's Save changes). 3 new and 4 reworded bilingual keys, 5 old keys removed.
+
 ## [2.120.0] - 2026-11-02
 
 **Release type:** Minor Feature Update

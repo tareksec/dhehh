@@ -183,7 +183,7 @@ class StorefrontNotificationService
             1011 => __('BulkSMSBD does not recognise this API key. Copy the API key again from the BulkSMSBD dashboard (Developers page) into Integrations → SMS Gateway → SMS API key, with no spaces, press Save changes, then press Send test SMS.'),
             1002, 1013, 1014, 1015 => __('The sender ID is wrong, switched off or does not belong to this API key. Use a sender ID that is approved on your BulkSMSBD account.'),
             1006, 1007 => __('The BulkSMSBD balance is empty or expired. Top it up.'),
-            1012 => __('A masking sender ID sends Bangla text only. Write this message in Bangla on SMS Templates, or use a numeric sender ID.'),
+            1012 => __('A masking sender ID sends Bangla text only. Write this message in Bangla under Message templates (Integrations → SMS Gateway), or use a numeric sender ID.'),
             1032 => __('Add this server\'s IP address to the BulkSMSBD whitelist, or switch the IP whitelist off.'),
             1018, 1031 => __('Your BulkSMSBD account needs attention. Contact BulkSMSBD support.'),
             1001 => __('The gateway says the phone number is not valid. The system sends it as 8801XXXXXXXXX, so in the gateway URL write number={phone} with nothing in front of {phone}, and not a word like Receiver or a fixed number. Check the number itself too.'),

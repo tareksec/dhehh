@@ -127,7 +127,7 @@ class InvestorPortalSettings extends Page
                     ]),
                 Section::make(__('Messages'))
                     ->schema([
-                        Text::make(__('The SMS investors get (sign-in and password-reset codes, project started, completed and profit settled) are written on Settings → SMS Templates. The SMS gateway is set on Settings → Integrations.')),
+                        Text::make(__('The SMS investors get (sign-in and password-reset codes, project started, completed and profit settled) are written on Settings → Integrations → SMS Gateway, under Message templates, next to the SMS gateway settings.')),
                     ]),
                 Section::make(__('Accounts'))
                     ->schema([
