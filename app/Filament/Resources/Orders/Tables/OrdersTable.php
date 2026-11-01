@@ -16,6 +16,7 @@ use App\Services\CourierService;
 use App\Services\CustomerRiskService;
 use App\Services\OrderStatusWorkflowService;
 use App\Support\PhoneLinks;
+use App\Support\TypeToConfirmDelete;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -374,9 +375,11 @@ class OrdersTable
                     ->modalIcon('heroicon-o-trash')
                     ->modalDescription(fn (): string => self::trashModalDescription())
                     ->modalWidth(Width::FiveExtraLarge)
-                    ->schema([
+                    // Deleting every trashed order is final, so it asks for their number first (owner request 2026-11-01).
+                    ->schema(fn (): array => [
                         SchemaLivewire::make(OrderTrashTable::class)
                             ->key('orderTrashTable'),
+                        ...TypeToConfirmDelete::countFields(self::trashedOrdersQuery()->count()),
                     ])
                     ->requiresConfirmation()
                     ->modalSubmitAction(fn (Action $action): Action => $action

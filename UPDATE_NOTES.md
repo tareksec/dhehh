@@ -2,7 +2,26 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-01 (latest) - Instruction text in an ⓘ icon: plan, agent rule, foundation (Phase 0)
+## 2026-11-01 (latest) - Delete asks for the name, then Trash (T1)
+
+Owner (Bangla): when Delete is pressed, the record's name must be offered for copying into a field, so the warning is stronger before deleting; after Confirm the record goes to the Trash page, where it can be restored or deleted permanently.
+
+What I did (phase T1; plan `docs/delete-and-trash-plan.md`):
+- **Name prompt on every Filament delete**, in all five panels, from one place (`App\Support\TypeToConfirmDelete`, wired in `AppServiceProvider`): a copyable red name badge and an input; Delete works only on an exact match. Bulk delete asks for the number of selected rows (my choice: the owner only described a single record, but a bulk delete would otherwise bypass the check).
+- **Generic Trash page** (`TrashedRecords`) with Restore and Delete permanently (name asked again), used first for **Expenses** (soft-deleted before, with no way back) and **Office → Feed**. Voucher and Order trash kept their own services; the voucher "Move to trash" / "Delete permanently" now ask for the voucher number, each trashed order can be deleted permanently (invoice number), and "delete all trashed orders" asks for their count.
+- **Honest modal text:** "moved to Trash" only where a Trash page exists, "deleted permanently, cannot be restored" for the many records that are still hard-deleted.
+- **Rule** for every future piece of work in `CLAUDE.md` ("Delete = type the name, then Trash"), `AGENTS.md` and `PROJECT_GUIDE.md`.
+- Nine existing tests that press Delete now pass `data: ['confirmation' => …]`.
+
+**Not done on purpose:** converting the rest of the models to Trash (products, customers, suppliers, …). Each needs `deleted_at`, unique-index decisions, reports and, for money / stock records, a reverse and restore effect, so it goes in phases T2–T7 after the owner answers the six questions in the plan (section 5). Decisions I made that the owner may change: exact (case-sensitive) match; the copy button copies but does not fill the input; Expenses Trash is Super Admin only (same as their Delete); Media, logs and crash reports are proposed to stay permanent.
+
+**Needs Bangla review:** the 22 new keys (the modal check, Trash page and order messages), for wording.
+
+**Verified:** `php -l` and Pint on every changed PHP file; `TypeToConfirmDeleteTest` (10) and `TranslationParityTest` (2) **run and passing**. **Not run:** `DeleteTypeNameAndTrashTest` (5), the nine edited Feature tests, the full suite, `npm run build`, and any browser look at the modal or the Trash pages — this computer has PHP 8.3 and the project needs 8.4, so the app cannot boot here (see the previous entry). CI on the branch decides. The first thing to check by eye: the delete modal on a row (badge with copy icon, the ⓘ next to the input label) and the "Trash (n)" button on Expenses.
+
+Commit status: committed on `claude/upbeat-franklin-hy6fhr`, pushed to that branch. Not on `main`.
+
+## 2026-11-01 - Instruction text in an ⓘ icon: plan, agent rule, foundation (Phase 0)
 
 Owner (Bangla), item 14: every title and subtitle in the ERP has instruction comments under it, some very long; they must go inside an ⓘ icon that shows the text on hover, like the fields of Ads → Meta Ad Accounts; in Bangla and English, in the ERP, IMS, Reseller dashboard and Trade dashboard; arrange the work in phases step by step so there are no mistakes; and the agent rules must say that every next new piece of work writes its instruction comments inside the ⓘ icon, for the whole system.
 

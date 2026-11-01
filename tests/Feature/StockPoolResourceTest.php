@@ -135,7 +135,7 @@ class StockPoolResourceTest extends TestCase
         StockPoolResource::syncMembers($pool, [$this->mirror->id]);
 
         Livewire::test(EditStockPool::class, ['record' => $pool->getKey()])
-            ->callAction('delete');
+            ->callAction('delete', data: ['confirmation' => $this->source->name]);
 
         $this->assertNull(StockPool::query()->find($pool->getKey()));
         $this->assertNull($this->source->refresh()->stock_pool_id);

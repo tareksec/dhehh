@@ -167,7 +167,7 @@ class ResellerLevelsTest extends TestCase
         $this->reseller->update(['reseller_level_id' => $silver->getKey()]);
 
         Livewire::test(ManageResellerLevels::class)
-            ->callTableAction('delete', $silver)
+            ->callTableAction('delete', $silver, data: ['confirmation' => 'Silver'])
             ->assertHasNoTableActionErrors();
 
         $this->assertNull(ResellerLevel::withoutGlobalScopes()->find($silver->getKey()));

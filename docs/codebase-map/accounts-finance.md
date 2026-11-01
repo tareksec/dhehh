@@ -1,5 +1,5 @@
 # Accounts & Finance
-> Last checked: 2026-10-24, branch `feature/ims-fund-source-accounts` (fund sources made from money accounts); before it 2026-10-23, `feature/trade-portal-cash-book` (Trade Portal cash book)
+> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (Expenses got a Trash page; type-the-name on Voucher / Order trash); before it 2026-10-24, `feature/ims-fund-source-accounts` (fund sources made from money accounts); before it 2026-10-23, `feature/trade-portal-cash-book` (Trade Portal cash book)
 
 ## What it does
 The Accounts & Finance module manages tenant-level financial accounting, multi-source cash flow, expenditure tracking, and automated financial reporting. It provides double-entry fund tracking across cash, bank, mobile banking, and digital wallet accounts through an immutable transaction ledger. It implements a structured multi-stage voucher approval system (pending, verified, approved, rejected, cancelled) with soft-delete trash governance. For day-to-day bookkeeping, it processes operational expenses, supplier payments, and AI/OCR-assisted optical expense receipt scanning. Additionally, it compiles profit-and-loss statements, cash flow audits, customer balance ledgers, and downloadable supplier payment reports.
@@ -62,6 +62,7 @@ The Accounts & Finance module manages tenant-level financial accounting, multi-s
 | `app/Filament/Resources/FundTransfers/FundTransferResource.php` | Manages transfer requests between internal bank and cash accounts. |
 | `app/Filament/Resources/TransactionLedgers/TransactionLedgerResource.php` | Read-only ledger audit trail showing debit, credit, balance, and reference links. |
 | `app/Filament/Resources/Expenses/ExpenseResource.php` | Registry of operational expenditures and category allocations. |
+| `app/Filament/Resources/Expenses/Pages/TrashedExpenses.php` | Trash page for deleted expenses (restore puts the money movement back on the account unless the balance would go negative; Super Admin only, like Delete). |
 | `app/Filament/Resources/ExpenseCategories/ExpenseCategoryResource.php` | Taxonomy of operational expense categories. |
 | `app/Filament/Resources/ExpenseScans/ExpenseScanResource.php` | Interface for uploading and reviewing AI-scanned receipt documents. |
 | `app/Filament/Resources/ExpenseScans/Pages/ReviewExpenseScan.php` | Interactive review screen to edit OCR-parsed items before publishing to expenses. |

@@ -3,6 +3,7 @@
 namespace App\Filament\Ims\Office\Resources\FeedPosts\Pages;
 
 use App\Filament\Ims\Office\Resources\FeedPosts\FeedPostResource;
+use App\Filament\Resources\Pages\TrashedRecords;
 use App\Ims\Feed\FeedService;
 use App\Models\FeedPost;
 use App\Services\CompanyContext;
@@ -22,6 +23,7 @@ class ListFeedPosts extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            TrashedRecords::linkAction(FeedPostResource::class),
             Action::make('write')
                 ->label(__('Write a post'))
                 ->icon('heroicon-o-pencil-square')

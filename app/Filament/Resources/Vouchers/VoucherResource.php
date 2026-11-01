@@ -17,6 +17,7 @@ use App\Services\CompanyContext;
 use App\Services\CompanyStorageService;
 use App\Services\VoucherService;
 use App\Services\VoucherTrashService;
+use App\Support\TypeToConfirmDelete;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
@@ -314,7 +315,8 @@ class VoucherResource extends Resource
      */
     public static function moveToTrashAction(): Action
     {
-        return Action::make('moveToTrash')
+        // Asks for the voucher number first (owner request 2026-11-01); the description below replaces the generic one.
+        return TypeToConfirmDelete::apply(Action::make('moveToTrash'), permanent: false)
             ->label(__('Move to trash'))
             ->icon(Heroicon::OutlinedTrash)
             ->color('danger')

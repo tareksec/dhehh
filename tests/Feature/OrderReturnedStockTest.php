@@ -255,7 +255,7 @@ class OrderReturnedStockTest extends TestCase
         // The page does not offer it, and the bulk action skips these orders.
         Livewire::test(EditOrder::class, ['record' => $returned->getKey()])->assertActionHidden('delete');
         Livewire::test(ListOrders::class)
-            ->callTableBulkAction('delete', [$returned, $refunded]);
+            ->callTableBulkAction('delete', [$returned, $refunded], data: ['confirmation' => '2']);
         $this->assertNull($returned->fresh()->deleted_at);
         $this->assertNull($refunded->fresh()->deleted_at);
 

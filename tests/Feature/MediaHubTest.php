@@ -118,7 +118,7 @@ class MediaHubTest extends TestCase
         ]);
 
         Livewire::test(ListMedia::class)
-            ->callTableAction('delete', $media)
+            ->callTableAction('delete', $media, data: ['confirmation' => 'delete-me.jpg'])
             ->assertHasNoTableActionErrors();
 
         $this->assertModelMissing($media);

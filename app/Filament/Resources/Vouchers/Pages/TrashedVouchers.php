@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Vouchers\Pages;
 use App\Filament\Resources\Vouchers\VoucherResource;
 use App\Models\Voucher;
 use App\Services\VoucherTrashService;
+use App\Support\TypeToConfirmDelete;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
@@ -78,7 +79,7 @@ class TrashedVouchers extends ListRecords
                     ->color('success')
                     ->requiresConfirmation()
                     ->action(fn (Voucher $record) => $this->run(fn () => app(VoucherTrashService::class)->restore($record, Auth::user()), __('Voucher restored.'))),
-                Action::make('deletePermanently')
+                TypeToConfirmDelete::apply(Action::make('deletePermanently'), permanent: true)
                     ->label(__('Delete permanently'))
                     ->icon(Heroicon::OutlinedTrash)
                     ->color('danger')

@@ -1604,6 +1604,17 @@ Help / instruction text under a page title, subtitle, section heading or field l
 4. Verify: `php scripts/info-tip-audit.php --file=<your file>` lists nothing; `php artisan test --filter=InfoTip` and `--filter=TranslationParityTest`; look at the screen in Bangla and English at 1366 px and 360 px (hover and tap). After converting existing text run `php scripts/info-tip-audit.php --write-baseline`.
 5. The rule, the phased conversion of the existing screens and the guard: `CLAUDE.md`, `docs/info-icon-instructions-plan.md`, `tests/Unit/InfoTipGuardTest.php`.
 
+### Make a record deletable (type the name, then Trash, owner request 2026-11-01)
+
+Pressing Delete asks for the record's name (a bulk delete: the number of records) and the record goes to Trash, from where it is restored or deleted permanently.
+
+1. Use Filament's `DeleteAction` / `DeleteBulkAction`: the name prompt is added to all of them in `App\Support\TypeToConfirmDelete` (registered in `AppServiceProvider`). A hand-made delete action calls `TypeToConfirmDelete::apply($action, permanent: true|false)`.
+2. If users may bring the record back: the model uses `SoftDeletes` (migration with `softDeletes()`; check unique indexes and every place that counts, lists or exports the model, and use `withTrashed()` where history points at it), then add the Trash page described in `app/Filament/Resources/Pages/TrashedRecords.php` and register `'trash'` before `'view'` in `getPages()`.
+3. If deleting or restoring moves money or stock, write the reverse effect in the model's `deleted` / `restored` handling (see `Expense`, `Order`, `VoucherTrashService`) and test it; do not use the generic Trash page without it.
+4. The name comes from the resource's record title: set `$recordTitleAttribute`, or define `getRecordTitle()` and `hasRecordTitle()` when the record has no name-like column.
+5. Add the bilingual keys, then run `php artisan test --filter=DeleteTypeNameAndTrash`. A test that runs a delete action passes `data: ['confirmation' => $name]`.
+6. Rule, phases and the models still to convert: `CLAUDE.md`, `docs/delete-and-trash-plan.md`.
+
 ## 10. Testing Checklist
 
 Before handoff:

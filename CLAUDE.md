@@ -68,6 +68,15 @@ Applies to **every screen and every new piece of work, in all panels** — ERP a
 - **Enforced:** `tests/Unit/InfoTipGuardTest.php` fails if a file gets more plain instruction text than `tests/Fixtures/info-tip-baseline.json` allows, or if an `->infoTip()` text is not inside `__()`. `php scripts/info-tip-audit.php` lists what is left (`--panel=trade`, `--file=…`, `--dynamic`, `--blocks`). After converting a screen, run `php scripts/info-tip-audit.php --write-baseline`.
 - A change that touches a screen also runs `php artisan test --filter=InfoTip` and, for converted screens, is looked at in Bangla and English at 1366 px and 360 px (hover and tap).
 
+## Delete = type the name, then Trash (owner request 2026-11-01)
+
+Applies to every delete in every panel. Plan, phases and the list of models still to convert: `docs/delete-and-trash-plan.md`.
+
+- **Pressing Delete never deletes at once.** The modal shows the record's name with a copy button and an input; Delete only goes through when the name is typed or pasted exactly. A bulk delete asks for the number of selected records. This is wired once for every Filament `DeleteAction`, `DeleteBulkAction`, `ForceDeleteAction` and `ForceDeleteBulkAction` (`App\Support\TypeToConfirmDelete`, registered in `AppServiceProvider`), so build a delete with those Filament actions and it comes for free. A hand-made delete action (for example "Move to trash") calls `TypeToConfirmDelete::apply($action, permanent: …)` itself. Never write a delete that skips it.
+- **What a user deletes goes to Trash first.** A new model that users can delete uses `SoftDeletes` (unless the owner says it is a log or technical row, which stays a permanent delete) and gets a Trash page: `class TrashedThings extends App\Filament\Resources\Pages\TrashedRecords`, the `'trash'` page registered **before** `'view'` in `getPages()`, `TrashedRecords::linkAction(ThingResource::class)` in the list page's header actions, and `canRestore*()` / `canForceDelete*()` on the resource. From Trash a record is restored or deleted permanently (which asks for the name again). A model whose delete or restore moves money or stock (vouchers, orders, payments) keeps its own restore logic: it never uses the generic page until its `restored` handling is written and tested.
+- **The name shown is the resource's record title.** A resource whose records have no name-like column (`name`, `title`, a number, a code…) defines `getRecordTitle()` and `hasRecordTitle()` (see `StockPoolResource`), so the modal never falls back to "Label #id".
+- **Tests that run a delete action pass the confirmation:** `callTableAction('delete', $record, data: ['confirmation' => $name])`, bulk: `data: ['confirmation' => (string) $count]`. Unit logic: `tests/Unit/TypeToConfirmDeleteTest.php`; flow: `tests/Feature/DeleteTypeNameAndTrashTest.php`.
+
 ## Multi-company isolation
 
 - Every new company-owned model must use `BelongsToCompany` + `CompanyScope` and be added to `MultiCompanyIsolationTest::test_every_company_owned_model_uses_the_company_scope_contract`.

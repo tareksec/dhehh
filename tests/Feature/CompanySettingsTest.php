@@ -51,7 +51,7 @@ class CompanySettingsTest extends TestCase
 
         Livewire::test(EditCompany::class, ['record' => $mainCompany->getKey()])
             ->assertActionExists('delete')
-            ->callAction('delete');
+            ->callAction('delete', data: ['confirmation' => $mainCompany->name]);
 
         $this->assertDatabaseMissing('companies', ['id' => $mainCompany->getKey()]);
         $this->assertSame($replacement->getKey(), Company::defaultCompany()?->getKey());

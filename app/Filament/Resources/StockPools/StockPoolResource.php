@@ -21,7 +21,9 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -41,6 +43,18 @@ class StockPoolResource extends Resource
     protected static ?int $navigationSort = 4;
 
     protected static ?string $navigationLabel = 'Shared Stock Pools';
+
+    // A pool has no name of its own: it is known by the product that holds its real stock. The Delete
+    // confirmation asks for this name (owner request 2026-11-01).
+    public static function hasRecordTitle(): bool
+    {
+        return true;
+    }
+
+    public static function getRecordTitle(?Model $record): string|Htmlable|null
+    {
+        return $record?->sourceProduct?->name ?? parent::getRecordTitle($record);
+    }
 
     public static function form(Schema $schema): Schema
     {

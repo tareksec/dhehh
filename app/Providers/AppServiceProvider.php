@@ -66,6 +66,7 @@ use App\Support\GuardedViewManager;
 use App\Support\InfoTip;
 use App\Support\ModuleHealth;
 use App\Support\MoneyFormatter;
+use App\Support\TypeToConfirmDelete;
 use Filament\Auth\Http\Controllers\LogoutController;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse as LoginResponseContract;
 use Filament\Facades\Filament;
@@ -147,6 +148,9 @@ class AppServiceProvider extends ServiceProvider
         // ->infoTip('text') on fields, entries and sections: instruction text in
         // an ⓘ icon (CLAUDE.md "Instruction text goes in an ⓘ icon").
         InfoTip::register();
+
+        // Every Filament Delete asks for the record's name first (owner request 2026-11-01).
+        TypeToConfirmDelete::register();
 
         TextColumn::macro('moneyWithoutTrailingZeroes', function (string|\BackedEnum|\Closure|null $currency = null, int|\Closure $divideBy = 0, string|\BackedEnum|\Closure|null $locale = null, int|\Closure|null $decimalPlaces = null): static {
             $this->formatStateUsing(static function (TextColumn $column, $state) use ($currency, $divideBy, $decimalPlaces): ?string {

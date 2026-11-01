@@ -1,5 +1,5 @@
 # Investments & IMS v2
-> Last checked: 2026-10-25, claude/focused-davinci-ltfifx (group backfill renames the project to its group code; `investments:undo-backfill-groups` takes a backfilled group out again); before it 2026-10-24, feature/ims-fund-source-accounts (fund-source pickers list Finance money accounts via `FundSourceSelect`)
+> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (Office Feed got a Trash page); before it 2026-10-25, claude/focused-davinci-ltfifx (group backfill renames the project to its group code; `investments:undo-backfill-groups` takes a backfilled group out again); before it 2026-10-24, feature/ims-fund-source-accounts (fund-source pickers list Finance money accounts via `FundSourceSelect`)
 
 ## What it does
 The Investments & IMS v2 module manages Islamic Mudarabah investment partnerships, syndicated investor pools, commercial project funding, and comprehensive investor relations. Built natively into the application following the retirement of the legacy external IMS, it provides two dedicated Filament 5 panels: the IMS Office back-office panel (`/office`) for investment managers, and the Investor Portal (`/investor`) for self-service investor access. It automates investor onboarding with NID OCR verification, digital agreement acceptance, syndicated investor group lifecycles, and automated daily profit proposals. Additionally, it features an investor transparency feed, scheduled monthly statement generation, capital return queues, bank statement reconciliation, and channel partner commission settlements.
@@ -97,6 +97,7 @@ The Investments & IMS v2 module manages Islamic Mudarabah investment partnership
 | `app/Filament/Ims/Office/Pages/PendingMoney.php` | Reconciliation queue for incoming bank transfers awaiting verification. |
 | `app/Filament/Ims/Office/Resources/CapitalReturns/CapitalReturnResource.php` | Queue for approving and disbursing matured capital repayments. |
 | `app/Filament/Ims/Office/Resources/FeedPosts/FeedPostResource.php` | Content editor for publishing project updates to the investor feed. |
+| `app/Filament/Ims/Office/Resources/FeedPosts/Pages/TrashedFeedPosts.php` | Trash page for deleted feed posts (restore or delete permanently; needs `ims.feed.write`). |
 | `app/Filament/Ims/Office/Resources/InvestorInvites/InvestorInviteResource.php` | Manages generated invitation links and registration tracking. |
 | `app/Filament/Ims/Office/Resources/KycReviews/KycReviewResource.php` | Identity verification review screen comparing OCR data with uploaded NID cards. |
 | `app/Filament/Ims/Office/Resources/ProfitProposals/ProfitProposalResource.php` | Interface for reviewing and approving daily automated profit distribution proposals. |

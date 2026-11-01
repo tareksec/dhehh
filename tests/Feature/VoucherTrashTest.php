@@ -69,7 +69,7 @@ class VoucherTrashTest extends TestCase
         }
 
         Livewire::test(ListVouchers::class)
-            ->callTableAction('moveToTrash', $voucher)
+            ->callTableAction('moveToTrash', $voucher, data: ['confirmation' => $voucher->voucher_number])
             ->assertCanNotSeeTableRecords([$voucher]);
 
         $this->assertSoftDeleted($voucher);
@@ -83,7 +83,7 @@ class VoucherTrashTest extends TestCase
 
         app(VoucherTrashService::class)->trash($voucher, $this->admin);
 
-        Livewire::test(TrashedVouchers::class)->callTableAction('deletePermanently', $voucher);
+        Livewire::test(TrashedVouchers::class)->callTableAction('deletePermanently', $voucher, data: ['confirmation' => $voucher->voucher_number]);
 
         $this->assertDatabaseMissing('vouchers', ['id' => $voucher->id]);
     }

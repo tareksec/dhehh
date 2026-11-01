@@ -265,7 +265,7 @@ class ResellerPortalAccountTest extends TestCase
         $this->assertSame('01833333333', $account->account_details);
         $this->assertSame('Shop', $account->label);
 
-        Livewire::test(PayoutAccounts::class)->callTableAction('delete', $account);
+        Livewire::test(PayoutAccounts::class)->callTableAction('delete', $account, data: ['confirmation' => 'Shop']);
 
         $this->assertDatabaseMissing('reseller_payout_accounts', ['id' => $account->getKey()]);
         $this->assertSame('01711111111', $request->fresh()->account_details);

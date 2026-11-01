@@ -6,6 +6,7 @@ use App\Filament\Clusters\Finance;
 use App\Filament\Resources\Expenses\Pages\CreateExpense;
 use App\Filament\Resources\Expenses\Pages\EditExpense;
 use App\Filament\Resources\Expenses\Pages\ListExpenses;
+use App\Filament\Resources\Expenses\Pages\TrashedExpenses;
 use App\Filament\Resources\Expenses\Pages\ViewExpense;
 use App\Filament\Resources\Expenses\Schemas\ExpenseForm;
 use App\Filament\Resources\Expenses\Schemas\ExpenseInfolist;
@@ -61,11 +62,33 @@ class ExpenseResource extends Resource
         return Auth::user()?->canDeleteSensitiveRecords() ?? false;
     }
 
+    // Whoever may delete an expense may bring it back or delete it for good from the Trash page.
+    public static function canRestore(Model $record): bool
+    {
+        return static::canDelete($record);
+    }
+
+    public static function canRestoreAny(): bool
+    {
+        return static::canDeleteAny();
+    }
+
+    public static function canForceDelete(Model $record): bool
+    {
+        return static::canDelete($record);
+    }
+
+    public static function canForceDeleteAny(): bool
+    {
+        return static::canDeleteAny();
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => ListExpenses::route('/'),
             'create' => CreateExpense::route('/create'),
+            'trash' => TrashedExpenses::route('/trash'),
             'view' => ViewExpense::route('/{record}'),
             'edit' => EditExpense::route('/{record}/edit'),
         ];

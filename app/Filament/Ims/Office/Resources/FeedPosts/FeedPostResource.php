@@ -3,6 +3,7 @@
 namespace App\Filament\Ims\Office\Resources\FeedPosts;
 
 use App\Filament\Ims\Office\Resources\FeedPosts\Pages\ListFeedPosts;
+use App\Filament\Ims\Office\Resources\FeedPosts\Pages\TrashedFeedPosts;
 use App\Filament\Ims\Office\Resources\FeedPosts\Pages\ViewFeedPost;
 use App\Filament\Ims\Office\Resources\FeedPosts\RelationManagers\CommentsRelationManager;
 use App\Filament\Ims\Office\Resources\FeedPosts\RelationManagers\ViewsRelationManager;
@@ -20,6 +21,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 /** The investors' feed in the office (IMS-V2/PRD.md FR-63): write, pin, see who saw, moderate comments. */
 class FeedPostResource extends Resource
@@ -52,6 +54,27 @@ class FeedPostResource extends Resource
     public static function canCreate(): bool
     {
         return false;
+    }
+
+    // Whoever may write posts (and so delete them) may restore one or delete it for good from the Trash page.
+    public static function canRestore(Model $record): bool
+    {
+        return static::canRestoreAny();
+    }
+
+    public static function canRestoreAny(): bool
+    {
+        return auth()->user()?->hasPermission('ims.feed.write') ?? false;
+    }
+
+    public static function canForceDelete(Model $record): bool
+    {
+        return static::canRestoreAny();
+    }
+
+    public static function canForceDeleteAny(): bool
+    {
+        return static::canRestoreAny();
     }
 
     public static function infolist(Schema $schema): Schema
@@ -105,6 +128,7 @@ class FeedPostResource extends Resource
     {
         return [
             'index' => ListFeedPosts::route('/'),
+            'trash' => TrashedFeedPosts::route('/trash'),
             'view' => ViewFeedPost::route('/{record}'),
         ];
     }

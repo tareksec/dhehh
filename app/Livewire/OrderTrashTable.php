@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Models\Order;
 use App\Services\CompanyContext;
+use App\Support\TypeToConfirmDelete;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -70,6 +71,16 @@ class OrderTrashTable extends Component implements HasActions, HasSchemas, HasTa
                     ->modalDescription('This order will return to the active Orders list. Its stock and customer balance effects will also be restored.')
                     ->modalSubmitActionLabel('Restore order')
                     ->action(fn (Order $record): bool => $this->restoreOrder($record)),
+                // Owner request 2026-11-01: from Trash an order is restored or deleted for good, and the
+                // permanent delete asks for the invoice number first.
+                TypeToConfirmDelete::apply(Action::make('deletePermanently'), permanent: true)
+                    ->label(__('Delete permanently'))
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->authorize(fn (Order $record): bool => $this->canRestore($record))
+                    ->modalHeading(__('Delete this order permanently?'))
+                    ->modalSubmitActionLabel(__('Delete permanently'))
+                    ->action(fn (Order $record): bool => $this->deleteOrderPermanently($record)),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -182,6 +193,37 @@ class OrderTrashTable extends Component implements HasActions, HasSchemas, HasTa
                 ->success()
                 ->send();
         }
+
+        return true;
+    }
+
+    protected function deleteOrderPermanently(Order $order): bool
+    {
+        if (! $this->canRestore($order)) {
+            Notification::make()
+                ->title(__('Order is no longer in trash'))
+                ->warning()
+                ->send();
+
+            return false;
+        }
+
+        try {
+            DB::transaction(fn (): bool => (bool) $order->forceDelete());
+        } catch (ValidationException $exception) {
+            Notification::make()
+                ->title(__(':number could not be deleted', ['number' => $order->order_number]))
+                ->body(collect($exception->errors())->flatten()->first() ?? __('Please try again.'))
+                ->danger()
+                ->send();
+
+            return false;
+        }
+
+        Notification::make()
+            ->title(__(':number deleted permanently', ['number' => $order->order_number]))
+            ->success()
+            ->send();
 
         return true;
     }

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Expenses\Pages;
 use App\Filament\Resources\Expenses\ExpenseResource;
 use App\Filament\Resources\Expenses\Widgets\ExpenseCategorySummaryWidget;
 use App\Filament\Resources\ExpenseScans\ExpenseScanResource;
+use App\Filament\Resources\Pages\TrashedRecords;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
@@ -23,6 +24,7 @@ class ListExpenses extends ListRecords
                 ->color('gray')
                 ->url(fn (): string => ExpenseScanResource::getUrl('create'))
                 ->visible(fn (): bool => ExpenseScanResource::canCreate()),
+            TrashedRecords::linkAction(ExpenseResource::class),
             CreateAction::make(),
         ];
     }

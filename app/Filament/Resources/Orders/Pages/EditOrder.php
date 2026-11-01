@@ -50,6 +50,7 @@ class EditOrder extends EditRecord
             ViewAction::make(),
             // A returned or refunded order is never trashed (owner decision 2026-10-15).
             DeleteAction::make()
+                ->modalDescription(__('This order will be moved to Trash. You can restore it, or delete it permanently, from the Trash button on the Orders list. Its stock and customer balance effects are released until it is restored.'))
                 ->visible(fn (): bool => $this->getRecord()->canBeMovedToTrash()),
         ];
     }
