@@ -10,8 +10,8 @@
 @section('content')
     <section class="border-b border-gray-200 dark:border-white/10">
         <div class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-5 lg:px-6">
-            <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Offers</h1>
-            <p class="storefront-page-copy mt-2">Special single-product and combo deals, priced lower than buying separately.</p>
+            <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">{{ __('Offers') }}</h1>
+            <p class="storefront-page-copy mt-2">{{ __('Special single-product and combo deals, priced lower than buying separately.') }}</p>
 
             <div class="mt-5 inline-flex rounded-full border border-gray-200 bg-gray-50 p-1 text-sm font-medium dark:border-white/10 dark:bg-white/5">
                 <a href="{{ $tabUrl(null) }}" class="rounded-full px-4 py-2 transition {{ $activeType === null ? 'bg-[var(--storefront-brand)] text-white' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white' }}">All offers</a>

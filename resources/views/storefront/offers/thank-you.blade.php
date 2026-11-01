@@ -10,7 +10,7 @@
         <div class="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
             <svg class="h-8 w-8" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
         </div>
-        <p class="mt-6 text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">Order submitted</p>
+        <p class="mt-6 text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">{{ __('Order submitted') }}</p>
         <h1 class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Thank you, {{ $order->customer?->name }}.</h1>
         <p class="storefront-page-copy mx-auto mt-3">Order <span class="font-semibold text-gray-950 dark:text-white">{{ $order->order_number }}</span>{{ $offer ? ' for '.$offer->title : '' }} has been received. Our team will review and confirm it shortly.</p>
 

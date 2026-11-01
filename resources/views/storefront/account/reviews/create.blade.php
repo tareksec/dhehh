@@ -9,7 +9,7 @@
     <div class="mb-4">
         <a href="{{ $ordersUrl }}" class="text-sm font-medium text-[var(--storefront-brand)]">&larr; Back to orders</a>
         <h2 class="mt-2 text-2xl font-semibold tracking-tight">Review order {{ $order->order_number }}</h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Share your experience with the products from this order.</p>
+        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ __('Share your experience with the products from this order.') }}</p>
     </div>
 
     @if (session('storefront_status'))
@@ -26,7 +26,7 @@
                 <div class="flex items-center justify-between gap-3">
                     <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ $item->product->name }}</h3>
                     @if ($alreadyReviewed)
-                        <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">Reviewed</span>
+                        <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">{{ __('Reviewed') }}</span>
                     @endif
                 </div>
 
@@ -36,7 +36,7 @@
                         <input type="hidden" name="product_id" value="{{ $item->product_id }}">
 
                         <fieldset>
-                            <legend class="text-xs font-medium text-gray-500 dark:text-gray-400">Rating</legend>
+                            <legend class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ __('Rating') }}</legend>
                             <div class="mt-1 flex items-center gap-1" x-data="{ rating: 5 }">
                                 @for ($star = 1; $star <= 5; $star++)
                                     <label class="cursor-pointer text-2xl" :class="rating >= {{ $star }} ? 'text-amber-500' : 'text-gray-300 dark:text-gray-600'">

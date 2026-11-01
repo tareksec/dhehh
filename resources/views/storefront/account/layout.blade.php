@@ -30,7 +30,7 @@
                     {{ $customerInitial }}
                 </div>
                 <div class="min-w-0">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">Customer account</p>
+                    <p class="text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">{{ __('Customer account') }}</p>
                     <h1 class="mt-1 truncate text-2xl font-semibold tracking-tight text-gray-950 dark:text-white sm:text-3xl">{{ $customer->name }}</h1>
                     <p class="mt-1 truncate text-sm text-gray-500 dark:text-gray-400">{{ $customer->phone }} &middot; Member since {{ $customer->created_at->format('M Y') }}</p>
                 </div>

@@ -66,7 +66,7 @@
     <section class="bg-gradient-to-br from-[var(--storefront-brand)] to-gray-950 dark:to-black">
         <div class="mx-auto flex w-full max-w-4xl flex-col items-center gap-3 px-4 py-10 text-center sm:px-5 sm:py-12 lg:px-6">
             <p class="text-xs font-semibold uppercase tracking-wider text-white/70">{{ $company->name }}</p>
-            <h1 class="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Connect with Us</h1>
+            <h1 class="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{{ __('Connect with Us') }}</h1>
             <p class="max-w-lg text-sm leading-6 text-white/80 sm:text-base">
                 Chat with our friendly team for quick help with any questions or issues you may have.
             </p>
@@ -102,8 +102,8 @@
     @if ($company->address)
         <section class="border-t border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-white/[0.02]">
             <div class="mx-auto w-full max-w-4xl px-4 py-8 text-center sm:px-5 lg:px-6">
-                <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">Our Location</h2>
-                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Meet our friendly team at this location for personalized assistance.</p>
+                <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ __('Our Location') }}</h2>
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ __('Meet our friendly team at this location for personalized assistance.') }}</p>
 
                 <div class="mt-5 flex flex-col items-center gap-4 rounded-lg border border-gray-200 bg-white p-6 dark:border-white/10 dark:bg-gray-900">
                     <div class="relative grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-rose-400 to-red-600 shadow-lg shadow-red-500/30">
@@ -124,7 +124,7 @@
 
     @if ($faqs->isNotEmpty())
         <section id="faq" class="scroll-mt-24 mx-auto w-full max-w-4xl px-4 py-8 sm:px-5 lg:px-6">
-            <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">Frequently Asked Questions</h2>
+            <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ __('Frequently Asked Questions') }}</h2>
             <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Everything you need to know. Can&rsquo;t find the answer you&rsquo;re looking for?</p>
 
             <div class="mt-5 divide-y divide-gray-200 rounded-lg border border-gray-200 dark:divide-white/10 dark:border-white/10" x-data="{ open: 0 }">
@@ -156,7 +156,7 @@
     @if ($ctaHref)
         <section class="bg-[var(--storefront-brand)]">
             <div class="mx-auto flex w-full max-w-7xl flex-col items-center gap-3 px-4 py-8 text-center sm:px-5 lg:px-6">
-                <h2 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Still Have Questions?</h2>
+                <h2 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">{{ __('Still Have Questions?') }}</h2>
                 <p class="max-w-md text-sm text-white/85">Can&rsquo;t find the answer you&rsquo;re looking for? Please chat to our friendly team.</p>
                 <a class="inline-flex items-center rounded-lg bg-white px-6 py-3 text-sm font-semibold text-gray-950 transition hover:bg-white/90" href="{{ $ctaHref }}" target="_blank" rel="noopener">
                     {{ $ctaLabel }}
