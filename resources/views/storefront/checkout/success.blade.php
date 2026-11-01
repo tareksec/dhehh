@@ -49,7 +49,7 @@
         <div class="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300">
             <svg class="h-8 w-8" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
         </div>
-        <p class="mt-6 text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">Order submitted</p>
+        <p class="mt-6 text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">{{ __('Order submitted') }}</p>
         <h1 class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Thank you, {{ $order->customer?->name }}.</h1>
         <p class="storefront-page-copy mx-auto mt-3">Order <span class="font-semibold text-gray-950 dark:text-white">{{ $order->order_number }}</span> has been received. Our team will review and confirm it shortly.</p>
 
@@ -74,7 +74,7 @@
                 </div>
             </div>
             <aside class="rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-white/10 dark:bg-white/[0.03]">
-                <h2 class="text-sm font-semibold text-gray-950 dark:text-white">Customer & delivery</h2>
+                <h2 class="text-sm font-semibold text-gray-950 dark:text-white">{{ __('Customer & delivery') }}</h2>
                 <dl class="mt-4 space-y-3 text-sm">
                     <div><dt class="text-xs text-gray-500 dark:text-gray-400">Name</dt><dd class="mt-1 font-medium">{{ $order->customer?->name }}</dd></div>
                     <div><dt class="text-xs text-gray-500 dark:text-gray-400">Phone</dt><dd class="mt-1 font-medium">{{ $order->customer?->phone }}</dd></div>
@@ -97,13 +97,13 @@
 
         <div class="mt-6 grid gap-4 text-left md:grid-cols-2">
             <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-400/20 dark:bg-emerald-400/10">
-                <h2 class="font-semibold text-emerald-950 dark:text-emerald-100">Get product and stock updates</h2>
+                <h2 class="font-semibold text-emerald-950 dark:text-emerald-100">{{ __('Get product and stock updates') }}</h2>
                 <p class="mt-2 text-sm leading-6 text-emerald-800 dark:text-emerald-200">{{ $setting->whatsappGroupMessage() }}</p>
                 <a class="mt-4 inline-flex min-h-11 items-center rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-800" href="{{ $setting->whatsappGroupUrl() }}" target="_blank" rel="noopener">Join WhatsApp group</a>
             </div>
             <div class="rounded-xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-white/5">
-                <h2 class="font-semibold text-gray-950 dark:text-white">Problem with this parcel?</h2>
-                <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">Report damaged products, wrong items, or a quantity mismatch using this order ID.</p>
+                <h2 class="font-semibold text-gray-950 dark:text-white">{{ __('Problem with this parcel?') }}</h2>
+                <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">{{ __('Report damaged products, wrong items, or a quantity mismatch using this order ID.') }}</p>
                 <a class="mt-4 inline-flex min-h-11 items-center rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-900 transition hover:border-[var(--storefront-brand)] dark:border-white/15 dark:text-white" href="{{ $complaintUrl }}">Submit a complaint</a>
             </div>
         </div>

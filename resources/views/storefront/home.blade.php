@@ -55,8 +55,8 @@
             <div class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-5 lg:px-6">
                 <div class="mb-6 flex items-end justify-between gap-5">
                     <div>
-                        <h2 class="text-xl font-semibold tracking-tight sm:text-2xl">Shop by category</h2>
-                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Browse our full collection by category</p>
+                        <h2 class="text-xl font-semibold tracking-tight sm:text-2xl">{{ __('Shop by category') }}</h2>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ __('Browse our full collection by category') }}</p>
                     </div>
                     <a class="inline-flex min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 dark:hover:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">See all</a>
                 </div>
@@ -166,7 +166,7 @@
 
     <section class="mx-auto w-full max-w-7xl px-4 py-7 sm:px-5 sm:py-8 lg:px-6" x-reveal>
         <div class="mb-5 flex items-end justify-between gap-5">
-            <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">Featured products</h2>
+            <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ __('Featured products') }}</h2>
             <a class="inline-flex min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 dark:hover:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">View all</a>
         </div>
 
@@ -207,7 +207,7 @@
     @if ($products->count() > 8)
         <section class="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-5 lg:px-6" x-reveal>
             <div class="mb-6 flex items-end justify-between gap-5">
-                <h2 class="text-xl font-semibold tracking-tight sm:text-3xl">Explore more products</h2>
+                <h2 class="text-xl font-semibold tracking-tight sm:text-3xl">{{ __('Explore more products') }}</h2>
                 <a class="inline-flex min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 dark:hover:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">View all</a>
             </div>
             <div class="storefront-catalog-grid grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-5">
@@ -220,7 +220,7 @@
 
     <section class="border-t border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-white/[0.02]">
         <div class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-5 sm:py-9 lg:px-6">
-            <h2 class="mb-5 text-center text-xl font-semibold tracking-tight sm:text-2xl">How to order</h2>
+            <h2 class="mb-5 text-center text-xl font-semibold tracking-tight sm:text-2xl">{{ __('How to order') }}</h2>
             <style>
                 /* Each step "activates" in turn on an 8s loop (2s per step).
                    All animations start paused; .steps-live (added on scroll into view) runs them. */
@@ -342,8 +342,8 @@
 
     <section class="bg-[var(--storefront-brand)]">
         <div class="mx-auto flex w-full max-w-7xl flex-col items-center gap-3 px-4 py-8 text-center sm:px-5 lg:px-6">
-            <h2 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Ready to order?</h2>
-            <p class="max-w-md text-sm text-white/85">Browse the full catalog and get it delivered to your door.</p>
+            <h2 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">{{ __('Ready to order?') }}</h2>
+            <p class="max-w-md text-sm text-white/85">{{ __('Browse the full catalog and get it delivered to your door.') }}</p>
             <a class="inline-flex items-center rounded-lg bg-white px-6 py-3 text-sm font-semibold text-gray-950 transition hover:bg-white/90" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">
                 {{ $heroCta }}
             </a>

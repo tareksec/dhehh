@@ -10,8 +10,8 @@
 
 @section('content')
     <section class="mx-auto w-full max-w-md px-4 py-8 sm:px-5 lg:px-6">
-        <p class="text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">Password-free login</p>
-        <h1 class="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Log in with an OTP</h1>
+        <p class="text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">{{ __('Password-free login') }}</p>
+        <h1 class="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{{ __('Log in with an OTP') }}</h1>
         <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">
             Enter the email address or phone number on your account. We will send a one-time 6-digit login code.
         </p>
@@ -25,7 +25,7 @@
         <form class="mt-5 space-y-5 rounded-lg border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-gray-900" method="POST" action="{{ $sendUrl }}">
             @csrf
             <div>
-                <label class="text-xs font-medium text-gray-500" for="otp-identifier">Phone number or email</label>
+                <label class="text-xs font-medium text-gray-500" for="otp-identifier">{{ __('Phone number or email') }}</label>
                 <input class="mt-2 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-4 text-sm outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/10 dark:bg-gray-950" id="otp-identifier" name="identifier" type="text" autocomplete="username" value="{{ old('identifier') }}" required autofocus @error('identifier') aria-invalid="true" aria-describedby="otp-identifier-error" @enderror>
                 @error('identifier') <p class="mt-1 text-xs text-red-600" id="otp-identifier-error">{{ $message }}</p> @enderror
             </div>

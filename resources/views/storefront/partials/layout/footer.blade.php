@@ -8,7 +8,7 @@
     @if ($sisterCompanies->isNotEmpty())
         <div class="border-b border-gray-200 dark:border-white/10">
             <div class="mx-auto w-full max-w-7xl px-4 py-5 sm:px-5 lg:px-6">
-                <div class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Our other brands</div>
+                <div class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">{{ __('Our other brands') }}</div>
                 <div class="mt-3 flex flex-wrap gap-3">
                     @foreach ($sisterCompanies as $sisterCompany)
                         <a class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-[var(--storefront-brand)] hover:text-gray-950 dark:border-white/10 dark:text-gray-300 dark:hover:text-white" href="https://{{ $sisterCompany->domain }}" target="_blank" rel="noopener">

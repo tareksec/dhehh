@@ -11,7 +11,7 @@
         <div class="{{ $isPreview ? 'grid gap-8 lg:grid-cols-[0.8fr_1.2fr]' : '' }}">
             @if ($isPreview)
                 <div>
-                <p class="text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">Customer account</p>
+                <p class="text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">{{ __('Customer account') }}</p>
                 <h1 class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">{{ $isPreview ? 'Find storefront orders.' : 'Your order history.' }}</h1>
                 <p class="storefront-page-copy mt-3">
                     {{ $isPreview
@@ -20,7 +20,7 @@
                 </p>
 
                     <form class="mt-5 rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900" method="GET" action="{{ $ordersUrl }}">
-                        <label class="text-xs font-medium text-gray-500" for="phone">Checkout phone number</label>
+                        <label class="text-xs font-medium text-gray-500" for="phone">{{ __('Checkout phone number') }}</label>
                         <div class="mt-2 flex flex-col gap-3 sm:flex-row">
                             <input
                                 class="min-h-11 flex-1 rounded-lg border border-gray-300 bg-white px-4 text-sm outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/10 dark:bg-gray-950"
@@ -43,15 +43,15 @@
                 </div>
             @else
                 <div class="mb-4">
-                    <p class="text-sm font-medium text-[var(--storefront-brand)]">Orders</p>
-                    <h2 class="mt-1 text-2xl font-semibold tracking-tight">Your order history.</h2>
-                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Review purchases, track delivery progress, or add available items to your cart again.</p>
+                    <p class="text-sm font-medium text-[var(--storefront-brand)]">{{ __('Orders') }}</p>
+                    <h2 class="mt-1 text-2xl font-semibold tracking-tight">{{ __('Your order history.') }}</h2>
+                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ __('Review purchases, track delivery progress, or add available items to your cart again.') }}</p>
                 </div>
             @endif
 
             <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
                 <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-5 dark:border-white/10">
-                    <h2 class="text-lg font-semibold tracking-tight">Your orders</h2>
+                    <h2 class="text-lg font-semibold tracking-tight">{{ __('Your orders') }}</h2>
                     @if ($orders->isNotEmpty())
                         <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600 dark:bg-white/10 dark:text-gray-300">
                             {{ $orders->count() }} {{ str('order')->plural($orders->count()) }}
@@ -63,7 +63,7 @@
                     <div class="grid min-h-80 place-items-center text-center">
                         <div>
                             <div class="mx-auto grid h-14 w-14 place-items-center rounded-full bg-gray-100 text-xl text-gray-500 dark:bg-white/10 dark:text-gray-300">☎</div>
-                            <h3 class="mt-5 text-xl font-semibold tracking-tight">Search by phone</h3>
+                            <h3 class="mt-5 text-xl font-semibold tracking-tight">{{ __('Search by phone') }}</h3>
                             <p class="mx-auto mt-2 max-w-sm text-sm leading-6 text-gray-500 dark:text-gray-400">
                                 Use the same phone number you entered during checkout.
                             </p>
@@ -99,14 +99,14 @@
                             <article class="rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:border-[var(--storefront-brand)] hover:bg-white hover:shadow-sm dark:border-gray-700 dark:bg-gray-950 dark:hover:bg-gray-800 sm:p-5">
                                 <div class="flex flex-wrap items-start justify-between gap-4">
                                     <div>
-                                        <div class="text-xs font-medium text-gray-400">Order number</div>
+                                        <div class="text-xs font-medium text-gray-400">{{ __('Order number') }}</div>
                                         <h3 class="mt-1 text-lg font-semibold tracking-tight">{{ $order->order_number }}</h3>
                                         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                                             {{ optional($order->order_date)->format('d M Y') }} &middot; {{ $itemCount }} {{ str('item')->plural($itemCount) }}
                                         </p>
                                     </div>
                                     <div class="text-right">
-                                        <div class="text-xs font-medium text-gray-400">Total</div>
+                                        <div class="text-xs font-medium text-gray-400">{{ __('Total') }}</div>
                                         <div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{{ \App\Support\MoneyFormatter::currency($order->buyerTotal(), $currency) }}</div>
                                     </div>
                                 </div>

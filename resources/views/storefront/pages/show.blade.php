@@ -44,7 +44,7 @@
         </div>
 
         <div class="mt-8 flex flex-col items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-5 py-6 text-center dark:border-white/10 dark:bg-gray-900">
-            <div class="text-base font-semibold text-gray-900 dark:text-white">Still have questions?</div>
+            <div class="text-base font-semibold text-gray-900 dark:text-white">{{ __('Still have questions?') }}</div>
             <p class="text-sm text-gray-500 dark:text-gray-400">Can&rsquo;t find what you&rsquo;re looking for? Our team is happy to help.</p>
             <a class="inline-flex items-center rounded-lg bg-[var(--storefront-brand)] px-6 py-2.5 text-sm font-medium text-white transition hover:opacity-90" href="{{ $contactUrl }}">
                 Contact us

@@ -16,7 +16,7 @@
         </a>
 
         <form class="mx-3 hidden min-w-0 max-w-3xl flex-1 md:flex lg:mx-6" role="search" method="GET" action="{{ $productsUrl }}">
-            <label class="sr-only" for="storefront-search-desktop">Search products</label>
+            <label class="sr-only" for="storefront-search-desktop">{{ __('Search products') }}</label>
             <div class="relative w-full">
                 <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.34-4.34M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
                 <input
@@ -87,7 +87,7 @@
                                     <div class="truncate text-xs text-gray-500 dark:text-gray-400">{{ $authCustomer->phone }}</div>
                                 </div>
                             </div>
-                            <div class="px-2.5 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">My account</div>
+                            <div class="px-2.5 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">{{ __('My account') }}</div>
                             <a class="flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition {{ request()->routeIs('storefront.account.index', 'storefront.preview.account.index') ? 'bg-gray-100 text-gray-950 dark:bg-gray-800 dark:text-white' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white' }}" href="{{ $accountUrl }}" role="menuitem" @click="open = false">
                                 @include('storefront.account.partials.nav-icon', ['icon' => 'home'])
                                 Account overview
@@ -141,7 +141,7 @@
                                 <svg data-theme-icon-light xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.36 6.36-1.42-1.42M7.05 7.05 5.64 5.64m12.72 0-1.42 1.42M7.05 16.95l-1.42 1.42M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/></svg>
                                 <svg data-theme-icon-dark class="hidden h-5 w-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
                             </span>
-                            <span data-theme-toggle-label>Dark mode</span>
+                            <span data-theme-toggle-label>{{ __('Dark mode') }}</span>
                         </button>
                     </div>
                 </div>
@@ -210,7 +210,7 @@
 
     <div class="border-t border-gray-100 px-4 py-2 md:hidden dark:border-gray-800">
         <form class="mx-auto w-full max-w-7xl" role="search" method="GET" action="{{ $productsUrl }}">
-            <label class="sr-only" for="storefront-search-mobile">Search products</label>
+            <label class="sr-only" for="storefront-search-mobile">{{ __('Search products') }}</label>
             <div class="relative">
                 <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.34-4.34M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
                 <input
@@ -251,7 +251,7 @@
             @endif
             @if ($navCategories->isNotEmpty())
                 <div class="mt-2 border-t border-gray-100 pt-2 dark:border-white/10">
-                    <div class="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Categories</div>
+                    <div class="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">{{ __('Categories') }}</div>
                     <div class="grid grid-cols-2 gap-1">
                         @foreach ($navCategories as $navCategory)
                             <a class="rounded-lg px-3 py-2 text-sm text-gray-600 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white" href="{{ $categoryUrl($navCategory) }}" @if ($isCurrentUrl($categoryUrl($navCategory))) aria-current="page" @endif>{{ $navCategory->name }}</a>

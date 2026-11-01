@@ -39,9 +39,9 @@
                         </a>
                     </div>
                     <dl class="noor-hero-stats">
-                        <div><dt>Stock signal</dt><dd>ERP Live</dd></div>
-                        <div><dt>Technology</dt><dd>N-Type ready</dd></div>
-                        <div><dt>Sales path</dt><dd>Retail & B2B</dd></div>
+                        <div><dt>{{ __('Stock signal') }}</dt><dd>{{ __('ERP Live') }}</dd></div>
+                        <div><dt>{{ __('Technology') }}</dt><dd>{{ __('N-Type ready') }}</dd></div>
+                        <div><dt>{{ __('Sales path') }}</dt><dd>{{ __('Retail & B2B') }}</dd></div>
                     </dl>
                 </div>
 
@@ -70,7 +70,7 @@
                         <div class="min-w-0">
                             <div class="noor-badge-row">
                                 <span class="noor-stock-badge">{{ ($heroProduct?->stock ?? 0) > 0 ? 'In Stock' : (($heroProduct?->is_preorder ?? false) ? 'Pre-order' : 'Quote Ready') }}</span>
-                                <span class="noor-data-label">ERP LIVE</span>
+                                <span class="noor-data-label">{{ __('ERP LIVE') }}</span>
                             </div>
                             <strong>{{ $heroProduct?->name ?: 'N-Type Solar Module' }}</strong>
                             <span>{{ $heroProduct?->sku ?: 'Project & B2B supply' }}</span>
@@ -79,7 +79,7 @@
                     </article>
                     <div class="noor-quote-status">
                         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M13 2 5 14h6l-1 8 8-12h-6z"/></svg>
-                        <span><small>System status</small><strong>Ready for quotation</strong></span>
+                        <span><small>{{ __('System status') }}</small><strong>{{ __('Ready for quotation') }}</strong></span>
                     </div>
                 </div>
             </div>
@@ -94,8 +94,8 @@
         <section class="noor-section noor-shell" id="noor-solutions" aria-labelledby="noor-solutions-title">
             <div class="noor-section-heading" x-reveal>
                 <div>
-                    <p class="noor-kicker">Start with your use-case</p>
-                    <h2 id="noor-solutions-title">Find the right solar path faster.</h2>
+                    <p class="noor-kicker">{{ __('Start with your use-case') }}</p>
+                    <h2 id="noor-solutions-title">{{ __('Find the right solar path faster.') }}</h2>
                 </div>
                 <p>Choose an application first. We’ll narrow the suitable modules, system capacity and quotation path from there.</p>
             </div>
@@ -123,8 +123,8 @@
                         <span class="noor-card-index">0{{ $index + 1 }}</span>
                         <div>
                             <h3>{{ $category->name }}</h3>
-                            <p>Explore available products and project-ready options for this application.</p>
-                            <span class="noor-text-link">Explore solution <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m4 10 12 0m-5-5 5 5-5 5"/></svg></span>
+                            <p>{{ __('Explore available products and project-ready options for this application.') }}</p>
+                            <span class="noor-text-link">{{ __('Explore solution') }} <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m4 10 12 0m-5-5 5 5-5 5"/></svg></span>
                         </div>
                     </a>
                 @empty
@@ -143,7 +143,7 @@
 
         <section class="noor-section noor-shell" id="noor-products" aria-labelledby="noor-products-title">
             <div class="noor-section-heading" x-reveal>
-                <div><p class="noor-kicker">Featured solar products</p><h2 id="noor-products-title">Real products. Cleaner decisions.</h2></div>
+                <div><p class="noor-kicker">{{ __('Featured solar products') }}</p><h2 id="noor-products-title">{{ __('Real products. Cleaner decisions.') }}</h2></div>
                 <a class="noor-heading-link" href="{{ $catalogUrl }}">View Full Catalog <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m4 10 12 0m-5-5 5 5-5 5"/></svg></a>
             </div>
 
@@ -165,7 +165,7 @@
                             <div class="noor-product-copy">
                                 <div class="noor-badge-row">
                                     <span class="noor-stock-badge {{ ! $inStock ? 'is-quote' : '' }}">{{ $status }}</span>
-                                    <span class="noor-data-label">ERP LIVE</span>
+                                    <span class="noor-data-label">{{ __('ERP LIVE') }}</span>
                                 </div>
                                 <p>{{ $product->category?->name ?: 'Solar Module' }}</p>
                                 <h3><a href="{{ $productUrl($product) }}">{{ $product->name }}</a></h3>
@@ -177,7 +177,7 @@
                                     @if ((float) $product->selling_price > 0)
                                         <span>{{ \App\Support\MoneyFormatter::currency((float) $product->selling_price) }}</span>
                                     @else
-                                        <span>Request Pricing</span>
+                                        <span>{{ __('Request Pricing') }}</span>
                                     @endif
                                     <a href="{{ $productUrl($product) }}" aria-label="View {{ $product->name }}">
                                         <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m4 10 12 0m-5-5 5 5-5 5"/></svg>
@@ -190,8 +190,8 @@
             @else
                 <div class="noor-empty-state" role="status">
                     <svg aria-hidden="true" viewBox="0 0 48 48"><path d="M7 38 15 14h22l5 24H7Zm4-8h27M17 14l-4 24m18-24 4 24M14 22h25"/></svg>
-                    <h3>Solar products are being prepared.</h3>
-                    <p>Contact the sales team for current module availability and project pricing.</p>
+                    <h3>{{ __('Solar products are being prepared.') }}</h3>
+                    <p>{{ __('Contact the sales team for current module availability and project pricing.') }}</p>
                     <a class="noor-button noor-button-dark" href="{{ $contactUrl }}">Contact Sales</a>
                 </div>
             @endif
@@ -200,10 +200,10 @@
         <section class="noor-section noor-shell" id="noor-technology" aria-labelledby="noor-technology-title">
             <div class="noor-technology-panel" x-reveal>
                 <div class="noor-technology-intro">
-                    <p class="noor-kicker noor-kicker-gold">Manufacturing intelligence</p>
-                    <h2 id="noor-technology-title">Engineering depth behind every module.</h2>
+                    <p class="noor-kicker noor-kicker-gold">{{ __('Manufacturing intelligence') }}</p>
+                    <h2 id="noor-technology-title">{{ __('Engineering depth behind every module.') }}</h2>
                     <p>Technical information should help buyers compare products confidently—without burying essential decisions inside a datasheet.</p>
-                    <div class="noor-trace-card"><small>ERP trust layer</small><strong>SKU-level documents & traceability</strong><span>Publish only the certifications verified for the selected product and market.</span></div>
+                    <div class="noor-trace-card"><small>{{ __('ERP trust layer') }}</small><strong>{{ __('SKU-level documents & traceability') }}</strong><span>{{ __('Publish only the certifications verified for the selected product and market.') }}</span></div>
                 </div>
                 <div class="noor-technology-grid">
                     @foreach ([
@@ -233,34 +233,34 @@
 
         <section class="noor-section noor-shell" id="noor-module-lab" aria-labelledby="noor-module-lab-title">
             <div class="noor-section-heading" x-reveal>
-                <div><p class="noor-kicker">Interactive product experience</p><h2 id="noor-module-lab-title">Inspect the module before the datasheet.</h2></div>
-                <p>The viewer loads only near the viewport. Clear buttons provide an accessible alternative to pointer rotation.</p>
+                <div><p class="noor-kicker">{{ __('Interactive product experience') }}</p><h2 id="noor-module-lab-title">{{ __('Inspect the module before the datasheet.') }}</h2></div>
+                <p>{{ __('The viewer loads only near the viewport. Clear buttons provide an accessible alternative to pointer rotation.') }}</p>
             </div>
             <div class="noor-module-lab" data-noor-module-lab x-reveal>
                 <div class="noor-module-stage" data-noor-module-stage role="img" aria-label="Interactive three-dimensional solar module preview">
                     <div class="noor-stage-fallback" data-noor-stage-fallback aria-hidden="true">
                         <div class="noor-stage-panel">@for ($cell = 0; $cell < 72; $cell++)<span></span>@endfor</div>
                     </div>
-                    <div class="noor-stage-label"><span class="noor-status-dot"></span> Interactive module</div>
-                    <p class="noor-stage-help">Drag to rotate. Use the view controls for precise navigation.</p>
+                    <div class="noor-stage-label"><span class="noor-status-dot"></span> {{ __('Interactive module') }}</div>
+                    <p class="noor-stage-help">{{ __('Drag to rotate. Use the view controls for precise navigation.') }}</p>
                 </div>
                 <aside class="noor-module-details">
-                    <div class="noor-badge-row"><span class="noor-stock-badge">ERP LIVE</span><span class="noor-tech-badge">N-TYPE READY</span></div>
+                    <div class="noor-badge-row"><span class="noor-stock-badge">{{ __('ERP LIVE') }}</span><span class="noor-tech-badge">{{ __('N-TYPE READY') }}</span></div>
                     <h3>{{ $moduleProduct?->name ?: 'Interactive Solar Module' }}</h3>
                     <p>{{ $moduleProduct?->sku ?: 'Product model can be mapped to the ERP SKU.' }}</p>
                     <fieldset class="noor-view-controls">
                         <legend>3D View</legend>
                         <div>
-                            <button type="button" data-noor-module-view="front" aria-pressed="true">Front</button>
-                            <button type="button" data-noor-module-view="cells" aria-pressed="false">Cells</button>
-                            <button type="button" data-noor-module-view="back" aria-pressed="false">Back</button>
+                            <button type="button" data-noor-module-view="front" aria-pressed="true">{{ __('Front') }}</button>
+                            <button type="button" data-noor-module-view="cells" aria-pressed="false">{{ __('Cells') }}</button>
+                            <button type="button" data-noor-module-view="back" aria-pressed="false">{{ __('Back') }}</button>
                         </div>
                     </fieldset>
                     <dl class="noor-module-specs">
                         <div><dt>Availability</dt><dd>{{ ($moduleProduct?->stock ?? 0) > 0 ? 'In Stock' : 'Project Supply' }}</dd></div>
                         <div><dt>Pricing mode</dt><dd>{{ ($moduleProduct?->selling_price ?? 0) > 0 ? 'Retail / Quote' : 'ERP Quote' }}</dd></div>
-                        <div><dt>Application</dt><dd>Commercial / Project</dd></div>
-                        <div><dt>Data source</dt><dd>ERP Product</dd></div>
+                        <div><dt>{{ __('Application') }}</dt><dd>{{ __('Commercial / Project') }}</dd></div>
+                        <div><dt>{{ __('Data source') }}</dt><dd>{{ __('ERP Product') }}</dd></div>
                     </dl>
                     <div class="noor-module-actions">
                         <a class="noor-button noor-button-dark" href="{{ $moduleProduct ? $productUrl($moduleProduct) : $catalogUrl }}">View Product Details</a>
@@ -274,18 +274,18 @@
         <section class="noor-section noor-shell" id="noor-builder" aria-labelledby="noor-builder-title">
             <div class="noor-builder" x-data="{ application: 'Home', capacity: '1–3 kW', goal: 'Reduce electricity bill' }" x-reveal>
                 <div class="noor-builder-copy">
-                    <p class="noor-kicker noor-kicker-gold">Solar system builder</p>
-                    <h2 id="noor-builder-title">Turn your requirement into a clearer project brief.</h2>
-                    <p>Choose three essentials. The sales team can use this brief to continue the technical discussion and quotation.</p>
+                    <p class="noor-kicker noor-kicker-gold">{{ __('Solar system builder') }}</p>
+                    <h2 id="noor-builder-title">{{ __('Turn your requirement into a clearer project brief.') }}</h2>
+                    <p>{{ __('Choose three essentials. The sales team can use this brief to continue the technical discussion and quotation.') }}</p>
                     <div class="noor-builder-summary" aria-live="polite">
-                        <small>Your starting brief</small>
+                        <small>{{ __('Your starting brief') }}</small>
                         <strong x-text="application + ' · ' + capacity"></strong>
                         <span x-text="goal"></span>
                     </div>
                 </div>
                 <div class="noor-builder-form">
                     <fieldset>
-                        <legend><span>01</span> Application</legend>
+                        <legend><span>01</span> {{ __('Application') }}</legend>
                         <div class="noor-choice-grid">
                             @foreach (['Home', 'Office', 'Factory', 'EPC Project'] as $choice)
                                 <button type="button" @click="application = '{{ $choice }}'" :aria-pressed="(application === '{{ $choice }}').toString()" :class="application === '{{ $choice }}' ? 'is-selected' : ''">{{ $choice }}</button>
@@ -293,7 +293,7 @@
                         </div>
                     </fieldset>
                     <fieldset>
-                        <legend><span>02</span> Capacity</legend>
+                        <legend><span>02</span> {{ __('Capacity') }}</legend>
                         <div class="noor-choice-grid">
                             @foreach (['1–3 kW', '3–10 kW', '10–50 kW', '100 kW+'] as $choice)
                                 <button type="button" @click="capacity = '{{ $choice }}'" :aria-pressed="(capacity === '{{ $choice }}').toString()" :class="capacity === '{{ $choice }}' ? 'is-selected' : ''">{{ $choice }}</button>
@@ -301,7 +301,7 @@
                         </div>
                     </fieldset>
                     <fieldset>
-                        <legend><span>03</span> Goal</legend>
+                        <legend><span>03</span> {{ __('Goal') }}</legend>
                         <div class="noor-choice-grid">
                             @foreach (['Backup', 'Reduce electricity bill', 'Hybrid', 'Full solar'] as $choice)
                                 <button type="button" @click="goal = '{{ $choice }}'" :aria-pressed="(goal === '{{ $choice }}').toString()" :class="goal === '{{ $choice }}' ? 'is-selected' : ''">{{ $choice }}</button>
@@ -316,27 +316,27 @@
         <section class="noor-section noor-shell" aria-labelledby="noor-trust-title">
             <div class="noor-local-trust" x-reveal>
                 <div>
-                    <p class="noor-kicker">Manufacturer-backed, locally delivered</p>
-                    <h2 id="noor-trust-title">Global manufacturing. Local execution.</h2>
+                    <p class="noor-kicker">{{ __('Manufacturer-backed, locally delivered') }}</p>
+                    <h2 id="noor-trust-title">{{ __('Global manufacturing. Local execution.') }}</h2>
                     <p>{{ $company->name }} brings product discovery, Bangladesh inventory, consultation, quotations and after-sales coordination into one storefront.</p>
                 </div>
                 <dl>
-                    <div><dt>Inventory</dt><dd>ERP-connected status</dd></div>
-                    <div><dt>Documents</dt><dd>Verified per SKU</dd></div>
-                    <div><dt>Projects</dt><dd>Engineering-led quote</dd></div>
-                    <div><dt>Support</dt><dd>Bangladesh team</dd></div>
+                    <div><dt>{{ __('Inventory') }}</dt><dd>{{ __('ERP-connected status') }}</dd></div>
+                    <div><dt>{{ __('Documents') }}</dt><dd>{{ __('Verified per SKU') }}</dd></div>
+                    <div><dt>{{ __('Projects') }}</dt><dd>{{ __('Engineering-led quote') }}</dd></div>
+                    <div><dt>{{ __('Support') }}</dt><dd>{{ __('Bangladesh team') }}</dd></div>
                 </dl>
             </div>
         </section>
 
         <section class="noor-cta noor-shell" aria-labelledby="noor-cta-title" x-reveal>
             <div>
-                <p class="noor-kicker noor-kicker-gold">Project quotation</p>
+                <p class="noor-kicker noor-kicker-gold">{{ __('Project quotation') }}</p>
                 <h2 id="noor-cta-title">Tell us what you need. We’ll shape the right solar path.</h2>
                 <p>Home, office, factory or EPC supply—start with a clear requirement and continue with the Noor sales team.</p>
             </div>
             <div class="noor-actions">
-                <a class="noor-button noor-button-gold" href="#noor-builder">Build My System</a>
+                <a class="noor-button noor-button-gold" href="#noor-builder">{{ __('Build My System') }}</a>
                 <a class="noor-button noor-button-outline" href="{{ $contactUrl }}">Request Project Quote</a>
             </div>
         </section>

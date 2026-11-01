@@ -2,9 +2,9 @@
 
 @section('account-content')
     <div>
-        <p class="text-sm font-medium text-[var(--storefront-brand)]">Activity</p>
-        <h2 class="mt-1 text-2xl font-semibold tracking-tight">Account activity</h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">A private timeline of important account and order actions.</p>
+        <p class="text-sm font-medium text-[var(--storefront-brand)]">{{ __('Activity') }}</p>
+        <h2 class="mt-1 text-2xl font-semibold tracking-tight">{{ __('Account activity') }}</h2>
+        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ __('A private timeline of important account and order actions.') }}</p>
     </div>
 
     <section class="mt-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900" aria-label="Account activity timeline">
@@ -13,8 +13,8 @@
                 <div class="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-300">
                     <svg class="h-6 w-6" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12h3l2.25-6 4.5 12 2.25-6h6"/></svg>
                 </div>
-                <h3 class="mt-4 font-semibold">No activity recorded yet</h3>
-                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Profile changes and new account actions will appear here.</p>
+                <h3 class="mt-4 font-semibold">{{ __('No activity recorded yet') }}</h3>
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ __('Profile changes and new account actions will appear here.') }}</p>
             </div>
         @else
             <ol class="divide-y divide-gray-200 dark:divide-gray-800">
