@@ -115,7 +115,7 @@
 
             <dl class="mt-4 grid grid-cols-3 gap-3 border-y border-gray-200 py-4 text-sm dark:border-white/10">
                 <div>
-                    <dt class="text-gray-400">Stock</dt>
+                    <dt class="text-gray-400">{{ __('Stock') }}</dt>
                     <dd data-stock class="mt-1 font-semibold">{{ (int) $product->stock }}</dd>
                 </div>
                 <div>
@@ -123,7 +123,7 @@
                     <dd data-sku class="mt-1 truncate font-semibold">{{ $product->sku }}</dd>
                 </div>
                 <div>
-                    <dt class="text-gray-400">Status</dt>
+                    <dt class="text-gray-400">{{ __('Status') }}</dt>
                     <dd data-status class="mt-1 font-semibold {{ $inStock ? 'text-emerald-600 dark:text-emerald-400' : ($isPreorder ? 'text-[var(--storefront-brand)]' : 'text-red-600 dark:text-red-400') }}">
                         {{ $inStock ? 'Available' : ($isPreorder ? 'Pre-order' : 'Out of stock') }}
                     </dd>
@@ -155,7 +155,7 @@
 
                 @if ($isVariableProduct)
                     <div class="mb-5">
-                        <div class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Choose options and quantities</div>
+                        <div class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">{{ __('Choose options and quantities') }}</div>
                         @if ($variantData->isNotEmpty())
                             <div class="divide-y divide-gray-200 overflow-hidden rounded-xl border border-gray-200 dark:divide-white/10 dark:border-white/15" data-variant-rows>
                                 @foreach ($variantData as $variant)
@@ -168,7 +168,7 @@
                                                 @if ($variant['stock'] > 0)
                                                     {{ $variant['stock'] }} in stock
                                                 @else
-                                                    <span class="font-medium text-red-600 dark:text-red-400">Out of stock</span>
+                                                    <span class="font-medium text-red-600 dark:text-red-400">{{ __('Out of stock') }}</span>
                                                 @endif
                                             </div>
                                         </button>
@@ -183,7 +183,7 @@
                                     </div>
                                 @endforeach
                             </div>
-                            <p data-variant-hint class="mt-2 text-xs text-gray-500 dark:text-gray-400">Set the quantity for each option you want, then add everything to your cart in one click.</p>
+                            <p data-variant-hint class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ __('Set the quantity for each option you want, then add everything to your cart in one click.') }}</p>
                         @else
                             <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
                                 Options are currently unavailable. Please check back later or contact us for availability.
@@ -196,7 +196,7 @@
                     @if (! $isVariableProduct)
                         <div class="flex items-center rounded-lg border border-gray-300 dark:border-white/15" data-qty-stepper>
                             <button type="button" data-qty-decrement class="grid h-12 w-11 place-items-center text-lg text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white [touch-action:manipulation]" aria-label="Decrease quantity">&minus;</button>
-                            <label class="sr-only" for="quantity">Quantity</label>
+                            <label class="sr-only" for="quantity">{{ __('Quantity') }}</label>
                             <input id="quantity" data-qty-input class="h-12 w-14 border-x border-gray-300 bg-transparent text-center text-sm font-semibold text-gray-950 outline-none focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:text-white" type="number" name="quantity" value="{{ $minOrderQuantity }}" min="{{ $minOrderQuantity }}" max="{{ $maxOrderQuantity }}" autocomplete="off">
                             <button type="button" data-qty-increment class="grid h-12 w-11 place-items-center text-lg text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white [touch-action:manipulation]" aria-label="Increase quantity">+</button>
                         </div>
@@ -247,7 +247,7 @@
                 @keydown.end.prevent="tab = 'shipping'; $nextTick(() => $refs.shippingTab.focus())"
                 :class="tab === 'description' ? 'border-gray-950 text-gray-950 dark:border-white dark:text-white' : 'border-transparent text-gray-500 dark:text-gray-400'"
                 class="inline-flex min-h-11 items-center border-b-2 transition"
-            >Description</button>
+            >{{ __('Description') }}</button>
             <button
                 id="product-tab-shipping"
                 x-ref="shippingTab"
@@ -276,9 +276,9 @@
                 </div>
             </div>
             <div id="product-panel-shipping" role="tabpanel" aria-labelledby="product-tab-shipping" tabindex="0" x-show="tab === 'shipping'" x-cloak>
-                <p>Orders are processed and shipped after confirmation. Delivery time and charges depend on your location and are confirmed at checkout.</p>
+                <p>{{ __('Orders are processed and shipped after confirmation. Delivery time and charges depend on your location and are confirmed at checkout.') }}</p>
                 @if ($setting->whatsapp_number)
-                    <p class="mt-3">For questions about returns or exchanges, message us on WhatsApp before returning an item.</p>
+                    <p class="mt-3">{{ __('For questions about returns or exchanges, message us on WhatsApp before returning an item.') }}</p>
                 @endif
             </div>
         </div>
@@ -286,7 +286,7 @@
 
     @if ($related->isNotEmpty())
         <section class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-5 lg:px-6">
-            <h2 class="mb-6 text-2xl font-semibold tracking-tight">You may also like</h2>
+            <h2 class="mb-6 text-2xl font-semibold tracking-tight">{{ __('You may also like') }}</h2>
             <div class="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-5">
                 @foreach ($related as $relatedProduct)
                     @include('storefront.partials.product-card', ['product' => $relatedProduct])

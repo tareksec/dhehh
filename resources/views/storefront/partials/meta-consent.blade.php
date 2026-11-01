@@ -17,13 +17,13 @@
         aria-label="Meta measurement privacy choices"
         @if ($metaConsentStatus !== null) hidden @endif
     >
-        <div class="text-sm font-semibold text-gray-950 dark:text-white">Privacy choices</div>
+        <div class="text-sm font-semibold text-gray-950 dark:text-white">{{ __('Privacy choices') }}</div>
         <p class="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">{{ $metaConsentMessage }}</p>
         <form method="POST" action="{{ route('storefront.meta-consent.store') }}" class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             @csrf
             <input type="hidden" name="redirect_to" value="{{ url()->current() }}">
-            <button type="submit" name="choice" value="denied" class="min-h-11 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[var(--storefront-brand)] focus:ring-offset-2 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-white/5">Decline</button>
-            <button type="submit" name="choice" value="granted" class="min-h-11 rounded-lg bg-[var(--storefront-brand)] px-4 text-sm font-semibold text-[var(--storefront-brand-contrast)] transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--storefront-brand)] focus:ring-offset-2">Accept Meta measurement</button>
+            <button type="submit" name="choice" value="denied" class="min-h-11 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[var(--storefront-brand)] focus:ring-offset-2 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-white/5">{{ __('Decline') }}</button>
+            <button type="submit" name="choice" value="granted" class="min-h-11 rounded-lg bg-[var(--storefront-brand)] px-4 text-sm font-semibold text-[var(--storefront-brand-contrast)] transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--storefront-brand)] focus:ring-offset-2">{{ __('Accept Meta measurement') }}</button>
         </form>
     </div>
 

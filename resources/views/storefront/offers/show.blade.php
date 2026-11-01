@@ -29,11 +29,11 @@
         <form id="offer-checkout-form" class="rounded-lg border border-gray-200 bg-white p-4 sm:p-5 dark:border-gray-800 dark:bg-gray-900" method="POST" action="{{ $checkoutUrl }}">
             @csrf
 
-            <h2 class="text-xl font-semibold text-gray-950 dark:text-white">Order this offer</h2>
+            <h2 class="text-xl font-semibold text-gray-950 dark:text-white">{{ __('Order this offer') }}</h2>
 
             @if ($errors->any())
                 <div class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200" role="alert">
-                    <p class="font-semibold">Please review the highlighted details.</p>
+                    <p class="font-semibold">{{ __('Please review the highlighted details.') }}</p>
                     <ul class="mt-2 list-disc space-y-1 pl-5">
                         @foreach ($errors->all() as $message)
                             <li>{{ $message }}</li>
@@ -44,43 +44,43 @@
 
             <div class="mt-4 grid gap-5 sm:grid-cols-2">
                 <label class="block">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Full name</span>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Full name') }}</span>
                     <input class="mt-2 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-950 outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:bg-white/10 dark:text-white" name="name" autocomplete="name" value="{{ old('name', $loggedInCustomer->name ?? '') }}" required>
                     @error('name') <span class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror
                 </label>
 
                 <label class="block">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Phone number</span>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Phone number') }}</span>
                     <input class="mt-2 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-950 outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:bg-white/10 dark:text-white" type="tel" inputmode="tel" name="phone" autocomplete="tel" value="{{ old('phone', $loggedInCustomer->phone ?? '') }}" required>
                     @error('phone') <span class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror
                 </label>
 
                 <label class="block sm:col-span-2">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Email address <span class="text-gray-400">(optional)</span></span>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Email address') }} <span class="text-gray-400">(optional)</span></span>
                     <input class="mt-2 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-950 outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:bg-white/10 dark:text-white" type="email" name="email" autocomplete="email" value="{{ old('email', $loggedInCustomer->email ?? '') }}">
                     @error('email') <span class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror
                 </label>
 
                 <label class="block sm:col-span-2">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Delivery address</span>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Delivery address') }}</span>
                     <textarea class="mt-2 min-h-28 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-950 outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:bg-white/10 dark:text-white" name="address" autocomplete="street-address" required>{{ old('address', $loggedInCustomer->address ?? '') }}</textarea>
                     @error('address') <span class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror
-                    <span class="mt-2 block text-xs text-gray-500 dark:text-gray-400">Delivery charge is calculated from your address after you place the order.</span>
+                    <span class="mt-2 block text-xs text-gray-500 dark:text-gray-400">{{ __('Delivery charge is calculated from your address after you place the order.') }}</span>
                 </label>
 
                 <label class="block">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Quantity</span>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Quantity') }}</span>
                     <input class="mt-2 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-950 outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:bg-white/10 dark:text-white" type="number" name="quantity" min="1" max="100" x-model.number="quantity" required>
                     @error('quantity') <span class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror
                 </label>
 
                 <fieldset class="block sm:col-span-2">
-                    <legend class="text-sm font-medium text-gray-700 dark:text-gray-200">Payment method</legend>
+                    <legend class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Payment method') }}</legend>
                     <div class="mt-2 space-y-3">
                         @if ($codEnabled)
                             <label class="flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm transition" :class="method === 'cod' ? 'border-[var(--storefront-brand)] ring-1 ring-[var(--storefront-brand)]' : 'border-gray-300 dark:border-white/15'">
                                 <input type="radio" name="payment_method" value="cod" x-model="method" class="h-4 w-4" required @checked($defaultPaymentMethod === 'cod')>
-                                <span class="font-medium text-gray-900 dark:text-white">Cash on Delivery</span>
+                                <span class="font-medium text-gray-900 dark:text-white">{{ __('Cash on Delivery') }}</span>
                             </label>
                         @endif
                         @if ($hasBkash)
@@ -109,12 +109,12 @@
                                 @endif
                                 <div class="mt-3 grid gap-3 sm:grid-cols-2">
                                     <label class="block">
-                                        <span class="text-xs font-medium text-gray-600 dark:text-gray-300">Your sender number</span>
+                                        <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{{ __('Your sender number') }}</span>
                                         <input class="mt-1 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:bg-white/10 dark:text-white" type="tel" inputmode="tel" name="sender_number" value="{{ old('sender_number') }}" x-bind:required="method === 'manual_bkash' || method === 'manual_nagad'">
                                         @error('sender_number') <span class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror
                                     </label>
                                     <label class="block">
-                                        <span class="text-xs font-medium text-gray-600 dark:text-gray-300">Transaction ID</span>
+                                        <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{{ __('Transaction ID') }}</span>
                                         <input class="mt-1 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:bg-white/10 dark:text-white" name="trx_id" value="{{ old('trx_id') }}" x-bind:required="method === 'manual_bkash' || method === 'manual_nagad'">
                                         @error('trx_id') <span class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror
                                     </label>
@@ -143,12 +143,12 @@
             <div class="mt-5 space-y-2 border-t border-gray-200 pt-5 text-sm dark:border-white/10">
                 @if ($componentsSubtotal > $finalPrice)
                     <div class="flex justify-between text-gray-500 line-through dark:text-gray-500">
-                        <span>Regular price</span>
+                        <span>{{ __('Regular price') }}</span>
                         <span>BDT {{ \App\Support\MoneyFormatter::number((float) $componentsSubtotal) }}</span>
                     </div>
                 @endif
                 <div class="flex justify-between font-medium text-gray-900 dark:text-white">
-                    <span>Offer price</span>
+                    <span>{{ __('Offer price') }}</span>
                     <span>BDT {{ \App\Support\MoneyFormatter::number((float) $finalPrice) }}</span>
                 </div>
                 @if ($setting->vatActive())
@@ -165,7 +165,7 @@
                     <span>Total (&times; <span x-text="Math.max(1, quantity)"></span>)</span>
                     <span x-text="'BDT ' + total.toFixed(2)"></span>
                 </div>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Delivery charge is added after your address is submitted.</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('Delivery charge is added after your address is submitted.') }}</p>
             </div>
 
             <button class="mt-6 w-full rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50" type="submit" form="offer-checkout-form" @disabled(! $hasPaymentPath)>

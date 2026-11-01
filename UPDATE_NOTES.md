@@ -1682,6 +1682,12 @@ Verification: `php artisan test --filter=NuportOrderImportTest` 22 passed; full 
 
 Commit status: committed on branch `feature/nuport-sku-map` (cut from origin/main v2.82.0) and pushed to main with the owner's approval (2026-10-17).
 
+## 2026-11-01 - Favicon option; footer logo follows dark mode
+
+Owner list items 11-12. Website: new Favicon upload (Storefront Settings → Branding, column `storefront_settings.favicon`), linked in the Blade `<head>` and served as `branding.favicon_url` in `GET /site`. ERP: Favicon upload in Company Settings → Branding (`companies.settings.favicon`), set on the admin panel. Blade footer About block shows the dark-mode logo in dark mode. The `/site` logo already comes from the Next.js site row (test added); if the Next.js site still shows the company logo, the website repo reads the wrong field. Needs `php artisan migrate`. Bangla to review: the 3 new favicon strings.
+
+Commit status: committed locally on `feature/ai-inbox-control-plane`, not pushed.
+
 ## 2026-10-17 - Import Nuport orders (customer purchases, payment, status)
 
 Owner request: the wholesale team sells through Nuport (app.nuport.io); only customers had been brought over. They asked how to bring in what each customer bought, the payment and the status. I downloaded the real export from Nuport (owner said yes: 1,340 invoices, 2,311 lines, SO-0001 21 Aug 2025 to SO-1309 15 Oct 2026) and built the import from it.

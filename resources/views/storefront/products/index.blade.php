@@ -51,7 +51,7 @@
             @if (($search ?? '') !== '')
                 <input type="hidden" name="q" value="{{ $search }}">
             @endif
-            <label class="text-sm font-medium text-gray-600 sm:sr-only dark:text-gray-300" for="sort">Sort by</label>
+            <label class="text-sm font-medium text-gray-600 sm:sr-only dark:text-gray-300" for="sort">{{ __('Sort by') }}</label>
             <select id="sort" name="sort" class="min-h-11 min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 sm:flex-none dark:border-white/10 dark:bg-gray-950 dark:text-gray-200" onchange="this.form.submit()">
                 @foreach ($sortOptions as $value => $label)
                     <option value="{{ $value }}" @selected($sort === $value)>{{ $label }}</option>

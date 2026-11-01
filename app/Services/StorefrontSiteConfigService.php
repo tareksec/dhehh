@@ -38,6 +38,7 @@ class StorefrontSiteConfigService
         return [
             'logo_url' => Media::url($this->setting->logo, $this->company),
             'logo_dark_url' => Media::url($this->setting->logo_dark, $this->company),
+            'favicon_url' => Media::url($this->setting->favicon, $this->company),
         ];
     }
 

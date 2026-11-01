@@ -158,6 +158,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="{{ $description }}">
+    @if ($faviconUrl = \App\Support\CompanyMedia::publicUrl($setting->favicon, $company))
+        <link rel="icon" href="{{ $faviconUrl }}">
+    @endif
     @if ($robots !== null)
         <meta name="robots" content="{{ $robots }}">
     @else

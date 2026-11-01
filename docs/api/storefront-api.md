@@ -49,7 +49,7 @@ Accept: application/json
 
 ### `GET /site`
 Everything site-wide, from the company's **Next.js** storefront settings row (never the Blade row):
-`company`, `sites` (`blade_domain`, `nextjs_domain`), `branding` (logo URLs), `theme`
+`company`, `sites` (`blade_domain`, `nextjs_domain`), `branding` (`logo_url`, `logo_dark_url`, `favicon_url` — all from the Next.js site row, never Company Settings), `theme`
 (`mode`, `colors` — the resolved palette incl. contrast colours and dark-mode colours — `fonts`
 with the Google Fonts URL, `typography`, `appearance`), `contact`, `social_links`, `hero`,
 `announcement`, `utility_bar`, `campaign`, `trust_items`, `offer_countdown` (`null` once it ended),
