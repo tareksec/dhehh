@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [2.117.0] - 2026-11-01
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -10,7 +12,6 @@
 ### Technical Notes
 
 - SMS switch: stored as `sms_enabled` in the site's `notification_credentials` (added to `StorefrontNotificationService::SMS_CREDENTIAL_KEYS`, so Storefront Settings keeps it). A missing, null or empty value means on; only a false value (false, 0, "0", "false") turns it off (`smsEnabled()`). `smsConfigured()` is now "gateway saved and switched on" and `smsUsable()` also needs the switch on, so every caller that asks "can this site text?" (customer and reseller sign-up and password codes, investor portal, broadcasts, reminders, `SmsTemplateService::gatewayFor()`) treats a switched-off site as having no gateway, the same way it treats a site with no gateway today (a phone number that already has a customer record cannot be proven and is refused until SMS is on; a brand-new number still signs up directly). `smsHasGateway()` is the old "a URL is saved" check. The single choke point is `deliverSms()`, which now returns reason `sms_off` before any request is made, so a caller that does not check first still sends nothing. A switched-off site is never used as the fallback gateway of a site whose own address is broken (`workingGateway()`), and a site does not borrow another site's gateway to send for itself while it is off. `SmsTemplateService::noGatewayReason()` gives the log reason (`sms_off` or `no_gateway`) for the order status and "order placed" SMS; `SmsLogService::other()` does not log `sms_off` or `no_gateway`. The balance check on the SMS Dashboard is not a send and still works while the switch is off. No migration. Tests: `SmsDashboardTest` (3 new), `SmsLogTest` (2 new), `IntegrationsPageTest` (1 new). 6 new bilingual keys.
-
 ## [2.116.0] - 2026-11-01
 
 **Release type:** Minor Feature Update
