@@ -196,7 +196,7 @@ Owner (Bangla), points 3, 4, 5, 6, 7 and 9 (there was no 8).
 
 **Needs Bangla review (`lang/bn.json`, 34 new keys):** all the courier amount texts ("কুরিয়ারের কাছে পুরনো অ্যামাউন্ট আছে", "কুরিয়ারের অ্যামাউন্ট আপডেট হয়েছে"…), "কম পিস পাঠানো হয়েছে", "অর্ডার পাঠানো পিসের সমান করুন", "আপনার পার্সেল ট্র্যাক করুন", "অর্ডার সামারি কার্ড (PDF)".
 
-**Verified:** the full `php artisan test` on PHP 8.4 (installed in this session with the owner's approval from the ondrej/php package source): 3512 passed, 2 skipped, 0 failed, and again after merging the latest `main`: 3541 passed, 2 skipped, 0 failed. New tests: `InvoiceEmptyFieldsTest` (3), `OrderSummaryCardPdfTest` (6, including the real card drawn with one and five products), `CourierCodMismatchTest` (8), `ShortShipmentTest` (9). The PDF writer was also checked with poppler (`pdfinfo`: one page, the link present) and the card was looked at as a picture (Bangla shaped, the orange button where the tracking line was). Not looked at in a browser.
+**Verified:** the full `php artisan test` on PHP 8.4 (installed in this session with the owner's approval from the ondrej/php package source): 3512 passed, 2 skipped, 0 failed, and again after merging the latest `main`: 3542 passed, 2 skipped, 0 failed. New tests: `InvoiceEmptyFieldsTest` (3), `OrderSummaryCardPdfTest` (6, including the real card drawn with one and five products), `CourierCodMismatchTest` (8), `ShortShipmentTest` (9). The PDF writer was also checked with poppler (`pdfinfo`: one page, the link present) and the card was looked at as a picture (Bangla shaped, the orange button where the tracking line was). Not looked at in a browser.
 
 Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
 
@@ -212,7 +212,7 @@ Owner (Bangla), two points:
 
 **Needs Bangla review (`lang/bn.json`, 18 new keys):** "যে ধাপে নেবেন" (Move to), "আগের ধাপে ফেরত" (Go back to), "সামনের ধাপে" (Move forward to), "মোট কেনা" (Total purchased), "মোট পরিশোধ" (Total paid), "বর্তমান বাকি" (Current due), "অর্ডারের ইতিহাস" (Order History) and the card description lines.
 
-**Verified:** `OrderStepBackTest` (10) and `CustomerOrderHistoryTest` (7) pass, and the full suite passed (3541 passed, 2 skipped, 0 failed, PHP 8.4, on the code merged with the latest `main`). Not looked at in a browser.
+**Verified:** `OrderStepBackTest` (10) and `CustomerOrderHistoryTest` (7) pass, and the full suite passed (3542 passed, 2 skipped, 0 failed, PHP 8.4, on the code merged with the latest `main`). Not looked at in a browser.
 
 Commit status: committed on `claude/order-management-features-nafks7` and pushed to `main` on the owner's approval ("মেইন এ পুশ কর").
 
