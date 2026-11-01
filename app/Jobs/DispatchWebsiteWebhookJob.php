@@ -2,12 +2,12 @@
 
 namespace App\Jobs;
 
+use App\Support\OutboundUrlGuard;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -41,7 +41,7 @@ class DispatchWebsiteWebhookJob implements ShouldQueue
         $signature = hash_hmac('sha256', $body, $this->secret);
 
         try {
-            $response = Http::timeout(10)
+            $response = OutboundUrlGuard::http($this->url, timeout: 10)
                 ->retry(2, 1000)
                 ->withHeaders(['X-ZamZam-Signature' => $signature])
                 ->withBody($body, 'application/json')

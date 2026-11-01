@@ -6,6 +6,7 @@ use App\Services\VideoGeneration\VideoGenerationException;
 use App\Services\VideoGeneration\VideoGenerationRequest;
 use App\Services\VideoGeneration\VideoPollResult;
 use App\Services\VideoGeneration\VideoSubmissionResult;
+use App\Support\OutboundUrlGuard;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 
@@ -131,7 +132,7 @@ class CustomVideoProvider extends AbstractVideoProvider
         rewind($sink);
         ftruncate($sink, 0);
 
-        $videoResponse = $this->attempt(fn () => Http::timeout($this->pollTimeoutSeconds)->sink($sink)->get((string) $videoUrl));
+        $videoResponse = $this->attempt(fn () => $this->downloadHttp((string) $videoUrl, (string) ($request->pollUrlFor('') ?: $request->baseUrl))->sink($sink)->get((string) $videoUrl));
 
         if ($videoResponse->failed()) {
             throw new VideoGenerationException(
@@ -150,6 +151,21 @@ class CustomVideoProvider extends AbstractVideoProvider
             videoSizeBytes: $bytes,
             meta: ['provider' => 'custom'],
         );
+    }
+
+    /**
+     * The submit and poll addresses are the self-hosted service the admin chose
+     * (it may well sit on the same private network), but the video link comes
+     * out of that service's answer. A link on the provider's own host is fetched
+     * as before; a link anywhere else must be a public address (SSRF).
+     */
+    protected function downloadHttp(string $videoUrl, string $pollUrl): PendingRequest
+    {
+        $sameHost = strcasecmp((string) parse_url($videoUrl, PHP_URL_HOST), (string) parse_url($pollUrl, PHP_URL_HOST)) === 0;
+
+        return $sameHost
+            ? Http::timeout($this->pollTimeoutSeconds)
+            : OutboundUrlGuard::http($videoUrl, requireHttps: false, timeout: $this->pollTimeoutSeconds);
     }
 
     protected function http(VideoGenerationRequest $request, int $timeout): PendingRequest

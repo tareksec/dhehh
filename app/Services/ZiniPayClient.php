@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Contracts\PaymentGatewayClient;
 use App\Models\StorefrontSetting;
-use Illuminate\Support\Facades\Http;
+use App\Support\OutboundUrlGuard;
 use RuntimeException;
 
 /**
@@ -47,7 +47,7 @@ class ZiniPayClient implements PaymentGatewayClient
         // $customerAddress, and $merchantReference exist only because
         // PayStation (the other PaymentGatewayClient implementation) needs
         // them; ignored here to keep this interface shared.
-        $response = Http::timeout(30)
+        $response = OutboundUrlGuard::http($this->baseUrl($setting), timeout: 30)
             ->withHeaders(['zini-api-key' => $this->apiKey($setting)])
             ->post($this->baseUrl($setting).'/v1/payment/create', [
                 'cus_name' => $customerName,
@@ -78,7 +78,7 @@ class ZiniPayClient implements PaymentGatewayClient
     {
         // $transactionId is unused — ZiniPay's verify call only needs the
         // invoice id; PayStation's retrive-transaction needs both.
-        $response = Http::timeout(30)
+        $response = OutboundUrlGuard::http($this->baseUrl($setting), timeout: 30)
             ->withHeaders(['zini-api-key' => $this->apiKey($setting)])
             ->post($this->baseUrl($setting).'/v1/payment/verify', [
                 'invoice_id' => $invoiceId,

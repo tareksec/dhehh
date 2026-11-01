@@ -4810,5 +4810,11 @@
     "The amount to collect is now :amount.": "এখন নেওয়ার অ্যামাউন্ট :amount।",
     "This order can no longer be cut down to the pieces sent.": "এই অর্ডার আর পাঠানো পিসের সমান করা যাবে না।",
     "Every ordered piece is marked as sent, so there is nothing to change.": "অর্ডারের সব পিস পাঠানো ধরা হয়েছে, তাই বদলানোর কিছু নেই।",
-    "At least one piece must have been sent. To stop the whole order, cancel it instead.": "অন্তত এক পিস পাঠানো হতে হবে। পুরো অর্ডার বন্ধ করতে চাইলে অর্ডার বাতিল করুন।"
+    "At least one piece must have been sent. To stop the whole order, cancel it instead.": "অন্তত এক পিস পাঠানো হতে হবে। পুরো অর্ডার বন্ধ করতে চাইলে অর্ডার বাতিল করুন।",
+    "The address must be a full URL such as https://example.com.": "ঠিকানাটি একটি পূর্ণ URL হতে হবে, যেমন https://example.com।",
+    "Only https:// addresses are allowed.": "শুধু https:// ঠিকানা ব্যবহার করা যাবে।",
+    "Only http:// and https:// addresses are allowed.": "শুধু http:// ও https:// ঠিকানা ব্যবহার করা যাবে।",
+    "The address must not contain a username or password.": "ঠিকানায় ইউজারনেম বা পাসওয়ার্ড থাকা যাবে না।",
+    "This address points to a private, local or reserved network and cannot be used.": "এই ঠিকানা একটি প্রাইভেট, লোকাল বা সংরক্ষিত নেটওয়ার্কের দিকে যায়, তাই ব্যবহার করা যাবে না।",
+    "The address could not be resolved. Check the domain name.": "ঠিকানাটি খুঁজে পাওয়া যায়নি। ডোমেইন নামটি যাচাই করুন।"
 }

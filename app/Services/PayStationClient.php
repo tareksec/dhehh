@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Contracts\PaymentGatewayClient;
 use App\Models\StorefrontSetting;
-use Illuminate\Support\Facades\Http;
+use App\Support\OutboundUrlGuard;
 use RuntimeException;
 
 /**
@@ -58,7 +58,7 @@ class PayStationClient implements PaymentGatewayClient
         // $webhookUrl are unused; $redirectUrl doubles as the one
         // callback_url for both success and failure (verifyPayment always
         // re-confirms the real status server-side before finalizing).
-        $response = Http::timeout(30)
+        $response = OutboundUrlGuard::http($this->baseUrl($setting), timeout: 30)
             ->withHeaders(['token' => $this->token($setting)])
             ->post($this->baseUrl($setting).'/create-payment', [
                 // TODO: verify JSON vs Http::asForm() against a real sandbox call.
@@ -97,7 +97,7 @@ class PayStationClient implements PaymentGatewayClient
             throw new RuntimeException('PayStation verification requires a transaction reference (trx_id) which was not provided.');
         }
 
-        $response = Http::timeout(30)
+        $response = OutboundUrlGuard::http($this->baseUrl($setting), timeout: 30)
             ->withHeaders(['token' => $this->token($setting)])
             ->post($this->baseUrl($setting).'/retrive-transaction', [
                 'invoice_number' => $invoiceId,
@@ -134,7 +134,7 @@ class PayStationClient implements PaymentGatewayClient
      */
     protected function token(StorefrontSetting $setting): string
     {
-        $response = Http::timeout(30)
+        $response = OutboundUrlGuard::http($this->baseUrl($setting), timeout: 30)
             ->withHeaders([
                 'merchantId' => $this->credential($setting, 'paystation_merchant_id'),
                 'password' => $this->credential($setting, 'paystation_password'),

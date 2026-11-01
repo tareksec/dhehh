@@ -1,5 +1,5 @@
 # Core Platform
-> Last checked: 2026-10-24, branch `feature/trade-portal-test-data-cleanup` (Trade Portal test-data cleanup command), merged with main (advanced backups Phase 6, Cloudflare R2)
+> Last checked: 2026-11-01, commit 288e7fb + security audit fixes (outbound URL guard, CSV formula guard); earlier: 2026-10-24, branch `feature/trade-portal-test-data-cleanup`, merged with main (advanced backups Phase 6, Cloudflare R2)
 
 ## What it does
 The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and five distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal, Trade Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated encrypted backups to Cloudflare R2 and/or Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
@@ -78,6 +78,9 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | Path | What it does |
 | --- | --- |
 | `app/Support/ModuleGuard.php` | Wraps component execution to catch exceptions and prevent 500 errors in panels. |
+| `app/Support/OutboundUrlGuard.php` | SSRF guard for every address the server calls that a user or remote service supplied (webhook, WooCommerce, payment and SMS gateway, video link): public hosts only, DNS check, IP pinned for the connection, redirects re-checked. `http()` is the client to use instead of `Http::` for such an address. Throws `UnsafeOutboundUrl`. |
+| `app/Support/UnsafeOutboundUrl.php` | Exception raised when an outbound address is refused. |
+| `app/Support/CsvSafe.php` | Neutralises spreadsheet formulas (`=`, `+`, `-`, `@`) in text cells of CSV exports. |
 | `app/Support/ModuleHealth.php` | Health check probes evaluating database tables and service availability. |
 | `app/Support/PanelErrorPages.php` | Detects panel errors and renders graceful module failure views. |
 | `app/Support/GuardedViewManager.php` | Restores Laravel blade view state after an inner view component throws an error. |
@@ -208,6 +211,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `config/auth.php` | Authentication guards and password reset providers for admin, customer, and portal users. |
 | `config/backup.php` | Daily schedule time, `hourly.enabled` / `daily.full_app` switches, per-kind retention (`database.keep`, `app.keep`; kinds hourly/daily/predeploy/prerestore/manual), `mysqldump` binary and timeout, `restore` (mysql client, import timeout, `file_paths` copied back from an archive), app-backup paths (including `storage/app/private`), `encryption.key`, `offsite` (kinds sent, `require_encryption`, Drive `keep`), `drill` (restore test), `health` (stale limits, monitor token), Google Drive. `config/database.php` has the `backup_drill` connection. |
 | `config/filesystems.php` | Disks definition (`local`, `public`, `company_media`, `s3`). |
+| `config/outbound.php` | `OUTBOUND_ALLOW_PRIVATE_HOSTS` / `OUTBOUND_ALLOWED_HOSTS`: development-only exceptions to `OutboundUrlGuard`. |
 | `config/login_protection.php` | Rates, budgets, device cookie tokens, and lockout thresholds for `LoginGate`. |
 | `config/release.php` | Current release version metadata and update check endpoints. |
 
@@ -226,6 +230,9 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 ### Tests
 | Path | What it does |
 | --- | --- |
+| `tests/Feature/OutboundUrlGuardTest.php` | SSRF: private/loopback/metadata/encoded addresses, DNS answers, redirects, webhook, gateway and SMS callers. |
+| `tests/Feature/CsvFormulaInjectionTest.php` | CSV exports write hostile names as plain text. |
+| `tests/Feature/InstallerPasswordPolicyTest.php` | The installer refuses a weak first admin password. |
 | `tests/Feature/MultiCompanyIsolationTest.php` | Asserts that every company-owned model enforces `BelongsToCompany` and respects `CompanyScope`. |
 | `tests/Feature/CompanySettingsTest.php` | Tests company profile saving, timezone handling, and currency configuration. |
 | `tests/Feature/CompanySelectionPersistenceTest.php` | Verifies active company selection persistence across user sessions. |
@@ -292,6 +299,8 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 - **Permission Checking Hierarchy**: Super admins (`super_admin`) bypass permission gates with wildcard access (`*`). All other users must have the explicit permission slug present in their role's JSON permission array. Enforced by `app/Models/User.php`.
 - **Module Failure Isolation**: Navigation badges, widget rendering, and layout hooks must run inside `ModuleGuard::run` or `renderView` so a database or runtime crash inside one module does not bring down the entire admin panel. Production isolates; local/testing environments rethrow by default unless `ISOLATE_MODULE_ERRORS=true`. Enforced by `app/Support/ModuleGuard.php`.
 - **Login Gate Protection**: All authentication attempts must be evaluated by `LoginGate::begin` prior to invoking bcrypt hashes to thwart DDoS credential stuffing. Enforced by `app/Services/LoginGate.php` and `app/Filament/Auth/AdminLogin.php`.
+- **Outbound Address Safety (SSRF)**: an address a user can type (website webhook, WooCommerce, ZiniPay/PayStation, SMS gateway) or a remote service returns (images, video links) is called only through `OutboundUrlGuard::http()` and saved only with the `SafeOutboundUrl` rule. Never pass such an address to `Http::` directly. Not covered on purpose: AI model addresses (Ollama on localhost is a preset), the WhatsApp bridge, Coolify, and a custom video provider's own submit/poll address (the self-hosted service the admin chose). Enforced by `app/Support/OutboundUrlGuard.php`, tested by `OutboundUrlGuardTest`.
+- **Spreadsheet Export Safety**: any CSV export of text that visitors can type must pass its rows through `CsvSafe::row()`. Enforced by `app/Support/CsvSafe.php`.
 - **Software License Key Format**: License keys must match the regex `^ZZERP-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$`. Enforced by `app/Services/LicenseActivationService.php`.
 - **Documentation Discrepancy (Filament Version)**: Legacy documents (e.g. `PROJECT_GUIDE.md`) refer to Filament 4; the actual codebase runs Filament 5 (`app/Providers/Filament/AdminPanelProvider.php`).
 - **Backups**: a backup's kind is the last part of its file name (`BackupRun::kindOfFile()`); each kind is pruned on its own (`config/backup.php` `database.keep` / `app.keep`), and a file with no kind counts as `manual`. The daily database dump is the one inside the daily full app backup. Only the copy sent to Google Drive is encrypted (`OffsiteBackupService`); the files on the server are not. Nothing is uploaded unencrypted unless `BACKUP_OFFSITE_REQUIRE_ENCRYPTION=false`, and Drive cleanup only ever deletes files named like our backups. Backup freshness is judged by `BackupHealth` from `backup_runs`; the scheduler cannot watch itself, so `/health/backups` is meant for an outside monitor. The restore test only ever creates and drops schemas matching `backup_drill_{14 digits}_{6 chars}`. A backup is only listed once complete (streamed to `.part`, renamed after mysqldump's "Dump completed" line). Recording in `backup_runs` must never stop a backup (the table may not exist yet before `migrate`). Enforced by `DatabaseBackupService` and `BackupRunRecorder`.

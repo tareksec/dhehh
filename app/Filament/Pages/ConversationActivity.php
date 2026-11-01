@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Filament\Clusters\Crm;
 use App\Models\Conversation;
 use App\Models\ConversationModeEvent;
+use App\Support\CsvSafe;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
@@ -121,7 +122,7 @@ class ConversationActivity extends Page implements HasTable
             fputcsv($out, [__('Time'), __('Customer'), __('Before'), __('After'), __('Source'), __('Reason'), __('Back to AI at'), __('By'), __('Note')]);
             $query->chunk(500, function ($events) use ($out): void {
                 foreach ($events as $event) {
-                    fputcsv($out, [
+                    fputcsv($out, CsvSafe::row([
                         $event->created_at?->toDateTimeString(),
                         $event->conversation?->profileDisplayName(),
                         self::modeLabel($event->from_mode),
@@ -131,7 +132,7 @@ class ConversationActivity extends Page implements HasTable
                         $event->revert_at?->toDateTimeString(),
                         $event->user?->name,
                         $event->note,
-                    ]);
+                    ]));
                 }
             });
             fclose($out);

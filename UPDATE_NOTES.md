@@ -2,6 +2,30 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-11-01 (latest) - Backend & API security audit (OWASP API Top 10) and fixes
+
+Request: run the pasted "Production API Security Audit" prompt (five gates: zero frontend trust, WHO/WHICH/WHAT access control, stateful business flows, zero-trust external APIs, SSRF) on this repository, find the problems and fix the confirmed ones with tests. Full report: `docs/security-audit-2026-11.md`.
+
+What I found and fixed (branch `ccr-e2cbd14e-o3wapj`):
+- **V1 (High) payment replay.** The public ZiniPay / PayStation webhooks believed the invoice id in their body, so one genuinely paid invoice could mark any other pending payment of the same amount as paid and place its order. `StorefrontPaymentService` now verifies only the invoice stored on the payment, completes it under a row lock, and refuses a gateway invoice / transaction that already settled another payment.
+- **V2 (Medium) SSRF.** New `OutboundUrlGuard` (+ `SafeOutboundUrl` rule, `config/outbound.php`) for the website webhook URL, WooCommerce (incl. image downloads), ZiniPay / PayStation base URLs, the SMS gateway URL and a video link returned by a custom video service.
+- **V3 (Medium) CSV formula injection** in the customer, supplier, product, report and conversation-activity exports (`CsvSafe`).
+- **V4 (Low)** the installer accepted an 8-character first Super Admin password; it now uses `AdminPassword::rule()`.
+- **V5 (Low)** the WooCommerce webhook mismatch log kept the full computed signature; now a 6-character prefix.
+
+Decisions for the owner (not changed, listed with reasons in the report section 5):
+- **R2 sign-up phone squatting** when a store has no SMS gateway (already an open decision above in this file's history).
+- **R1** AI model URLs (Ollama preset is `localhost`), the WhatsApp bridge, Coolify and a custom video provider's own submit/poll address are not behind the SSRF guard on purpose; add the hosts you really use to `OUTBOUND_ALLOWED_HOSTS` if needed.
+- **R3** `POST /api/v1/orders` lets the API key set `unit_price`.
+- Behaviour change to know: an address saved in Integrations that is not public https (or a name that does not resolve, in production) is now refused with a message; plain http stays allowed only for the SMS gateway and video links. A development machine that really talks to a private host sets `OUTBOUND_ALLOW_PRIVATE_HOSTS=true`.
+- Please run the two SQL checks in the report (section 7) on the live database to see whether V1 was ever used.
+
+Needs Bangla review (6 new keys, all in `lang/bn.json`): the five address messages from `OutboundUrlGuard` ("The address must be a full URL such as https://example.com.", "Only https:// addresses are allowed.", "Only http:// and https:// addresses are allowed.", "The address must not contain a username or password.", "This address points to a private, local or reserved network and cannot be used.") and "The address could not be resolved. Check the domain name.".
+
+Verified: new tests `PaymentWebhookReplayTest` (5), `OutboundUrlGuardTest` (39), `CsvFormulaInjectionTest` (4), `InstallerPasswordPolicyTest` (2), +1 in `VideoGenerationProviderAdaptersTest`; the V1 and V3 tests fail on the old code. Focused regression runs over payments, WooCommerce, SMS, video, webhooks, Integrations, CSV, installer, release, translation parity are green. Full `php artisan test` (plain, no `--env`): 3593 passed, 2 skipped, 0 failed. Not tried in a browser; no live gateway, SMS or WooCommerce call was made.
+
+Commit status: committed and pushed to `ccr-e2cbd14e-o3wapj` (not `main`; not merged).
+
 ## 2026-11-01 (latest) - Supplier Report: one account page for each product
 
 Owner (Bangla): redo the Report module so that a supplier's account shows every product separately: at what price how many pieces were sold, how many damaged, how many in stock, how many short; each product on its own page; the account must be crystal clear with no gap.

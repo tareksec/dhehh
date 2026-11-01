@@ -10,6 +10,7 @@ use App\Models\Company;
 use App\Models\Order;
 use App\Models\SmsLog;
 use App\Models\StorefrontSetting;
+use App\Rules\SafeOutboundUrl;
 use App\Services\CompanyContext;
 use App\Services\Crm\AiSettingsService;
 use App\Services\PayStationClient;
@@ -20,6 +21,7 @@ use App\Services\WooCommerceImportService;
 use App\Services\WooCommerceOrderSyncService;
 use App\Services\ZiniPayClient;
 use App\Support\BulkSmsBdPolicy;
+use App\Support\OutboundUrlGuard;
 use App\Support\SmsGatewayUrl;
 use BackedEnum;
 use Closure;
@@ -1167,7 +1169,7 @@ class Integrations extends Page
         }
 
         try {
-            $response = Http::timeout(15)
+            $response = OutboundUrlGuard::http($baseUrl, timeout: 15)
                 ->withBasicAuth($key, $secret)
                 ->get("{$baseUrl}/wp-json/wc/v3/orders/{$wooOrderId}");
         } catch (\Throwable $exception) {
@@ -1271,6 +1273,7 @@ class Integrations extends Page
                                 TextInput::make('woocommerce_base_url')
                                     ->label('WooCommerce site URL')
                                     ->url()
+                                    ->rule(new SafeOutboundUrl)
                                     ->maxLength(255)
                                     ->placeholder('https://zamzamgadgetbd.com')
                                     ->helperText('Root URL of the WooCommerce site. Do not include /wp-json.')
@@ -1331,6 +1334,7 @@ class Integrations extends Page
                                 TextInput::make('website_api_credentials.webhook_url')
                                     ->label('Webhook delivery URL')
                                     ->url()
+                                    ->rule(new SafeOutboundUrl)
                                     ->maxLength(255)
                                     ->helperText('Where ZamZam ERP sends order status and stock/price change notifications.')
                                     ->columnSpanFull(),
@@ -1377,6 +1381,7 @@ class Integrations extends Page
                                 TextInput::make('payment_credentials.zinipay_base_url')
                                     ->label('ZiniPay base URL')
                                     ->url()
+                                    ->rule(new SafeOutboundUrl)
                                     ->maxLength(255)
                                     ->placeholder(ZiniPayClient::DEFAULT_BASE_URL)
                                     ->helperText('Leave empty for the default. Change only if ZiniPay gives you a different API host.')
@@ -1397,6 +1402,7 @@ class Integrations extends Page
                                 TextInput::make('payment_credentials.paystation_base_url')
                                     ->label('PayStation base URL')
                                     ->url()
+                                    ->rule(new SafeOutboundUrl)
                                     ->maxLength(255)
                                     ->placeholder(PayStationClient::DEFAULT_BASE_URL)
                                     ->helperText('Leave empty for the default. Change only if PayStation gives you a different API host.')
@@ -1429,6 +1435,8 @@ class Integrations extends Page
                                     ->columnSpanFull(),
                                 TextInput::make('notification_credentials.sms_api_url')
                                     ->label(__('SMS gateway URL template'))
+                                    // Plain http gateways are common, so only the host is judged: it must be a public one.
+                                    ->rule(new SafeOutboundUrl(requireHttps: false, template: true))
                                     ->dehydrateStateUsing(fn (?string $state): ?string => $state === null ? null : trim($state))
                                     ->maxLength(500)
                                     ->placeholder(SmsGatewayUrl::BULKSMSBD)

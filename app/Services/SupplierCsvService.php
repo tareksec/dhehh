@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Supplier;
+use App\Support\CsvSafe;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -31,7 +32,7 @@ class SupplierCsvService
                 ->orderBy('name')
                 ->chunk(200, function (Collection $suppliers) use ($handle): void {
                     foreach ($suppliers as $supplier) {
-                        fputcsv($handle, $this->supplierRow($supplier));
+                        fputcsv($handle, CsvSafe::row($this->supplierRow($supplier)));
                     }
                 });
 
@@ -78,7 +79,7 @@ class SupplierCsvService
             fclose($handle);
 
             throw ValidationException::withMessages([
-                'csv' => 'Missing required CSV columns: ' . implode(', ', $missingHeadings),
+                'csv' => 'Missing required CSV columns: '.implode(', ', $missingHeadings),
             ]);
         }
 
@@ -136,7 +137,7 @@ class SupplierCsvService
         $email = $this->nullableString($data['email'] ?? null);
         $phone = $this->nullableString($data['phone'] ?? null);
         $companyName = $this->nullableString($data['company_name'] ?? null);
-        $supplier = $this->findExistingSupplier($email, $phone, $companyName) ?? new Supplier();
+        $supplier = $this->findExistingSupplier($email, $phone, $companyName) ?? new Supplier;
 
         $supplier->fill([
             'name' => $name,

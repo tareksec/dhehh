@@ -5,8 +5,8 @@ namespace App\Services;
 use App\Models\Company;
 use App\Models\Product;
 use App\Models\StorefrontSetting;
+use App\Support\OutboundUrlGuard;
 use App\Support\WooCommerceDescription;
-use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 /**
@@ -50,7 +50,7 @@ class WooCommerceDescriptionRepairService
         $page = 1;
 
         do {
-            $response = Http::timeout(30)
+            $response = OutboundUrlGuard::http($baseUrl, timeout: 30)
                 ->retry(2, 1000, throw: false)
                 ->acceptJson()
                 ->get("{$baseUrl}/wp-json/wc/store/v1/products", ['per_page' => 100, 'page' => $page]);

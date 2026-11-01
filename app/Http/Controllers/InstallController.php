@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\CompanySettingsService;
 use App\Services\LicenseActivationService;
 use App\Services\ProductSetupService;
+use App\Support\AdminPassword;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -40,7 +41,8 @@ class InstallController extends Controller
             'date_format' => ['required', 'string', 'max:30'],
             'admin_name' => ['required', 'string', 'max:120'],
             'admin_email' => ['required', 'email', 'max:120', 'unique:users,email'],
-            'admin_password' => ['required', 'string', 'min:8', 'confirmed'],
+            // The first account is a Super Admin, so it follows the same strong-password policy as every admin (12+ characters, mixed case, numbers, symbols).
+            'admin_password' => ['required', 'string', AdminPassword::rule(), 'confirmed'],
             'license_key' => ['nullable', 'string', 'max:32'],
             'demo_mode' => ['nullable', 'boolean'],
         ]);

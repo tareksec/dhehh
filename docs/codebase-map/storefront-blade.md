@@ -1,5 +1,5 @@
 # Storefront (Blade)
-> Last checked: 2026-10-20, commit 0e5316d
+> Last checked: 2026-11-01, commit 288e7fb + security audit fixes (payment replay guard)
 
 ## What it does
 The Storefront (Blade) module powers the server-rendered customer-facing e-commerce storefront, reseller affiliate shops, promotional landing pages, and customer self-service accounts. It manages visual storefront design elements including home page section builders, multi-theme layouts (default, marketplace-pro, noor-solar), promotional banner slides, dynamic navigation menus, and modular footer blocks. It provides a multi-step checkout workflow with automated shipping fee calculation (inside/outside Dhaka), VAT handling, and risk-gated payment eligibility. The module integrates online payment gateways (ZiniPay, PayStation, and manual accounts), tracks Meta Conversions API (CAPI) server events, and automates abandoned cart recovery. Additionally, it handles customer complaints, order tracking, and dynamic multi-tenant SEO assets (sitemaps, robots.txt, schema markup).
@@ -37,7 +37,7 @@ The Storefront (Blade) module powers the server-rendered customer-facing e-comme
 | `app/Services/StorefrontCheckoutPolicyService.php` | Enforces mandatory advance payments on high-risk customers or high-value orders. |
 | `app/Services/StorefrontCart.php` | Session-based cart management with line item calculations and quantity rules. |
 | `app/Services/StorefrontCatalogService.php` | Queries cached catalog products, categories, and inventory for storefront views. |
-| `app/Services/StorefrontPaymentService.php` | Coordinates payment redirects, gateway returns, and transaction reconciliation. |
+| `app/Services/StorefrontPaymentService.php` | Coordinates payment redirects, gateway returns, and transaction reconciliation. Verifies only the invoice stored on the payment (a webhook body's invoice id is ignored) and settles one gateway invoice/transaction once, under a row lock. |
 | `app/Services/StorefrontPaymentEligibilityService.php` | Determines allowed payment options (COD vs online advance) based on customer risk. |
 | `app/Services/StorefrontDeliveryService.php` | Calculates delivery fees, courier transit days, and inside/outside Dhaka zones. |
 | `app/Services/StorefrontDeliveryAreaResolver.php` | Resolves delivery zone based on customer district, city, or postal address. |

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Purchase;
+use App\Support\CsvSafe;
 use Illuminate\Support\Collection;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Traversable;
@@ -22,7 +23,7 @@ class ReportExportService
             fputcsv($handle, $export['headings']);
 
             foreach ($export['rows'] as $row) {
-                fputcsv($handle, $row);
+                fputcsv($handle, CsvSafe::row($row));
             }
 
             fclose($handle);

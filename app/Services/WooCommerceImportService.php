@@ -7,8 +7,8 @@ use App\Models\Company;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\StorefrontSetting;
+use App\Support\OutboundUrlGuard;
 use App\Support\WooCommerceDescription;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -60,7 +60,7 @@ class WooCommerceImportService
         $result = ['created' => 0, 'updated' => 0, 'skipped' => 0];
 
         do {
-            $response = Http::timeout(30)
+            $response = OutboundUrlGuard::http($baseUrl, timeout: 30)
                 ->retry(2, 1000)
                 ->withBasicAuth($key, $secret)
                 ->get("{$baseUrl}/wp-json/wc/v3/products", [
@@ -224,7 +224,7 @@ class WooCommerceImportService
         $sortOrder = 0;
 
         do {
-            $response = Http::timeout(30)
+            $response = OutboundUrlGuard::http($this->baseUrl, timeout: 30)
                 ->retry(2, 1000)
                 ->withBasicAuth($this->key, $this->secret)
                 ->get("{$this->baseUrl}/wp-json/wc/v3/products/{$wooProductId}/variations", [
@@ -378,7 +378,8 @@ class WooCommerceImportService
     protected function downloadImage(string $url, Company $company, string $area): ?string
     {
         try {
-            $response = Http::timeout(20)->get($url);
+            // The link comes from the remote store's data, so it is checked like any outside address (public hosts only).
+            $response = OutboundUrlGuard::http($url, requireHttps: false, timeout: 20)->get($url);
 
             if ($response->failed()) {
                 return null;

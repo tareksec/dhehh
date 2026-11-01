@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Support\CsvSafe;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -52,7 +53,7 @@ class ProductCsvService
                 ->orderBy('name')
                 ->chunk(200, function (Collection $products) use ($handle): void {
                     foreach ($products as $product) {
-                        fputcsv($handle, $this->productRow($product));
+                        fputcsv($handle, CsvSafe::row($this->productRow($product)));
                     }
                 });
 

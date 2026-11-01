@@ -4810,5 +4810,11 @@
     "The amount to collect is now :amount.": "The amount to collect is now :amount.",
     "This order can no longer be cut down to the pieces sent.": "This order can no longer be cut down to the pieces sent.",
     "Every ordered piece is marked as sent, so there is nothing to change.": "Every ordered piece is marked as sent, so there is nothing to change.",
-    "At least one piece must have been sent. To stop the whole order, cancel it instead.": "At least one piece must have been sent. To stop the whole order, cancel it instead."
+    "At least one piece must have been sent. To stop the whole order, cancel it instead.": "At least one piece must have been sent. To stop the whole order, cancel it instead.",
+    "The address must be a full URL such as https://example.com.": "The address must be a full URL such as https://example.com.",
+    "Only https:// addresses are allowed.": "Only https:// addresses are allowed.",
+    "Only http:// and https:// addresses are allowed.": "Only http:// and https:// addresses are allowed.",
+    "The address must not contain a username or password.": "The address must not contain a username or password.",
+    "This address points to a private, local or reserved network and cannot be used.": "This address points to a private, local or reserved network and cannot be used.",
+    "The address could not be resolved. Check the domain name.": "The address could not be resolved. Check the domain name."
 }

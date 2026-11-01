@@ -7,9 +7,9 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\StorefrontSetting;
+use App\Support\OutboundUrlGuard;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -417,7 +417,7 @@ class WooCommerceOrderSyncService
         }
 
         try {
-            $response = Http::timeout(15)
+            $response = OutboundUrlGuard::http($baseUrl, timeout: 15)
                 ->retry(2, 1000)
                 ->withBasicAuth($key, $secret)
                 ->put("{$baseUrl}/wp-json/wc/v3/orders/{$wooOrderId}", ['status' => $wooStatus]);

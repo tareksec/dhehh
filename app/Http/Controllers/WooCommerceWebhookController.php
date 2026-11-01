@@ -42,18 +42,18 @@ class WooCommerceWebhookController extends Controller
         $signature = base64_encode(hash_hmac('sha256', $request->getContent(), $secret, true));
         $receivedSignature = (string) $request->header('X-WC-Webhook-Signature');
 
-        // Neither value below is the secret itself (both are one-way HMAC
-        // digests) — safe to log in full for diagnosing a real mismatch,
-        // e.g. WooCommerce's Secret field not exactly matching what's saved
-        // here (Settings → Integrations → WooCommerce → "Send test webhook"
-        // checks that specific possibility in one click).
+        // Only the first characters of each digest are logged: enough to tell
+        // a genuine secret mismatch from a missing header (Settings →
+        // Integrations → WooCommerce → "Send test webhook" checks that in one
+        // click), but never a full signature that would be valid for the body
+        // that was just sent.
         if (! hash_equals($signature, $receivedSignature)) {
             Log::warning('WooCommerce webhook rejected: signature does not match the secret saved for this company.', [
                 'company' => $company->getKey(),
                 'topic' => (string) $request->header('X-WC-Webhook-Topic'),
                 'signature_header_present' => $receivedSignature !== '',
-                'computed_signature' => $signature,
-                'received_signature' => $receivedSignature,
+                'computed_signature_prefix' => substr($signature, 0, 6),
+                'received_signature_prefix' => substr($receivedSignature, 0, 6),
             ]);
 
             // Same reasoning as the 404 above: expose enough in the response

@@ -213,6 +213,30 @@ class VideoGenerationProviderAdaptersTest extends TestCase
         $this->assertSame($video, stream_get_contents($sink));
     }
 
+    public function test_custom_provider_poll_never_downloads_a_video_url_inside_the_private_network(): void
+    {
+        Http::fake([
+            'self-hosted.local/jobs/ext-9' => Http::response(
+                ['status' => 'complete', 'video_url' => 'http://169.254.169.254/latest/meta-data/iam/security-credentials/'],
+                200,
+                ['Content-Type' => 'application/json'],
+            ),
+        ]);
+
+        try {
+            app(CustomVideoProvider::class)->poll(
+                $this->request(['pollUrlTemplate' => 'https://self-hosted.local/jobs/{job_id}']),
+                'ext-9',
+                $this->sink(),
+            );
+            $this->fail('The internal video link should have been refused.');
+        } catch (VideoGenerationException $exception) {
+            $this->assertStringContainsString('private, local or reserved network', $exception->getMessage());
+        }
+
+        Http::assertSentCount(1); // only the poll itself, never the metadata address
+    }
+
     public function test_custom_provider_poll_reports_failure_from_a_json_error_body(): void
     {
         Http::fake(['self-hosted.local/jobs/ext-9' => Http::response(

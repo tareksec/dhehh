@@ -10,6 +10,7 @@ use App\Models\StorefrontSetting;
 use App\Services\Meta\MetaGraphService;
 use App\Services\Ses\SesApiService;
 use App\Services\Ses\SesTrackingService;
+use App\Support\OutboundUrlGuard;
 use App\Support\PhoneLinks;
 use App\Support\SmsSegments;
 use Illuminate\Contracts\Mail\Mailer;
@@ -293,7 +294,8 @@ class StorefrontNotificationService
         $url = $this->smsRequestUrl($urlTemplate, $credentials, $phone, $message);
 
         try {
-            $response = Http::timeout(20)->get($url);
+            // SMS gateways are often plain http, so http is allowed here; the host must still be a public one.
+            $response = OutboundUrlGuard::http($url, requireHttps: false, timeout: 20)->get($url);
         } catch (\Throwable $exception) {
             $error = self::scrubUrls($exception->getMessage());
             Log::warning('Storefront SMS send failed', ['error' => $error]);

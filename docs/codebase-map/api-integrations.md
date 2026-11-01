@@ -1,5 +1,5 @@
 # API & Integrations
-> Last checked: 2026-10-20, commit 0e5316d
+> Last checked: 2026-11-01, commit 288e7fb + security audit fixes (payment replay guard, outbound URL guard)
 
 ## What it does
 The API & Integrations module manages machine-to-machine integrations, headless commerce endpoints, external e-commerce synchronizations, and inbound carrier/payment webhooks. It serves the `/api/v1/storefront/*` headless REST API powering the decoupled Next.js web application, providing cart quotations, server-side checkout, order tracking, and customer account portals. It exposes the `/api/v1/*` website API for external corporate sites to sync catalog SKUs, submit sales leads, and push orders using tenant Bearer API keys. Additionally, it handles bidirectional WooCommerce catalog imports and order status synchronization, Nuport order imports, outbound website change webhooks, and CSRF-exempt webhook endpoints for logistics couriers and online payment gateways.
@@ -167,6 +167,8 @@ The API & Integrations module manages machine-to-machine integrations, headless 
 - **Server-to-Server Rate Limiting**: The Next.js storefront API uses rate limiting grouped by API key (`throttle:storefront-api`), rather than by client IP address, because all requests originate from the same Next.js server node. Enforced by `routes/api.php` and `app/Providers/AppServiceProvider.php`.
 - **Webhook Loop Suppression**: When products or orders are updated from an external source (e.g. `PATCH /api/v1/products/{sku}` or WooCommerce sync), `$model->suppressWebsiteWebhook = true` or `Order::$suppressWooCommercePush = true` is set before saving to prevent echoing the update back out in an endless loop. Enforced by `app/Models/Product.php`, `app/Models/Order.php`, and `app/Services/WooCommerceOrderSyncService.php`.
 - **CSRF Exclusion for Public Webhooks**: All carrier and payment webhook endpoints are explicitly listed in `bootstrap/app.php`'s `validateCsrfTokens(except: [...])` array so external servers can post payloads without session cookies. Enforced by `bootstrap/app.php`.
+- **Payment Webhook Trust**: the ZiniPay / PayStation webhooks (`webhooks/zinipay/{payment}`, `webhooks/paystation/{payment}`) are public, so the invoice id in their body is never believed: `StorefrontPaymentService` verifies the invoice stored on the payment, and one gateway invoice / transaction settles one payment only. Enforced by `StorefrontPaymentService::invoiceToVerify()` / `markCompleted()`, tested by `tests/Feature/PaymentWebhookReplayTest.php`.
+- **Outbound Address Safety**: the website webhook job, all WooCommerce calls (including image downloads) and the payment gateway clients call user-supplied addresses only through `App\Support\OutboundUrlGuard::http()`. See `core-platform.md`.
 - **Legacy IMS Sync Retirement**: The legacy IMS sync API (`/api/v1/sync/*`) was permanently decommissioned on 2026-10-19; all legacy sync endpoints return 404. Documented in `routes/api.php`.
 
 ## Links to other modules
