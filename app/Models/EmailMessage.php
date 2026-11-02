@@ -30,6 +30,9 @@ class EmailMessage extends Model
     /** Written and sent, waiting out the undo-send window. */
     public const STATUS_PENDING = 'pending';
 
+    /** Claimed by the one process that is handing it to the mail server right now. */
+    public const STATUS_SENDING = 'sending';
+
     public const STATUS_SENT = 'sent';
 
     public const STATUS_FAILED = 'failed';
@@ -40,13 +43,14 @@ class EmailMessage extends Model
 
     protected $fillable = [
         'company_id', 'thread_id', 'mailbox_id', 'direction', 'kind', 'status', 'message_id', 'in_reply_to',
-        'references', 'from_address', 'from_name', 'to_addresses', 'cc_addresses', 'bcc_addresses', 'subject',
+        'references', 'from_address', 'from_name', 'reply_to_addresses', 'to_addresses', 'cc_addresses', 'bcc_addresses', 'subject',
         'body_text', 'body_html', 'is_read', 'sent_at', 'send_after', 'user_id', 'provider_message_id', 'error', 'raw_size',
     ];
 
     protected function casts(): array
     {
         return [
+            'reply_to_addresses' => 'array',
             'to_addresses' => 'array',
             'cc_addresses' => 'array',
             'bcc_addresses' => 'array',

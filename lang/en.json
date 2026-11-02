@@ -5091,5 +5091,16 @@
     "Settings → Email delivery": "Settings → Email delivery",
     "The server's own mailer": "The server's own mailer",
     "Replies from the Email inbox": "Replies from the Email inbox",
-    "Reply from the Email inbox": "Reply from the Email inbox"
+    "Reply from the Email inbox": "Reply from the Email inbox",
+    "The files are too big: one message can carry :size MB in all.": "The files are too big: one message can carry :size MB in all.",
+    "This mailbox is switched off.": "This mailbox is switched off.",
+    "Add at least one person to send to.": "Add at least one person to send to.",
+    "One message can go to :count people at most.": "One message can go to :count people at most.",
+    "Write something or attach a file before sending.": "Write something or attach a file before sending.",
+    "This company has no site yet, so there is no email account to send through.": "This company has no site yet, so there is no email account to send through.",
+    "The sending was interrupted. Check the Email Log, then send it again.": "The sending was interrupted. Check the Email Log, then send it again.",
+    "Write the note first.": "Write the note first.",
+    "On :date, :who wrote:": "On :date, :who wrote:",
+    "Forwarded message": "Forwarded message",
+    "This message is not a draft any more.": "This message is not a draft any more."
 }

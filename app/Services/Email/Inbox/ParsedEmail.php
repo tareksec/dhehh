@@ -13,6 +13,7 @@ final class ParsedEmail
     /**
      * @param  array<int, array{address: string, name: ?string}>  $to
      * @param  array<int, array{address: string, name: ?string}>  $cc
+     * @param  array<int, array{address: string, name: ?string}>  $replyTo
      * @param  array<int, string>  $references  Message-IDs without the angle brackets, oldest first
      * @param  array<int, ParsedAttachment>  $attachments
      */
@@ -24,6 +25,7 @@ final class ParsedEmail
         public readonly ?string $fromName,
         public readonly array $to,
         public readonly array $cc,
+        public readonly array $replyTo,
         public readonly string $subject,
         public readonly string $text,
         public readonly ?string $html,

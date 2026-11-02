@@ -72,13 +72,15 @@ return new class extends Migration
             $table->string('direction', 3);
             // message | note (internal, never sent) | draft
             $table->string('kind', 10)->default('message');
-            // received | pending (sent after the undo window) | sent | failed | draft | note
+            // received | pending (waiting out the undo window) | sending | sent | failed | draft | note
             $table->string('status', 12)->default('received');
             $table->string('message_id', 255)->nullable();
             $table->string('in_reply_to', 255)->nullable();
             $table->text('references')->nullable();
             $table->string('from_address', 190)->nullable();
             $table->string('from_name', 190)->nullable();
+            // Where an answer should go when it is not the sender (a website contact form mails from its own address).
+            $table->json('reply_to_addresses')->nullable();
             $table->json('to_addresses')->nullable();
             $table->json('cc_addresses')->nullable();
             $table->json('bcc_addresses')->nullable();

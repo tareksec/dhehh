@@ -109,6 +109,7 @@ class InboundEmailService
             'references' => $email->references === [] ? null : implode(' ', $email->references),
             'from_address' => $email->fromAddress,
             'from_name' => $email->fromName,
+            'reply_to_addresses' => $email->replyTo === [] ? null : $email->replyTo,
             'to_addresses' => $email->to,
             'cc_addresses' => $email->cc === [] ? null : $email->cc,
             'subject' => $email->subject,

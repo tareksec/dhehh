@@ -2,7 +2,28 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-02 (latest) - Email inbox, step 2: receiving mail (tables, parser, webhook, Worker)
+## 2026-11-02 (latest) - Email inbox, step 3: writing and sending mail (reply, reply all, forward, drafts, undo send)
+
+Plan: `docs/email-inbox-plan.md`. Steps 1 and 2 are commits `131d66a` and `4af2d2c` on the feature branch `ccr-3799b463-p4pv7n`.
+
+Step 3 (this commit): the sending side, still nothing visible to staff. `OutboundEmailService` starts a new message, a reply, a reply to all and a forward (the signature first, the original quoted below), saves the draft (cleaned HTML, valid addresses kept and the bad ones returned, files on the company's private storage, 12 MB in all), queues it for sending behind the undo window and delivers it through the site's own SMTP account. `email:send-due` runs every minute and sends what the open pages did not. `ComposedEmail` is the message as sent (HTML plus plain-text twin, files, Message-ID / In-Reply-To / References). `sendComposed()` in `StorefrontNotificationService` logs one Email Log row per recipient and adds the Amazon SES configuration set when tracking is on.
+
+Decisions made while building (owner please read):
+
+- **Undo send is 10 seconds** by default; the mailbox settings (step 6) will let you choose 0 to 60. With 0 the message goes at once.
+- A **reply goes to the Reply-To address** when the mail has one, not to the From address. This matters for website contact forms, which mail from the site's own address; the customer's address is in Reply-To.
+- **Reply all** never adds our own mailbox address, and never lists a person twice (a Cc that is already in To is dropped).
+- A **forward** starts a conversation of its own (no reply headers), keeps the original's files and writes the "Forwarded message" block (From, Date, Subject, To).
+- A message **stuck "sending" for ten minutes** is marked failed with "The sending was interrupted. Check the Email Log, then send it again." We cannot know whether the mail server took it, so it is never re-sent on its own.
+- Messages are limited to **50 people** (To + Cc + Bcc) in all, the same limit Cloudflare Email Sending has.
+
+Needs Bangla review: the sentence "ফরোয়ার্ড করা মেইল" and the quote line ":date তারিখে :who লিখেছেন:".
+
+Not verified: sending through a real SMTP server (the tests use the mail fake and the `array` mailer for the rendered message). The rendered message was checked for its headers, text and HTML parts and the attachment; it has not been opened in Gmail or Outlook.
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main`.
+
+## 2026-11-02 - Email inbox, step 2: receiving mail (tables, parser, webhook, Worker)
 
 Plan: `docs/email-inbox-plan.md`. Step 1 (Email delivery page) is commit `131d66a` on the feature branch `ccr-3799b463-p4pv7n`.
 

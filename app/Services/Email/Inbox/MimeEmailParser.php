@@ -2,6 +2,7 @@
 
 namespace App\Services\Email\Inbox;
 
+use App\Support\EmailText;
 use Carbon\CarbonImmutable;
 use Throwable;
 use ZBateson\MailMimeParser\Message;
@@ -40,7 +41,7 @@ class MimeEmailParser
         $text = (string) $message->getTextContent();
 
         if (trim($text) === '' && filled($html)) {
-            $text = $this->textFromHtml((string) $html);
+            $text = EmailText::fromHtml((string) $html);
         }
 
         $messageId = $this->idOf((string) $message->getHeaderValue('Message-ID'))
@@ -54,6 +55,7 @@ class MimeEmailParser
             fromName: $this->cleanName($from['name'] ?? null),
             to: $this->addresses($message, 'To'),
             cc: $this->addresses($message, 'Cc'),
+            replyTo: $this->addresses($message, 'Reply-To'),
             subject: $this->singleLine((string) $message->getSubject(), 255),
             text: $text,
             html: filled($html) ? (string) $html : null,
@@ -172,14 +174,5 @@ class MimeEmailParser
         $name = (string) preg_replace('/[\x00-\x1F\x7F]+/u', '', $name);
 
         return mb_substr($name === '' ? 'attachment' : $name, 0, 255);
-    }
-
-    protected function textFromHtml(string $html): string
-    {
-        $html = (string) preg_replace('#<(style|script|head)\b[^>]*>.*?</\1>#is', ' ', $html);
-        $html = (string) preg_replace('#<\s*(br|/p|/div|/tr|/li|/h[1-6])\s*/?>#i', "\n", $html);
-        $text = html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-
-        return trim((string) preg_replace("/[ \t]+/u", ' ', (string) preg_replace("/\n{3,}/", "\n\n", $text)));
     }
 }

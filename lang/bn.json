@@ -5091,5 +5091,16 @@
     "Settings → Email delivery": "সেটিংস → ইমেইল ডেলিভারি",
     "The server's own mailer": "সার্ভারের নিজস্ব মেইলার",
     "Replies from the Email inbox": "ইমেইল ইনবক্স থেকে উত্তর",
-    "Reply from the Email inbox": "ইমেইল ইনবক্স থেকে উত্তর"
+    "Reply from the Email inbox": "ইমেইল ইনবক্স থেকে উত্তর",
+    "The files are too big: one message can carry :size MB in all.": "ফাইলগুলো অনেক বড়: একটি মেইলে সব মিলিয়ে সর্বোচ্চ :size MB পাঠানো যায়।",
+    "This mailbox is switched off.": "এই মেইলবক্সটি বন্ধ আছে।",
+    "Add at least one person to send to.": "কাকে পাঠাবেন, অন্তত একজনের ঠিকানা দিন।",
+    "One message can go to :count people at most.": "একটি মেইল সর্বোচ্চ :count জনকে পাঠানো যায়।",
+    "Write something or attach a file before sending.": "পাঠানোর আগে কিছু লিখুন অথবা একটি ফাইল যোগ করুন।",
+    "This company has no site yet, so there is no email account to send through.": "এই কোম্পানির এখনো কোনো সাইট নেই, তাই মেইল পাঠানোর মতো ইমেইল অ্যাকাউন্টও নেই।",
+    "The sending was interrupted. Check the Email Log, then send it again.": "পাঠানোর মাঝপথে বাধা পড়েছে। ইমেইল লগ দেখে নিন, তারপর আবার পাঠান।",
+    "Write the note first.": "আগে নোটটি লিখুন।",
+    "On :date, :who wrote:": ":date তারিখে :who লিখেছেন:",
+    "Forwarded message": "ফরোয়ার্ড করা মেইল",
+    "This message is not a draft any more.": "এই মেইলটি আর ড্রাফট নেই।"
 }
