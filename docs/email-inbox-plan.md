@@ -66,23 +66,29 @@ system), IMAP checking for mailboxes that cannot forward, SES inbound.
 ## Steps and commits
 
 Each step ends green (its tests, bilingual keys, code map, `CHANGELOG.md`, `UPDATE_NOTES.md`) and is committed and
-pushed to the feature branch. Nothing goes to `main` without the owner's approval.
+pushed to the feature branch `ccr-3799b463-p4pv7n`. Nothing goes to `main` without the owner's approval.
 
-1. **Email delivery page for any provider.** A `EmailDeliveryService` (provider detected from the SMTP host, usage
-   counted from the Email Log for any host, generic free allowance and price settings with the old `ses_*` values as
-   fallback), a Settings → Email delivery page with the approved design, the usage section removed from the Amazon
-   SES page (which keeps only the SES tools), tests.
-2. **Data model and inbound pipeline.** Migrations, models, MIME parser service, threading, customer matching,
-   attachment storage, the inbound webhook, the Cloudflare Worker script and a setup guide, fixtures and tests.
-3. **Outbound mail.** The compose service (new, reply, reply all, forward), drafts, signature, attachments,
-   threading headers, Email Log rows, undo-send window, tests.
-4. **Email page.** Folders, list, conversation view, labels, stars, bulk actions, search, mailbox switcher, the
-   phone layout, CSS (`.zz-mail-*`), navigation badge, tests.
-5. **Compose window, customer panel, assignment.** Rich text, attachments, Quick replies, customer panel with its
-   buttons, assignee, status, internal notes, tests.
-6. **Mailbox settings.** Connection (token, test mail, status), signature, labels, behaviour, tests.
-7. **Finish.** Code map, release notes, `npm run build`, render check at 390 and 1440 px (light and dark), full
-   `php artisan test`, push the feature branch.
+| Step | What | Commit | Status |
+| --- | --- | --- | --- |
+| 1 | **Email delivery page for any provider** (`EmailProvider`, `EmailUsageService`, Settings → Email delivery) | `131d66a` | done |
+| 2 | **Data model and inbound pipeline** (tables, MIME parser, sanitiser, threading, customer matching, webhook, Cloudflare Worker, setup guide) | `4af2d2c` | done |
+| 3 | **Outbound mail** (`OutboundEmailService`: new / reply / reply all / forward, drafts, undo send, `email:send-due`, Email Log rows) | `d080370` | done |
+| 4 | **Email page** (folders, list, conversation, labels, stars, bulk actions with undo, search, quick filters, mailbox switcher, phone layout, sandboxed HTML, file downloads) | `deb331a` | done |
+| 5a | **Writing in the page** (compose window, autosaved drafts, files, Quick replies, Send with the undo bar, send again, notes) | `cfc196b` | done |
+| 5b | **Who the conversation is with** (assignee, status, customer panel, Create order / Create lead / Link to order) | `631a60f` | done |
+| 6 | **Settings → Email inbox** (add mailbox, forwarding address shown once, new token, test mail, setup steps, signature, behaviour, labels; new-mail alerts) | `9290766` | done |
+| 7 | **Finish** (this document, code map, release notes, `npm run build`, render check at 390 and 1440 px light and dark, full `php artisan test`) | this commit | done |
+
+### What differs from the first plan
+
+- Drafts are private to the person writing them; Sent, Drafts, Starred and All mail are views, not folders.
+- Undo send is a countdown bar in the page (default 10 seconds, 0 to 60 in Settings); the page sends when it ends and
+  `email:send-due` (every minute) is the backup for a closed page.
+- A lead made from an email needs a phone number (the CRM works from it); the lead source **Email** was added.
+- Create order opens the existing New Order page with the customer picked (`?customer=ID`); it does not make the order.
+- New mail alerts staff by default (bell and push); it is a setting of each mailbox.
+- Not built (Phase 2): snooze, scheduled send, rules, Suggest reply, IMAP checking, Amazon SES inbound, address
+  suggestions in To / Cc, a bottom reading pane, a Trash that empties itself after 30 days.
 
 ## What the owner has to do outside the ERP
 
