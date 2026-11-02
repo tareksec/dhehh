@@ -15,6 +15,9 @@
                 <x-filament::icon icon="heroicon-o-envelope" class="zz-mail-empty-icon" aria-hidden="true" />
                 <h2>{{ __('No mailbox yet') }}</h2>
                 <p>{{ __('A mailbox is an email address the company reads here. Once one is added, the mail sent to it appears in this page.') }}</p>
+                @if (\App\Filament\Pages\EmailInboxSettings::canAccess())
+                    <x-filament::button tag="a" :href="\App\Filament\Pages\EmailInboxSettings::getUrl()" color="gray">{{ __('Add a mailbox in Settings') }}</x-filament::button>
+                @endif
             </div>
         </x-filament::section>
     @else
@@ -98,6 +101,12 @@
                     <span class="zz-mail-pill"><x-filament::icon icon="heroicon-m-check-circle" class="zz-mail-i zz-mail-i-s zz-mail-good" aria-hidden="true" />{{ __('Sending is set up') }}</span>
                 @else
                     <span class="zz-mail-pill zz-mail-pill-warn"><x-filament::icon icon="heroicon-m-exclamation-circle" class="zz-mail-i zz-mail-i-s" aria-hidden="true" />{{ __('Sending is not set up') }}</span>
+                @endif
+
+                @if (\App\Filament\Pages\EmailInboxSettings::canAccess())
+                    <a class="zz-mail-ib" href="{{ \App\Filament\Pages\EmailInboxSettings::getUrl(['mailbox' => $mailbox->id]) }}" aria-label="{{ __('Mailbox settings') }}" title="{{ __('Mailbox settings') }}">
+                        <x-filament::icon icon="heroicon-o-cog-6-tooth" class="zz-mail-i" aria-hidden="true" />
+                    </a>
                 @endif
 
                 <button type="button" class="zz-mail-ib" wire:click="$refresh" aria-label="{{ __('Refresh') }}">

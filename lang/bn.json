@@ -5291,5 +5291,7 @@
     "New label": "নতুন লেবেল",
     "Save label": "লেবেল সংরক্ষণ",
     "New email from :name": ":name-এর নতুন মেইল",
-    "Open email": "মেইল খুলুন"
+    "Open email": "মেইল খুলুন",
+    "Mailbox settings": "মেইলবক্সের সেটিংস",
+    "Add a mailbox in Settings": "সেটিংসে একটি মেইলবক্স যোগ করুন"
 }

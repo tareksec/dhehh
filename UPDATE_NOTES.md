@@ -22,6 +22,8 @@ Needs Bangla review: the six setup steps and "তাৎক্ষণিক ফর
 
 Not verified: the Cloudflare steps themselves and the Worker on real Cloudflare; the push notification on a real device; adding a mailbox for a company with two sites.
 
+Step 7 (the closing commit): the plan document records the finished state; a gear button on the Email page opens the settings. **Full `php artisan test`: 3750 passed, 7 skipped, 0 failed** (run on the step 6 commit, before the gear button; the page and settings tests were run again after it). `npm run build` passes. Checked in a real browser (Chromium, a throwaway database, never the demo one) at 1440 px light and dark and at 390 px: the Email page, an open conversation, the compose window with the editor, a file and a Quick reply, the customer panel inline, over the page and full screen, and the settings page.
+
 Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main`.
 
 ## 2026-11-02 - Email inbox, step 5b: assignee, status and the customer panel

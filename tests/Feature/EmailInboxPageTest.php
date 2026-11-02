@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\EmailInbox;
+use App\Filament\Pages\EmailInboxSettings;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\EmailAttachment;
@@ -69,6 +70,19 @@ class EmailInboxPageTest extends TestCase
         Auth::login(User::factory()->create(['role' => 'accountant', 'is_active' => true]));
         $this->assertFalse(EmailInbox::canAccess());
         Livewire::test(EmailInbox::class)->assertForbidden();
+    }
+
+    public function test_settings_managers_get_a_link_to_the_mailbox_settings_and_others_do_not(): void
+    {
+        $settings = EmailInboxSettings::getUrl(['mailbox' => $this->mailbox->getKey()]);
+
+        Livewire::test(EmailInbox::class)->assertDontSeeHtml($settings);
+
+        Auth::login(User::factory()->create(['role' => 'super_admin', 'is_active' => true]));
+        Livewire::test(EmailInbox::class)->assertSeeHtml($settings)->assertSee('Mailbox settings');
+
+        app(CompanyContext::class)->set($this->makeCompany('Empty Co', 'empty-co'));
+        Livewire::test(EmailInbox::class)->assertSee('Add a mailbox in Settings');
     }
 
     public function test_a_company_without_a_mailbox_is_told_so(): void
