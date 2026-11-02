@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Reseller\Pages\Dashboard;
 use App\Filament\Reseller\Pages\Withdrawals;
 use App\Filament\Resources\ResellerLevels\Pages\ManageResellerLevels;
+use App\Filament\Resources\ResellerLevels\Pages\TrashedResellerLevels;
 use App\Filament\Resources\ResellerLevels\ResellerLevelResource;
 use App\Filament\Resources\Resellers\Pages\EditReseller;
 use App\Filament\Resources\Resellers\Pages\ListResellers;
@@ -170,10 +171,71 @@ class ResellerLevelsTest extends TestCase
             ->callTableAction('delete', $silver, data: ['confirmation' => 'Silver'])
             ->assertHasNoTableActionErrors();
 
-        $this->assertNull(ResellerLevel::withoutGlobalScopes()->find($silver->getKey()));
-        $this->assertNull($this->reseller->fresh()->reseller_level_id);
+        // Delete = Trash (plan T4b): the level is kept, but it stops applying.
+        $this->assertTrue(ResellerLevel::withoutGlobalScopes()->withTrashed()->findOrFail($silver->getKey())->trashed());
+        $this->assertNull(ResellerLevel::query()->find($silver->getKey()));
+        $this->assertSame($silver->getKey(), $this->reseller->fresh()->reseller_level_id);
+        $this->assertNull($this->reseller->fresh()->resellerLevel);
         $this->assertSame(50.0, $this->reseller->fresh()->resellerReturnCharge());
         $this->assertSame('approved', $this->reseller->fresh()->reseller_status);
+
+        // Deleting it permanently clears the link, as a hard delete always did.
+        ResellerLevel::withoutGlobalScopes()->withTrashed()->findOrFail($silver->getKey())->forceDelete();
+        $this->assertNull($this->reseller->fresh()->reseller_level_id);
+        $this->assertSame(50.0, $this->reseller->fresh()->resellerReturnCharge());
+    }
+
+    public function test_a_level_nobody_has_goes_to_trash_too(): void
+    {
+        $this->signInAdmin();
+        $bronze = $this->level($this->company, 'Bronze');
+
+        // Its delete modal has no "resellers go back to the company amounts" line, which used to fail the whole request.
+        $component = Livewire::test(ManageResellerLevels::class)->mountTableAction('delete', $bronze);
+        $description = (string) $component->instance()->getMountedAction()->getModalDescription();
+        $this->assertStringContainsString('moved to Trash', $description);
+        $this->assertStringNotContainsString('go back to the company amounts', $description);
+
+        $component
+            ->setTableActionData(['confirmation' => 'Bronze'])
+            ->callMountedTableAction()
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSoftDeleted($bronze);
+    }
+
+    public function test_a_level_in_trash_stops_applying_keeps_its_name_and_applies_again_when_restored(): void
+    {
+        $this->signInAdmin();
+        StorefrontSetting::query()->where('company_id', $this->company->getKey())->update(['reseller_min_withdrawal' => 500]);
+        $silver = $this->level($this->company, 'Silver', returnCharge: 20, minWithdrawal: 100);
+        $this->reseller->update(['reseller_level_id' => $silver->getKey()]);
+        $this->assertSame(20.0, $this->reseller->fresh()->resellerReturnCharge());
+        $this->assertSame(100.0, $this->reseller->fresh()->resellerMinWithdrawal());
+
+        $silver->delete();
+
+        // While it is in Trash the reseller uses the company amounts, but keeps the link...
+        $reseller = $this->reseller->fresh();
+        $this->assertSame($silver->getKey(), $reseller->reseller_level_id);
+        $this->assertSame(50.0, $reseller->resellerReturnCharge());
+        $this->assertSame(500.0, $reseller->resellerMinWithdrawal());
+
+        // ...the level is not offered for another reseller, and its name stays reserved.
+        $names = collect(ResellerLevel::query()->pluck('name'));
+        $this->assertFalse($names->contains('Silver'));
+        Livewire::test(ManageResellerLevels::class)
+            ->callAction('create', ['name' => 'Silver', 'sort_order' => 0])
+            ->assertHasActionErrors(['name' => 'unique']);
+
+        // Restore makes it apply again, for the same reseller, with nothing else changed.
+        Livewire::test(TrashedResellerLevels::class)
+            ->assertCanSeeTableRecords([$silver])
+            ->callTableAction('restore', $silver)
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame(20.0, $this->reseller->fresh()->resellerReturnCharge());
+        $this->assertSame(100.0, $this->reseller->fresh()->resellerMinWithdrawal());
     }
 
     public function test_a_reseller_is_given_a_level_on_their_edit_page_and_only_one_of_their_own_company(): void

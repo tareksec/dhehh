@@ -24,7 +24,7 @@ class RefreshWhatsAppWebNamesJob implements ShouldQueue
 
     public function handle(CompanyContext $context, WhatsAppWebArchiveService $archive): void
     {
-        $channel = ConversationChannel::withoutGlobalScopes()->with('company')->where('connection_type', 'web')->find($this->channelId);
+        $channel = ConversationChannel::withoutGlobalScopes()->withoutTrashed()->with('company')->where('connection_type', 'web')->find($this->channelId);
 
         if (! $channel) {
             return;

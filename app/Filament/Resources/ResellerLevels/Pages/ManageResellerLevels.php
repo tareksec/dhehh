@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ResellerLevels\Pages;
 
+use App\Filament\Resources\Pages\TrashedRecords;
 use App\Filament\Resources\ResellerLevels\ResellerLevelResource;
 use App\Services\CompanyContext;
 use Filament\Actions\CreateAction;
@@ -15,6 +16,7 @@ class ManageResellerLevels extends ManageRecords
     protected function getHeaderActions(): array
     {
         return [
+            TrashedRecords::linkAction(ResellerLevelResource::class),
             CreateAction::make()
                 ->label(__('New level'))
                 ->visible(fn (): bool => ResellerLevelResource::canCreate())

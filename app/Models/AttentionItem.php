@@ -41,6 +41,21 @@ class AttentionItem extends Model
 
     protected $guarded = ['id'];
 
+    protected static function booted(): void
+    {
+        // Deleting a lead used to delete its Needs attention item with it (the
+        // foreign key cascades). A lead in Trash (owner request 2026-11-01, plan
+        // T4b) hides the item the same way: not in the queue, the badge or the
+        // reports; Restore puts it back.
+        static::addGlobalScope('leadNotInTrash', function (Builder $query): void {
+            $column = $query->getModel()->qualifyColumn('lead_id');
+
+            $query->where(fn (Builder $any): Builder => $any
+                ->whereNull($column)
+                ->orWhereIn($column, Lead::withoutGlobalScopes()->withoutTrashed()->select('id')));
+        });
+    }
+
     protected $casts = [
         'opened_at' => 'datetime',
         'due_at' => 'datetime',

@@ -5,11 +5,22 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
+/**
+ * A channel in Trash (owner request 2026-11-01, plan T4b) behaves exactly like a
+ * deleted one did: it receives nothing and sends nothing, and the conversations
+ * and messages it archived stay. Every webhook, job and service that looks a
+ * channel up with `withoutGlobalScopes()` therefore adds `->withoutTrashed()`
+ * (tests/Feature/CrmTrashTest guards this by scanning the code). The relations
+ * from a conversation, a contact or a broadcast stay on the default scope, so
+ * `$conversation->channel` is null while the channel is in Trash and the
+ * existing "no active channel" guards apply; Restore brings it all back.
+ */
 class ConversationChannel extends Model
 {
-    use BelongsToCompany;
+    use BelongsToCompany, SoftDeletes;
 
     public const PROVIDERS = [
         'whatsapp' => 'WhatsApp Cloud API',

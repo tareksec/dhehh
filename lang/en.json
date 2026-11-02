@@ -4603,5 +4603,7 @@
     "This company already has a payment method of this type, and it is in Trash. Restore it from Trash instead of adding another.": "This company already has a payment method of this type, and it is in Trash. Restore it from Trash instead of adding another.",
     "This company already has a payment method of this type. Edit the existing one instead of adding another.": "This company already has a payment method of this type. Edit the existing one instead of adding another.",
     "Trash": "Trash",
-    "A customer with this phone number already exists, so this one cannot be restored. Delete it permanently, or change the other customer's phone first.": "A customer with this phone number already exists, so this one cannot be restored. Delete it permanently, or change the other customer's phone first."
+    "A customer with this phone number already exists, so this one cannot be restored. Delete it permanently, or change the other customer's phone first.": "A customer with this phone number already exists, so this one cannot be restored. Delete it permanently, or change the other customer's phone first.",
+    "A chat channel with this Phone Number ID / Page ID already exists (possibly under another company, or in Trash).": "A chat channel with this Phone Number ID / Page ID already exists (possibly under another company, or in Trash).",
+    "The lead of this quotation is in Trash. Restore the lead first, or choose a customer for the quotation.": "The lead of this quotation is in Trash. Restore the lead first, or choose a customer for the quotation."
 }

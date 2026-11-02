@@ -30,7 +30,8 @@ class SalesQualificationService
 
         return DB::transaction(function () use ($conversation, $data): array {
             $locked = Conversation::query()->whereKey($conversation->getKey())->lockForUpdate()->firstOrFail();
-            if (! $locked->lead_id) {
+            // A lead in Trash counts as no lead (the link itself is kept, so Restore reconnects it).
+            if (! $locked->lead_id || ! Lead::query()->where('company_id', $locked->company_id)->whereKey($locked->lead_id)->exists()) {
                 if (blank($locked->contact_phone)) {
                     return ['error' => 'A phone number is required before creating a lead.'];
                 }

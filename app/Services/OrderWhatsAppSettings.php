@@ -55,7 +55,7 @@ class OrderWhatsAppSettings
             return null;
         }
 
-        return ConversationChannel::withoutGlobalScopes()
+        return ConversationChannel::withoutGlobalScopes()->withoutTrashed()
             ->where('company_id', $company instanceof Company ? $company->getKey() : $company)
             ->where('provider', 'whatsapp')
             ->whereIn('connection_type', self::CHANNEL_TYPES)
@@ -71,7 +71,7 @@ class OrderWhatsAppSettings
      */
     public function channelOptions(Company $company): array
     {
-        return ConversationChannel::withoutGlobalScopes()
+        return ConversationChannel::withoutGlobalScopes()->withoutTrashed()
             ->where('company_id', $company->getKey())
             ->where('provider', 'whatsapp')
             ->whereIn('connection_type', self::CHANNEL_TYPES)

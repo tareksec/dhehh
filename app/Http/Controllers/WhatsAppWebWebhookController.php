@@ -109,7 +109,7 @@ class WhatsAppWebWebhookController extends Controller
 
     protected function channel(int $id): ConversationChannel
     {
-        return ConversationChannel::withoutGlobalScopes()
+        return ConversationChannel::withoutGlobalScopes()->withoutTrashed()
             ->with('company')
             ->where('connection_type', 'web')
             ->findOrFail($id);

@@ -46,7 +46,9 @@ class ConversationMessengerService
         }
 
         // WhatsApp Web (QR) channels are a read-only archive: the bridge
-        // never sends, so the linked number is not put at extra ban risk.
+        // never sends, so the linked number is not put at extra ban risk. The
+        // scope-free lookup includes a channel in Trash on purpose: an archive
+        // chat stays read-only while its channel is in Trash.
         if ($conversation->channel()->withoutGlobalScopes()->first()?->isWeb()) {
             throw ValidationException::withMessages([
                 'body' => __('WhatsApp Web archive chats are read-only. Reply from the WhatsApp Business app on your phone, or add an internal note.'),

@@ -559,7 +559,17 @@ class WhatsAppWebArchiveTest extends TestCase
         $this->assertNotNull($channel->web_disconnected_at);
         $this->assertNotNull($channel->last_error);
 
+        // Delete = Trash (plan T4b): the archive is untouched and still points at the channel, so Restore reconnects it.
         $channel->delete();
+
+        $this->assertSame(1, Conversation::withoutGlobalScopes()->count());
+        $this->assertSame($channel->getKey(), Conversation::withoutGlobalScopes()->sole()->channel_id);
+        $this->assertSame(2, ConversationMessage::query()->count());
+        $this->assertSame(1, WhatsAppContact::withoutGlobalScopes()->count());
+        $this->assertSame($channel->getKey(), WhatsAppContact::withoutGlobalScopes()->sole()->channel_id);
+
+        // Deleting the channel permanently still never deletes the archive.
+        $channel->forceDelete();
 
         $this->assertSame(1, Conversation::withoutGlobalScopes()->count());
         $this->assertNull(Conversation::withoutGlobalScopes()->sole()->channel_id);

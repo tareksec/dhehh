@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\Leads;
 
 use App\Filament\Clusters\Crm;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\Leads\Pages\CreateLead;
 use App\Filament\Resources\Leads\Pages\EditLead;
 use App\Filament\Resources\Leads\Pages\ListLeads;
+use App\Filament\Resources\Leads\Pages\TrashedLeads;
 use App\Filament\Resources\Leads\Pages\ViewLead;
 use App\Filament\Resources\Leads\RelationManagers\ActivitiesRelationManager;
 use App\Filament\Resources\Leads\RelationManagers\QuotationsRelationManager;
@@ -21,6 +23,8 @@ use Filament\Tables\Table;
 
 class LeadResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = Lead::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserPlus;
@@ -59,6 +63,7 @@ class LeadResource extends Resource
         return [
             'index' => ListLeads::route('/'),
             'create' => CreateLead::route('/create'),
+            'trash' => TrashedLeads::route('/trash'),
             'view' => ViewLead::route('/{record}'),
             'edit' => EditLead::route('/{record}/edit'),
         ];

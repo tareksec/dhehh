@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Leads\RelationManagers;
 
+use App\Filament\Concerns\HasTrashView;
 use App\Models\LeadActivity;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -13,10 +14,13 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 
 class ActivitiesRelationManager extends RelationManager
 {
+    use HasTrashView;
+
     protected static string $relationship = 'activities';
 
     protected static ?string $title = 'Follow-up Activities';
@@ -40,6 +44,9 @@ class ActivitiesRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $this->trashQuery($query))
+            // An activity has no name: the Delete confirmation asks for "Call #12".
+            ->recordTitle(fn (LeadActivity $record): string => __(LeadActivity::TYPES[$record->type] ?? (string) $record->type).' #'.$record->getKey())
             ->columns([
                 TextColumn::make('type')
                     ->badge()
@@ -51,8 +58,10 @@ class ActivitiesRelationManager extends RelationManager
             ])
             ->defaultSort('created_at', 'desc')
             ->headerActions([
+                $this->trashToggleAction(),
                 CreateAction::make()
                     ->label('Add activity')
+                    ->hidden(fn (): bool => $this->showTrash)
                     ->mutateDataUsing(function (array $data): array {
                         $data['user_id'] = Auth::id();
 
@@ -67,8 +76,10 @@ class ActivitiesRelationManager extends RelationManager
                     }),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->hidden(fn (): bool => $this->showTrash),
                 DeleteAction::make(),
+                ...$this->trashRecordActions(),
             ]);
     }
 }

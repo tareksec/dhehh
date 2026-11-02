@@ -27,7 +27,7 @@ class SendLeadFollowUpReminders extends Command
         BusinessNotificationService $businessNotifications,
         StorefrontNotificationService $storefrontNotifications,
     ): int {
-        $leads = Lead::withoutGlobalScopes()
+        $leads = Lead::withoutGlobalScopes()->withoutTrashed()
             ->with(['company', 'assignedUser'])
             ->whereNotNull('assigned_to')
             ->whereNotNull('next_follow_up_at')

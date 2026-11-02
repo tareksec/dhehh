@@ -117,6 +117,35 @@ class EmbeddedSignupTest extends TestCase
         $this->assertSame('token-two', ConversationChannel::withoutGlobalScopes()->where('external_id', '9990001111')->first()->access_token);
     }
 
+    public function test_reconnecting_a_number_whose_channel_is_in_trash_brings_the_channel_back(): void
+    {
+        [$company, $user] = $this->makeCompanyAndUser();
+        $this->actingAs($user)->withSession(['current_company_id' => $company->id]);
+
+        app(EmbeddedSignupSettingsService::class)->save($company, [
+            'app_id' => '123456789', 'config_id' => 'config-abc', 'verify_token' => 'verify-xyz', 'app_secret' => 'app-secret-value',
+        ]);
+
+        Http::fake([
+            '*/oauth/access_token*' => Http::response(['access_token' => 'token-new'], 200),
+            '*/subscribed_apps' => Http::response(['success' => true], 200),
+        ]);
+
+        $trashed = ConversationChannel::query()->create([
+            'provider' => 'whatsapp', 'external_id' => '9990002222', 'waba_id' => 'waba-1', 'display_name' => 'Old', 'access_token' => 'token-old', 'is_active' => true,
+        ]);
+        $trashed->delete();
+
+        Livewire::test(ConnectWhatsAppBusinessApp::class)->call('completeEmbeddedSignup', 'auth-code', 'waba-1', '9990002222');
+
+        // The Phone Number ID is unique, so the same row is reused: it is live again, not a second one hidden in Trash.
+        $this->assertSame(1, ConversationChannel::withoutGlobalScopes()->withTrashed()->where('external_id', '9990002222')->count());
+        $channel = ConversationChannel::query()->where('external_id', '9990002222')->first();
+        $this->assertNotNull($channel);
+        $this->assertNull($channel->deleted_at);
+        $this->assertSame('token-new', $channel->access_token);
+    }
+
     public function test_failed_code_exchange_does_not_create_a_channel_and_does_not_throw(): void
     {
         [$company, $user] = $this->makeCompanyAndUser();

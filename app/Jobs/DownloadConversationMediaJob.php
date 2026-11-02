@@ -44,7 +44,7 @@ class DownloadConversationMediaJob implements ShouldBeUnique, ShouldQueue
     public function handle(CompanyContext $context, CompanyStorageService $storage, ?MetaGraphService $metaGraph = null): void
     {
         $metaGraph ??= app(MetaGraphService::class);
-        $channel = ConversationChannel::withoutGlobalScopes()->with('company')->findOrFail($this->channelId);
+        $channel = ConversationChannel::withoutGlobalScopes()->withoutTrashed()->with('company')->findOrFail($this->channelId);
         $context->set($channel->company);
         $message = null;
 

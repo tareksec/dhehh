@@ -8,10 +8,11 @@ use App\Services\WebsiteWebhookDispatcher;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Lead extends Model
 {
-    use BelongsToCompany;
+    use BelongsToCompany, SoftDeletes;
 
     public const SOURCES = [
         'facebook' => 'Facebook',

@@ -436,6 +436,24 @@ class CrmSalesAutomationTest extends TestCase
         $this->assertArrayNotHasKey('budget', $lead->fresh()->qualification);
     }
 
+    public function test_qualification_gives_a_chat_a_fresh_lead_when_its_lead_is_in_trash(): void
+    {
+        $source = $this->conversation->messages()->first();
+        $service = app(SalesQualificationService::class);
+        $service->update($this->conversation, ['field' => 'delivery_area', 'value' => 'ঢাকা', 'evidence_message_id' => $source->id, 'evidence_quote' => $source->body]);
+        $trashed = $this->conversation->fresh()->lead;
+        $trashed->delete();
+
+        // Without this the save would stop on the lead in Trash; it behaves as it did when a deleted lead cleared the link.
+        $saved = $service->update($this->conversation->fresh(), ['field' => 'delivery_area', 'value' => 'ঢাকা', 'evidence_message_id' => $source->id, 'evidence_quote' => $source->body]);
+
+        $this->assertTrue($saved['saved']);
+        $fresh = $this->conversation->fresh()->lead;
+        $this->assertNotNull($fresh);
+        $this->assertNotSame($trashed->getKey(), $fresh->getKey());
+        $this->assertSoftDeleted($trashed);
+    }
+
     public function test_follow_up_starts_over_after_a_new_inbound_message(): void
     {
         $this->travelTo(now('Asia/Dhaka')->setTime(12, 0));

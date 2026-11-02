@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\ConversationChannels;
 
 use App\Filament\Clusters\Crm;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\ConversationChannels\Pages\CreateConversationChannel;
 use App\Filament\Resources\ConversationChannels\Pages\EditConversationChannel;
 use App\Filament\Resources\ConversationChannels\Pages\ListConversationChannels;
+use App\Filament\Resources\ConversationChannels\Pages\TrashedConversationChannels;
 use App\Models\Company;
 use App\Models\ConversationChannel;
 use App\Services\CompanyContext;
@@ -26,11 +28,14 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rules\Unique;
 
 class ConversationChannelResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = ConversationChannel::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSignal;
@@ -92,7 +97,7 @@ class ConversationChannelResource extends Resource
                         modifyRuleUsing: fn (Unique $rule, Get $get) => $rule->where('provider', $get('provider')),
                     )
                     ->validationMessages([
-                        'unique' => 'A chat channel with this Phone Number ID / Page ID already exists (possibly under another company).',
+                        'unique' => __('A chat channel with this Phone Number ID / Page ID already exists (possibly under another company, or in Trash).'),
                     ]),
                 TextInput::make('waba_id')
                     ->label('WhatsApp Business Account ID (WABA ID)')
@@ -262,11 +267,23 @@ class ConversationChannelResource extends Resource
         return Auth::user()?->isSuperAdmin() ?? false;
     }
 
+    // Super Admin only, like the rest of this resource: Restore and Delete permanently in the Trash follow these (TrashFollowsDelete).
+    public static function canDelete(Model $record): bool
+    {
+        return static::canAccess();
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return static::canAccess();
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => ListConversationChannels::route('/'),
             'create' => CreateConversationChannel::route('/create'),
+            'trash' => TrashedConversationChannels::route('/trash'),
             'edit' => EditConversationChannel::route('/{record}/edit'),
         ];
     }

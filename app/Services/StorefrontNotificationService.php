@@ -526,7 +526,7 @@ class StorefrontNotificationService
         $credentials = $setting->notification_credentials ?? [];
         $template = trim((string) ($templateOverride ?: ($credentials['whatsapp_template_name'] ?? '')));
         $selectedChannelId = $credentials['whatsapp_channel_id'] ?? null;
-        $channelQuery = ConversationChannel::withoutGlobalScopes()
+        $channelQuery = ConversationChannel::withoutGlobalScopes()->withoutTrashed()
             ->where('company_id', $setting->company_id)
             ->where('provider', 'whatsapp')
             ->where('is_active', true);

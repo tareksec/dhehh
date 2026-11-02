@@ -46,7 +46,7 @@ class BroadcastService
         $rows = collect();
 
         if (in_array($broadcast->audience_type, ['leads', 'both'], true)) {
-            $query = Lead::query()->withoutGlobalScopes()
+            $query = Lead::query()->withoutGlobalScopes()->withoutTrashed()
                 ->where('company_id', $broadcast->company_id)
                 ->whereNull('opted_out_at')
                 ->whereNotNull('phone')
@@ -302,7 +302,7 @@ class BroadcastService
             return __('This chat is not on the Page chosen for the broadcast.');
         }
 
-        $channel = ConversationChannel::withoutGlobalScopes()->find($broadcast->messenger_channel_id);
+        $channel = ConversationChannel::withoutGlobalScopes()->withoutTrashed()->find($broadcast->messenger_channel_id);
         if (! $channel || (int) $channel->company_id !== (int) $broadcast->company_id || ! $channel->is_active || blank($channel->access_token)) {
             return __('The Messenger channel is not active.');
         }

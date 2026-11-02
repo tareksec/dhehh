@@ -1,5 +1,5 @@
 # Reseller Program & Portal
-> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (delete = Trash, phase T4a: customers, resellers and suppliers are soft-deleted); before it: 2026-10-23, reseller landing page (portal host front page, website footer, header logo pair and dark-mode toggle, Bangla switch, Anek Bangla, own Tailwind stylesheet) and the website banner button
+> Last checked: 2026-11-02, branch `claude/upbeat-franklin-hy6fhr` (T4b: reseller levels are soft-deleted; a level in Trash stops applying); before it: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (delete = Trash, phase T4a: customers, resellers and suppliers are soft-deleted); before it: 2026-10-23, reseller landing page (portal host front page, website footer, header logo pair and dark-mode toggle, Bangla switch, Anek Bangla, own Tailwind stylesheet) and the website banner button
 
 ## What it does
 The Reseller Program & Portal module enables wholesale multi-vendor dropshipping, affiliate storefronts, commission earnings, and reseller account management. Approved resellers log into a dedicated Filament 5 portal (`/portal`) to browse wholesale catalogs, place customer dropship orders, track commission earnings, and request payout withdrawals to mobile banking or bank accounts. It allows resellers to launch their own branded affiliate stores on company subdomains (e.g. `shop.company.com`) or verified custom domains with automatic on-demand SSL issuance. The module supports customizable variation selling prices, security deposit ledgers, own-courier merchant account fulfillment, and self-service password recovery workflows.
@@ -26,7 +26,7 @@ The Reseller Program & Portal module enables wholesale multi-vendor dropshipping
 | `app/Models/ResellerPayoutRequest.php` | Withdrawal requests submitted by resellers to withdraw earned profits. |
 | `app/Models/ResellerPayoutAccount.php` | Saved withdrawal payment methods (bKash, Nagad, Rocket, Bank Account) per reseller. |
 | `app/Models/ProductVariant.php` | Serves as the underlying model for `ResellerVariationPriceResource` to set suggested prices. |
-| `app/Models/ResellerLevel.php` | Company-made reseller level (set by hand) with an optional own return charge and minimum withdrawal; `Customer::resellerReturnCharge()` / `resellerMinWithdrawal()` pick the level's amount or the company's. |
+| `app/Models/ResellerLevel.php` | Company-made reseller level (set by hand) with an optional own return charge and minimum withdrawal; `Customer::resellerReturnCharge()` / `resellerMinWithdrawal()` pick the level's amount or the company's. Soft-deleted (T4b): a level in Trash stops applying (`Customer::resellerLevel()` stays on the default scope) and applies again on Restore. |
 
 ### Services
 | Path | What it does |
@@ -77,7 +77,7 @@ The Reseller Program & Portal module enables wholesale multi-vendor dropshipping
 | `app/Filament/Resources/ResellerVariationPrices/ResellerVariationPriceResource.php` | Batch tool for setting suggested reseller retail prices on variants. |
 | `app/Filament/Pages/ResellerSettings.php` | Configures reseller program defaults, commission payout minimums, terms and the SMS-to-resellers texts. |
 | `app/Filament/Pages/ResellerSalesReport.php` | Read-only report, one row per reseller for a chosen period (view `filament/pages/reseller-sales-report`). |
-| `app/Filament/Resources/ResellerLevels/ResellerLevelResource.php` | Reseller levels list with pop-up forms; the level is set on the reseller's edit page or in bulk on the reseller list. |
+| `app/Filament/Resources/ResellerLevels/ResellerLevelResource.php` | Reseller levels list with pop-up forms; the level is set on the reseller's edit page or in bulk on the reseller list. Trash page `Pages/TrashedResellerLevels.php` (T4b). |
 
 ### Controllers & Middleware
 | Path | What it does |

@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\Quotations;
 
 use App\Filament\Clusters\Crm;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\Quotations\Pages\CreateQuotation;
 use App\Filament\Resources\Quotations\Pages\EditQuotation;
 use App\Filament\Resources\Quotations\Pages\ListQuotations;
+use App\Filament\Resources\Quotations\Pages\TrashedQuotations;
 use App\Filament\Resources\Quotations\Schemas\QuotationForm;
 use App\Filament\Resources\Quotations\Tables\QuotationsTable;
 use App\Models\Quotation;
@@ -18,6 +20,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 class QuotationResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = Quotation::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentCurrencyDollar;
@@ -48,6 +52,7 @@ class QuotationResource extends Resource
         return [
             'index' => ListQuotations::route('/'),
             'create' => CreateQuotation::route('/create'),
+            'trash' => TrashedQuotations::route('/trash'),
             'edit' => EditQuotation::route('/{record}/edit'),
         ];
     }

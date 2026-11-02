@@ -18,6 +18,8 @@ class QuotationPublicController extends Controller
     {
         $quotation = Quotation::query()
             ->withoutGlobalScopes()
+            // A deleted quotation (in Trash) is gone for the customer too; Restore turns the link back on.
+            ->withoutTrashed()
             ->where('quotation_number', $quotationNumber)
             ->whereIn('status', ['sent', 'accepted'])
             ->with(['items.product', 'items.productVariant', 'company', 'customer', 'lead'])

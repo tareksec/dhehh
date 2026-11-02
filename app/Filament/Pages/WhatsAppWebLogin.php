@@ -224,6 +224,7 @@ class WhatsAppWebLogin extends Page
 
         return ConversationChannel::query()
             ->withoutGlobalScopes()
+            ->withoutTrashed()
             ->where('company_id', $company?->getKey())
             ->where('connection_type', 'web')
             ->withCount('conversations')
@@ -247,6 +248,7 @@ class WhatsAppWebLogin extends Page
     {
         return ConversationChannel::query()
             ->withoutGlobalScopes()
+            ->withoutTrashed()
             ->where('company_id', $this->company()?->getKey())
             ->where('connection_type', 'web')
             ->findOrFail($channelId);

@@ -3,7 +3,9 @@
 namespace App\Filament\Resources\ResellerLevels;
 
 use App\Filament\Clusters\Resellers;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\ResellerLevels\Pages\ManageResellerLevels;
+use App\Filament\Resources\ResellerLevels\Pages\TrashedResellerLevels;
 use App\Filament\Resources\Resellers\ResellerResource;
 use App\Models\ResellerLevel;
 use App\Models\StorefrontSetting;
@@ -31,6 +33,8 @@ use Illuminate\Validation\Rules\Unique;
  */
 class ResellerLevelResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = ResellerLevel::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedTrophy;
@@ -68,7 +72,9 @@ class ResellerLevelResource extends Resource
                 ->unique(
                     ignoreRecord: true,
                     modifyRuleUsing: fn (Unique $rule, ?ResellerLevel $record): Unique => $rule->where('company_id', $record?->company_id ?? app(CompanyContext::class)->id()),
-                ),
+                )
+                // A level in Trash still holds its name (the unique index is unchanged).
+                ->validationMessages(['unique' => __('This is already used, possibly by an item in Trash. Use another one, or restore or permanently delete the one in Trash.')]),
             TextInput::make('sort_order')
                 ->label(__('Order in lists'))
                 ->helperText(__('A smaller number is listed first.'))
@@ -114,9 +120,10 @@ class ResellerLevelResource extends Resource
                 EditAction::make()->visible(fn (): bool => static::canManage('update')),
                 DeleteAction::make()
                     ->visible(fn (): bool => static::canManage('delete'))
-                    ->modalDescription(fn (ResellerLevel $record): string => $record->resellers()->exists()
-                        ? __('The resellers on this level go back to the company amounts. Their orders and money are not changed.')
-                        : null),
+                    // Always a text: a level nobody has used to return null here, which failed the whole request.
+                    ->modalDescription(fn (ResellerLevel $record): string => ($record->resellers()->exists()
+                        ? __('The resellers on this level go back to the company amounts. Their orders and money are not changed.').' '
+                        : '').__('This will be moved to Trash. You can restore it, or delete it permanently, from the Trash page.')),
             ])
             ->emptyStateHeading(__('No reseller levels yet'))
             ->emptyStateDescription(__('Make up the levels you want, for example Bronze, Silver and Gold, then give each reseller a level on the reseller\'s page.'))
@@ -127,6 +134,7 @@ class ResellerLevelResource extends Resource
     {
         return [
             'index' => ManageResellerLevels::route('/'),
+            'trash' => TrashedResellerLevels::route('/trash'),
         ];
     }
 
@@ -164,6 +172,11 @@ class ResellerLevelResource extends Resource
     }
 
     public static function canDelete($record): bool
+    {
+        return static::canManage('delete');
+    }
+
+    public static function canDeleteAny(): bool
     {
         return static::canManage('delete');
     }

@@ -1,5 +1,5 @@
 # Sales, Orders & Couriers
-> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (delete = Trash, phase T4a: customers, resellers and suppliers are soft-deleted); before it: 2026-10-24 (the order email twin of the status SMS, and the Email the customer button; before it: main merged with the Trade Portal's Delivery Challan)
+> Last checked: 2026-11-02, branch `claude/upbeat-franklin-hy6fhr` (T4b: quotations are soft-deleted; a quotation in Trash has no public link and is skipped by the expiry job); before it: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (delete = Trash, phase T4a: customers, resellers and suppliers are soft-deleted); before it: 2026-10-24 (the order email twin of the status SMS, and the Email the customer button; before it: main merged with the Trade Portal's Delivery Challan)
 
 ## What it does
 The Sales, Orders & Couriers module orchestrates customer acquisition, order fulfillment, multi-carrier parcel delivery, and delivery fraud prevention. It manages the full lifecycle of orders from draft quotations to confirmed, processing, delivered, or returned states, while tracking payments and stock reservations. It integrates with major Bangladeshi courier logistics APIs (Steadfast, Pathao, RedX, eCourier, and manual delivery), automating airway bill booking, webhook tracking, parcel barcode scanning, and driver handover sheets. For fraud mitigation, it runs an intelligent customer risk scoring engine that evaluates historical courier return ratios, first-time high COD thresholds, phone number reuse, and a dual-tier (global and tenant-scoped) customer blacklist.
@@ -24,7 +24,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Models/OrderCost.php` | Operational costs associated with fulfilling an order (packaging, ad allocation, handling). |
 | `app/Models/OrderPayment.php` | Payments received against an order (COD, advance gateway payment, bank deposit). |
 | `app/Models/OrderStatusTransition.php` | Audit trail of order status changes, recording previous/next status and user ID. |
-| `app/Models/Quotation.php` | Price quotation estimates with validity expiry and conversion to confirmed orders. |
+| `app/Models/Quotation.php` | Price quotation estimates with validity expiry and conversion to confirmed orders. Soft-deleted (T4b): the number stays reserved; `lead()` is `withTrashed()` so a quote keeps its lead's name. |
 | `app/Models/QuotationItem.php` | Items attached to a price quotation. |
 | `app/Models/Customer.php` | Customer profiles recording contact details, delivery addresses, and lifetime order values. Soft-deleted (T4a): the Customers resource (non-resellers) has a Trash page; a customer in Trash keeps orders / payments / balance, cannot sign in, and is restored by an order from the same phone (`RestoresFromTrashWhenTheyReturn`). Every `belongsTo(Customer)` is `->withTrashed()` except the login token's. |
 | `app/Models/CustomerPayment.php` | General customer payment receipts credited towards outstanding account dues. |
@@ -97,7 +97,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Filament/Resources/Orders/Actions/EmailCustomerAction.php` | "Email the customer" on the order page: mails one of the company's own email templates to the customer, with the order's values filled in. |
 | `app/Filament/Resources/Orders/Actions/CourierBookingFeedback.php` | Modal action to create an airway bill booking with the selected courier. |
 | `app/Filament/Resources/Orders/Actions/PutReturnedGoodsBackInStockAction.php` | Action allowing returned goods to be inspected and restored to inventory. |
-| `app/Filament/Resources/Quotations/QuotationResource.php` | Manages sales quotations and conversion into orders. |
+| `app/Filament/Resources/Quotations/QuotationResource.php` | Manages sales quotations and conversion into orders. Trash page `Pages/TrashedQuotations.php` (T4b). |
 | `app/Filament/Resources/Customers/CustomerResource.php` | Customer directory, risk badges, address book, and order histories. |
 | `app/Filament/Resources/CustomerPayments/CustomerPaymentResource.php` | Logs customer payments and allocates credits across orders. |
 | `app/Filament/Resources/CustomerBlacklists/CustomerBlacklistResource.php` | Manages global and company-specific blacklist entries (Super Admin only). |

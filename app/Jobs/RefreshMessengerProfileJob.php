@@ -25,7 +25,7 @@ class RefreshMessengerProfileJob implements ShouldQueue
         if (! $conversation || $conversation->provider !== 'messenger' || $conversation->profileDisplayName() !== 'নাম পাওয়া যায়নি') {
             return;
         }
-        $channel = ConversationChannel::withoutGlobalScopes()->where('company_id', $conversation->company_id)->find($conversation->channel_id);
+        $channel = ConversationChannel::withoutGlobalScopes()->withoutTrashed()->where('company_id', $conversation->company_id)->find($conversation->channel_id);
         if (! $channel || ! $channel->is_active) {
             return;
         }
@@ -44,7 +44,7 @@ class RefreshMessengerProfileJob implements ShouldQueue
                     ->where('contact_name', $conversation->contact_name)->update(['contact_name' => $name]);
                 $channel->clearDiagnosticError('profile');
                 if ($conversation->lead_id) {
-                    Lead::withoutGlobalScopes()->whereKey($conversation->lead_id)->where('company_id', $conversation->company_id)
+                    Lead::withoutGlobalScopes()->withoutTrashed()->whereKey($conversation->lead_id)->where('company_id', $conversation->company_id)
                         ->where('name', 'Chat contact '.$conversation->external_contact_id)->update(['name' => $name]);
                 }
             }

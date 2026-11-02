@@ -1038,7 +1038,7 @@ class StorefrontSettingResource extends Resource
                         ->options(function (Get $get, ?StorefrontSetting $record): array {
                             $companyId = $get('company_id') ?: $record?->company_id ?: app(CompanyContext::class)->company()?->getKey();
 
-                            return $companyId ? ConversationChannel::withoutGlobalScopes()
+                            return $companyId ? ConversationChannel::withoutGlobalScopes()->withoutTrashed()
                                 ->where('company_id', $companyId)
                                 ->where('provider', 'whatsapp')
                                 ->where('is_active', true)

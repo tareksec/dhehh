@@ -2,7 +2,33 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-01 (latest) - Trash for customers, resellers and suppliers (T4a)
+## 2026-11-02 (latest) - Trash for leads, quotations, chat channels and reseller levels (T4b)
+
+Owner (Bangla): "পরের ধাপের কাজ করে" (the next phase after T4a: T4b of `docs/delete-and-trash-plan.md`).
+
+What I did:
+- **Four models now go to Trash when deleted, plus a lead's activities.** Migration `2026_11_02_100000_add_soft_deletes_to_crm_and_reseller_level_tables`; `SoftDeletes` on `Lead`, `LeadActivity`, `Quotation`, `ConversationChannel`, `ResellerLevel`; a Trash page and "Trash (n)" button for Leads, Quotations, Chat Channels and Reseller levels; the lead's Follow-up Activities have a Trash button inside the lead (`HasTrashView`). Unique indexes are untouched, so a row in Trash keeps its Phone Number ID / website reference / level name.
+- **A chat channel in Trash receives nothing and sends nothing.** About 25 places find a channel with `withoutGlobalScopes()` (Meta webhook verify and routing, the WhatsApp-Web bridge webhook, seven jobs, pickers, the order WhatsApp card, storefront notifications, broadcasts): all now add `->withoutTrashed()`, and a test scans the code so a new one cannot be forgotten. The channel's conversations and messages stay (the archive is untouched) and a chat opened on it cannot send. Reconnecting the same number through Embedded Signup restores the channel.
+- **A lead in Trash:** no broadcast, no follow-up reminder, off the Needs attention list and badge (the old foreign-key cascade used to remove that item; a global scope on `AttentionItem` does it now). An opt-out it carries still holds. The website's retry of a lead that is in Trash returns that lead (the `(company, reference)` index is unique, so a second insert would have failed). A quotation whose lead is in Trash cannot be turned into an order until the lead is restored, with a message that says so.
+- **A quotation in Trash has no public link** (found while checking: the customer link used `withoutGlobalScopes()`), the nightly expiry job leaves it as it was, and its number is never given out again.
+- **A reseller level in Trash stops applying** (its resellers fall back to the company's return charge and minimum withdrawal, as when a deleted level vanished) and applies again on Restore; its name stays reserved ("possibly by an item in Trash").
+- **A bug that was already there, found in the browser:** deleting a reseller level that no reseller has returned a server error, because its Delete modal text came from a function declared to return text that returned nothing. Fixed, with a test; the modal now also says the level goes to Trash.
+- **Two old tests changed** because a delete is now a Trash: the reseller-level delete test and the WhatsApp-Web "deleting the channel never deletes the archive" test (it now also covers the permanent delete, after which the chats keep existing with no channel).
+- Docs: CHANGELOG, plan (T4b built, questions 9 and 10), codebase map (crm-messaging, sales-orders-couriers, reseller, core-platform), `CLAUDE.md` / `PROJECT_GUIDE.md` (the rule now names webhooks, jobs and public pages, not only lists).
+
+**New owner questions (not decided by me):**
+9. **A WhatsApp-Web (QR) channel in Trash:** today it stops archiving (the bridge's webhook gets "not found", exactly as after a hard delete). `docs/whatsapp-web-rules.md` says the archive is permanent and the webhook code says "no customer message is ever lost". Should a QR channel in Trash **keep archiving** until it is deleted permanently, or should Trash be refused for a QR channel (log out from WhatsApp Web Login instead)?
+10. **Who may delete a lead or a quotation:** they have no delete permission of their own, so anyone who can open the CRM screens can delete (and now restore) them, as before. Keep that, or add a "CRM: delete" permission?
+
+**Needs Bangla review (2 new keys):** "A chat channel with this Phone Number ID / Page ID already exists (possibly under another company, or in Trash)." and "The lead of this quotation is in Trash. Restore the lead first, or choose a customer for the quotation.".
+
+**Verified (run, not read):** the full suite on PHP 8.4: 3571 passed, 6 skipped, 1 failed — `MediaHubTest` "media belonging to another company cannot be selected" hit a random duplicate `companies.invoice_prefix` in its own fixture (not related to this change; it passed 3 times in a row when rerun alone). `CrmTrashTest` 21 passed. Each guard checked by removing it and watching its test fail (14 mutations: webhook routing and verify, bridge webhook, attention scope, broadcast, reminders, website retry, qualification, quotation conversion, public quotation link, expiry job, Embedded Signup restore, level in Trash, opt-out). Browser (Chromium, throwaway database, English and Bangla, 1366 px and 360 px): the Delete modal on a lead (edit page), a reseller level (row) and a chat channel shows the name with its copy button, a wrong name is refused, the right name moves it to Trash; "Trash (n)" appears in the four list headers; the Trash pages list the rows and Restore works for leads and levels; the lead's activities Trash works; no sideways page scroll at 360 px.
+
+**Known, not mine:** the lead's relation-manager tab titles and "Add activity" are not translated; the Trash tables scroll sideways inside their card at 1366 px (same as the live lists). Not looked at by eye: the quotation and channel Restore buttons (covered by tests) and the ⓘ hover.
+
+Commit status: committed on `claude/upbeat-franklin-hy6fhr`, pushed to that branch. Not on `main`.
+
+## 2026-11-01 - Trash for customers, resellers and suppliers (T4a)
 
 Owner (Bangla): "T4 শুরু করো" (phase T4 of `docs/delete-and-trash-plan.md`). T4 is big and touches money, so I split it in two commits: **T4a (this one): customers, resellers, suppliers** — the records that carry balances — and **T4b: leads, quotations, conversation channels, reseller levels** (still to do; channels need every webhook and job to skip a channel in Trash).
 

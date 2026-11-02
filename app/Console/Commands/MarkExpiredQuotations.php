@@ -15,6 +15,8 @@ class MarkExpiredQuotations extends Command
     {
         $count = Quotation::query()
             ->withoutGlobalScopes()
+            // A quotation in Trash is left exactly as it was deleted.
+            ->withoutTrashed()
             ->where('status', 'sent')
             ->whereNotNull('valid_until')
             ->whereDate('valid_until', '<', today())

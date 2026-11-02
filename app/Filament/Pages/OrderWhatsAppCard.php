@@ -144,7 +144,7 @@ class OrderWhatsAppCard extends Page
     {
         $company = $this->company();
         $channel = $company && $channelId > 0
-            ? ConversationChannel::withoutGlobalScopes()
+            ? ConversationChannel::withoutGlobalScopes()->withoutTrashed()
                 ->where('company_id', $company->getKey())
                 ->where('provider', 'whatsapp')
                 ->whereIn('connection_type', OrderWhatsAppSettings::CHANNEL_TYPES)

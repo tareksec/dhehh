@@ -32,7 +32,8 @@ class LeadController extends Controller
         $externalReference = filled($data['external_reference'] ?? null) ? $data['external_reference'] : null;
 
         if ($externalReference !== null) {
-            $existing = Lead::query()->where('external_reference', $externalReference)->first();
+            // withTrashed: (company, external_reference) is unique, and a lead in Trash still holds its reference.
+            $existing = Lead::query()->withTrashed()->where('external_reference', $externalReference)->first();
 
             if ($existing) {
                 return response()->json(['data' => $this->transform($existing)]);

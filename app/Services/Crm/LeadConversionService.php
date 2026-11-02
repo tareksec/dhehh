@@ -70,8 +70,13 @@ class LeadConversionService
             if ($quotation->status !== 'accepted') {
                 throw new \RuntimeException('Only accepted quotations can be converted to an order.');
             }
+            $lead = $quotation->lead?->trashed() ? null : $quotation->lead;
             $customer = $quotation->customer
-                ?? ($quotation->lead ? $this->convertToCustomer($quotation->lead) : null);
+                ?? ($lead ? $this->convertToCustomer($lead) : null);
+
+            if (! $customer && $quotation->lead?->trashed()) {
+                throw new \RuntimeException(__('The lead of this quotation is in Trash. Restore the lead first, or choose a customer for the quotation.'));
+            }
 
             if (! $customer) {
                 throw new \RuntimeException('Quotation must have a customer or lead to convert.');
@@ -108,8 +113,8 @@ class LeadConversionService
 
             $quotation->update(['converted_order_id' => $order->getKey()]);
 
-            if ($quotation->lead) {
-                $quotation->lead->update([
+            if ($lead) {
+                $lead->update([
                     'status' => 'won',
                     'converted_order_id' => $order->getKey(),
                 ]);

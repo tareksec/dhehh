@@ -53,7 +53,7 @@ abstract class TrashedRecords extends ListRecords
     {
         $resource = static::getResource();
 
-        return $resource::canViewAny() && ($resource::canRestoreAny() || $resource::canForceDeleteAny());
+        return $resource::canAccess() && $resource::canViewAny() && ($resource::canRestoreAny() || $resource::canForceDeleteAny());
     }
 
     public function mount(): void

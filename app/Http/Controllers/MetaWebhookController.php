@@ -30,7 +30,7 @@ class MetaWebhookController extends Controller
         $challenge = $this->hubQuery($request, 'challenge');
 
         $channels = $mode === 'subscribe' && $token !== ''
-            ? ConversationChannel::withoutGlobalScopes()
+            ? ConversationChannel::withoutGlobalScopes()->withoutTrashed()
                 ->where('is_active', true)
                 ->where('verify_token', $token)
                 ->get()
@@ -162,7 +162,7 @@ class MetaWebhookController extends Controller
                     continue;
                 }
 
-                $channel = ConversationChannel::withoutGlobalScopes()
+                $channel = ConversationChannel::withoutGlobalScopes()->withoutTrashed()
                     ->where('provider', 'whatsapp')
                     ->where('external_id', $phoneNumberId)
                     ->where('is_active', true)
@@ -199,7 +199,7 @@ class MetaWebhookController extends Controller
             }
 
             $pageId = (string) ($entry['id'] ?? '');
-            $channel = $pageId !== '' ? ConversationChannel::withoutGlobalScopes()
+            $channel = $pageId !== '' ? ConversationChannel::withoutGlobalScopes()->withoutTrashed()
                 ->where('provider', 'messenger')
                 ->where('external_id', $pageId)
                 ->where('is_active', true)

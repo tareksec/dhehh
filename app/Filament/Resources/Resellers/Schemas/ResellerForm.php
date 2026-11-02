@@ -53,6 +53,7 @@ class ResellerForm
                             ->label(__('Reseller level'))
                             ->helperText(__('Set by hand. The reseller sees the level name, and its return charge and minimum withdrawal apply when the level sets them.'))
                             ->options(fn (?Customer $record): array => ResellerLevel::withoutGlobalScopes()
+                                ->withoutTrashed()
                                 ->where('company_id', $record?->company_id ?? app(CompanyContext::class)->id())
                                 ->orderBy('sort_order')
                                 ->orderBy('name')

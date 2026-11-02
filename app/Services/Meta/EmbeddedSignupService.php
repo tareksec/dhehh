@@ -58,6 +58,13 @@ class EmbeddedSignupService
             ],
         );
 
+        // The scope-free lookup above also finds this number's row in Trash (the
+        // Phone Number ID is unique), so reconnecting the number brings the
+        // channel back instead of leaving a live connection that nobody can see.
+        if ($channel->trashed()) {
+            $channel->restore();
+        }
+
         $this->graph->subscribeWhatsApp($channel);
 
         return $channel;

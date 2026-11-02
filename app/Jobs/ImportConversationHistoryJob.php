@@ -36,7 +36,7 @@ class ImportConversationHistoryJob implements ShouldQueue
 
     public function handle(CompanyContext $context): void
     {
-        $channel = ConversationChannel::withoutGlobalScopes()->with('company')->findOrFail($this->channelId);
+        $channel = ConversationChannel::withoutGlobalScopes()->withoutTrashed()->with('company')->findOrFail($this->channelId);
         $context->set($channel->company);
 
         try {

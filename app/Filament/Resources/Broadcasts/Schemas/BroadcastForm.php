@@ -75,7 +75,7 @@ class BroadcastForm
                             ->options(function (): array {
                                 $companyId = app(CompanyContext::class)->company()?->getKey();
 
-                                return $companyId ? ConversationChannel::withoutGlobalScopes()
+                                return $companyId ? ConversationChannel::withoutGlobalScopes()->withoutTrashed()
                                     ->where('company_id', $companyId)
                                     ->where('provider', 'whatsapp')
                                     ->where('is_active', true)
@@ -123,7 +123,7 @@ class BroadcastForm
                             ->options(function (): array {
                                 $companyId = app(CompanyContext::class)->company()?->getKey();
 
-                                return $companyId ? ConversationChannel::withoutGlobalScopes()
+                                return $companyId ? ConversationChannel::withoutGlobalScopes()->withoutTrashed()
                                     ->where('company_id', $companyId)
                                     ->where('provider', 'messenger')
                                     ->where('is_active', true)
@@ -168,7 +168,7 @@ class BroadcastForm
             return collect();
         }
 
-        $channel = ConversationChannel::withoutGlobalScopes()->find($channelId);
+        $channel = ConversationChannel::withoutGlobalScopes()->withoutTrashed()->find($channelId);
 
         if (! $channel) {
             return collect();

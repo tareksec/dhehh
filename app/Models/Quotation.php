@@ -8,10 +8,11 @@ use App\Services\Crm\SalesFollowUpService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Quotation extends Model
 {
-    use BelongsToCompany, GeneratesSequentialNumber;
+    use BelongsToCompany, GeneratesSequentialNumber, SoftDeletes;
 
     public const STATUSES = [
         'draft' => 'Draft',
@@ -71,9 +72,10 @@ class Quotation extends Model
         return $base.str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
     }
 
+    /** A quotation keeps showing the lead it was made for while that lead is in Trash (plan T4b); converting it still needs the lead restored. */
     public function lead(): BelongsTo
     {
-        return $this->belongsTo(Lead::class);
+        return $this->belongsTo(Lead::class)->withTrashed();
     }
 
     public function customer(): BelongsTo

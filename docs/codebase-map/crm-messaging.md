@@ -1,5 +1,5 @@
 # CRM & Omnichannel Messaging
-> Last checked: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (T4a: `BroadcastService` skips customers in Trash and `LeadConversionService` restores a customer in Trash with the lead's phone; delete = Trash, phase T3: soft deletes on this module's catalog / storefront / CRM rows); before it: 2026-10-24 (Amazon SES page: email usage section, counted from the Email Log, with cost settings; Email Templates added: order emails, code/reset and IMS emails in a branded layout, the owner's own templates; SMS Dashboard added; gateway URL is built from the API key and sender ID boxes; a site with a broken gateway sends through the other working site; OTPs live 3 minutes at most)
+> Last checked: 2026-11-02, branch `claude/upbeat-franklin-hy6fhr` (T4b: leads, lead activities and chat channels are soft-deleted, every channel lookup that strips global scopes skips Trash, `AttentionItem` hides items of leads in Trash); before it: 2026-11-01, branch `claude/upbeat-franklin-hy6fhr` (T4a: `BroadcastService` skips customers in Trash and `LeadConversionService` restores a customer in Trash with the lead's phone; delete = Trash, phase T3: soft deletes on this module's catalog / storefront / CRM rows); before it: 2026-10-24 (Amazon SES page: email usage section, counted from the Email Log, with cost settings; Email Templates added: order emails, code/reset and IMS emails in a branded layout, the owner's own templates; SMS Dashboard added; gateway URL is built from the API key and sender ID boxes; a site with a broken gateway sends through the other working site; OTPs live 3 minutes at most)
 
 ## What it does
 The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, multi-channel chat conversations, automated follow-ups, and marketing broadcasts. It unifies customer communications across WhatsApp Cloud API, WhatsApp Web (QR Baileys bridge), Facebook Messenger, SMS gateways, and Telegram into a single real-time inbox. It incorporates an AI Inbox Control Plane featuring intelligent automated replies, multimodal image/voice note comprehension, intent qualification, cart link generation, and smart human hand-over queues (Agent Desk, Needs Attention, To Chase, Unanswered Questions). Additionally, it coordinates scheduled sales automation cadences, promotional SMS/Messenger broadcasts, quick-reply snippet management, and Firebase Cloud Messaging (FCM) web push notifications.
@@ -19,10 +19,11 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 ### Models
 | Path | What it does |
 | --- | --- |
-| `app/Models/Lead.php` | Sales lead entity tracking acquisition source, pipeline stage, estimated value, and assigned agent. |
-| `app/Models/LeadActivity.php` | Activity timeline recording notes, calls, follow-up tasks, and stage changes per lead. |
+| `app/Models/Lead.php` | Sales lead entity tracking acquisition source, pipeline stage, estimated value, and assigned agent. Soft-deleted (T4b): a lead in Trash gets no broadcast or reminder and is off Needs attention. |
+| `app/Models/LeadActivity.php` | Activity timeline recording notes, calls, follow-up tasks, and stage changes per lead. Soft-deleted (T4b); its Trash is a button inside the lead (`HasTrashView`). |
+| `app/Models/AttentionItem.php` | One time a chat or website lead needed a person (Needs attention). A global scope `leadNotInTrash` hides the item of a lead in Trash (T4b). |
 | `app/Models/Conversation.php` | Unified conversation thread grouping customer messages across a specific channel. |
-| `app/Models/ConversationChannel.php` | Configured messaging channels (WhatsApp Cloud, WhatsApp Web, Messenger, Telegram, SMS). |
+| `app/Models/ConversationChannel.php` | Configured messaging channels (WhatsApp Cloud, WhatsApp Web, Messenger, Telegram, SMS). Soft-deleted (T4b): a channel in Trash receives and sends nothing; every lookup with `withoutGlobalScopes()` adds `->withoutTrashed()` (scanned by `CrmTrashTest`), the relations from conversations / contacts / broadcasts stay on the default scope. |
 | `app/Models/ConversationMessage.php` | Individual message record storing text, attachments, direction (inbound/outbound), and AI tags. |
 | `app/Models/ConversationModeEvent.php` | Audit log of mode transitions (`ai` to `manual` and vice-versa) with reasons and agent IDs. |
 | `app/Models/WhatsAppContact.php` | Cached WhatsApp address book records and profile pictures synced from the phone. |
@@ -86,8 +87,8 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | Path | What it does |
 | --- | --- |
 | `app/Filament/Clusters/Crm.php` | Navigation cluster grouping Leads, Inbox, Channels, Broadcasts, and Automation. |
-| `app/Filament/Resources/Leads/LeadResource.php` | Sales lead management, pipeline stages, activity logging, and order conversion. |
-| `app/Filament/Resources/ConversationChannels/ConversationChannelResource.php` | Channel configuration (Cloud API, Web QR, Messenger, Telegram, SMS). |
+| `app/Filament/Resources/Leads/LeadResource.php` | Sales lead management, pipeline stages, activity logging, and order conversion. Trash page `Pages/TrashedLeads.php` (T4b); `RelationManagers/ActivitiesRelationManager.php` has the activities' Trash button. |
+| `app/Filament/Resources/ConversationChannels/ConversationChannelResource.php` | Channel configuration (Cloud API, Web QR, Messenger, Telegram, SMS). Super Admin only (also its delete and Trash). Trash page `Pages/TrashedConversationChannels.php` (T4b). |
 | `app/Filament/Resources/Broadcasts/BroadcastResource.php` | Marketing broadcast campaign builder with audience filters and scheduling. |
 | `app/Filament/Resources/QuickReplies/QuickReplyResource.php` | Canned response snippet manager with keyboard shortcuts. Trash page `Pages/TrashedQuickReplies.php` (T3); FAQs (`CompanyFaqResource`) have `Pages/TrashedCompanyFaqs.php`. |
 | `app/Filament/Pages/Inbox.php` | Live unified messaging inbox for real-time customer communication. |
@@ -172,6 +173,7 @@ The CRM & Omnichannel Messaging module manages sales leads, customer inquiries, 
 | `tests/Feature/ConversationIngestTest.php` | Tests inbound webhook processing and conversation thread creation. |
 | `tests/Feature/ConversationModeTest.php` | Tests automatic AI-to-manual switching when staff responds, and timeout reversion. |
 | `tests/Feature/CrmSalesAutomationTest.php` | Tests automated sales follow-up cadences and cart link generation. |
+| `tests/Feature/CrmTrashTest.php` | Tests the Trash for leads (+ activities), quotations, chat channels and reseller levels: webhooks, sends, broadcasts, reminders, Needs attention, the website retry, the public quotation link, and a scan that every channel lookup skips Trash. |
 | `tests/Feature/BroadcastTest.php` | Tests marketing campaign creation, audience filtering, and throttled sending. |
 | `tests/Feature/LeadConversionTest.php` | Tests converting leads into customer accounts and sales orders. |
 | `tests/Feature/SesApiServiceTest.php`, `SesTrackingTest.php`, `AmazonSesPageTest.php`, `SesUsageServiceTest.php` | Amazon SES API service, tracking set-up and events (signed SNS messages), the webhook, the Amazon SES page (including its usage section and cost settings) and the usage counts, with Amazon faked (`tests/Feature/Concerns/FakesAws.php`). |
