@@ -7,7 +7,7 @@
         <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ __('A private timeline of important account and order actions.') }}</p>
     </div>
 
-    <section class="mt-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900" aria-label="Account activity timeline">
+    <section class="mt-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900" aria-label="{{ __('Account activity timeline') }}">
         @if ($activities->isEmpty())
             <div class="py-8 text-center">
                 <div class="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-300">
@@ -35,7 +35,7 @@
                                 <p class="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">{{ $activity->description }}</p>
                             @endif
                             @if ($orderNumber)
-                                <a class="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-[var(--storefront-brand)] hover:underline" href="{{ \App\Support\StorefrontUrl::route('track.show', [$orderNumber], $previewSlug ?? null) }}">View order</a>
+                                <a class="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-[var(--storefront-brand)] hover:underline" href="{{ \App\Support\StorefrontUrl::route('track.show', [$orderNumber], $previewSlug ?? null) }}">{{ __('View order') }}</a>
                             @endif
                         </div>
                     </li>

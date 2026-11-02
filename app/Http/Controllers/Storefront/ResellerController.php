@@ -39,7 +39,7 @@ class ResellerController extends Controller
         $this->apply($request);
 
         return redirect()->route('storefront.reseller.show')
-            ->with('storefront_status', 'Your reseller application has been received. The store will contact you after review.');
+            ->with('storefront_status', __('Your reseller application has been received. The store will contact you after review.'));
     }
 
     public function storePreview(Request $request, Company $company): RedirectResponse
@@ -48,7 +48,7 @@ class ResellerController extends Controller
         $this->apply($request);
 
         return redirect()->route('storefront.preview.reseller.show', $company->slug)
-            ->with('storefront_status', 'Your reseller application has been received. The store will contact you after review.');
+            ->with('storefront_status', __('Your reseller application has been received. The store will contact you after review.'));
     }
 
     protected function apply(Request $request): void

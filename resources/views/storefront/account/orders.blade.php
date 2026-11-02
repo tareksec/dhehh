@@ -12,11 +12,11 @@
             @if ($isPreview)
                 <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">{{ __('Customer account') }}</p>
-                <h1 class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">{{ $isPreview ? 'Find storefront orders.' : 'Your order history.' }}</h1>
+                <h1 class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">{{ $isPreview ? __('Find storefront orders.') : __('Your order history.') }}</h1>
                 <p class="storefront-page-copy mt-3">
                     {{ $isPreview
-                        ? 'Enter the phone number used at checkout to preview order history and live tracking.'
-                        : 'Review your '.$company->name.' purchases, track delivery progress, or add available items to your cart again.' }}
+                        ? __('Enter the phone number used at checkout to preview order history and live tracking.')
+                        : __('Review your :company purchases, track delivery progress, or add available items to your cart again.', ['company' => $company->name]) }}
                 </p>
 
                     <form class="mt-5 rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900" method="GET" action="{{ $ordersUrl }}">
@@ -26,18 +26,18 @@
                                 class="min-h-11 flex-1 rounded-lg border border-gray-300 bg-white px-4 text-sm outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/10 dark:bg-gray-950"
                                 id="phone"
                                 name="phone"
-                                placeholder="Example: 01728174614"
+                                placeholder="{{ __('Example: 01728174614') }}"
                                 type="tel"
                                 inputmode="tel"
                                 autocomplete="tel"
                                 value="{{ $phone }}"
                             >
                             <button class="rounded-lg bg-[var(--storefront-brand)] px-6 py-2.5 text-sm font-medium text-white transition hover:opacity-90" type="submit">
-                                Show orders
+                                {{ __('Show orders') }}
                             </button>
                         </div>
                         <p class="mt-3 text-xs leading-5 text-gray-500 dark:text-gray-400">
-                            Preview access is available only to local or authenticated administrators.
+                            {{ __('Preview access is available only to local or authenticated administrators.') }}
                         </p>
                     </form>
                 </div>
@@ -65,7 +65,7 @@
                             <div class="mx-auto grid h-14 w-14 place-items-center rounded-full bg-gray-100 text-xl text-gray-500 dark:bg-white/10 dark:text-gray-300">☎</div>
                             <h3 class="mt-5 text-xl font-semibold tracking-tight">{{ __('Search by phone') }}</h3>
                             <p class="mx-auto mt-2 max-w-sm text-sm leading-6 text-gray-500 dark:text-gray-400">
-                                Use the same phone number you entered during checkout.
+                                {{ __('Use the same phone number you entered during checkout.') }}
                             </p>
                         </div>
                     </div>
@@ -73,11 +73,11 @@
                     <div class="grid min-h-80 place-items-center text-center">
                         <div>
                             <div class="mx-auto grid h-14 w-14 place-items-center rounded-full bg-gray-100 text-xl text-gray-500 dark:bg-white/10 dark:text-gray-300">!</div>
-                            <h3 class="mt-5 text-xl font-semibold tracking-tight">{{ $isPreview ? 'No storefront orders found' : 'No orders yet' }}</h3>
+                            <h3 class="mt-5 text-xl font-semibold tracking-tight">{{ $isPreview ? __('No storefront orders found') : __('No orders yet') }}</h3>
                             <p class="mx-auto mt-2 max-w-sm text-sm leading-6 text-gray-500 dark:text-gray-400">
                                 {{ $isPreview
-                                    ? 'Check the phone number or contact '.$company->name.' if the order was placed another way.'
-                                    : 'Orders placed with this account will appear here after checkout.' }}
+                                    ? __('Check the phone number or contact :company if the order was placed another way.', ['company' => $company->name])
+                                    : __('Orders placed with this account will appear here after checkout.') }}
                             </p>
                         </div>
                     </div>
@@ -89,7 +89,7 @@
                                     ? route('storefront.preview.track.show', array_filter(['company' => $previewSlug, 'orderNo' => $order->order_number, 'phone' => $isPreview ? $phone : null]))
                                     : route('storefront.track.show', ['orderNo' => $order->order_number]);
                                 $reorderUrl = \App\Support\StorefrontUrl::route('account.reorder', [$order->order_number], $previewSlug ?? null);
-                                $statusLabel = App\Models\Order::STATUSES[$order->status] ?? str($order->status)->headline();
+                                $statusLabel = __(App\Models\Order::STATUSES[$order->status] ?? str($order->status)->headline());
                                 $itemCount = $order->items->sum('quantity');
                                 $reviewUrl = ! $isPreview && $order->status === App\Models\Order::STATUS_COMPLETED
                                     ? (\App\Support\StorefrontUrl::route('account.reviews.create', [$order->order_number], $previewSlug ?? null))
@@ -122,15 +122,15 @@
                                                 <input type="hidden" name="phone" value="{{ $phone }}">
                                             @endif
                                             <button class="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-900 transition hover:border-gray-950 dark:border-gray-700 dark:text-white dark:hover:border-gray-500" type="submit">
-                                                Reorder
+                                                {{ __('Reorder') }}
                                             </button>
                                         </form>
                                         <a class="inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--storefront-brand)] px-4 text-sm font-medium text-white transition hover:opacity-90" href="{{ $trackUrl }}">
-                                            Track order
+                                            {{ __('Track order') }}
                                         </a>
                                         @if ($reviewUrl)
                                             <a class="col-span-2 inline-flex min-h-11 items-center justify-center rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-900 transition hover:border-[var(--storefront-brand)] dark:border-gray-700 dark:text-white" href="{{ $reviewUrl }}">
-                                                Write a review
+                                                {{ __('Write a review') }}
                                             </a>
                                         @endif
                                     </div>

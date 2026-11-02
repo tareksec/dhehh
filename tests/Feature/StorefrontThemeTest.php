@@ -276,6 +276,25 @@ class StorefrontThemeTest extends TestCase
         }
     }
 
+    public function test_the_marketplace_footer_follows_the_colour_mode_and_shows_both_logos(): void
+    {
+        [, $setting] = $this->createMarketplaceStore();
+        $setting->forceFill([
+            'logo' => 'storefront/logos/light.png',
+            'logo_dark' => 'storefront/logos/dark.png',
+            'footer_blocks' => [['type' => 'brand_about', 'data' => ['show_logo' => true]]],
+        ])->save();
+
+        $html = $this->get('http://marketplace.example.test/')->assertOk()->getContent();
+
+        // The footer is no longer pinned to the dark surface, so the light-mode logo can show.
+        $this->assertDoesNotMatchRegularExpression('/<footer[^>]*class="[^"]*\bmp-footer\b[^"]*\bdark\b/', $html);
+        $this->assertStringContainsString('light.png', $html);
+        $this->assertStringContainsString('dark.png', $html);
+        $this->assertMatchesRegularExpression('/<img[^>]*dark:hidden[^>]*light\.png|<img[^>]*light\.png[^>]*dark:hidden/', $html);
+        $this->assertMatchesRegularExpression('/<img[^>]*hidden[^>]*dark:block[^>]*dark\.png|<img[^>]*dark\.png[^>]*dark:block/', $html);
+    }
+
     public function test_other_themes_keep_the_default_header(): void
     {
         [, $setting] = $this->createMarketplaceStore();

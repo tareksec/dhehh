@@ -33,7 +33,7 @@
         <div class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-5 lg:px-6">
             <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">{{ __('Delivery details') }}</h1>
             <p class="storefront-page-copy mt-2">
-                Submit your storefront order. The ERP team will review and confirm it before stock is deducted.
+                {{ __('Submit your storefront order. The ERP team will review and confirm it before stock is deducted.') }}
             </p>
         </div>
     </section>
@@ -70,7 +70,7 @@
                 </label>
 
                 <label class="block sm:col-span-2">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Email address') }} <span class="text-gray-400">(optional)</span></span>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Email address') }} <span class="text-gray-400">{{ __('(optional)') }}</span></span>
                     <input id="checkout-email" class="mt-2 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-950 outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:bg-white/10 dark:text-white" type="email" name="email" autocomplete="email" spellcheck="false" value="{{ old('email', $loggedInCustomer->email ?? '') }}" @error('email') aria-invalid="true" aria-describedby="checkout-email-error" @enderror>
                     @error('email') <span id="checkout-email-error" class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror
                 </label>
@@ -82,7 +82,7 @@
                     <span class="mt-2 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
                         <svg class="h-4 w-4 shrink-0 text-[var(--storefront-brand)]" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21s6-4.35 6-11a6 6 0 1 0-12 0c0 6.65 6 11 6 11Z"/><circle cx="12" cy="10" r="2"/></svg>
                         <span x-show="area === null">{{ __('Enter the full address to calculate delivery automatically.') }}</span>
-                        <span x-show="area !== null" x-cloak>Detected delivery area: <strong x-text="area === 'inside' ? 'Inside Dhaka' : 'Outside Dhaka'"></strong></span>
+                        <span x-show="area !== null" x-cloak>{{ __('Detected delivery area:') }} <strong x-text="area === 'inside' ? 'Inside Dhaka' : 'Outside Dhaka'"></strong></span>
                     </span>
                 </label>
 
@@ -133,7 +133,7 @@
                                 @foreach ($manualPaymentMethods as $manualMethod)
                                     <div id="manual-payment-instructions-{{ $manualMethod->getKey() }}" x-show="method === {{ Illuminate\Support\Js::from($manualMethod->paymentValue()) }}">
                                         @if ($manualMethod->account_number)
-                                            <p class="text-gray-700 dark:text-gray-200">Send Money to <span class="font-semibold">{{ $manualMethod->account_number }}</span></p>
+                                            <p class="text-gray-700 dark:text-gray-200">{{ __('Send Money to') }} <span class="font-semibold">{{ $manualMethod->account_number }}</span></p>
                                         @endif
                                         @if ($manualMethod->instructions)
                                             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $manualMethod->instructions }}</p>
@@ -166,7 +166,7 @@
                     </div>
                     @unless ($hasPaymentPath)
                         <p id="checkout-payment-unavailable" class="mt-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300" role="alert">
-                            No payment method is available right now. Please contact the store before placing this order.
+                            {{ __('No payment method is available right now. Please contact the store before placing this order.') }}
                         </p>
                     @endunless
                     @if ($errors->has('payment_method') || $errors->has('payment'))
@@ -178,7 +178,7 @@
                 </fieldset>
 
                 <label class="block sm:col-span-2">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Order note') }} <span class="text-gray-400">(optional)</span></span>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Order note') }} <span class="text-gray-400">{{ __('(optional)') }}</span></span>
                     <textarea id="checkout-note" class="mt-2 min-h-24 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-950 outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:bg-white/10 dark:text-white" name="note" autocomplete="off" @error('note') aria-invalid="true" aria-describedby="checkout-note-error" @enderror>{{ old('note') }}</textarea>
                     @error('note') <span id="checkout-note-error" class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror
                 </label>
@@ -213,7 +213,7 @@
                 @endif
                 <div class="flex justify-between text-gray-600 dark:text-gray-300">
                     <span>{{ __('Parcel weight') }}</span>
-                    <span>{{ number_format($actualWeight, 3) }} kg (charged as {{ $billedWeight }} kg)</span>
+                    <span>{{ __(':actualweight kg (charged as :billedweight kg)', ['actualweight' => number_format($actualWeight, 3), 'billedweight' => $billedWeight]) }}</span>
                 </div>
                 <div class="flex justify-between text-gray-600 dark:text-gray-300">
                     <span>{{ __('Delivery charge') }}</span>
@@ -236,11 +236,11 @@
                     </div>
                     @if ($onlinePaymentAvailable ?? false)
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            Your cart includes pre-order items. The order will be created only after the secure payment verifies this advance.
+                            {{ __('Your cart includes pre-order items. The order will be created only after the secure payment verifies this advance.') }}
                         </p>
                     @else
                         <p id="checkout-preorder-payment-unavailable" class="mt-2 text-xs font-medium text-red-600 dark:text-red-400" role="alert">
-                            Online payment is currently unavailable. Please contact the store to complete this pre-order.
+                            {{ __('Online payment is currently unavailable. Please contact the store to complete this pre-order.') }}
                         </p>
                     @endif
                 </div>
@@ -248,8 +248,8 @@
 
             @if ($setting->new_customer_delivery_advance_enabled ?? true)
                 <div class="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs leading-5 text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300">
-                    <span class="font-semibold text-gray-900 dark:text-white">Weight-based rate:</span>
-                    first 1 kg BDT {{ \App\Support\MoneyFormatter::number($setting->delivery_first_kg_inside) }} inside Dhaka / BDT {{ \App\Support\MoneyFormatter::number($setting->delivery_first_kg_outside) }} outside Dhaka, then BDT {{ \App\Support\MoneyFormatter::number($setting->delivery_additional_per_kg) }} per additional started kg.
+                    <span class="font-semibold text-gray-900 dark:text-white">{{ __('Weight-based rate:') }}</span>
+                    {{ __('first 1 kg BDT :delivery_first_kg_inside inside Dhaka / BDT :delivery_first_kg_outside outside Dhaka, then BDT :delivery_additional_per_kg per additional started kg.', ['delivery_first_kg_inside' => \App\Support\MoneyFormatter::number($setting->delivery_first_kg_inside), 'delivery_first_kg_outside' => \App\Support\MoneyFormatter::number($setting->delivery_first_kg_outside), 'delivery_additional_per_kg' => \App\Support\MoneyFormatter::number($setting->delivery_additional_per_kg)]) }}
                 </div>
             @endif
 
@@ -261,7 +261,7 @@
                 @disabled($checkoutBlocked)
                 @if ($checkoutBlocked) aria-disabled="true" aria-describedby="{{ $checkoutBlockDescription }}" @endif
             >
-                Place order / continue to payment
+                {{ __('Place order / continue to payment') }}
             </button>
         </aside>
     </section>

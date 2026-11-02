@@ -72,7 +72,7 @@ class AccountOrdersController extends Controller
         if (! $setting->customer_accounts_enabled) {
             return redirect()
                 ->route('storefront.track.index')
-                ->with('storefront_status', 'Enter your order number and checkout phone to find an order.');
+                ->with('storefront_status', __('Enter your order number and checkout phone to find an order.'));
         }
 
         $customer = Auth::guard('customer')->user();
@@ -80,7 +80,7 @@ class AccountOrdersController extends Controller
         if (! $customer) {
             return redirect()
                 ->route('storefront.account.login')
-                ->with('storefront_status', 'Log in to reorder from your order history.');
+                ->with('storefront_status', __('Log in to reorder from your order history.'));
         }
 
         $order = Order::query()
@@ -176,8 +176,10 @@ class AccountOrdersController extends Controller
         }
 
         session()->flash('storefront_status', $added > 0
-            ? "Added {$added} ".str('item')->plural($added)." from order {$order->order_number} to your cart."
-            : 'None of the items from that order are currently available.');
+            ? $added === 1
+                ? __('Added :count item from order :order to your cart.', ['count' => $added, 'order' => $order->order_number])
+                : __('Added :count items from order :order to your cart.', ['count' => $added, 'order' => $order->order_number])
+            : __('None of the items from that order are currently available.'));
 
         return $added;
     }
@@ -192,7 +194,7 @@ class AccountOrdersController extends Controller
             if (! $setting->customer_accounts_enabled) {
                 return redirect()
                     ->route('storefront.track.index')
-                    ->with('storefront_status', 'Enter your order number and checkout phone to find an order.');
+                    ->with('storefront_status', __('Enter your order number and checkout phone to find an order.'));
             }
 
             $customer = Auth::guard('customer')->user();
@@ -200,7 +202,7 @@ class AccountOrdersController extends Controller
             if (! $customer) {
                 return redirect()
                     ->route('storefront.account.login')
-                    ->with('storefront_status', 'Log in to view your order history.');
+                    ->with('storefront_status', __('Log in to view your order history.'));
             }
 
             $orders = Order::query()

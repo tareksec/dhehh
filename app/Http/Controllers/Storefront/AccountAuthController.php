@@ -184,7 +184,7 @@ class AccountAuthController extends Controller
 
         if (! $customer) {
             throw ValidationException::withMessages([
-                'identifier' => "Those details don't match an account. Check your phone/email and password.",
+                'identifier' => __("Those details don't match an account. Check your phone/email and password."),
             ]);
         }
 
@@ -201,7 +201,7 @@ class AccountAuthController extends Controller
             'A successful sign-in was recorded.',
         );
 
-        return redirect()->to($this->accountRoute($request, 'profile'))->with('storefront_status', "Welcome back, {$customer->name}.");
+        return redirect()->to($this->accountRoute($request, 'profile'))->with('storefront_status', __('Welcome back, :name.', ['name' => $customer->name]));
     }
 
     public function showOtp(Request $request): View|RedirectResponse
@@ -234,16 +234,16 @@ class AccountAuthController extends Controller
         $isEmail = str_contains($identifier, '@');
 
         if ($isEmail && ! filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
-            throw ValidationException::withMessages(['identifier' => 'Enter a valid email address.']);
+            throw ValidationException::withMessages(['identifier' => __('Enter a valid email address.')]);
         }
 
         if (! $isEmail && strlen(preg_replace('/\D+/', '', $identifier) ?: '') < 10) {
-            throw ValidationException::withMessages(['identifier' => 'Enter a valid phone number.']);
+            throw ValidationException::withMessages(['identifier' => __('Enter a valid phone number.')]);
         }
 
         if (! $isEmail && ! $this->notifications->smsConfigured($setting)) {
             throw ValidationException::withMessages([
-                'identifier' => 'Phone OTP is not available right now. Use your email address or password to log in.',
+                'identifier' => __('Phone OTP is not available right now. Use your email address or password to log in.'),
             ]);
         }
 
@@ -258,7 +258,7 @@ class AccountAuthController extends Controller
 
         return redirect()
             ->to($this->accountRoute($request, 'otp.verify'))
-            ->with('storefront_status', 'If a matching account exists, a 6-digit login code has been sent.');
+            ->with('storefront_status', __('If a matching account exists, a 6-digit login code has been sent.'));
     }
 
     public function showOtpVerify(Request $request): View|RedirectResponse
@@ -270,7 +270,7 @@ class AccountAuthController extends Controller
 
         if (! is_string($identifier) || $identifier === '') {
             return redirect()->to($this->accountRoute($request, 'otp'))
-                ->with('storefront_status', 'Enter your phone number or email to request a login code.');
+                ->with('storefront_status', __('Enter your phone number or email to request a login code.'));
         }
 
         return StorefrontThemeRegistry::page('account.otp-verify', [
@@ -294,7 +294,7 @@ class AccountAuthController extends Controller
 
         if (! $customer || ! $this->accounts->verifyLoginOtp($customer, $data['code'])) {
             throw ValidationException::withMessages([
-                'code' => 'That code is invalid or has expired. Request a new code and try again.',
+                'code' => __('That code is invalid or has expired. Request a new code and try again.'),
             ]);
         }
 
@@ -311,7 +311,7 @@ class AccountAuthController extends Controller
             ['channel' => str_contains((string) $identifier, '@') ? 'email' : 'sms'],
         );
 
-        return redirect()->to($this->accountRoute($request, 'profile'))->with('storefront_status', "Welcome back, {$customer->name}.");
+        return redirect()->to($this->accountRoute($request, 'profile'))->with('storefront_status', __('Welcome back, :name.', ['name' => $customer->name]));
     }
 
     public function showRegister(Request $request): View|RedirectResponse
@@ -468,7 +468,7 @@ class AccountAuthController extends Controller
             'data' => ['status' => 'registered'],
         ]);
 
-        return redirect()->to($this->accountRoute($request, 'profile'))->with('storefront_status', "Welcome, {$customer->name}! Your account has been created.");
+        return redirect()->to($this->accountRoute($request, 'profile'))->with('storefront_status', __('Welcome, :name! Your account has been created.', ['name' => $customer->name]));
     }
 
     public function logout(Request $request): RedirectResponse
@@ -483,7 +483,7 @@ class AccountAuthController extends Controller
             ? route('storefront.preview.show', $this->previewSlug($request))
             : route('marketing.home');
 
-        return redirect()->to($homeUrl)->with('storefront_status', 'You have been logged out.');
+        return redirect()->to($homeUrl)->with('storefront_status', __('You have been logged out.'));
     }
 
     public function showForgotPassword(Request $request): View
@@ -509,7 +509,7 @@ class AccountAuthController extends Controller
         ]);
 
         if (! $this->notifications->smsConfigured($setting)) {
-            return back()->withInput()->with('storefront_status', 'Password reset by SMS isn\'t available right now. Please contact support to regain access to your account.');
+            return back()->withInput()->with('storefront_status', __('Password reset by SMS isn\'t available right now. Please contact support to regain access to your account.'));
         }
 
         $customer = $this->accounts->findRegisteredByPhone($data['phone']);
@@ -522,7 +522,7 @@ class AccountAuthController extends Controller
         // can't be used to probe which numbers have accounts.
         return redirect()
             ->to($this->accountRoute($request, 'reset-password', ['phone' => $data['phone']]))
-            ->with('storefront_status', 'If an account exists for that phone number, a reset code has been sent by SMS.');
+            ->with('storefront_status', __('If an account exists for that phone number, a reset code has been sent by SMS.'));
     }
 
     public function showResetPassword(Request $request): View
@@ -554,7 +554,7 @@ class AccountAuthController extends Controller
 
         if (! $reset) {
             throw ValidationException::withMessages([
-                'code' => 'That code is invalid or has expired. Please request a new one.',
+                'code' => __('That code is invalid or has expired. Please request a new one.'),
             ]);
         }
 
@@ -568,7 +568,7 @@ class AccountAuthController extends Controller
             'Your account password was reset successfully.',
         );
 
-        return redirect()->to($this->accountRoute($request, 'profile'))->with('storefront_status', 'Your password has been reset.');
+        return redirect()->to($this->accountRoute($request, 'profile'))->with('storefront_status', __('Your password has been reset.'));
     }
 
     protected function preparePreview(Request $request, Company $company): void

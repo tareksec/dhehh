@@ -203,7 +203,7 @@ class OfferCheckoutController extends Controller
 
         if ($offer->online_payment_required && $data['payment_method'] === 'cod') {
             throw ValidationException::withMessages([
-                'payment_method' => 'This offer requires an advance payment — Cash on Delivery is not available for it.',
+                'payment_method' => __('This offer requires an advance payment — Cash on Delivery is not available for it.'),
             ]);
         }
 

@@ -133,6 +133,8 @@ final class StorefrontSiteDesign
 
     public const DEFAULT_FOOTER_BACKGROUND = '#09090B';
 
+    public const DEFAULT_FOOTER_BACKGROUND_LIGHT = '#F4F4F5';
+
     public const DEFAULT_FLASH_BACKGROUND = '#0D2141';
 
     public const DEFAULT_MOBILE_CTA_BACKGROUND = '#F5F9FC';
@@ -331,6 +333,7 @@ final class StorefrontSiteDesign
             ],
             'footer' => [
                 'background' => self::color($footer['background'] ?? null) ?? self::DEFAULT_FOOTER_BACKGROUND,
+                'background_light' => self::color($footer['background_light'] ?? null) ?? self::DEFAULT_FOOTER_BACKGROUND_LIGHT,
             ],
             'product_card' => [
                 'price_color' => self::color($card['price_color'] ?? null) ?? self::DEFAULT_PRICE_COLOR,

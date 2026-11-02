@@ -92,6 +92,7 @@ class NextjsSiteDesignTest extends TestCase
             ->assertJsonPath('data.design.header.sticky', true)
             ->assertJsonPath('data.design.header.tagline', null)
             ->assertJsonPath('data.design.footer.background', '#09090B')
+            ->assertJsonPath('data.design.footer.background_light', '#F4F4F5')
             ->assertJsonPath('data.design.floating_help.enabled', true)
             ->assertJsonPath('data.design.floating_help.url', null);
     }
@@ -489,8 +490,10 @@ class NextjsSiteDesignTest extends TestCase
             ->call('selectSection', 'navigation_seo')
             ->assertSee(__('Custom links column'))
             ->assertSee(__('Payment badges'))
-            ->assertSee(__('Footer background colour'))
+            ->assertSee(__('Footer background colour (dark mode)'))
+            ->assertSee(__('Footer background colour (light mode)'))
             ->set('data.site_design.footer.background', '#101010')
+            ->set('data.site_design.footer.background_light', '#EEF2FF')
             ->set('data.footer_blocks', [
                 ['type' => 'payment_methods', 'data' => ['heading' => 'Safe payments', 'items' => [['label' => 'bKash', 'tone' => 'pink']]]],
                 ['type' => 'bottom_bar', 'data' => ['center_text' => 'Built by us']],
@@ -500,6 +503,7 @@ class NextjsSiteDesignTest extends TestCase
 
         $this->nextjs->refresh();
         $this->assertSame('#101010', $this->nextjs->siteDesign()['footer']['background']);
+        $this->assertSame('#EEF2FF', $this->nextjs->siteDesign()['footer']['background_light']);
         $this->assertSame('payment_methods', $this->nextjs->footer_blocks[0]['type']);
         $this->assertSame('Built by us', $this->nextjs->footer_blocks[1]['data']['center_text']);
     }

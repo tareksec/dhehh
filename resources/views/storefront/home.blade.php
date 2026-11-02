@@ -4,9 +4,9 @@
     @php
         $heroProduct = $products->first();
         $slides = $slides ?? collect();
-        $heroHeading = $setting->hero_heading ?: 'Shop the latest from '.$company->name.'.';
-        $heroSubheading = $setting->hero_subheading ?: 'Browse current products, order directly, and track purchases from one clean storefront.';
-        $heroCta = $setting->hero_cta_label ?: 'Start shopping';
+        $heroHeading = $setting->hero_heading ?: __('Shop the latest from :company.', ['company' => $company->name]);
+        $heroSubheading = $setting->hero_subheading ?: __('Browse current products, order directly, and track purchases from one clean storefront.');
+        $heroCta = $setting->hero_cta_label ?: __('Start shopping');
     @endphp
 
     @if ($slides->isNotEmpty())
@@ -17,7 +17,7 @@
                 <div>
                     <p class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">
                         <span class="h-1.5 w-1.5 rounded-full bg-[var(--storefront-brand)]"></span>
-                        Official storefront
+                        {{ __('Official storefront') }}
                     </p>
                     <h1 class="mt-4 max-w-xl text-balance text-4xl font-semibold tracking-tight text-gray-950 sm:text-5xl lg:text-6xl dark:text-white">
                         {{ $heroHeading }}
@@ -31,7 +31,7 @@
                         </a>
                         @if ($categories->isNotEmpty())
                             <a class="inline-flex items-center rounded-lg border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition hover:border-gray-950 dark:border-white/15 dark:text-white dark:hover:border-white" href="#collections">
-                                Browse collections
+                                {{ __('Browse collections') }}
                             </a>
                         @endif
                     </div>
@@ -58,7 +58,7 @@
                         <h2 class="text-xl font-semibold tracking-tight sm:text-2xl">{{ __('Shop by category') }}</h2>
                         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ __('Browse our full collection by category') }}</p>
                     </div>
-                    <a class="inline-flex min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 dark:hover:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">See all</a>
+                    <a class="inline-flex min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 dark:hover:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">{{ __('See all') }}</a>
                 </div>
                 <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
                     @foreach ($categories as $category)
@@ -106,10 +106,10 @@
                 <div class="font-semibold">
                     {{ $setting->offer_title }}
                     @if ($setting->offer_discount_percent)
-                        <span class="text-[var(--storefront-accent)]">— up to {{ $setting->offer_discount_percent }}% off</span>
+                        <span class="text-[var(--storefront-accent)]">{{ __('— up to :offer_discount_percent% off', ['offer_discount_percent' => $setting->offer_discount_percent]) }}</span>
                     @endif
                 </div>
-                <div class="flex items-center gap-1.5 font-mono text-xs" aria-label="Offer ends in">
+                <div class="flex items-center gap-1.5 font-mono text-xs" aria-label="{{ __('Offer ends in') }}">
                     <template x-if="remaining.d > 0">
                         <span class="rounded bg-white/10 px-2 py-1" x-text="remaining.d + 'd'"></span>
                     </template>
@@ -167,7 +167,7 @@
     <section class="mx-auto w-full max-w-7xl px-4 py-7 sm:px-5 sm:py-8 lg:px-6" x-reveal>
         <div class="mb-5 flex items-end justify-between gap-5">
             <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ __('Featured products') }}</h2>
-            <a class="inline-flex min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 dark:hover:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">View all</a>
+            <a class="inline-flex min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 dark:hover:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">{{ __('View all') }}</a>
         </div>
 
         <div class="storefront-catalog-grid grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
@@ -175,7 +175,7 @@
                 @include('storefront.partials.product-card', ['product' => $product])
             @empty
                 <div class="rounded-xl border border-dashed border-gray-300 p-10 text-center text-gray-500 dark:border-white/15">
-                    No available products yet.
+                    {{ __('No available products yet.') }}
                 </div>
             @endforelse
         </div>
@@ -190,7 +190,7 @@
                         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ $carousel->subtitle }}</p>
                     @endif
                 </div>
-                <a class="hidden min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 sm:inline-flex dark:hover:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">View all</a>
+                <a class="hidden min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 sm:inline-flex dark:hover:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">{{ __('View all') }}</a>
             </div>
             <div class="-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
                 <div class="flex snap-x snap-mandatory gap-5">
@@ -208,7 +208,7 @@
         <section class="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-5 lg:px-6" x-reveal>
             <div class="mb-6 flex items-end justify-between gap-5">
                 <h2 class="text-xl font-semibold tracking-tight sm:text-3xl">{{ __('Explore more products') }}</h2>
-                <a class="inline-flex min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 dark:hover:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">View all</a>
+                <a class="inline-flex min-h-11 items-center text-sm font-medium text-gray-500 hover:text-gray-950 dark:hover:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">{{ __('View all') }}</a>
             </div>
             <div class="storefront-catalog-grid grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-5">
                 @foreach ($products->skip(8) as $product)

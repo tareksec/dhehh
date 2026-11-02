@@ -14,7 +14,7 @@
             @if (session('complaint_submitted'))
                 <div class="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200" role="status" aria-live="polite">
                     <p class="font-semibold">{{ __('Complaint received successfully.') }}</p>
-                    <p class="mt-1">Reference: <span class="font-semibold">{{ session('complaint_submitted') }}</span>. Please keep this number for follow-up.</p>
+                    <p class="mt-1">{{ __('Reference:') }} <span class="font-semibold">{{ session('complaint_submitted') }}</span>{{ __('. Please keep this number for follow-up.') }}</p>
                 </div>
             @endif
 
@@ -39,12 +39,12 @@
                     </label>
 
                     <label class="block">
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Customer name') }} <span class="text-gray-400">(optional)</span></span>
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Customer name') }} <span class="text-gray-400">{{ __('(optional)') }}</span></span>
                         <input class="mt-2 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:bg-white/10" name="customer_name" autocomplete="name" value="{{ old('customer_name') }}">
                     </label>
 
                     <label class="block">
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Contact phone') }} <span class="text-gray-400">(optional)</span></span>
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Contact phone') }} <span class="text-gray-400">{{ __('(optional)') }}</span></span>
                         <input class="mt-2 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:bg-white/10" type="tel" inputmode="tel" name="phone" autocomplete="tel" value="{{ old('phone', request('phone')) }}">
                     </label>
 
@@ -73,9 +73,9 @@
         <aside class="h-fit rounded-xl border border-gray-200 bg-gray-50 p-5 text-sm dark:border-white/10 dark:bg-white/[0.03]">
             <h2 class="font-semibold text-gray-950 dark:text-white">{{ __('What happens next?') }}</h2>
             <ol class="mt-4 space-y-4 text-gray-600 dark:text-gray-300">
-                <li><span class="font-semibold text-gray-900 dark:text-white">1. Recorded company-wise</span><br>{{ __('Your complaint gets a unique reference.') }}</li>
-                <li><span class="font-semibold text-gray-900 dark:text-white">2. Team notification</span><br>{{ __('The configured company Telegram account receives the details.') }}</li>
-                <li><span class="font-semibold text-gray-900 dark:text-white">3. Resolution tracking</span><br>{{ __('Staff updates the complaint status from the admin panel.') }}</li>
+                <li><span class="font-semibold text-gray-900 dark:text-white">{{ __('1. Recorded company-wise') }}</span><br>{{ __('Your complaint gets a unique reference.') }}</li>
+                <li><span class="font-semibold text-gray-900 dark:text-white">{{ __('2. Team notification') }}</span><br>{{ __('The configured company Telegram account receives the details.') }}</li>
+                <li><span class="font-semibold text-gray-900 dark:text-white">{{ __('3. Resolution tracking') }}</span><br>{{ __('Staff updates the complaint status from the admin panel.') }}</li>
             </ol>
         </aside>
     </section>

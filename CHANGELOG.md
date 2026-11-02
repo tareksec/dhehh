@@ -1,5 +1,22 @@
 ## [Unreleased]
 
+### Added
+
+- **The website footer now has a light look and a dark look.** The Marketplace Pro footer on the Blade store stayed dark navy in both modes, so the light-mode logo never appeared. It now follows the visitor's colour mode: a light surface with the light logo in light mode, the navy surface with the dark logo in dark mode (the About block shows the right logo of the pair). The Next.js site's footer does the same, with a new **Footer background colour (light mode)** beside the existing dark-mode colour (Site → Storefront Settings → Website Design → Footer); `GET /site` returns it as `design.footer.background_light` (default `#F4F4F5`).
+- **Website texts go through the translation files.** About 330 storefront texts that were hardcoded English now use `__()` with Bangla in `lang/bn.json`:
+  - page text, button labels, placeholders and screen-reader labels, including text that carries a name, price or number (e.g. "Welcome back, :name.");
+  - order, delivery, courier, payment and reseller status words, and default texts shown when an admin field is empty (footer headings, home hero, meta consent, solar theme);
+  - the message shown after an action (login, logout, add to cart, cart updated, review sent, reseller application, store changes) and the error messages of login, OTP, cart, checkout and offers, and the storefront checkout service;
+  - the 403 / 404 / 419 / 429 / 500 pages and the page `lang` attribute.
+- **Bangla that was hardcoded in English mode is gone.** The offer thank-you page (new-account box), the offer FAQ heading, the offer hero button fallback and the testimonials heading had Bangla written into the view; it now lives in `lang/bn.json` and shows only in Bangla.
+- **The ERP's own messages follow the Next.js visitor's language.** The storefront API reads `X-Locale: bn|en` (or `?lang=`) and writes error and status messages in that language instead of always English (`SetStorefrontApiLocale`). The website now sends the visitor's language on checkout and account calls. Product names, banners, menus, the home page builder and footer text are still shown exactly as entered.
+
+### Technical Notes
+
+- Language switching is still missing on the Blade storefront: `docs/i18n-bangla-english-plan.md` phases 1-2 (locale resolver, `SetStorefrontLocale`, switcher, `default_locale`) are not built, so the Blade pages render in `APP_LOCALE`. Admin-entered content (home page builder, trust strip, banners, menus, footer text, product and category names) is one language per field until plan phase 4, so the Next.js site's Bangla mode shows that content as typed. `SetStorefrontApiLocale` covers only the messages the ERP writes itself.
+- Next.js repo (`bhd4232/zamzamint-new-website-theme`): Footer.tsx renders both looks with `dark:` classes (`design.footer.background` = dark mode, `background_light` = light mode, text and chip classes chosen per colour), `layout.tsx` uses `branding.favicon_url`, `erp.ts` sends `X-Locale`, and five hardcoded aria-labels use the dictionary. That repo is committed separately.
+
+
 ## [2.121.0] - 2026-11-02
 
 **Release type:** Minor Feature Update
@@ -1069,6 +1086,8 @@
 
 ### Technical Notes
 
+- Language switching is still missing on the Blade storefront: `docs/i18n-bangla-english-plan.md` phases 1-2 (locale resolver, `SetStorefrontLocale`, switcher, `default_locale`) are not built, so the Blade pages render in `APP_LOCALE`. Admin-entered content (home page builder, trust strip, banners, menus, footer text, product and category names) is one language per field until plan phase 4, so the Next.js site's Bangla mode shows that content as typed. `SetStorefrontApiLocale` covers only the messages the ERP writes itself.
+- Next.js repo (`bhd4232/zamzamint-new-website-theme`): Footer.tsx renders both looks with `dark:` classes (`design.footer.background` = dark mode, `background_light` = light mode, text and chip classes chosen per colour), `layout.tsx` uses `branding.favicon_url`, `erp.ts` sends `X-Locale`, and five hardcoded aria-labels use the dictionary. That repo is committed separately.
 - New `conversations` columns `automation_mode` (`ai` | `human`), `handover_reason`, `mode_changed_at`, `mode_changed_by`; `human_handled_until` keeps its meaning and is the return-to-AI time (NULL = no time limit). Migration backfills `human` for every chat with AI switched off or held until a future time. New company-owned table `conversation_mode_events` (`ConversationModeEvent`, in `MultiCompanyIsolationTest`).
 - `App\Services\Crm\ConversationModeService` is the only writer of the mode (`toHuman()`, `toAi()`, `staffAnswered()`, `revertDue()`); it keeps `ai_enabled` in step (false while the team has the chat) so existing checks keep working, and writes one event per switch. `AiReplyService::escalate()` takes a reason code and switches through it; `escalate_to_human` gained a required `reason_code` enum.
 - New command `crm:revert-conversations`, scheduled every minute, loops per company.

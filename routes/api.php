@@ -13,6 +13,7 @@ use App\Http\Middleware\EnsureNextjsSiteEnabled;
 use App\Http\Middleware\EnsureStorefrontAccountsEnabled;
 use App\Http\Middleware\ForceJsonResponse;
 use App\Http\Middleware\ResolveCompanyFromApiKey;
+use App\Http\Middleware\SetStorefrontApiLocale;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -65,7 +66,7 @@ Route::prefix('v1')
 */
 
 Route::prefix('v1/storefront')
-    ->middleware(['throttle:storefront-api', ForceJsonResponse::class, ResolveCompanyFromApiKey::class, EnsureNextjsSiteEnabled::class])
+    ->middleware(['throttle:storefront-api', ForceJsonResponse::class, ResolveCompanyFromApiKey::class, EnsureNextjsSiteEnabled::class, SetStorefrontApiLocale::class])
     ->group(function (): void {
         Route::get('site', [StorefrontController::class, 'site']);
         Route::get('categories', [StorefrontController::class, 'categories']);
