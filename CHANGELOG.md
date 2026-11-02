@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+## [2.122.0] - 2026-11-02
+
+**Release type:** Minor Feature Update
+
 ### Added
 
 - **The website footer now has a light look and a dark look.** The Marketplace Pro footer on the Blade store stayed dark navy in both modes, so the light-mode logo never appeared. It now follows the visitor's colour mode: a light surface with the light logo in light mode, the navy surface with the dark logo in dark mode (the About block shows the right logo of the pair). The Next.js site's footer does the same, with a new **Footer background colour (light mode)** beside the existing dark-mode colour (Site → Storefront Settings → Website Design → Footer); `GET /site` returns it as `design.footer.background_light` (default `#F4F4F5`).
@@ -15,8 +19,6 @@
 
 - Language switching is still missing on the Blade storefront: `docs/i18n-bangla-english-plan.md` phases 1-2 (locale resolver, `SetStorefrontLocale`, switcher, `default_locale`) are not built, so the Blade pages render in `APP_LOCALE`. Admin-entered content (home page builder, trust strip, banners, menus, footer text, product and category names) is one language per field until plan phase 4, so the Next.js site's Bangla mode shows that content as typed. `SetStorefrontApiLocale` covers only the messages the ERP writes itself.
 - Next.js repo (`bhd4232/zamzamint-new-website-theme`): Footer.tsx renders both looks with `dark:` classes (`design.footer.background` = dark mode, `background_light` = light mode, text and chip classes chosen per colour), `layout.tsx` uses `branding.favicon_url`, `erp.ts` sends `X-Locale`, and five hardcoded aria-labels use the dictionary. That repo is committed separately.
-
-
 ## [2.121.0] - 2026-11-02
 
 **Release type:** Minor Feature Update
