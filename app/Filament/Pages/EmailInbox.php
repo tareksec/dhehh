@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Filament\Clusters\Crm;
 use App\Filament\Concerns\HasGuardedNavigationBadge;
 use App\Filament\Pages\Concerns\ComposesEmail;
+use App\Filament\Pages\Concerns\ManagesEmailConversation;
 use App\Models\Company;
 use App\Models\EmailLabel;
 use App\Models\EmailMailbox;
@@ -38,6 +39,7 @@ class EmailInbox extends Page
 {
     use ComposesEmail;
     use HasGuardedNavigationBadge;
+    use ManagesEmailConversation;
 
     public const PAGE_SIZE = 30;
 
@@ -639,6 +641,6 @@ class EmailInbox extends Page
 
     protected function forgetData(): void
     {
-        unset($this->threads, $this->counts, $this->thread, $this->messages, $this->composeFiles, $this->quickReplies);
+        unset($this->threads, $this->counts, $this->thread, $this->messages, $this->composeFiles, $this->quickReplies, $this->staff, $this->contact);
     }
 }

@@ -5204,5 +5204,22 @@
     "Quick replies": "Quick replies",
     "Search quick replies": "Search quick replies",
     "No quick replies yet. Add them in CRM → Quick Replies.": "No quick replies yet. Add them in CRM → Quick Replies.",
-    "Discard this draft?": "Discard this draft?"
+    "Discard this draft?": "Discard this draft?",
+    "Lead created": "Lead created",
+    "Not a customer yet": "Not a customer yet",
+    "Open customer": "Open customer",
+    "Open WhatsApp chat": "Open WhatsApp chat",
+    "Open chat in the CRM Inbox": "Open chat in the CRM Inbox",
+    "Total spent": "Total spent",
+    "Balance": "Balance",
+    "This address is not one of your customers. You can still make a lead of it or tie the conversation to an order.": "This address is not one of your customers. You can still make a lead of it or tie the conversation to an order.",
+    "Linked order": "Linked order",
+    "Unlink order": "Unlink order",
+    "Lead": "Lead",
+    "Create lead": "Create lead",
+    "Link to order": "Link to order",
+    "Assign to": "Assign to",
+    "Unassigned": "Unassigned",
+    "Assign to me": "Assign to me",
+    "Email contact": "Email contact"
 }

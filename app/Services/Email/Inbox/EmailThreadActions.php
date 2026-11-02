@@ -7,6 +7,9 @@ use App\Models\EmailLabel;
 use App\Models\EmailMailbox;
 use App\Models\EmailMessage;
 use App\Models\EmailThread;
+use App\Models\Lead;
+use App\Models\Order;
+use App\Models\User;
 use App\Services\CompanyContext;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
@@ -116,6 +119,85 @@ class EmailThreadActions
         return $threads->count();
     }
 
+    /** Gives the conversation to one staff member of this company, or to nobody (null). */
+    public function assign(EmailThread $thread, ?User $user): EmailThread
+    {
+        $this->guard($thread);
+
+        if ($user !== null && ! $this->isStaff($user)) {
+            throw new AuthorizationException('That person cannot be given email of this company.');
+        }
+
+        $thread->forceFill(['assigned_to' => $user?->getKey()])->save();
+
+        return $thread;
+    }
+
+    /** Open, Pending (waiting for the customer or for us) or Closed (done). */
+    public function setStatus(EmailThread $thread, string $status): EmailThread
+    {
+        $this->guard($thread);
+
+        if (! in_array($status, EmailThread::STATUSES, true)) {
+            throw new \InvalidArgumentException('Unknown status.');
+        }
+
+        $thread->forceFill(['status' => $status])->save();
+
+        return $thread;
+    }
+
+    /** Ties the conversation to one of this company's orders, or to none (null). */
+    public function linkOrder(EmailThread $thread, ?Order $order): EmailThread
+    {
+        $this->guard($thread);
+
+        if ($order !== null && (int) $order->company_id !== $this->companyId()) {
+            throw new AuthorizationException('That order belongs to another company.');
+        }
+
+        $thread->forceFill(['order_id' => $order?->getKey()])->save();
+
+        return $thread;
+    }
+
+    /**
+     * Makes a sales lead of the person on the other end of the conversation (name, phone, email, source "email") and
+     * ties the conversation to it. A lead always has a phone number (the CRM works from it), so the person gives it.
+     * A conversation that already has a lead keeps it.
+     */
+    public function createLead(EmailThread $thread, User $by, string $phone, ?string $name = null): Lead
+    {
+        $this->guard($thread);
+
+        if ($thread->lead_id !== null && ($lead = Lead::query()->find($thread->lead_id)) !== null) {
+            return $lead;
+        }
+
+        $lead = Lead::query()->create([
+            'company_id' => $this->companyId(),
+            'name' => mb_substr(trim((string) $name) !== '' ? trim((string) $name) : ($thread->contact_name ?: ($thread->contact_email ?: __('Email contact'))), 0, 190),
+            'phone' => $phone,
+            'email' => $thread->contact_email,
+            'source' => 'email',
+            'status' => 'new',
+            'interest' => mb_substr((string) $thread->subject, 0, 190) ?: null,
+            'created_by' => $by->getKey(),
+        ]);
+
+        $thread->forceFill(['lead_id' => $lead->getKey()])->save();
+
+        return $lead;
+    }
+
+    /** Whether the person is an active member of the current company who may use CRM. */
+    public function isStaff(User $user): bool
+    {
+        return $user->is_active !== false
+            && $user->hasPermission('crm.view')
+            && $user->canAccessCompany($this->companyId());
+    }
+
     /** Deletes conversations that are in Trash for good, with their files. Anything not in Trash is left alone. */
     public function deleteForever(array $ids): int
     {
@@ -171,6 +253,13 @@ class EmailThreadActions
         $this->files->deleteAll($files, $company);
 
         return EmailThread::query()->whereKey($threads->modelKeys())->where('company_id', $this->companyId())->delete();
+    }
+
+    protected function guard(EmailThread $thread): void
+    {
+        if ((int) $thread->company_id !== $this->companyId()) {
+            throw new AuthorizationException('That conversation belongs to another company.');
+        }
     }
 
     protected function companyId(): int

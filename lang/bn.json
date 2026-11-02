@@ -5204,5 +5204,22 @@
     "Quick replies": "দ্রুত উত্তর",
     "Search quick replies": "দ্রুত উত্তর খুঁজুন",
     "No quick replies yet. Add them in CRM → Quick Replies.": "এখনো কোনো দ্রুত উত্তর নেই। CRM → Quick Replies থেকে যোগ করুন।",
-    "Discard this draft?": "এই ড্রাফট বাতিল করবেন?"
+    "Discard this draft?": "এই ড্রাফট বাতিল করবেন?",
+    "Lead created": "লিড তৈরি হয়েছে",
+    "Not a customer yet": "এখনো কাস্টমার নন",
+    "Open customer": "কাস্টমার দেখুন",
+    "Open WhatsApp chat": "WhatsApp চ্যাট খুলুন",
+    "Open chat in the CRM Inbox": "CRM ইনবক্সে চ্যাট খুলুন",
+    "Total spent": "মোট কেনাকাটা",
+    "Balance": "ব্যালেন্স",
+    "This address is not one of your customers. You can still make a lead of it or tie the conversation to an order.": "এই ঠিকানাটি আপনার কোনো কাস্টমারের নয়। চাইলে এটি দিয়ে লিড বানাতে বা কথোপকথনটি কোনো অর্ডারের সাথে যুক্ত করতে পারেন।",
+    "Linked order": "যুক্ত অর্ডার",
+    "Unlink order": "অর্ডারের যোগ সরান",
+    "Lead": "লিড",
+    "Create lead": "লিড তৈরি করুন",
+    "Link to order": "অর্ডারের সাথে যুক্ত করুন",
+    "Assign to": "দায়িত্ব দিন",
+    "Unassigned": "কাউকে দেওয়া হয়নি",
+    "Assign to me": "আমাকে দিন",
+    "Email contact": "ইমেইল যোগাযোগ"
 }

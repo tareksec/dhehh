@@ -46,7 +46,17 @@
             $inSpam = $this->folder === 'spam';
         @endphp
 
-        <div class="zz-mail" x-data="{ menu: false }" wire:poll.30s="checkNew" x-on:keydown.escape.window="menu = false">
+        <div class="zz-mail"
+                x-data="{
+                    menu: false,
+                    wide: false,
+                    // Remembered per browser; the first time, open on a big screen only.
+                    cust: (() => { try { const saved = localStorage.getItem('zzMailCustomer'); return saved === null ? window.innerWidth >= 1600 : saved === '1' } catch (e) { return false } })(),
+                }"
+                x-init="if (window.ResizeObserver) { new ResizeObserver((entries) => { wide = entries[0].contentRect.width >= 1300 }).observe($refs.body) }"
+                x-effect="(() => { try { localStorage.setItem('zzMailCustomer', cust ? '1' : '0') } catch (e) {} })()"
+                wire:poll.30s="checkNew"
+                x-on:keydown.escape.window="menu = false">
             {{-- Top bar: mailbox, search, status --}}
             <div class="zz-mail-top">
                 <button type="button" class="zz-mail-ib zz-mail-menu-btn" x-on:click="menu = ! menu" aria-label="{{ __('Folders and labels') }}" x-bind:aria-expanded="menu.toString()">
@@ -95,7 +105,7 @@
                 </button>
             </div>
 
-            <div @class(['zz-mail-body', 'has-thread' => $thread])>
+            <div @class(['zz-mail-body', 'has-thread' => $thread]) x-ref="body" x-bind:class="{ 'has-cust': cust && {{ $thread ? 'true' : 'false' }}, 'is-wide': wide }">
                 <div class="zz-mail-scrim" x-show="menu" x-on:click="menu = false" x-cloak></div>
 
                 {{-- Folders and labels --}}
@@ -330,6 +340,50 @@
                                 @endif
                             @endif
                             <span class="zz-mail-spacer"></span>
+
+                            @php
+                                $statusNames = ['open' => __('Open'), 'pending' => __('Pending'), 'closed' => __('Closed')];
+                                $assignee = $thread->assignee;
+                            @endphp
+                            @if ($canManage)
+                                <x-filament::dropdown placement="bottom-end">
+                                    <x-slot name="trigger">
+                                        <button type="button" class="zz-mail-sel" aria-label="{{ __('Assign to') }}" title="{{ __('Assign to') }}">
+                                            <span class="zz-mail-av zz-mail-av-s {{ $assignee ? $this->avatarClass($assignee->email) : 'zz-mail-a6' }}" aria-hidden="true">{{ $assignee ? $this->initials($assignee->name, $assignee->email) : '–' }}</span>
+                                            <span class="zz-mail-sel-text">{{ $assignee?->name ?? __('Unassigned') }}</span>
+                                            <x-filament::icon icon="heroicon-m-chevron-down" class="zz-mail-i zz-mail-i-s" aria-hidden="true" />
+                                        </button>
+                                    </x-slot>
+                                    <x-filament::dropdown.list>
+                                        <x-filament::dropdown.list.item wire:click="assignThread({{ auth()->id() }})" wire:key="assign-me">{{ __('Assign to me') }}</x-filament::dropdown.list.item>
+                                        <x-filament::dropdown.list.item wire:click="assignThread(null)" wire:key="assign-none" :icon="$assignee === null ? 'heroicon-m-check' : null">{{ __('Unassigned') }}</x-filament::dropdown.list.item>
+                                        @foreach ($this->staff as $member)
+                                            <x-filament::dropdown.list.item wire:click="assignThread({{ $member->id }})" wire:key="assign-{{ $member->id }}" :icon="$assignee?->is($member) ? 'heroicon-m-check' : null">{{ $member->name }}</x-filament::dropdown.list.item>
+                                        @endforeach
+                                    </x-filament::dropdown.list>
+                                </x-filament::dropdown>
+
+                                <x-filament::dropdown placement="bottom-end">
+                                    <x-slot name="trigger">
+                                        <button type="button" class="zz-mail-sel zz-mail-sel-{{ $thread->status }}" aria-label="{{ __('Status') }}" title="{{ __('Status') }}">
+                                            <span class="zz-mail-sel-text">{{ $statusNames[$thread->status] ?? $thread->status }}</span>
+                                            <x-filament::icon icon="heroicon-m-chevron-down" class="zz-mail-i zz-mail-i-s" aria-hidden="true" />
+                                        </button>
+                                    </x-slot>
+                                    <x-filament::dropdown.list>
+                                        @foreach ($statusNames as $key => $name)
+                                            <x-filament::dropdown.list.item wire:click="setThreadStatus('{{ $key }}')" wire:key="status-{{ $key }}" :icon="$thread->status === $key ? 'heroicon-m-check' : null">{{ $name }}</x-filament::dropdown.list.item>
+                                        @endforeach
+                                    </x-filament::dropdown.list>
+                                </x-filament::dropdown>
+                            @else
+                                <span class="zz-mail-chip">{{ $assignee?->name ?? __('Unassigned') }}</span>
+                                <span class="zz-mail-chip">{{ $statusNames[$thread->status] ?? $thread->status }}</span>
+                            @endif
+
+                            <button type="button" class="zz-mail-ib" x-on:click="cust = ! cust" x-bind:aria-pressed="cust.toString()" aria-label="{{ __('Customer') }}" title="{{ __('Customer') }}">
+                                <x-filament::icon icon="heroicon-o-user-circle" class="zz-mail-i" aria-hidden="true" />
+                            </button>
                             <button type="button" class="zz-mail-star @if ($thread->is_starred) is-on @endif" @if ($canManage) wire:click="toggleStar({{ $thread->id }})" @else disabled @endif aria-label="{{ $thread->is_starred ? __('Remove star') : __('Add star') }}" aria-pressed="{{ $thread->is_starred ? 'true' : 'false' }}">
                                 <x-filament::icon :icon="$thread->is_starred ? 'heroicon-s-star' : 'heroicon-o-star'" class="zz-mail-i" aria-hidden="true" />
                             </button>
@@ -394,6 +448,10 @@
                         </div>
                     @endif
                 </section>
+
+                @if ($thread)
+                    @include('filament.pages.email-inbox-customer', ['contact' => $this->contact])
+                @endif
             </div>
 
             @if ($this->composeId !== null && $canManage)

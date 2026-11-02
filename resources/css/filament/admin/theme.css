@@ -1170,7 +1170,8 @@ html:not(.zz-sidebar-navigation-ready) .zz-sidebar-menu-parent.fi-sidebar-route-
     box-sizing: border-box;
 }
 
-.zz-mail button {
+/* :where() keeps this reset at zero specificity, so every button class below can set its own colour. */
+:where(.zz-mail) button {
     font: inherit;
     color: inherit;
 }
@@ -2582,5 +2583,280 @@ html:not(.zz-sidebar-navigation-ready) .zz-sidebar-menu-parent.fi-sidebar-route-
         inset-inline: 12px;
         bottom: 70px;
         width: auto;
+    }
+}
+
+/* CRM -> Email: who the conversation is with (step 5b). The assignee and status pickers and the customer panel. */
+.zz-mail-sel {
+    display: inline-flex;
+    height: 32px;
+    max-width: 180px;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px 0 6px;
+    border: 1px solid var(--m-line2);
+    border-radius: 8px;
+    background: var(--m-surface);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.zz-mail-sel-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.zz-mail-sel-pending {
+    border-color: var(--m-warn);
+    color: var(--m-warn-ink);
+}
+
+.zz-mail-sel-closed {
+    color: var(--m-ink3);
+}
+
+.zz-mail-av-s {
+    width: 20px;
+    height: 20px;
+    font-size: 9px;
+}
+
+/* The panel: over the conversation by default, beside it when the page is wide (the page sets .is-wide). */
+.zz-mail-cust {
+    display: none;
+}
+
+.zz-mail-cust.is-open {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
+    z-index: 12;
+    display: flex;
+    width: min(320px, 100%);
+    flex-direction: column;
+    border-inline-start: 1px solid var(--m-line);
+    background: var(--m-surface);
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.14);
+}
+
+.zz-mail-body.is-wide.has-cust {
+    grid-template-columns: 208px 340px minmax(0, 1fr) 300px;
+}
+
+.zz-mail-body.is-wide .zz-mail-cust.is-open {
+    position: static;
+    width: auto;
+    box-shadow: none;
+}
+
+.zz-mail-cust-head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 48px;
+    padding: 0 8px 0 16px;
+    border-bottom: 1px solid var(--m-line);
+}
+
+.zz-mail-cust-head h3,
+.zz-mail-cust-h {
+    margin: 0;
+    color: var(--m-ink3);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.zz-mail-cust-body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.zz-mail-cust-who {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.zz-mail-cust-who > div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+.zz-mail-cust-who b {
+    overflow-wrap: anywhere;
+    font-size: 15px;
+}
+
+.zz-mail-cust-who > div span:not(.zz-mail-chip) {
+    overflow-wrap: anywhere;
+    color: var(--m-ink3);
+    font-size: 12px;
+}
+
+.zz-mail-kv,
+.zz-mail-linkrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    color: var(--m-ink2);
+    font-size: 13px;
+}
+
+.zz-mail-linkrow {
+    color: var(--m-blue-ink);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.zz-mail-linkrow:hover {
+    text-decoration: underline;
+}
+
+.zz-mail-tiles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.zz-mail-tile {
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--m-line);
+    border-radius: 10px;
+}
+
+.zz-mail-tile b {
+    display: block;
+    overflow: hidden;
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zz-mail-tile span {
+    color: var(--m-ink3);
+    font-size: 12px;
+}
+
+.zz-mail-orders {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.zz-mail-orders a {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--m-line);
+    color: var(--m-ink);
+    font-size: 13px;
+    text-decoration: none;
+}
+
+.zz-mail-orders small {
+    display: block;
+    color: var(--m-ink3);
+}
+
+.zz-mail-linked {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--m-line);
+    border-radius: 10px;
+    color: var(--m-ink3);
+    font-size: 12px;
+}
+
+.zz-mail-linked a {
+    margin-inline-end: auto;
+    color: var(--m-blue-ink);
+    font-size: 13px;
+}
+
+.zz-mail-cust-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.zz-mail-btn2 {
+    display: flex;
+    width: 100%;
+    min-height: 40px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 1px solid var(--m-line2);
+    border-radius: 8px;
+    background: var(--m-surface);
+    color: var(--m-ink);
+    font-weight: 600;
+    text-align: start;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.zz-mail-btn2 .zz-mail-i {
+    color: var(--m-ink2);
+}
+
+.zz-mail-orderlink {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.zz-mail-orderlink label {
+    color: var(--m-ink3);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.zz-mail-orderlink > div {
+    display: flex;
+    gap: 8px;
+}
+
+.zz-mail-orderlink input {
+    min-width: 0;
+    flex: 1;
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--m-line2);
+    border-radius: 8px;
+    background: var(--m-surface);
+    color: var(--m-ink);
+}
+
+@media (max-width: 760px) {
+    .zz-mail-cust.is-open {
+        position: fixed;
+        inset: 0;
+        z-index: 55;
+        width: auto;
+        box-shadow: none;
+    }
+
+    .zz-mail-sel-text {
+        max-width: 84px;
     }
 }

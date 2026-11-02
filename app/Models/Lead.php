@@ -20,6 +20,7 @@ class Lead extends Model
         'referral' => 'Referral',
         'walk_in' => 'Walk-in',
         'phone_call' => 'Phone Call',
+        'email' => 'Email',
         'other' => 'Other',
     ];
 

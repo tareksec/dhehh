@@ -2,7 +2,26 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-02 (latest) - Email inbox, step 5a: writing mail in the Email page (compose, reply, forward, drafts, undo send, notes)
+## 2026-11-02 (latest) - Email inbox, step 5b: assignee, status and the customer panel
+
+Plan: `docs/email-inbox-plan.md`. Step 5a (writing) is commit `cfc196b`; this is 5b on the same branch `ccr-3799b463-p4pv7n`.
+
+Decisions made while building (owner please read):
+
+- **A lead needs a phone.** The CRM's lead table (`leads.phone`) cannot be empty, and the follow-up and broadcast tools work from it, so "Create lead" asks for the phone (filled from the customer when there is one). A new lead source **Email** was added to `Lead::SOURCES` (it shows in the Leads filter and the Broadcast audience list).
+- **Create order opens the existing New Order page with the customer picked** (`?customer=ID`). It does not create an order by itself. This touches `CreateOrder` (a few lines, only when the address has `?customer=`); everything else on that page is unchanged.
+- **Who can be assigned:** active staff with "CRM Inbox: View" who belong to the company (super admins too). A conversation can be assigned to a person who then reads it in the Inbox with the filter **Mine**.
+- **No notification is sent to the assignee** yet (the plan's Phase 2 "rules" step); they see it under **Mine**.
+- "Total spent" counts confirmed, processing and completed orders (the same orders the customer's balance counts); cancelled and draft orders are shown in the list but not added up.
+- The customer is matched by the sender's **email only** (when the mail arrives). A customer who writes from an address that is not saved on their record shows as "not a customer yet"; staff can tie the conversation to an order to connect them.
+
+Needs Bangla review: "দায়িত্ব দিন" (Assign to), "কাউকে দেওয়া হয়নি" (Unassigned), "মোট কেনাকাটা" (Total spent), "ব্যালেন্স" (Balance).
+
+Not verified: Create order on a customer with a courier-risk history (the same code as picking the customer by hand runs, but only the unit test exercises it); the panel on a real phone.
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main`.
+
+## 2026-11-02 - Email inbox, step 5a: writing mail in the Email page (compose, reply, forward, drafts, undo send, notes)
 
 Plan: `docs/email-inbox-plan.md`. Steps 1-4 are commits `131d66a`, `4af2d2c`, `d080370` and `deb331a` on the feature branch `ccr-3799b463-p4pv7n`. Step 5 is split in two commits: 5a (this one) is writing; 5b is the customer panel, assigning and status.
 
