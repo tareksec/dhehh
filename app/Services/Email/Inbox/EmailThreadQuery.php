@@ -10,8 +10,8 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * The conversations the Email page lists (owner request 2026-11-02): one view at a time (Inbox, Starred, Sent, Drafts,
- * Spam, Trash, All mail or a label), narrowed by the quick filters and the search words. Sent, Drafts, Starred and All
+ * The conversations the Email page lists (owner request 2026-11-02): one view at a time (Inbox, Starred, Snoozed, Sent,
+ * Drafts, Spam, Trash, All mail or a label), narrowed by the quick filters and the search words. Sent, Drafts, Starred and All
  * mail are views over the same rows, not folders. A search looks through all the mail (not Spam or Trash, unless that is
  * the view) so an answer sent last month can be found from the Inbox.
  */
@@ -20,6 +20,8 @@ class EmailThreadQuery
     public const VIEW_INBOX = 'inbox';
 
     public const VIEW_STARRED = 'starred';
+
+    public const VIEW_SNOOZED = 'snoozed';
 
     public const VIEW_SENT = 'sent';
 
@@ -31,7 +33,7 @@ class EmailThreadQuery
 
     public const VIEW_ALL = 'all';
 
-    public const VIEWS = [self::VIEW_INBOX, self::VIEW_STARRED, self::VIEW_SENT, self::VIEW_DRAFTS, self::VIEW_SPAM, self::VIEW_TRASH, self::VIEW_ALL];
+    public const VIEWS = [self::VIEW_INBOX, self::VIEW_STARRED, self::VIEW_SNOOZED, self::VIEW_SENT, self::VIEW_DRAFTS, self::VIEW_SPAM, self::VIEW_TRASH, self::VIEW_ALL];
 
     public const FILTER_UNREAD = 'unread';
 
@@ -74,10 +76,16 @@ class EmailThreadQuery
             $this->scopeSearch($query, $search);
         }
 
-        // Drafts have no message time yet; they are listed by when they were last edited.
-        return $view === self::VIEW_DRAFTS && $search === ''
-            ? $query->orderByDesc('updated_at')->orderByDesc('id')
-            : $query->orderByDesc('last_message_at')->orderByDesc('id');
+        // Drafts have no message time yet; they are listed by when they were last edited. Snoozed ones come back soonest-first.
+        if ($search === '' && $view === self::VIEW_DRAFTS) {
+            return $query->orderByDesc('updated_at')->orderByDesc('id');
+        }
+
+        if ($search === '' && $view === self::VIEW_SNOOZED && $label === null) {
+            return $query->orderBy('snoozed_until')->orderByDesc('id');
+        }
+
+        return $query->orderByDesc('last_message_at')->orderByDesc('id');
     }
 
     /**
@@ -101,7 +109,7 @@ class EmailThreadQuery
             ->all();
 
         return [
-            'inbox' => $base()->where('folder', EmailThread::FOLDER_INBOX)->where('unread_count', '>', 0)->count(),
+            'inbox' => $base()->where('folder', EmailThread::FOLDER_INBOX)->whereNull('snoozed_until')->where('unread_count', '>', 0)->count(),
             'spam' => $base()->where('folder', EmailThread::FOLDER_SPAM)->where('unread_count', '>', 0)->count(),
             'drafts' => $this->scopeDrafts($base(), $user)->count(),
             'labels' => $labels,
@@ -115,6 +123,7 @@ class EmailThreadQuery
 
         match ($view) {
             self::VIEW_STARRED => $query->where('is_starred', true)->whereIn('folder', $live),
+            self::VIEW_SNOOZED => $query->where('folder', EmailThread::FOLDER_INBOX)->whereNotNull('snoozed_until'),
             self::VIEW_SENT => $query->whereIn('folder', $live)->whereHas('messages', fn (Builder $inner) => $inner
                 ->where('direction', EmailMessage::OUT)->where('kind', EmailMessage::KIND_MESSAGE)->whereIn('status', self::OUTGOING)),
             self::VIEW_DRAFTS => $this->scopeDrafts($query, $user),
@@ -123,7 +132,7 @@ class EmailThreadQuery
             self::VIEW_ALL => $query->whereIn('folder', $live)->where('message_count', '>', 0),
             default => $label !== null
                 ? $query->whereIn('folder', $live)->whereHas('labels', fn (Builder $inner) => $inner->whereKey($label->getKey()))
-                : $query->where('folder', EmailThread::FOLDER_INBOX)->where('message_count', '>', 0),
+                : $query->where('folder', EmailThread::FOLDER_INBOX)->whereNull('snoozed_until')->where('message_count', '>', 0),
         };
     }
 

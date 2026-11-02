@@ -24,10 +24,12 @@ Amazon SES usage page becomes a provider-neutral **Email delivery** page.
 - Several mailboxes per company with a switcher; mailbox settings (connection, signature, labels, behaviour).
 - Email delivery page: works for any SMTP provider (see Step 1).
 
-## Phase 2 (not in this build)
+## Phase 2 (owner asked for "the next step" on 2026-11-02)
 
-Snooze, scheduled send, rules (auto label / assign), "Suggest reply" (a draft for staff to review, never sent by the
-system), IMAP checking for mailboxes that cannot forward, SES inbound.
+Built one step at a time, each its own commit (see "Phase 2 steps" below): snooze, a Trash that empties itself,
+scheduled send, rules (auto label / assign), address suggestions, "Suggest reply" (a draft for staff to review, never
+sent by the system) and IMAP checking for mailboxes that cannot forward. Left for later, on the owner's word: SES
+inbound (the owner does not use SES now) and a bottom reading pane.
 
 ## Decisions
 
@@ -78,6 +80,16 @@ pushed to the feature branch `ccr-3799b463-p4pv7n`. Nothing goes to `main` witho
 | 5b | **Who the conversation is with** (assignee, status, customer panel, Create order / Create lead / Link to order) | `631a60f` | done |
 | 6 | **Settings → Email inbox** (add mailbox, forwarding address shown once, new token, test mail, setup steps, signature, behaviour, labels; new-mail alerts) | `9290766` | done |
 | 7 | **Finish** (this document, code map, release notes, `npm run build`, render check at 390 and 1440 px light and dark, full `php artisan test`) | this commit | done |
+
+### Phase 2 steps
+
+| Step | What | Commit | Status |
+| --- | --- | --- | --- |
+| 8 | **Snooze and a Trash that empties itself** (Snoozed view, wake-up and bell, `trash_days` setting, `email:wake-snoozed`, `email:purge-trash`) | this commit | done |
+| 9 | **Scheduled send** (Send later in the compose window, Scheduled view, cancel) | | planned |
+| 10 | **Rules and address suggestions** (auto label / assign / archive by sender or subject; To / Cc suggestions from past contacts and customers) | | planned |
+| 11 | **Suggest reply** (a draft for staff to edit; never sent by the system; uses the ERP's existing AI setup) | | planned |
+| 12 | **IMAP checking** (a mailbox that cannot forward is read from its IMAP account) | | planned |
 
 ### What differs from the first plan
 

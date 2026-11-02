@@ -6,6 +6,7 @@ use App\Filament\Clusters\Crm;
 use App\Filament\Concerns\HasGuardedNavigationBadge;
 use App\Filament\Pages\Concerns\ComposesEmail;
 use App\Filament\Pages\Concerns\ManagesEmailConversation;
+use App\Filament\Pages\Concerns\SnoozesEmail;
 use App\Models\Company;
 use App\Models\EmailLabel;
 use App\Models\EmailMailbox;
@@ -40,6 +41,7 @@ class EmailInbox extends Page
     use ComposesEmail;
     use HasGuardedNavigationBadge;
     use ManagesEmailConversation;
+    use SnoozesEmail;
 
     public const PAGE_SIZE = 30;
 
@@ -93,7 +95,7 @@ class EmailInbox extends Page
 
     public string $labelColor = 'blue';
 
-    /** The last move, so a mistaken Archive or Delete can be taken back: {message: string, moves: array<int, string>}. */
+    /** The last move or snooze, so a mistake can be taken back: {message: string, moves: array<int, string>, snoozed?: array<int, int>}. */
     public ?array $undo = null;
 
     /** What the last poll saw; an unchanged value means the page need not be drawn again. */
@@ -101,7 +103,7 @@ class EmailInbox extends Page
 
     protected static function navigationBadge(): ?string
     {
-        $count = (int) EmailThread::query()->where('folder', EmailThread::FOLDER_INBOX)->where('unread_count', '>', 0)->count();
+        $count = (int) EmailThread::query()->where('folder', EmailThread::FOLDER_INBOX)->whereNull('snoozed_until')->where('unread_count', '>', 0)->count();
 
         return $count > 0 ? (string) $count : null;
     }
@@ -433,7 +435,7 @@ class EmailInbox extends Page
         }
     }
 
-    /** One of: archive, inbox, spam, notspam, trash, restore, delete, read, unread, star, unstar. */
+    /** One of: archive, inbox, spam, notspam, trash, restore, delete, read, unread, unsnooze, star, unstar. */
     public function perform(string $action, array $ids): void
     {
         $this->authorizeManage();
@@ -465,6 +467,7 @@ class EmailInbox extends Page
                 'delete' => $actions->deleteForever($ids),
                 'read' => $actions->markRead($ids),
                 'unread' => $actions->markUnread($ids),
+                'unsnooze' => $actions->unsnooze($ids),
                 'star' => $actions->star($ids, true),
                 'unstar' => $actions->star($ids, false),
                 default => null,
@@ -489,11 +492,16 @@ class EmailInbox extends Page
     public function undoMove(): void
     {
         $this->authorizeManage();
-        $moves = (array) ($this->undo['moves'] ?? []);
+        $undone = (array) $this->undo;
+        $moves = (array) ($undone['moves'] ?? []);
         $this->undo = null;
 
         foreach (collect($moves)->groupBy(fn ($folder) => $folder, preserveKeys: true) as $folder => $group) {
             app(EmailThreadActions::class)->move($this->ownIds($group->keys()->all()), (string) $folder);
+        }
+
+        if ($snoozed = (array) ($undone['snoozed'] ?? [])) {
+            app(EmailThreadActions::class)->unsnooze($this->ownIds($snoozed));
         }
 
         $this->forgetData();

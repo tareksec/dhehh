@@ -11,6 +11,7 @@ use App\Models\Lead;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\CompanyContext;
+use Carbon\CarbonInterface;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -46,10 +47,55 @@ class EmailThreadActions
             }
         }
 
+        // Leaving the Inbox ends a snooze; Trash starts the clock of the "empty Trash after N days" setting.
+        $changes = ['folder' => $folder, 'snoozed_until' => null, 'snoozed_by' => null];
+
+        if ($folder !== EmailThread::FOLDER_TRASH) {
+            $changes['trashed_at'] = null;
+        }
+
+        $changed = EmailThread::query()
+            ->whereKey($threads->modelKeys())
+            ->where('company_id', $this->companyId())
+            ->update($changes);
+
+        if ($folder === EmailThread::FOLDER_TRASH) {
+            EmailThread::query()
+                ->whereKey($threads->modelKeys())
+                ->where('company_id', $this->companyId())
+                ->whereNull('trashed_at')
+                ->update(['trashed_at' => now()]);
+        }
+
+        return $changed;
+    }
+
+    /**
+     * Hides conversations of the Inbox until the time, then they come back unread (email:wake-snoozed). Only a
+     * conversation in the Inbox can be snoozed, and the time must still be ahead: anything else is left alone.
+     */
+    public function snooze(array $ids, CarbonInterface $until, User $by): int
+    {
+        if ($until->lte(now())) {
+            return 0;
+        }
+
+        $threads = $this->threads($ids)->filter(fn (EmailThread $thread): bool => $thread->folder === EmailThread::FOLDER_INBOX);
+
         return EmailThread::query()
             ->whereKey($threads->modelKeys())
             ->where('company_id', $this->companyId())
-            ->update(['folder' => $folder]);
+            ->update(['snoozed_until' => $until->copy()->timezone(config('app.timezone')), 'snoozed_by' => $by->getKey()]);
+    }
+
+    /** Brings snoozed conversations back to the Inbox now. */
+    public function unsnooze(array $ids): int
+    {
+        return EmailThread::query()
+            ->whereKey($this->threads($ids)->modelKeys())
+            ->where('company_id', $this->companyId())
+            ->whereNotNull('snoozed_until')
+            ->update(['snoozed_until' => null, 'snoozed_by' => null]);
     }
 
     public function star(array $ids, bool $on): int
@@ -219,6 +265,31 @@ class EmailThreadActions
             ->where('company_id', $this->companyId())
             ->where('mailbox_id', $mailbox->getKey())
             ->where('folder', EmailThread::FOLDER_TRASH)
+            ->chunkById(100, function (Collection $chunk) use (&$total): void {
+                $total += $this->destroy($chunk);
+            });
+
+        return $total;
+    }
+
+    /**
+     * Deletes for good the conversations of a mailbox that have been in Trash since before the time ("empty Trash after
+     * N days"). A conversation with no recorded Trash time counts from when it was last changed.
+     */
+    public function purgeTrashedBefore(EmailMailbox $mailbox, CarbonInterface $before): int
+    {
+        if ((int) $mailbox->company_id !== $this->companyId()) {
+            throw new AuthorizationException('That mailbox belongs to another company.');
+        }
+
+        $total = 0;
+
+        EmailThread::query()
+            ->where('company_id', $this->companyId())
+            ->where('mailbox_id', $mailbox->getKey())
+            ->where('folder', EmailThread::FOLDER_TRASH)
+            ->where(fn ($query) => $query->where('trashed_at', '<', $before)
+                ->orWhere(fn ($inner) => $inner->whereNull('trashed_at')->where('updated_at', '<', $before)))
             ->chunkById(100, function (Collection $chunk) use (&$total): void {
                 $total += $this->destroy($chunk);
             });

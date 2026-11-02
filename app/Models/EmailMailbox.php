@@ -31,6 +31,8 @@ class EmailMailbox extends Model
         'load_remote_images' => false,
         'notify' => true,
         'signature_on_replies' => true,
+        // Days a conversation stays in Trash before it is deleted for good; 0 keeps it until someone empties the Trash.
+        'trash_days' => 30,
     ];
 
     protected $fillable = [

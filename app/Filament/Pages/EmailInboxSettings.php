@@ -192,6 +192,13 @@ class EmailInboxSettings extends Page
                     Toggle::make('match_customers')->label(__('Match mail to customers'))->helperText(__('By the sender\'s email address.')),
                     Toggle::make('load_remote_images')->label(__('Load pictures from the internet'))->helperText(__('Off keeps tracking pictures out. A picture can still be shown per message.')),
                     Toggle::make('notify')->label(__('Alert staff on new mail'))->helperText(__('Uses the ERP bell and push notifications. A conversation given to someone alerts only them.')),
+                    Select::make('trash_days')->label(__('Empty Trash by itself'))->selectablePlaceholder(false)->options([
+                        0 => __('Never (only when someone empties it)'),
+                        7 => __('After :count days', ['count' => 7]),
+                        30 => __('After :count days', ['count' => 30]),
+                        60 => __('After :count days', ['count' => 60]),
+                        90 => __('After :count days', ['count' => 90]),
+                    ])->helperText(__('A deleted conversation is removed for good this long after it went to Trash.')),
                 ]),
             ]);
     }
@@ -212,6 +219,7 @@ class EmailInboxSettings extends Page
             'match_customers' => (bool) $mailbox->setting('match_customers'),
             'load_remote_images' => (bool) $mailbox->setting('load_remote_images'),
             'notify' => (bool) $mailbox->setting('notify'),
+            'trash_days' => (int) $mailbox->setting('trash_days'),
         ]);
     }
 
@@ -240,6 +248,7 @@ class EmailInboxSettings extends Page
                 'match_customers' => (bool) $state['match_customers'],
                 'load_remote_images' => (bool) $state['load_remote_images'],
                 'notify' => (bool) $state['notify'],
+                'trash_days' => in_array((int) $state['trash_days'], [0, 7, 30, 60, 90], true) ? (int) $state['trash_days'] : 30,
             ],
         ])->save();
 

@@ -2,7 +2,27 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-02 (latest) - Email inbox, step 6: Settings -> Email inbox (mailboxes, forwarding address, signature, behaviour, labels)
+## 2026-11-02 (latest) - Email inbox, Phase 2 step 8: Snooze and a Trash that empties itself
+
+Plan: `docs/email-inbox-plan.md` (Phase 2 steps 8-12 are listed there). Phase 1 (steps 1-7) is on the feature branch `ccr-3799b463-p4pv7n`; this is the first Phase 2 step on the same branch.
+
+Decisions made while building (owner please read):
+
+- **Snooze times are fixed presets**: Later today = 3 hours; Tomorrow morning, In 3 days and Next week = 8:00 in the company's time zone; or any time typed (must be ahead, at most a year). No weekday rules were assumed (the usual Gmail "This weekend" / "Monday" were left out because the shop's working week is the owner's to define). Tell me the times you want and I change them.
+- **A snoozed conversation comes back unread, but in the list it keeps its place by its last message date** (it does not jump to the top). The bell message is what points to it. Putting it at the top needs a second sort column; say if you want that.
+- **The Trash empties itself after 30 days by default**, and this deletes real mail for good (files too). It is per mailbox (Never / 7 / 30 / 60 / 90 days) in Settings -> Email inbox -> Inbox behaviour. Spam is **not** emptied by itself. Conversations that were already in Trash when this is deployed start their 30 days on that day.
+- The bell message goes to the person who snoozed (else the assignee, else everyone with "CRM Inbox: Reply and Manage"); it is always on (it is the point of snoozing), unlike the new-mail alert.
+- Snoozing is for the Inbox only; a conversation in Archive, Spam or Trash cannot be snoozed.
+
+Needs Bangla review: "স্নুজ" for Snooze, "Later today / Tomorrow morning" (আজ একটু পরে / আগামীকাল সকালে).
+
+**Full `php artisan test`: 3773 passed, 7 skipped, 0 failed.** Browser check (throwaway database, never the demo one): the Snooze drop-down, the Snoozed view and the chips at 1440 px light and 390 px dark, no console errors.
+
+Not verified: the scheduler on the real server (`schedule:run` must already be running for `email:send-due`; the two new commands use the same scheduler); the bell message on a real device.
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main`.
+
+## 2026-11-02 - Email inbox, step 6: Settings -> Email inbox (mailboxes, forwarding address, signature, behaviour, labels)
 
 Plan: `docs/email-inbox-plan.md`. Steps 1-5 are commits `131d66a`, `4af2d2c`, `d080370`, `deb331a`, `cfc196b` and `631a60f` on the feature branch `ccr-3799b463-p4pv7n`.
 

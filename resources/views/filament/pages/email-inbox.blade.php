@@ -30,6 +30,7 @@
             $folders = [
                 ['inbox', __('Inbox'), 'heroicon-o-inbox', $counts['inbox']],
                 ['starred', __('Starred'), 'heroicon-o-star', 0],
+                ['snoozed', __('Snoozed'), 'heroicon-o-clock', 0],
                 ['sent', __('Sent'), 'heroicon-o-paper-airplane', 0],
                 ['drafts', __('Drafts'), 'heroicon-o-document-text', $counts['drafts']],
                 ['spam', __('Spam'), 'heroicon-o-exclamation-triangle', $counts['spam']],
@@ -47,6 +48,8 @@
             $selectedCount = count($this->selected);
             $inTrash = $this->folder === 'trash';
             $inSpam = $this->folder === 'spam';
+            $inSnoozed = $this->folder === 'snoozed' && $activeLabel === null;
+            $trashDays = max(0, (int) $mailbox->setting('trash_days'));
         @endphp
 
         <div class="zz-mail"
@@ -197,6 +200,10 @@
                                 <button type="button" class="zz-mail-tb" wire:click="performSelected('trash')">{{ __('Delete') }}</button>
                             @else
                                 <button type="button" class="zz-mail-ib" wire:click="performSelected('archive')" aria-label="{{ __('Archive') }}" title="{{ __('Archive') }}"><x-filament::icon icon="heroicon-o-archive-box-arrow-down" class="zz-mail-i" aria-hidden="true" /></button>
+                                @include('filament.pages.email-inbox-snooze', ['target' => 'selected'])
+                                @if ($inSnoozed)
+                                    <button type="button" class="zz-mail-tb" wire:click="performSelected('unsnooze')">{{ __('Unsnooze') }}</button>
+                                @endif
                                 <button type="button" class="zz-mail-ib" wire:click="performSelected('spam')" aria-label="{{ __('Report spam') }}" title="{{ __('Report spam') }}"><x-filament::icon icon="heroicon-o-exclamation-triangle" class="zz-mail-i" aria-hidden="true" /></button>
                                 <button type="button" class="zz-mail-ib" wire:click="performSelected('trash')" aria-label="{{ __('Delete') }}" title="{{ __('Delete') }}"><x-filament::icon icon="heroicon-o-trash" class="zz-mail-i" aria-hidden="true" /></button>
                                 <span class="zz-mail-sep"></span>
@@ -235,6 +242,10 @@
                             <button type="button" class="zz-mail-fc @if (in_array($key, $this->filters, true)) is-on @endif" wire:click="toggleFilter('{{ $key }}')" aria-pressed="{{ in_array($key, $this->filters, true) ? 'true' : 'false' }}" wire:key="filter-{{ $key }}">{{ $name }}</button>
                         @endforeach
                     </div>
+
+                    @if ($inTrash && $trashDays > 0)
+                        <p class="zz-mail-hint zz-mail-trashhint">{{ __('Conversations in Trash are deleted for good after :days days.', ['days' => $trashDays]) }}</p>
+                    @endif
 
                     @if ($rows->isEmpty())
                         <div class="zz-mail-none">
@@ -275,8 +286,11 @@
                                         </span>
                                         <span class="zz-mail-sub">{{ $row->subject !== '' ? $row->subject : __('(no subject)') }}</span>
                                         <span class="zz-mail-snip">{{ $isDraftOnly ? __('Draft').' · ' : '' }}{{ $row->snippet }}</span>
-                                        @if ($row->labels->isNotEmpty() || $row->has_attachments || ($row->status !== 'open') || $row->assignee)
+                                        @if ($row->labels->isNotEmpty() || $row->has_attachments || ($row->status !== 'open') || $row->assignee || $row->snoozed_until)
                                             <span class="zz-mail-chiprow">
+                                                @if ($row->snoozed_until)
+                                                    <span class="zz-mail-chip" title="{{ __('Snoozed until :time', ['time' => $this->longTime($row->snoozed_until)]) }}"><x-filament::icon icon="heroicon-m-clock" class="zz-mail-i" aria-hidden="true" />{{ $this->shortTime($row->snoozed_until) }}</span>
+                                                @endif
                                                 @foreach ($row->labels as $label)
                                                     <span class="zz-mail-chip"><i class="zz-mail-c-{{ $label->color }}" aria-hidden="true"></i>{{ $label->name }}</span>
                                                 @endforeach
@@ -326,6 +340,7 @@
                                 @else
                                     @if ($thread->folder === 'inbox')
                                         <button type="button" class="zz-mail-ib" wire:click="perform('archive', [{{ $thread->id }}])" aria-label="{{ __('Archive') }}" title="{{ __('Archive') }}"><x-filament::icon icon="heroicon-o-archive-box-arrow-down" class="zz-mail-i" aria-hidden="true" /></button>
+                                        @include('filament.pages.email-inbox-snooze', ['target' => 'thread'])
                                     @else
                                         <button type="button" class="zz-mail-ib" wire:click="perform('inbox', [{{ $thread->id }}])" aria-label="{{ __('Move to Inbox') }}" title="{{ __('Move to Inbox') }}"><x-filament::icon icon="heroicon-o-inbox-arrow-down" class="zz-mail-i" aria-hidden="true" /></button>
                                     @endif
@@ -410,6 +425,14 @@
                                             @endif
                                         </span>
                                     @endforeach
+                                    @if ($thread->snoozed_until)
+                                        <span class="zz-mail-chip">
+                                            <x-filament::icon icon="heroicon-m-clock" class="zz-mail-i" aria-hidden="true" />{{ __('Snoozed until :time', ['time' => $this->longTime($thread->snoozed_until)]) }}
+                                            @if ($canManage)
+                                                <button type="button" class="zz-mail-chipx" wire:click="perform('unsnooze', [{{ $thread->id }}])" aria-label="{{ __('Unsnooze') }}">×</button>
+                                            @endif
+                                        </span>
+                                    @endif
                                     @if ($thread->folder === 'spam')<span class="zz-mail-chip">{{ __('Spam') }}</span>@endif
                                     @if ($thread->folder === 'trash')<span class="zz-mail-chip">{{ __('Trash') }}</span>@endif
                                 </div>

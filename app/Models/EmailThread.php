@@ -11,7 +11,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * One conversation in the Email inbox: the messages that belong together (joined by their In-Reply-To /
  * References headers, else by subject and sender), with its folder, stars, assignee, status and the customer,
- * lead and order it is about. Sent, Drafts, Starred and All mail are views over these rows, not folders.
+ * lead and order it is about. Sent, Drafts, Starred, Snoozed and All mail are views over these rows, not folders.
+ * A snoozed conversation stays in the Inbox folder but is hidden from the Inbox view until `snoozed_until`.
  */
 class EmailThread extends Model
 {
@@ -38,7 +39,7 @@ class EmailThread extends Model
     protected $fillable = [
         'company_id', 'mailbox_id', 'subject', 'snippet', 'folder', 'is_starred', 'unread_count', 'message_count',
         'has_attachments', 'last_message_at', 'last_inbound_at', 'last_outbound_at', 'contact_email', 'contact_name',
-        'assigned_to', 'status', 'customer_id', 'lead_id', 'order_id',
+        'assigned_to', 'status', 'customer_id', 'lead_id', 'order_id', 'snoozed_until', 'snoozed_by', 'trashed_at',
     ];
 
     protected function casts(): array
@@ -51,6 +52,8 @@ class EmailThread extends Model
             'last_message_at' => 'datetime',
             'last_inbound_at' => 'datetime',
             'last_outbound_at' => 'datetime',
+            'snoozed_until' => 'datetime',
+            'trashed_at' => 'datetime',
         ];
     }
 
@@ -87,6 +90,12 @@ class EmailThread extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    /** Hidden from the Inbox until the snooze time (the Snoozed view lists it meanwhile). */
+    public function isSnoozed(): bool
+    {
+        return $this->snoozed_until !== null;
     }
 
     public function isUnread(): bool

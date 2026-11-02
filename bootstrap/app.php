@@ -3,9 +3,9 @@
 use App\Http\Middleware\InvalidateStaleCustomerSession;
 use App\Http\Middleware\PreventDemoModeWrites;
 use App\Http\Middleware\RestrictPortalHosts;
-use App\Http\Middleware\SetResellerPortalLocale;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetCurrentCompany;
+use App\Http\Middleware\SetResellerPortalLocale;
 use App\Models\BackupRun;
 use App\Services\GoogleDriveBackupService;
 use App\Services\OffsiteBackupService;
@@ -108,6 +108,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('crm:process-sales-follow-ups')->everyFiveMinutes()->withoutOverlapping()->onOneServer();
         $schedule->command('crm:revert-conversations')->everyMinute()->withoutOverlapping()->onOneServer();
         $schedule->command('email:send-due')->everyMinute()->withoutOverlapping()->onOneServer();
+        $schedule->command('email:wake-snoozed')->everyMinute()->withoutOverlapping()->onOneServer();
+        $schedule->command('email:purge-trash')->dailyAt('03:40')->withoutOverlapping()->onOneServer();
         $schedule->command('storefront:retry-meta-events')
             ->everyTenMinutes()
             ->withoutOverlapping()

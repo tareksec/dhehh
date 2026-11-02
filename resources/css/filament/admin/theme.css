@@ -1430,6 +1430,40 @@ html:not(.zz-sidebar-navigation-ready) .zz-sidebar-menu-parent.fi-sidebar-route-
     font-size: 12px;
 }
 
+.zz-mail-trashhint {
+    margin: 0;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--m-line);
+}
+
+.zz-mail-when {
+    margin-inline-start: 8px;
+    color: var(--m-ink3);
+    font-size: 12px;
+}
+
+.zz-mail-snooze-custom {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--m-line);
+}
+
+.zz-mail-snooze-custom label {
+    color: var(--m-ink3);
+    font-size: 12px;
+}
+
+.zz-mail-snooze-custom input {
+    padding: 6px 8px;
+    border: 1px solid var(--m-line);
+    border-radius: 8px;
+    background: var(--m-surface);
+    color: var(--m-ink);
+    font-size: 13px;
+}
+
 .zz-mail-status {
     display: flex;
     flex-direction: column;

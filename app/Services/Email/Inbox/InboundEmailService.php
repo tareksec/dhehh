@@ -193,7 +193,12 @@ class InboundEmailService
         // A reply to a conversation that was archived or deleted brings it back; one marked as spam stays there.
         if (in_array($thread->folder, [EmailThread::FOLDER_ARCHIVED, EmailThread::FOLDER_TRASH], true)) {
             $thread->folder = EmailThread::FOLDER_INBOX;
+            $thread->trashed_at = null;
         }
+
+        // A snoozed conversation that gets a new message is back in the Inbox at once, as in Gmail.
+        $thread->snoozed_until = null;
+        $thread->snoozed_by = null;
 
         // A customer who writes again after the staff closed the conversation reopens it.
         if ($thread->status === EmailThread::STATUS_CLOSED) {
