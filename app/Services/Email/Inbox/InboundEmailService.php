@@ -2,11 +2,14 @@
 
 namespace App\Services\Email\Inbox;
 
+use App\Filament\Pages\EmailInbox;
 use App\Models\Company;
 use App\Models\EmailAttachment;
 use App\Models\EmailMailbox;
 use App\Models\EmailMessage;
 use App\Models\EmailThread;
+use App\Models\User;
+use App\Services\BusinessNotificationService;
 use App\Services\CompanyContext;
 use App\Services\CompanyStorageService;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -59,7 +62,10 @@ class InboundEmailService
                     $stored[] = [$attachment, $this->storage->putPrivate($company, 'email-attachments', Str::uuid()->toString().'.bin', $attachment->content)];
                 }
 
-                return DB::transaction(fn (): InboundEmailResult => $this->store($mailbox, $email, $stored));
+                $result = DB::transaction(fn (): InboundEmailResult => $this->store($mailbox, $email, $stored));
+                $this->alert($mailbox, $company, $result);
+
+                return $result;
             } catch (UniqueConstraintViolationException) {
                 // The same message arrived twice at the same moment: the first one won.
                 $this->discardFiles($company, $stored);
@@ -75,6 +81,41 @@ class InboundEmailService
                 throw $exception;
             }
         });
+    }
+
+    /**
+     * Tells staff a new message came in (the ERP bell and push), when the mailbox's "Alert staff" setting is on: the one it
+     * is assigned to, else everyone who may answer CRM mail. Not for a duplicate, and not for spam or the Trash. The message
+     * is already kept, so nothing here may fail the delivery.
+     */
+    protected function alert(EmailMailbox $mailbox, Company $company, InboundEmailResult $result): void
+    {
+        if ($result->duplicate || ! $mailbox->setting('notify')) {
+            return;
+        }
+
+        try {
+            $thread = EmailThread::query()->find($result->message->thread_id);
+
+            if ($thread === null || $thread->folder !== EmailThread::FOLDER_INBOX) {
+                return;
+            }
+
+            $message = $result->message;
+            $title = __('New email from :name', ['name' => $message->from_name ?: $message->from_address]);
+            $body = filled($message->subject) ? (string) $message->subject : __('(no subject)');
+            $url = EmailInbox::getUrl(['mailbox' => $mailbox->getKey(), 'thread' => $thread->getKey()], panel: 'admin');
+            $notifications = app(BusinessNotificationService::class);
+            $assignee = $thread->assigned_to ? User::query()->find($thread->assigned_to) : null;
+
+            if ($assignee !== null) {
+                $notifications->notifyUser($assignee, 'email.received', $title, $body, ['thread_id' => (string) $thread->getKey()], $url, __('Open email'));
+            } else {
+                $notifications->notifyCompany($company, 'email.received', 'crm.manage', $title, $body, ['thread_id' => (string) $thread->getKey()], $url, __('Open email'));
+            }
+        } catch (Throwable $exception) {
+            report($exception);
+        }
     }
 
     /** @param  array<int, array{0: ParsedAttachment, 1: string}>  $stored */

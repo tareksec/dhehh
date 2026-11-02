@@ -106,7 +106,7 @@ class OutboundEmailService
             'to_addresses' => $to,
             'cc_addresses' => $cc === [] ? null : $cc,
             'subject' => $this->prefixed('Re', (string) $original->subject),
-            'body_html' => $this->signatureBlock($mailbox).$this->quote($original),
+            'body_html' => ($mailbox->setting('signature_on_replies') ? $this->signatureBlock($mailbox) : '<p></p>').$this->quote($original),
             'in_reply_to' => $original->message_id,
             'references' => trim(implode(' ', array_slice(array_filter([...preg_split('/\s+/', (string) $original->references, -1, PREG_SPLIT_NO_EMPTY), $original->message_id]), -20))) ?: null,
         ]);

@@ -2,7 +2,29 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-02 (latest) - Email inbox, step 5b: assignee, status and the customer panel
+## 2026-11-02 (latest) - Email inbox, step 6: Settings -> Email inbox (mailboxes, forwarding address, signature, behaviour, labels)
+
+Plan: `docs/email-inbox-plan.md`. Steps 1-5 are commits `131d66a`, `4af2d2c`, `d080370`, `deb331a`, `cfc196b` and `631a60f` on the feature branch `ccr-3799b463-p4pv7n`.
+
+Now a mailbox can be made by the owner (no developer needed), and the page tells step by step how to connect it to Cloudflare.
+
+Decisions made while building (owner please read):
+
+- **New mail alerts staff by default** (ERP bell + push to everyone with "CRM Inbox: Reply and Manage"; only the assignee when the conversation is assigned). A mailbox that receives many newsletters will be noisy: switch **Alert staff on new mail** off in Settings -> Email inbox. Spam and Trash are never alerted.
+- **A mailbox cannot be deleted from the page**, only switched off (**Mailbox is on**), because deleting it would delete all its mail. A developer can still remove one.
+- **Receiving by IMAP (the ERP checking a mailbox) is not built**; the page offers instant forwarding (Cloudflare) or send only. IMAP and Amazon SES inbound are Phase 2.
+- **Reading pane position** (right / off) from the canvas is not offered: only the right-hand pane is built, and a setting that does nothing would mislead.
+- The **forwarding address cannot be shown again** (only its hash is stored). If it is lost, **New token** makes another, and the Cloudflare Worker's `INBOX_URL` must be updated.
+- The **test mail** is sent *to* the mailbox address from the site's email account. It only comes back into the inbox when Cloudflare Email Routing and the Worker are already set up; before that it shows whether sending works.
+- The signature is plain text (lines); in a message it is put under "-- ".
+
+Needs Bangla review: the six setup steps and "তাৎক্ষণিক ফরওয়ার্ডিং" (Instant forwarding).
+
+Not verified: the Cloudflare steps themselves and the Worker on real Cloudflare; the push notification on a real device; adding a mailbox for a company with two sites.
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main`.
+
+## 2026-11-02 - Email inbox, step 5b: assignee, status and the customer panel
 
 Plan: `docs/email-inbox-plan.md`. Step 5a (writing) is commit `cfc196b`; this is 5b on the same branch `ccr-3799b463-p4pv7n`.
 

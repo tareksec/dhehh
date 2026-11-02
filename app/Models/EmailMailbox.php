@@ -30,6 +30,7 @@ class EmailMailbox extends Model
         'match_customers' => true,
         'load_remote_images' => false,
         'notify' => true,
+        'signature_on_replies' => true,
     ];
 
     protected $fillable = [
