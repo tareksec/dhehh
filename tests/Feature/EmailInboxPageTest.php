@@ -16,13 +16,13 @@ use App\Services\CompanyContext;
 use App\Services\CompanyStorageService;
 use App\Services\Email\Inbox\EmailMessageView;
 use App\Services\Email\Inbox\EmailThreadActions;
-use App\Services\Email\Inbox\EmailThreadStats;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Livewire\Livewire;
+use Tests\Feature\Concerns\BuildsEmailInbox;
 use Tests\TestCase;
 
 /**
@@ -32,6 +32,7 @@ use Tests\TestCase;
  */
 class EmailInboxPageTest extends TestCase
 {
+    use BuildsEmailInbox;
     use RefreshDatabase;
 
     private Company $company;
@@ -631,178 +632,10 @@ class EmailInboxPageTest extends TestCase
         $this->assertSame(['Second', 'First'], $page->instance()->threads->pluck('subject')->all());
     }
 
-    // --- Helpers --------------------------------------------------------------------------------------
-
     private function badge(): ?string
     {
         $method = new \ReflectionMethod(EmailInbox::class, 'navigationBadge');
 
         return $method->invoke(null);
-    }
-
-    /** A conversation with one received message. */
-    private function received(
-        string $subject,
-        string $from = 'rahim@x.test',
-        ?string $name = 'Rahim',
-        string $text = 'Hello',
-        ?string $html = null,
-        string $folder = EmailThread::FOLDER_INBOX,
-        bool $starred = false,
-        bool $read = false,
-        int $files = 0,
-        ?int $assignedTo = null,
-        string $status = EmailThread::STATUS_OPEN,
-        ?Customer $customer = null,
-        array $labels = [],
-        ?Company $company = null,
-        ?EmailMailbox $mailbox = null,
-        ?string $messageId = null,
-        ?\DateTimeInterface $when = null,
-    ): EmailThread {
-        $company ??= $this->company;
-        $mailbox ??= $this->mailbox;
-        $thread = EmailThread::withoutGlobalScopes()->create([
-            'company_id' => $company->getKey(),
-            'mailbox_id' => $mailbox->getKey(),
-            'subject' => $subject,
-            'folder' => $folder,
-            'is_starred' => $starred,
-            'contact_email' => $from,
-            'contact_name' => $name,
-            'assigned_to' => $assignedTo,
-            'status' => $status,
-            'customer_id' => $customer?->getKey(),
-        ]);
-
-        $message = $this->message($thread, EmailMessage::IN, $text, from: $from, name: $name, read: $read, html: $html, when: $when, messageId: $messageId ?? uniqid('m').'@x.test', company: $company, mailbox: $mailbox);
-
-        for ($i = 0; $i < $files; $i++) {
-            $this->attach($message, "file{$i}.pdf", 'PDF');
-        }
-
-        foreach ($labels as $label) {
-            $thread->labels()->attach($label->getKey());
-        }
-
-        return $this->refreshed($thread);
-    }
-
-    private function sentOnly(string $subject): EmailThread
-    {
-        $thread = EmailThread::query()->create(['mailbox_id' => $this->mailbox->getKey(), 'subject' => $subject, 'folder' => EmailThread::FOLDER_ARCHIVED, 'contact_email' => 'karim@y.test']);
-        $this->message($thread, EmailMessage::OUT, 'Hello from us', from: 'info@shop.test', status: EmailMessage::STATUS_SENT, read: true);
-
-        return $this->refreshed($thread);
-    }
-
-    private function outgoing(EmailThread $thread, string $text): EmailMessage
-    {
-        $message = $this->message($thread, EmailMessage::OUT, $text, from: 'info@shop.test', status: EmailMessage::STATUS_SENT, read: true, when: now()->addMinute());
-        $this->refreshed($thread);
-
-        return $message;
-    }
-
-    private function draftOnly(string $subject, User $user): EmailThread
-    {
-        $thread = EmailThread::query()->create(['mailbox_id' => $this->mailbox->getKey(), 'subject' => $subject, 'folder' => EmailThread::FOLDER_ARCHIVED]);
-        $this->message($thread, EmailMessage::OUT, 'Draft text', from: 'info@shop.test', kind: EmailMessage::KIND_DRAFT, status: EmailMessage::STATUS_DRAFT, read: true, userId: $user->getKey());
-
-        return $thread;
-    }
-
-    private function message(
-        EmailThread $thread,
-        string $direction,
-        string $text,
-        string $from = 'rahim@x.test',
-        ?string $name = null,
-        string $kind = EmailMessage::KIND_MESSAGE,
-        ?string $status = null,
-        bool $read = false,
-        ?string $html = null,
-        ?\DateTimeInterface $when = null,
-        ?string $messageId = null,
-        ?string $error = null,
-        ?int $userId = null,
-        ?Company $company = null,
-        ?EmailMailbox $mailbox = null,
-    ): EmailMessage {
-        $message = EmailMessage::withoutGlobalScopes()->create([
-            'company_id' => ($company ?? $this->company)->getKey(),
-            'thread_id' => $thread->getKey(),
-            'mailbox_id' => ($mailbox ?? $this->mailbox)->getKey(),
-            'direction' => $direction,
-            'kind' => $kind,
-            'status' => $status ?? ($direction === EmailMessage::IN ? EmailMessage::STATUS_RECEIVED : EmailMessage::STATUS_SENT),
-            'message_id' => $messageId,
-            'from_address' => $from,
-            'from_name' => $name,
-            'to_addresses' => [['address' => 'info@shop.test', 'name' => null]],
-            'subject' => $thread->subject,
-            'body_text' => $text,
-            'body_html' => $html,
-            'is_read' => $read,
-            'sent_at' => $when ?? now()->subMinutes(5),
-            'error' => $error,
-            'user_id' => $userId,
-        ]);
-
-        if ($kind === EmailMessage::KIND_MESSAGE) {
-            $this->stats($thread);
-        }
-
-        return $message;
-    }
-
-    private function refreshed(EmailThread $thread): EmailThread
-    {
-        return $this->stats($thread);
-    }
-
-    /** A conversation's counters, worked out inside its own company. */
-    private function stats(EmailThread $thread): EmailThread
-    {
-        $thread = EmailThread::withoutGlobalScopes()->findOrFail($thread->getKey());
-
-        return app(CompanyContext::class)->within(Company::query()->findOrFail($thread->company_id), fn () => app(EmailThreadStats::class)->refresh($thread));
-    }
-
-    private function attach(EmailMessage $message, string $name, string $content, string $mime = 'application/pdf', ?string $contentId = null, bool $inline = false): EmailAttachment
-    {
-        $company = Company::query()->findOrFail($message->company_id);
-        $path = app(CompanyStorageService::class)->putPrivate($company, 'email-attachments', $name, $content);
-
-        $file = EmailAttachment::withoutGlobalScopes()->create([
-            'company_id' => $message->company_id,
-            'message_id' => $message->getKey(),
-            'filename' => $name,
-            'mime' => $mime,
-            'size' => strlen($content),
-            'path' => $path,
-            'content_id' => $contentId,
-            'is_inline' => $inline,
-        ]);
-
-        $this->stats(EmailThread::withoutGlobalScopes()->findOrFail($message->thread_id));
-
-        return $file;
-    }
-
-    private function makeCompany(string $name, string $slug): Company
-    {
-        return Company::query()->create(['name' => $name, 'slug' => $slug, 'invoice_prefix' => strtoupper(substr($slug, 0, 3)), 'currency' => 'BDT', 'timezone' => 'UTC', 'is_active' => true]);
-    }
-
-    private function makeMailbox(Company $company, string $address): EmailMailbox
-    {
-        return EmailMailbox::withoutGlobalScopes()->create([
-            'company_id' => $company->getKey(),
-            'name' => $address,
-            'address' => $address,
-            'receive_mode' => EmailMailbox::RECEIVE_WEBHOOK,
-            'is_active' => true,
-        ]);
     }
 }

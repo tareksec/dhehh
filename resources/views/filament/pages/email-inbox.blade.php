@@ -100,6 +100,13 @@
 
                 {{-- Folders and labels --}}
                 <aside class="zz-mail-folders" x-bind:class="{ 'is-open': menu }" aria-label="{{ __('Folders and labels') }}">
+                    @if ($canManage)
+                        <button type="button" class="zz-mail-compose" wire:click="composeNew" x-on:click="menu = false">
+                            <x-filament::icon icon="heroicon-o-pencil-square" class="zz-mail-i" aria-hidden="true" />
+                            {{ __('Compose') }}
+                        </button>
+                    @endif
+
                     @foreach ($folders as [$key, $name, $icon, $count])
                         @php $on = $this->folder === $key && $activeLabel === null; @endphp
                         <button type="button" class="zz-mail-nav @if ($on) is-on @endif" wire:click="showFolder('{{ $key }}')" wire:key="folder-{{ $key }}" x-on:click="menu = false" @if ($on) aria-current="page" @endif>
@@ -283,7 +290,8 @@
                     @if ($thread)
                         @php
                             $messages = $this->messages;
-                            $lastId = $messages->where('kind', '!=', 'note')->last()?->id;
+                            // The newest real message: not a note, not a draft.
+                            $lastId = $messages->where('kind', 'message')->last()?->id;
                         @endphp
                         <div class="zz-mail-bar">
                             <button type="button" class="zz-mail-ib zz-mail-back" wire:click="closeThread" aria-label="{{ __('Back to the list') }}">
@@ -347,6 +355,37 @@
                             @foreach ($messages as $message)
                                 @include('filament.pages.email-inbox-message', ['message' => $message, 'isLast' => $message->id === $lastId])
                             @endforeach
+
+                            @if ($canManage && $lastId && ! in_array($thread->folder, ['spam', 'trash'], true))
+                                @php $target = $messages->firstWhere('id', $lastId); @endphp
+                                <div class="zz-mail-actions" wire:key="thread-actions-{{ $thread->id }}">
+                                    <button type="button" class="zz-mail-btn" wire:click="composeReply({{ $lastId }})">
+                                        <x-filament::icon icon="heroicon-o-arrow-uturn-left" class="zz-mail-i zz-mail-i-s" aria-hidden="true" />{{ __('Reply') }}
+                                    </button>
+                                    @if ($this->replyAllMakesSense($target))
+                                        <button type="button" class="zz-mail-btn zz-mail-btn-quiet" wire:click="composeReply({{ $lastId }}, true)">
+                                            <x-filament::icon icon="heroicon-o-arrow-uturn-left" class="zz-mail-i zz-mail-i-s" aria-hidden="true" />{{ __('Reply all') }}
+                                        </button>
+                                    @endif
+                                    <button type="button" class="zz-mail-btn zz-mail-btn-quiet" wire:click="composeForward({{ $lastId }})">
+                                        <x-filament::icon icon="heroicon-o-arrow-uturn-right" class="zz-mail-i zz-mail-i-s" aria-hidden="true" />{{ __('Forward') }}
+                                    </button>
+                                    <button type="button" class="zz-mail-btn zz-mail-btn-quiet" wire:click="$toggle('noteOpen')" aria-expanded="{{ $this->noteOpen ? 'true' : 'false' }}">
+                                        <x-filament::icon icon="heroicon-o-lock-closed" class="zz-mail-i zz-mail-i-s" aria-hidden="true" />{{ __('Add note') }}
+                                    </button>
+                                </div>
+
+                                @if ($this->noteOpen)
+                                    <form class="zz-mail-noteform" wire:submit="addNote" wire:key="note-form">
+                                        <label for="zz-mail-note-text">{{ __('Internal note, only staff see it') }}</label>
+                                        <textarea id="zz-mail-note-text" wire:model="noteText" rows="3" maxlength="5000" placeholder="{{ __('Write a note for your team') }}"></textarea>
+                                        <div class="zz-mail-noteform-row">
+                                            <button type="submit" class="zz-mail-btn">{{ __('Save note') }}</button>
+                                            <button type="button" class="zz-mail-btn zz-mail-btn-quiet" wire:click="$set('noteOpen', false)">{{ __('Cancel') }}</button>
+                                        </div>
+                                    </form>
+                                @endif
+                            @endif
                         </div>
                     @else
                         <div class="zz-mail-none zz-mail-pick">
@@ -357,7 +396,18 @@
                 </section>
             </div>
 
-            @if ($this->undo)
+            @if ($this->composeId !== null && $canManage)
+                @include('filament.pages.email-inbox-compose')
+            @endif
+
+            @if ($this->sentUndo)
+                <div class="zz-mail-toast" role="status" wire:key="sent-{{ $this->sentUndo['id'] }}"
+                    x-data="{ left: {{ (int) $this->sentUndo['seconds'] }} }"
+                    x-init="const timer = setInterval(() => { left--; if (left <= 0) { clearInterval(timer); $wire.deliverDue() } }, 1000)">
+                    <span>{{ __('Message sent') }}</span>
+                    <button type="button" wire:click="undoSend({{ (int) $this->sentUndo['id'] }})">{{ __('Undo') }} <span x-text="left" aria-hidden="true"></span></button>
+                </div>
+            @elseif ($this->undo)
                 <div class="zz-mail-toast" role="status" x-data x-init="setTimeout(() => $wire.dismissUndo(), 8000)" wire:key="undo-{{ md5(json_encode($this->undo)) }}">
                     <span>{{ $this->undo['message'] }}</span>
                     <button type="button" wire:click="undoMove">{{ __('Undo') }}</button>

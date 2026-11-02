@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Filament\Clusters\Crm;
 use App\Filament\Concerns\HasGuardedNavigationBadge;
+use App\Filament\Pages\Concerns\ComposesEmail;
 use App\Models\Company;
 use App\Models\EmailLabel;
 use App\Models\EmailMailbox;
@@ -35,6 +36,7 @@ use Livewire\Attributes\Url;
  */
 class EmailInbox extends Page
 {
+    use ComposesEmail;
     use HasGuardedNavigationBadge;
 
     public const PAGE_SIZE = 30;
@@ -214,6 +216,17 @@ class EmailInbox extends Page
             ->orderByRaw('COALESCE(sent_at, created_at)')
             ->orderBy('id')
             ->get();
+    }
+
+    /** "Reply all" is offered when someone besides the sender (and ourselves) is on the message. */
+    public function replyAllMakesSense(EmailMessage $message): bool
+    {
+        $own = mb_strtolower((string) $this->mailbox?->address);
+        $others = collect([...(array) $message->to_addresses, ...(array) $message->cc_addresses])
+            ->pluck('address')->map(fn ($address): string => mb_strtolower((string) $address))
+            ->reject(fn (string $address): bool => $address === $own)->unique();
+
+        return $message->direction === EmailMessage::IN ? $others->isNotEmpty() : $others->count() > 1 || ! empty($message->cc_addresses);
     }
 
     public function messageView(): EmailMessageView
@@ -626,6 +639,6 @@ class EmailInbox extends Page
 
     protected function forgetData(): void
     {
-        unset($this->threads, $this->counts, $this->thread, $this->messages);
+        unset($this->threads, $this->counts, $this->thread, $this->messages, $this->composeFiles, $this->quickReplies);
     }
 }

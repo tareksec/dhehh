@@ -29,6 +29,9 @@
         </div>
         <div class="zz-mail-msgbody">
             <div class="zz-mail-text">{!! $viewer->text($message) !!}</div>
+            @if ($this->canManage() && $message->user_id === auth()->id())
+                <div><button type="button" class="zz-mail-btn zz-mail-btn-quiet" wire:click="editDraft({{ $message->id }})">{{ __('Edit draft') }}</button></div>
+            @endif
         </div>
     </article>
 @else
@@ -66,6 +69,12 @@
             <div class="zz-mail-msgbody">
                 @if ($message->status === 'failed' && $message->error)
                     <p class="zz-mail-alert" role="alert">{{ $message->error }}</p>
+                @endif
+                @if ($this->canManage() && $message->status === 'failed')
+                    <div><button type="button" class="zz-mail-btn zz-mail-btn-quiet" wire:click="retryMessage({{ $message->id }})">{{ __('Send again') }}</button></div>
+                @endif
+                @if ($this->canManage() && $message->status === 'pending' && $message->user_id === auth()->id())
+                    <div><button type="button" class="zz-mail-btn zz-mail-btn-quiet" wire:click="undoSend({{ $message->id }})">{{ __('Undo send') }}</button></div>
                 @endif
 
                 <dl class="zz-mail-details">

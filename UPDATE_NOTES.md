@@ -2,7 +2,26 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-02 (latest) - Email inbox, step 4: the Email page (folders, list, conversation, labels, search)
+## 2026-11-02 (latest) - Email inbox, step 5a: writing mail in the Email page (compose, reply, forward, drafts, undo send, notes)
+
+Plan: `docs/email-inbox-plan.md`. Steps 1-4 are commits `131d66a`, `4af2d2c`, `d080370` and `deb331a` on the feature branch `ccr-3799b463-p4pv7n`. Step 5 is split in two commits: 5a (this one) is writing; 5b is the customer panel, assigning and status.
+
+Decisions made while building (owner please read):
+
+- **Undo send:** the **Undo** bar counts down in the page; when it reaches 0 the page sends the message. If the person closes the page first, the scheduled `email:send-due` (every minute) sends it, so a message is never stuck, but it may go up to a minute after the countdown.
+- **Quick Replies go in at the cursor** (at the top of the message, above the signature, when the person has not clicked in the text). Quick Replies have no title in the database, only a "shortcut" and a text; the list shows both.
+- **Closing an unchanged compose window deletes the draft** (a new message nobody typed in; a reply that was only opened). A draft that was changed, or opened again from Drafts, is kept.
+- **Drafts are private:** staff see only their own drafts. Two people can each have a draft reply in the same conversation.
+- **To / Cc / Bcc are plain text boxes** (addresses separated by commas or semicolons, "Name <address>" is understood). Address suggestions from customers and earlier mail are not built yet.
+- A mailbox's **signature** is added when a draft is started, from the mailbox settings (step 6); until then it is empty unless a developer sets it.
+
+Needs Bangla review: "দ্রুত উত্তর" (Quick replies), "পাঠানো ফেরান" (Undo send), "নতুন মেইল লিখুন" (Compose).
+
+Not verified: sending through a real SMTP server from the page (the tests use the mail fake); the compose window on a real phone keyboard (only a 390 px desktop browser); pasting formatted text from Word into the editor.
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main`.
+
+## 2026-11-02 - Email inbox, step 4: the Email page (folders, list, conversation, labels, search)
 
 Plan: `docs/email-inbox-plan.md`. Steps 1-3 are commits `131d66a`, `4af2d2c` and `d080370` on the feature branch `ccr-3799b463-p4pv7n`.
 
