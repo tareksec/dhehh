@@ -2,7 +2,25 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-02 (latest) - Email inbox, step 1: Email delivery page for any provider
+## 2026-11-02 (latest) - Email inbox, step 2: receiving mail (tables, parser, webhook, Worker)
+
+Plan: `docs/email-inbox-plan.md`. Step 1 (Email delivery page) is commit `131d66a` on the feature branch `ccr-3799b463-p4pv7n`.
+
+Step 2 (this commit): the receiving side, nothing visible to staff yet. Migration `2026_11_02_100000_create_email_inbox_tables` (mailboxes, threads, messages, attachments, labels, label pivot); models `EmailMailbox`, `EmailThread`, `EmailMessage`, `EmailAttachment`, `EmailLabel` (company-owned, in the isolation test); `App\Services\Email\Inbox\*` (parser, sanitizer, thread resolver, contact matcher, inbound service); `InboundEmailController` on `POST /webhooks/email/{mailbox}/{token}`; the Cloudflare Worker `docs/email-inbox/cloudflare-email-worker.js` and the guide `docs/email-inbox-setup.md`. New direct dependencies: `zbateson/mail-mime-parser` ^4.0, `symfony/html-sanitizer` ^8.1.
+
+Decisions made while building (owner please read):
+
+- The Worker posts the **raw message** and the ERP parses it, so the Worker stays a pasteable 40-line file with no npm packages and the same parser serves any future source (IMAP, SES inbound).
+- A message over **15 MB** is refused (nginx and PHP allow 16 MB per request); the Worker then forwards it to the fallback address, or rejects it when none is set.
+- `<style>` blocks in received HTML are removed (inline `style` stays). Some newsletters will look plainer than in Gmail. The next steps show the mail in a sandboxed frame that also blocks scripts and remote pictures.
+- A reply joins its conversation by `In-Reply-To` / `References`; without them by the same subject (no Re:/Fwd:) from the same address within 14 days. A message that arrives for an archived or deleted conversation brings it back to the Inbox and reopens a closed one; spam stays spam.
+- The mailbox token is shown once and only its SHA-256 hash is kept. A mailbox is made from Settings → Email in step 6; until then only a developer can create one.
+
+Not verified: the Worker was run against stand-in messages (success, ERP error with and without fallback, too large) but not on Cloudflare itself. Real mail (large HTML newsletters, unusual character sets) has not been tried; only the `.eml` fixtures in `tests/Fixtures/email`.
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main`.
+
+## 2026-11-02 - Email inbox, step 1: Email delivery page for any provider
 
 Owner request (2026-11-02): a Gmail-like **Email** inbox in the ERP, and the SES usage dashboard made provider-neutral. The design was approved on the canvas "ERP Email Inbox Design"; the plan is `docs/email-inbox-plan.md` (7 steps, one commit each, all on the feature branch `ccr-3799b463-p4pv7n`).
 

@@ -1,0 +1,28 @@
+From: Nusrat Jahan <nusrat@example.test>
+To: info@zamzamgadgetbd.com
+Subject: Order question
+Date: Mon, 02 Nov 2026 09:15:00 +0600
+Message-ID: <alt-1@example.test>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="BOUNDARY-ALT"
+
+--BOUNDARY-ALT
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+Hello team,
+
+Where is my order? Thanks.
+--BOUNDARY-ALT
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+<html><body onload="steal()"><p style="color:#c00">Where is <b>my order</b>?</p>
+<script>alert(1)</script>
+<a href="javascript:alert(2)">bad link</a> <a href="https://shop.test/track">tracking</a>
+<img src="https://tracker.example/pixel.gif" onerror="alert(3)">
+<form action="https://evil.example"><input name="x"></form>
+<iframe src="https://evil.example"></iframe>
+<table><tr><td align="center">cell</td></tr></table>
+</body></html>
+--BOUNDARY-ALT--

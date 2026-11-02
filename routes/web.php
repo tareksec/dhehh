@@ -31,6 +31,7 @@ use App\Http\Controllers\CourierHandoverSheetController;
 use App\Http\Controllers\CourierWebhookController;
 use App\Http\Controllers\DocumentationGuideController;
 use App\Http\Controllers\FirebaseServiceWorkerController;
+use App\Http\Controllers\InboundEmailController;
 use App\Http\Controllers\InstallController;
 use App\Http\Controllers\MetaWebhookController;
 use App\Http\Controllers\MobileCrashReportController;
@@ -61,6 +62,7 @@ use App\Http\Controllers\Storefront\ProductShowController as StorefrontProductSh
 use App\Http\Controllers\Storefront\ResellerController;
 use App\Http\Controllers\Storefront\ResellerStoreController;
 use App\Http\Controllers\Storefront\SeoFilesController;
+use App\Http\Controllers\TlsAskController;
 use App\Http\Controllers\WhatsAppWebWebhookController;
 use App\Http\Controllers\WooCommerceWebhookController;
 use App\Http\Controllers\ZiniPayWebhookController;
@@ -86,7 +88,7 @@ Route::middleware('signed')
     ->get('/quotation/{quotationNumber}', [QuotationPublicController::class, 'show'])
     ->name('quotation.public');
 
-Route::get('/internal/tls-ask', \App\Http\Controllers\TlsAskController::class)
+Route::get('/internal/tls-ask', TlsAskController::class)
     ->middleware('throttle:60,1')
     ->name('internal.tls-ask');
 
@@ -573,6 +575,12 @@ Route::post('/webhooks/ses/{setting}/{token}', SesWebhookController::class)
     ->whereNumber('setting')
     ->middleware('throttle:600,1')
     ->name('webhooks.ses');
+
+// A received email handed over by the Cloudflare Email Routing Worker (see InboundEmailController).
+Route::post('/webhooks/email/{mailbox}/{token}', InboundEmailController::class)
+    ->whereNumber('mailbox')
+    ->middleware('throttle:600,1')
+    ->name('webhooks.email');
 
 Route::post('/webhooks/woocommerce/{company}', WooCommerceWebhookController::class)
     ->middleware('throttle:120,1')
