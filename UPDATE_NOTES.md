@@ -2,7 +2,30 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-02 (latest) - Email inbox, step 3: writing and sending mail (reply, reply all, forward, drafts, undo send)
+## 2026-11-02 (latest) - Email inbox, step 4: the Email page (folders, list, conversation, labels, search)
+
+Plan: `docs/email-inbox-plan.md`. Steps 1-3 are commits `131d66a`, `4af2d2c` and `d080370` on the feature branch `ccr-3799b463-p4pv7n`.
+
+Step 4 (this commit): **CRM -> Email**, the first screen staff see. Reading and organising only; writing (the Compose / Reply buttons), the customer panel, assigning, status and notes arrive in step 5, the mailbox settings page in step 6, so until then a mailbox is made by a developer.
+
+Decisions made while building (owner please read):
+
+- **Who may do what.** Open and read: `crm.view`. Star, move, label, delete: `crm.manage` ("CRM Inbox: Reply and Manage"). Opening a conversation marks it read for everyone, as in a shared Gmail inbox.
+- **Folders are views.** Sent, Drafts, Starred and All mail are not stored folders. **Drafts shows only your own drafts.** A conversation that is only a draft is thrown away (not put in Trash) when deleted.
+- **Search ignores the folder** (it looks through Inbox, archive, Sent) but not Spam and Trash, unless you are in them. It uses `LIKE`, which is fine for a few thousand mails; a very large mailbox would need a full-text index (Phase 2).
+- **Pictures from the internet are hidden by default** in HTML mail, with a "Show pictures" button per message; the mailbox's `load_remote_images` setting (step 6) can switch this off for the whole mailbox. Plain HTML layouts that depend on `<style>` blocks look plainer than in Gmail (the cleaner removes them).
+- **Undo** after Archive / Spam / Delete is a bar at the bottom for eight seconds. It puts each conversation back where it came from.
+- The Trash is **not emptied by itself** yet; **Empty Trash** is a button. (Gmail empties after 30 days; that can be a scheduled job later if you want it.)
+- The page draws itself again every 30 seconds only when something changed (a count and a time are compared first).
+- The reading pane is on the right (the default). A bottom pane and a "list only" mode are not built.
+
+Needs Bangla review: the folder names (ইনবক্স, তারকা চিহ্নিত, ড্রাফট, স্প্যাম, ট্র্যাশ, সব মেইল), "উত্তর দরকার" (Needs reply) and the sentence about hidden pictures.
+
+Not verified: real mail from Gmail / newsletters (only seeded messages); the page with thousands of conversations (the list loads 30 at a time); Safari. The phone layout was checked in a desktop browser at 390 px, not on a real phone.
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main`.
+
+## 2026-11-02 - Email inbox, step 3: writing and sending mail (reply, reply all, forward, drafts, undo send)
 
 Plan: `docs/email-inbox-plan.md`. Steps 1 and 2 are commits `131d66a` and `4af2d2c` on the feature branch `ccr-3799b463-p4pv7n`.
 

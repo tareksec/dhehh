@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\BackupDownloadController;
 use App\Http\Controllers\Admin\CompanySwitchController;
 use App\Http\Controllers\Admin\ConversationMediaController;
 use App\Http\Controllers\Admin\CustomerCsvController;
+use App\Http\Controllers\Admin\EmailAttachmentDownloadController;
 use App\Http\Controllers\Admin\ExpenseScanImageController;
 use App\Http\Controllers\Admin\InvestmentDocumentDownloadController;
 use App\Http\Controllers\Admin\InvestmentReportController;
@@ -764,6 +765,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/admin/conversation-messages/{message}/media', ConversationMediaController::class)
         ->whereNumber('message')
         ->name('conversation-messages.media');
+
+    Route::get('/admin/email-attachments/{attachment}/download', EmailAttachmentDownloadController::class)
+        ->whereNumber('attachment')
+        ->name('email-attachments.download');
 
     Route::get('/admin/expense-scans/{scan}/images/{index}', ExpenseScanImageController::class)
         ->whereNumber(['scan', 'index'])

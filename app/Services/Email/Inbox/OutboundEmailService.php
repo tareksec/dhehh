@@ -43,6 +43,7 @@ class OutboundEmailService
         protected CompanyStorageService $storage,
         protected CompanyContext $context,
         protected StorefrontNotificationService $notifications,
+        protected EmailFiles $files,
     ) {}
 
     // --- Starting a message ---------------------------------------------------------------------------
@@ -562,22 +563,12 @@ class OutboundEmailService
 
     protected function deleteFiles(EmailMessage $message): void
     {
-        foreach ($message->attachments()->get() as $file) {
-            $this->deleteFile($file->path);
-        }
+        $this->files->deleteAll($message->attachments()->get(), $this->company());
     }
 
     protected function deleteFile(string $path): void
     {
-        try {
-            $location = $this->storage->locatePrivate($path, $this->company());
-
-            if ($location !== null) {
-                Storage::disk($location['disk'])->delete($location['path']);
-            }
-        } catch (\Throwable $exception) {
-            report($exception);
-        }
+        $this->files->delete($path, $this->company());
     }
 
     protected function company(): Company
