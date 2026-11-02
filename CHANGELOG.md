@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [2.121.0] - 2026-11-02
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -38,7 +40,6 @@
 - `SupplierAccountService::statement()` / `productDetail()` read receipts, supplier orders, our own orders (`order_items`), stock movements, supplier payments, expenses and account entries; as-of date applies to dated records, stock and damage use the movement dates.
 - Tests: `ReportsTest` (+11), `PurchaseReceiptStockTest`, `PurchaseReceiptResourceTest`, `SupplierOrderTest`, `SupplierAccountCostsTest`, `SupplierAccountStatementTest`, `SupplierWorkbookImportTest`, `NuportOrderImportTest` (+1).
 - Next to the purchase-based **Supplier Report** (invoice lines with short/damaged pieces and costs after arrival, `SupplierReportService`): the Supplier Account works from **Goods Receipts**, Supplier Orders and Account Entries and does not read Purchase lines. They answer different questions and share nothing, so the same goods must not be entered in both a Purchase and a Goods Receipt.
-
 ## [2.120.0] - 2026-11-02
 
 **Release type:** Minor Feature Update
