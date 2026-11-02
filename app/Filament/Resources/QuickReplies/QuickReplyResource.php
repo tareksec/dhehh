@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\QuickReplies;
 
 use App\Filament\Clusters\Crm;
+use App\Filament\Concerns\AuthorizesByPermission;
 use App\Filament\Resources\QuickReplies\Pages\CreateQuickReply;
 use App\Filament\Resources\QuickReplies\Pages\EditQuickReply;
 use App\Filament\Resources\QuickReplies\Pages\ListQuickReplies;
@@ -21,6 +22,8 @@ use Filament\Tables\Table;
 
 class QuickReplyResource extends Resource
 {
+    use AuthorizesByPermission;
+
     protected static ?string $model = QuickReply::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBookmark;
@@ -63,6 +66,11 @@ class QuickReplyResource extends Resource
             IconColumn::make('is_active')->label('Active')->boolean(),
             TextColumn::make('updated_at')->dateTime()->sortable(),
         ]);
+    }
+
+    protected static function requiredPermissions(): array
+    {
+        return ['view' => 'crm.view', 'create' => 'crm.manage', 'update' => 'crm.manage', 'delete' => 'crm.manage'];
     }
 
     public static function getPages(): array

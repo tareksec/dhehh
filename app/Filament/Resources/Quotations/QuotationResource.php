@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Quotations;
 
 use App\Filament\Clusters\Crm;
+use App\Filament\Concerns\AuthorizesByPermission;
 use App\Filament\Resources\Quotations\Pages\CreateQuotation;
 use App\Filament\Resources\Quotations\Pages\EditQuotation;
 use App\Filament\Resources\Quotations\Pages\ListQuotations;
@@ -18,6 +19,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 class QuotationResource extends Resource
 {
+    use AuthorizesByPermission;
+
     protected static ?string $model = Quotation::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentCurrencyDollar;
@@ -41,6 +44,11 @@ class QuotationResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->with(['lead', 'customer']);
+    }
+
+    protected static function requiredPermissions(): array
+    {
+        return ['view' => 'crm.view', 'create' => 'crm.manage', 'update' => 'crm.manage', 'delete' => 'crm.manage'];
     }
 
     public static function getPages(): array

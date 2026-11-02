@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\CompanyFaqs;
 
 use App\Filament\Clusters\Crm;
+use App\Filament\Concerns\AuthorizesByPermission;
 use App\Filament\Resources\CompanyFaqs\Pages\CreateCompanyFaq;
 use App\Filament\Resources\CompanyFaqs\Pages\EditCompanyFaq;
 use App\Filament\Resources\CompanyFaqs\Pages\ListCompanyFaqs;
@@ -21,6 +22,8 @@ use Filament\Tables\Table;
 
 class CompanyFaqResource extends Resource
 {
+    use AuthorizesByPermission;
+
     protected static ?string $model = CompanyFaq::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedQuestionMarkCircle;
@@ -65,6 +68,11 @@ class CompanyFaqResource extends Resource
             IconColumn::make('is_active')->label('Active')->boolean(),
             TextColumn::make('updated_at')->dateTime()->sortable(),
         ]);
+    }
+
+    protected static function requiredPermissions(): array
+    {
+        return ['view' => 'crm.view', 'create' => 'crm.manage', 'update' => 'crm.manage', 'delete' => 'crm.manage'];
     }
 
     public static function getPages(): array

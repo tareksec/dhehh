@@ -1,5 +1,5 @@
 # Core Platform
-> Last checked: 2026-11-01, commit 288e7fb + security audit fixes (outbound URL guard, CSV formula guard); earlier: 2026-10-24, branch `feature/trade-portal-test-data-cleanup`, merged with main (advanced backups Phase 6, Cloudflare R2)
+> Last checked: 2026-11-02, commit 6cc8481 + security audit follow-up (panel authorization: `AuthorizesByPermission`, voucher / exchange-rate access); earlier: 2026-11-01, commit 288e7fb + security audit fixes (outbound URL guard, CSV formula guard); 2026-10-24, branch `feature/trade-portal-test-data-cleanup`, merged with main (advanced backups Phase 6, Cloudflare R2)
 
 ## What it does
 The Core Platform provides the multi-tenant architectural foundation, role-based access control, and operational infrastructure for the entire ERP system. It isolates company data using global query scopes and automated tenant attribute injection on Eloquent models. It manages administrative users, custom roles with granular permission arrays, and five distinct Filament 5 panels (Admin, IMS Office, Investor Portal, Reseller Portal, Trade Portal). It implements system resilience through ModuleGuard failure isolation, rate-limited deployment error reporting, and defensive error pages. Additionally, it handles system-wide operations including automated encrypted backups to Cloudflare R2 and/or Google Drive, Coolify deployments, database schema migrations, and pre-authentication bcrypt protection via LoginGate.
@@ -144,6 +144,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `app/Filament/Auth/AdminLogin.php` | Custom Filament login page integrated with `LoginGate` and company detection. |
 | `app/Filament/Concerns/GuardsWidgetRendering.php` | Trait wrapping Filament widget render methods inside `ModuleGuard`. |
 | `app/Filament/Concerns/HasGuardedNavigationBadge.php` | Trait ensuring navigation badge count queries never crash the navigation bar. |
+| `app/Filament/Concerns/AuthorizesByPermission.php` | Puts a Filament resource behind role permissions: overrides `getAuthorizationResponse()` (where every ability and page route ends) and maps view / create / update / delete to the names in the resource's `requiredPermissions()`; `permits()` for relation managers. Needed because there are no model policies and `Gate::before` returns null (= allowed to Filament) for a model outside `User::MODEL_MODULES`. Used by Lead, Quotation, QuickReply, CompanyFaq (`crm.*`), Shipment, Container (`purchasing.*`). |
 
 ### Controllers
 | Path | What it does |
@@ -233,6 +234,7 @@ The Core Platform provides the multi-tenant architectural foundation, role-based
 | `tests/Feature/OutboundUrlGuardTest.php` | SSRF: private/loopback/metadata/encoded addresses, DNS answers, redirects, webhook, gateway and SMS callers. |
 | `tests/Feature/CsvFormulaInjectionTest.php` | CSV exports write hostile names as plain text. |
 | `tests/Feature/InstallerPasswordPolicyTest.php` | The installer refuses a weak first admin password. |
+| `tests/Feature/PanelResourceAuthorizationTest.php` | Role access to CRM, shipment, container, voucher (own vs view-all) and exchange-rate pages; the guard that every Filament resource has an access rule (Media is the documented exception). |
 | `tests/Feature/MultiCompanyIsolationTest.php` | Asserts that every company-owned model enforces `BelongsToCompany` and respects `CompanyScope`. |
 | `tests/Feature/CompanySettingsTest.php` | Tests company profile saving, timezone handling, and currency configuration. |
 | `tests/Feature/CompanySelectionPersistenceTest.php` | Verifies active company selection persistence across user sessions. |

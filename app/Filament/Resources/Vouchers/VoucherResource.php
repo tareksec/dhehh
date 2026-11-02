@@ -35,6 +35,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -474,6 +475,36 @@ class VoucherResource extends Resource
     public static function canDelete($record): bool
     {
         return false;
+    }
+
+    /**
+     * Anyone holding a voucher permission may open the list; it shows their own
+     * vouchers, or every voucher with "View All" (see table()). A staff member
+     * with no voucher permission at all has no business here.
+     */
+    public static function canViewAny(): bool
+    {
+        $user = Auth::user();
+
+        return $user !== null
+            && ($user->canViewAllVouchers()
+                || $user->hasPermission('voucher.view')
+                || $user->canCreateVoucher()
+                || $user->canCreateFundTransfer());
+    }
+
+    /**
+     * The list only shows a staff member's own vouchers unless they hold "View
+     * All", so the page for a single voucher must follow the same rule - the
+     * ids are sequential, and the view page does not use the list's filter.
+     */
+    public static function canView(Model $record): bool
+    {
+        $user = Auth::user();
+
+        return $user !== null
+            && static::canViewAny()
+            && ($user->canViewAllVouchers() || (int) $record->getAttribute('submitted_by') === (int) $user->getKey());
     }
 
     public static function getEloquentQuery(): Builder

@@ -2,7 +2,31 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-01 (latest) - Backend & API security audit (OWASP API Top 10) and fixes
+## 2026-11-02 (latest) - Security audit follow-up: the Filament panels (V6–V8)
+
+Request: "do the next task" after the audit of 2026-11-01. The biggest gap that audit listed (R10) needed no owner decision: the ~470 Filament panel routes were only sampled. This pass checks every resource and page for an access rule.
+
+What I found and fixed (same branch, `ccr-e2cbd14e-o3wapj`):
+- **V6 (Medium) roles without CRM permission could open and change CRM data.** There are no model policies in this app: `Gate::before` decides, only for models in `User::MODEL_MODULES`, and returns null for any other model, which Filament (no policy) reads as "allowed". An accountant and an inventory-staff user — neither has `crm.view` — got 200 on `/admin/crm/leads`, `/quotations`, `/quick-replies`, `/company-faqs` and their `create` pages (the Inbox, with its own rule, gave 403). New concern `AuthorizesByPermission` (one override of `getAuthorizationResponse()`) now puts those four resources behind `crm.view` (see) and `crm.manage` (create / edit / delete); the lead's follow-up-activities relation manager follows the lead.
+- **V7 (Medium) any staff member could open any voucher by id.** The list filters to "own vouchers" unless `voucher.view_all`, but the single-voucher page does not use that filter and `canView()` was missing. `VoucherResource::canView()` / `canViewAny()` added.
+- **V8 (Low–Medium)** shipments and containers (hidden from the menu, reachable by URL) now need `purchasing.*`; the exchange-rate list needs `investments.view` (or `.manage`).
+
+Decisions for the owner (not changed, in the report section 5):
+- **R11 Media library** — any staff member may upload to and delete from it. Which permission should it need? It is the one known-open entry in the guard test.
+- **R12** — the image / video generation tools pre-fill the form from any earlier generation id of the same company (settings only, not result files).
+- Behaviour change to know: a **custom** role that relied on those pages being open now sees 403 until the permission is added (Users → Roles). Built-in roles keep what they normally use: Manager and Sales Staff have `crm.view` + `crm.manage`; Accountant, Inventory Staff and Manager have `purchasing.view`.
+
+Also read and found clean: every `{!! !!}` in the views (escaped with `e()`, a constant, or an SVG built from a sanitised value), every raw SQL fragment with an interpolated part (constants only), every `Process` call (array arguments, no shell).
+
+Not exercised in a browser: only HTTP responses of the pages were tested; the Filament menus (which hide a page for a role without access) were not clicked through.
+
+Needs Bangla review: none (no new user-visible text; a refused page is the standard 403).
+
+Verified: new `PanelResourceAuthorizationTest` (23 tests, 94 assertions) — the CRM and purchasing pages were probed on the old code first (200 for roles without the permission) and the voucher and exchange-rate assertions failed there before the fix; Pint run; full `php artisan test` run, result in the commit message. Docs: `docs/security-audit-2026-11.md` (new findings, R10 narrowed, R11/R12, section 7 step 6), `docs/codebase-map/core-platform.md`.
+
+Commit status: committed and pushed to `ccr-e2cbd14e-o3wapj` (not `main`; not merged).
+
+## 2026-11-01 - Backend & API security audit (OWASP API Top 10) and fixes
 
 Request: run the pasted "Production API Security Audit" prompt (five gates: zero frontend trust, WHO/WHICH/WHAT access control, stateful business flows, zero-trust external APIs, SSRF) on this repository, find the problems and fix the confirmed ones with tests. Full report: `docs/security-audit-2026-11.md`.
 

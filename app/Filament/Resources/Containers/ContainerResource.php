@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Containers;
 
+use App\Filament\Concerns\AuthorizesByPermission;
 use App\Models\Container;
 use BackedEnum;
 use Filament\Actions\EditAction;
@@ -18,6 +19,8 @@ use UnitEnum;
 
 class ContainerResource extends Resource
 {
+    use AuthorizesByPermission;
+
     protected static ?string $model = Container::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCube;
@@ -40,6 +43,11 @@ class ContainerResource extends Resource
         return $table->columns([
             TextColumn::make('container_number')->searchable()->sortable(), TextColumn::make('shipping_line')->searchable(), TextColumn::make('origin'), TextColumn::make('destination'), TextColumn::make('status')->badge(), TextColumn::make('estimated_arrival')->date()->sortable(), TextColumn::make('shipments_count')->counts('shipments')->label('Shipments'),
         ])->recordActions([EditAction::make()]);
+    }
+
+    protected static function requiredPermissions(): array
+    {
+        return ['view' => 'purchasing.view', 'create' => 'purchasing.create', 'update' => 'purchasing.update', 'delete' => 'purchasing.delete'];
     }
 
     public static function getPages(): array

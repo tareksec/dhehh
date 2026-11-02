@@ -61,6 +61,12 @@ class ExchangeRateResource extends Resource
         return auth()->user()?->hasPermission('investments.manage') ?? false;
     }
 
+    /** Rates belong to the investments module, like every other resource in its cluster. */
+    public static function canViewAny(): bool
+    {
+        return (auth()->user()?->hasPermission('investments.view') ?? false) || static::canManage();
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([

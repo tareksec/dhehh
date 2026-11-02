@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Shipments;
 
+use App\Filament\Concerns\AuthorizesByPermission;
 use App\Models\Shipment;
 use BackedEnum;
 use Filament\Actions\EditAction;
@@ -18,6 +19,8 @@ use UnitEnum;
 
 class ShipmentResource extends Resource
 {
+    use AuthorizesByPermission;
+
     protected static ?string $model = Shipment::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedGlobeAsiaAustralia;
@@ -42,6 +45,11 @@ class ShipmentResource extends Resource
         return $table->columns([
             TextColumn::make('tracking_number')->searchable()->sortable(), TextColumn::make('purchase.purchase_number')->label('Purchase')->searchable(), TextColumn::make('container.container_number')->label('Container')->searchable(), TextColumn::make('carrier'), TextColumn::make('transport_mode')->badge(), TextColumn::make('status')->badge(), TextColumn::make('estimated_arrival')->date()->sortable(),
         ])->recordActions([EditAction::make()]);
+    }
+
+    protected static function requiredPermissions(): array
+    {
+        return ['view' => 'purchasing.view', 'create' => 'purchasing.create', 'update' => 'purchasing.update', 'delete' => 'purchasing.delete'];
     }
 
     public static function getPages(): array

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Leads;
 
 use App\Filament\Clusters\Crm;
+use App\Filament\Concerns\AuthorizesByPermission;
 use App\Filament\Resources\Leads\Pages\CreateLead;
 use App\Filament\Resources\Leads\Pages\EditLead;
 use App\Filament\Resources\Leads\Pages\ListLeads;
@@ -21,6 +22,8 @@ use Filament\Tables\Table;
 
 class LeadResource extends Resource
 {
+    use AuthorizesByPermission;
+
     protected static ?string $model = Lead::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserPlus;
@@ -52,6 +55,11 @@ class LeadResource extends Resource
             ActivitiesRelationManager::class,
             QuotationsRelationManager::class,
         ];
+    }
+
+    protected static function requiredPermissions(): array
+    {
+        return ['view' => 'crm.view', 'create' => 'crm.manage', 'update' => 'crm.manage', 'delete' => 'crm.manage'];
     }
 
     public static function getPages(): array

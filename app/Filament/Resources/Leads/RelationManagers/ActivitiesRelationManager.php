@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Leads\RelationManagers;
 
+use App\Filament\Resources\Leads\LeadResource;
 use App\Models\LeadActivity;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -13,6 +14,8 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Auth\Access\Response;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
 class ActivitiesRelationManager extends RelationManager
@@ -20,6 +23,16 @@ class ActivitiesRelationManager extends RelationManager
     protected static string $relationship = 'activities';
 
     protected static ?string $title = 'Follow-up Activities';
+
+    /**
+     * Activities are part of the lead: whoever may only view leads may only view
+     * them, and adding, editing or deleting one needs the same permission as
+     * changing the lead (the default would allow it to anyone who can open the page).
+     */
+    public function getAuthorizationResponse(string $action, ?Model $record = null): Response
+    {
+        return LeadResource::permits($action) ? Response::allow() : Response::deny();
+    }
 
     public function form(Schema $schema): Schema
     {
