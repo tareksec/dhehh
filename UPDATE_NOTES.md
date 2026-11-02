@@ -2,7 +2,19 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-01 (latest) - Supplier Account reports and a restructured Report module
+## 2026-11-02 (latest) - Email inbox, step 1: Email delivery page for any provider
+
+Owner request (2026-11-02): a Gmail-like **Email** inbox in the ERP, and the SES usage dashboard made provider-neutral. The design was approved on the canvas "ERP Email Inbox Design"; the plan is `docs/email-inbox-plan.md` (7 steps, one commit each, all on the feature branch `ccr-3799b463-p4pv7n`).
+
+Step 1 (this commit): **Settings → Email delivery**. `EmailProvider` finds the service from the SMTP host; `EmailUsageService` (was `SesUsageService`) counts the Email Log of the company for that host; the page shows the gauge, numbers, kinds, months, weeks, an "About this service" card and the cost settings (`email_free_limit`, `email_price_per_1000`, with the old `ses_*` values as a fallback). The Amazon SES page keeps the account box and links to the new page. Email Log gets the kind `staff_reply` for the coming inbox.
+
+Needs Bangla review: the phrases that name what a service "reports back" ("ফেরত জানায়") and "চেনা সেবা".
+
+Open points: the provider list is a guess from the host (no API call); an unknown host is shown as "Other SMTP service". The Delivered / Bounced numbers exist only for Amazon SES with tracking on. Cloudflare Email Sending, Brevo and the others show every accepted email as "Sent".
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main` (the owner decides).
+
+## 2026-11-01 - Supplier Account reports and a restructured Report module
 
 Owner request (2026-10-26, plan `C:\Users\user\.claude\plans\enumerated-kindling-karp.md`, phases P0 to P7): use what was worked out in the Shahin Khan workbook to arrange the Report module. Owner answers: goods the supplier gives his own customers leave **our** stock and are entered through a **separate order form for the supplier**; the old workbook is imported once, so receipts carry the **receive date, cartons and pieces**; the nine existing reports are restructured too. The work was built uncommitted while the owner waited for the GitHub limit; on 2026-11-01 the owner said "commit and push, and push to main".
 

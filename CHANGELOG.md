@@ -1,5 +1,25 @@
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **Settings → Email delivery: what the site's email account sent, for any mail service** (owner request 2026-11-02). The page finds the service from the SMTP host saved in Integrations → Email Setup (Amazon SES, Cloudflare Email Sending, Brevo, Mailjet, Resend, Gmail, Zoho ZeptoMail, Zoho Mail, SendGrid, Mailgun, Postmark; any other host is shown as "Other SMTP service" with the host, and a site with no SMTP account as "The server's own mailer"). It shows the free-allowance gauge, sent / failed numbers, the emails by kind, month by month and week by week, an estimated cost, and an "About this service" card that says plainly what the service can tell us: Amazon SES reports delivered, bounced and spam back (with tracking on); every other service does not, so its accepted emails stay "Sent".
+- Emails written in the coming Email inbox have their own kind in the Email Log ("Reply from the Email inbox") and their own row in the usage by kind.
+- `docs/email-inbox-plan.md`: the step-by-step plan for the Gmail-like Email inbox the owner approved (design on the "ERP Email Inbox Design" canvas).
+
+### Changed
+
+- **The email usage and cost moved from Settings → Amazon SES to Settings → Email delivery.** The Amazon SES page keeps the AWS key, the account (sandbox or production, the daily limit, the fastest rate, Amazon's view of the account), domains, tracking and the suppression list, and links to the new page.
+- **The free emails each month and the price of 1,000 emails are now kept as `email_free_limit` and `email_price_per_1000`** per site (they are the owner's own numbers for whichever service is used). Values typed on the Amazon SES page earlier (`ses_free_limit`, `ses_price_per_1000`) are still read until the new page saves, and are then replaced by the new keys.
+- The Email Log's emails are counted per mail service (the log's "via" host), so after a switch from one service to another the numbers of the old service are not mixed into the new one's free allowance.
+
+### Technical Notes
+
+- `App\Services\Ses\SesUsageService` became `App\Services\Email\EmailUsageService` (`report()` now takes the Email Log `via` as its second argument); `App\Services\Email\EmailProvider` finds the service from the host and carries the `via` and whether the service reports back. `App\Filament\Pages\EmailDelivery` and `App\Filament\Concerns\ManagesCompanySite` (the site/company helpers `AmazonSes` had) are new; the views are `email-delivery.blade.php`, `email-delivery-usage.blade.php` (the old `amazon-ses-usage.blade.php`) and `amazon-ses-account.blade.php`. `StorefrontNotificationService::EMAIL_COST_KEYS` is kept when Storefront Settings is saved.
+- No migration and no new CSS (the `.zz-use-*` rules are reused); the deploy needs `npm run build` only because the views are new Tailwind sources. 38 new bilingual keys (parity test green).
+- Tests: `EmailUsageServiceTest` (+2, was `SesUsageServiceTest`), new `EmailDeliveryPageTest` (10), `AmazonSesPageTest` (usage cases replaced by 2 account cases).
+
 ## [2.121.0] - 2026-11-02
 
 **Release type:** Minor Feature Update

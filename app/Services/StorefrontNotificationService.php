@@ -50,6 +50,9 @@ class StorefrontNotificationService
      */
     public const SES_CREDENTIAL_KEYS = ['ses_api_key_id', 'ses_api_secret', 'ses_api_region', 'ses_config_set', 'ses_topic_arn', 'ses_tracking_enabled', 'ses_subscription_confirmed_at', 'ses_free_limit', 'ses_price_per_1000'];
 
+    /** notification_credentials keys edited on Settings → Email delivery: the free emails each month and the price of 1,000 (EmailUsageService). */
+    public const EMAIL_COST_KEYS = ['email_free_limit', 'email_price_per_1000'];
+
     /** Reply code BulkSMSBD-style gateways send (inside an HTTP 200) when the SMS was accepted. */
     public const SMS_GATEWAY_SUCCESS_CODE = 202;
 

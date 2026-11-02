@@ -61,8 +61,8 @@
                     </x-filament::section>
                 @endif
 
-                {{-- 2. Email usage, with the account's daily limit (owner request 2026-10-24) --}}
-                @include('filament.pages.amazon-ses-usage')
+                {{-- 2. The Amazon account and its daily limit; the email usage is on Settings → Email delivery --}}
+                @include('filament.pages.amazon-ses-account')
 
                 {{-- 3. Domains and addresses --}}
                 @if (isset($overview['identities']) || ! empty($overview['errors']['identities']))

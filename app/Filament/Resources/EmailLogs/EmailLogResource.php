@@ -79,6 +79,7 @@ class EmailLogResource extends Resource
             EmailLog::KIND_OWNER_DIGEST => __('Owner daily digest'),
             EmailLog::KIND_ORDER => __('Order email'),
             EmailLog::KIND_TEMPLATE => __('Email from a template'),
+            EmailLog::KIND_STAFF_REPLY => __('Reply from the Email inbox'),
             EmailLog::KIND_TEST => __('Test email'),
             EmailLog::KIND_OTHER => __('Other email'),
         ];
