@@ -1263,6 +1263,20 @@ class Integrations extends Page
                                             ->icon(Heroicon::OutlinedRectangleStack)
                                             ->schema($this->aiToolFields('ai_landing_page_', 'Enable AI for offer landing page generation', false))
                                             ->columns(2),
+                                        Tab::make(__('Order Form AI Fill'))
+                                            ->icon(Heroicon::OutlinedClipboardDocumentList)
+                                            ->schema([
+                                                Placeholder::make('ai_order_autofill_note')
+                                                    ->hiddenLabel()
+                                                    ->content(__('Staff paste the message a customer sent into the new-order form and this model fills in the customer, products, advance and note. It only reads text, so a small or free model is enough (Groq, Google Gemini or an OpenRouter ":free" model: pick it under Quick setup, or type the model name). Free plans have their own small limits, and some providers may keep what they receive: the pasted message (name, phone, address) goes to the provider you choose here, so read its terms first. Nothing is saved until staff press Create on the order.'))
+                                                    ->columnSpanFull(),
+                                                ...$this->aiToolFields('ai_order_autofill_', __('Enable AI fill on the new-order form'), false),
+                                                TextInput::make('ai_order_autofill_daily_run_limit')
+                                                    ->label(__('Uses per day'))
+                                                    ->numeric()->minValue(1)->maxValue(10000)->required()
+                                                    ->helperText(__('After this many "Fill with AI" uses in a day the button stops until tomorrow, so a busy day cannot overspend your key or your free plan.')),
+                                            ])
+                                            ->columns(2),
                                     ]),
                             ]),
 

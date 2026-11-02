@@ -49,13 +49,14 @@ class AiLlmClient
         $response = Http::withHeaders([
             'x-api-key' => $this->apiKey,
             'anthropic-version' => '2023-06-01',
-        ])->timeout($this->timeoutSeconds)->connectTimeout(min(10, $this->timeoutSeconds))->post($url, [
+        ])->timeout($this->timeoutSeconds)->connectTimeout(min(10, $this->timeoutSeconds))->post($url, array_filter([
             'model' => $this->model,
             'max_tokens' => $this->maxTokens,
             'system' => $system,
             'messages' => $messages,
-            'tools' => $tools,
-        ])->throw()->json();
+            // No tools at all (a plain-text call) means no `tools` key: some providers refuse an empty list.
+            'tools' => $tools ?: null,
+        ], fn (mixed $value): bool => $value !== null))->throw()->json();
 
         $text = null;
         $toolCalls = [];
@@ -99,11 +100,12 @@ class AiLlmClient
         $response = Http::withToken($this->apiKey)
             ->timeout($this->timeoutSeconds)
             ->connectTimeout(min(10, $this->timeoutSeconds))
-            ->post($url, [
+            ->post($url, array_filter([
                 'model' => $this->model,
                 'max_tokens' => $this->maxTokens,
                 'messages' => $openAiMessages,
-                'tools' => array_map(fn (array $tool): array => [
+                // A plain-text call sends no `tools` key: OpenAI itself and many free models refuse an empty list.
+                'tools' => $tools === [] ? null : array_map(fn (array $tool): array => [
                     'type' => 'function',
                     'function' => [
                         'name' => $tool['name'],
@@ -111,7 +113,7 @@ class AiLlmClient
                         'parameters' => $tool['input_schema'],
                     ],
                 ], $tools),
-            ])->throw()->json();
+            ], fn (mixed $value): bool => $value !== null))->throw()->json();
 
         $choice = $response['choices'][0]['message'] ?? [];
 

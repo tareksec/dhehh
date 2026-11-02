@@ -218,11 +218,15 @@ class AiSettingsServiceTest extends TestCase
 
         $fresh = $company->fresh();
 
-        foreach (AiSettingsService::TOOLS as $tool => $label) {
+        foreach (array_diff_key(AiSettingsService::TOOLS, array_flip(AiSettingsService::NO_LEGACY_FALLBACK)) as $tool => $label) {
             $settings = $service->all($fresh, $tool);
             $this->assertSame('legacy-model', $settings['model']);
             $this->assertSame('legacy-key', $settings['api_key']);
         }
+
+        // A tool that came after the shared config never borrows it (it is off until the owner turns it on).
+        $this->assertNull($service->all($fresh, AiSettingsService::TOOL_ORDER_AUTOFILL)['api_key']);
+        $this->assertFalse($service->enabled($fresh, AiSettingsService::TOOL_ORDER_AUTOFILL));
 
         // Once a tool is explicitly saved, only that tool moves off the
         // legacy fallback — the other two keep reading the legacy blob.

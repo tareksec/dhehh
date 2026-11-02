@@ -41,12 +41,23 @@ class AiSettingsService
 
     public const TOOL_LANDING_PAGE = 'landing_page';
 
+    public const TOOL_ORDER_AUTOFILL = 'order_autofill';
+
     /** @var array<string, string> */
     public const TOOLS = [
         self::TOOL_MESSAGING => 'Auto Messaging (Inbox AI Reply)',
         self::TOOL_AD_ASSISTANT => 'Ad Assistant (Meta Ads)',
         self::TOOL_LANDING_PAGE => 'Landing Page Builder (Offer Pages)',
+        self::TOOL_ORDER_AUTOFILL => 'Order Form AI Fill',
     ];
+
+    /**
+     * Tools that did not exist before the per-tool settings: they never borrow the old shared `settings->ai`
+     * blob, so a company's existing (possibly paid) AI key is not used by a tool its owner never switched on.
+     *
+     * @var list<string>
+     */
+    public const NO_LEGACY_FALLBACK = [self::TOOL_ORDER_AUTOFILL];
 
     public const DEFAULTS = [
         'enabled' => false,
@@ -159,7 +170,7 @@ class AiSettingsService
     {
         $stored = (array) data_get($company->settings, "ai_tools.{$tool}", []);
 
-        if ($stored === []) {
+        if ($stored === [] && ! in_array($tool, self::NO_LEGACY_FALLBACK, true)) {
             $stored = $this->legacyGlobalSettings($company) ?? [];
         }
 

@@ -16,6 +16,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Services\CompanyContext;
 use App\Services\ExternalCourierFraudService;
+use App\Services\OrderAutofill\OrderAutofillService;
 use App\Services\ShippingFeeService;
 use App\Support\FraudCheckReport;
 use Filament\Actions\Action;
@@ -26,6 +27,7 @@ use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Flex;
@@ -36,6 +38,8 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
+use RuntimeException;
 
 class OrderForm
 {
@@ -53,6 +57,35 @@ class OrderForm
         return $schema
             ->columns(1)
             ->components([
+                // "Fill with AI" (owner request 2026-11-02): paste the customer's message, the form fills itself.
+                // Shown on a new order once a super admin has switched the tool on (Integrations → AI Integration).
+                Actions::make([
+                    Action::make('fillWithAi')
+                        ->label(__('Fill with AI'))
+                        ->icon('heroicon-o-sparkles')
+                        ->color('info')
+                        ->modalHeading(__('Fill the order from a customer message'))
+                        ->modalDescription(__('Paste the message the customer sent. The AI reads the customer, products, advance and note and puts them on this form. Nothing is saved until you press Create, so check everything first.'))
+                        ->modalSubmitActionLabel(__('Read and fill'))
+                        ->modalWidth('2xl')
+                        ->schema([
+                            Textarea::make('message')
+                                ->label(__('Customer message'))
+                                ->rows(8)
+                                ->required()
+                                ->maxLength(OrderAutofillService::MAX_MESSAGE_LENGTH)
+                                ->placeholder(__('Paste the WhatsApp / Messenger message here: name, phone, address, products...')),
+                            Toggle::make('create_customer')
+                                ->label(__('Create a new customer if this phone number is not in the system'))
+                                ->default(true),
+                        ])
+                        ->action(fn (array $data, Get $get, Set $set) => self::fillWithAi($data, $get, $set)),
+                ])
+                    ->key('aiFill')
+                    ->visible(fn (string $operation): bool => $operation === 'create'
+                        && app(OrderAutofillService::class)->isConfigured(app(CompanyContext::class)->company()))
+                    ->columnSpanFull(),
+
                 Section::make('Invoice Details')
                     ->columnSpanFull()
                     ->schema([
@@ -488,6 +521,100 @@ class OrderForm
                     ->collapsible()
                     ->persistCollapsed(),
             ]);
+    }
+
+    /**
+     * Puts what the AI read from a customer's message on the form: the customer (matched by phone, or created when
+     * the staff member left that on), the products at their catalog price, the advance and the note. The totals,
+     * the shipping zone and the courier fraud check follow the same path as choosing the customer by hand. A
+     * summary says what was filled and what needs a person; nothing is saved until the order is created.
+     *
+     * @param  array{message?: string, create_customer?: bool}  $data
+     */
+    protected static function fillWithAi(array $data, Get $get, Set $set): void
+    {
+        $service = app(OrderAutofillService::class);
+
+        try {
+            $result = $service->read(app(CompanyContext::class)->company(), (string) ($data['message'] ?? ''));
+        } catch (RuntimeException $exception) {
+            Notification::make()->title(__('Could not fill the form'))->body($exception->getMessage())->danger()->send();
+
+            return;
+        }
+
+        $notes = [];
+        $warnings = $result['warnings'];
+        $customerId = $result['customer']['id'];
+        $created = false;
+
+        if ($customerId === null && $result['customer']['is_new'] && ($data['create_customer'] ?? true)) {
+            $customerId = $service->createCustomer($result['customer'])->getKey();
+            $created = true;
+        }
+
+        $customer = $customerId ? Customer::query()->find($customerId) : null;
+
+        if ($customer !== null && ! $customer->is_active) {
+            $warnings[] = __(':name is an inactive customer, so they were not selected. Switch the customer on first.', ['name' => $customer->name]);
+            $customer = null;
+        }
+
+        if ($customer !== null) {
+            $set('customer_id', $customer->getKey());
+            $set('customer_name', $customer->name);
+            self::setShippingFee($get, $set, $customer);
+            self::runExternalCourierFraudCheck($set, $customer, bypassCache: false);
+            $notes[] = $created
+                ? __('Customer: :name (new customer created)', ['name' => $customer->name])
+                : __('Customer: :name (found by phone)', ['name' => $customer->name]);
+        } elseif ($result['customer']['phone'] !== null) {
+            $notes[] = __('Customer: :name, :phone is not in the system yet. Use the + next to Customer to add them.', ['name' => $result['customer']['name'] ?: '—', 'phone' => $result['customer']['phone']]);
+        }
+
+        if ($result['items'] !== []) {
+            $set('items', collect($result['items'])->mapWithKeys(fn (array $item): array => [(string) Str::uuid() => [
+                'product_id' => $item['product_id'],
+                'product_variant_id' => $item['variant_id'],
+                'variant_label' => $item['variant_label'],
+                'quantity' => $item['quantity'],
+                'unit_price' => $item['unit_price'],
+                'subtotal' => $item['quantity'] * $item['unit_price'],
+            ]])->all());
+            $notes[] = __('Products: :count added at the catalog price', ['count' => count($result['items'])]);
+        }
+
+        if ($result['advance'] !== null) {
+            $set('paid_amount', $result['advance']);
+
+            if ($result['payment_account_id'] !== null) {
+                $set('payment_account_id', $result['payment_account_id']);
+            }
+
+            $notes[] = __('Advance: ৳:amount', ['amount' => rtrim(rtrim(number_format($result['advance'], 2, '.', ''), '0'), '.')]);
+
+            if ($result['payment_account_id'] === null && OrderPayment::accountOptions() !== []) {
+                $warnings[] = __('Choose the Payment Method for the advance.');
+            }
+        }
+
+        if ($result['note'] !== null) {
+            $current = trim((string) $get('note'));
+            $set('note', $current !== '' ? $current."\n".$result['note'] : $result['note']);
+            $notes[] = __('Note added');
+        }
+
+        self::setOrderTotals($get, $set);
+
+        $lines = [...$notes, ...array_map(fn (string $warning): string => '⚠ '.$warning, $warnings)];
+
+        Notification::make()
+            ->title($warnings === [] ? __('Form filled. Check it, then press Create.') : __('Form filled. Please check the points below.'))
+            ->body(new HtmlString(collect($lines)->map(fn (string $line): string => e($line))->implode('<br>')))
+            ->color($warnings === [] ? 'success' : 'warning')
+            ->icon($warnings === [] ? 'heroicon-o-check-circle' : 'heroicon-o-exclamation-triangle')
+            ->persistent($warnings !== [])
+            ->send();
     }
 
     protected static function setItemSubtotal(Get $get, Set $set): void

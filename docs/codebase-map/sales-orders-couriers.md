@@ -1,5 +1,5 @@
 # Sales, Orders & Couriers
-> Last checked: 2026-10-24 (the order email twin of the status SMS, and the Email the customer button; before it: main merged with the Trade Portal's Delivery Challan)
+> Last checked: 2026-11-02 (the new-order form has a Fill with AI button, `OrderForm::fillWithAi()`, see crm-messaging.md; before it, 2026-10-24: the order email twin of the status SMS, and the Email the customer button; before it: main merged with the Trade Portal's Delivery Challan)
 
 ## What it does
 The Sales, Orders & Couriers module orchestrates customer acquisition, order fulfillment, multi-carrier parcel delivery, and delivery fraud prevention. It manages the full lifecycle of orders from draft quotations to confirmed, processing, delivered, or returned states, while tracking payments and stock reservations. It integrates with major Bangladeshi courier logistics APIs (Steadfast, Pathao, RedX, eCourier, and manual delivery), automating airway bill booking, webhook tracking, parcel barcode scanning, and driver handover sheets. For fraud mitigation, it runs an intelligent customer risk scoring engine that evaluates historical courier return ratios, first-time high COD thresholds, phone number reuse, and a dual-tier (global and tenant-scoped) customer blacklist.

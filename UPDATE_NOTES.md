@@ -2,6 +2,32 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
+## 2026-11-02 (latest) - "Fill with AI" on the new-order form
+
+Owner (Bangla): add an AI feature to the order form so that giving the customer's information fills it automatically; do it with a free model if that is better; it may already exist in the CRM, tell me first how it can be done. After my plan: "put the settings on the Integrations page, no separate page needed".
+
+What I found: the CRM has no such feature (it has the Inbox auto-reply and Smart Scan, which reads pasted expense text); the AI client, per-tool provider settings and encrypted keys already existed, so this was built on them.
+
+What I did:
+- **New tool `order_autofill`** in `AiSettingsService` (the same per-tool provider / model / encrypted key as Auto Messaging, Ad Assistant and Landing Page Builder) with a new tab **Order Form AI Fill** under Settings → Integrations → AI Integration, including **Uses per day**. No new page. It does not fall back to the company's old shared AI key.
+- **`OrderAutofillService`**: reads one pasted message into customer, products, advance + payment method and note, and checks all of it against the real records (see CHANGELOG, Technical Notes). Works with any chat model: plain JSON, no tool calling.
+- **Order form**: a **Fill with AI** button (new orders only, shown once the tool is on) opens a box for the message and a switch "Create a new customer if this phone number is not in the system" (on). The form is filled and a notification lists what was done and what needs a person.
+- `AiLlmClient` no longer sends an empty `tools` list.
+- 35 new keys in `lang/en.json` and `lang/bn.json`.
+
+Things the owner should know:
+- Free plans have small limits and some providers may keep what they receive; the pasted message (name, phone, address) goes to the provider chosen in the tab. Read the provider's terms before using a customer's real data. I did not check any provider's terms.
+- Small free models can misread Bangla addresses. I did not run a live model (tests use a fake reply), so try about 20 real messages with the model you pick and tell me which one reads Bangla best.
+- The phone number is found by code, not by the model, and a product the model invents is dropped, so the usual failure is "product not found, add it by hand", not a wrong order.
+- A new customer is created at the moment of pressing **Read and fill** (before the order is saved) when the switch is on.
+- Photos / screenshots are not read yet (text only).
+
+Needs Bangla review: the new Bangla wording (all 35 keys; the "এআই" spelling, "ফিল", the notification lines, and the long tab note).
+
+Verified: `OrderAutofillTest` 17 passed, with the settings, AI, order form and isolation suites around it (165 passed). Full `php artisan test` on PHP 8.4 after merging the latest main: 3632 passed, 2 skipped, 1 failed. The one failure (`IntegrationsPageTest`, the SMS Templates page check) came from a stale Composer class map in this container, which still listed the page class that main deleted; after `composer dump-autoload` that test file passes (37 passed). I did not re-run the whole suite a second time.
+
+Commit status: committed on `claude/order-management-features-nafks7`; not pushed to `main` (needs the owner's approval).
+
 ## 2026-11-01 (latest) - Supplier Account reports and a restructured Report module
 
 Owner request (2026-10-26, plan `C:\Users\user\.claude\plans\enumerated-kindling-karp.md`, phases P0 to P7): use what was worked out in the Shahin Khan workbook to arrange the Report module. Owner answers: goods the supplier gives his own customers leave **our** stock and are entered through a **separate order form for the supplier**; the old workbook is imported once, so receipts carry the **receive date, cartons and pieces**; the nine existing reports are restructured too. The work was built uncommitted while the owner waited for the GitHub limit; on 2026-11-01 the owner said "commit and push, and push to main".

@@ -1,5 +1,21 @@
 ## [Unreleased]
 
+**Release type:** Minor Feature Update
+
+### Added
+
+- **"Fill with AI" on the new-order form.** Owner request 2026-11-02. Staff paste the message a customer sent (WhatsApp, Messenger, SMS) and the form fills itself: the customer (found by phone number, or created when the staff member leaves that switch on), the products at their catalog price, the advance with its payment method, and the note. The shipping zone and fee, the totals and the courier fraud check follow as if the customer had been chosen by hand, and a summary says what was filled and what needs a person (a product that is not in the catalog, a variation to choose, an address that differs from the saved one). Nothing is saved until **Create** is pressed. The button shows on a new order once a super admin has turned the tool on.
+- **Order Form AI Fill settings, on the Integrations page.** Settings → Integrations → AI Integration has a new tab with the switch, the provider quick-setup, API format, base URL, model, encrypted API key and **Uses per day**. It reads text only, so a small or free model is enough (Groq, Google Gemini, or an OpenRouter ":free" model); the tab warns that free plans have small limits and that the pasted message goes to the chosen provider. It never borrows the company's older shared AI key: it stays off until the owner switches it on.
+
+### Changed
+
+- The AI client sends no `tools` list when a call uses no tools (it used to send an empty one, which OpenAI itself and many free models refuse).
+
+### Technical Notes
+
+- `OrderAutofillService` (`app/Services/OrderAutofill/`): the model gets the pasted message plus the products that look relevant (the whole catalog when it has 60 products or fewer) and answers with one JSON object, no tool calling, so any chat model works; `<think>` blocks, code fences and chatter around the JSON are tolerated. Everything it returns is re-checked: the phone number is found by code from the message (any spelling, Bangla digits) before the model's is used; a product or variation id that is not in the sent list is dropped; no price is asked for; a customer is matched by phone and never edited; the pasted text is not stored or logged. The daily limit is a per-company cache counter. `AiSettingsService::TOOL_ORDER_AUTOFILL` (`NO_LEGACY_FALLBACK`), `OrderForm::fillWithAi()`, `Integrations` tab. No schema change.
+- Tests: `OrderAutofillTest` 17 (reading, phone, made-up products, variations, wrapped answers, no `tools` key, large catalog, off/limit/provider errors, the form button, the Integrations tab). `AiSettingsServiceTest` now expects the new tool not to use the shared config. 35 new bilingual keys.
+
 ## [2.121.0] - 2026-11-02
 
 **Release type:** Minor Feature Update
