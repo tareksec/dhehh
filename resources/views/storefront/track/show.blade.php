@@ -4,9 +4,9 @@
     $currency = $company->currency ?: 'BDT';
     $trackIndexUrl = \App\Support\StorefrontUrl::route('track.index', [], $previewSlug ?? null);
     $booking = $order?->latestCourierBooking;
-    $orderStatusLabel = $order ? (App\Models\Order::STATUSES[$order->status] ?? ucfirst((string) $order->status)) : null;
+    $orderStatusLabel = $order ? __(App\Models\Order::STATUSES[$order->status] ?? ucfirst((string) $order->status)) : null;
     $deliveryStatus = $order?->delivery_status ?? App\Models\CourierBooking::STATUS_NOT_BOOKED;
-    $deliveryStatusLabel = App\Models\Order::DELIVERY_STATUSES[$deliveryStatus] ?? str($deliveryStatus)->headline();
+    $deliveryStatusLabel = __(App\Models\Order::DELIVERY_STATUSES[$deliveryStatus] ?? str($deliveryStatus)->headline());
     $hasDeliveryUpdate = $order && ($deliveryStatus !== App\Models\CourierBooking::STATUS_NOT_BOOKED || $booking);
     $orderSteps = [
         ['key' => 'submitted', 'label' => 'Order submitted', 'done' => (bool) $order],
@@ -21,7 +21,7 @@
                 <p class="text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">{{ __('Order tracking') }}</p>
                 <h1 class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">{{ __('Track your storefront order.') }}</h1>
                 <p class="storefront-page-copy mt-3">
-                    Enter your ERP order number to see the latest order, delivery, and courier information from {{ $company->name }}.
+                    {{ __('Enter your ERP order number to see the latest order, delivery, and courier information from :name.', ['name' => $company->name]) }}
                 </p>
 
                 <form class="mt-5 rounded-lg border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-gray-900" method="GET" action="{{ $trackIndexUrl }}">
@@ -48,14 +48,14 @@
                             value="{{ $phone }}"
                         >
                         <button class="rounded-lg bg-[var(--storefront-brand)] px-6 py-2.5 text-sm font-medium text-white transition hover:opacity-90" type="submit">
-                            Track order
+                            {{ __('Track order') }}
                         </button>
                     </div>
                     <p class="mt-3 text-xs leading-5 text-gray-400">{{ __('For your privacy, enter the phone number used when placing the order to view its details.') }}</p>
 
                     @if (! empty($notFound))
                         <p class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
-                            We couldn&rsquo;t find an order matching that order number and phone number. Please check both and try again.
+                            {{ __('We couldn’t find an order matching that order number and phone number. Please check both and try again.') }}
                         </p>
                     @endif
                 </form>
@@ -68,7 +68,7 @@
                             <div class="mx-auto grid h-14 w-14 place-items-center rounded-full bg-gray-100 text-xl text-gray-500 dark:bg-white/10 dark:text-gray-300">#</div>
                             <h2 class="mt-5 text-xl font-semibold tracking-tight">{{ __('Enter an order number') }}</h2>
                             <p class="mx-auto mt-2 max-w-sm text-sm leading-6 text-gray-500 dark:text-gray-400">
-                                After checkout, use the order number from the success page or invoice to track status here.
+                                {{ __('After checkout, use the order number from the success page or invoice to track status here.') }}
                             </p>
                         </div>
                     </div>
@@ -105,7 +105,7 @@
                         @if ($booking)
                             <div class="rounded-lg bg-gray-50 p-4 dark:bg-gray-950">
                                 <div class="text-xs font-medium text-gray-400">{{ __('Courier') }}</div>
-                                <div class="mt-1 text-base font-semibold">{{ $booking->provider?->name ?? 'Booked' }}</div>
+                                <div class="mt-1 text-base font-semibold">{{ $booking->provider?->name ?? __('Booked') }}</div>
                             </div>
                         @endif
                     </div>
@@ -140,11 +140,11 @@
                             <div class="mt-3 grid gap-3 text-sm sm:grid-cols-2">
                                 <div>
                                     <span class="block font-medium text-gray-900 dark:text-white">{{ __('Tracking ID') }}</span>
-                                    <span class="text-gray-600 dark:text-gray-300">{{ $booking->tracking_id ?: 'Pending' }}</span>
+                                    <span class="text-gray-600 dark:text-gray-300">{{ $booking->tracking_id ?: __('Pending') }}</span>
                                 </div>
                                 <div>
                                     <span class="block font-medium text-gray-900 dark:text-white">{{ __('Booking status') }}</span>
-                                    <span class="text-gray-600 dark:text-gray-300">{{ App\Models\CourierBooking::STATUSES[$booking->status] ?? str($booking->status)->headline() }}</span>
+                                    <span class="text-gray-600 dark:text-gray-300">{{ __(App\Models\CourierBooking::STATUSES[$booking->status] ?? str($booking->status)->headline()) }}</span>
                                 </div>
                             </div>
                         </div>
@@ -215,8 +215,8 @@
                             @foreach ($order->items as $item)
                                 <div class="flex justify-between gap-4 rounded-lg bg-gray-50 p-4 text-sm dark:bg-gray-950">
                                     <div>
-                                        <div class="font-medium">{{ $item->product?->name ?? 'Product' }}</div>
-                                        <div class="mt-1 text-gray-500">Qty {{ $item->quantity }}</div>
+                                        <div class="font-medium">{{ $item->product?->name ?? __('Product') }}</div>
+                                        <div class="mt-1 text-gray-500">{{ __('Qty :quantity', ['quantity' => $item->quantity]) }}</div>
                                     </div>
                                     <div class="font-semibold">{{ \App\Support\MoneyFormatter::currency($order->showsResellerPricesToBuyer() ? $item->buyerSubtotal() : (float) $order->due_amount, $currency) }}</div>
                                 </div>

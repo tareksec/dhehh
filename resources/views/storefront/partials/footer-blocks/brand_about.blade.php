@@ -16,6 +16,6 @@
         <div class="text-xs text-gray-500 dark:text-gray-400">{{ $data['tagline'] }}</div>
     @endif
     <p class="mt-3 max-w-sm text-sm leading-6 text-gray-500 dark:text-gray-400">
-        {{ filled($data['text'] ?? null) ? $data['text'] : 'Browse curated products, place direct orders, and track storefront purchases from '.$company->name.'.' }}
+        {{ filled($data['text'] ?? null) ? $data['text'] : __('Browse curated products, place direct orders, and track storefront purchases from :company.', ['company' => $company->name]) }}
     </p>
 </div>

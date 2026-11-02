@@ -16,7 +16,7 @@
             x-data="{ tab: '{{ $activeTab }}' }"
             x-init="$nextTick(() => (tab === 'login' ? $refs.loginFirst : $refs.registerFirst)?.focus())"
         >
-            <div class="grid grid-cols-2 gap-2 rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-white/10 dark:bg-gray-900" role="group" aria-label="Log in or create an account">
+            <div class="grid grid-cols-2 gap-2 rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-white/10 dark:bg-gray-900" role="group" aria-label="{{ __('Log in or create an account') }}">
                 <button
                     type="button"
                     :aria-pressed="(tab === 'login').toString()"
@@ -24,7 +24,7 @@
                     class="rounded-lg py-2.5 text-sm font-medium transition"
                     :class="tab === 'login' ? 'bg-white text-gray-950 shadow-sm dark:bg-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'"
                 >
-                    Log in
+                    {{ __('Log in') }}
                 </button>
                 <button
                     type="button"
@@ -33,7 +33,7 @@
                     class="rounded-lg py-2.5 text-sm font-medium transition"
                     :class="tab === 'register' ? 'bg-white text-gray-950 shadow-sm dark:bg-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'"
                 >
-                    Create account
+                    {{ __('Create account') }}
                 </button>
             </div>
 
@@ -51,25 +51,25 @@
                     <div>
                         <div class="flex items-center justify-between">
                             <label class="text-xs font-medium text-gray-500" for="password">{{ __('Password') }}</label>
-                            <a class="text-xs font-medium text-[var(--storefront-brand)]" href="{{ $forgotUrl }}">Forgot password?</a>
+                            <a class="text-xs font-medium text-[var(--storefront-brand)]" href="{{ $forgotUrl }}">{{ __('Forgot password?') }}</a>
                         </div>
                         <input class="mt-2 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-4 text-sm outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/10 dark:bg-gray-950" id="password" name="password" type="password" autocomplete="current-password" required>
                         @error('password') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                     </div>
                     <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                         <input class="rounded border-gray-300 text-[var(--storefront-brand)] focus:ring-[var(--storefront-brand)]" type="checkbox" name="remember" value="1">
-                        Keep me logged in
+                        {{ __('Keep me logged in') }}
                     </label>
                     <button class="w-full rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90 [touch-action:manipulation]" type="submit">
-                        Log in
+                        {{ __('Log in') }}
                     </button>
                     <div class="flex items-center gap-3" aria-hidden="true">
                         <span class="h-px flex-1 bg-gray-200 dark:bg-white/10"></span>
-                        <span class="text-xs text-gray-400">or</span>
+                        <span class="text-xs text-gray-400">{{ __('or') }}</span>
                         <span class="h-px flex-1 bg-gray-200 dark:bg-white/10"></span>
                     </div>
                     <a class="flex min-h-11 w-full items-center justify-center rounded-lg border border-gray-300 px-6 py-3 text-sm font-medium text-gray-800 transition hover:border-[var(--storefront-brand)] hover:text-[var(--storefront-brand)] dark:border-white/15 dark:text-gray-100" href="{{ $otpUrl }}">
-                        Log in with an OTP
+                        {{ __('Log in with an OTP') }}
                     </a>
                 </form>
             </div>
@@ -91,12 +91,12 @@
                         @error('phone') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                     </div>
                     <div>
-                        <label class="text-xs font-medium text-gray-500" for="email">Email (optional)</label>
+                        <label class="text-xs font-medium text-gray-500" for="email">{{ __('Email (optional)') }}</label>
                         <input class="mt-2 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-4 text-sm outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/10 dark:bg-gray-950" id="email" name="email" type="email" autocomplete="email" spellcheck="false" value="{{ old('email') }}">
                         @error('email') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                     </div>
                     <div>
-                        <label class="text-xs font-medium text-gray-500" for="address">Delivery address (optional)</label>
+                        <label class="text-xs font-medium text-gray-500" for="address">{{ __('Delivery address (optional)') }}</label>
                         <textarea class="mt-2 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/10 dark:bg-gray-950" id="address" name="address" rows="2" autocomplete="street-address">{{ old('address') }}</textarea>
                         @error('address') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                     </div>
@@ -111,7 +111,7 @@
                         <input class="mt-2 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-4 text-sm outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/10 dark:bg-gray-950" id="password_confirmation" name="password_confirmation" type="password" autocomplete="new-password" minlength="8" required>
                     </div>
                     <button class="w-full rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90 [touch-action:manipulation]" type="submit">
-                        Create account
+                        {{ __('Create account') }}
                     </button>
                 </form>
             </div>

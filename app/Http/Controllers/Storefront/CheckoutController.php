@@ -229,7 +229,7 @@ class CheckoutController extends Controller
             ]);
 
             return redirect()->route('storefront.checkout.show')
-                ->withErrors(['payment' => 'Your payment session ended or was cancelled. Please try again.']);
+                ->withErrors(['payment' => __('Your payment session ended or was cancelled. Please try again.')]);
         }
 
         [$company, $setting] = $this->domainStorefront($request);
@@ -245,7 +245,7 @@ class CheckoutController extends Controller
             ]);
 
             return redirect()->route('storefront.preview.checkout.show', $company->slug)
-                ->withErrors(['payment' => 'Your payment session ended or was cancelled. Please try again.']);
+                ->withErrors(['payment' => __('Your payment session ended or was cancelled. Please try again.')]);
         }
 
         $setting = $this->previewStorefront($company);
@@ -277,7 +277,7 @@ class CheckoutController extends Controller
             return redirect($previewSlug
                 ? route('storefront.preview.checkout.show', $previewSlug)
                 : route('storefront.checkout.show'))
-                ->withErrors(['payment' => 'Payment was not completed or could not be verified. No order was placed.']);
+                ->withErrors(['payment' => __('Payment was not completed or could not be verified. No order was placed.')]);
         }
 
         $this->cart->clear($company, $order);
@@ -294,7 +294,7 @@ class CheckoutController extends Controller
         if ($items->isEmpty()) {
             return redirect($previewSlug
                 ? route('storefront.preview.cart.show', $previewSlug)
-                : route('storefront.cart.show'))->with('storefront_status', 'Add products before checkout.');
+                : route('storefront.cart.show'))->with('storefront_status', __('Add products before checkout.'));
         }
 
         $insideQuote = $this->delivery->quote($items, 'inside', $setting);

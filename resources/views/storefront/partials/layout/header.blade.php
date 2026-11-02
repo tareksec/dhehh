@@ -24,7 +24,7 @@
                     type="search"
                     name="q"
                     value="{{ $search ?? request('q') }}"
-                    placeholder="Search products…"
+                    placeholder="{{ __('Search products…') }}"
                     autocomplete="off"
                     enterkeyhint="search"
                     class="h-10 w-full rounded-lg border border-gray-300 bg-gray-50 py-2 pl-9 pr-4 text-sm outline-none transition focus:border-[var(--storefront-brand)] focus:bg-white focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:bg-gray-950"
@@ -36,10 +36,10 @@
             <button
                 type="button"
                 data-mobile-menu-toggle
-                data-open-label="Open menu"
-                data-close-label="Close menu"
+                data-open-label="{{ __('Open menu') }}"
+                data-close-label="{{ __('Close menu') }}"
                 class="grid h-10 w-10 place-items-center rounded-md border border-gray-300 text-gray-600 transition hover:border-gray-400 hover:bg-gray-100 hover:text-gray-950 lg:hidden dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
-                aria-label="Open menu"
+                aria-label="{{ __('Open menu') }}"
                 aria-expanded="false"
                 aria-controls="storefront-mobile-menu"
             >
@@ -47,7 +47,7 @@
                 <svg data-mobile-menu-icon-close class="hidden h-5 w-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
             </button>
             @if ($setting->phone_number)
-                <a class="hidden h-10 w-10 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition hover:border-gray-400 hover:text-gray-950 lg:inline-flex dark:border-gray-700 dark:text-gray-300 dark:hover:text-white" href="tel:{{ preg_replace('/\s+/', '', $setting->phone_number) }}" title="Call support" aria-label="Call support">
+                <a class="hidden h-10 w-10 items-center justify-center rounded-md border border-gray-300 text-gray-600 transition hover:border-gray-400 hover:text-gray-950 lg:inline-flex dark:border-gray-700 dark:text-gray-300 dark:hover:text-white" href="tel:{{ preg_replace('/\s+/', '', $setting->phone_number) }}" title="{{ __('Call support') }}" aria-label="{{ __('Call support') }}">
                     <svg class="h-5 w-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h1.5a2.25 2.25 0 0 0 2.25-2.25v-1.372a1 1 0 0 0-.804-.98l-4.204-.841a1 1 0 0 0-1.028.417l-.92 1.38a1 1 0 0 1-1.21.38 12.035 12.035 0 0 1-5.512-5.512 1 1 0 0 1 .38-1.21l1.38-.92a1 1 0 0 0 .417-1.028l-.84-4.204a1 1 0 0 0-.98-.804H4.5a2.25 2.25 0 0 0-2.25 2.25v.75Z"/></svg>
                 </a>
             @endif
@@ -64,7 +64,7 @@
                     :aria-expanded="open.toString()"
                     aria-controls="storefront-account-menu"
                     class="flex h-10 min-w-10 items-center justify-center gap-1 rounded-md border border-gray-300 px-2 text-gray-600 transition hover:border-gray-400 hover:bg-gray-100 hover:text-gray-950 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
-                    aria-label="{{ $authCustomer ? 'Account menu' : 'Account' }}"
+                    aria-label="{{ $authCustomer ? __('Account menu') : __('Account') }}"
                 >
                     @if ($authCustomer)
                         <span class="grid h-6 w-6 place-items-center rounded-full bg-[var(--storefront-brand)] text-[11px] font-semibold text-white" aria-hidden="true">
@@ -78,7 +78,7 @@
                 <div class="absolute right-0 top-full z-30 w-72 max-w-[calc(100vw-2rem)] pt-1.5" id="storefront-account-menu" x-show="open" x-cloak x-transition>
                     <div class="rounded-lg border border-gray-200 bg-white p-1.5 shadow-xl dark:border-gray-800 dark:bg-gray-950" role="menu">
                         @if (! $accountsEnabled)
-                            <a class="block rounded-lg px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white" href="{{ $trackUrl }}" @click="open = false">Track an order</a>
+                            <a class="block rounded-lg px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white" href="{{ $trackUrl }}" @click="open = false">{{ __('Track an order') }}</a>
                         @elseif ($authCustomer)
                             <div class="flex items-center gap-2.5 border-b border-gray-100 px-2 py-2 dark:border-gray-800">
                                 <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--storefront-brand)] text-sm font-semibold text-white" aria-hidden="true">{{ mb_strtoupper(mb_substr($authCustomer->name, 0, 1)) }}</span>
@@ -90,51 +90,51 @@
                             <div class="px-2.5 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">{{ __('My account') }}</div>
                             <a class="flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition {{ request()->routeIs('storefront.account.index', 'storefront.preview.account.index') ? 'bg-gray-100 text-gray-950 dark:bg-gray-800 dark:text-white' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white' }}" href="{{ $accountUrl }}" role="menuitem" @click="open = false">
                                 @include('storefront.account.partials.nav-icon', ['icon' => 'home'])
-                                Account overview
+                                {{ __('Account overview') }}
                             </a>
                             <a class="flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition {{ request()->routeIs('storefront.account.profile', 'storefront.preview.account.profile') ? 'bg-gray-100 text-gray-950 dark:bg-gray-800 dark:text-white' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white' }}" href="{{ $profileUrl }}" role="menuitem" @click="open = false">
                                 @include('storefront.account.partials.nav-icon', ['icon' => 'user'])
-                                Profile settings
+                                {{ __('Profile settings') }}
                             </a>
                             <a class="flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition {{ request()->routeIs('storefront.account.orders', 'storefront.preview.account.orders') ? 'bg-gray-100 text-gray-950 dark:bg-gray-800 dark:text-white' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white' }}" href="{{ $accountOrdersUrl }}" role="menuitem" @click="open = false">
                                 @include('storefront.account.partials.nav-icon', ['icon' => 'bag'])
-                                My orders
+                                {{ __('My orders') }}
                             </a>
                             <a class="flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition {{ request()->routeIs('storefront.account.activity', 'storefront.preview.account.activity') ? 'bg-gray-100 text-gray-950 dark:bg-gray-800 dark:text-white' : 'text-gray-700 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white' }}" href="{{ $activityUrl }}" role="menuitem" @click="open = false">
                                 @include('storefront.account.partials.nav-icon', ['icon' => 'activity'])
-                                Account activity
+                                {{ __('Account activity') }}
                             </a>
                             <div class="my-0.5 border-t border-gray-100 dark:border-gray-800"></div>
                             <a class="flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white" href="{{ $trackUrl }}" role="menuitem" @click="open = false">
                                 <svg class="h-5 w-5 shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12a9 9 0 1 0 3-6.708M3 4.5v5.25h5.25M12 7.5V12l3 1.5"/></svg>
-                                Track an order
+                                {{ __('Track an order') }}
                             </a>
                             @if ($setting->reseller_program_enabled ?? true)
                                 <a class="flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white" href="{{ in_array($authCustomer->reseller_status, [null, 'none'], true) ? $resellerUrl : ($resellerStatusUrl ?? $resellerUrl) }}" role="menuitem" @click="open = false">
                                     <svg class="h-5 w-5 shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372A9.337 9.337 0 0 0 21 18.872M15 19.128v-.003c0-1.113-.285-2.16-.786-3.071M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766v-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"/></svg>
-                                    {{ in_array($authCustomer->reseller_status, [null, 'none'], true) ? 'Become a reseller' : 'Reseller status' }}
+                                    {{ in_array($authCustomer->reseller_status, [null, 'none'], true) ? __('Become a reseller') : __('Reseller status') }}
                                 </a>
                             @endif
                             <form class="border-t border-gray-100 pt-0.5 dark:border-gray-800" method="POST" action="{{ $logoutUrl }}">
                                 @csrf
                                 <button class="flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-sm font-medium text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30" type="submit" role="menuitem">
                                     <svg class="h-5 w-5 shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6A2.25 2.25 0 0 0 5.25 5.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12"/></svg>
-                                    Log out
+                                    {{ __('Log out') }}
                                 </button>
                             </form>
                         @else
-                            <a class="block rounded-lg px-3 py-2 text-sm font-medium text-gray-900 transition hover:bg-gray-100 dark:text-white dark:hover:bg-white/10" href="{{ $loginUrl }}" @click="open = false">Log in</a>
-                            <a class="block rounded-lg px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white" href="{{ $registerUrl }}" @click="open = false">Create account</a>
-                            <a class="block rounded-lg px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white" href="{{ $trackUrl }}" @click="open = false">Track an order</a>
+                            <a class="block rounded-lg px-3 py-2 text-sm font-medium text-gray-900 transition hover:bg-gray-100 dark:text-white dark:hover:bg-white/10" href="{{ $loginUrl }}" @click="open = false">{{ __('Log in') }}</a>
+                            <a class="block rounded-lg px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white" href="{{ $registerUrl }}" @click="open = false">{{ __('Create account') }}</a>
+                            <a class="block rounded-lg px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white" href="{{ $trackUrl }}" @click="open = false">{{ __('Track an order') }}</a>
                         @endif
                         <div class="my-0.5 border-t border-gray-100 dark:border-white/10"></div>
                         <button
                             type="button"
                             data-theme-toggle
-                            data-light-label="Switch to light mode"
-                            data-dark-label="Switch to dark mode"
+                            data-light-label="{{ __('Switch to light mode') }}"
+                            data-dark-label="{{ __('Switch to dark mode') }}"
                             class="flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-sm text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white"
-                            aria-label="Switch to dark mode"
+                            aria-label="{{ __('Switch to dark mode') }}"
                             aria-pressed="false"
                         >
                             <span class="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-gray-100 dark:bg-white/10">
@@ -148,7 +148,7 @@
             </div>
 
             <a class="relative hidden h-10 items-center whitespace-nowrap rounded-md border border-gray-300 px-4 text-sm font-semibold text-gray-900 transition hover:border-[var(--storefront-brand)] sm:inline-flex dark:border-gray-700 dark:text-white" href="{{ $cartUrl }}">
-                Cart
+                {{ __('Cart') }}
                 @if ($cartCount > 0)
                     <span class="ml-2 grid h-5 min-w-5 place-items-center rounded-full bg-[var(--storefront-brand)] px-1 text-xs font-semibold text-white">{{ $cartCount }}</span>
                 @endif
@@ -157,7 +157,7 @@
     </div>
 
     <div class="hidden border-t border-gray-200 bg-gray-50 lg:block dark:border-gray-800 dark:bg-gray-900">
-        <nav class="mx-auto flex min-h-10 w-full max-w-7xl flex-wrap items-center gap-x-6 gap-y-1 px-5 text-sm font-semibold text-gray-700 lg:px-6 dark:text-gray-200" aria-label="Storefront navigation">
+        <nav class="mx-auto flex min-h-10 w-full max-w-7xl flex-wrap items-center gap-x-6 gap-y-1 px-5 text-sm font-semibold text-gray-700 lg:px-6 dark:text-gray-200" aria-label="{{ __('Storefront navigation') }}">
             @if ($headerMenu->isNotEmpty())
                 @foreach ($headerMenu as $menuItem)
                     <a
@@ -175,7 +175,7 @@
                     </a>
                 @endforeach
             @else
-                <a class="inline-flex min-h-10 items-center border-b-2 transition hover:border-[var(--storefront-brand)] hover:text-gray-950 dark:hover:text-white {{ $isCatalogCurrent ? 'border-[var(--storefront-brand)] text-gray-950 dark:text-white' : 'border-transparent' }}" href="{{ $productsUrl }}" @if ($isCatalogCurrent) aria-current="page" @endif>Shop all</a>
+                <a class="inline-flex min-h-10 items-center border-b-2 transition hover:border-[var(--storefront-brand)] hover:text-gray-950 dark:hover:text-white {{ $isCatalogCurrent ? 'border-[var(--storefront-brand)] text-gray-950 dark:text-white' : 'border-transparent' }}" href="{{ $productsUrl }}" @if ($isCatalogCurrent) aria-current="page" @endif>{{ __('Shop all') }}</a>
             @endif
 
             @if ($navCategories->isNotEmpty())
@@ -187,7 +187,7 @@
                         class="flex min-h-10 items-center gap-1 border-b-2 transition"
                         :class="open ? 'border-[var(--storefront-brand)] text-gray-950 dark:text-white' : 'border-transparent'"
                     >
-                        Categories
+                        {{ __('Categories') }}
                         <svg class="h-3.5 w-3.5 transition" :class="open ? 'rotate-180' : ''" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg>
                     </button>
                     <div class="absolute left-0 top-full z-30 w-[min(90vw,640px)] pt-2" x-show="open" x-cloak x-transition>
@@ -203,7 +203,7 @@
             @endif
 
             @if ($headerMenu->isEmpty())
-                <a class="inline-flex min-h-10 items-center border-b-2 transition hover:border-[var(--storefront-brand)] hover:text-gray-950 dark:hover:text-white {{ $isCurrentUrl($trackUrl) ? 'border-[var(--storefront-brand)] text-gray-950 dark:text-white' : 'border-transparent' }}" href="{{ $trackUrl }}" @if ($isCurrentUrl($trackUrl)) aria-current="page" @endif>Track order</a>
+                <a class="inline-flex min-h-10 items-center border-b-2 transition hover:border-[var(--storefront-brand)] hover:text-gray-950 dark:hover:text-white {{ $isCurrentUrl($trackUrl) ? 'border-[var(--storefront-brand)] text-gray-950 dark:text-white' : 'border-transparent' }}" href="{{ $trackUrl }}" @if ($isCurrentUrl($trackUrl)) aria-current="page" @endif>{{ __('Track order') }}</a>
             @endif
         </nav>
     </div>
@@ -218,7 +218,7 @@
                     type="search"
                     name="q"
                     value="{{ $search ?? request('q') }}"
-                    placeholder="Search products…"
+                    placeholder="{{ __('Search products…') }}"
                     autocomplete="off"
                     enterkeyhint="search"
                     class="min-h-11 w-full rounded-full border border-gray-200 bg-gray-50 py-2.5 pl-9 pr-4 text-sm outline-none transition focus:border-[var(--storefront-brand)] focus:bg-white focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/10 dark:bg-white/5 dark:text-white"
@@ -228,7 +228,7 @@
     </div>
 
     <div id="storefront-mobile-menu" data-mobile-menu class="hidden border-t border-gray-200 bg-white lg:hidden dark:border-white/10 dark:bg-gray-950" hidden>
-        <nav class="mx-auto flex w-full max-w-7xl flex-col gap-1 px-4 py-3" aria-label="Mobile menu">
+        <nav class="mx-auto flex w-full max-w-7xl flex-col gap-1 px-4 py-3" aria-label="{{ __('Mobile menu') }}">
             @if ($headerMenu->isNotEmpty())
                 @foreach ($headerMenu as $menuItem)
                     <a class="flex items-center gap-1.5 rounded-lg px-3 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white" href="{{ $menuItem['url'] }}" @if ($isCurrentUrl($menuItem['url'])) aria-current="page" @endif @if ($menuItem['new_tab']) target="_blank" rel="noopener" @endif>
@@ -241,11 +241,11 @@
                     </a>
                 @endforeach
             @else
-                <a class="rounded-lg px-3 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white" href="{{ $productsUrl }}" @if ($isCatalogCurrent) aria-current="page" @endif>Shop all</a>
-                <a class="rounded-lg px-3 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white" href="{{ $trackUrl }}" @if ($isCurrentUrl($trackUrl)) aria-current="page" @endif>Track order</a>
+                <a class="rounded-lg px-3 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white" href="{{ $productsUrl }}" @if ($isCatalogCurrent) aria-current="page" @endif>{{ __('Shop all') }}</a>
+                <a class="rounded-lg px-3 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white" href="{{ $trackUrl }}" @if ($isCurrentUrl($trackUrl)) aria-current="page" @endif>{{ __('Track order') }}</a>
                 @if ($accountsEnabled)
                     <a class="rounded-lg px-3 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white" href="{{ $mobileAccountUrl }}" @if ($isAccountCurrent) aria-current="page" @endif>
-                        {{ $authCustomer ? 'My account' : 'Log in / Register' }}
+                        {{ $authCustomer ? __('My account') : __('Log in / Register') }}
                     </a>
                 @endif
             @endif

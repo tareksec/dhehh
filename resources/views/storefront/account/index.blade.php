@@ -11,10 +11,10 @@
     <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
             <p class="text-sm font-medium text-[var(--storefront-brand)]">{{ __('Overview') }}</p>
-            <h2 class="mt-1 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">Welcome back, {{ str($customer->name)->before(' ') }}.</h2>
+            <h2 class="mt-1 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{{ __('Welcome back, :name.', ['name' => str($customer->name)->before(' ')]) }}</h2>
             <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ __('Manage your account and follow every order from one place.') }}</p>
         </div>
-        <a class="mt-3 inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--storefront-brand)] px-5 text-sm font-semibold text-white transition hover:opacity-90 sm:mt-0" href="{{ $productsUrl }}">Continue shopping</a>
+        <a class="mt-3 inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--storefront-brand)] px-5 text-sm font-semibold text-white transition hover:opacity-90 sm:mt-0" href="{{ $productsUrl }}">{{ __('Continue shopping') }}</a>
     </div>
 
     <div class="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -35,7 +35,7 @@
         <section class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900" aria-labelledby="recent-orders-heading">
             <div class="flex items-center justify-between gap-4">
                 <h3 class="text-lg font-semibold tracking-tight" id="recent-orders-heading">{{ __('Recent orders') }}</h3>
-                <a class="text-sm font-semibold text-[var(--storefront-brand)] hover:underline" href="{{ $accountRoute('orders') }}">View all</a>
+                <a class="text-sm font-semibold text-[var(--storefront-brand)] hover:underline" href="{{ $accountRoute('orders') }}">{{ __('View all') }}</a>
             </div>
             @if ($recentOrders->isEmpty())
                 <div class="py-8 text-center">
@@ -48,11 +48,11 @@
                         <a class="flex min-h-16 items-center justify-between gap-4 py-3 transition hover:text-[var(--storefront-brand)]" href="{{ \App\Support\StorefrontUrl::route('track.show', [$order->order_number], $previewSlug ?? null) }}">
                             <div class="min-w-0">
                                 <p class="truncate text-sm font-semibold">{{ $order->order_number }}</p>
-                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ optional($order->order_date)->format('d M Y') }} &middot; {{ $order->items->sum('quantity') }} items</p>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ __(':order_date · :items items', ['order_date' => optional($order->order_date)->format('d M Y'), 'items' => $order->items->sum('quantity')]) }}</p>
                             </div>
                             <div class="shrink-0 text-right">
                                 <p class="text-sm font-semibold">{{ \App\Support\MoneyFormatter::currency($order->buyerTotal(), $company->currency ?: 'BDT') }}</p>
-                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ App\Models\Order::STATUSES[$order->status] ?? str($order->status)->headline() }}</p>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ __(App\Models\Order::STATUSES[$order->status] ?? str($order->status)->headline()) }}</p>
                             </div>
                         </a>
                     @endforeach
@@ -63,7 +63,7 @@
         <section class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900" aria-labelledby="recent-activity-heading">
             <div class="flex items-center justify-between gap-4">
                 <h3 class="text-lg font-semibold tracking-tight" id="recent-activity-heading">{{ __('Recent activity') }}</h3>
-                <a class="text-sm font-semibold text-[var(--storefront-brand)] hover:underline" href="{{ $accountRoute('activity') }}">View all</a>
+                <a class="text-sm font-semibold text-[var(--storefront-brand)] hover:underline" href="{{ $accountRoute('activity') }}">{{ __('View all') }}</a>
             </div>
             @if ($recentActivities->isEmpty())
                 <div class="py-8 text-center">

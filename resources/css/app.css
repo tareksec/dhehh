@@ -365,7 +365,14 @@ body[data-storefront-theme='marketplace_pro'] .mp-brand-name {
 }
 
 .mp-footer {
+    background: var(--storefront-surface);
+    border-top: 1px solid var(--storefront-border);
+    color: var(--storefront-text);
+}
+
+.dark .mp-footer {
     background: color-mix(in srgb, var(--storefront-secondary) 72%, black);
+    border-top-color: transparent;
     color: rgb(255 255 255 / 0.82);
 }
 
@@ -2325,13 +2332,16 @@ body[data-storefront-theme='noor_solar'] .storefront-footer a:hover {
     background-color: color-mix(in srgb, var(--storefront-dark-background) 95%, transparent);
 }
 
-/* Marketplace Pro keeps its navy header/footer in both colour modes. */
+/* Marketplace Pro keeps its navy header in both colour modes; its footer follows the colour mode. */
 .storefront-shell .storefront-header.mp-header,
 .dark .storefront-shell .storefront-header.mp-header {
     background-color: var(--storefront-secondary);
 }
 
-.storefront-shell .storefront-footer.mp-footer,
+.storefront-shell .storefront-footer.mp-footer {
+    background-color: var(--storefront-surface);
+}
+
 .dark .storefront-shell .storefront-footer.mp-footer {
     background-color: color-mix(in srgb, var(--storefront-secondary) 72%, black);
 }

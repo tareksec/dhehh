@@ -166,7 +166,7 @@ class StorefrontCheckoutService
         // would otherwise require, so this always takes the online-payment
         // path regardless of the eligibility decision.
         if ($data['payment_method'] === StorefrontPaymentMethod::TYPE_ONLINE_GATEWAY) {
-            $this->assertOnlinePaymentAvailable($setting, 'Online payment is not available right now.');
+            $this->assertOnlinePaymentAvailable($setting, __('Online payment is not available right now.'));
             $decision = $this->fullOnlinePaymentDecision($totalAmount);
             $this->policies->recordPaymentDecision($attempt, $decision);
 
@@ -187,7 +187,7 @@ class StorefrontCheckoutService
         $this->policies->recordPaymentDecision($attempt, $decision);
 
         if ($decision['required_advance'] > 0) {
-            $this->assertOnlinePaymentAvailable($setting, 'This order requires a verified online advance before it can be placed.');
+            $this->assertOnlinePaymentAvailable($setting, __('This order requires a verified online advance before it can be placed.'));
 
             return $this->startAdvancePayment($company, $setting, $data, $items, $quote, $decision, $paymentUrls, $attempt, $cart);
         }
@@ -309,7 +309,7 @@ class StorefrontCheckoutService
             $payment->update(['status' => StorefrontPayment::STATUS_FAILED, 'payload' => ['error' => $exception->getMessage()]]);
             Log::warning('Checkout advance payment creation failed', ['payment' => $payment->getKey(), 'error' => $exception->getMessage()]);
 
-            throw ValidationException::withMessages(['payment' => 'The secure payment page could not be opened. No order was placed; please try again.']);
+            throw ValidationException::withMessages(['payment' => __('The secure payment page could not be opened. No order was placed; please try again.')]);
         }
 
         $payment->update(['invoice_id' => $created['invoice_id']]);
@@ -334,7 +334,7 @@ class StorefrontCheckoutService
         $cart?->rememberContact($company, $data['phone'], $data['name']);
 
         return DB::transaction(function () use ($company, $data, $items, $deliveryCharge, $cart, $setting): Order {
-            abort_if($items->isEmpty(), 422, 'Your cart is empty.');
+            abort_if($items->isEmpty(), 422, __('Your cart is empty.'));
 
             $this->assertStock($items);
 
@@ -422,7 +422,7 @@ class StorefrontCheckoutService
 
     public function assertStock($items): void
     {
-        abort_if(collect($items)->isEmpty(), 422, 'Your cart is empty.');
+        abort_if(collect($items)->isEmpty(), 422, __('Your cart is empty.'));
 
         foreach ($items as $item) {
             $variant = $item['variant'] ?? null;
@@ -432,7 +432,7 @@ class StorefrontCheckoutService
                 continue;
             }
 
-            abort_if($item['quantity'] > $availableStock, 422, "{$item['product']->name} does not have enough stock.");
+            abort_if($item['quantity'] > $availableStock, 422, __(':product does not have enough stock.', ['product' => $item['product']->name]));
         }
     }
 

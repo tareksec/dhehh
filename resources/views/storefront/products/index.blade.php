@@ -35,12 +35,12 @@
         <div class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-5 lg:px-6">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                    <p class="text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">{{ ($search ?? '') !== '' ? 'Search' : ($category?->name ?? 'Catalog') }}</p>
+                    <p class="text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">{{ ($search ?? '') !== '' ? __('Search') : ($category?->name ?? __('Catalog')) }}</p>
                     <h1 class="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
                         @if (($search ?? '') !== '')
-                            Results for &ldquo;{{ $search }}&rdquo;
+                            {{ __('Results for “:search”', ['search' => $search]) }}
                         @else
-                            {{ $category?->name ?? 'All products' }}
+                            {{ $category?->name ?? __('All products') }}
                         @endif
                     </h1>
                 </div>
@@ -50,7 +50,7 @@
             @if ($categories->isNotEmpty())
                 <div class="-mx-4 mt-6 flex snap-x gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
                     <a class="inline-flex min-h-11 shrink-0 snap-start items-center rounded-full border px-4 text-sm font-medium transition {{ ! $category ? 'border-[var(--storefront-brand)] bg-[var(--storefront-brand)] text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400 dark:border-white/10 dark:text-gray-300' }}" href="{{ $baseProductsUrl }}" @if (! $category) aria-current="page" @endif>
-                        All
+                        {{ __('All') }}
                     </a>
                     @foreach ($categories as $chip)
                         @php
@@ -84,9 +84,9 @@
             @empty
                 <div class="col-span-full rounded-xl border border-dashed border-gray-300 p-10 text-center text-gray-500 dark:border-white/15">
                     @if (($search ?? '') !== '')
-                        No products match &ldquo;{{ $search }}&rdquo;. Try a different search term.
+                        {{ __('No products match “:search”. Try a different search term.', ['search' => $search]) }}
                     @else
-                        No products found.
+                        {{ __('No products found.') }}
                     @endif
                 </div>
             @endforelse

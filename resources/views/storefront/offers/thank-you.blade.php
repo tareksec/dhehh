@@ -4,6 +4,7 @@
     @php
         $offersUrl = \App\Support\StorefrontUrl::route('offers.index', [], $previewSlug ?? null);
         $loginUrl = \App\Support\StorefrontUrl::route('account.login', [], $previewSlug ?? null);
+        $orderNumberHtml = '<span class="font-semibold text-gray-950 dark:text-white">'.e($order->order_number).'</span>';
     @endphp
 
     <section class="mx-auto w-full max-w-3xl px-4 py-8 text-center sm:px-5 lg:px-6">
@@ -11,25 +12,27 @@
             <svg class="h-8 w-8" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
         </div>
         <p class="mt-6 text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">{{ __('Order submitted') }}</p>
-        <h1 class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Thank you, {{ $order->customer?->name }}.</h1>
-        <p class="storefront-page-copy mx-auto mt-3">Order <span class="font-semibold text-gray-950 dark:text-white">{{ $order->order_number }}</span>{{ $offer ? ' for '.$offer->title : '' }} has been received. Our team will review and confirm it shortly.</p>
+        <h1 class="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">{{ __('Thank you, :name.', ['name' => $order->customer?->name]) }}</h1>
+        <p class="storefront-page-copy mx-auto mt-3">{!! $offer
+            ? __('Order :number for :offer has been received. Our team will review and confirm it shortly.', ['number' => $orderNumberHtml, 'offer' => e($offer->title)])
+            : __('Order :number has been received. Our team will review and confirm it shortly.', ['number' => $orderNumberHtml]) !!}</p>
 
         @if ($generatedPassword)
             <div class="mt-6 rounded-xl border border-[var(--storefront-brand)]/30 bg-[var(--storefront-brand)]/5 p-5 text-left text-sm leading-6">
-                <h2 class="font-semibold text-gray-950 dark:text-white">আপনার অ্যাকাউন্ট তৈরি হয়েছে</h2>
+                <h2 class="font-semibold text-gray-950 dark:text-white">{{ __('Your account has been created') }}</h2>
                 <p class="mt-2 text-gray-700 dark:text-gray-200">
-                    লগইন: <span class="font-semibold">{{ $order->customer?->phone }}</span><br>
-                    পাসওয়ার্ড: <span class="font-semibold">{{ $generatedPassword }}</span>
+                    {{ __('Login:') }} <span class="font-semibold">{{ $order->customer?->phone }}</span><br>
+                    {{ __('Password:') }} <span class="font-semibold">{{ $generatedPassword }}</span>
                 </p>
-                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">এই পাসওয়ার্ড শুধু একবারই দেখানো হচ্ছে — অনুগ্রহ করে সংরক্ষণ করুন। লগইন করে প্রোফাইল সেটিংস থেকে যেকোনো সময় পরিবর্তন করতে পারবেন।</p>
-                <a href="{{ $loginUrl }}" class="mt-3 inline-flex items-center text-sm font-medium text-[var(--storefront-brand)]">এখনই লগইন করুন &rarr;</a>
+                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ __('This password is shown only once — please save it. After logging in you can change it any time from profile settings.') }}</p>
+                <a href="{{ $loginUrl }}" class="mt-3 inline-flex items-center text-sm font-medium text-[var(--storefront-brand)]">{{ __('Log in now') }} &rarr;</a>
             </div>
         @endif
 
         <div class="mt-8 rounded-xl border border-gray-200 bg-white p-6 text-left dark:border-white/10 dark:bg-white/5">
             <div class="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 pb-5 dark:border-white/10">
-                <div><div class="text-xs font-medium text-gray-400">Status</div><div class="mt-1 text-base font-semibold">{{ ucfirst($order->status) }}</div></div>
-                <div class="text-right"><div class="text-xs font-medium text-gray-400">Total</div><div class="mt-1 text-xl font-semibold text-gray-950 dark:text-white">{{ \App\Support\MoneyFormatter::currency((float) $order->total_amount) }}</div></div>
+                <div><div class="text-xs font-medium text-gray-400">{{ __('Status') }}</div><div class="mt-1 text-base font-semibold">{{ __(\App\Models\Order::STATUSES[$order->status] ?? ucfirst((string) $order->status)) }}</div></div>
+                <div class="text-right"><div class="text-xs font-medium text-gray-400">{{ __('Total') }}</div><div class="mt-1 text-xl font-semibold text-gray-950 dark:text-white">{{ \App\Support\MoneyFormatter::currency((float) $order->total_amount) }}</div></div>
             </div>
             <div class="mt-5 space-y-3">
                 @foreach ($order->items as $item)
@@ -40,15 +43,15 @@
                 @endforeach
             </div>
             <div class="mt-5 space-y-2 border-t border-gray-200 pt-4 text-sm dark:border-white/10">
-                <div class="flex justify-between text-gray-600 dark:text-gray-300"><span>Subtotal</span><span>{{ \App\Support\MoneyFormatter::currency((float) $order->total_amount) }}</span></div>
-                <div class="flex justify-between text-gray-600 dark:text-gray-300"><span>Delivery charge</span><span>{{ \App\Support\MoneyFormatter::currency((float) $order->total_amount) }}</span></div>
-                <div class="flex justify-between font-semibold text-gray-950 dark:text-white"><span>Amount due on delivery</span><span>{{ \App\Support\MoneyFormatter::currency((float) $order->total_amount) }}</span></div>
+                <div class="flex justify-between text-gray-600 dark:text-gray-300"><span>{{ __('Subtotal') }}</span><span>{{ \App\Support\MoneyFormatter::currency((float) $order->total_amount) }}</span></div>
+                <div class="flex justify-between text-gray-600 dark:text-gray-300"><span>{{ __('Delivery charge') }}</span><span>{{ \App\Support\MoneyFormatter::currency((float) $order->total_amount) }}</span></div>
+                <div class="flex justify-between font-semibold text-gray-950 dark:text-white"><span>{{ __('Amount due on delivery') }}</span><span>{{ \App\Support\MoneyFormatter::currency((float) $order->total_amount) }}</span></div>
             </div>
         </div>
 
         <div class="mt-8 flex flex-wrap justify-center gap-3">
-            <a class="inline-flex min-h-11 items-center rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90" href="{{ $offersUrl }}">Browse more offers</a>
-            <a class="inline-flex min-h-11 items-center rounded-lg border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition hover:border-[var(--storefront-brand)] dark:border-white/10 dark:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">Continue shopping</a>
+            <a class="inline-flex min-h-11 items-center rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90" href="{{ $offersUrl }}">{{ __('Browse more offers') }}</a>
+            <a class="inline-flex min-h-11 items-center rounded-lg border border-gray-300 px-6 py-3 text-sm font-medium text-gray-900 transition hover:border-[var(--storefront-brand)] dark:border-white/10 dark:text-white" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">{{ __('Continue shopping') }}</a>
         </div>
     </section>
 @endsection

@@ -1,5 +1,5 @@
 <div>
-    <div class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">{{ $data['heading'] ?? 'Contact' }}</div>
+    <div class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">{{ $data['heading'] ?? __('Contact') }}</div>
     @php
         $contactPhones = collect(preg_split('/\R/u', is_array($data['phones'] ?? null) ? implode("\n", $data['phones']) : (string) ($data['phones'] ?? '')))->map(fn ($phone) => trim((string) $phone))->filter()->take(4);
     @endphp
@@ -24,19 +24,19 @@
     @endif
     <div class="mt-3 flex flex-col items-start gap-3">
         <a class="text-sm text-gray-600 transition hover:text-[var(--storefront-brand)] dark:text-gray-400" href="{{ \App\Support\StorefrontUrl::route('contact', [], $previewSlug ?? null) }}">
-            Contact us
+            {{ __('Contact us') }}
         </a>
         <a class="text-sm text-gray-600 transition hover:text-[var(--storefront-brand)] dark:text-gray-400" href="{{ \App\Support\StorefrontUrl::route('complaints.show', [], $previewSlug ?? null) }}">
-            Product complaint
+            {{ __('Product complaint') }}
         </a>
         @if ($setting->reseller_program_enabled ?? true)
             <a class="text-sm text-gray-600 transition hover:text-[var(--storefront-brand)] dark:text-gray-400" href="{{ $resellerUrl }}">
-                Become a reseller
+                {{ __('Become a reseller') }}
             </a>
         @endif
         @if ($setting->whatsapp_number)
             <a class="inline-flex rounded-lg bg-[var(--storefront-brand)] px-4 py-2 text-sm font-medium text-white" href="https://wa.me/{{ preg_replace('/\D+/', '', $setting->whatsapp_number) }}" target="_blank" rel="noopener">
-                Chat on WhatsApp
+                {{ __('Chat on WhatsApp') }}
             </a>
         @endif
     </div>

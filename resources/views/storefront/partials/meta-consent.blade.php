@@ -6,7 +6,7 @@
         && $metaTracking->browserPixelIds($setting) !== [];
     $metaConsentStatus = $showMetaConsent ? $metaTracking->consentStatus($setting, request()) : null;
     $metaConsentMessage = trim((string) $setting->meta_consent_message)
-        ?: 'We use Meta measurement cookies to understand storefront activity and improve advertising. You can accept or decline, and change this choice later.';
+        ?: __('We use Meta measurement cookies to understand storefront activity and improve advertising. You can accept or decline, and change this choice later.');
 @endphp
 
 @if ($showMetaConsent)
@@ -14,7 +14,7 @@
         data-meta-consent-panel
         class="fixed inset-x-3 bottom-20 z-50 mx-auto max-w-2xl rounded-xl border border-gray-200 bg-white p-4 shadow-xl sm:bottom-4 dark:border-gray-700 dark:bg-gray-900"
         role="region"
-        aria-label="Meta measurement privacy choices"
+        aria-label="{{ __('Meta measurement privacy choices') }}"
         @if ($metaConsentStatus !== null) hidden @endif
     >
         <div class="text-sm font-semibold text-gray-950 dark:text-white">{{ __('Privacy choices') }}</div>
@@ -33,7 +33,7 @@
         class="fixed bottom-20 left-3 z-40 min-h-10 rounded-full border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 shadow-sm transition hover:text-gray-950 focus:outline-none focus:ring-2 focus:ring-[var(--storefront-brand)] sm:bottom-4 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:text-white"
         @if ($metaConsentStatus === null) hidden @endif
     >
-        Privacy choices
+        {{ __('Privacy choices') }}
     </button>
 
     <script>

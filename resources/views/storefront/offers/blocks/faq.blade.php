@@ -4,7 +4,7 @@
             @if (! empty($data['heading']))
                 <h2 class="text-center text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{{ $data['heading'] }}</h2>
             @else
-                <h2 class="text-center text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">প্রশ্নোত্তর</h2>
+                <h2 class="text-center text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{{ __('Frequently asked questions') }}</h2>
             @endif
             <div class="mt-6 space-y-3">
                 @foreach ($data['questions'] as $qa)

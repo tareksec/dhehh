@@ -8,7 +8,7 @@
     $logoUrl = \App\Support\CompanyMedia::publicUrl($setting->logo, $company);
     $logoDarkUrl = \App\Support\CompanyMedia::publicUrl($setting->logo_dark, $company);
     $title = $setting->meta_title ?: $company->name;
-    $description = $setting->meta_description ?: 'Shop products from '.$company->name;
+    $description = $setting->meta_description ?: __('Shop products from :company', ['company' => $company->name]);
     $bannerImage = \App\Models\StorefrontSlide::forCompany($company->getKey())->first()?->image;
     $shareImageUrl = \App\Support\CompanyMedia::publicUrl($bannerImage, $company) ?: ($logoUrl ?: null);
     $previewSlug = $previewSlug ?? null; // isset() stays false when null
@@ -239,7 +239,7 @@
         --radius-2xl: {{ $cornerRadii['2xl'] }};"
 >
     <a class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-[var(--storefront-brand)] focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-[var(--storefront-brand-contrast)]" href="#main-content">
-        Skip to content
+        {{ __('Skip to content') }}
     </a>
 
     @include(\App\Support\StorefrontThemeRegistry::view($setting->storefrontTheme(), 'partials.layout.header'))

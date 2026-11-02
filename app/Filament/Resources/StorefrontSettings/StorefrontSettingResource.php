@@ -1184,6 +1184,12 @@ class StorefrontSettingResource extends Resource
                         ->columnSpanFull()
                         ->reorderable()
                         ->defaultItems(0)
+                    ColorPicker::make('site_design.footer.background_light')
+                        ->label(__('Footer background colour (light mode)'))
+                        ->default(StorefrontSiteDesign::DEFAULT_FOOTER_BACKGROUND_LIGHT)
+                        ->helperText(__('Used by the Next.js site when the visitor is in light mode, with the light-mode logo. The text colour adjusts to stay readable.'))
+                        ->visible(fn (Get $get): bool => ($get('site_type') ?: StorefrontSetting::SITE_BLADE) === StorefrontSetting::SITE_NEXTJS),
+
                         ->itemLabel(fn (array $state): ?string => StorefrontSetting::SOCIAL_PLATFORMS[$state['platform'] ?? ''] ?? null)
                         ->addActionLabel('Add social link')
                         ->schema([
@@ -1199,9 +1205,9 @@ class StorefrontSettingResource extends Resource
                         ->columns(2),
 
                     ColorPicker::make('site_design.footer.background')
-                        ->label(__('Footer background colour'))
+                        ->label(__('Footer background colour (dark mode)'))
                         ->default(StorefrontSiteDesign::DEFAULT_FOOTER_BACKGROUND)
-                        ->helperText(__('Used by the Next.js site. The text colour adjusts to stay readable.'))
+                        ->helperText(__('Used by the Next.js site when the visitor is in dark mode, with the dark-mode logo. The text colour adjusts to stay readable.'))
                         ->visible(fn (Get $get): bool => ($get('site_type') ?: StorefrontSetting::SITE_BLADE) === StorefrontSetting::SITE_NEXTJS),
 
                     Repeater::make('footer_blocks')

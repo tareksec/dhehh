@@ -56,7 +56,7 @@
                 </label>
 
                 <label class="block sm:col-span-2">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Email address') }} <span class="text-gray-400">(optional)</span></span>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ __('Email address') }} <span class="text-gray-400">{{ __('(optional)') }}</span></span>
                     <input class="mt-2 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-950 outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:bg-white/10 dark:text-white" type="email" name="email" autocomplete="email" value="{{ old('email', $loggedInCustomer->email ?? '') }}">
                     @error('email') <span class="mt-1 block text-sm text-red-600">{{ $message }}</span> @enderror
                 </label>
@@ -86,25 +86,25 @@
                         @if ($hasBkash)
                             <label class="flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm transition" :class="method === 'manual_bkash' ? 'border-[var(--storefront-brand)] ring-1 ring-[var(--storefront-brand)]' : 'border-gray-300 dark:border-white/15'">
                                 <input type="radio" name="payment_method" value="manual_bkash" x-model="method" class="h-4 w-4" required @checked($defaultPaymentMethod === 'manual_bkash')>
-                                <span class="font-medium text-gray-900 dark:text-white">bKash (Send Money)</span>
+                                <span class="font-medium text-gray-900 dark:text-white">{{ __('bKash (Send Money)') }}</span>
                             </label>
                         @endif
                         @if ($hasNagad)
                             <label class="flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm transition" :class="method === 'manual_nagad' ? 'border-[var(--storefront-brand)] ring-1 ring-[var(--storefront-brand)]' : 'border-gray-300 dark:border-white/15'">
                                 <input type="radio" name="payment_method" value="manual_nagad" x-model="method" class="h-4 w-4" required @checked($defaultPaymentMethod === 'manual_nagad')>
-                                <span class="font-medium text-gray-900 dark:text-white">Nagad (Send Money)</span>
+                                <span class="font-medium text-gray-900 dark:text-white">{{ __('Nagad (Send Money)') }}</span>
                             </label>
                         @endif
                         @if ($hasBkash || $hasNagad)
                             <div x-show="method === 'manual_bkash' || method === 'manual_nagad'" x-cloak class="ml-1 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm dark:border-white/10 dark:bg-white/5">
                                 @if ($hasBkash)
                                     <div x-show="method === 'manual_bkash'">
-                                        <p class="text-gray-700 dark:text-gray-200">Send Money to <span class="font-semibold">{{ $setting->manual_bkash_number }}</span></p>
+                                        <p class="text-gray-700 dark:text-gray-200">{{ __('Send Money to') }} <span class="font-semibold">{{ $setting->manual_bkash_number }}</span></p>
                                     </div>
                                 @endif
                                 @if ($hasNagad)
                                     <div x-show="method === 'manual_nagad'">
-                                        <p class="text-gray-700 dark:text-gray-200">Send Money to <span class="font-semibold">{{ $setting->manual_nagad_number }}</span></p>
+                                        <p class="text-gray-700 dark:text-gray-200">{{ __('Send Money to') }} <span class="font-semibold">{{ $setting->manual_nagad_number }}</span></p>
                                     </div>
                                 @endif
                                 <div class="mt-3 grid gap-3 sm:grid-cols-2">
@@ -124,7 +124,7 @@
                     </div>
                     @unless ($hasPaymentPath)
                         <p class="mt-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300" role="alert">
-                            No payment method is available right now. Please contact the store before placing this order.
+                            {{ __('No payment method is available right now. Please contact the store before placing this order.') }}
                         </p>
                     @endunless
                 </fieldset>
@@ -162,14 +162,14 @@
                     </div>
                 @endif
                 <div class="flex justify-between border-t border-gray-200 pt-2 text-lg font-semibold text-gray-950 dark:border-white/10 dark:text-white">
-                    <span>Total (&times; <span x-text="Math.max(1, quantity)"></span>)</span>
+                    <span>{{ __('Total (') }}&times; <span x-text="Math.max(1, quantity)"></span>)</span>
                     <span x-text="'BDT ' + total.toFixed(2)"></span>
                 </div>
                 <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('Delivery charge is added after your address is submitted.') }}</p>
             </div>
 
             <button class="mt-6 w-full rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50" type="submit" form="offer-checkout-form" @disabled(! $hasPaymentPath)>
-                Order now
+                {{ __('Order now') }}
             </button>
         </aside>
     </section>
