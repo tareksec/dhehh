@@ -300,6 +300,7 @@ class ReportService
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->join('products', 'products.id', '=', 'order_items.product_id')
             ->whereIn('orders.status', Order::ACCOUNTED_STATUSES)
+            ->whereNull('orders.deleted_at') // a raw join does not see the Trash filter
             ->groupBy('products.id', 'products.name')
             ->orderByDesc('quantity')
             ->limit($limit)

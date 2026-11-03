@@ -4,12 +4,17 @@ namespace App\Filament\Resources\Products\Tables;
 
 use App\Filament\Concerns\PersistsProductFormData;
 use App\Models\Product;
+use App\Services\ProductTrashService;
 use App\Support\CompanyMedia;
+use App\Support\TypeToConfirmDelete;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
@@ -19,6 +24,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 class ProductsTable
 {
@@ -181,9 +187,68 @@ class ProductsTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->label('Move to trash')
+                        ->schema(fn (): array => [
+                            ...TypeToConfirmDelete::countFields(),
+                            ...self::trashReasonFields(),
+                        ])
+                        ->using(fn (Collection $records, array $data) => self::moveToTrash($records, $data)),
                 ]),
             ]);
+    }
+
+    /**
+     * The reason asked when products go to Trash (owner request 2026-11-03): it is saved with the product,
+     * and "Test product" lets one that was ordered often, or already paid or shipped, go to Trash too.
+     *
+     * @return list<Select|Textarea>
+     */
+    public static function trashReasonFields(): array
+    {
+        return [
+            Select::make('trash_reason')
+                ->label('Reason')
+                ->options(fn (): array => collect(ProductTrashService::REASONS)->map(fn (string $label): string => __($label))->all())
+                ->required()
+                ->native(false)
+                ->infoTip(__('Why is this product being deleted? A product with orders or purchases goes to trash together with them. Only a "Test product" may go when it was ordered more than twice, or when money was received or the goods were shipped.')),
+            Textarea::make('trash_note')
+                ->label('Note')
+                ->rows(2)
+                ->maxLength(500),
+        ];
+    }
+
+    /**
+     * Move the chosen products to Trash one by one, so a refused one (see ProductTrashService) does not stop the rest.
+     *
+     * @param  Collection<int, Product>  $records
+     * @param  array<string, mixed>  $data
+     */
+    public static function moveToTrash(Collection $records, array $data): void
+    {
+        $service = app(ProductTrashService::class);
+        $moved = 0;
+        $refused = [];
+
+        foreach ($records as $product) {
+            $why = $service->tryMoveToTrash($product, $data['trash_reason'] ?? null, $data['trash_note'] ?? null);
+
+            if ($why === null) {
+                $moved++;
+            } else {
+                $refused[] = $product->name.': '.$why;
+            }
+        }
+
+        if ($moved > 0) {
+            Notification::make()->title(__(':count products moved to trash', ['count' => $moved]))->success()->send();
+        }
+
+        if ($refused !== []) {
+            Notification::make()->title(__('Not moved to trash'))->body(implode("\n", $refused))->danger()->persistent()->send();
+        }
     }
 
     /**

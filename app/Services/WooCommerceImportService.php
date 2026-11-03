@@ -111,6 +111,11 @@ class WooCommerceImportService
             $product = Product::query()->where('sku', $sku)->first();
         }
 
+        // A product in Trash still holds its SKU (plan T5b): leave it alone rather than fail on the unique index.
+        if (! $product && $sku !== '' && Product::onlyTrashed()->where('sku', $sku)->exists()) {
+            return 'skipped';
+        }
+
         $product ??= Product::query()->where('slug', $slug)->first();
 
         $regularPrice = $this->toPrice($payload['regular_price'] ?? null) ?? $this->toPrice($payload['price'] ?? null) ?? 0.0;

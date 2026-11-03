@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Products\Pages;
 
+use App\Filament\Resources\Pages\TrashedRecords;
 use App\Filament\Resources\Products\ProductResource;
 use App\Filament\Resources\Products\Widgets\ProductStatsOverview;
 use App\Models\Product;
@@ -41,6 +42,7 @@ class ListProducts extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            TrashedRecords::linkAction(ProductResource::class),
             ...$this->productHeaderActions(),
 
             ActionGroup::make($this->productHeaderActions(mobile: true))

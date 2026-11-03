@@ -80,6 +80,7 @@ class OrderController extends Controller
             foreach ($data['items'] as $item) {
                 $product = Product::query()->where('sku', $item['sku'])->first();
 
+                abort_if(! $product && Product::onlyTrashed()->where('sku', $item['sku'])->exists(), 422, "The product with SKU \"{$item['sku']}\" is in Trash.");
                 abort_if(! $product, 422, "No product found with SKU \"{$item['sku']}\".");
 
                 OrderItem::query()->create([

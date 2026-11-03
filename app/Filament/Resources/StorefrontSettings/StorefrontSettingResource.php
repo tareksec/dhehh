@@ -1681,6 +1681,7 @@ class StorefrontSettingResource extends Resource
     public static function productCount(StorefrontSetting $record): int
     {
         return Product::withoutGlobalScopes()
+            ->withoutTrashed()
             ->where('company_id', $record->company_id)
             ->where('is_active', true)
             ->where('status', Product::STATUS_AVAILABLE)

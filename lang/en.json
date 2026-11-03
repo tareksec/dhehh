@@ -4606,5 +4606,16 @@
     "A customer with this phone number already exists, so this one cannot be restored. Delete it permanently, or change the other customer's phone first.": "A customer with this phone number already exists, so this one cannot be restored. Delete it permanently, or change the other customer's phone first.",
     "A chat channel with this Phone Number ID / Page ID already exists (possibly under another company, or in Trash).": "A chat channel with this Phone Number ID / Page ID already exists (possibly under another company, or in Trash).",
     "The lead of this quotation is in Trash. Restore the lead first, or choose a customer for the quotation.": "The lead of this quotation is in Trash. Restore the lead first, or choose a customer for the quotation.",
-    "This pool cannot be restored: its source product was deleted or is now in another stock pool.": "This pool cannot be restored: its source product was deleted or is now in another stock pool."
+    "This pool cannot be restored: its source product was deleted or is now in another stock pool.": "This pool cannot be restored: its source product was deleted or is now in another stock pool.",
+    ":count products moved to trash": ":count products moved to trash",
+    "Not moved to trash": "Not moved to trash",
+    "Test product": "Test product",
+    "Duplicate or entered by mistake": "Duplicate or entered by mistake",
+    "No longer sold": "No longer sold",
+    "Why is this product being deleted? A product with orders or purchases goes to trash together with them. Only a \"Test product\" may go when it was ordered more than twice, or when money was received or the goods were shipped.": "Why is this product being deleted? A product with orders or purchases goes to trash together with them. Only a \"Test product\" may go when it was ordered more than twice, or when money was received or the goods were shipped.",
+    "This product is the source of a shared stock pool. Delete the pool, or choose another source, first.": "This product is the source of a shared stock pool. Delete the pool, or choose another source, first.",
+    "It is in a returned or refunded order (:orders), which can never be moved to trash.": "It is in a returned or refunded order (:orders), which can never be moved to trash.",
+    "It is in :count orders. A product ordered more than :max times cannot be moved to trash. Choose the reason \"Test product\" only for a product made for testing.": "It is in :count orders. A product ordered more than :max times cannot be moved to trash. Choose the reason \"Test product\" only for a product made for testing.",
+    "Money was received, or the goods were shipped, delivered or completed, in these orders: :orders.": "Money was received, or the goods were shipped, delivered or completed, in these orders: :orders.",
+    "Choose a reason: this product is in orders or purchases that go to trash with it.": "Choose a reason: this product is in orders or purchases that go to trash with it."
 }

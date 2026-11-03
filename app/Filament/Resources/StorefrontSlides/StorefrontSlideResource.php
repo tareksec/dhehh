@@ -170,14 +170,14 @@ class StorefrontSlideResource extends Resource
                             $companyId = $get('company_id') ?? $record?->company_id;
 
                             return $companyId
-                                ? Product::withoutGlobalScopes()->where('company_id', $companyId)->orderBy('name')->limit(100)->pluck('name', 'id')->all()
+                                ? Product::withoutGlobalScopes()->withoutTrashed()->where('company_id', $companyId)->orderBy('name')->limit(100)->pluck('name', 'id')->all()
                                 : [];
                         })
                         ->getSearchResultsUsing(function (string $search, Get $get, ?StorefrontSlide $record) {
                             $companyId = $get('company_id') ?? $record?->company_id;
 
                             return $companyId
-                                ? Product::withoutGlobalScopes()->where('company_id', $companyId)->where('name', 'like', "%{$search}%")->limit(50)->pluck('name', 'id')
+                                ? Product::withoutGlobalScopes()->withoutTrashed()->where('company_id', $companyId)->where('name', 'like', "%{$search}%")->limit(50)->pluck('name', 'id')
                                 : [];
                         })
                         ->getOptionLabelUsing(fn ($value): ?string => Product::withoutGlobalScopes()->find($value)?->name),

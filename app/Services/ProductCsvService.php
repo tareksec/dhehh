@@ -292,6 +292,10 @@ class ProductCsvService
         $category = $this->categoryFor($data['category'] ?? null);
         $stock = $this->integer($data['stock'] ?? 0, 'Stock');
 
+        if (Product::onlyTrashed()->where('sku', $sku)->exists()) {
+            throw ValidationException::withMessages(['sku' => "SKU \"{$sku}\" belongs to a product in Trash. Restore it, or delete it permanently, first."]);
+        }
+
         $product = Product::query()->firstOrNew(['sku' => $sku]);
 
         $product->fill([

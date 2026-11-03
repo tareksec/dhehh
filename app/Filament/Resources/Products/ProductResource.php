@@ -3,10 +3,12 @@
 namespace App\Filament\Resources\Products;
 
 use App\Filament\Clusters\Inventory;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\Products\Pages\BulkUpdateStock;
 use App\Filament\Resources\Products\Pages\CreateProduct;
 use App\Filament\Resources\Products\Pages\EditProduct;
 use App\Filament\Resources\Products\Pages\ListProducts;
+use App\Filament\Resources\Products\Pages\TrashedProducts;
 use App\Filament\Resources\Products\RelationManagers\StockMovementsRelationManager;
 use App\Filament\Resources\Products\Schemas\ProductForm;
 use App\Filament\Resources\Products\Schemas\ProductInfolist;
@@ -20,6 +22,8 @@ use Filament\Tables\Table;
 
 class ProductResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = Product::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCube;
@@ -60,6 +64,7 @@ class ProductResource extends Resource
             'index' => ListProducts::route('/'),
             'create' => CreateProduct::route('/create'),
             'bulk-stock' => BulkUpdateStock::route('/bulk-stock'),
+            'trash' => TrashedProducts::route('/trash'),
             'view' => Pages\ViewProduct::route('/{record}'),
             'edit' => EditProduct::route('/{record}/edit'),
         ];

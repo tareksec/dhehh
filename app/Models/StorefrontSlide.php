@@ -54,7 +54,7 @@ class StorefrontSlide extends Model
 
     public function product(): BelongsTo
     {
-        return $this->belongsTo(Product::class)->withoutGlobalScopes();
+        return $this->belongsTo(Product::class)->withoutGlobalScopes()->withoutTrashed();
     }
 
     /** The site this slide is limited to; null means it shows on every site of the company. */

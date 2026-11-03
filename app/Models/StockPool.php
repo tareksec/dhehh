@@ -73,6 +73,6 @@ class StockPool extends Model
 
     public function sourceProduct(): BelongsTo
     {
-        return $this->belongsTo(Product::class, 'source_product_id');
+        return $this->belongsTo(Product::class, 'source_product_id')->withTrashed();
     }
 }

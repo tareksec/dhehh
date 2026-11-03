@@ -145,6 +145,16 @@ final class TypeToConfirmDelete
         return self::fields(self::BULK_WORD, isCount: true);
     }
 
+    /**
+     * The modal fields of a single-record action that adds fields of its own (the name prompt first).
+     *
+     * @return list<Component>
+     */
+    public static function nameFields(Action $action): array
+    {
+        return self::fields(self::nameOf($action), isCount: false);
+    }
+
     /** @return list<Component> */
     private static function fields(string $expected, bool $isCount): array
     {

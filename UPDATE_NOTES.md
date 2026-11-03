@@ -2,7 +2,11 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-03 (latest) - T5b mapped: Product to Trash (docs only)
+## 2026-11-03 (latest) - Product to Trash (T5b)
+
+Owner answers (question dialog): a product with order/purchase history goes to Trash **with its orders, purchases, payments and advances**; more than 2 orders blocks it with a warning; a **required reason**, and "Test product" lifts the block; Next.js is told; SKU stays reserved; restore brings everything back together; an order with money received or shipped blocks the product. Built: migration `2026_11_03_110000_add_soft_deletes_to_products` (`deleted_at`, `trash_reason`, `trash_note`, `trash_cascade`), `ProductTrashService`, `Product` hooks, `TrashedProducts`, Products bulk "Move to trash" and Edit-page action with reason fields, `withTrashed()` on the history relations, `deleted_at IS NULL` in the stock value and the top-products report, `withoutTrashed()` in the pickers, SKU-in-Trash messages in CSV/Woo/order API/form, `dispatchProductRemoved`. `ProductTrashTest` (19). **My choices to confirm:** orders are counted as distinct live orders (any status), purchases have no limit; "Test product" lifts both the count limit and the money/shipping block, but not returned/refunded orders or a pool source; a missing reason blocks only when the product has orders or purchases; completed orders count as "delivered". Needs Bangla review: the 11 new keys. Commit status: committed and pushed to `claude/upbeat-franklin-hy6fhr`; full suite 3606 passed, 6 skipped, 0 failed; 8 mutation checks; browser check (English, 1366 and 360 px; the ERP admin has no Bangla switch yet).
+
+## 2026-11-03 - T5b mapped: Product to Trash (docs only)
 
 Owner: keep the ⓘ icon work in the same queue, to start after the delete/Trash phases (task list; plan `docs/info-icon-instructions-plan.md`, its 5 questions still to ask). Wrote section 7 of `docs/delete-and-trash-plan.md`: what a product delete does today, the design, 10 things to handle, questions A-C. No code changed. Commit status: docs only, pushed to the feature branch.
 

@@ -35,6 +35,21 @@ class WebsiteWebhookDispatcher
         ]);
     }
 
+    /**
+     * A product went to Trash (plan T5b). The website already revalidates on `product.updated`,
+     * so it is the same event with `removed: true`; the page then no longer finds the product.
+     * Restoring sends the ordinary `product.updated`.
+     */
+    public function dispatchProductRemoved(Product $product): void
+    {
+        $this->dispatch($product->company_id, 'product.updated', [
+            'sku' => $product->sku,
+            'name' => $product->name,
+            'removed' => true,
+            'updated_at' => now()->toIso8601String(),
+        ]);
+    }
+
     public function dispatchOrderStatusUpdated(Order $order): void
     {
         $this->dispatch($order->company_id, 'order.status_updated', [

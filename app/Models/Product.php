@@ -3,16 +3,18 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Services\ProductTrashService;
 use App\Services\ResellerPricing;
 use App\Services\WebsiteWebhookDispatcher;
 use App\Support\StorefrontListingCache;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class Product extends Model
 {
-    use BelongsToCompany;
+    use BelongsToCompany, SoftDeletes;
 
     /**
      * Set by the website API's PATCH /products/{sku} controller right
@@ -62,6 +64,8 @@ class Product extends Model
         'variant_attributes',
         'has_variants',
         'category_id',
+        'trash_reason',
+        'trash_note',
     ];
 
     protected $casts = [
@@ -78,6 +82,7 @@ class Product extends Model
         'gallery_images' => 'array',
         'variant_attributes' => 'array',
         'has_variants' => 'boolean',
+        'trash_cascade' => 'array',
     ];
 
     protected static function booted(): void
@@ -104,7 +109,26 @@ class Product extends Model
                 app(WebsiteWebhookDispatcher::class)->dispatchProductUpdated($product);
             }
         });
-        static::deleted(fn (Product $product) => StorefrontListingCache::forgetCompany($product->company_id));
+
+        // Trash (plan T5b): the rules and what goes to Trash together with the product
+        // live in ProductTrashService, so a delete from any screen, the API or a job behaves the same.
+        static::deleting(function (Product $product): void {
+            if (! $product->isForceDeleting()) {
+                app(ProductTrashService::class)->moveToTrash($product);
+            }
+        });
+        static::deleted(function (Product $product): void {
+            StorefrontListingCache::forgetCompany($product->company_id);
+
+            if (! $product->isForceDeleting()) {
+                app(WebsiteWebhookDispatcher::class)->dispatchProductRemoved($product);
+            }
+        });
+        static::restored(function (Product $product): void {
+            app(ProductTrashService::class)->restoreFromTrash($product);
+            StorefrontListingCache::forgetCompany($product->company_id);
+            app(WebsiteWebhookDispatcher::class)->dispatchProductUpdated($product);
+        });
     }
 
     public function category()
@@ -309,6 +333,7 @@ class Product extends Model
         $suffix = 2;
 
         while (static::query()
+            ->withTrashed()
             ->when($product->company_id, fn ($query) => $query->where('company_id', $product->company_id))
             ->where('slug', $slug)
             ->when($product->exists, fn ($query) => $query->whereKeyNot($product->getKey()))

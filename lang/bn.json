@@ -4606,5 +4606,16 @@
     "A customer with this phone number already exists, so this one cannot be restored. Delete it permanently, or change the other customer's phone first.": "এই ফোন নম্বরে আরেকজন কাস্টমার আছে, তাই একে ফিরিয়ে আনা যাচ্ছে না। এটিকে স্থায়ীভাবে ডিলিট করুন, অথবা আগে অন্য কাস্টমারের ফোন নম্বর বদলান।",
     "A chat channel with this Phone Number ID / Page ID already exists (possibly under another company, or in Trash).": "এই ফোন নম্বর আইডি / পেজ আইডি দিয়ে একটি চ্যাট চ্যানেল আগে থেকেই আছে (অন্য কোম্পানির অধীনে বা ট্র্যাশে থাকতে পারে)।",
     "The lead of this quotation is in Trash. Restore the lead first, or choose a customer for the quotation.": "এই কোটেশনের লিড ট্র্যাশে আছে। আগে লিডটি ফিরিয়ে আনুন, অথবা কোটেশনের জন্য একজন কাস্টমার বেছে নিন।",
-    "This pool cannot be restored: its source product was deleted or is now in another stock pool.": "এই পুলটি ফিরিয়ে আনা যাবে না: এর সোর্স পণ্যটি ডিলিট হয়ে গেছে অথবা এখন অন্য স্টক পুলে আছে।"
+    "This pool cannot be restored: its source product was deleted or is now in another stock pool.": "এই পুলটি ফিরিয়ে আনা যাবে না: এর সোর্স পণ্যটি ডিলিট হয়ে গেছে অথবা এখন অন্য স্টক পুলে আছে।",
+    ":count products moved to trash": ":count টি পণ্য ট্র্যাশে সরানো হয়েছে",
+    "Not moved to trash": "ট্র্যাশে সরানো হয়নি",
+    "Test product": "টেস্ট পণ্য",
+    "Duplicate or entered by mistake": "ডুপ্লিকেট বা ভুল করে এন্ট্রি",
+    "No longer sold": "আর বিক্রি হয় না",
+    "Why is this product being deleted? A product with orders or purchases goes to trash together with them. Only a \"Test product\" may go when it was ordered more than twice, or when money was received or the goods were shipped.": "এই পণ্যটি কেন ডিলিট করা হচ্ছে? যে পণ্যের অর্ডার বা পারচেজ আছে, সেগুলোসহ ট্র্যাশে যায়। দুইবারের বেশি অর্ডার হওয়া, টাকা পাওয়া হয়ে যাওয়া অথবা মাল পাঠানো হয়ে যাওয়া পণ্য শুধু \"টেস্ট পণ্য\" হলেই যেতে পারে।",
+    "This product is the source of a shared stock pool. Delete the pool, or choose another source, first.": "এই পণ্যটি একটি শেয়ার্ড স্টক পুলের সোর্স। আগে পুলটি ডিলিট করুন, অথবা অন্য সোর্স বেছে নিন।",
+    "It is in a returned or refunded order (:orders), which can never be moved to trash.": "এটি একটি রিটার্ন বা রিফান্ড হওয়া অর্ডারে (:orders) আছে, যা কখনো ট্র্যাশে যায় না।",
+    "It is in :count orders. A product ordered more than :max times cannot be moved to trash. Choose the reason \"Test product\" only for a product made for testing.": "এটি :count টি অর্ডারে আছে। :max বারের বেশি অর্ডার হওয়া পণ্য ট্র্যাশে যায় না। \"টেস্ট পণ্য\" কারণটি শুধু টেস্টের জন্য বানানো পণ্যে বেছে নিন।",
+    "Money was received, or the goods were shipped, delivered or completed, in these orders: :orders.": "এই অর্ডারগুলোতে টাকা নেওয়া হয়েছে, অথবা মাল পাঠানো, ডেলিভারি বা সম্পন্ন হয়ে গেছে: :orders।",
+    "Choose a reason: this product is in orders or purchases that go to trash with it.": "একটি কারণ বেছে নিন: এই পণ্যের অর্ডার বা পারচেজগুলোও এর সঙ্গে ট্র্যাশে যাবে।"
 }

@@ -178,7 +178,7 @@ class StockMovement extends Model
 
     public function product()
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(Product::class)->withTrashed();
     }
 
     public function productVariant()

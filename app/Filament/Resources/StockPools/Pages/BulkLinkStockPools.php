@@ -177,6 +177,7 @@ class BulkLinkStockPools extends Page implements HasTable
 
         return Product::query()
             ->withoutGlobalScopes()
+            ->withoutTrashed()
             ->where('company_id', $this->sourceCompanyId)
             ->where('has_variants', false)
             ->with(['stockPool', 'company']);
@@ -191,6 +192,7 @@ class BulkLinkStockPools extends Page implements HasTable
 
         return Product::query()
             ->withoutGlobalScopes()
+            ->withoutTrashed()
             ->where('company_id', $this->targetCompanyId)
             ->where('has_variants', false)
             ->whereNull('stock_pool_id')
@@ -315,8 +317,8 @@ class BulkLinkStockPools extends Page implements HasTable
 
         DB::transaction(function () use ($pairs, &$linked, &$skipped): void {
             foreach ($pairs as $sourceId => $targetId) {
-                $source = Product::query()->withoutGlobalScopes()->find($sourceId);
-                $target = Product::query()->withoutGlobalScopes()->find($targetId);
+                $source = Product::query()->withoutGlobalScopes()->withoutTrashed()->find($sourceId);
+                $target = Product::query()->withoutGlobalScopes()->withoutTrashed()->find($targetId);
 
                 if (
                     ! $source || ! $target

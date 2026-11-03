@@ -338,6 +338,7 @@ class Inbox extends Page
         }
 
         return Product::withoutGlobalScopes()
+            ->withoutTrashed()
             ->where('company_id', $conversation->company_id)
             ->where('is_active', true)
             ->when(trim($this->productSearch) !== '', fn (Builder $query): Builder => $query
@@ -355,6 +356,7 @@ class Inbox extends Page
 
         return ($this->orderFormProductId && $conversation)
             ? Product::withoutGlobalScopes()
+                ->withoutTrashed()
                 ->where('company_id', $conversation->company_id)
                 ->whereKey($this->orderFormProductId)
                 ->first()

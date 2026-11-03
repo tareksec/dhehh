@@ -70,11 +70,13 @@ class ProductForm
                         TextInput::make('sku')
                             ->label('SKU')
                             ->required()
-                            ->unique(ignoreRecord: true, modifyRuleUsing: CompanyScopedUnique::rule()),
+                            ->unique(ignoreRecord: true, modifyRuleUsing: CompanyScopedUnique::rule())
+                            ->validationMessages(['unique' => __('This is already used, possibly by an item in Trash. Use another one, or restore or permanently delete the one in Trash.')]),
 
                         TextInput::make('barcode')
                             ->label('Barcode')
                             ->unique(ignoreRecord: true, modifyRuleUsing: CompanyScopedUnique::rule())
+                            ->validationMessages(['unique' => __('This is already used, possibly by an item in Trash. Use another one, or restore or permanently delete the one in Trash.')])
                             ->maxLength(255),
 
                         TextInput::make('brand')

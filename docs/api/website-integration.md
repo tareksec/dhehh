@@ -88,6 +88,8 @@ X-ZamZam-Signature: <hex-encoded HMAC-SHA256 of the raw request body>
 Events sent: `order.status_updated`, `product.updated`,
 `lead.status_updated`, `storefront.updated` and `ping` (test webhook only).
 
+`product.updated` with `removed: true` (only `sku`, `name`, `removed`, `updated_at`) means the product went to Trash (owner decision 2026-11-03): refresh or drop it on the website. Restoring it sends the ordinary `product.updated` again.
+
 `storefront.updated` (empty `data` except `updated_at`) means storefront content
 changed — settings (home page, header, footer, menus), hero slides, pages,
 categories, offers/collections. It is sent about 5 seconds after the first change

@@ -27,12 +27,14 @@ class AccountBalanceService
         $baseProducts = (float) DB::table('products')
             ->when($companyId !== null, fn ($query) => $query->where('company_id', $companyId))
             ->where('has_variants', false)
+            ->whereNull('deleted_at') // a raw query does not see the Trash filter
             ->sum(DB::raw('stock * cost_price'));
 
         $variantProducts = (float) DB::table('product_variants')
             ->join('products', 'products.id', '=', 'product_variants.product_id')
             ->when($companyId !== null, fn ($query) => $query->where('product_variants.company_id', $companyId))
             ->where('products.has_variants', true)
+            ->whereNull('products.deleted_at')
             ->where('product_variants.is_active', true)
             ->sum(DB::raw('product_variants.stock * COALESCE(product_variants.cost_price, products.cost_price)'));
 
