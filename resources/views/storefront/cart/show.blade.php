@@ -7,7 +7,7 @@
         <div class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-5 lg:px-6">
             <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">{{ __('Your cart') }}</h1>
             <p class="storefront-page-copy mt-2">
-                Review selected products before checkout. Your order will be submitted to {{ $company->name }} for review and confirmation.
+                {{ __('Review selected products before checkout. Your order will be submitted to :name for review and confirmation.', ['name' => $company->name]) }}
             </p>
         </div>
     </section>
@@ -38,24 +38,24 @@
                     </a>
                     <div class="min-w-0 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div class="min-w-0">
-                            <div class="text-xs font-medium text-gray-400">{{ $product->category?->name ?? 'Product' }}</div>
+                            <div class="text-xs font-medium text-gray-400">{{ $product->category?->name ?? __('Product') }}</div>
                             <a href="{{ $productUrl }}" class="mt-1 block text-base font-semibold tracking-tight text-gray-950 dark:text-white">{{ $product->name }}</a>
                             @if ($variant)
                                 <div class="mt-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">{{ $variant->label() }}</div>
                             @endif
                             <div class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                BDT {{ \App\Support\MoneyFormatter::number($item['unit_price']) }} each
+                                {{ __('BDT :item each', ['item' => \App\Support\MoneyFormatter::number($item['unit_price'])]) }}
                                 &middot;
                                 @if ($isPreorderLine && $lineStock < 1)
-                                    Available for pre-order
+                                    {{ __('Available for pre-order') }}
                                 @elseif ($isPreorderLine)
-                                    {{ $lineStock }} in stock; additional quantity available for pre-order
+                                    {{ __(':linestock in stock; additional quantity available for pre-order', ['linestock' => $lineStock]) }}
                                 @else
-                                    {{ $lineStock }} in stock
+                                    {{ __(':linestock in stock', ['linestock' => $lineStock]) }}
                                 @endif
                             </div>
                             @if ($product->effectiveMoq() > 1)
-                                <div class="mt-1 text-xs font-medium text-gray-400 dark:text-gray-500">Minimum order: {{ $product->effectiveMoq() }} {{ $product->unit ?: 'pcs' }}</div>
+                                <div class="mt-1 text-xs font-medium text-gray-400 dark:text-gray-500">{{ __('Minimum order: :product :unit', ['product' => $product->effectiveMoq(), 'unit' => $product->unit ?: __('pcs')]) }}</div>
                             @endif
                         </div>
 
@@ -67,12 +67,12 @@
                                     <input type="hidden" name="variant" value="{{ $variant->getKey() }}">
                                 @endif
                                 <div class="flex items-center rounded-lg border border-gray-300 dark:border-white/15" data-qty-stepper>
-                                    <button type="button" data-qty-decrement class="grid h-11 w-11 place-items-center text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white [touch-action:manipulation]" aria-label="Decrease quantity">&minus;</button>
-                                    <label class="sr-only" for="quantity-{{ $product->id }}-{{ $variant?->getKey() ?? 0 }}">Quantity</label>
+                                    <button type="button" data-qty-decrement class="grid h-11 w-11 place-items-center text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white [touch-action:manipulation]" aria-label="{{ __('Decrease quantity') }}">&minus;</button>
+                                    <label class="sr-only" for="quantity-{{ $product->id }}-{{ $variant?->getKey() ?? 0 }}">{{ __('Quantity') }}</label>
                                     <input id="quantity-{{ $product->id }}-{{ $variant?->getKey() ?? 0 }}" data-qty-input class="h-11 w-12 border-x border-gray-300 bg-transparent text-center text-sm font-semibold outline-none focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15" type="number" name="quantity" min="{{ $lineMin }}" max="{{ $lineMax }}" value="{{ $item['quantity'] }}" autocomplete="off">
-                                    <button type="button" data-qty-increment class="grid h-11 w-11 place-items-center text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white [touch-action:manipulation]" aria-label="Increase quantity">+</button>
+                                    <button type="button" data-qty-increment class="grid h-11 w-11 place-items-center text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white [touch-action:manipulation]" aria-label="{{ __('Increase quantity') }}">+</button>
                                 </div>
-                                <button class="inline-flex min-h-11 items-center rounded-lg bg-[var(--storefront-brand)] px-3 text-xs font-medium text-white transition hover:opacity-90 disabled:cursor-wait disabled:opacity-60" type="submit" data-pending-label="Updating&hellip;">{{ __('Update') }}</button>
+                                <button class="inline-flex min-h-11 items-center rounded-lg bg-[var(--storefront-brand)] px-3 text-xs font-medium text-white transition hover:opacity-90 disabled:cursor-wait disabled:opacity-60" type="submit" data-pending-label="{{ __('Updating…') }}">{{ __('Update') }}</button>
                             </form>
                             <form method="POST" action="{{ $removeUrl }}" data-confirm="Remove {{ $product->name }} from your cart?" data-cart-line-form>
                                 @csrf
@@ -80,7 +80,7 @@
                                 @if ($variant)
                                     <input type="hidden" name="variant" value="{{ $variant->getKey() }}">
                                 @endif
-                                <button class="inline-flex min-h-11 items-center rounded-lg border border-gray-300 px-3 text-xs font-medium text-gray-600 transition hover:border-red-400 hover:text-red-600 disabled:cursor-wait disabled:opacity-60 dark:border-white/15 dark:text-gray-300" type="submit" data-pending-label="Removing&hellip;">{{ __('Remove') }}</button>
+                                <button class="inline-flex min-h-11 items-center rounded-lg border border-gray-300 px-3 text-xs font-medium text-gray-600 transition hover:border-red-400 hover:text-red-600 disabled:cursor-wait disabled:opacity-60 dark:border-white/15 dark:text-gray-300" type="submit" data-pending-label="{{ __('Removing…') }}">{{ __('Remove') }}</button>
                             </form>
                             <div class="w-full text-right text-base font-semibold text-gray-950 dark:text-white">BDT {{ \App\Support\MoneyFormatter::number($item['subtotal']) }}</div>
                         </div>
@@ -90,7 +90,7 @@
                 <div class="rounded-lg border border-dashed border-gray-300 bg-white p-10 text-center dark:border-gray-800 dark:bg-gray-900">
                     <h2 class="text-xl font-semibold">{{ __('Your cart is empty') }}</h2>
                     <p class="mt-2 text-gray-500 dark:text-gray-400">{{ __('Add products from the catalog to start a storefront order.') }}</p>
-                    <a class="mt-6 inline-flex rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">Browse products</a>
+                    <a class="mt-6 inline-flex rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90" href="{{ \App\Support\StorefrontUrl::route('products.index', [], $previewSlug ?? null) }}">{{ __('Browse products') }}</a>
                 </div>
             @endforelse
         </div>
@@ -118,11 +118,11 @@
                 </div>
                 @if ($items->isNotEmpty())
                     <a class="mt-5 flex w-full justify-center rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90" href="{{ \App\Support\StorefrontUrl::route('checkout.show', [], $previewSlug ?? null) }}">
-                        Continue to checkout
+                        {{ __('Continue to checkout') }}
                     </a>
                 @else
                     <button class="mt-5 w-full cursor-not-allowed rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white opacity-60" type="button" disabled>
-                        Add products first
+                        {{ __('Add products first') }}
                     </button>
                 @endif
             </div>

@@ -75,7 +75,7 @@ class AccountProfileController extends Controller
         ]);
 
         if (filled($data['email']) && $data['email'] !== $customer->email && ! $this->accounts->emailAvailable($data['email'], $customer->getKey())) {
-            throw ValidationException::withMessages(['email' => 'That email address is already in use by another account.']);
+            throw ValidationException::withMessages(['email' => __('That email address is already in use by another account.')]);
         }
 
         $changedFields = collect($data)
@@ -96,7 +96,7 @@ class AccountProfileController extends Controller
             );
         }
 
-        return redirect()->to($this->accountRoute($request, 'profile'))->with('storefront_status', 'Your profile has been updated.');
+        return redirect()->to($this->accountRoute($request, 'profile'))->with('storefront_status', __('Your profile has been updated.'));
     }
 
     public function updatePassword(Request $request): RedirectResponse
@@ -110,7 +110,7 @@ class AccountProfileController extends Controller
         ]);
 
         if (! Hash::check($data['current_password'], $customer->password)) {
-            throw ValidationException::withMessages(['current_password' => 'Your current password is incorrect.']);
+            throw ValidationException::withMessages(['current_password' => __('Your current password is incorrect.')]);
         }
 
         $this->accounts->updatePassword($customer, $data['password']);
@@ -122,7 +122,7 @@ class AccountProfileController extends Controller
             'Your account password was changed successfully.',
         );
 
-        return redirect()->to($this->accountRoute($request, 'profile'))->with('storefront_status', 'Your password has been changed.');
+        return redirect()->to($this->accountRoute($request, 'profile'))->with('storefront_status', __('Your password has been changed.'));
     }
 
     protected function requireCustomer(): Customer

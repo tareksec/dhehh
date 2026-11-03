@@ -26,8 +26,8 @@
         $tiers = $productPage->tiers;
     @endphp
 
-    <nav class="mx-auto w-full max-w-7xl px-4 pt-4 text-xs text-gray-500 sm:px-5 lg:px-6 dark:text-gray-400" aria-label="Breadcrumb">
-        <a class="hover:text-gray-900 dark:hover:text-white" href="{{ $productsUrl }}">Shop all</a>
+    <nav class="mx-auto w-full max-w-7xl px-4 pt-4 text-xs text-gray-500 sm:px-5 lg:px-6 dark:text-gray-400" aria-label="{{ __('Breadcrumb') }}">
+        <a class="hover:text-gray-900 dark:hover:text-white" href="{{ $productsUrl }}">{{ __('Shop all') }}</a>
         @if ($categoryUrl)
             <span class="mx-2">/</span>
             <a class="hover:text-gray-900 dark:hover:text-white" href="{{ $categoryUrl }}">{{ $product->category->name }}</a>
@@ -43,7 +43,7 @@
                     <img data-main-image class="h-full w-full cursor-zoom-in object-contain transition-transform duration-200 ease-out will-change-transform" src="{{ $galleryImages->first() }}" alt="{{ $product->name }}" width="960" height="960" fetchpriority="high">
                     <div class="pointer-events-none absolute bottom-3 right-3 hidden items-center gap-1.5 rounded-full border border-white/70 bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm backdrop-blur lg:flex dark:border-gray-700 dark:bg-gray-950/90 dark:text-gray-200">
                         <svg class="h-4 w-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m2.1-5.4a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0ZM11.25 8.25v6m3-3h-6"/></svg>
-                        Hover to zoom
+                        {{ __('Hover to zoom') }}
                     </div>
                 </div>
                 <div data-thumbnails class="mt-3 grid grid-cols-5 gap-2 {{ $galleryImages->count() < 2 && ! $productPage->variantsHaveImages() ? 'hidden' : '' }}">
@@ -80,7 +80,7 @@
             @if ($tiers !== [] && ! $isVariableProduct)
                 <div class="mt-4 max-w-xl overflow-hidden rounded-lg border border-gray-200 dark:border-white/15">
                     <div class="border-b border-gray-200 bg-gray-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:border-white/10 dark:bg-white/5 dark:text-gray-400">
-                        Wholesale pricing
+                        {{ __('Wholesale pricing') }}
                     </div>
                     <table class="w-full text-sm">
                         <tbody class="divide-y divide-gray-200 dark:divide-white/10">
@@ -103,13 +103,13 @@
 
             @if ($moq > 1)
                 <div class="mt-4 inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600 dark:bg-white/10 dark:text-gray-300">
-                    Minimum order: {{ $moq }} {{ $product->unit ?: 'pcs' }}
+                    {{ __('Minimum order: :moq :unit', ['moq' => $moq, 'unit' => $product->unit ?: __('pcs')]) }}
                 </div>
             @endif
 
             @if ($isPreorder && ! $inStock)
                 <div class="mt-4 rounded-lg border border-[var(--storefront-brand)]/30 bg-[var(--storefront-brand)]/5 px-4 py-3 text-sm text-gray-700 dark:text-gray-200">
-                    This item is available for pre-order. An advance payment of {{ $product->preorderAdvancePercent() }}% is collected online at checkout; cash on delivery is not available for pre-order quantities.
+                    {{ __('This item is available for pre-order. An advance payment of :product% is collected online at checkout; cash on delivery is not available for pre-order quantities.', ['product' => $product->preorderAdvancePercent()]) }}
                 </div>
             @endif
 
@@ -125,7 +125,7 @@
                 <div>
                     <dt class="text-gray-400">{{ __('Status') }}</dt>
                     <dd data-status class="mt-1 font-semibold {{ $inStock ? 'text-emerald-600 dark:text-emerald-400' : ($isPreorder ? 'text-[var(--storefront-brand)]' : 'text-red-600 dark:text-red-400') }}">
-                        {{ $inStock ? 'Available' : ($isPreorder ? 'Pre-order' : 'Out of stock') }}
+                        {{ $inStock ? __('Available') : ($isPreorder ? __('Pre-order') : __('Out of stock')) }}
                     </dd>
                 </div>
             </dl>
@@ -166,7 +166,7 @@
                                                 BDT {{ \App\Support\MoneyFormatter::number($variant['price']) }}
                                                 &middot;
                                                 @if ($variant['stock'] > 0)
-                                                    {{ $variant['stock'] }} in stock
+                                                    {{ __(':variant in stock', ['variant' => $variant['stock']]) }}
                                                 @else
                                                     <span class="font-medium text-red-600 dark:text-red-400">{{ __('Out of stock') }}</span>
                                                 @endif
@@ -174,10 +174,10 @@
                                         </button>
                                         @if ($variant['stock'] > 0)
                                             <div class="flex shrink-0 items-center rounded-lg border border-gray-300 dark:border-white/15" data-qty-stepper>
-                                                <button type="button" data-qty-decrement class="grid h-11 w-11 place-items-center text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white [touch-action:manipulation]" aria-label="Decrease quantity">&minus;</button>
-                                                <label class="sr-only" for="variant-qty-{{ $variant['id'] }}">Quantity for {{ $variant['label'] }}</label>
+                                                <button type="button" data-qty-decrement class="grid h-11 w-11 place-items-center text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white [touch-action:manipulation]" aria-label="{{ __('Decrease quantity') }}">&minus;</button>
+                                                <label class="sr-only" for="variant-qty-{{ $variant['id'] }}">{{ __('Quantity for :variant', ['variant' => $variant['label']]) }}</label>
                                                 <input id="variant-qty-{{ $variant['id'] }}" data-qty-input data-variant-qty class="h-11 w-12 border-x border-gray-300 bg-transparent text-center text-sm font-semibold text-gray-950 outline-none focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:text-white" type="number" name="quantities[{{ $variant['id'] }}]" value="0" min="0" max="{{ $variant['stock'] }}" autocomplete="off">
-                                                <button type="button" data-qty-increment class="grid h-11 w-11 place-items-center text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white [touch-action:manipulation]" aria-label="Increase quantity">+</button>
+                                                <button type="button" data-qty-increment class="grid h-11 w-11 place-items-center text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white [touch-action:manipulation]" aria-label="{{ __('Increase quantity') }}">+</button>
                                             </div>
                                         @endif
                                     </div>
@@ -186,7 +186,7 @@
                             <p data-variant-hint class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ __('Set the quantity for each option you want, then add everything to your cart in one click.') }}</p>
                         @else
                             <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
-                                Options are currently unavailable. Please check back later or contact us for availability.
+                                {{ __('Options are currently unavailable. Please check back later or contact us for availability.') }}
                             </div>
                         @endif
                     </div>
@@ -195,23 +195,23 @@
                 <div class="flex flex-wrap items-center gap-3">
                     @if (! $isVariableProduct)
                         <div class="flex items-center rounded-lg border border-gray-300 dark:border-white/15" data-qty-stepper>
-                            <button type="button" data-qty-decrement class="grid h-12 w-11 place-items-center text-lg text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white [touch-action:manipulation]" aria-label="Decrease quantity">&minus;</button>
+                            <button type="button" data-qty-decrement class="grid h-12 w-11 place-items-center text-lg text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white [touch-action:manipulation]" aria-label="{{ __('Decrease quantity') }}">&minus;</button>
                             <label class="sr-only" for="quantity">{{ __('Quantity') }}</label>
                             <input id="quantity" data-qty-input class="h-12 w-14 border-x border-gray-300 bg-transparent text-center text-sm font-semibold text-gray-950 outline-none focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:text-white" type="number" name="quantity" value="{{ $minOrderQuantity }}" min="{{ $minOrderQuantity }}" max="{{ $maxOrderQuantity }}" autocomplete="off">
-                            <button type="button" data-qty-increment class="grid h-12 w-11 place-items-center text-lg text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white [touch-action:manipulation]" aria-label="Increase quantity">+</button>
+                            <button type="button" data-qty-increment class="grid h-12 w-11 place-items-center text-lg text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white [touch-action:manipulation]" aria-label="{{ __('Increase quantity') }}">+</button>
                         </div>
                     @endif
-                    <button type="submit" data-add-to-cart data-idle-label="{{ $inStock ? 'Add to cart' : ($isPreorder ? 'Pre-order now' : 'Out of stock') }}" data-pending-label="Adding&hellip;" class="inline-flex h-12 items-center rounded-lg border border-gray-950 px-7 text-sm font-medium text-gray-950 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white dark:text-white dark:hover:bg-white/10" @disabled(! $orderable || $isVariableProduct)>
-                        {{ $inStock ? 'Add to cart' : ($isPreorder ? 'Pre-order now' : 'Out of stock') }}
+                    <button type="submit" data-add-to-cart data-idle-label="{{ $inStock ? __('Add to cart') : ($isPreorder ? __('Pre-order now') : __('Out of stock')) }}" data-pending-label="{{ __('Adding…') }}" class="inline-flex h-12 items-center rounded-lg border border-gray-950 px-7 text-sm font-medium text-gray-950 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white dark:text-white dark:hover:bg-white/10" @disabled(! $orderable || $isVariableProduct)>
+                        {{ $inStock ? __('Add to cart') : ($isPreorder ? __('Pre-order now') : __('Out of stock')) }}
                     </button>
                     @if (! $isVariableProduct)
-                        <button type="submit" name="buy_now" value="1" data-buy-now data-pending-label="Opening checkout&hellip;" class="inline-flex h-12 items-center rounded-lg bg-[var(--storefront-brand)] px-7 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50" @disabled(! $orderable)>
-                            {{ $isPreorder && ! $inStock ? 'Pre-order now' : 'Buy now' }}
+                        <button type="submit" name="buy_now" value="1" data-buy-now data-pending-label="{{ __('Opening checkout…') }}" class="inline-flex h-12 items-center rounded-lg bg-[var(--storefront-brand)] px-7 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50" @disabled(! $orderable)>
+                            {{ $isPreorder && ! $inStock ? __('Pre-order now') : __('Buy now') }}
                         </button>
                     @endif
                     @if ($setting->whatsapp_number)
-                        <a class="inline-flex h-12 items-center rounded-lg border border-gray-300 px-7 text-sm font-medium text-gray-900 transition hover:border-gray-950 dark:border-white/15 dark:text-white dark:hover:border-white" href="https://wa.me/{{ preg_replace('/\D+/', '', $setting->whatsapp_number) }}?text={{ rawurlencode('I am interested in '.$product->name) }}" target="_blank" rel="noopener">
-                            Ask on WhatsApp
+                        <a class="inline-flex h-12 items-center rounded-lg border border-gray-300 px-7 text-sm font-medium text-gray-900 transition hover:border-gray-950 dark:border-white/15 dark:text-white dark:hover:border-white" href="https://wa.me/{{ preg_replace('/\D+/', '', $setting->whatsapp_number) }}?text={{ rawurlencode(__('I am interested in :product', ['product' => $product->name])) }}" target="_blank" rel="noopener">
+                            {{ __('Ask on WhatsApp') }}
                         </a>
                     @endif
                 </div>
@@ -221,19 +221,19 @@
 
     @if ($orderable)
         <div class="fixed inset-x-0 z-30 flex gap-3 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur sm:hidden dark:border-white/10 dark:bg-gray-950/95" style="bottom: calc(4rem + env(safe-area-inset-bottom));" data-mobile-purchase-bar>
-            <button type="submit" form="product-purchase-form" data-add-to-cart data-add-to-cart-mobile data-idle-label="{{ $inStock ? 'Add to cart' : ($isPreorder ? 'Pre-order' : 'Out of stock') }}" data-pending-label="Adding&hellip;" class="flex-1 rounded-lg border border-gray-950 px-4 py-3 text-sm font-medium text-gray-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white dark:text-white" @disabled($isVariableProduct)>
-                {{ $inStock ? 'Add to cart' : ($isPreorder ? 'Pre-order' : 'Out of stock') }}
+            <button type="submit" form="product-purchase-form" data-add-to-cart data-add-to-cart-mobile data-idle-label="{{ $inStock ? __('Add to cart') : ($isPreorder ? __('Pre-order') : __('Out of stock')) }}" data-pending-label="{{ __('Adding…') }}" class="flex-1 rounded-lg border border-gray-950 px-4 py-3 text-sm font-medium text-gray-950 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white dark:text-white" @disabled($isVariableProduct)>
+                {{ $inStock ? __('Add to cart') : ($isPreorder ? __('Pre-order') : __('Out of stock')) }}
             </button>
             @if (! $isVariableProduct)
-                <button type="submit" form="product-purchase-form" name="buy_now" value="1" data-pending-label="Opening checkout&hellip;" class="flex-1 rounded-lg bg-[var(--storefront-brand)] px-4 py-3 text-sm font-medium text-white transition hover:opacity-90">
-                    {{ $isPreorder && ! $inStock ? 'Pre-order now' : 'Buy now' }}
+                <button type="submit" form="product-purchase-form" name="buy_now" value="1" data-pending-label="{{ __('Opening checkout…') }}" class="flex-1 rounded-lg bg-[var(--storefront-brand)] px-4 py-3 text-sm font-medium text-white transition hover:opacity-90">
+                    {{ $isPreorder && ! $inStock ? __('Pre-order now') : __('Buy now') }}
                 </button>
             @endif
         </div>
     @endif
 
     <section class="mx-auto w-full max-w-7xl px-4 pb-8 sm:px-5 lg:px-6" x-data="{ tab: 'description' }">
-        <div class="flex gap-6 border-b border-gray-200 text-sm font-medium dark:border-white/10" role="tablist" aria-label="Product information">
+        <div class="flex gap-6 border-b border-gray-200 text-sm font-medium dark:border-white/10" role="tablist" aria-label="{{ __('Product information') }}">
             <button
                 id="product-tab-description"
                 x-ref="descriptionTab"
@@ -261,13 +261,13 @@
                 @keydown.home.prevent="tab = 'description'; $nextTick(() => $refs.descriptionTab.focus())"
                 :class="tab === 'shipping' ? 'border-gray-950 text-gray-950 dark:border-white dark:text-white' : 'border-transparent text-gray-500 dark:text-gray-400'"
                 class="inline-flex min-h-11 items-center border-b-2 transition"
-            >Shipping &amp; Return</button>
+            >{{ __('Shipping & Return') }}</button>
         </div>
         <div class="max-w-3xl py-6 text-sm leading-7 text-gray-600 dark:text-gray-300">
             <div id="product-panel-description" role="tabpanel" aria-labelledby="product-tab-description" tabindex="0" x-show="tab === 'description'">
                 <div class="prose prose-sm max-w-none dark:prose-invert">
                     @if (! $product->description)
-                        Product details will be updated soon. Contact us for specifications, availability, and delivery details.
+                        {{ __('Product details will be updated soon. Contact us for specifications, availability, and delivery details.') }}
                     @elseif ($isHtmlDescription)
                         {{ RichContentRenderer::make($product->description) }}
                     @else

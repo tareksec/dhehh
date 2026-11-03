@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Ses;
+namespace App\Services\Email;
 
 use App\Models\EmailLog;
 use App\Models\StorefrontSetting;
@@ -9,21 +9,18 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Query\Builder;
 
 /**
- * What Settings → Amazon SES shows about email use (owner request 2026-10-24):
- * how many emails went out, how many reached the recipient, bounced, were
- * marked as spam or failed, how much of the monthly free allowance is used, and
- * an estimate of the cost. Everything is counted from this company's Email Log,
- * only the emails that went through an Amazon SES SMTP host. Amazon's own API
- * does not give the free allowance or the price, so the owner types those two
- * numbers in (kept with the site's other SES settings); nothing is assumed.
- * The cost is an estimate, not Amazon's bill.
+ * What Settings → Email delivery shows about email use (owner request 2026-10-24, made provider-neutral
+ * 2026-11-02): how many emails went out, how many reached the recipient, bounced, were marked as spam or failed,
+ * how much of the monthly free allowance is used, and an estimate of the cost. Everything is counted from this
+ * company's Email Log, only the emails that went through the site's own mail service (the Email Log "via", for
+ * example `smtp:smtp.mx.cloudflare.net`, see EmailProvider). No service's API gives the free allowance or the
+ * price, so the owner types those two numbers in (kept with the site's settings); nothing is assumed. The cost
+ * is an estimate, not the provider's bill. Delivered, bounced and spam only exist for a service that reports
+ * back (Amazon SES with tracking on); for the others every accepted email stays "sent".
  */
-class SesUsageService
+class EmailUsageService
 {
-    /** The Email Log "via" of an email sent through an Amazon SES SMTP host (SesApiService::SMTP_HOST_PATTERN). */
-    public const VIA_PATTERN = 'smtp:email-smtp.%.amazonaws.com';
-
-    /** Amazon accepted these (sent, and later delivered, bounced or marked as spam). */
+    /** The service accepted these (sent, and later delivered, bounced or marked as spam). */
     public const ACCEPTED_STATUSES = [EmailLog::STATUS_SENT, EmailLog::STATUS_DELIVERED, EmailLog::STATUS_BOUNCED, EmailLog::STATUS_COMPLAINED];
 
     /** From this share of the free allowance the gauge turns amber. */
@@ -39,6 +36,7 @@ class SesUsageService
         EmailLog::KIND_IMS_INVITATION => 'ims',
         EmailLog::KIND_IMS_MESSAGE => 'ims',
         EmailLog::KIND_OWNER_DIGEST => 'digest',
+        EmailLog::KIND_STAFF_REPLY => 'staff',
         EmailLog::KIND_TEST => 'test',
         EmailLog::KIND_OTHER => 'other',
     ];
@@ -52,6 +50,7 @@ class SesUsageService
             'codes' => __('Login and reset codes'),
             'ims' => __('IMS investor emails'),
             'digest' => __('Owner digest'),
+            'staff' => __('Replies from the Email inbox'),
             'test' => __('Test emails'),
             'other' => __('Other'),
         ];
@@ -59,15 +58,16 @@ class SesUsageService
 
     /**
      * The two numbers the owner types in: free emails each month and the price of 1,000 emails after that (US
-     * dollars). Null while not filled in.
+     * dollars). Null while not filled in. The values typed on the Amazon SES page before the page became
+     * provider-neutral (`ses_*`) are read when the new ones (`email_*`) are not there yet.
      *
      * @return array{free_limit: ?int, price: ?float}
      */
     public static function settingsFor(?StorefrontSetting $setting): array
     {
         $credentials = (array) $setting?->notification_credentials;
-        $free = $credentials['ses_free_limit'] ?? null;
-        $price = $credentials['ses_price_per_1000'] ?? null;
+        $free = $credentials['email_free_limit'] ?? $credentials['ses_free_limit'] ?? null;
+        $price = $credentials['email_price_per_1000'] ?? $credentials['ses_price_per_1000'] ?? null;
 
         return [
             'free_limit' => is_numeric($free) ? max(0, (int) $free) : null,
@@ -76,12 +76,13 @@ class SesUsageService
     }
 
     /**
-     * The usage of one calendar month (Amazon bills by calendar month) and the four months up to it.
+     * The usage of one calendar month (providers bill by calendar month) and the four months up to it, of the
+     * emails that went through $via (EmailProvider::$via).
      *
      * @param  array{free_limit: ?int, price: ?float}  $settings
      * @return array<string, mixed>
      */
-    public function report(int $companyId, int $monthsBack, array $settings, ?CarbonImmutable $now = null): array
+    public function report(int $companyId, string $via, int $monthsBack, array $settings, ?CarbonImmutable $now = null): array
     {
         $now ??= CarbonImmutable::now();
         $monthsBack = max(0, min(3, $monthsBack));
@@ -91,15 +92,15 @@ class SesUsageService
         $daysInMonth = $start->daysInMonth;
         $elapsed = $isCurrent ? $now->day : $daysInMonth;
 
-        $totals = $this->counts($companyId, $start, $end);
+        $totals = $this->counts($companyId, $via, $start, $end);
 
         return [
             'month' => ['label' => $start->translatedFormat('F Y'), 'short' => $start->translatedFormat('M'), 'is_current' => $isCurrent, 'days' => $daysInMonth],
             'totals' => $totals,
-            'last_24h' => $this->counts($companyId, $now->subDay(), $now->addSecond())['sent'],
-            'kinds' => $this->kinds($companyId, $start, $end, $totals['sent']),
-            'weeks' => $this->weeks($companyId, $start, $elapsed),
-            'months' => $this->months($companyId, $now, $monthsBack, $settings),
+            'last_24h' => $this->counts($companyId, $via, $now->subDay(), $now->addSecond())['sent'],
+            'kinds' => $this->kinds($companyId, $via, $start, $end, $totals['sent']),
+            'weeks' => $this->weeks($companyId, $via, $start, $elapsed),
+            'months' => $this->months($companyId, $via, $now, $monthsBack, $settings),
             'free' => $this->free($totals['sent'], $settings['free_limit'], $now, $isCurrent, $elapsed, $daysInMonth),
             'cost' => $this->cost($totals['sent'], $settings),
         ];
@@ -172,11 +173,11 @@ class SesUsageService
      *
      * @return array<int, array{name: string, sent: int, delivered: int, waiting: int, problems: int, failed: int, share: float}>
      */
-    protected function kinds(int $companyId, CarbonInterface $from, CarbonInterface $to, int $totalSent): array
+    protected function kinds(int $companyId, string $via, CarbonInterface $from, CarbonInterface $to, int $totalSent): array
     {
         $groups = [];
 
-        foreach ($this->query($companyId, $from, $to)->selectRaw('kind, '.$this->aggregate())->groupBy('kind')->get() as $row) {
+        foreach ($this->query($companyId, $via, $from, $to)->selectRaw('kind, '.$this->aggregate())->groupBy('kind')->get() as $row) {
             $key = self::KIND_GROUPS[$row->kind] ?? 'other';
             $counts = $this->normalise($row);
             $groups[$key] ??= $this->normalise(null);
@@ -210,7 +211,7 @@ class SesUsageService
      *
      * @return array{rows: array<int, array{range: string, sent: int, delivered: int}>, top: int}
      */
-    protected function weeks(int $companyId, CarbonImmutable $start, int $elapsed): array
+    protected function weeks(int $companyId, string $via, CarbonImmutable $start, int $elapsed): array
     {
         $month = $start->translatedFormat('M');
         $rows = [];
@@ -222,7 +223,7 @@ class SesUsageService
                 break;
             }
 
-            $counts = $this->counts($companyId, $start->addDays($first - 1), $start->addDays($last));
+            $counts = $this->counts($companyId, $via, $start->addDays($first - 1), $start->addDays($last));
             $rows[] = [
                 'range' => $first === $last ? $month.' '.$first : $month.' '.$first.'–'.$last,
                 'sent' => $counts['sent'],
@@ -245,13 +246,13 @@ class SesUsageService
      * @param  array{free_limit: ?int, price: ?float}  $settings
      * @return array<int, array{label: string, is_current: bool, selected: bool, sent: int, failed: int, percent: ?float, over_by: int, cost: ?float}>
      */
-    protected function months(int $companyId, CarbonImmutable $now, int $monthsBack, array $settings): array
+    protected function months(int $companyId, string $via, CarbonImmutable $now, int $monthsBack, array $settings): array
     {
         $rows = [];
 
         for ($i = 0; $i < 4; $i++) {
             $start = $now->startOfMonth()->subMonths($i);
-            $counts = $this->counts($companyId, $start, $start->addMonth());
+            $counts = $this->counts($companyId, $via, $start, $start->addMonth());
             $limit = $settings['free_limit'];
 
             $rows[] = [
@@ -272,17 +273,17 @@ class SesUsageService
     /**
      * @return array{sent: int, delivered: int, waiting: int, bounced: int, complained: int, problems: int, failed: int, attempts: int}
      */
-    protected function counts(int $companyId, CarbonInterface $from, CarbonInterface $to): array
+    protected function counts(int $companyId, string $via, CarbonInterface $from, CarbonInterface $to): array
     {
-        return $this->normalise($this->query($companyId, $from, $to)->selectRaw($this->aggregate())->first());
+        return $this->normalise($this->query($companyId, $via, $from, $to)->selectRaw($this->aggregate())->first());
     }
 
-    /** The SES emails of one company created from $from up to (not including) $to. */
-    protected function query(int $companyId, CarbonInterface $from, CarbonInterface $to): Builder
+    /** The emails of one company that went through $via, created from $from up to (not including) $to. */
+    protected function query(int $companyId, string $via, CarbonInterface $from, CarbonInterface $to): Builder
     {
         return EmailLog::withoutGlobalScopes()
             ->where('company_id', $companyId)
-            ->where('via', 'like', self::VIA_PATTERN)
+            ->where('via', $via)
             ->where('created_at', '>=', $from)
             ->where('created_at', '<', $to)
             ->toBase();

@@ -49,6 +49,9 @@ class EmailLog extends Model
     /** One of the owner's own templates, sent by hand from an order. */
     public const KIND_TEMPLATE = 'template';
 
+    /** A message a staff member wrote in the Email inbox (a reply, a forward or a new message). */
+    public const KIND_STAFF_REPLY = 'staff_reply';
+
     public const KIND_TEST = 'test';
 
     public const KIND_OTHER = 'other';

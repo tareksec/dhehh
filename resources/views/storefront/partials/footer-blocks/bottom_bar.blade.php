@@ -17,7 +17,7 @@
             <div class="text-sm text-gray-500 dark:text-gray-400">{!! str_replace('{heart}', '<span class="text-red-500" aria-hidden="true">&hearts;</span>', e($data['right_text'])) !!}</div>
         @endif
         @if ($legalLinks->isNotEmpty())
-            <nav class="flex flex-wrap items-center justify-center gap-x-4 gap-y-1" aria-label="Legal">
+            <nav class="flex flex-wrap items-center justify-center gap-x-4 gap-y-1" aria-label="{{ __('Legal') }}">
                 @foreach ($legalLinks as $legalLink)
                     @continue(! $legalPageSlugs->has($legalLink['page_id']))
                     <a class="text-sm text-gray-500 transition hover:text-[var(--storefront-brand)] dark:text-gray-400" href="{{ $pageUrl($legalPageSlugs->get($legalLink['page_id'])) }}">

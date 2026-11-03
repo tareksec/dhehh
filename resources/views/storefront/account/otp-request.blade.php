@@ -13,12 +13,12 @@
         <p class="text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">{{ __('Password-free login') }}</p>
         <h1 class="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{{ __('Log in with an OTP') }}</h1>
         <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">
-            Enter the email address or phone number on your account. We will send a one-time 6-digit login code.
+            {{ __('Enter the email address or phone number on your account. We will send a one-time 6-digit login code.') }}
         </p>
 
         @unless ($smsAvailable)
             <div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200" role="note">
-                Phone OTP is temporarily unavailable for this store. Email OTP is still available.
+                {{ __('Phone OTP is temporarily unavailable for this store. Email OTP is still available.') }}
             </div>
         @endunless
 
@@ -31,15 +31,15 @@
             </div>
             <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                 <input class="rounded border-gray-300 text-[var(--storefront-brand)] focus:ring-[var(--storefront-brand)]" type="checkbox" name="remember" value="1">
-                Keep me logged in
+                {{ __('Keep me logged in') }}
             </label>
             <button class="w-full rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90 [touch-action:manipulation]" type="submit">
-                Send login code
+                {{ __('Send login code') }}
             </button>
         </form>
 
         <p class="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
-            Prefer your password? <a class="font-medium text-[var(--storefront-brand)]" href="{{ $loginUrl }}">Log in with password</a>
+            {{ __('Prefer your password?') }} <a class="font-medium text-[var(--storefront-brand)]" href="{{ $loginUrl }}">{{ __('Log in with password') }}</a>
         </p>
     </section>
 @endsection

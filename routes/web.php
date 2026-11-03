@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\BackupDownloadController;
 use App\Http\Controllers\Admin\CompanySwitchController;
 use App\Http\Controllers\Admin\ConversationMediaController;
 use App\Http\Controllers\Admin\CustomerCsvController;
+use App\Http\Controllers\Admin\EmailAttachmentDownloadController;
 use App\Http\Controllers\Admin\ExpenseScanImageController;
 use App\Http\Controllers\Admin\InvestmentDocumentDownloadController;
 use App\Http\Controllers\Admin\InvestmentReportController;
@@ -31,6 +32,7 @@ use App\Http\Controllers\CourierHandoverSheetController;
 use App\Http\Controllers\CourierWebhookController;
 use App\Http\Controllers\DocumentationGuideController;
 use App\Http\Controllers\FirebaseServiceWorkerController;
+use App\Http\Controllers\InboundEmailController;
 use App\Http\Controllers\InstallController;
 use App\Http\Controllers\MetaWebhookController;
 use App\Http\Controllers\MobileCrashReportController;
@@ -61,6 +63,7 @@ use App\Http\Controllers\Storefront\ProductShowController as StorefrontProductSh
 use App\Http\Controllers\Storefront\ResellerController;
 use App\Http\Controllers\Storefront\ResellerStoreController;
 use App\Http\Controllers\Storefront\SeoFilesController;
+use App\Http\Controllers\TlsAskController;
 use App\Http\Controllers\WhatsAppWebWebhookController;
 use App\Http\Controllers\WooCommerceWebhookController;
 use App\Http\Controllers\ZiniPayWebhookController;
@@ -86,7 +89,7 @@ Route::middleware('signed')
     ->get('/quotation/{quotationNumber}', [QuotationPublicController::class, 'show'])
     ->name('quotation.public');
 
-Route::get('/internal/tls-ask', \App\Http\Controllers\TlsAskController::class)
+Route::get('/internal/tls-ask', TlsAskController::class)
     ->middleware('throttle:60,1')
     ->name('internal.tls-ask');
 
@@ -574,6 +577,12 @@ Route::post('/webhooks/ses/{setting}/{token}', SesWebhookController::class)
     ->middleware('throttle:600,1')
     ->name('webhooks.ses');
 
+// A received email handed over by the Cloudflare Email Routing Worker (see InboundEmailController).
+Route::post('/webhooks/email/{mailbox}/{token}', InboundEmailController::class)
+    ->whereNumber('mailbox')
+    ->middleware('throttle:600,1')
+    ->name('webhooks.email');
+
 Route::post('/webhooks/woocommerce/{company}', WooCommerceWebhookController::class)
     ->middleware('throttle:120,1')
     ->name('woocommerce.webhook');
@@ -756,6 +765,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/admin/conversation-messages/{message}/media', ConversationMediaController::class)
         ->whereNumber('message')
         ->name('conversation-messages.media');
+
+    Route::get('/admin/email-attachments/{attachment}/download', EmailAttachmentDownloadController::class)
+        ->whereNumber('attachment')
+        ->name('email-attachments.download');
 
     Route::get('/admin/expense-scans/{scan}/images/{index}', ExpenseScanImageController::class)
         ->whereNumber(['scan', 'index'])

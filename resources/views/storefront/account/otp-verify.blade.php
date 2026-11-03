@@ -13,7 +13,7 @@
         <p class="text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">{{ __('Verify login') }}</p>
         <h1 class="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{{ __('Enter your 6-digit code') }}</h1>
         <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">
-            If an account matched, the code was sent to <span class="font-medium text-gray-800 dark:text-gray-200">{{ $maskedIdentifier }}</span>. It expires in {{ \App\Services\CustomerAccountService::LOGIN_CODE_MINUTES }} minutes.
+            {{ __('If an account matched, the code was sent to') }} <span class="font-medium text-gray-800 dark:text-gray-200">{{ $maskedIdentifier }}</span>{{ __('. It expires in :minutes minutes.', ['minutes' => \App\Services\CustomerAccountService::LOGIN_CODE_MINUTES]) }}
         </p>
 
         <form class="mt-5 space-y-5 rounded-lg border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-gray-900" method="POST" action="{{ $verifyUrl }}">
@@ -24,12 +24,12 @@
                 @error('code') <p class="mt-2 text-center text-xs text-red-600" id="otp-code-error">{{ $message }}</p> @enderror
             </div>
             <button class="w-full rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90 [touch-action:manipulation]" type="submit">
-                Verify and log in
+                {{ __('Verify and log in') }}
             </button>
         </form>
 
         <p class="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
-            Didn't receive it? <a class="font-medium text-[var(--storefront-brand)]" href="{{ $requestUrl }}">Request a new code</a>
+            {{ __('Didn\'t receive it?') }} <a class="font-medium text-[var(--storefront-brand)]" href="{{ $requestUrl }}">{{ __('Request a new code') }}</a>
         </p>
     </section>
 @endsection

@@ -180,6 +180,34 @@ class AdminBottomNavigationTest extends TestCase
         $this->assertNotNull($other->getKey());
     }
 
+    public function test_a_long_company_name_wraps_to_two_lines_instead_of_being_cut_to_one(): void
+    {
+        $this->company->update(['name' => 'ZamZam International']);
+        $this->superAdmin();
+        Company::query()->create([
+            'name' => 'Second Co', 'slug' => 'second-co', 'invoice_prefix' => 'SEC',
+            'currency' => 'BDT', 'timezone' => 'Asia/Dhaka', 'is_active' => true,
+        ]);
+
+        $html = $this->get('/admin')->assertOk()->getContent();
+
+        // The bar showed "ZamZam ..." because the label was one truncated line
+        // in a column as wide as the others. Owner report 2026-11-03: the label
+        // may now take two lines (a clamp, not a one-line truncate), and the full
+        // name is also the button's title.
+        $this->assertMatchesRegularExpression('/<span[^>]*line-clamp-2[^>]*data-bottom-nav-company-label[^>]*>\s*ZamZam International\s*<\/span>/s', $html);
+        $this->assertDoesNotMatchRegularExpression('/<span[^>]*truncate[^>]*data-bottom-nav-company-label/s', $html);
+        $this->assertMatchesRegularExpression('/<button[^>]*title="ZamZam International"[^>]*data-bottom-nav="company"/s', $html);
+
+        // The columns come from one class in the theme (a wider company column,
+        // equal sides so the "+" stays in the middle), not from five equal parts.
+        $this->assertMatchesRegularExpression('/<ul[^>]*zz-bottom-nav-grid/s', $html);
+        $this->assertDoesNotMatchRegularExpression('/<ul[^>]*grid-cols-5/s', $html);
+
+        $theme = (string) file_get_contents(resource_path('css/filament/admin/theme.css'));
+        $this->assertMatchesRegularExpression('/\.zz-bottom-nav-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*0\.9fr\)\s*minmax\(0,\s*1\.1fr\)\s*3\.5rem\s*minmax\(0,\s*1fr\)\s*minmax\(0,\s*1fr\)/s', $theme);
+    }
+
     public function test_the_expense_popup_creates_an_expense_and_goes_to_the_expense_list(): void
     {
         $this->superAdmin();

@@ -7,8 +7,8 @@
 
 @section('account-content')
     <div class="mb-4">
-        <a href="{{ $ordersUrl }}" class="text-sm font-medium text-[var(--storefront-brand)]">&larr; Back to orders</a>
-        <h2 class="mt-2 text-2xl font-semibold tracking-tight">Review order {{ $order->order_number }}</h2>
+        <a href="{{ $ordersUrl }}" class="text-sm font-medium text-[var(--storefront-brand)]">&larr; {{ __('Back to orders') }}</a>
+        <h2 class="mt-2 text-2xl font-semibold tracking-tight">{{ __('Review order :order_number', ['order_number' => $order->order_number]) }}</h2>
         <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ __('Share your experience with the products from this order.') }}</p>
     </div>
 
@@ -48,12 +48,12 @@
                         </fieldset>
 
                         <label class="block">
-                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Comment (optional)</span>
+                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ __('Comment (optional)') }}</span>
                             <textarea name="comment" rows="3" class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/15 dark:bg-white/10 dark:text-white"></textarea>
                         </label>
 
                         <button class="inline-flex min-h-10 items-center rounded-lg bg-[var(--storefront-brand)] px-5 text-sm font-medium text-white transition hover:opacity-90" type="submit">
-                            Submit review
+                            {{ __('Submit review') }}
                         </button>
                     </form>
                 @endunless

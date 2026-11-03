@@ -39,7 +39,7 @@ class AccountController extends Controller
         $customer = $this->customer();
 
         if (! $customer) {
-            return $this->loginRedirect($request, 'Log in to open your account.');
+            return $this->loginRedirect($request, __('Log in to open your account.'));
         }
 
         $orders = $this->ordersQuery($company, $customer);
@@ -65,7 +65,7 @@ class AccountController extends Controller
         $customer = $this->customer();
 
         if (! $customer) {
-            return $this->loginRedirect($request, 'Log in to view your account activity.');
+            return $this->loginRedirect($request, __('Log in to view your account activity.'));
         }
 
         return StorefrontThemeRegistry::page('account.activity', [

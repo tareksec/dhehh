@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Company;
 use App\Models\StorefrontSetting;
-use App\Services\Ses\SesUsageService;
+use App\Services\Email\EmailUsageService;
 use App\Services\StorefrontNotificationService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -12,11 +12,11 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * What Settings → Amazon SES shows about email use (owner request 2026-10-24): the
- * Email Log counted for one company, only the emails that went through an Amazon SES
- * host, by status, kind, week and month, with the free allowance and an estimated cost.
+ * What Settings → Email delivery shows about email use (owner request 2026-10-24, provider-neutral since
+ * 2026-11-02): the Email Log counted for one company, only the emails that went through the given mail service
+ * (the log's "via"), by status, kind, week and month, with the free allowance and an estimated cost.
  */
-class SesUsageServiceTest extends TestCase
+class EmailUsageServiceTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -56,7 +56,7 @@ class SesUsageServiceTest extends TestCase
         $this->log('sent', '2026-10-05 10:00', 'order', company: $this->other);
     }
 
-    public function test_the_month_is_counted_by_status_for_this_company_and_amazon_only(): void
+    public function test_the_month_is_counted_by_status_for_this_company_and_this_service_only(): void
     {
         $totals = $this->report()['totals'];
 
@@ -74,11 +74,11 @@ class SesUsageServiceTest extends TestCase
     {
         $this->assertSame(3, $this->report()['last_24h']);
 
-        $empty = (new SesUsageService)->report($this->other->getKey(), 0, SesUsageService::settingsFor(null), $this->now);
+        $empty = (new EmailUsageService)->report($this->other->getKey(), self::SES, 0, EmailUsageService::settingsFor(null), $this->now);
         $this->assertSame(1, $empty['totals']['sent'], 'Another company sees only its own email.');
 
         $nobody = Company::query()->create(['name' => 'Empty Co', 'slug' => 'empty-co', 'invoice_prefix' => 'EMP', 'currency' => 'BDT', 'timezone' => 'UTC', 'is_active' => true]);
-        $none = (new SesUsageService)->report($nobody->getKey(), 0, SesUsageService::settingsFor(null), $this->now);
+        $none = (new EmailUsageService)->report($nobody->getKey(), self::SES, 0, EmailUsageService::settingsFor(null), $this->now);
         $this->assertSame(0, $none['totals']['sent']);
         $this->assertSame([], $none['kinds']);
         $this->assertSame(0, $none['weeks']['rows'][0]['sent']);
@@ -125,7 +125,7 @@ class SesUsageServiceTest extends TestCase
     public function test_the_four_months_up_to_the_current_one_carry_their_cost(): void
     {
         $settings = ['free_limit' => 3, 'price' => 100.0];
-        $months = (new SesUsageService)->report($this->company->getKey(), 0, $settings, $this->now)['months'];
+        $months = (new EmailUsageService)->report($this->company->getKey(), self::SES, 0, $settings, $this->now)['months'];
 
         $this->assertSame(['Oct 2026', 'Sep 2026', 'Aug 2026', 'Jul 2026'], array_column($months, 'label'));
         $this->assertSame([9, 4, 2, 0], array_column($months, 'sent'));
@@ -138,7 +138,7 @@ class SesUsageServiceTest extends TestCase
 
     public function test_the_free_allowance_is_unset_ok_near_or_over(): void
     {
-        $free = fn (?int $limit): array => (new SesUsageService)->report($this->company->getKey(), 0, ['free_limit' => $limit, 'price' => null], $this->now)['free'];
+        $free = fn (?int $limit): array => (new EmailUsageService)->report($this->company->getKey(), self::SES, 0, ['free_limit' => $limit, 'price' => null], $this->now)['free'];
 
         $this->assertSame('unset', $free(null)['state']);
         $this->assertNull($free(null)['left']);
@@ -164,7 +164,7 @@ class SesUsageServiceTest extends TestCase
 
     public function test_the_cost_is_only_what_passes_the_free_emails(): void
     {
-        $service = new SesUsageService;
+        $service = new EmailUsageService;
 
         $cost = $service->cost(12000, ['free_limit' => 3000, 'price' => 0.10]);
         $this->assertSame(9000, $cost['billable']);
@@ -178,31 +178,61 @@ class SesUsageServiceTest extends TestCase
 
     public function test_money_never_shows_a_small_cost_as_free(): void
     {
-        $this->assertSame('—', SesUsageService::money(null));
-        $this->assertSame('$0.00', SesUsageService::money(0.0));
-        $this->assertSame('$0.90', SesUsageService::money(0.9));
-        $this->assertSame('less than $0.01', SesUsageService::money(0.0004));
-        $this->assertSame('$0.01', SesUsageService::money(0.0146));
+        $this->assertSame('—', EmailUsageService::money(null));
+        $this->assertSame('$0.00', EmailUsageService::money(0.0));
+        $this->assertSame('$0.90', EmailUsageService::money(0.9));
+        $this->assertSame('less than $0.01', EmailUsageService::money(0.0004));
+        $this->assertSame('$0.01', EmailUsageService::money(0.0146));
     }
 
     public function test_the_two_cost_numbers_are_read_from_the_site_settings(): void
     {
-        $this->assertSame(['free_limit' => null, 'price' => null], SesUsageService::settingsFor(null));
+        $this->assertSame(['free_limit' => null, 'price' => null], EmailUsageService::settingsFor(null));
 
         $setting = new StorefrontSetting(['notification_credentials' => ['ses_free_limit' => '3000', 'ses_price_per_1000' => '0.1']]);
-        $this->assertSame(['free_limit' => 3000, 'price' => 0.1], SesUsageService::settingsFor($setting));
+        $this->assertSame(['free_limit' => 3000, 'price' => 0.1], EmailUsageService::settingsFor($setting));
 
         $zero = new StorefrontSetting(['notification_credentials' => ['ses_free_limit' => 0, 'ses_price_per_1000' => '0']]);
-        $this->assertSame(['free_limit' => 0, 'price' => 0.0], SesUsageService::settingsFor($zero), 'Zero is a number the owner typed, not "not set".');
+        $this->assertSame(['free_limit' => 0, 'price' => 0.0], EmailUsageService::settingsFor($zero), 'Zero is a number the owner typed, not "not set".');
 
         $this->assertContains('ses_free_limit', StorefrontNotificationService::SES_CREDENTIAL_KEYS);
         $this->assertContains('ses_price_per_1000', StorefrontNotificationService::SES_CREDENTIAL_KEYS);
     }
 
+    public function test_the_new_cost_keys_win_over_the_ones_typed_on_the_amazon_page(): void
+    {
+        $both = new StorefrontSetting(['notification_credentials' => [
+            'ses_free_limit' => '200', 'ses_price_per_1000' => '0.1',
+            'email_free_limit' => '3000', 'email_price_per_1000' => '0.35',
+        ]]);
+
+        $this->assertSame(['free_limit' => 3000, 'price' => 0.35], EmailUsageService::settingsFor($both));
+        $this->assertContains('email_free_limit', StorefrontNotificationService::EMAIL_COST_KEYS);
+        $this->assertContains('email_price_per_1000', StorefrontNotificationService::EMAIL_COST_KEYS);
+    }
+
+    public function test_each_mail_service_is_counted_on_its_own(): void
+    {
+        $cloudflare = 'smtp:smtp.mx.cloudflare.net';
+        $this->log('sent', '2026-10-06 10:00', 'staff_reply', times: 2, via: $cloudflare);
+        $this->log('failed', '2026-10-07 10:00', 'order', via: $cloudflare);
+        $this->log('sent', '2026-10-06 10:00', 'order', via: $cloudflare, company: $this->other);
+
+        $report = (new EmailUsageService)->report($this->company->getKey(), $cloudflare, 0, ['free_limit' => null, 'price' => null], $this->now);
+
+        $this->assertSame(2, $report['totals']['sent'], 'Only the emails that went through this host, of this company.');
+        $this->assertSame(1, $report['totals']['failed']);
+        $this->assertSame(2, $report['totals']['waiting'], 'A service that never reports back leaves every accepted email as sent.');
+        $this->assertSame(0, $report['totals']['delivered']);
+        $this->assertSame(['Replies from the Email inbox'], collect($report['kinds'])->pluck('name')->diff(['Order emails'])->values()->all());
+
+        $this->assertSame(9, $this->report()['totals']['sent'], 'The Amazon SES numbers do not change.');
+    }
+
     /** @return array<string, mixed> */
     private function report(int $monthsBack = 0): array
     {
-        return (new SesUsageService)->report($this->company->getKey(), $monthsBack, ['free_limit' => null, 'price' => null], $this->now);
+        return (new EmailUsageService)->report($this->company->getKey(), self::SES, $monthsBack, ['free_limit' => null, 'price' => null], $this->now);
     }
 
     private function log(string $status, string $when, string $kind, int $times = 1, ?string $via = self::SES, ?Company $company = null): void

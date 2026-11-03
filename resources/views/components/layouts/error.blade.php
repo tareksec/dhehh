@@ -8,12 +8,12 @@
     step 3.2.
 --}}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex">
-    <title>{{ $title ?? 'Unavailable' }}</title>
+    <title>{{ $title ?? __('Unavailable') }}</title>
     <style>
         :root {
             color-scheme: light;
@@ -63,7 +63,7 @@
         <div class="code">{{ $status ?? '' }}</div>
         <h1>{{ $heading }}</h1>
         <p>{{ $message }}</p>
-        <a class="home" href="{{ url('/') }}">Go to homepage</a>
+        <a class="home" href="{{ url('/') }}">{{ __('Go to homepage') }}</a>
     </main>
 </body>
 </html>

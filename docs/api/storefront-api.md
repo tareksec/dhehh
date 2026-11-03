@@ -30,7 +30,13 @@ Send on every request:
 ```
 Authorization: Bearer <key>
 Accept: application/json
+X-Locale: bn            (optional: bn | en)
 ```
+
+`X-Locale` (or `?lang=bn`) is the visitor's language. Every message the ERP writes for that request
+(checkout and account errors, order status words, tracking updates) comes back in that language
+instead of English. Admin-entered content (product names, banners, menus, footer text) is returned
+exactly as entered.
 
 ## 2. Behaviour shared by every endpoint
 
@@ -135,7 +141,7 @@ unsafe links). A site with nothing saved gets the defaults below; the default la
 | --- | --- |
 | `topbar` | `enabled`, `show_social`, `message`, `background`, `links` (menu items with `label, type, category_slug, page_slug, url, new_tab, icon`) |
 | `header` | `tagline`, `search_placeholder`, `show_search`, `show_theme_toggle`, `show_account`, `show_wishlist`, `show_support`, `support_label`, `support_phone`, `show_categories_menu`, `categories_label`, `sticky` |
-| `footer` | `background` |
+| `footer` | `background` (dark mode), `background_light` (light mode) |
 | `product_card` | `price_color`, `badge_color`, `show_rating`, `show_stock`, `show_wishlist`, `show_quick_view`, `show_add_to_cart` |
 | `floating_help` | `enabled`, `title`, `subtitle`, `url` (null = a WhatsApp chat with `contact.whatsapp_number`) |
 

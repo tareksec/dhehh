@@ -156,7 +156,7 @@ class ResellerStoreController extends Controller
 
         return redirect()
             ->to($this->editUrl($request))
-            ->with('storefront_status', 'Your store URL has been updated.');
+            ->with('storefront_status', __('Your store URL has been updated.'));
     }
 
     public function toggleProduct(Request $request, Product $product): RedirectResponse
@@ -190,7 +190,7 @@ class ResellerStoreController extends Controller
 
         return redirect()
             ->to($this->editUrl($request))
-            ->with('storefront_status', $existing ? "Removed \"{$product->name}\" from your store." : "Added \"{$product->name}\" to your store.");
+            ->with('storefront_status', $existing ? __('Removed ":name" from your store.', ['name' => $product->name]) : __('Added ":name" to your store.', ['name' => $product->name]));
     }
 
     /**
@@ -274,7 +274,7 @@ class ResellerStoreController extends Controller
                 ? route('storefront.preview.account.login', $this->previewSlug($request))
                 : route('storefront.account.login');
 
-            return redirect()->to($route)->with('storefront_status', 'Log in to manage your store.');
+            return redirect()->to($route)->with('storefront_status', __('Log in to manage your store.'));
         }
 
         abort_unless($customer->isApprovedReseller(), 403);

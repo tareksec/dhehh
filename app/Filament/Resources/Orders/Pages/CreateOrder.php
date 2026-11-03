@@ -6,6 +6,7 @@ use App\Filament\Concerns\HasStickyHeaderFormActions;
 use App\Filament\Resources\Orders\OrderResource;
 use App\Filament\Resources\Orders\Pages\Concerns\HandlesStockShortages;
 use App\Filament\Resources\Orders\Pages\Concerns\ReportsStockErrors;
+use App\Models\Customer;
 use App\Models\Order;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -24,6 +25,23 @@ class CreateOrder extends CreateRecord
      * must not leave a half-saved order behind.
      */
     protected ?bool $hasDatabaseTransactions = true;
+
+    /**
+     * "Create order" in CRM → Email opens this page with `?customer=ID`: the customer is already picked, and the fields
+     * that depend on the customer (name, shipping fee, courier check) are filled exactly as if it had been picked by hand.
+     * An unknown, inactive or other company's customer is ignored.
+     */
+    protected function afterFill(): void
+    {
+        $customerId = (int) request()->query('customer');
+
+        if ($customerId <= 0 || ! Customer::query()->where('is_active', true)->whereKey($customerId)->exists()) {
+            return;
+        }
+
+        $this->form->fill([...$this->data, 'customer_id' => $customerId]);
+        $this->form->getComponent('customer_id')?->callAfterStateUpdated();
+    }
 
     protected function getHeaderActions(): array
     {
