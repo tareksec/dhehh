@@ -10,6 +10,7 @@
 ### Changed
 
 - The AI client sends no `tools` list when a call uses no tools (it used to send an empty one, which OpenAI itself and many free models refuse).
+- **Groq quick-setup models** (owner request 2026-11-03). Picking Groq on Settings → Integrations → AI Integration fills `openai/gpt-oss-120b` (it stays the first, default model) and the model list now holds only models Groq's own pages show for free and developer accounts: `openai/gpt-oss-120b`, `openai/gpt-oss-20b` and `qwen/qwen3.8-27b`. Removed names Groq has already shut down or no longer offers: `meta-llama/llama-4-scout-17b-16e-instruct`, `qwen-qwq-32b` and `deepseek-r1-distill-llama-70b`. Settings that were saved earlier are not touched.
 
 ### Technical Notes
 

@@ -233,6 +233,35 @@ class IntegrationsPageTest extends TestCase
         $this->assertSame('deepseek-v4-flash', $landingPage['model']);
     }
 
+    public function test_picking_groq_fills_gpt_oss_120b_and_offers_only_models_on_groqs_list(): void
+    {
+        $company = $this->makeCompany();
+        $user = $this->makeSuperAdmin($company);
+        $this->actingAs($user)
+            ->withSession(['current_company_id' => $company->getKey(), 'current_company_selection_explicit' => true]);
+
+        $test = Livewire::test(Integrations::class)
+            ->set('data.ai_order_autofill_provider_preset', 'groq')
+            ->assertSet('data.ai_order_autofill_provider', 'Groq')
+            ->assertSet('data.ai_order_autofill_base_url', 'https://api.groq.com/openai/v1/chat/completions')
+            ->assertSet('data.ai_order_autofill_api_format', 'openai')
+            ->assertSet('data.ai_order_autofill_model', 'openai/gpt-oss-120b');
+
+        // The list is Groq's own for free / developer accounts (console.groq.com
+        // docs, 2026-11-03): gpt-oss-120b first, none of the retired names that
+        // used to be offered (llama-4-scout, qwen-qwq-32b, deepseek-r1-distill,
+        // and the two Llama models Groq shut down on 2026-08-16).
+        $page = new Integrations;
+        $presets = (new \ReflectionMethod($page, 'llmProviderPresets'))->invoke($page);
+
+        $this->assertSame(
+            ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'],
+            $presets['groq']['models'],
+        );
+
+        $test->call('save')->assertHasNoFormErrors();
+    }
+
     /**
      * Regression test: the model picker's own options legitimately shrink
      * or change whenever provider_preset/api_format change elsewhere on the

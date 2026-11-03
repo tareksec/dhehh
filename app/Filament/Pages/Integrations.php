@@ -360,9 +360,15 @@ class Integrations extends Page
             'groq' => [
                 'label' => 'Groq',
                 'base_url' => 'https://api.groq.com/openai/v1/chat/completions',
-                // Groq deprecated its own llama-3.3/3.1 chat routes — these
-                // are its current recommended general-purpose + reasoning models.
-                'models' => ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'meta-llama/llama-4-scout-17b-16e-instruct', 'qwen-qwq-32b', 'deepseek-r1-distill-llama-70b'],
+                // Only chat models that Groq's own pages (console.groq.com/docs/models
+                // and /docs/deprecations, checked 2026-11-03) show for free and
+                // developer accounts. The FIRST one is what picking Groq fills into
+                // the Model field (owner request 2026-11-03: gpt-oss-120b).
+                // Left out on purpose: llama-3.3-70b-versatile and llama-3.1-8b-instant
+                // (shut down 2026-08-16 for non-enterprise accounts), minimax-m2.7 and
+                // muse-spark-open (enterprise pricing only), gpt-oss-safeguard-20b (a
+                // safety classifier) and the Whisper / Orpheus / Prompt Guard models.
+                'models' => ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'],
             ],
             'openrouter' => [
                 'label' => 'OpenRouter',

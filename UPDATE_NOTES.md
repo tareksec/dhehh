@@ -2,7 +2,20 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-02 (latest) - "Fill with AI" on the new-order form
+## 2026-11-03 (latest) - Groq quick-setup: gpt-oss-120b as the default, only models Groq lists
+
+Owner (Bangla): make `openai/gpt-oss-120b` the default model for Groq, and "give only the models that are on Groq's list".
+
+What I did:
+- Picking Groq in the Quick setup already filled the first model of the preset (`openai/gpt-oss-120b`); that stays first, now with a comment saying the first entry is the default.
+- The Groq preset list was out of date. Checked against Groq's own pages (`console.groq.com/docs/models` and `/docs/deprecations`, 2026-11-03): `llama-4-scout` (shut down 2026-07-17), `qwen-qwq-32b` (2025-07-14) and `deepseek-r1-distill-llama-70b` (2025-10-02) are gone. The list is now `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `qwen/qwen3.8-27b`.
+- Left out although the models page still shows them: `llama-3.3-70b-versatile` and `llama-3.1-8b-instant` (the deprecations page says they were shut down on 2026-08-16 for free and developer accounts; the models page shows them with "contact sales" pricing only), `minimaxai/minimax-m2.7` and `meta-models/muse-spark-open` (also "contact sales" pricing, and absent from the free-plan limits table; this part is my reading, not Groq's words), and `openai/gpt-oss-safeguard-20b` (a safety classifier, not for reading orders). The Model field stays free text, so any of them can still be typed in.
+- New test in `IntegrationsPageTest` (38 tests there now pass): picking Groq fills `gpt-oss-120b`, the Groq base URL and the OpenAI-compatible format, and pins the model list.
+- Already-saved settings are not changed.
+
+Commit status: committed on the feature branch only; not on `main`.
+
+## 2026-11-02 - "Fill with AI" on the new-order form
 
 Owner (Bangla): add an AI feature to the order form so that giving the customer's information fills it automatically; do it with a free model if that is better; it may already exist in the CRM, tell me first how it can be done. After my plan: "put the settings on the Integrations page, no separate page needed".
 
