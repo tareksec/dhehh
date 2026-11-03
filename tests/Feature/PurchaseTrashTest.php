@@ -131,7 +131,7 @@ class PurchaseTrashTest extends TestCase
 
         Livewire::actingAs($this->admin)
             ->test(ListPurchases::class)
-            ->callTableBulkAction('delete', [$purchase], data: ['confirmation' => '1'])
+            ->callTableBulkAction('delete', [$purchase], data: ['confirmation' => 'DELETE'])
             ->assertHasNoTableBulkActionErrors();
         $this->assertSoftDeleted($purchase);
         $this->assertSame(0, $this->stock());

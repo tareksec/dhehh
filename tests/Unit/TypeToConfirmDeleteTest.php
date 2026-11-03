@@ -49,19 +49,6 @@ class TypeToConfirmDeleteTest extends TestCase
         $this->assertTrue(TypeToConfirmDelete::matches("Cafe\u{0301}", "Caf\u{00E9}"));
     }
 
-    public function test_a_number_is_matched_in_any_script(): void
-    {
-        $this->assertTrue(TypeToConfirmDelete::matchesNumber('12', 12));
-        $this->assertTrue(TypeToConfirmDelete::matchesNumber(' 12 ', 12));
-        $this->assertFalse(TypeToConfirmDelete::matchesNumber('13', 12));
-        $this->assertFalse(TypeToConfirmDelete::matchesNumber('', 0 + 1));
-
-        if (class_exists(\IntlChar::class)) {
-            // The same number written with Bangla digits (U+09E7 U+09E8).
-            $this->assertTrue(TypeToConfirmDelete::matchesNumber("\u{09E7}\u{09E8}", 12));
-        }
-    }
-
     public function test_the_resource_record_title_is_the_name_when_it_is_a_real_title(): void
     {
         $name = TypeToConfirmDelete::recordName($this->record(['name' => 'ignored']), 'Order INV-1001', ['expense', 'Expense']);

@@ -25,7 +25,7 @@ use Illuminate\Support\Arr;
  * Pressing Delete opens a modal that shows the record's name with a copy button
  * and an input. Delete only goes through when the name is typed (or pasted)
  * exactly, so a stray click can never remove the wrong record. A bulk delete
- * asks for the number of selected records instead.
+ * asks for the word DELETE instead.
  *
  * It is wired once, for every Filament delete action in every panel
  * (`register()` is called from AppServiceProvider::boot()), so new work gets it
@@ -40,6 +40,9 @@ use Illuminate\Support\Arr;
 final class TypeToConfirmDelete
 {
     public const FIELD = 'confirmation';
+
+    /** The word typed to confirm a bulk delete (owner decision 2026-11-03; it was the number of records). */
+    public const BULK_WORD = 'DELETE';
 
     /** Attributes tried, in order, when the resource has no record title of its own. */
     private const NAME_ATTRIBUTES = [
@@ -77,7 +80,7 @@ final class TypeToConfirmDelete
     {
         return $action
             ->modalDescription(fn (BulkAction $action): string => self::describeSelection(self::isPermanent($action, $permanent)))
-            ->schema(fn (BulkAction $action): array => self::fields((string) self::selectedCount($action), isCount: true));
+            ->schema(fn (): array => self::fields(self::BULK_WORD, isCount: true));
     }
 
     /**
@@ -114,12 +117,6 @@ final class TypeToConfirmDelete
         return self::normalise($typed) === self::normalise($expected);
     }
 
-    /** Does what was typed equal the number? Digits of any script (Bangla included) count. */
-    public static function matchesNumber(string $typed, int $expected): bool
-    {
-        return self::normalise($typed, digits: true) === (string) $expected;
-    }
-
     public static function usesSoftDeletes(Model|string $model): bool
     {
         return in_array(SoftDeletes::class, class_uses_recursive($model), true);
@@ -139,13 +136,13 @@ final class TypeToConfirmDelete
 
     /**
      * The modal fields for a hand-made action that deletes many things at once
-     * (the number to type is the count it will delete).
+     * (the word to type is DELETE).
      *
      * @return list<Component>
      */
-    public static function countFields(int $count): array
+    public static function countFields(): array
     {
-        return self::fields((string) $count, isCount: true);
+        return self::fields(self::BULK_WORD, isCount: true);
     }
 
     /** @return list<Component> */
@@ -161,21 +158,17 @@ final class TypeToConfirmDelete
                 ->iconPosition(IconPosition::After)
                 ->tooltip(__('Click to copy')),
             TextInput::make(self::FIELD)
-                ->label($isCount ? __('Type the number to confirm') : __('Type the name to confirm'))
+                ->label($isCount ? __('Type the word to confirm') : __('Type the name to confirm'))
                 ->infoTip($isCount
-                    ? __('Copy the number shown above and paste it here, or type it. Delete stays locked until it matches. This stops a delete by mistake.')
+                    ? __('Copy the word shown above and paste it here, or type it. Delete stays locked until it matches. This stops a delete by mistake.')
                     : __('Copy the name shown above and paste it here, or type it exactly. Delete stays locked until it matches. This stops the wrong record being deleted by mistake.'))
                 ->required()
                 ->autocomplete(false)
                 ->rules([
                     fn (): Closure => function (string $attribute, mixed $value, Closure $fail) use ($expected, $isCount): void {
-                        $ok = $isCount
-                            ? self::matchesNumber((string) $value, (int) $expected)
-                            : self::matches((string) $value, $expected);
-
-                        if (! $ok) {
+                        if (! self::matches((string) $value, $expected)) {
                             $fail($isCount
-                                ? __('This is not the number shown above.')
+                                ? __('This is not the word shown above.')
                                 : __('This does not match the name shown above. Copy it and paste it here.'));
                         }
                     },
@@ -210,11 +203,6 @@ final class TypeToConfirmDelete
         }
 
         return self::recordName($record, $action->getRecordTitle($record), [$action->getModelLabel(), $action->getTitleCaseModelLabel()]);
-    }
-
-    private static function selectedCount(BulkAction $action): int
-    {
-        return $action->getLivewire()->getSelectedTableRecordsQuery(shouldFetchSelectedRecords: false)->count();
     }
 
     /** Is this delete final? Decided by the caller, else by the action type, else by whether the model has a Trash. */

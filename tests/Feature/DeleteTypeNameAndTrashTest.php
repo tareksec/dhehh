@@ -69,7 +69,7 @@ class DeleteTypeNameAndTrashTest extends TestCase
 
         Livewire::actingAs($this->admin)
             ->test(ListExpenses::class)
-            ->callTableBulkAction('delete', [$first, $second], data: ['confirmation' => '2'])
+            ->callTableBulkAction('delete', [$first, $second], data: ['confirmation' => 'DELETE'])
             ->assertHasNoTableBulkActionErrors();
 
         $this->assertSoftDeleted($first);

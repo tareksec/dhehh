@@ -109,7 +109,7 @@ class UserManagementEscalationTest extends TestCase
         $staff = User::factory()->create(['role' => 'sales_staff', 'is_active' => true]);
 
         Livewire::test(ListUsers::class)
-            ->callTableBulkAction('delete', [$superAdmin, $staff], data: ['confirmation' => '2']);
+            ->callTableBulkAction('delete', [$superAdmin, $staff], data: ['confirmation' => 'DELETE']);
 
         $this->assertModelExists($superAdmin);
         $this->assertModelMissing($staff);

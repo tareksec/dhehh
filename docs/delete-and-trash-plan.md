@@ -21,7 +21,7 @@ Owner request, 2026-11-01. Rule for agents: `CLAUDE.md` → "Delete = type the n
 
 1. Delete (row, page header or bulk) opens a modal. The record's **name** is shown in a red badge with a copy icon (click to copy). Under it an input "Type the name to confirm" with an ⓘ icon explaining the check.
 2. The input must equal the name: case counts; spaces at the ends or doubled do not; Unicode forms are normalised so a pasted Bangla name always matches. A wrong text shows an error under the input and nothing is deleted.
-3. Bulk delete: the badge shows the **number of selected records**; typing the number (Bangla digits are accepted) confirms.
+3. Bulk delete: the badge shows the word **DELETE**; typing it (or pasting it) confirms (owner decision 2026-11-03; it was the number of selected records).
 4. The modal text says what will happen: "moved to Trash… restore it, or delete it permanently, from the Trash page" (the model has a Trash page), "removed from the list" (soft-deleted but no Trash page yet), or "deleted permanently. It cannot be restored" (everything else).
 5. Trash page (`/…/trash`, "Trash (n)" button in the list header): the resource's own columns plus "Moved to trash at"; row and bulk **Restore** and **Delete permanently**. Delete permanently asks for the name again.
 
@@ -84,11 +84,11 @@ Each phase ends with the full test suite on PHP 8.4, a look at the Trash page an
 
 ## 5. Questions for the owner
 
-1. **Bulk delete asks for the number of selected records.** Fine, or should it ask for a word (for example `DELETE`)?
-2. **Exact match:** capital and small letters must match; the copy button fills nothing, it only copies (you paste it yourself). Fine?
-3. **The proposal in section 3.** Which groups should *not* go to Trash, and which need your decision first (finance payments, accounts, IMS money records)?
+1. **(answered 2026-11-03: the word `DELETE`)** **Bulk delete** now asks for the word `DELETE`, not the number of selected records.
+2. **(answered 2026-11-03: as it is)** **Exact match:** capital and small letters must match; the copy button fills nothing, it only copies (you paste it yourself). Fine?
+3. **(answered 2026-11-03: do T5b first, T6 and T7 later)** **The proposal in section 3.** Which groups should *not* go to Trash, and which need your decision first (finance payments, accounts, IMS money records)?
 4. **(answered 2026-11-03: as it is)** **How long does Trash keep things?** Today: until someone deletes them permanently. Should a record be removed automatically after, say, 30 / 90 days?
-5. **Who may use Trash?** Today: whoever may delete that kind of record (Expenses: Super Admin only, like their delete).
+5. **(answered 2026-11-03: as it is)** **Who may use Trash?** Today: whoever may delete that kind of record (Expenses: Super Admin only, like their delete).
 6. **(answered 2026-11-03: no bulk delete; built in T5a)** **Stock movements:** should bulk delete of stock movements exist at all? Deleting a ledger row changes stock history.
 7. **(answered 2026-11-03: fine as it is)** **Customers and suppliers with an unpaid balance (T4a):** should they be blocked from Trash, or stay counted in the dues reports while in Trash? Today their balance drops out of the totals, as it did when a deleted customer vanished.
 8. **(answered 2026-11-03: fine as it is)** **A customer in Trash who orders again (T4a):** they are restored at once (the order is matched by phone). Is that right, or should such an order be flagged for staff?

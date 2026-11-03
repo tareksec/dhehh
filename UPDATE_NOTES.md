@@ -2,7 +2,11 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-03 (latest) - Trash for purchases and shared stock pools (T5a); owner's answers on questions 4 and 6
+## 2026-11-03 (latest) - Bulk delete asks for the word DELETE (plan question 1)
+
+Owner answered the open plan questions: 1 = the word `DELETE` (changed: `TypeToConfirmDelete::BULK_WORD`, `matchesNumber()` removed, `countFields()` takes no count), 2 and 5 = as they are, 3 = do T5b (products) first, T6/T7 later. Tests that confirmed a bulk delete with a count now pass `DELETE`. Bilingual: 3 values reworded in `lang/en.json` and `lang/bn.json` (same keys renamed) - Needs Bangla review: "নিশ্চিত করতে শব্দটি লিখুন". Commit status: see below.
+
+## 2026-11-03 - Trash for purchases and shared stock pools (T5a); owner's answers on questions 4 and 6
 
 Owner (Bangla, answered in the question dialog): Managers do not get `crm.delete` by default; "start T5"; no bulk delete of stock movements (question 6); Trash keeps things as it does (question 4). T5 is split like T4: **T5a (this one): purchases and stock pools**, T5b: products.
 

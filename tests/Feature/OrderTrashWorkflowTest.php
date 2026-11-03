@@ -35,7 +35,7 @@ class OrderTrashWorkflowTest extends TestCase
             ->assertTableBulkActionHasLabel('delete', 'Move to trash')
             ->assertTableBulkActionHasIcon('delete', 'heroicon-o-trash')
             ->mountTableBulkAction('delete', [$order])
-            ->setTableBulkActionData(['confirmation' => '1'])
+            ->setTableBulkActionData(['confirmation' => 'DELETE'])
             ->callMountedTableBulkAction()
             ->assertHasNoTableBulkActionErrors();
 
@@ -87,7 +87,7 @@ class OrderTrashWorkflowTest extends TestCase
             ->assertMountedActionModalSee('Company A Customer')
             ->assertMountedActionModalDontSee('TRASH-B-0001')
             ->assertMountedActionModalDontSee('Company B Customer')
-            ->setTableActionData(['confirmation' => '1'])
+            ->setTableActionData(['confirmation' => 'DELETE'])
             ->callMountedTableAction()
             ->assertHasNoTableActionErrors();
 

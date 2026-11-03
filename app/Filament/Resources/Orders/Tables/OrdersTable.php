@@ -379,7 +379,7 @@ class OrdersTable
                     ->schema(fn (): array => [
                         SchemaLivewire::make(OrderTrashTable::class)
                             ->key('orderTrashTable'),
-                        ...TypeToConfirmDelete::countFields(self::trashedOrdersQuery()->count()),
+                        ...TypeToConfirmDelete::countFields(),
                     ])
                     ->requiresConfirmation()
                     ->modalSubmitAction(fn (Action $action): Action => $action

@@ -120,7 +120,7 @@ class PeopleTrashTest extends TestCase
 
         Livewire::actingAs($this->admin)
             ->test(ListCustomers::class)
-            ->callTableBulkAction('delete', [$customer], data: ['confirmation' => '1'])
+            ->callTableBulkAction('delete', [$customer], data: ['confirmation' => 'DELETE'])
             ->assertHasNoTableBulkActionErrors();
 
         $this->assertSoftDeleted($customer);
@@ -199,7 +199,7 @@ class PeopleTrashTest extends TestCase
         // The Resellers list deletes the same record the Customers list would.
         Livewire::actingAs($this->admin)
             ->test(ListResellers::class)
-            ->callTableBulkAction('delete', [$reseller], data: ['confirmation' => '1'])
+            ->callTableBulkAction('delete', [$reseller], data: ['confirmation' => 'DELETE'])
             ->assertHasNoTableBulkActionErrors();
 
         $this->assertSoftDeleted($reseller);
@@ -329,7 +329,7 @@ class PeopleTrashTest extends TestCase
 
         Livewire::actingAs($this->admin)
             ->test(ListSuppliers::class)
-            ->callTableBulkAction('delete', [$supplier], data: ['confirmation' => '1'])
+            ->callTableBulkAction('delete', [$supplier], data: ['confirmation' => 'DELETE'])
             ->assertHasNoTableBulkActionErrors();
 
         $this->assertSoftDeleted($supplier);
