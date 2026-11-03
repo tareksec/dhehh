@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [2.123.0] - 2026-11-03
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -45,8 +47,6 @@
 - Email delivery (step 1): no migration and no new CSS (the `.zz-use-*` rules are reused); the deploy needs `npm run build` only because the views are new Tailwind sources. 38 new bilingual keys (parity test green).
 - Tests: `EmailUsageServiceTest` (+2, was `SesUsageServiceTest`), new `EmailDeliveryPageTest` (10), `AmazonSesPageTest` (usage cases replaced by 2 account cases).
 - `admin-bottom-navigation.blade.php`: the `<ul>` uses `.zz-bottom-nav-grid` (columns `0.9fr 1.1fr 3.5rem 1fr 1fr` in `resources/css/filament/admin/theme.css`; both sides add up to 2fr so the fixed middle column stays centred) instead of `grid-cols-5`, cells start at the top (`items-start`; the "+" cell keeps `self-end`), and the company label is `line-clamp-2` with a `title`. Tab labels are 10px below 360px, 11px from 360px. No migration, no new keys. Test: `AdminBottomNavigationTest::test_a_long_company_name_wraps_to_two_lines_instead_of_being_cut_to_one` (15 tests in the file). Needs `npm run build` on deploy, as for any theme change.
-
-
 ## [2.122.0] - 2026-11-02
 
 **Release type:** Minor Feature Update
