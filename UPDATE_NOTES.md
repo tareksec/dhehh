@@ -67,6 +67,25 @@ Verified: Pint clean. Focused run (translation parity, BulkSMSBD policy, SMS tem
 
 Commit status: committed on branch `feature/sms-templates-in-gateway` and pushed to that branch only (owner approval 2026-11-01). Not merged to `main`.
 
+## 2026-11-03 - Bottom bar: the company name is shown in full
+
+Owner (Bangla, with a phone screenshot): the company name in the bottom bar is not fully shown ("ZamZam ..."); how will you fix it?
+
+Cause: the bar had five equal columns and the company label was one `truncate` line, so a name wider than about 62px was cut. "ZamZam International" is about 100px at 11px.
+
+What I did (branch `feature/admin-bottom-navigation`, restarted from `main` at 20d38a0 because the first bar was already merged):
+- The company label may take **two lines** (`line-clamp-2`, `text-center`), so "ZamZam International" shows as "ZamZam" / "International"; only a name longer than two lines ends in "…". The button's `title` and the dropdown list it opens always carry the full name.
+- The five equal columns became `.zz-bottom-nav-grid` in `theme.css`: `0.9fr 1.1fr 3.5rem 1fr 1fr`. The company column is wider; both sides add up to 2fr, so the fixed middle column (the "+" is 56px) stays centred. My first try (`1fr 1.3fr 4rem 1.15fr 1.15fr`) fixed the company name but cut "Dashboard" to "Dashbo..." — caught in the browser and rebalanced using the measured label widths ("Dashboard" ≈ 57px, "International" ≈ 65px at 11px).
+- Cells now start at the top (`items-start`), so the four icons stay on one line when the company name takes two; the "+" cell keeps `self-end` (it sits where it was). The bar is 14px taller (57px → 71px at 360px wide, measured) only when the name wraps; the page's bottom padding (5rem + safe area) already covers it.
+- Below 360px wide the labels are 10px (11px from 360px up); the old equal columns already cut "Dashboard" on a 320px phone, now it fits.
+- No new keys, no migration.
+
+Verified: `AdminBottomNavigationTest` 15 passed (new test pins the clamp, the title and the grid class), Pint clean. In a real browser (Playwright, throwaway sqlite in the scratchpad, never demo or live) at 320, 360 and 390px with "ZamZam International", "ZamZam Gadget" and a 46-character name: every tab label whole, no label cut except the 46-character name (two lines then "…", as intended), "+" exactly at the screen centre, icons on one line, no sideways scroll. Full suite: see the commit status below.
+
+Decision to confirm: a name longer than two lines still ends in "…" in the bar (the full name is in the title and the list). If the owner prefers a short name, the company's name can be shortened on its Companies record; I did not add a separate "short name" field (not asked).
+
+Commit status: committed and pushed to `feature/admin-bottom-navigation` only. Not on `main` (the owner decides when `main` moves).
+
 ## 2026-11-01 - Admin bottom bar with a "+" quick-create (phones and tablets)
 
 Owner (Bangla, item 8): put the ERP dashboard header's navigation icon buttons at the bottom as a bottom navigation; in the middle a "+" button that offers Create a new order, Add a new product, Add a new purchase, Add a new expense, each opening a popup where the form can be filled in; on the left the Dashboard and company-switch icons, on the right the Orders and Products icons.

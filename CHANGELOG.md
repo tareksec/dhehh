@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### Fixed
+
+- **The company name in the phone bottom bar is shown in full.** Owner report 2026-11-03: the bar showed "ZamZam ..." for "ZamZam International" because the name was one line cut off in a column as narrow as the others. The company column is now a little wider and the name may take two lines ("ZamZam" / "International"); only a very long name (more than two lines) ends in "…", and the button's title and the list it opens always show the full name. Dashboard keeps room for its whole word, the "+" stays exactly in the middle, and on very small phones (under 360px wide) the bar's labels are a little smaller so they still fit. The icons stay on one line even when the company name takes two lines.
+
+### Technical Notes
+
+- `admin-bottom-navigation.blade.php`: the `<ul>` uses `.zz-bottom-nav-grid` (columns `0.9fr 1.1fr 3.5rem 1fr 1fr` in `resources/css/filament/admin/theme.css`; both sides add up to 2fr so the fixed middle column stays centred) instead of `grid-cols-5`, cells start at the top (`items-start`; the "+" cell keeps `self-end`), and the company label is `line-clamp-2` with a `title`. Tab labels are 10px below 360px, 11px from 360px. No migration, no new keys. Test: `AdminBottomNavigationTest::test_a_long_company_name_wraps_to_two_lines_instead_of_being_cut_to_one` (15 tests in the file). Needs `npm run build` on deploy, as for any theme change.
+
 ## [2.122.0] - 2026-11-02
 
 **Release type:** Minor Feature Update

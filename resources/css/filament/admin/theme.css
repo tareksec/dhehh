@@ -1099,6 +1099,23 @@ html:not(.zz-sidebar-navigation-ready) .zz-sidebar-menu-parent.fi-sidebar-route-
     width: 100%;
 }
 
+/*
+ * Dashboard | Company | + | Orders | Products. The company column is wider so a
+ * name such as "ZamZam International" fits on two lines instead of being cut to
+ * "ZamZam ..."; Dashboard keeps room for its own word. The sides add up to the
+ * same (0.9 + 1.1 = 1 + 1), so the fixed middle column — the "+", as wide as
+ * its button — stays in the centre of the screen. Measured at 11px: "Dashboard"
+ * ≈ 57px, "International" ≈ 65px.
+ */
+.zz-bottom-nav-grid {
+    grid-template-columns:
+        minmax(0, 0.9fr)
+        minmax(0, 1.1fr)
+        3.5rem
+        minmax(0, 1fr)
+        minmax(0, 1fr);
+}
+
 @media (max-width: 1023px) {
     body:has(.zz-bottom-nav) .fi-main-ctn {
         padding-bottom: calc(5rem + env(safe-area-inset-bottom));

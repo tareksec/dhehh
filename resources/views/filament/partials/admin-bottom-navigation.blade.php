@@ -9,7 +9,8 @@
             aria-label="{{ __('Quick navigation') }}"
             data-admin-bottom-nav
         >
-            <ul class="mx-auto grid max-w-lg grid-cols-5 items-end px-1 pt-1">
+            {{-- Columns are set in theme.css (.zz-bottom-nav-grid): the company column is wider so a company name fits on two lines, and the two sides stay equal so the "+" stays in the middle. Cells start at the top so the icons line up when the name takes two lines. --}}
+            <ul class="zz-bottom-nav-grid mx-auto grid max-w-lg items-start px-1 pt-1">
                 {{-- Left: Dashboard and the company switch. --}}
                 <li class="flex justify-center">
                     @include('filament.partials.admin-bottom-navigation-tab', ['key' => 'dashboard', 'tab' => $tabs['dashboard'], 'active' => $activeTab === 'dashboard'])
@@ -35,12 +36,14 @@
                             <x-slot name="trigger">
                                 <button
                                     type="button"
-                                    class="flex w-full flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-medium leading-tight text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                    class="flex w-full flex-col items-center gap-0.5 rounded-lg px-0.5 py-1.5 text-[10px] font-medium leading-tight min-[360px]:text-[11px] text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                                     aria-label="{{ __('Switch company') }}: {{ $selectedLabel }}"
+                                    title="{{ $selectedLabel }}"
                                     data-bottom-nav="company"
                                 >
                                     <x-filament::icon icon="heroicon-o-building-office-2" class="h-6 w-6" />
-                                    <span class="max-w-full truncate">{{ $selectedLabel }}</span>
+                                    {{-- Up to two lines, then an ellipsis; the full name is also the button's title and in the list it opens. --}}
+                                    <span class="line-clamp-2 max-w-full break-words text-center" data-bottom-nav-company-label>{{ $selectedLabel }}</span>
                                 </button>
                             </x-slot>
 
@@ -82,7 +85,7 @@
                 </li>
 
                 {{-- Middle: the raised "+" and its quick-create menu. --}}
-                <li class="relative flex justify-center" x-data="{ quickOpen: false }" x-on:click.outside="quickOpen = false" x-on:keydown.escape.window="quickOpen = false">
+                <li class="relative flex justify-center self-end" x-data="{ quickOpen: false }" x-on:click.outside="quickOpen = false" x-on:keydown.escape.window="quickOpen = false">
                     @if ($quickActions !== [])
                         <button
                             type="button"
