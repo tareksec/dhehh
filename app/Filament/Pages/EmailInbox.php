@@ -6,6 +6,7 @@ use App\Filament\Clusters\Crm;
 use App\Filament\Concerns\HasGuardedNavigationBadge;
 use App\Filament\Pages\Concerns\ComposesEmail;
 use App\Filament\Pages\Concerns\ManagesEmailConversation;
+use App\Filament\Pages\Concerns\SchedulesEmail;
 use App\Filament\Pages\Concerns\SnoozesEmail;
 use App\Models\Company;
 use App\Models\EmailLabel;
@@ -41,6 +42,7 @@ class EmailInbox extends Page
     use ComposesEmail;
     use HasGuardedNavigationBadge;
     use ManagesEmailConversation;
+    use SchedulesEmail;
     use SnoozesEmail;
 
     public const PAGE_SIZE = 30;
@@ -390,7 +392,8 @@ class EmailInbox extends Page
             return false;
         }
 
-        return $isLast || in_array($message->getKey(), $this->opened, true);
+        // A scheduled message is always open: its time and its Send now / Cancel buttons are what the person came for.
+        return $isLast || $message->status === EmailMessage::STATUS_SCHEDULED || in_array($message->getKey(), $this->opened, true);
     }
 
     public function toggleMessage(int $messageId, bool $isLast): void

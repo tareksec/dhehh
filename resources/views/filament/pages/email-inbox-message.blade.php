@@ -53,7 +53,9 @@
                 @endif
             </span>
             <span class="zz-mail-meta">
-                @if ($message->status === 'pending' || $message->status === 'sending')
+                @if ($message->status === 'scheduled')
+                    <span class="zz-mail-state"><x-filament::icon icon="heroicon-m-calendar-days" class="zz-mail-i zz-mail-i-s" aria-hidden="true" />{{ __('Scheduled') }}</span>
+                @elseif ($message->status === 'pending' || $message->status === 'sending')
                     <span class="zz-mail-state">{{ __('Sending…') }}</span>
                 @elseif ($message->status === 'failed')
                     <span class="zz-mail-state zz-mail-bad">{{ __('Not sent') }}</span>
@@ -72,6 +74,17 @@
                 @endif
                 @if ($this->canManage() && $message->status === 'failed')
                     <div><button type="button" class="zz-mail-btn zz-mail-btn-quiet" wire:click="retryMessage({{ $message->id }})">{{ __('Send again') }}</button></div>
+                @endif
+                @if ($message->status === 'scheduled')
+                    <p class="zz-mail-hint">{{ __('Scheduled for :time', ['time' => $this->longTime($message->send_after)]) }}</p>
+                    @if ($this->canManage() && $message->user_id === auth()->id())
+                        <div class="zz-mail-actions">
+                            <button type="button" class="zz-mail-btn zz-mail-btn-quiet" wire:click="sendScheduledNow({{ $message->id }})">{{ __('Send now') }}</button>
+                            <button type="button" class="zz-mail-btn zz-mail-btn-quiet" wire:click="cancelScheduled({{ $message->id }})">{{ __('Cancel and edit') }}</button>
+                        </div>
+                    @else
+                        <p class="zz-mail-hint">{{ __('Only :name can change this.', ['name' => $message->from_name ?: $message->from_address]) }}</p>
+                    @endif
                 @endif
                 @if ($this->canManage() && $message->status === 'pending' && $message->user_id === auth()->id())
                     <div><button type="button" class="zz-mail-btn zz-mail-btn-quiet" wire:click="undoSend({{ $message->id }})">{{ __('Undo send') }}</button></div>

@@ -2,7 +2,22 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-02 (latest) - Email inbox, Phase 2 step 8: Snooze and a Trash that empties itself
+## 2026-11-03 (latest) - Email inbox, Phase 2 step 9: Send later
+
+Plan: `docs/email-inbox-plan.md`. Steps 1-8 are on `main` (merged with the owner's approval on 2026-11-03, with `main` v2.122.0 merged in first; full suite 3776 passed). This step is on the feature branch `ccr-3799b463-p4pv7n` only.
+
+Decisions made while building (owner please read):
+
+- **Only the author can cancel or send a scheduled message now.** Everyone with Email access sees it (in the conversation and in the Scheduled view) so nobody replies twice; other staff get "Only <name> can change this." If a colleague should be able to cancel, say so.
+- **The ready-made times** are In 1 hour, Tomorrow morning, In 3 days, Next week (8:00 in the company's time zone), or any typed time (at least 1 minute ahead, at most a year). No weekday rules.
+- **A scheduled message skips the undo-send wait** (it has its own Cancel). It is not part of the conversation (no message count, no "last reply") until it goes.
+- **If it cannot go at its time** (mailbox switched off, no email account for the site) it is marked Not sent with the reason, its author gets a bell message, and Send again works as for any failed message.
+
+Needs Bangla review: "নির্ধারিত" (Scheduled), "পরে পাঠান" (Send later), "বাতিল করে সম্পাদনা করুন" (Cancel and edit).
+
+Not yet checked: a browser render of the new calendar drop-down and Scheduled view (tests cover the behaviour), and the scheduler on the real server.
+
+## 2026-11-02 - Email inbox, Phase 2 step 8: Snooze and a Trash that empties itself
 
 Plan: `docs/email-inbox-plan.md` (Phase 2 steps 8-12 are listed there). Phase 1 (steps 1-7) is on the feature branch `ccr-3799b463-p4pv7n`; this is the first Phase 2 step on the same branch.
 

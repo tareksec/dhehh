@@ -5550,5 +5550,13 @@
     "Removed \":name\" from your store.": "Removed \":name\" from your store.",
     "Added \":name\" to your store.": "Added \":name\" to your store.",
     ". It expires in :minutes minutes.": ". It expires in :minutes minutes.",
-    "Enter the 6-digit code we texted you and choose a new password. The code expires in :minutes minutes.": "Enter the 6-digit code we texted you and choose a new password. The code expires in :minutes minutes."
+    "Enter the 6-digit code we texted you and choose a new password. The code expires in :minutes minutes.": "Enter the 6-digit code we texted you and choose a new password. The code expires in :minutes minutes.",
+    "Scheduled": "Scheduled",
+    "Send later": "Send later",
+    "In 1 hour": "In 1 hour",
+    "Scheduled for :time": "Scheduled for :time",
+    "Cancel and edit": "Cancel and edit",
+    "Only :name can change this.": "Only :name can change this.",
+    "Scheduling cancelled. Your message is open again.": "Scheduling cancelled. Your message is open again.",
+    "A scheduled email was not sent": "A scheduled email was not sent"
 }

@@ -5550,5 +5550,13 @@
     "Removed \":name\" from your store.": "আপনার স্টোর থেকে “:name” সরানো হয়েছে।",
     "Added \":name\" to your store.": "আপনার স্টোরে “:name” যোগ করা হয়েছে।",
     ". It expires in :minutes minutes.": "। কোডটির মেয়াদ :minutes মিনিট।",
-    "Enter the 6-digit code we texted you and choose a new password. The code expires in :minutes minutes.": "আমরা এসএমএসে যে ৬ সংখ্যার কোড পাঠিয়েছি তা দিন এবং নতুন পাসওয়ার্ড বেছে নিন। কোডের মেয়াদ :minutes মিনিট।"
+    "Enter the 6-digit code we texted you and choose a new password. The code expires in :minutes minutes.": "আমরা এসএমএসে যে ৬ সংখ্যার কোড পাঠিয়েছি তা দিন এবং নতুন পাসওয়ার্ড বেছে নিন। কোডের মেয়াদ :minutes মিনিট।",
+    "Scheduled": "নির্ধারিত",
+    "Send later": "পরে পাঠান",
+    "In 1 hour": "১ ঘণ্টা পরে",
+    "Scheduled for :time": ":time-এ পাঠানো হবে",
+    "Cancel and edit": "বাতিল করে সম্পাদনা করুন",
+    "Only :name can change this.": "শুধু :name এটি বদলাতে পারেন।",
+    "Scheduling cancelled. Your message is open again.": "নির্ধারণ বাতিল হয়েছে। আপনার বার্তা আবার খোলা আছে।",
+    "A scheduled email was not sent": "নির্ধারিত ইমেইল পাঠানো যায়নি"
 }

@@ -85,6 +85,24 @@
             <x-filament::icon icon="heroicon-o-paper-airplane" class="zz-mail-i" aria-hidden="true" />{{ __('Send') }}
         </button>
 
+        <x-filament::dropdown placement="top-start" width="xs">
+            <x-slot name="trigger">
+                <button type="button" class="zz-mail-ib" aria-label="{{ __('Send later') }}" title="{{ __('Send later') }}"><x-filament::icon icon="heroicon-o-calendar-days" class="zz-mail-i" aria-hidden="true" /></button>
+            </x-slot>
+            <x-filament::dropdown.list>
+                @foreach ($this->scheduleChoices() as $key => [$name, $at])
+                    <x-filament::dropdown.list.item wire:click="sendLater('{{ $key }}')" wire:key="schedule-{{ $key }}">
+                        {{ $name }} <span class="zz-mail-when">{{ $at->translatedFormat('D, g:i A') }}</span>
+                    </x-filament::dropdown.list.item>
+                @endforeach
+            </x-filament::dropdown.list>
+            <div class="zz-mail-snooze-custom">
+                <label for="schedule-custom">{{ __('Pick date and time') }}</label>
+                <input id="schedule-custom" type="datetime-local" wire:model="scheduleCustom" min="{{ $this->scheduleMin() }}">
+                <button type="button" class="zz-mail-btn zz-mail-btn-quiet" wire:click="sendLater('custom')">{{ __('Send later') }}</button>
+            </div>
+        </x-filament::dropdown>
+
         <label class="zz-mail-ib" title="{{ __('Attach files') }}" aria-label="{{ __('Attach files') }}">
             <x-filament::icon icon="heroicon-o-paper-clip" class="zz-mail-i" aria-hidden="true" />
             <input type="file" class="sr-only" multiple wire:model="composeUploads">

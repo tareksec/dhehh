@@ -23,6 +23,8 @@ class EmailThreadQuery
 
     public const VIEW_SNOOZED = 'snoozed';
 
+    public const VIEW_SCHEDULED = 'scheduled';
+
     public const VIEW_SENT = 'sent';
 
     public const VIEW_DRAFTS = 'drafts';
@@ -33,7 +35,7 @@ class EmailThreadQuery
 
     public const VIEW_ALL = 'all';
 
-    public const VIEWS = [self::VIEW_INBOX, self::VIEW_STARRED, self::VIEW_SNOOZED, self::VIEW_SENT, self::VIEW_DRAFTS, self::VIEW_SPAM, self::VIEW_TRASH, self::VIEW_ALL];
+    public const VIEWS = [self::VIEW_INBOX, self::VIEW_STARRED, self::VIEW_SNOOZED, self::VIEW_SCHEDULED, self::VIEW_SENT, self::VIEW_DRAFTS, self::VIEW_SPAM, self::VIEW_TRASH, self::VIEW_ALL];
 
     public const FILTER_UNREAD = 'unread';
 
@@ -81,6 +83,13 @@ class EmailThreadQuery
             return $query->orderByDesc('updated_at')->orderByDesc('id');
         }
 
+        // Scheduled ones go out soonest-first; the time of the next one is read as `next_scheduled_at`.
+        if ($search === '' && $view === self::VIEW_SCHEDULED) {
+            return $query->withMin(['messages as next_scheduled_at' => fn (Builder $inner) => $inner
+                ->where('kind', EmailMessage::KIND_MESSAGE)->where('status', EmailMessage::STATUS_SCHEDULED)], 'send_after')
+                ->orderBy('next_scheduled_at')->orderByDesc('id');
+        }
+
         if ($search === '' && $view === self::VIEW_SNOOZED && $label === null) {
             return $query->orderBy('snoozed_until')->orderByDesc('id');
         }
@@ -124,6 +133,8 @@ class EmailThreadQuery
         match ($view) {
             self::VIEW_STARRED => $query->where('is_starred', true)->whereIn('folder', $live),
             self::VIEW_SNOOZED => $query->where('folder', EmailThread::FOLDER_INBOX)->whereNotNull('snoozed_until'),
+            self::VIEW_SCHEDULED => $query->whereIn('folder', $live)->whereHas('messages', fn (Builder $inner) => $inner
+                ->where('kind', EmailMessage::KIND_MESSAGE)->where('status', EmailMessage::STATUS_SCHEDULED)),
             self::VIEW_SENT => $query->whereIn('folder', $live)->whereHas('messages', fn (Builder $inner) => $inner
                 ->where('direction', EmailMessage::OUT)->where('kind', EmailMessage::KIND_MESSAGE)->whereIn('status', self::OUTGOING)),
             self::VIEW_DRAFTS => $this->scopeDrafts($query, $user),

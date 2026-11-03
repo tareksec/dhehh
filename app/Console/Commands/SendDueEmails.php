@@ -21,7 +21,7 @@ class SendDueEmails extends Command
     public function handle(CompanyContext $context, OutboundEmailService $outbound): int
     {
         $companyIds = EmailMessage::withoutGlobalScopes()
-            ->whereIn('status', [EmailMessage::STATUS_PENDING, EmailMessage::STATUS_SENDING])
+            ->whereIn('status', [EmailMessage::STATUS_PENDING, EmailMessage::STATUS_SCHEDULED, EmailMessage::STATUS_SENDING])
             ->distinct()
             ->pluck('company_id');
 

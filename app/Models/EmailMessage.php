@@ -33,6 +33,9 @@ class EmailMessage extends Model
     /** Claimed by the one process that is handing it to the mail server right now. */
     public const STATUS_SENDING = 'sending';
 
+    /** Written and set to go at a chosen time (Send later); `send_after` and `sent_at` hold that time. Not part of the conversation until it goes. */
+    public const STATUS_SCHEDULED = 'scheduled';
+
     public const STATUS_SENT = 'sent';
 
     public const STATUS_FAILED = 'failed';

@@ -31,6 +31,7 @@
                 ['inbox', __('Inbox'), 'heroicon-o-inbox', $counts['inbox']],
                 ['starred', __('Starred'), 'heroicon-o-star', 0],
                 ['snoozed', __('Snoozed'), 'heroicon-o-clock', 0],
+                ['scheduled', __('Scheduled'), 'heroicon-o-calendar-days', 0],
                 ['sent', __('Sent'), 'heroicon-o-paper-airplane', 0],
                 ['drafts', __('Drafts'), 'heroicon-o-document-text', $counts['drafts']],
                 ['spam', __('Spam'), 'heroicon-o-exclamation-triangle', $counts['spam']],
@@ -286,8 +287,11 @@
                                         </span>
                                         <span class="zz-mail-sub">{{ $row->subject !== '' ? $row->subject : __('(no subject)') }}</span>
                                         <span class="zz-mail-snip">{{ $isDraftOnly ? __('Draft').' · ' : '' }}{{ $row->snippet }}</span>
-                                        @if ($row->labels->isNotEmpty() || $row->has_attachments || ($row->status !== 'open') || $row->assignee || $row->snoozed_until)
+                                        @if ($row->labels->isNotEmpty() || $row->has_attachments || ($row->status !== 'open') || $row->assignee || $row->snoozed_until || $row->next_scheduled_at)
                                             <span class="zz-mail-chiprow">
+                                                @if ($row->next_scheduled_at)
+                                                    <span class="zz-mail-chip" title="{{ __('Scheduled for :time', ['time' => $this->longTime(\Carbon\Carbon::parse($row->next_scheduled_at))]) }}"><x-filament::icon icon="heroicon-m-calendar-days" class="zz-mail-i" aria-hidden="true" />{{ $this->shortTime(\Carbon\Carbon::parse($row->next_scheduled_at)) }}</span>
+                                                @endif
                                                 @if ($row->snoozed_until)
                                                     <span class="zz-mail-chip" title="{{ __('Snoozed until :time', ['time' => $this->longTime($row->snoozed_until)]) }}"><x-filament::icon icon="heroicon-m-clock" class="zz-mail-i" aria-hidden="true" />{{ $this->shortTime($row->snoozed_until) }}</span>
                                                 @endif
@@ -324,7 +328,7 @@
                         @php
                             $messages = $this->messages;
                             // The newest real message: not a note, not a draft.
-                            $lastId = $messages->where('kind', 'message')->last()?->id;
+                            $lastId = $messages->where('kind', 'message')->where('status', '!=', 'scheduled')->last()?->id;
                         @endphp
                         <div class="zz-mail-bar">
                             <button type="button" class="zz-mail-ib zz-mail-back" wire:click="closeThread" aria-label="{{ __('Back to the list') }}">

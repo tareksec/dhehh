@@ -2,6 +2,7 @@
 
 namespace App\Services\Email\Inbox;
 
+use App\Filament\Pages\EmailInbox;
 use App\Mail\ComposedEmail;
 use App\Models\Company;
 use App\Models\EmailAttachment;
@@ -10,15 +11,18 @@ use App\Models\EmailMessage;
 use App\Models\EmailThread;
 use App\Models\StorefrontSetting;
 use App\Models\User;
+use App\Services\BusinessNotificationService;
 use App\Services\CompanyContext;
 use App\Services\CompanyStorageService;
 use App\Services\StorefrontNotificationService;
 use App\Support\EmailAddressList;
 use App\Support\EmailText;
+use Carbon\CarbonInterface;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * Everything a staff member does to write and send email in the Email inbox (owner request 2026-11-02): start a new
@@ -237,7 +241,7 @@ class OutboundEmailService
      * Sends the draft: it becomes a message that waits out the mailbox's undo window (none when that is 0, then it goes
      * at once). Refused, with the reason, when nobody is addressed, too many are, or there is nothing to send.
      */
-    public function queue(EmailMessage $draft, User $user): EmailMessage
+    public function queue(EmailMessage $draft, User $user, ?CarbonInterface $at = null): EmailMessage
     {
         $this->guardDraft($draft);
         $mailbox = $draft->mailbox()->firstOrFail();
@@ -260,17 +264,24 @@ class OutboundEmailService
             throw new EmailSendException(__('Write something or attach a file before sending.'));
         }
 
-        $undo = max(0, min(self::MAX_UNDO_SECONDS, (int) $mailbox->setting('undo_send_seconds')));
+        // Stored in the app's time zone, like every other time in the database.
+        $at = $at?->copy()->timezone(config('app.timezone'));
+
+        if ($at !== null && ($at->lt(now()->addMinute()) || $at->gt(now()->addYear()))) {
+            throw new EmailSendException(__('Pick a time that is still ahead (within a year).'));
+        }
+
+        $undo = $at !== null ? 0 : max(0, min(self::MAX_UNDO_SECONDS, (int) $mailbox->setting('undo_send_seconds')));
 
         $draft->forceFill([
             'kind' => EmailMessage::KIND_MESSAGE,
-            'status' => EmailMessage::STATUS_PENDING,
+            'status' => $at !== null ? EmailMessage::STATUS_SCHEDULED : EmailMessage::STATUS_PENDING,
             'direction' => EmailMessage::OUT,
             'message_id' => Str::uuid()->toString().'@'.$this->domainOf($mailbox->address),
             'user_id' => $user->getKey(),
             'is_read' => true,
-            'sent_at' => now(),
-            'send_after' => now()->addSeconds($undo),
+            'sent_at' => $at ?? now(),
+            'send_after' => $at ?? now()->addSeconds($undo),
             'error' => null,
         ])->save();
 
@@ -287,11 +298,45 @@ class OutboundEmailService
 
         $this->stats->refresh($thread);
 
-        if ($undo === 0) {
+        if ($at === null && $undo === 0) {
             $this->deliver($draft);
         }
 
         return $draft->fresh();
+    }
+
+    /** Takes a scheduled message back before its time: it becomes a draft again, for its author. */
+    public function cancelScheduled(EmailMessage $message): bool
+    {
+        $this->guard($message);
+
+        $taken = EmailMessage::query()
+            ->whereKey($message->getKey())
+            ->where('status', EmailMessage::STATUS_SCHEDULED)
+            ->where('send_after', '>', now())
+            ->update(['kind' => EmailMessage::KIND_DRAFT, 'status' => EmailMessage::STATUS_DRAFT, 'send_after' => null, 'message_id' => null]);
+
+        if ($taken === 0) {
+            return false;
+        }
+
+        $this->stats->refresh($message->thread()->firstOrFail());
+        $this->syncDraftThread($message->fresh());
+
+        return true;
+    }
+
+    /** Sends a scheduled message now instead of at its time. */
+    public function sendScheduledNow(EmailMessage $message): bool
+    {
+        $this->guard($message);
+
+        $moved = EmailMessage::query()
+            ->whereKey($message->getKey())
+            ->where('status', EmailMessage::STATUS_SCHEDULED)
+            ->update(['status' => EmailMessage::STATUS_PENDING, 'send_after' => now(), 'sent_at' => now()]);
+
+        return $moved > 0 && $this->deliver($message->fresh());
     }
 
     /** Takes a message back while it still waits out the undo window: it becomes a draft again. */
@@ -338,7 +383,7 @@ class OutboundEmailService
 
         $claimed = EmailMessage::query()
             ->whereKey($message->getKey())
-            ->where('status', EmailMessage::STATUS_PENDING)
+            ->whereIn('status', [EmailMessage::STATUS_PENDING, EmailMessage::STATUS_SCHEDULED])
             ->where('send_after', '<=', now())
             ->update(['status' => EmailMessage::STATUS_SENDING, 'updated_at' => now()]);
 
@@ -349,6 +394,10 @@ class OutboundEmailService
         $message = $message->fresh();
         $mailbox = $message->mailbox()->firstOrFail();
         $setting = $this->settingFor($mailbox);
+
+        if (! $mailbox->is_active) {
+            return $this->finish($message, false, __('This mailbox is switched off.'), null);
+        }
 
         if ($setting === null) {
             return $this->finish($message, false, __('This company has no site yet, so there is no email account to send through.'), null);
@@ -397,17 +446,46 @@ class OutboundEmailService
         $sent = 0;
 
         foreach (EmailMessage::query()
-            ->where('status', EmailMessage::STATUS_PENDING)
+            ->whereIn('status', [EmailMessage::STATUS_PENDING, EmailMessage::STATUS_SCHEDULED])
             ->where('send_after', '<=', now())
             ->orderBy('send_after')
             ->limit($limit)
             ->get() as $message) {
+            $wasScheduled = $message->status === EmailMessage::STATUS_SCHEDULED;
+
             if ($this->deliver($message)) {
                 $sent++;
+            } elseif ($wasScheduled && $message->fresh()?->status === EmailMessage::STATUS_FAILED) {
+                $this->tellAuthorItFailed($message->fresh());
             }
         }
 
         return $sent;
+    }
+
+    /** A message set to go later failed with nobody watching: the person who wrote it gets a bell message. */
+    protected function tellAuthorItFailed(EmailMessage $message): void
+    {
+        try {
+            $author = $message->user_id === null ? null : User::query()->find($message->user_id);
+
+            if ($author === null) {
+                return;
+            }
+
+            $url = EmailInbox::getUrl(['mailbox' => $message->mailbox_id, 'thread' => $message->thread_id], panel: 'admin');
+            app(BusinessNotificationService::class)->notifyUser(
+                $author,
+                'email.scheduled_failed',
+                __('A scheduled email was not sent'),
+                trim((string) $message->subject) !== '' ? (string) $message->subject.' — '.(string) $message->error : (string) $message->error,
+                ['thread_id' => (string) $message->thread_id],
+                $url,
+                __('Open email'),
+            );
+        } catch (Throwable $exception) {
+            report($exception);
+        }
     }
 
     // --- Notes ----------------------------------------------------------------------------------------
