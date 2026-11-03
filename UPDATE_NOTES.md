@@ -2,7 +2,27 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-02 (latest) - Trash for leads, quotations, chat channels and reseller levels (T4b)
+## 2026-11-03 (latest) - Owner's answers on the Trash questions; a delete permission for leads and quotations
+
+Owner (Bangla): "7 এবং 8 ঠিক আছে। 11 এইভাবেই থাকুক। কিন্তু 12 তে পারমিশন লাগবে।" (7 and 8 are fine; 11 stays as it is; 12 needs a permission.)
+
+**Reading of the numbers.** `docs/delete-and-trash-plan.md` section 5 has questions 1–10 only. I read "7" and "8" as the plan's 7 and 8 (the T4a customer / supplier behaviour), "11" as question 9 (the QR channel in Trash: "keep it as it is") and "12" as question 10 (leads and quotations: "a permission is needed"). Question 10 is the only one about permission, which is why I am fairly sure. If the owner meant something else, this is the place to correct it.
+
+What I did:
+- **Questions 7, 8, 9 recorded as answered** in the plan; `docs/whatsapp-web-rules.md` rule 1 now says a QR channel in Trash keeps everything saved and stops archiving until it is restored (messages arriving meanwhile are not saved). No code changed for these three: the behaviour is what was already built.
+- **New permission `crm.delete`** ("CRM: Delete Leads, Quotations and Follow-up Activities (move to Trash, Restore and Delete Permanently)"): Delete, the Trash page and button, Restore and Delete permanently for `Lead`, `Quotation` and `LeadActivity`. Super Admin has it; Manager and Sales Staff do not (they keep `crm.view` / `crm.manage`), so they lose the Delete button until a Super Admin ticks it for a role or a user. I followed the `voucher.delete` precedent (a dedicated permission, in no role by default) rather than giving it to Managers; this is a one-line change in `User::ROLE_PERMISSIONS['manager']` if the owner wants Managers to keep it.
+- **Where the rule lives:** `Gate::before` in `AppServiceProvider`. My first try, `canDelete()` on the two Resources, did not hide the Delete button (Filament asks the Gate for the Delete action, not the Resource), which the new test caught; so the rule is in one place instead. `CLAUDE.md` and `PROJECT_GUIDE.md` now say so for the next model.
+- Code map (crm-messaging), CHANGELOG (Added, Changed, Technical Notes).
+
+**Verified (run, not read):** `CrmTrashTest` 24 passed (3 new), three mutation checks each failed a test, and 153 tests across the permission, role, parity, ⓘ-guard and multi-company suites passed, and the full suite on PHP 8.4: 3575 passed, 6 skipped, 0 failed (the flaky `MediaHubTest` from last time passed).
+
+**Needs Bangla review:** none (the permission label is English like all the permission labels).
+
+**Still waiting for the owner:** plan questions 1–6 and the five ⓘ questions; the go-ahead for T5 (products, stock pools, purchases).
+
+Commit status: committed on `claude/upbeat-franklin-hy6fhr`, pushed to that branch. Not on `main`.
+
+## 2026-11-02 - Trash for leads, quotations, chat channels and reseller levels (T4b)
 
 Owner (Bangla): "পরের ধাপের কাজ করে" (the next phase after T4a: T4b of `docs/delete-and-trash-plan.md`).
 

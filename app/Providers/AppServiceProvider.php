@@ -33,6 +33,8 @@ use App\Models\InvestorGroup;
 use App\Models\InvestorGroupMember;
 use App\Models\InvestorRequest;
 use App\Models\InvestorSecurityInstrument;
+use App\Models\Lead;
+use App\Models\LeadActivity;
 use App\Models\Order;
 use App\Models\OrderCost;
 use App\Models\OrderItem;
@@ -44,6 +46,7 @@ use App\Models\ProjectCostItem;
 use App\Models\ProjectSettlement;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
+use App\Models\Quotation;
 use App\Models\ResellerDepositEntry;
 use App\Models\SettlementPayout;
 use App\Models\StockMovement;
@@ -277,6 +280,14 @@ class AppServiceProvider extends ServiceProvider
         Gate::before(function (User $user, string $ability, array $arguments = []): ?bool {
             $subject = $arguments[0] ?? null;
             $modelClass = is_object($subject) ? $subject::class : $subject;
+
+            // Leads, quotations and a lead's follow-up activities have no module of their own
+            // (opening and editing them is open to whoever sees the CRM), but deleting them,
+            // and using their Trash, needs the CRM delete permission (owner decision 2026-11-03).
+            if (in_array($modelClass, [Lead::class, LeadActivity::class, Quotation::class], true)
+                && in_array($ability, ['delete', 'deleteAny', 'restore', 'restoreAny', 'forceDelete', 'forceDeleteAny'], true)) {
+                return $user->canDeleteCrmRecords();
+            }
 
             if (! is_string($modelClass) || ! array_key_exists($modelClass, User::MODEL_MODULES)) {
                 return null;

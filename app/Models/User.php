@@ -319,6 +319,7 @@ class User extends Authenticatable implements FilamentUser
         'reports.export' => 'Reports: Export',
         'crm.view' => 'CRM Inbox: View',
         'crm.manage' => 'CRM Inbox: Reply and Manage',
+        'crm.delete' => 'CRM: Delete Leads, Quotations and Follow-up Activities (move to Trash, Restore and Delete Permanently)',
         'backups.manage' => 'Backups: Manage',
         'settings.manage' => 'Settings: Manage',
         'users.manage' => 'Users: Manage',
@@ -667,6 +668,16 @@ class User extends Authenticatable implements FilamentUser
     public function canDeleteVoucher(): bool
     {
         return $this->isSuperAdmin() || $this->hasPermission('voucher.delete');
+    }
+
+    /**
+     * Delete, restore and permanently delete a lead, a quotation or a lead's
+     * follow-up activity (owner decision 2026-11-03). Not part of any built-in
+     * role except Super Admin: it is given to a role or a user on purpose.
+     */
+    public function canDeleteCrmRecords(): bool
+    {
+        return $this->isSuperAdmin() || $this->hasPermission('crm.delete');
     }
 
     public function canViewAllVouchers(): bool

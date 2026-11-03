@@ -95,6 +95,10 @@ documents are at the links.
    never deletes saved conversations, messages, media or `whatsapp_contacts`
    rows. "Delete for everyone" only sets `revoked_at`. No code path may delete
    archive data because of the WhatsApp connection state.
+   A channel moved to **Trash** keeps everything saved and **stops archiving**
+   (the bridge's webhook answers "not found") until it is restored; messages
+   that arrive in between are not saved. Owner decision 2026-11-03 (plan
+   question 9: keep it as it is).
 2. **Sending is off by default.** It is enabled per channel by a super admin,
    who first confirms they have read the risk above. Until enabled, the
    channel is read-only (the current behaviour).

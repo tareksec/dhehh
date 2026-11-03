@@ -28,6 +28,7 @@ use App\Models\LeadActivity;
 use App\Models\Quotation;
 use App\Models\ResellerLevel;
 use App\Models\User;
+use App\Models\UserRole;
 use App\Services\CompanyContext;
 use App\Services\Crm\AttentionQueueService;
 use App\Services\Crm\BroadcastService;
@@ -112,8 +113,8 @@ class CrmTrashTest extends TestCase
     }
 
     /**
-     * Who may use a Trash is whoever may delete that record (plan question 5). Leads and quotations
-     * have no delete permission of their own (nobody is refused today, so nobody is refused in Trash);
+     * Who may use a Trash is whoever may delete that record (plan question 5). Leads, quotations and
+     * lead activities need the `crm.delete` permission (owner decision 2026-11-03, plan question 10);
      * reseller levels are guarded by the sales module and chat channels are Super Admin only.
      */
     public function test_someone_who_may_not_delete_cannot_use_the_trash(): void
@@ -122,11 +123,120 @@ class CrmTrashTest extends TestCase
 
         $this->actingAs($staff);
 
-        foreach ([ResellerLevelResource::class, ConversationChannelResource::class] as $resource) {
+        foreach ([ResellerLevelResource::class, ConversationChannelResource::class, LeadResource::class, QuotationResource::class] as $resource) {
             $this->assertFalse($resource::canDeleteAny(), $resource);
             $this->assertFalse($resource::canRestoreAny(), $resource);
             $this->assertFalse($resource::canForceDeleteAny(), $resource);
         }
+    }
+
+    public function test_the_crm_delete_permission_is_given_to_no_built_in_role_except_super_admin(): void
+    {
+        $this->assertArrayHasKey('crm.delete', User::CUSTOM_PERMISSION_OPTIONS);
+
+        foreach (User::ROLE_PERMISSIONS as $role => $permissions) {
+            $this->assertSame($role === 'super_admin', in_array('crm.delete', $permissions, true) || in_array('*', $permissions, true), $role);
+        }
+
+        // Sales staff and managers can work the CRM (view and manage) but not delete in it.
+        foreach (['manager', 'sales_staff'] as $role) {
+            $user = User::factory()->create(['role' => $role, 'is_active' => true]);
+
+            $this->assertTrue($user->hasPermission('crm.manage'), $role);
+            $this->assertFalse($user->canDeleteCrmRecords(), $role);
+        }
+    }
+
+    public function test_without_the_crm_delete_permission_a_lead_a_quotation_and_an_activity_cannot_be_deleted_or_restored(): void
+    {
+        $lead = $this->lead('Guarded Lead', '01811000060');
+        $activity = $lead->activities()->create(['type' => 'call', 'note' => 'Guarded call']);
+        $quotation = Quotation::query()->create(['lead_id' => $lead->getKey(), 'status' => 'draft']);
+        $trashedLead = $this->lead('Already Trashed', '01811000061');
+        $trashedLead->delete();
+        $trashedQuotation = Quotation::query()->create(['status' => 'draft']);
+        $trashedQuotation->delete();
+        $params = ['ownerRecord' => $lead, 'pageClass' => EditLead::class];
+
+        $staff = User::factory()->create(['role' => 'sales_staff', 'is_active' => true]);
+        $this->grantCompany($staff);
+
+        Livewire::actingAs($staff)
+            ->test(EditLead::class, ['record' => $lead->getRouteKey()])
+            ->assertActionHidden('delete');
+        Livewire::actingAs($staff)
+            ->test(EditQuotation::class, ['record' => $quotation->getRouteKey()])
+            ->assertActionHidden('delete');
+        Livewire::actingAs($staff)
+            ->test(ActivitiesRelationManager::class, $params)
+            ->assertTableActionHidden('delete', $activity)
+            ->assertTableActionHidden('trash');
+
+        // The Trash pages are closed, and the "Trash (n)" button is not offered.
+        $this->actingAs($staff);
+        $this->assertFalse(TrashedLeads::canAccess());
+        $this->assertFalse(TrashedQuotations::canAccess());
+
+        Livewire::actingAs($staff)->test(TrashedLeads::class)->assertForbidden();
+        Livewire::actingAs($staff)->test(TrashedQuotations::class)->assertForbidden();
+
+        $this->assertNotSoftDeleted($lead);
+        $this->assertNotSoftDeleted($activity);
+        $this->assertNotSoftDeleted($quotation);
+        $this->assertSoftDeleted($trashedLead);
+        $this->assertSoftDeleted($trashedQuotation);
+    }
+
+    public function test_a_role_with_the_crm_delete_permission_can_delete_restore_and_delete_permanently(): void
+    {
+        UserRole::query()->create([
+            'name' => 'CRM Cleaner',
+            'slug' => 'crm_cleaner',
+            'permissions' => ['crm.view', 'crm.manage', 'crm.delete'],
+            'is_active' => true,
+        ]);
+        $cleaner = User::factory()->create(['role' => 'crm_cleaner', 'is_active' => true]);
+        $this->grantCompany($cleaner);
+
+        $lead = $this->lead('Cleaner Lead', '01811000062');
+        $activity = $lead->activities()->create(['type' => 'call', 'note' => 'Cleaner call']);
+        $quotation = Quotation::query()->create(['status' => 'draft']);
+        $params = ['ownerRecord' => $lead, 'pageClass' => EditLead::class];
+
+        $this->actingAs($cleaner);
+        $this->assertTrue($cleaner->canDeleteCrmRecords());
+        $this->assertTrue(TrashedLeads::canAccess());
+        $this->assertTrue(TrashedQuotations::canAccess());
+
+        Livewire::actingAs($cleaner)
+            ->test(ActivitiesRelationManager::class, $params)
+            ->callTableAction('delete', $activity, data: ['confirmation' => 'Call #'.$activity->getKey()])
+            ->assertHasNoTableActionErrors();
+        $this->assertSoftDeleted($activity);
+
+        Livewire::actingAs($cleaner)
+            ->test(EditQuotation::class, ['record' => $quotation->getRouteKey()])
+            ->callAction('delete', data: ['confirmation' => $quotation->quotation_number])
+            ->assertHasNoActionErrors();
+        $this->assertSoftDeleted($quotation);
+
+        Livewire::actingAs($cleaner)
+            ->test(EditLead::class, ['record' => $lead->getRouteKey()])
+            ->callAction('delete', data: ['confirmation' => 'Cleaner Lead'])
+            ->assertHasNoActionErrors();
+        $this->assertSoftDeleted($lead);
+
+        Livewire::actingAs($cleaner)
+            ->test(TrashedLeads::class)
+            ->callTableAction('restore', $lead)
+            ->assertHasNoTableActionErrors();
+        $this->assertNotSoftDeleted($lead);
+
+        Livewire::actingAs($cleaner)
+            ->test(TrashedQuotations::class)
+            ->callTableAction('forceDelete', $quotation, data: ['confirmation' => $quotation->quotation_number])
+            ->assertHasNoTableActionErrors();
+        $this->assertDatabaseMissing('quotations', ['id' => $quotation->getKey()]);
     }
 
     // ------------------------------------------------------------------ leads
@@ -474,6 +584,14 @@ class CrmTrashTest extends TestCase
     }
 
     // --------------------------------------------------------------- helpers
+
+    /** Gives a staff account access to the test company with its own role. */
+    private function grantCompany(User $user): void
+    {
+        $user->companies()->syncWithoutDetaching([
+            $this->company->getKey() => ['role' => $user->role, 'is_default' => true],
+        ]);
+    }
 
     /** @param  array<string, mixed>  $extra */
     private function lead(string $name, string $phone, array $extra = []): Lead
