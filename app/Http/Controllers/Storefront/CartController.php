@@ -77,7 +77,7 @@ class CartController extends Controller
                 return $this->redirectToCheckout($request, $company);
             }
 
-            return back()->with('storefront_status', "{$product->name} added to cart.");
+            return back()->with('storefront_status', __(':name added to cart.', ['name' => $product->name]));
         }
 
         $quantities = collect((array) $request->input('quantities', []))
@@ -89,7 +89,7 @@ class CartController extends Controller
             $quantities = collect([(int) $request->integer('variant') => max(1, (int) $request->integer('quantity', 1))]);
         }
 
-        abort_if($quantities->isEmpty(), 422, 'Please select quantity for at least one option.');
+        abort_if($quantities->isEmpty(), 422, __('Please select quantity for at least one option.'));
 
         $variants = ProductVariant::query()
             ->where('product_id', $product->getKey())
@@ -98,7 +98,7 @@ class CartController extends Controller
             ->get()
             ->keyBy('id');
 
-        abort_if($variants->isEmpty(), 422, 'Selected options are not available.');
+        abort_if($variants->isEmpty(), 422, __('Selected options are not available.'));
 
         $addedLines = 0;
         $addedQuantity = 0;
@@ -118,14 +118,16 @@ class CartController extends Controller
             $addedValue += $variant->effectiveSalePrice() * $quantity;
         }
 
-        abort_if($addedLines === 0, 422, 'Selected options are out of stock.');
+        abort_if($addedLines === 0, 422, __('Selected options are out of stock.'));
         $this->flashAddToCartEvent($product, $addedQuantity, $addedValue);
 
         if ($buyNow) {
             return $this->redirectToCheckout($request, $company);
         }
 
-        return back()->with('storefront_status', "{$product->name} added to cart ({$addedLines} ".($addedLines === 1 ? 'option' : 'options').').');
+        return back()->with('storefront_status', $addedLines === 1
+            ? __(':name added to cart (:count option).', ['name' => $product->name, 'count' => $addedLines])
+            : __(':name added to cart (:count options).', ['name' => $product->name, 'count' => $addedLines]));
     }
 
     /**
@@ -193,7 +195,7 @@ class CartController extends Controller
 
         $this->cart->update($company, $product, (int) $request->integer('quantity'), $this->resolveVariant($request, $product));
 
-        return back()->with('storefront_status', 'Cart updated.');
+        return back()->with('storefront_status', __('Cart updated.'));
     }
 
     public function updatePreview(Request $request, Company $company, string $slug): RedirectResponse
@@ -203,7 +205,7 @@ class CartController extends Controller
 
         $this->cart->update($company, $product, (int) $request->integer('quantity'), $this->resolveVariant($request, $product));
 
-        return back()->with('storefront_status', 'Cart updated.');
+        return back()->with('storefront_status', __('Cart updated.'));
     }
 
     public function remove(Request $request): RedirectResponse
@@ -213,7 +215,7 @@ class CartController extends Controller
         $this->flashRemoveFromCartEvent($product);
         $this->cart->remove($company, $product, $this->resolveVariant($request, $product));
 
-        return back()->with('storefront_status', 'Item removed from cart.');
+        return back()->with('storefront_status', __('Item removed from cart.'));
     }
 
     public function removePreview(Request $request, Company $company, string $slug): RedirectResponse
@@ -222,7 +224,7 @@ class CartController extends Controller
         $product = $this->product($slug);
         $this->cart->remove($company, $product, $this->resolveVariant($request, $product));
 
-        return back()->with('storefront_status', 'Item removed from cart.');
+        return back()->with('storefront_status', __('Item removed from cart.'));
     }
 
     protected function flashRemoveFromCartEvent(Product $product): void
@@ -250,7 +252,7 @@ class CartController extends Controller
         $this->cart->restore($company, $record);
 
         return redirect()->route('storefront.cart.show')
-            ->with('storefront_status', 'Your saved cart has been restored. Review the items before checkout.');
+            ->with('storefront_status', __('Your saved cart has been restored. Review the items before checkout.'));
     }
 
     protected function resolveVariant(Request $request, Product $product, bool $requireForVariable = false): ?ProductVariant
@@ -258,7 +260,7 @@ class CartController extends Controller
         $variantId = (int) $request->integer('variant');
 
         if ($variantId < 1) {
-            abort_if($requireForVariable && $product->has_variants, 422, 'Please select an option first.');
+            abort_if($requireForVariable && $product->has_variants, 422, __('Please select an option first.'));
 
             return null;
         }

@@ -40,7 +40,7 @@
             'storefront-image-banner-hide-nav-desktop' => ! $bannerNavDesktop,
             'storefront-image-banner-hide-nav-mobile' => ! $bannerNavMobile,
         ])
-        aria-label="Storefront banners"
+        aria-label="{{ __('Storefront banners') }}"
         aria-roledescription="carousel"
         x-data="{
             count: {{ $bannerCount }},
@@ -104,7 +104,7 @@
                 @endphp
                 <div class="relative h-full w-full shrink-0">
                     @if ($slideHref)
-                        <a class="block h-full w-full" href="{{ $slideHref }}" aria-label="Open banner promotion">
+                        <a class="block h-full w-full" href="{{ $slideHref }}" aria-label="{{ __('Open banner promotion') }}">
                     @endif
                     <picture class="block h-full w-full">
                         @if ($slide->image_mobile)
@@ -173,7 +173,7 @@
                         x-cloak
                         @click="toggle()"
                         class="grid h-11 w-11 place-items-center rounded-full text-white transition hover:bg-white/15"
-                        :aria-label="paused ? 'Play banners' : 'Pause banners'"
+                        :aria-label="paused ? @js(__('Play banners')) : @js(__('Pause banners'))"
                         :aria-pressed="paused.toString()"
                     >
                         <svg x-show="! paused" class="h-4 w-4" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M6.75 5.25a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z"/></svg>

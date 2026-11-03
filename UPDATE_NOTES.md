@@ -1928,11 +1928,31 @@ Verification: `php artisan test --filter=NuportOrderImportTest` 22 passed; full 
 
 Commit status: committed on branch `feature/nuport-sku-map` (cut from origin/main v2.82.0) and pushed to main with the owner's approval (2026-10-17).
 
+## 2026-11-02 - Footer light/dark look, remaining Blade texts, ERP messages follow the visitor's language
+
+Owner report: "Bangla/English and the footer are not fixed; the light version was not created." Cause: (1) the Marketplace Pro footer is forced dark in both modes (class `dark` plus a CSS override), and the Next.js footer has one background colour, so the light logo never showed; (2) the first language pass only wrapped plain text nodes, leaving text that carries a variable, attribute text, `?? 'English'` fallbacks, status words, controller flash/validation messages and Bangla written into the offer views; (3) the Next.js site's Bangla mode shows ERP-entered content in the language it was typed (plan phase 4 is not built), and the ERP wrote its own messages in English whatever the visitor chose.
+
+What changed (ERP):
+
+- `resources/views/storefront/themes/marketplace-pro/partials/layout/footer.blade.php` and `app.css` (`.mp-footer`): light surface in light mode, navy in dark mode; back-to-top bar and "Our other brands" follow the mode.
+- `StorefrontSiteDesign`: `footer.background_light` (default `#F4F4F5`); Storefront Settings shows "Footer background colour (light mode)" and "(dark mode)"; `docs/api/storefront-api.md` updated.
+- About 330 storefront texts wrapped with `__()` (script-assisted over 41 views; `lang/*.json` +295 keys), status words (`Order`, `CourierBooking`, `StorefrontPayment`, `Customer::RESELLER_STATUSES`), `data-*-label` attributes, 13 storefront controllers' flash and validation messages, `StorefrontCheckoutService` messages, error pages and the `components/layouts/error` layout.
+- Hardcoded Bangla removed from `offers/thank-you`, `offers/blocks/faq`, `hero`, `testimonials` (now `lang/bn.json`).
+- `App\Http\Middleware\SetStorefrontApiLocale` on `/api/v1/storefront/*` (`X-Locale: bn|en` or `?lang=`); tests `StorefrontApiLocaleTest` (2).
+
+What changed (website repo, separate commit): Footer.tsx light/dark looks and both logos, favicon from `branding.favicon_url`, `X-Locale` sent to the ERP, aria-labels in the dictionary.
+
+Not done: language switcher and locale resolver for the Blade storefront; Bangla/English versions of admin-entered content (home page builder, trust strip, menus, banners, footer text, category and product names). Owner decision needed on how to supply Bangla for that content. Activity-log lines saved for customers (e.g. "Signed in to your account") are stored in English.
+
+Needs Bangla review: all ~295 new keys written in this pass (button and message wording), especially the status words and the offer landing page texts.
+
+Commit status: committed locally on `feature/ai-inbox-control-plane`, not pushed.
+
 ## 2026-11-01 - Favicon option; footer logo follows dark mode
 
 Owner list items 11-12. Website: new Favicon upload (Storefront Settings → Branding, column `storefront_settings.favicon`), linked in the Blade `<head>` and served as `branding.favicon_url` in `GET /site`. ERP: Favicon upload in Company Settings → Branding (`companies.settings.favicon`), set on the admin panel. Blade footer About block shows the dark-mode logo in dark mode. The `/site` logo already comes from the Next.js site row (test added); if the Next.js site still shows the company logo, the website repo reads the wrong field. Needs `php artisan migrate`. Bangla to review: the 3 new favicon strings.
 
-Commit status: committed locally on `feature/ai-inbox-control-plane`, not pushed.
+Commit status: committed (`f9452b6e` on `feature/ai-inbox-control-plane`) and on main as `8ebf5f6b`, pushed. The language pass of the same day is `6896aabc` / `b544b541`.
 
 ## 2026-10-17 - Import Nuport orders (customer purchases, payment, status)
 

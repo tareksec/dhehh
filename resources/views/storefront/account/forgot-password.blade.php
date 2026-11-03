@@ -14,12 +14,12 @@
         <p class="text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">{{ __('Account recovery') }}</p>
         <h1 class="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{{ __('Forgot your password?') }}</h1>
         <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">
-            Enter the phone number on your account. If it matches, we'll text you a 6-digit reset code.
+            {{ __('Enter the phone number on your account. If it matches, we\'ll text you a 6-digit reset code.') }}
         </p>
 
         @unless ($smsAvailable)
             <div class="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
-                Password reset by SMS isn't set up for this store yet. Please <a class="font-medium underline" href="{{ $contactUrl }}">contact support</a> to regain access to your account.
+                {{ __('Password reset by SMS isn\'t set up for this store yet. Please') }} <a class="font-medium underline" href="{{ $contactUrl }}">{{ __('contact support') }}</a> {{ __('to regain access to your account.') }}
             </div>
         @endunless
 
@@ -31,12 +31,12 @@
                 @error('phone') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
             </div>
             <button class="w-full rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90 [touch-action:manipulation]" type="submit">
-                Send reset code
+                {{ __('Send reset code') }}
             </button>
         </form>
 
         <p class="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
-            Remembered it? <a class="font-medium text-[var(--storefront-brand)]" href="{{ $loginUrl }}">Log in</a>
+            {{ __('Remembered it?') }} <a class="font-medium text-[var(--storefront-brand)]" href="{{ $loginUrl }}">{{ __('Log in') }}</a>
         </p>
     </section>
 @endsection

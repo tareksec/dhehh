@@ -95,7 +95,7 @@ class ProductReviewController extends Controller
             : route('storefront.account.reviews.create', $orderNo);
 
         if ($exists) {
-            return redirect($redirectUrl)->with('storefront_status', 'You already reviewed this product for this order.');
+            return redirect($redirectUrl)->with('storefront_status', __('You already reviewed this product for this order.'));
         }
 
         ProductReview::query()->create([
@@ -108,7 +108,7 @@ class ProductReviewController extends Controller
             'status' => ProductReview::STATUS_PENDING,
         ]);
 
-        return redirect($redirectUrl)->with('storefront_status', 'Thank you — your review has been submitted for approval.');
+        return redirect($redirectUrl)->with('storefront_status', __('Thank you — your review has been submitted for approval.'));
     }
 
     protected function authorizedCompletedOrder(Company $company, string $orderNo): Order

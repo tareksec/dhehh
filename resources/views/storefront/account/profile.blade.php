@@ -1,7 +1,7 @@
 @extends('storefront.account.layout')
 
 @php
-    $resellerStatusLabel = \App\Models\Customer::RESELLER_STATUSES[$customer->reseller_status] ?? null;
+    $resellerStatusLabel = isset(\App\Models\Customer::RESELLER_STATUSES[$customer->reseller_status]) ? __(\App\Models\Customer::RESELLER_STATUSES[$customer->reseller_status]) : null;
     $accountRoute = static fn (string $name) => isset($previewSlug)
         ? route('storefront.preview.account.'.$name, $previewSlug)
         : route('storefront.account.'.$name);
@@ -75,10 +75,10 @@
             <section class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900" aria-labelledby="reseller-heading">
                 <h3 class="text-lg font-semibold tracking-tight" id="reseller-heading">{{ __('Reseller account') }}</h3>
                 @if ($resellerStatusLabel && $customer->reseller_status !== 'none')
-                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Current status: <span class="font-semibold text-gray-900 dark:text-white">{{ $resellerStatusLabel }}</span></p>
+                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ __('Current status:') }} <span class="font-semibold text-gray-900 dark:text-white">{{ $resellerStatusLabel }}</span></p>
                 @else
                     <p class="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">{{ __('Apply for wholesale pricing and direct ordering support.') }}</p>
-                    <a class="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 px-4 text-sm font-semibold transition hover:border-gray-950 dark:border-gray-700 dark:hover:border-gray-500" href="{{ $resellerUrl }}">Become a reseller</a>
+                    <a class="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 px-4 text-sm font-semibold transition hover:border-gray-950 dark:border-gray-700 dark:hover:border-gray-500" href="{{ $resellerUrl }}">{{ __('Become a reseller') }}</a>
                 @endif
             </section>
         </div>

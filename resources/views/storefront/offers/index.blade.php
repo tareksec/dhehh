@@ -14,9 +14,9 @@
             <p class="storefront-page-copy mt-2">{{ __('Special single-product and combo deals, priced lower than buying separately.') }}</p>
 
             <div class="mt-5 inline-flex rounded-full border border-gray-200 bg-gray-50 p-1 text-sm font-medium dark:border-white/10 dark:bg-white/5">
-                <a href="{{ $tabUrl(null) }}" class="rounded-full px-4 py-2 transition {{ $activeType === null ? 'bg-[var(--storefront-brand)] text-white' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white' }}">All offers</a>
-                <a href="{{ $tabUrl('single') }}" class="rounded-full px-4 py-2 transition {{ $activeType === 'single' ? 'bg-[var(--storefront-brand)] text-white' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white' }}">Single offer</a>
-                <a href="{{ $tabUrl('combo') }}" class="rounded-full px-4 py-2 transition {{ $activeType === 'combo' ? 'bg-[var(--storefront-brand)] text-white' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white' }}">Combo offer</a>
+                <a href="{{ $tabUrl(null) }}" class="rounded-full px-4 py-2 transition {{ $activeType === null ? 'bg-[var(--storefront-brand)] text-white' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white' }}">{{ __('All offers') }}</a>
+                <a href="{{ $tabUrl('single') }}" class="rounded-full px-4 py-2 transition {{ $activeType === 'single' ? 'bg-[var(--storefront-brand)] text-white' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white' }}">{{ __('Single offer') }}</a>
+                <a href="{{ $tabUrl('combo') }}" class="rounded-full px-4 py-2 transition {{ $activeType === 'combo' ? 'bg-[var(--storefront-brand)] text-white' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white' }}">{{ __('Combo offer') }}</a>
             </div>
         </div>
     </section>
@@ -24,7 +24,7 @@
     <section class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-5 lg:px-6">
         @if ($offers->isEmpty())
             <div class="rounded-lg border border-dashed border-gray-300 px-6 py-16 text-center text-sm text-gray-500 dark:border-white/15 dark:text-gray-400">
-                No offers are available right now. Please check back soon.
+                {{ __('No offers are available right now. Please check back soon.') }}
             </div>
         @else
             <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">

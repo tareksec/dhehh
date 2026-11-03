@@ -24,7 +24,7 @@
         @endif
         @if ($product->stock < 1)
             <div class="absolute inset-x-0 bottom-0 {{ $product->is_preorder ? 'bg-[var(--storefront-brand)]/90' : 'bg-gray-950/80' }} px-3 py-1.5 text-center text-xs font-semibold uppercase tracking-wide text-white">
-                {{ $product->is_preorder ? 'Pre-order' : 'Out of stock' }}
+                {{ $product->is_preorder ? __('Pre-order') : __('Out of stock') }}
             </div>
         @endif
 
@@ -32,7 +32,7 @@
             <a
                 class="absolute bottom-3 right-3 grid h-11 w-11 place-items-center rounded-full bg-white text-gray-900 shadow-md transition hover:bg-[var(--storefront-brand)] hover:text-white dark:bg-gray-900 dark:text-white"
                 href="{{ $productUrl }}"
-                title="Choose options"
+                title="{{ __('Choose options') }}"
                 aria-label="Choose options for {{ $product->name }}"
                 data-choose-options
             >
@@ -45,7 +45,7 @@
                 <button
                     class="grid h-11 w-11 place-items-center rounded-full bg-white text-gray-900 shadow-md transition hover:bg-[var(--storefront-brand)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-900 dark:text-white"
                     type="submit"
-                    title="Quick add to cart"
+                    title="{{ __('Quick add to cart') }}"
                     aria-label="Add {{ $product->name }} to cart"
                     data-pending-label="Adding {{ $product->name }} to cart"
                     @disabled($product->stock < 1 && ! $product->is_preorder)
@@ -56,7 +56,7 @@
         @endif
     </div>
     <div class="flex flex-1 flex-col p-4">
-        <div class="text-xs font-medium text-gray-400">{{ $product->category?->name ?? 'Product' }}</div>
+        <div class="text-xs font-medium text-gray-400">{{ $product->category?->name ?? __('Product') }}</div>
         <a href="{{ $productUrl }}">
             <h3 class="mt-1 line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-gray-900 dark:text-white">{{ $product->name }}</h3>
         </a>
@@ -68,7 +68,7 @@
                 @endif
             </div>
             @if ($product->stock > 0 && $product->stock <= 5)
-                <span class="text-xs font-medium text-amber-600 dark:text-amber-400">{{ (int) $product->stock }} left</span>
+                <span class="text-xs font-medium text-amber-600 dark:text-amber-400">{{ __(':stock left', ['stock' => (int) $product->stock]) }}</span>
             @endif
         </div>
         @if ($product->effectiveMoq() > 1)

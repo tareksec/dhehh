@@ -13,7 +13,7 @@
         <p class="text-xs font-semibold uppercase tracking-wider text-[var(--storefront-brand)]">{{ __('Account recovery') }}</p>
         <h1 class="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">{{ __('Enter your reset code') }}</h1>
         <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">
-            Enter the 6-digit code we texted you and choose a new password. The code expires in {{ \App\Services\CustomerAccountService::RESET_CODE_MINUTES }} minutes.
+            {{ __('Enter the 6-digit code we texted you and choose a new password. The code expires in :minutes minutes.', ['minutes' => \App\Services\CustomerAccountService::RESET_CODE_MINUTES]) }}
         </p>
 
         <form class="mt-5 space-y-5 rounded-lg border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-gray-900" method="POST" action="{{ $resetStoreUrl }}">
@@ -39,12 +39,12 @@
                 <input class="mt-2 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-4 text-sm outline-none transition focus:border-[var(--storefront-brand)] focus:ring-1 focus:ring-[var(--storefront-brand)] dark:border-white/10 dark:bg-gray-950" id="password_confirmation" name="password_confirmation" type="password" autocomplete="new-password" minlength="8" required>
             </div>
             <button class="w-full rounded-lg bg-[var(--storefront-brand)] px-6 py-3 text-sm font-medium text-white transition hover:opacity-90 [touch-action:manipulation]" type="submit">
-                Reset password
+                {{ __('Reset password') }}
             </button>
         </form>
 
         <p class="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
-            Didn't get a code? <a class="font-medium text-[var(--storefront-brand)]" href="{{ $forgotUrl }}">Request another</a>
+            {{ __('Didn\'t get a code?') }} <a class="font-medium text-[var(--storefront-brand)]" href="{{ $forgotUrl }}">{{ __('Request another') }}</a>
         </p>
     </section>
 @endsection

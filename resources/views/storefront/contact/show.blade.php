@@ -37,7 +37,7 @@
         ],
         [
             'label' => 'Call Us',
-            'text' => $setting->contact_hours ?: 'Give us a call for friendly, direct support.',
+            'text' => $setting->contact_hours ?: __('Give us a call for friendly, direct support.'),
             'action' => $callNumber,
             'href' => $callNumber ? 'tel:'.preg_replace('/\s+/', '', $callNumber) : null,
             'gradient' => 'from-amber-400 to-orange-600',
@@ -68,7 +68,7 @@
             <p class="text-xs font-semibold uppercase tracking-wider text-white/70">{{ $company->name }}</p>
             <h1 class="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{{ __('Connect with Us') }}</h1>
             <p class="max-w-lg text-sm leading-6 text-white/80 sm:text-base">
-                Chat with our friendly team for quick help with any questions or issues you may have.
+                {{ __('Chat with our friendly team for quick help with any questions or issues you may have.') }}
             </p>
         </div>
     </section>
@@ -115,7 +115,7 @@
                     </div>
                     <div class="text-sm leading-6 text-gray-700 dark:text-gray-200">{{ $company->address }}</div>
                     @if ($mapUrl)
-                        <a class="text-sm font-semibold text-[var(--storefront-brand)]" href="{{ $mapUrl }}" target="_blank" rel="noopener">Find on Map</a>
+                        <a class="text-sm font-semibold text-[var(--storefront-brand)]" href="{{ $mapUrl }}" target="_blank" rel="noopener">{{ __('Find on Map') }}</a>
                     @endif
                 </div>
             </div>
@@ -125,7 +125,7 @@
     @if ($faqs->isNotEmpty())
         <section id="faq" class="scroll-mt-24 mx-auto w-full max-w-4xl px-4 py-8 sm:px-5 lg:px-6">
             <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ __('Frequently Asked Questions') }}</h2>
-            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Everything you need to know. Can&rsquo;t find the answer you&rsquo;re looking for?</p>
+            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">{{ __('Everything you need to know. Can’t find the answer you’re looking for?') }}</p>
 
             <div class="mt-5 divide-y divide-gray-200 rounded-lg border border-gray-200 dark:divide-white/10 dark:border-white/10" x-data="{ open: 0 }">
                 @foreach ($faqs as $index => $faq)
@@ -157,7 +157,7 @@
         <section class="bg-[var(--storefront-brand)]">
             <div class="mx-auto flex w-full max-w-7xl flex-col items-center gap-3 px-4 py-8 text-center sm:px-5 lg:px-6">
                 <h2 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">{{ __('Still Have Questions?') }}</h2>
-                <p class="max-w-md text-sm text-white/85">Can&rsquo;t find the answer you&rsquo;re looking for? Please chat to our friendly team.</p>
+                <p class="max-w-md text-sm text-white/85">{{ __('Can’t find the answer you’re looking for? Please chat to our friendly team.') }}</p>
                 <a class="inline-flex items-center rounded-lg bg-white px-6 py-3 text-sm font-semibold text-gray-950 transition hover:bg-white/90" href="{{ $ctaHref }}" target="_blank" rel="noopener">
                     {{ $ctaLabel }}
                 </a>
