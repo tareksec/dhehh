@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [2.124.0] - 2026-11-03
+
 **Release type:** Minor Feature Update
 
 ### Added
@@ -16,7 +18,6 @@
 
 - `OrderAutofillService` (`app/Services/OrderAutofill/`): the model gets the pasted message plus the products that look relevant (the whole catalog when it has 60 products or fewer) and answers with one JSON object, no tool calling, so any chat model works; `<think>` blocks, code fences and chatter around the JSON are tolerated. Everything it returns is re-checked: the phone number is found by code from the message (any spelling, Bangla digits) before the model's is used; a product or variation id that is not in the sent list is dropped; no price is asked for; a customer is matched by phone and never edited; the pasted text is not stored or logged. The daily limit is a per-company cache counter. `AiSettingsService::TOOL_ORDER_AUTOFILL` (`NO_LEGACY_FALLBACK`), `OrderForm::fillWithAi()`, `Integrations` tab. No schema change.
 - Tests: `OrderAutofillTest` 17 (reading, phone, made-up products, variations, wrapped answers, no `tools` key, large catalog, off/limit/provider errors, the form button, the Integrations tab). `AiSettingsServiceTest` now expects the new tool not to use the shared config. 35 new bilingual keys.
-
 ## [2.123.0] - 2026-11-03
 
 **Release type:** Minor Feature Update
