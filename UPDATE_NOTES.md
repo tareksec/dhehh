@@ -2,7 +2,22 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-03 (latest) - Email inbox, Phase 2 step 9: Send later
+## 2026-11-03 (latest) - Email inbox, Phase 2 step 10: Rules and address suggestions
+
+Plan: `docs/email-inbox-plan.md`. Steps 1-8 are on `main`; steps 9 and 10 are on the feature branch `ccr-3799b463-p4pv7n` only.
+
+Decisions made while building (owner please read):
+
+- **Rules run on every message that arrives**, not only on the first mail of a conversation (as in Gmail). So a rule that archives also archives each later reply of that conversation if it is in the Inbox again. A conversation that is already assigned keeps its owner; Spam and the Trash are never touched.
+- **A rule matches with "contains"** (sender address or name, subject), not with patterns. Both boxes filled = both must hold. There is no "stop after this rule": all fitting rules run in order.
+- **Rules belong to one mailbox** (the open one in Settings), while labels belong to the company. A rule can give a conversation only to staff who may use CRM.
+- **Address suggestions** come from this mailbox's past contacts and the company's customers with an email address. The To / Cc / Bcc boxes now update the server as you type (after a short pause), which is one small request per pause.
+
+Needs Bangla review: "নিয়ম" (Rules), "আর্কাইভ", "প্রস্তাবিত ঠিকানা", and the rule sentence "যখন প্রেরকের মধ্যে “…” আছে → লেবেল …, … -কে দিন, আর্কাইভ".
+
+Not yet checked: a browser render of the Rules card and the suggestion list (tests cover the behaviour).
+
+## 2026-11-03 - Email inbox, Phase 2 step 9: Send later
 
 Plan: `docs/email-inbox-plan.md`. Steps 1-8 are on `main` (merged with the owner's approval on 2026-11-03, with `main` v2.122.0 merged in first; full suite 3776 passed). This step is on the feature branch `ccr-3799b463-p4pv7n` only.
 

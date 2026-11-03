@@ -2423,6 +2423,7 @@ html:not(.zz-sidebar-navigation-ready) .zz-sidebar-menu-parent.fi-sidebar-route-
 }
 
 .zz-mail-field {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -2893,4 +2894,53 @@ html:not(.zz-sidebar-navigation-ready) .zz-sidebar-menu-parent.fi-sidebar-route-
     .zz-mail-sel-text {
         max-width: 84px;
     }
+}
+
+/* Address suggestions under the To / Cc / Bcc boxes of the compose window. */
+.zz-mail-suggest {
+    position: absolute;
+    inset-inline: 14px;
+    top: 100%;
+    z-index: 5;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    max-height: 240px;
+    overflow-y: auto;
+    border: 1px solid var(--m-line);
+    border-radius: 8px;
+    background: var(--m-surface);
+    box-shadow: 0 6px 18px rgb(0 0 0 / 0.14);
+}
+
+.zz-mail-suggest button {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    width: 100%;
+    min-height: 40px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    text-align: start;
+    color: var(--m-ink);
+}
+
+.zz-mail-suggest button:hover,
+.zz-mail-suggest button:focus-visible {
+    background: var(--m-hover);
+}
+
+.zz-mail-suggest span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--m-ink3);
+    font-size: 0.85em;
+}
+
+.zz-mail-suggest em {
+    margin-inline-start: auto;
+    font-style: normal;
+    font-size: 0.75em;
+    opacity: 0.7;
 }

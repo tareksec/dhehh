@@ -203,6 +203,7 @@ trait ComposesEmail
         $this->composeTo = $this->composeCc = $this->composeBcc = $this->composeSubject = '';
         $this->composeShowCc = $this->composeShowBcc = $this->showQuickReplies = false;
         $this->composeInvalid = [];
+        $this->suggestField = null;
         $this->composeSavedAt = null;
         $this->composeUploads = [];
         $this->composeForm->fill(['body' => '']);

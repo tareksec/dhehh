@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Clusters\Settings;
+use App\Filament\Pages\Concerns\ManagesEmailRules;
 use App\Models\Company;
 use App\Models\EmailLabel;
 use App\Models\EmailMailbox;
@@ -38,6 +39,8 @@ use Livewire\Attributes\Url;
  */
 class EmailInboxSettings extends Page
 {
+    use ManagesEmailRules;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedInboxArrowDown;
 
     protected static ?string $cluster = Settings::class;
@@ -147,6 +150,7 @@ class EmailInboxSettings extends Page
 
     public function updatedMailboxId(): void
     {
+        $this->cancelRule();
         $this->forwardingUrl = null;
         unset($this->mailbox);
         $this->fillForm();

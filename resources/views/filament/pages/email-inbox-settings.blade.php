@@ -175,6 +175,95 @@
                     </div>
                 </form>
             </x-filament::section>
+
+            {{-- Rules --}}
+            <x-filament::section :heading="__('Rules')" :description="__('Act on mail of this mailbox as it arrives: put a label on it, give it to someone, or archive it. Rules run in this order; every rule that fits does its part.')">
+                <ul class="divide-y divide-gray-200 text-sm dark:divide-white/10">
+                    @forelse ($this->mailboxRules as $rule)
+                        <li class="flex flex-wrap items-center justify-between gap-3 py-2" wire:key="rule-row-{{ $rule->id }}">
+                            <span class="min-w-0 flex-1 @unless ($rule->is_active) opacity-60 @endunless">
+                                <span class="block truncate font-medium">{{ $rule->name }}@unless ($rule->is_active) <span class="text-xs font-normal text-gray-500 dark:text-gray-400">· {{ __('Off') }}</span>@endunless</span>
+                                <span class="block text-xs text-gray-500 dark:text-gray-400">
+                                    {{ __('When') }}
+                                    @if ($rule->from_contains){{ __('the sender contains “:text”', ['text' => $rule->from_contains]) }}@endif
+                                    @if ($rule->from_contains && $rule->subject_contains) {{ __('and') }} @endif
+                                    @if ($rule->subject_contains){{ __('the subject contains “:text”', ['text' => $rule->subject_contains]) }}@endif
+                                    →
+                                    {{ collect([
+                                        $rule->label ? __('label :name', ['name' => $rule->label->name]) : null,
+                                        $rule->assignee ? __('give to :name', ['name' => $rule->assignee->name]) : null,
+                                        $rule->archive ? __('archive') : null,
+                                    ])->filter()->implode(', ') }}
+                                </span>
+                            </span>
+                            <span class="flex shrink-0 flex-wrap gap-1">
+                                <x-filament::button color="gray" size="xs" wire:click="moveRule({{ $rule->id }}, -1)" :disabled="$loop->first" :aria-label="__('Move up')">↑</x-filament::button>
+                                <x-filament::button color="gray" size="xs" wire:click="moveRule({{ $rule->id }}, 1)" :disabled="$loop->last" :aria-label="__('Move down')">↓</x-filament::button>
+                                <x-filament::button color="gray" size="xs" wire:click="toggleRule({{ $rule->id }})">{{ $rule->is_active ? __('Turn off') : __('Turn on') }}</x-filament::button>
+                                <x-filament::button color="gray" size="xs" wire:click="editRule({{ $rule->id }})">{{ __('Edit') }}</x-filament::button>
+                                <x-filament::button color="danger" size="xs" wire:click="deleteRule({{ $rule->id }})" wire:confirm="{{ __('Delete the rule :name?', ['name' => $rule->name]) }}">{{ __('Delete') }}</x-filament::button>
+                            </span>
+                        </li>
+                    @empty
+                        <li class="py-2 text-gray-500 dark:text-gray-400">{{ __('No rules yet.') }}</li>
+                    @endforelse
+                </ul>
+
+                <form class="mt-4 space-y-3 border-t border-gray-200 pt-4 dark:border-white/10" wire:submit="saveRule">
+                    <p class="text-sm font-medium">{{ $this->editingRuleId ? __('Edit rule') : __('New rule') }}</p>
+                    <div class="grid max-w-3xl gap-3 sm:grid-cols-2">
+                        <div class="sm:col-span-2">
+                            <x-filament::input.wrapper :valid="! $errors->has('ruleName')">
+                                <x-filament::input type="text" wire:model="ruleName" maxlength="80" :placeholder="__('Rule name')" :aria-label="__('Rule name')" />
+                            </x-filament::input.wrapper>
+                            @error('ruleName')<p class="mt-1 text-xs text-danger-600">{{ $message }}</p>@enderror
+                        </div>
+                        <div>
+                            <x-filament::input.wrapper :valid="! $errors->has('ruleFrom')">
+                                <x-filament::input type="text" wire:model="ruleFrom" maxlength="190" :placeholder="__('Sender contains (address or name)')" :aria-label="__('Sender contains')" />
+                            </x-filament::input.wrapper>
+                            @error('ruleFrom')<p class="mt-1 text-xs text-danger-600">{{ $message }}</p>@enderror
+                        </div>
+                        <div>
+                            <x-filament::input.wrapper :valid="! $errors->has('ruleSubject')">
+                                <x-filament::input type="text" wire:model="ruleSubject" maxlength="190" :placeholder="__('Subject contains')" :aria-label="__('Subject contains')" />
+                            </x-filament::input.wrapper>
+                            @error('ruleSubject')<p class="mt-1 text-xs text-danger-600">{{ $message }}</p>@enderror
+                        </div>
+                        <div>
+                            <x-filament::input.wrapper :valid="! $errors->has('ruleLabelId')">
+                                <x-filament::input.select wire:model="ruleLabelId" :aria-label="__('Put the label')">
+                                    <option value="">{{ __('No label') }}</option>
+                                    @foreach ($this->labels as $label)
+                                        <option value="{{ $label->id }}">{{ $label->name }}</option>
+                                    @endforeach
+                                </x-filament::input.select>
+                            </x-filament::input.wrapper>
+                        </div>
+                        <div>
+                            <x-filament::input.wrapper>
+                                <x-filament::input.select wire:model="ruleAssignTo" :aria-label="__('Give it to')">
+                                    <option value="">{{ __('Give it to nobody') }}</option>
+                                    @foreach ($this->ruleStaff as $person)
+                                        <option value="{{ $person->id }}">{{ $person->name }}</option>
+                                    @endforeach
+                                </x-filament::input.select>
+                            </x-filament::input.wrapper>
+                        </div>
+                        <label class="flex items-center gap-2 text-sm sm:col-span-2">
+                            <input type="checkbox" wire:model="ruleArchive" class="rounded border-gray-300">
+                            {{ __('Archive it (skip the Inbox)') }}
+                        </label>
+                        @error('ruleLabelId')<p class="text-xs text-danger-600 sm:col-span-2">{{ $message }}</p>@enderror
+                    </div>
+                    <div class="flex gap-2">
+                        <x-filament::button type="submit" size="sm">{{ $this->editingRuleId ? __('Save rule') : __('Create rule') }}</x-filament::button>
+                        @if ($this->editingRuleId)
+                            <x-filament::button color="gray" size="sm" wire:click="cancelRule">{{ __('Cancel') }}</x-filament::button>
+                        @endif
+                    </div>
+                </form>
+            </x-filament::section>
         </div>
     @endif
 </x-filament-panels::page>

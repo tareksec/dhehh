@@ -30,24 +30,27 @@
             <span class="zz-mail-from">{{ $mailbox->name }} &lt;{{ $mailbox->address }}&gt;</span>
         </div>
 
-        <div class="zz-mail-field">
+        <div class="zz-mail-field" x-data="{ open: true }" x-on:focusout="if (! $el.contains($event.relatedTarget)) open = false" x-on:focusin="open = true" x-on:keydown.escape="open = false">
             <label class="zz-mail-label" for="zz-mail-to">{{ __('To') }}</label>
-            <input id="zz-mail-to" type="text" wire:model="composeTo" autocomplete="off" spellcheck="false" placeholder="name@example.com" @class(['is-bad' => $this->composeInvalid !== []])>
+            <input id="zz-mail-to" type="text" wire:model.live.debounce.300ms="composeTo" autocomplete="off" spellcheck="false" placeholder="name@example.com" @class(['is-bad' => $this->composeInvalid !== []])>
+            @include('filament.pages.email-inbox-suggest', ['field' => 'to'])
             <span class="zz-mail-ccs">
                 @if (! $this->composeShowCc)<button type="button" wire:click="$set('composeShowCc', true)">{{ __('Cc') }}</button>@endif
                 @if (! $this->composeShowBcc)<button type="button" wire:click="$set('composeShowBcc', true)">{{ __('Bcc') }}</button>@endif
             </span>
         </div>
         @if ($this->composeShowCc)
-            <div class="zz-mail-field">
+            <div class="zz-mail-field" x-data="{ open: true }" x-on:focusout="if (! $el.contains($event.relatedTarget)) open = false" x-on:focusin="open = true" x-on:keydown.escape="open = false">
                 <label class="zz-mail-label" for="zz-mail-cc">{{ __('Cc') }}</label>
-                <input id="zz-mail-cc" type="text" wire:model="composeCc" autocomplete="off" spellcheck="false">
+                <input id="zz-mail-cc" type="text" wire:model.live.debounce.300ms="composeCc" autocomplete="off" spellcheck="false">
+                @include('filament.pages.email-inbox-suggest', ['field' => 'cc'])
             </div>
         @endif
         @if ($this->composeShowBcc)
-            <div class="zz-mail-field">
+            <div class="zz-mail-field" x-data="{ open: true }" x-on:focusout="if (! $el.contains($event.relatedTarget)) open = false" x-on:focusin="open = true" x-on:keydown.escape="open = false">
                 <label class="zz-mail-label" for="zz-mail-bcc">{{ __('Bcc') }}</label>
-                <input id="zz-mail-bcc" type="text" wire:model="composeBcc" autocomplete="off" spellcheck="false">
+                <input id="zz-mail-bcc" type="text" wire:model.live.debounce.300ms="composeBcc" autocomplete="off" spellcheck="false">
+                @include('filament.pages.email-inbox-suggest', ['field' => 'bcc'])
             </div>
         @endif
         @if ($this->composeInvalid !== [])

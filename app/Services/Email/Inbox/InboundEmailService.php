@@ -37,6 +37,7 @@ class InboundEmailService
         protected EmailContactMatcher $contacts,
         protected CompanyStorageService $storage,
         protected CompanyContext $context,
+        protected EmailRuleEngine $rules,
     ) {}
 
     /**
@@ -63,6 +64,7 @@ class InboundEmailService
                 }
 
                 $result = DB::transaction(fn (): InboundEmailResult => $this->store($mailbox, $email, $stored));
+                $this->applyRules($mailbox, $result);
                 $this->alert($mailbox, $company, $result);
 
                 return $result;
@@ -81,6 +83,16 @@ class InboundEmailService
                 throw $exception;
             }
         });
+    }
+
+    /** The mailbox's rules (label, assign, archive) on the message just kept; they can never fail the delivery. */
+    protected function applyRules(EmailMailbox $mailbox, InboundEmailResult $result): void
+    {
+        $thread = EmailThread::query()->find($result->message->thread_id);
+
+        if ($thread !== null) {
+            $this->rules->apply($mailbox, $thread, (string) $result->message->from_address, $result->message->from_name, (string) $result->message->subject);
+        }
     }
 
     /**

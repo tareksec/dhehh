@@ -8,6 +8,7 @@ use App\Filament\Pages\Concerns\ComposesEmail;
 use App\Filament\Pages\Concerns\ManagesEmailConversation;
 use App\Filament\Pages\Concerns\SchedulesEmail;
 use App\Filament\Pages\Concerns\SnoozesEmail;
+use App\Filament\Pages\Concerns\SuggestsEmailAddresses;
 use App\Models\Company;
 use App\Models\EmailLabel;
 use App\Models\EmailMailbox;
@@ -44,6 +45,7 @@ class EmailInbox extends Page
     use ManagesEmailConversation;
     use SchedulesEmail;
     use SnoozesEmail;
+    use SuggestsEmailAddresses;
 
     public const PAGE_SIZE = 30;
 

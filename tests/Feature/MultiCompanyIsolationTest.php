@@ -42,6 +42,7 @@ use App\Models\EmailLabel;
 use App\Models\EmailLog;
 use App\Models\EmailMailbox;
 use App\Models\EmailMessage;
+use App\Models\EmailRule;
 use App\Models\EmailTemplate;
 use App\Models\EmailThread;
 use App\Models\ExchangeRate;
@@ -177,7 +178,7 @@ class MultiCompanyIsolationTest extends TestCase
             FundSource::class, Voucher::class,
             VoucherAttachment::class, FundTransfer::class,
             StorefrontSlide::class, SmsTemplate::class, SmsLog::class, EmailLog::class, EmailTemplate::class,
-            EmailMailbox::class, EmailThread::class, EmailMessage::class, EmailAttachment::class, EmailLabel::class,
+            EmailMailbox::class, EmailThread::class, EmailMessage::class, EmailAttachment::class, EmailLabel::class, EmailRule::class,
             Lead::class, Quotation::class, QuotationItem::class,
             AiInstructionVersion::class, AttentionItem::class, Conversation::class, ConversationChannel::class, ConversationModeEvent::class,
             ChaseMark::class, ChatOrderLink::class, CompanyFaq::class, KnowledgeDocument::class, QuickReply::class,

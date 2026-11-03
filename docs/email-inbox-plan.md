@@ -86,8 +86,8 @@ pushed to the feature branch `ccr-3799b463-p4pv7n`. Nothing goes to `main` witho
 | Step | What | Commit | Status |
 | --- | --- | --- | --- |
 | 8 | **Snooze and a Trash that empties itself** (Snoozed view, wake-up and bell, `trash_days` setting, `email:wake-snoozed`, `email:purge-trash`) | `4f0746d` (on `main`) | done |
-| 9 | **Scheduled send** (Send later in the compose window, Scheduled view, cancel / send now by the author) | this commit | done |
-| 10 | **Rules and address suggestions** (auto label / assign / archive by sender or subject; To / Cc suggestions from past contacts and customers) | | planned |
+| 9 | **Scheduled send** (Send later in the compose window, Scheduled view, cancel / send now by the author) | `ddc35de` | done |
+| 10 | **Rules and address suggestions** (auto label / assign / archive by sender or subject; To / Cc suggestions from past contacts and customers) | this commit | done |
 | 11 | **Suggest reply** (a draft for staff to edit; never sent by the system; uses the ERP's existing AI setup) | | planned |
 | 12 | **IMAP checking** (a mailbox that cannot forward is read from its IMAP account) | | planned |
 
