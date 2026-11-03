@@ -29,6 +29,7 @@
 ### Fixed
 
 - **The company name in the phone bottom bar is shown in full.** Owner report 2026-11-03: the bar showed "ZamZam ..." for "ZamZam International" because the name was one line cut off in a column as narrow as the others. The company column is now a little wider and the name may take two lines ("ZamZam" / "International"); only a very long name (more than two lines) ends in "…", and the button's title and the list it opens always show the full name. Dashboard keeps room for its whole word, the "+" stays exactly in the middle, and on very small phones (under 360px wide) the bar's labels are a little smaller so they still fit. The icons stay on one line even when the company name takes two lines.
+- **The Top Business Performers card is tidy on phones.** Owner report 2026-11-03: on the Dashboard the Top Products / Top Customers / Top Suppliers cards had too much padding on a phone — four boxes inside one another (the section, the card, the list and a bordered box for every row), so names were squeezed and every row was tall. On screens up to 640px the section's own padding is smaller, the cards have no shadow, the rows are a plain list with a thin line between them (no box), the amount sits to the right of the name (it used to drop to a line of its own), a long name takes two lines before it is cut with “…”, and the amount column has one width so the bars under the names end together. Amounts use tabular figures on every screen size. Tablets and desktop look as before.
 
 ### Technical Notes
 
@@ -45,7 +46,7 @@
 - Email delivery (step 1): no migration and no new CSS (the `.zz-use-*` rules are reused); the deploy needs `npm run build` only because the views are new Tailwind sources. 38 new bilingual keys (parity test green).
 - Tests: `EmailUsageServiceTest` (+2, was `SesUsageServiceTest`), new `EmailDeliveryPageTest` (10), `AmazonSesPageTest` (usage cases replaced by 2 account cases).
 - `admin-bottom-navigation.blade.php`: the `<ul>` uses `.zz-bottom-nav-grid` (columns `0.9fr 1.1fr 3.5rem 1fr 1fr` in `resources/css/filament/admin/theme.css`; both sides add up to 2fr so the fixed middle column stays centred) instead of `grid-cols-5`, cells start at the top (`items-start`; the "+" cell keeps `self-end`), and the company label is `line-clamp-2` with a `title`. Tab labels are 10px below 360px, 11px from 360px. No migration, no new keys. Test: `AdminBottomNavigationTest::test_a_long_company_name_wraps_to_two_lines_instead_of_being_cut_to_one` (15 tests in the file). Needs `npm run build` on deploy, as for any theme change.
-
+- `top-business-performers.blade.php`: the section gets `zz-performers-section`; the `@media (max-width: 640px)` block is rewritten (section content padding 12px with a selector as specific as Filament's, no card shadow, borderless divided rows, `28px 1fr auto` grid, name clamped to two lines, amount column `min-width: 100px`). The widget's inline `<style>` is used, so no `npm run build` is needed. No migration, no new keys (no new text). Looked at in a browser at 360, 390 and 768px with sample data (a very long product name, an empty Suppliers list); not tied to a test because it is layout only.
 
 ## [2.122.0] - 2026-11-02
 

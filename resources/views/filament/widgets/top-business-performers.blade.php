@@ -263,6 +263,7 @@
             color: var(--zz-performer-title);
             font-size: 13px;
             font-weight: 850;
+            font-variant-numeric: tabular-nums;
             line-height: 1.25;
             white-space: nowrap;
         }
@@ -296,20 +297,86 @@
             }
         }
 
+        /*
+         * Phones: the card used to sit inside the section, with a padded list
+         * inside the card and a bordered box for every row — four boxes inside
+         * one another, so the names had little room and each row was tall. Now
+         * the section's own padding is smaller, the card has no shadow, rows are
+         * a plain divided list (no box), and the amount sits to the right of the
+         * name instead of on a line of its own.
+         */
         @media (max-width: 640px) {
-            .zz-performer-row {
-                grid-template-columns: 30px minmax(0, 1fr);
+            .fi-section.zz-performers-section:not(.fi-section-not-contained):not(.fi-divided) > .fi-section-content-ctn > .fi-section-content {
+                padding: 12px;
             }
 
+            .zz-performers,
+            .zz-performers__grid {
+                gap: 12px;
+            }
+
+            .zz-performer-card {
+                border-radius: 10px;
+                box-shadow: none;
+            }
+
+            .zz-performer-card__head {
+                gap: 10px;
+                padding: 12px;
+            }
+
+            .zz-performer-icon {
+                width: 36px;
+                height: 36px;
+            }
+
+            .zz-performer-list {
+                gap: 0;
+                padding: 0;
+            }
+
+            .zz-performer-row {
+                grid-template-columns: 28px minmax(0, 1fr) auto;
+                gap: 10px;
+                align-items: start;
+                min-height: 0;
+                padding: 12px;
+                background: transparent;
+                border: 0;
+                border-radius: 0;
+            }
+
+            .zz-performer-row + .zz-performer-row {
+                border-top: 1px solid var(--zz-performer-row-border);
+            }
+
+            .zz-performer-rank {
+                width: 28px;
+                height: 28px;
+            }
+
+            .zz-performer-name {
+                display: -webkit-box;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+                white-space: normal;
+                overflow-wrap: anywhere;
+            }
+
+            /* One width for every amount, so the bars under the names end together. */
             .zz-performer-value {
-                grid-column: 2;
-                min-width: 0;
-                text-align: left;
+                min-width: 100px;
+                text-align: right;
+            }
+
+            .zz-performer-empty {
+                min-height: 96px;
+                margin: 12px;
             }
         }
     </style>
 
-    <x-filament::section>
+    <x-filament::section class="zz-performers-section">
         <x-slot name="heading">Top Business Performers</x-slot>
         <x-slot name="description">Best products, customers, and suppliers by confirmed business activity.</x-slot>
 

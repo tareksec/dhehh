@@ -223,6 +223,22 @@ Verified: Pint clean. Focused run (translation parity, BulkSMSBD policy, SMS tem
 
 Commit status: committed on branch `feature/sms-templates-in-gateway` and pushed to that branch only (owner approval 2026-11-01). Not merged to `main`.
 
+## 2026-11-03 - Dashboard: Top Business Performers card, standard phone layout
+
+Owner (Bangla, with a phone screenshot): on the main dashboard this card has extra padding on mobile and is not standard; lay it out in the standard way using the design guidelines.
+
+Cause (`top-business-performers.blade.php`): on a phone the Filament section (24px padding) held the performer card (border + shadow), whose list had 14px padding, and every row was itself a bordered box with 10px padding — four nested boxes. Below 640px the amount also dropped to its own line, so each row was about 155px tall and names had little room.
+
+What I did (branch `feature/dashboard-top-performers-mobile-layout`, from `main` at da3a3cf), following the Web Interface Guidelines (flex/grid children `min-w-0`, long text handled with a clamp, `tabular-nums` for amounts, no box inside a box):
+- At 640px and below: section content padding 12px; card without shadow; card header 12px; list without padding; rows are a plain divided list (thin line between rows, no box); grid `rank | name + units + bar | amount` with the amount right-aligned (about 72px a row instead of about 155px); name up to two lines then “…” (full name still in the `title`); the amount column has a fixed minimum width so the bars end together; the empty state keeps a 12px margin.
+- Everywhere: amounts use `font-variant-numeric: tabular-nums`.
+- Above 640px nothing changes (checked at 768px).
+- No new text, so no new translation keys; no migration.
+
+Verified in a real browser (Playwright, throwaway sqlite in the scratchpad, never demo or live) at 360, 390 and 768px: the real view rendered with sample data inside the real dashboard page (long product name, an empty Suppliers card); no sideways scroll; bars aligned; dark-mode variables unchanged. I did not check dark mode by eye. Full suite not rerun for this CSS-only change: see the commit status.
+
+Commit status: committed and pushed to `feature/dashboard-top-performers-mobile-layout` only. Not on `main` (the owner decides when `main` moves; the earlier "push to main" approval was for the bottom-bar fix).
+
 ## 2026-11-03 - Bottom bar: the company name is shown in full
 
 Owner (Bangla, with a phone screenshot): the company name in the bottom bar is not fully shown ("ZamZam ..."); how will you fix it?
