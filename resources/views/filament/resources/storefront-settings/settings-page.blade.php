@@ -134,23 +134,52 @@
                 display: none;
             }
 
+            /*
+             * The section menu is only a three-line button now (no card of its
+             * own, so the page header moves up into the space the card used).
+             * It sits at the right end of the header's button row — the header
+             * is the positioning parent and its button row is its last line —
+             * with no background shape, only a soft shadow. The button row
+             * keeps room on the right so a wrapping row never runs under it.
+             */
+            .zz-storefront-settings-custom-header {
+                position: sticky;
+            }
+
             .zz-storefront-settings-mobile-nav {
+                position: absolute;
+                inset-inline-end: 1rem;
+                inset-block-end: 1.375rem;
+                z-index: 1;
                 display: block;
-                position: relative;
-                background-color: var(--gray-50);
-                padding-top: 10px;
             }
 
-            .dark .zz-storefront-settings-mobile-nav {
-                background-color: var(--gray-950);
+            /* Filament makes a dropdown panel screen-wide up to its max width;
+               this list is a narrow one that hangs from the right edge. */
+            .zz-storefront-settings-mobile-nav .fi-dropdown-panel {
+                width: min(16rem, calc(100vw - 2rem));
             }
 
-            .zz-storefront-settings-mobile-nav-panel {
-                border-block-start: 1px solid var(--gray-200);
+            .zz-storefront-settings-custom-header .fi-header-actions-ctn {
+                padding-inline-end: 3.25rem;
             }
 
-            .dark .zz-storefront-settings-mobile-nav-panel {
-                border-block-start-color: var(--gray-700);
+            .zz-storefront-settings-mobile-nav-toggle.fi-icon-btn {
+                background: transparent;
+                box-shadow: none;
+            }
+
+            .zz-storefront-settings-mobile-nav-toggle.fi-icon-btn:hover,
+            .zz-storefront-settings-mobile-nav-toggle.fi-icon-btn:focus-visible {
+                background: transparent;
+            }
+
+            .zz-storefront-settings-mobile-nav-toggle svg {
+                filter: drop-shadow(0 1px 2px rgb(15 23 42 / 0.35));
+            }
+
+            .dark .zz-storefront-settings-mobile-nav-toggle svg {
+                filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.6));
             }
         }
 

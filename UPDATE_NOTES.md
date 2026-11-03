@@ -223,6 +223,20 @@ Verified: Pint clean. Focused run (translation parity, BulkSMSBD policy, SMS tem
 
 Commit status: committed on branch `feature/sms-templates-in-gateway` and pushed to that branch only (owner approval 2026-11-01). Not merged to `main`.
 
+## 2026-11-03 - Storefront Settings: three-line section menu on phones
+
+Owner (Bangla, with a phone screenshot and a red circle right of "Save changes"): on this page, on mobile only, put the page's menu at the circled spot; the freed space goes to the page header, which moves up. The menu is only the three lines, no background shape, at most a slight shadow. The navigation menu opens from the right side.
+
+What I did (branch `feature/storefront-settings-mobile-menu`, from `main` at da3a3cf): below 1024px (the page's existing mobile breakpoint) the "Publishing" card is removed; the three-line button is absolutely placed at the right end of the header's button row (vertically centred on Save changes), transparent with a soft drop shadow; the header's button row keeps room on the right; the list opens from the right edge as a 16rem panel and highlights the current section; picking a section still switches it. Desktop (left rail) is unchanged.
+
+Decision to confirm: "opens from the right" is built as a list hanging from the right edge (the existing dropdown, anchored to the right), not a full-height drawer sliding in from the right. A real slide-in drawer would be a larger change (new component); say so if you want it.
+
+Also: the card used to show the current section's name ("Publishing"); now only the highlight inside the opened list shows it.
+
+Verified in a real browser (Playwright, throwaway sqlite in the scratchpad, never demo or live): Create Storefront Setting at 360 (menu opens, 16rem panel anchored right, "Theme & Layout" switches the section and the URL), 390 (same, measured), 820 (button aligned with Save) and 1280px (button hidden, rail as before); no sideways scroll; the page title moved from y=214 to y=79 (px at 360 wide). Related tests: PhaseFourAdminPagesTest, StorefrontSetting*, TranslationParityTest pass (8 tests). The Edit page uses the same header; its button row can hold more buttons, which wrap before the icon (not shown with extra buttons in the browser). Dark mode not checked by eye.
+
+Commit status: committed and pushed to `feature/storefront-settings-mobile-menu` only. Not on `main`.
+
 ## 2026-11-03 - Bottom bar: the company name is shown in full
 
 Owner (Bangla, with a phone screenshot): the company name in the bottom bar is not fully shown ("ZamZam ..."); how will you fix it?

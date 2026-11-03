@@ -29,6 +29,7 @@
 ### Fixed
 
 - **The company name in the phone bottom bar is shown in full.** Owner report 2026-11-03: the bar showed "ZamZam ..." for "ZamZam International" because the name was one line cut off in a column as narrow as the others. The company column is now a little wider and the name may take two lines ("ZamZam" / "International"); only a very long name (more than two lines) ends in "…", and the button's title and the list it opens always show the full name. Dashboard keeps room for its whole word, the "+" stays exactly in the middle, and on very small phones (under 360px wide) the bar's labels are a little smaller so they still fit. The icons stay on one line even when the company name takes two lines.
+- **Storefront Settings: on a phone the section menu is a single three-line button.** Owner request 2026-11-03: the page used a whole card (“Publishing” with a menu icon) above the page title, which pushed the title and the Save button down. On phones and tablets (below 1024px) the card is gone: the page title and Save button move up, and the menu is just the three-line icon at the right end of the Save button row — no background shape, only a soft shadow. The list opens from the right edge and highlights the section you are on. Desktop is unchanged.
 
 ### Technical Notes
 
@@ -45,7 +46,7 @@
 - Email delivery (step 1): no migration and no new CSS (the `.zz-use-*` rules are reused); the deploy needs `npm run build` only because the views are new Tailwind sources. 38 new bilingual keys (parity test green).
 - Tests: `EmailUsageServiceTest` (+2, was `SesUsageServiceTest`), new `EmailDeliveryPageTest` (10), `AmazonSesPageTest` (usage cases replaced by 2 account cases).
 - `admin-bottom-navigation.blade.php`: the `<ul>` uses `.zz-bottom-nav-grid` (columns `0.9fr 1.1fr 3.5rem 1fr 1fr` in `resources/css/filament/admin/theme.css`; both sides add up to 2fr so the fixed middle column stays centred) instead of `grid-cols-5`, cells start at the top (`items-start`; the "+" cell keeps `self-end`), and the company label is `line-clamp-2` with a `title`. Tab labels are 10px below 360px, 11px from 360px. No migration, no new keys. Test: `AdminBottomNavigationTest::test_a_long_company_name_wraps_to_two_lines_instead_of_being_cut_to_one` (15 tests in the file). Needs `npm run build` on deploy, as for any theme change.
-
+- `storefront-settings/partials/settings-header.blade.php`: the mobile `<x-filament::section>` wrapper and the section label are removed; the dropdown is `placement="bottom-end"`. `settings-page.blade.php` (`max-width: 1023px`): `.zz-storefront-settings-mobile-nav` is absolutely positioned in the sticky custom header (`inset-inline-end: 1rem; inset-block-end: 1.375rem`, which centres it on the Save button), the header's button row keeps `padding-inline-end: 3.25rem` so wrapping buttons never run under it, the toggle has a transparent background and a `drop-shadow`, and its panel is `min(16rem, 100vw - 2rem)` (Filament's panel is screen-wide up to its max width). Inline `<style>`, so no `npm run build`. No migration, no new keys. `PhaseFourAdminPagesTest` still pins the label, the header class and the rail.
 
 ## [2.122.0] - 2026-11-02
 
