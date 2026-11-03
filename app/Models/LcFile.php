@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
 use App\Support\NumberToWords;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -81,6 +82,18 @@ class LcFile extends Model
         'exchange_rate' => 'decimal:4',
         'landed_cost_applied_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        // The LC file of a purchase in Trash is hidden with it (a hard delete used to remove it
+        // through the foreign key); Restore shows it again. See Purchase and plan T5a.
+        static::addGlobalScope('purchaseNotInTrash', function (Builder $query): void {
+            $query->whereIn(
+                $query->getModel()->qualifyColumn('purchase_id'),
+                Purchase::withoutGlobalScopes()->withoutTrashed()->select('id'),
+            );
+        });
+    }
 
     public function purchase(): BelongsTo
     {

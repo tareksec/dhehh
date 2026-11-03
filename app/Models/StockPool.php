@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Services\StockPoolMembership;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Deliberately does NOT use BelongsToCompany/CompanyScope, and is excluded
@@ -30,12 +32,39 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * Pooling is only supported for simple (non-variant) products — see
  * StockPoolResource's product picker.
+ *
+ * Delete = Trash (owner request 2026-11-01, plan T5a). Moving a pool to Trash does what deleting
+ * it always did: its products go back to their own ledgers. The pool remembers who was in it
+ * (`member_product_ids`) and Restore links them again (StockPoolMembership).
  */
 class StockPool extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'source_product_id',
     ];
+
+    protected $casts = [
+        'member_product_ids' => 'array',
+    ];
+
+    protected static function booted(): void
+    {
+        static::deleting(function (StockPool $pool): void {
+            if (! $pool->trashed()) {
+                app(StockPoolMembership::class)->release($pool);
+            }
+        });
+
+        static::restoring(function (StockPool $pool): void {
+            app(StockPoolMembership::class)->assertCanRestore($pool);
+        });
+
+        static::restored(function (StockPool $pool): void {
+            app(StockPoolMembership::class)->restoreMembers($pool);
+        });
+    }
 
     public function products(): HasMany
     {

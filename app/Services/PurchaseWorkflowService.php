@@ -16,6 +16,15 @@ class PurchaseWorkflowService
             return;
         }
 
+        // A purchase in Trash puts no goods in stock: anything that saves it meanwhile (a voucher
+        // changing its paid amount, say) must not bring the movements back. Restore does.
+        if ($purchase->trashed()) {
+            $this->deleteStockMovements($purchase);
+            $this->syncSupplierBalance($purchase);
+
+            return;
+        }
+
         $items = $purchase->items()->with('product')->get();
         $subtotal = $items->sum(fn (PurchaseItem $item): float => (int) $item->quantity * (float) $item->unit_cost);
         $total = max($subtotal + $purchase->chinaToBdCostTotal() - (float) $purchase->discount + (float) $purchase->vat, 0);

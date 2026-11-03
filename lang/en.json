@@ -4605,5 +4605,6 @@
     "Trash": "Trash",
     "A customer with this phone number already exists, so this one cannot be restored. Delete it permanently, or change the other customer's phone first.": "A customer with this phone number already exists, so this one cannot be restored. Delete it permanently, or change the other customer's phone first.",
     "A chat channel with this Phone Number ID / Page ID already exists (possibly under another company, or in Trash).": "A chat channel with this Phone Number ID / Page ID already exists (possibly under another company, or in Trash).",
-    "The lead of this quotation is in Trash. Restore the lead first, or choose a customer for the quotation.": "The lead of this quotation is in Trash. Restore the lead first, or choose a customer for the quotation."
+    "The lead of this quotation is in Trash. Restore the lead first, or choose a customer for the quotation.": "The lead of this quotation is in Trash. Restore the lead first, or choose a customer for the quotation.",
+    "This pool cannot be restored: its source product was deleted or is now in another stock pool.": "This pool cannot be restored: its source product was deleted or is now in another stock pool."
 }

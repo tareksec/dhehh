@@ -3,13 +3,15 @@
 namespace App\Filament\Resources\StockPools;
 
 use App\Filament\Clusters\Inventory;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\StockPools\Pages\BulkLinkStockPools;
 use App\Filament\Resources\StockPools\Pages\CreateStockPool;
 use App\Filament\Resources\StockPools\Pages\EditStockPool;
 use App\Filament\Resources\StockPools\Pages\ListStockPools;
+use App\Filament\Resources\StockPools\Pages\TrashedStockPools;
 use App\Models\Product;
 use App\Models\StockPool;
-use App\Services\StockMovementService;
+use App\Services\StockPoolMembership;
 use BackedEnum;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -34,6 +36,8 @@ use Illuminate\Support\Facades\Auth;
  */
 class StockPoolResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = StockPool::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSquares2x2;
@@ -130,52 +134,36 @@ class StockPoolResource extends Resource
             ])
             ->recordActions([
                 EditAction::make(),
-                DeleteAction::make()
-                    ->before(fn (StockPool $record) => self::syncMembers($record, [])),
+                // Moving the pool to Trash takes its products out of the pool (StockPool::booted()).
+                DeleteAction::make(),
             ]);
     }
 
     /** @return Collection<int, Product> */
     public static function memberProducts(StockPool $pool): Collection
     {
+        // A pool in Trash has no linked products (they went back to their own ledgers); the Trash
+        // page shows the ones it remembers and will link again on Restore.
         return Product::query()
             ->withoutGlobalScopes()
-            ->where('stock_pool_id', $pool->getKey())
+            ->when(
+                $pool->trashed(),
+                fn ($query) => $query->whereIn('id', $pool->member_product_ids ?? []),
+                fn ($query) => $query->where('stock_pool_id', $pool->getKey()),
+            )
             ->with('company')
             ->get();
     }
 
     /**
-     * Sets stock_pool_id on the source + selected member products, clears
-     * it from anything previously in this pool that's no longer selected,
-     * and resyncs every touched product's displayed stock so removed
-     * members immediately revert to their own independent ledger.
+     * Sets stock_pool_id on the source + selected member products and takes it off anything
+     * previously in this pool that is no longer selected (see StockPoolMembership::sync()).
      *
      * @param  list<int>  $memberProductIds
      */
     public static function syncMembers(StockPool $pool, array $memberProductIds): void
     {
-        $desiredIds = collect($memberProductIds)
-            ->push($pool->source_product_id)
-            ->filter()
-            ->unique()
-            ->values();
-
-        $previousIds = Product::query()->withoutGlobalScopes()->where('stock_pool_id', $pool->getKey())->pluck('id');
-
-        if ($desiredIds->isNotEmpty()) {
-            Product::query()->withoutGlobalScopes()->whereIn('id', $desiredIds)->update(['stock_pool_id' => $pool->getKey()]);
-        }
-
-        $removedIds = $previousIds->diff($desiredIds);
-
-        if ($removedIds->isNotEmpty()) {
-            Product::query()->withoutGlobalScopes()->whereIn('id', $removedIds)->update(['stock_pool_id' => null]);
-        }
-
-        foreach ($desiredIds->merge($removedIds)->unique() as $id) {
-            app(StockMovementService::class)->syncProductStock((int) $id);
-        }
+        app(StockPoolMembership::class)->sync($pool, $memberProductIds);
     }
 
     /** @return array<int, string> */
@@ -221,11 +209,17 @@ class StockPoolResource extends Resource
         return Auth::user()?->isSuperAdmin() ?? false;
     }
 
+    public static function canDeleteAny(): bool
+    {
+        return Auth::user()?->isSuperAdmin() ?? false;
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => ListStockPools::route('/'),
             'create' => CreateStockPool::route('/create'),
+            'trash' => TrashedStockPools::route('/trash'),
             'bulk-link' => BulkLinkStockPools::route('/bulk-link'),
             'edit' => EditStockPool::route('/{record}/edit'),
         ];

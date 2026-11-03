@@ -250,7 +250,7 @@ class VoucherService
         // voucher-row lock only protects against double-approving this one
         // voucher), so the sum below is never read from two transactions at
         // once and cannot jointly overfund the purchase.
-        $purchase = Purchase::query()->withoutGlobalScopes()->lockForUpdate()->find($voucher->purchase_id);
+        $purchase = Purchase::query()->withoutGlobalScopes()->withoutTrashed()->lockForUpdate()->find($voucher->purchase_id);
 
         if (! $purchase) {
             return;

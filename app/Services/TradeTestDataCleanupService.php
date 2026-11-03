@@ -251,7 +251,7 @@ class TradeTestDataCleanupService
         // purchases (purchase stock movements out; LC file and landed cost
         // lines go with them), then the suppliers.
         $found['supplierPayments']->each->delete();
-        $found['purchases']->each->delete();
+        $found['purchases']->each->forceDelete();
         $found['suppliers']->each->delete();
 
         // What is left on the test products' stock ledger (opening stock,

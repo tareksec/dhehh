@@ -4605,5 +4605,6 @@
     "Trash": "ট্র্যাশ",
     "A customer with this phone number already exists, so this one cannot be restored. Delete it permanently, or change the other customer's phone first.": "এই ফোন নম্বরে আরেকজন কাস্টমার আছে, তাই একে ফিরিয়ে আনা যাচ্ছে না। এটিকে স্থায়ীভাবে ডিলিট করুন, অথবা আগে অন্য কাস্টমারের ফোন নম্বর বদলান।",
     "A chat channel with this Phone Number ID / Page ID already exists (possibly under another company, or in Trash).": "এই ফোন নম্বর আইডি / পেজ আইডি দিয়ে একটি চ্যাট চ্যানেল আগে থেকেই আছে (অন্য কোম্পানির অধীনে বা ট্র্যাশে থাকতে পারে)।",
-    "The lead of this quotation is in Trash. Restore the lead first, or choose a customer for the quotation.": "এই কোটেশনের লিড ট্র্যাশে আছে। আগে লিডটি ফিরিয়ে আনুন, অথবা কোটেশনের জন্য একজন কাস্টমার বেছে নিন।"
+    "The lead of this quotation is in Trash. Restore the lead first, or choose a customer for the quotation.": "এই কোটেশনের লিড ট্র্যাশে আছে। আগে লিডটি ফিরিয়ে আনুন, অথবা কোটেশনের জন্য একজন কাস্টমার বেছে নিন।",
+    "This pool cannot be restored: its source product was deleted or is now in another stock pool.": "এই পুলটি ফিরিয়ে আনা যাবে না: এর সোর্স পণ্যটি ডিলিট হয়ে গেছে অথবা এখন অন্য স্টক পুলে আছে।"
 }

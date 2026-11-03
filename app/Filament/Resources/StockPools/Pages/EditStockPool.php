@@ -17,8 +17,8 @@ class EditStockPool extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            DeleteAction::make()
-                ->before(fn () => StockPoolResource::syncMembers($this->record, [])),
+            // Moving the pool to Trash takes its products out of the pool (StockPool::booted()).
+            DeleteAction::make(),
         ];
     }
 

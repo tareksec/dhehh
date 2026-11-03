@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Purchases\Pages;
 
+use App\Filament\Resources\Pages\TrashedRecords;
 use App\Filament\Resources\Purchases\PurchaseResource;
 use App\Models\Purchase;
 use App\Models\Supplier;
@@ -34,6 +35,7 @@ class ListPurchases extends ListRecords
                 ->openUrlInNewTab()
                 ->visible(fn (): bool => (bool) auth()->user()?->canPerformModelAbility('create', Purchase::class)),
 
+            TrashedRecords::linkAction(PurchaseResource::class),
             CreateAction::make(),
         ];
     }

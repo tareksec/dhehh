@@ -2,7 +2,31 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-03 (latest) - Owner's answers on the Trash questions; a delete permission for leads and quotations
+## 2026-11-03 (latest) - Trash for purchases and shared stock pools (T5a); owner's answers on questions 4 and 6
+
+Owner (Bangla, answered in the question dialog): Managers do not get `crm.delete` by default; "start T5"; no bulk delete of stock movements (question 6); Trash keeps things as it does (question 4). T5 is split like T4: **T5a (this one): purchases and stock pools**, T5b: products.
+
+What I did:
+- **A purchase in Trash does what a deleted one did, and Restore undoes it:** stock movements gone (goods leave stock), amount out of the supplier's balance, lines and LC file hidden (global scope `purchaseNotInTrash`), out of reports, shipment values and voucher funding. Its number stays reserved. A save while it is in Trash (a voucher changing the paid amount) leaves its stored totals alone and does not bring the goods back.
+- **A stock pool in Trash is empty and remembers its products** (`stock_pools.member_product_ids`); Restore links them again, unless the source product is gone or in another pool (then Restore says so and the pool stays in Trash). A member that joined another pool meanwhile is left where it is.
+- **Stock movements: the bulk delete is gone** (the list is read-only apart from edit/view).
+- **A bug that was already there:** a product leaving a pool was only re-computed when you were working in its own company (the stock query was company-scoped), so a retail product kept the pool's total. Fixed (by product id) because Trash and Restore depend on it.
+- Docs: CHANGELOG, plan (T5a built; questions 4 and 6 answered), code map (catalog-inventory), the plan's model count (25).
+
+**Decisions I made, for the owner to change:**
+- **Shipments stay a permanent delete** (they carry no stock or money; the plan lists only Purchase and StockPool for T5). A shipment of a purchase in Trash stays on its list and keeps the link.
+- **A purchase with paid vouchers can go to Trash** exactly as it could be deleted before (its vouchers stay, and no longer fund it). I did not add a block.
+- **Restore of a purchase is never refused** (it only adds stock and balance back), unlike an order's.
+
+**Needs Bangla review (1 new key):** "This pool cannot be restored: its source product was deleted or is now in another stock pool."
+
+**Verified (run, not read):** the full suite on PHP 8.4: 3588 passed, 6 skipped, 0 failed; `PurchaseTrashTest` 13 passed; nine mutation checks each failed a test (one hook turned out redundant and was removed); the purchase and stock-pool tests, the multi-company, parity and ⓘ-guard tests passed; browser check (Chromium) of the Purchases list, bulk-delete modal, Trash page and Restore, and the Stock Pools Delete modal, Trash and Restore, in English and Bangla at 1366 px and 360 px with no sideways page scroll. **Not looked at by eye:** the Bangla purchase bulk-delete menu click-through (the English one and the unit test cover the same modal).
+
+**Still waiting for the owner:** plan questions 1, 2, 3, 5 and the five ⓘ questions; the go-ahead for T5b (products).
+
+Commit status: committed on `claude/upbeat-franklin-hy6fhr`, pushed to that branch. Not on `main`.
+
+## 2026-11-03 - Owner's answers on the Trash questions; a delete permission for leads and quotations
 
 Owner (Bangla): "7 এবং 8 ঠিক আছে। 11 এইভাবেই থাকুক। কিন্তু 12 তে পারমিশন লাগবে।" (7 and 8 are fine; 11 stays as it is; 12 needs a permission.)
 

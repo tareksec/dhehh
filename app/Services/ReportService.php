@@ -334,7 +334,8 @@ class ReportService
             ])
             ->leftJoin('purchases', function ($join): void {
                 $join->on('purchases.supplier_id', '=', 'suppliers.id')
-                    ->where('purchases.status', 'received');
+                    ->where('purchases.status', 'received')
+                    ->whereNull('purchases.deleted_at');
             })
             ->groupBy('suppliers.id', 'suppliers.name', 'suppliers.current_balance')
             ->orderByDesc('total_purchases')

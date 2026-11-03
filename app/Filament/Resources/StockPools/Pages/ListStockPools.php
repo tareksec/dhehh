@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\StockPools\Pages;
 
+use App\Filament\Resources\Pages\TrashedRecords;
 use App\Filament\Resources\StockPools\StockPoolResource;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
@@ -15,6 +16,7 @@ class ListStockPools extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            TrashedRecords::linkAction(StockPoolResource::class),
             Action::make('bulkLink')
                 ->label('Bulk link products')
                 ->icon(Heroicon::OutlinedSquares2x2)

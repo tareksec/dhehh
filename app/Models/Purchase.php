@@ -12,11 +12,17 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class Purchase extends Model
 {
-    use BelongsToCompany, GeneratesSequentialNumber;
+    // Delete = Trash (owner request 2026-11-01, plan T5a). Moving a purchase to Trash does what
+    // deleting it always did: its stock movements go (the goods leave stock) and the supplier's
+    // balance is worked out again without it (the deleted hook in booted()). Restore puts both back:
+    // restoring saves the model, and the saved hook works the stock and the balance out again.
+    // Its lines and LC file are hidden while it is in Trash (global scopes on PurchaseItem / LcFile).
+    use BelongsToCompany, GeneratesSequentialNumber, SoftDeletes;
 
     public const CHINA_TO_BD_COST_FIELDS = [
         'machine_purchase' => 'Machine Purchase',
@@ -178,7 +184,8 @@ class Purchase extends Model
 
         do {
             $number = $prefix.'-PUR-'.now()->format('Ymd').'-'.Str::upper(Str::random(5));
-        } while (self::query()
+            // A purchase in Trash still holds its number (the unique index is unchanged).
+        } while (self::query()->withTrashed()
             ->when($company, fn ($query) => $query->where('company_id', $company->getKey()))
             ->where('purchase_number', $number)
             ->exists());

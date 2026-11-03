@@ -3,8 +3,6 @@
 namespace App\Filament\Resources\StockMovements\Tables;
 
 use App\Models\StockMovement;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
@@ -89,11 +87,9 @@ class StockMovementsTable
                 ViewAction::make(),
                 EditAction::make(),
             ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
-            ])
+            // No bulk delete (owner decision 2026-11-03, plan question 6): a stock movement is a row of
+            // the stock ledger, and deleting one rewrites the stock history. A movement is corrected
+            // with another movement (an adjustment), or goes with the order / purchase that made it.
             ->defaultSort('created_at', 'desc');
     }
 }

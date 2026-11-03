@@ -118,9 +118,12 @@ class StockMovementService
             return;
         }
 
-        $stock = $this->signedStockSum(StockMovement::query()->where('product_id', $productId));
+        // By the product's id, across companies: a product that has just left a stock pool belongs
+        // to another company than the one the admin is working in, and must still go back to its
+        // own ledger (StockPoolMembership, plan T5a).
+        $stock = $this->signedStockSum(StockMovement::query()->withoutGlobalScopes()->where('product_id', $productId));
 
-        Product::query()->whereKey($productId)->update(['stock' => $stock]);
+        Product::query()->withoutGlobalScopes()->whereKey($productId)->update(['stock' => $stock]);
     }
 
     public function normalizeQuantity(?string $type, int $quantity): int

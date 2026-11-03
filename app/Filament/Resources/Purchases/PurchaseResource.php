@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\Purchases;
 
 use App\Filament\Clusters\Purchasing;
+use App\Filament\Concerns\TrashFollowsDelete;
 use App\Filament\Resources\Purchases\Pages\CreatePurchase;
 use App\Filament\Resources\Purchases\Pages\EditPurchase;
 use App\Filament\Resources\Purchases\Pages\ListPurchases;
+use App\Filament\Resources\Purchases\Pages\TrashedPurchases;
 use App\Filament\Resources\Purchases\Pages\ViewPurchase;
 use App\Filament\Resources\Purchases\RelationManagers\ShipmentsRelationManager;
 use App\Filament\Resources\Purchases\Schemas\PurchaseForm;
@@ -20,6 +22,8 @@ use Filament\Tables\Table;
 
 class PurchaseResource extends Resource
 {
+    use TrashFollowsDelete;
+
     protected static ?string $model = Purchase::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShoppingBag;
@@ -57,6 +61,7 @@ class PurchaseResource extends Resource
         return [
             'index' => ListPurchases::route('/'),
             'create' => CreatePurchase::route('/create'),
+            'trash' => TrashedPurchases::route('/trash'),
             'view' => ViewPurchase::route('/{record}'),
             'edit' => EditPurchase::route('/{record}/edit'),
         ];

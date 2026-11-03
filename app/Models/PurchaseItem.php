@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Validation\ValidationException;
@@ -44,6 +45,15 @@ class PurchaseItem extends Model
 
     protected static function booted(): void
     {
+        // The lines of a purchase in Trash are hidden with it (a hard delete used to remove them
+        // through the foreign key); Restore shows them again. See Purchase and plan T5a.
+        static::addGlobalScope('purchaseNotInTrash', function (Builder $query): void {
+            $query->whereIn(
+                $query->getModel()->qualifyColumn('purchase_id'),
+                Purchase::withoutGlobalScopes()->withoutTrashed()->select('id'),
+            );
+        });
+
         static::creating(function (PurchaseItem $item): void {
             $item->company_id ??= $item->purchase?->company_id;
         });

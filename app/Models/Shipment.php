@@ -42,8 +42,13 @@ class Shipment extends Model
         return $this->belongsTo(Container::class);
     }
 
+    /**
+     * A shipment stays on the list when its purchase goes to Trash and keeps the link (a hard
+     * delete used to clear it), so saving the shipment still finds the purchase to check the
+     * company against. Money and stock figures leave the purchase out themselves.
+     */
     public function purchase(): BelongsTo
     {
-        return $this->belongsTo(Purchase::class);
+        return $this->belongsTo(Purchase::class)->withTrashed();
     }
 }

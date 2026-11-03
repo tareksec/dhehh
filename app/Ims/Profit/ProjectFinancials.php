@@ -115,7 +115,7 @@ class ProjectFinancials
         }
 
         return DB::table('purchase_items')
-            ->whereIn('purchase_id', $otherPurchaseIds)
+            ->whereIn('purchase_id', DB::table('purchases')->whereNull('deleted_at')->whereIn('id', $otherPurchaseIds)->select('id'))
             ->whereIn('product_id', $productIds)
             ->distinct()
             ->pluck('product_id')

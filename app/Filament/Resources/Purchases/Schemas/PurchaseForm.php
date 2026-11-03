@@ -39,6 +39,8 @@ class PurchaseForm
                             ->default(fn (): string => Purchase::nextPurchaseNumber())
                             ->required()
                             ->unique(ignoreRecord: true)
+                            // A purchase in Trash still holds its number (the unique index is unchanged).
+                            ->validationMessages(['unique' => __('This is already used, possibly by an item in Trash. Use another one, or restore or permanently delete the one in Trash.')])
                             ->maxLength(255),
 
                         Select::make('supplier_id')

@@ -54,6 +54,7 @@ class AccountBalanceService
         $activeStatuses = array_diff(array_keys(Shipment::STATUSES), ['received', 'cancelled']);
 
         return (float) DB::table('purchases')
+            ->whereNull('deleted_at')
             ->when($companyId !== null, fn ($query) => $query->where('company_id', $companyId))
             ->whereIn('id', DB::table('shipments')
                 ->select('purchase_id')
