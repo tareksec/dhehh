@@ -1125,3 +1125,1789 @@ html:not(.zz-sidebar-navigation-ready) .zz-sidebar-menu-parent.fi-sidebar-route-
         display: none;
     }
 }
+
+/* ---------------------------------------------------------------------------------------------------------
+   CRM -> Email (owner request 2026-11-02): the shared mailbox laid out like Gmail. Folders | list | open
+   conversation on a desktop; on a phone one of them at a time (the open conversation replaces the list, the
+   folders slide in over it). Colours are tokens on .zz-mail, redefined for dark mode.
+   --------------------------------------------------------------------------------------------------------- */
+.zz-mail {
+    --m-surface: #ffffff;
+    --m-page: #f4f4f1;
+    --m-ink: #111110;
+    --m-ink2: #52514e;
+    --m-ink3: #6b6a65;
+    --m-line: rgba(11, 11, 11, 0.1);
+    --m-line2: rgba(11, 11, 11, 0.2);
+    --m-hover: #efeee9;
+    --m-sel: #e4eefb;
+    --m-blue: #256abf;
+    --m-blue-ink: #1f5fb0;
+    --m-on-blue: #ffffff;
+    --m-good: #0ca30c;
+    --m-good-ink: #006300;
+    --m-warn: #fab219;
+    --m-warn-ink: #8a5a00;
+    --m-bad: #b42a2a;
+    --m-note: #fff7e0;
+    --m-note-line: #d9b24a;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 540px;
+    height: calc(100dvh - 12rem);
+    color: var(--m-ink);
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.dark .zz-mail {
+    --m-surface: #1a1a19;
+    --m-page: #121211;
+    --m-ink: #f0efec;
+    --m-ink2: #c3c2b7;
+    --m-ink3: #a3a298;
+    --m-line: rgba(255, 255, 255, 0.1);
+    --m-line2: rgba(255, 255, 255, 0.2);
+    --m-hover: #242423;
+    --m-sel: #1b2b43;
+    --m-blue: #3987e5;
+    --m-blue-ink: #7ab4f5;
+    --m-on-blue: #0b0b0b;
+    --m-good-ink: #3fcf3f;
+    --m-warn-ink: #fab219;
+    --m-bad: #f08a8a;
+    --m-note: #2a2412;
+    --m-note-line: #7a6521;
+}
+
+.zz-mail *,
+.zz-mail *::before,
+.zz-mail *::after {
+    box-sizing: border-box;
+}
+
+/* :where() keeps this reset at zero specificity, so every button class below can set its own colour. */
+:where(.zz-mail) button {
+    font: inherit;
+    color: inherit;
+}
+
+.zz-mail-i {
+    width: 20px;
+    height: 20px;
+    flex: none;
+}
+
+.zz-mail-i-s {
+    width: 16px;
+    height: 16px;
+}
+
+.zz-mail-good {
+    color: var(--m-good-ink);
+}
+
+.zz-mail-on {
+    color: var(--m-blue-ink);
+}
+
+.zz-mail-spacer {
+    flex: 1;
+}
+
+.zz-mail-spin {
+    animation: zz-mail-spin 0.8s linear infinite;
+}
+
+@keyframes zz-mail-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Top bar */
+.zz-mail-top {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+    padding: 0 0 10px;
+}
+
+.zz-mail-ib {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--m-ink2);
+    cursor: pointer;
+}
+
+.zz-mail-ib:hover {
+    background: var(--m-hover);
+}
+
+.zz-mail-ib-sm {
+    width: 28px;
+    height: 28px;
+}
+
+.zz-mail-menu-btn {
+    display: none;
+}
+
+.zz-mail-mbx {
+    display: inline-flex;
+    min-width: 0;
+    max-width: 280px;
+    min-height: 38px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 1px solid var(--m-line2);
+    border-radius: 8px;
+    background: var(--m-surface);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.zz-mail-mbx-static {
+    cursor: default;
+}
+
+.zz-mail-mbx-dd {
+    min-width: 0;
+}
+
+.zz-mail-mbx-dd .fi-dropdown-trigger {
+    display: block;
+}
+
+.zz-mail-mbx-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zz-mail-dot {
+    display: inline-block;
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--m-good);
+}
+
+.zz-mail-dot-idle {
+    background: var(--m-ink3);
+}
+
+.zz-mail-search {
+    display: flex;
+    flex: 1;
+    max-width: 560px;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: var(--m-hover);
+    color: var(--m-ink2);
+}
+
+.zz-mail-search:focus-within {
+    border-color: var(--m-blue);
+    background: var(--m-surface);
+}
+
+.zz-mail-search input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--m-ink);
+    outline: none;
+    box-shadow: none;
+    padding: 0;
+}
+
+.zz-mail-search input::placeholder {
+    color: var(--m-ink3);
+}
+
+.zz-mail-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--m-line2);
+    border-radius: 999px;
+    color: var(--m-ink2);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.zz-mail-pill-warn {
+    color: var(--m-warn-ink);
+}
+
+/* The three panes */
+.zz-mail-body {
+    position: relative;
+    display: grid;
+    flex: 1;
+    min-height: 0;
+    grid-template-columns: 208px 340px minmax(0, 1fr);
+    border: 1px solid var(--m-line);
+    border-radius: 12px;
+    background: var(--m-surface);
+    overflow: hidden;
+}
+
+.zz-mail-folders {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 0;
+    padding: 10px 8px;
+    overflow-y: auto;
+    border-right: 1px solid var(--m-line);
+    background: var(--m-page);
+}
+
+.zz-mail-nav {
+    display: flex;
+    width: 100%;
+    min-height: 36px;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--m-ink2);
+    text-align: start;
+    cursor: pointer;
+}
+
+.zz-mail-nav:hover {
+    background: var(--m-hover);
+}
+
+.zz-mail-nav.is-on {
+    background: var(--m-sel);
+    color: var(--m-ink);
+    font-weight: 700;
+}
+
+.zz-mail-nav-name {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zz-mail-n {
+    margin-inline-start: auto;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--m-ink2);
+}
+
+.zz-mail-nav.is-on .zz-mail-n {
+    color: var(--m-ink);
+}
+
+.zz-mail-sec {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 10px 4px;
+    color: var(--m-ink3);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.zz-mail-hint {
+    padding: 4px 10px;
+    color: var(--m-ink3);
+    font-size: 12px;
+}
+
+.zz-mail-trashhint {
+    margin: 0;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--m-line);
+}
+
+.zz-mail-when {
+    margin-inline-start: 8px;
+    color: var(--m-ink3);
+    font-size: 12px;
+}
+
+.zz-mail-snooze-custom {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--m-line);
+}
+
+.zz-mail-snooze-custom label {
+    color: var(--m-ink3);
+    font-size: 12px;
+}
+
+.zz-mail-snooze-custom input {
+    padding: 6px 8px;
+    border: 1px solid var(--m-line);
+    border-radius: 8px;
+    background: var(--m-surface);
+    color: var(--m-ink);
+    font-size: 13px;
+}
+
+.zz-mail-status {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: auto 4px 0;
+    padding: 10px 12px;
+    border: 1px solid var(--m-line);
+    border-radius: 10px;
+    background: var(--m-surface);
+    color: var(--m-ink2);
+    font-size: 12px;
+}
+
+.zz-mail-status span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.zz-mail-status b {
+    color: var(--m-ink);
+}
+
+.zz-mail-c-blue { --c: #2a78d6; }
+.zz-mail-c-green { --c: #0ca30c; }
+.zz-mail-c-orange { --c: #ec835a; }
+.zz-mail-c-purple { --c: #8a5cd6; }
+.zz-mail-c-amber { --c: #fab219; }
+.zz-mail-c-red { --c: #d03b3b; }
+.zz-mail-c-gray { --c: #898781; }
+
+.zz-mail-lb,
+.zz-mail-chip i {
+    display: block;
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: var(--c, #898781);
+}
+
+.zz-mail-labelform {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 4px 6px;
+    padding: 10px;
+    border: 1px solid var(--m-line);
+    border-radius: 10px;
+    background: var(--m-surface);
+}
+
+.zz-mail-labelform input[type='text'] {
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--m-line2);
+    border-radius: 8px;
+    background: var(--m-surface);
+    color: var(--m-ink);
+}
+
+.zz-mail-err {
+    color: var(--m-bad);
+    font-size: 12px;
+}
+
+.zz-mail-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.zz-mail-swatch {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+}
+
+.zz-mail-swatch span {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--c);
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+}
+
+.zz-mail-swatch input:checked + span {
+    outline-color: var(--m-ink);
+}
+
+.zz-mail-swatch input:focus-visible + span {
+    outline-color: var(--m-blue);
+}
+
+.zz-mail-btn {
+    display: inline-flex;
+    min-height: 36px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--m-blue);
+    color: var(--m-on-blue);
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.zz-mail-btn-quiet {
+    border: 1px solid var(--m-line2);
+    background: transparent;
+    color: var(--m-ink);
+}
+
+/* The list */
+.zz-mail-list {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    border-right: 1px solid var(--m-line);
+}
+
+.zz-mail-bar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+    min-height: 48px;
+    padding: 0 8px;
+    border-bottom: 1px solid var(--m-line);
+}
+
+.zz-mail-viewname {
+    margin: 0 0 0 4px;
+    overflow: hidden;
+    font-size: 15px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zz-mail-count {
+    margin-inline-start: auto;
+    padding-inline: 4px;
+    color: var(--m-ink2);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.zz-mail-sep {
+    flex: none;
+    width: 1px;
+    height: 20px;
+    margin: 0 6px;
+    background: var(--m-line2);
+}
+
+.zz-mail-check {
+    cursor: pointer;
+}
+
+.zz-mail input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--m-blue);
+}
+
+.zz-mail-tb {
+    display: inline-flex;
+    min-height: 32px;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--m-ink2);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.zz-mail-tb:hover {
+    background: var(--m-hover);
+}
+
+.zz-mail-danger {
+    color: var(--m-bad);
+}
+
+.zz-mail-chips {
+    display: flex;
+    flex: none;
+    gap: 6px;
+    padding: 8px 12px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--m-line);
+}
+
+.zz-mail-fc {
+    display: inline-flex;
+    height: 28px;
+    flex: none;
+    align-items: center;
+    padding: 0 10px;
+    border: 1px solid var(--m-line2);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--m-ink2);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.zz-mail-fc.is-on {
+    border-color: var(--m-blue);
+    background: var(--m-sel);
+    color: var(--m-ink);
+}
+
+.zz-mail-rows {
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.zz-mail-row {
+    display: grid;
+    grid-template-columns: 18px 24px minmax(0, 1fr);
+    column-gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--m-line);
+    background: var(--m-page);
+}
+
+.zz-mail-row.is-unread {
+    background: var(--m-surface);
+}
+
+.zz-mail-row.is-sel {
+    background: var(--m-sel);
+}
+
+.zz-mail-row > input {
+    margin: 2px 0 0;
+}
+
+.zz-mail-star {
+    display: grid;
+    width: 24px;
+    height: 24px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--m-ink3);
+    cursor: pointer;
+}
+
+.zz-mail-star:disabled {
+    cursor: default;
+}
+
+.zz-mail-star .zz-mail-i {
+    width: 18px;
+    height: 18px;
+}
+
+.zz-mail-star.is-on {
+    color: var(--m-warn);
+}
+
+.zz-mail-main {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 1px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: start;
+    cursor: pointer;
+}
+
+.zz-mail-l1 {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.zz-mail-snd,
+.zz-mail-sub,
+.zz-mail-snip {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zz-mail-cnt {
+    margin-inline-start: 4px;
+    color: var(--m-ink3);
+    font-size: 12px;
+    font-weight: 400;
+}
+
+.zz-mail-row.is-unread .zz-mail-snd,
+.zz-mail-row.is-unread .zz-mail-sub {
+    font-weight: 700;
+}
+
+.zz-mail-tm {
+    flex: none;
+    color: var(--m-ink3);
+    font-size: 12px;
+}
+
+.zz-mail-row.is-unread .zz-mail-tm {
+    color: var(--m-ink);
+    font-weight: 700;
+}
+
+.zz-mail-snip {
+    color: var(--m-ink3);
+    font-size: 13px;
+}
+
+.zz-mail-chiprow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 5px;
+}
+
+.zz-mail-chip {
+    display: inline-flex;
+    height: 20px;
+    align-items: center;
+    gap: 5px;
+    padding: 0 8px;
+    border: 1px solid var(--m-line2);
+    border-radius: 6px;
+    background: var(--m-surface);
+    color: var(--m-ink2);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.zz-mail-chip .zz-mail-i {
+    width: 12px;
+    height: 12px;
+}
+
+.zz-mail-chipx {
+    padding: 0 0 0 2px;
+    border: 0;
+    background: transparent;
+    color: var(--m-ink3);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.zz-mail-more {
+    display: flex;
+    flex: none;
+    justify-content: center;
+    padding: 10px;
+    border-top: 1px solid var(--m-line);
+}
+
+.zz-mail-none {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 32px 16px;
+    color: var(--m-ink3);
+    text-align: center;
+}
+
+.zz-mail-empty-icon {
+    width: 40px;
+    height: 40px;
+    opacity: 0.6;
+}
+
+.zz-mail-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 24px 12px;
+    text-align: center;
+}
+
+.zz-mail-empty h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.zz-mail-empty p {
+    max-width: 460px;
+    color: var(--m-ink3, #6b6a65);
+}
+
+/* The open conversation */
+.zz-mail-read {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+}
+
+.zz-mail-back {
+    display: none;
+}
+
+.zz-mail-thread {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 20px 24px;
+    overflow-y: auto;
+    background: var(--m-page);
+}
+
+.zz-mail-subj h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+.zz-mail-msg {
+    border: 1px solid var(--m-line);
+    border-radius: 10px;
+    background: var(--m-surface);
+}
+
+.zz-mail-msghead {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    text-align: start;
+    cursor: pointer;
+}
+
+.zz-mail-msg.is-draft .zz-mail-msghead {
+    cursor: default;
+}
+
+.zz-mail-av {
+    display: grid;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.zz-mail-a1 { background: #256abf; }
+.zz-mail-a2 { background: #b4532a; }
+.zz-mail-a3 { background: #1d7a1d; }
+.zz-mail-a4 { background: #7040b8; }
+.zz-mail-a5 { background: #8a6100; }
+.zz-mail-a6 { background: #52514e; }
+
+.zz-mail-who {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+}
+
+.zz-mail-who b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zz-mail-to,
+.zz-mail-sn {
+    overflow: hidden;
+    color: var(--m-ink3);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zz-mail-msg.is-min .zz-mail-sn {
+    font-size: 13px;
+}
+
+.zz-mail-meta {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    color: var(--m-ink3);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.zz-mail-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+}
+
+.zz-mail-ok {
+    color: var(--m-good-ink);
+}
+
+.zz-mail-bad {
+    color: var(--m-bad);
+}
+
+.zz-mail-draftmark {
+    color: var(--m-bad);
+}
+
+.zz-mail-msgbody {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0 14px 14px 54px;
+}
+
+.zz-mail-details {
+    display: grid;
+    gap: 2px;
+    margin: 0;
+    color: var(--m-ink3);
+    font-size: 12px;
+}
+
+.zz-mail-details > div {
+    display: flex;
+    gap: 8px;
+}
+
+.zz-mail-details dt {
+    flex: none;
+    min-width: 54px;
+    font-weight: 600;
+}
+
+.zz-mail-details dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.zz-mail-frame {
+    display: block;
+    width: 100%;
+    min-height: 60px;
+    border: 0;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.zz-mail-text {
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+.zz-mail-notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 8px 12px;
+    border: 1px solid var(--m-line2);
+    border-radius: 8px;
+    background: var(--m-hover);
+    color: var(--m-ink2);
+    font-size: 13px;
+}
+
+.zz-mail-notice button {
+    border: 0;
+    background: transparent;
+    color: var(--m-blue-ink);
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.zz-mail-alert {
+    margin: 0;
+    padding: 8px 12px;
+    border: 1px solid var(--m-bad);
+    border-radius: 8px;
+    color: var(--m-bad);
+    font-size: 13px;
+}
+
+.zz-mail-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.zz-mail-file {
+    display: inline-flex;
+    max-width: 100%;
+    min-height: 36px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    border: 1px solid var(--m-line2);
+    border-radius: 8px;
+    background: var(--m-surface);
+    color: var(--m-ink);
+    font-size: 13px;
+    text-decoration: none;
+}
+
+.zz-mail-file:hover {
+    background: var(--m-hover);
+}
+
+.zz-mail-filename {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zz-mail-file small {
+    color: var(--m-ink3);
+}
+
+.zz-mail-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    border: 1px dashed var(--m-note-line);
+    border-radius: 10px;
+    background: var(--m-note);
+}
+
+.zz-mail-note small {
+    display: block;
+    color: var(--m-ink2);
+    font-size: 12px;
+}
+
+.zz-mail-note p {
+    margin: 4px 0 0;
+    overflow-wrap: anywhere;
+}
+
+.zz-mail-toast {
+    position: absolute;
+    inset-inline-start: 50%;
+    bottom: 16px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 14px;
+    transform: translateX(-50%);
+    border-radius: 10px;
+    background: #1b1b1a;
+    color: #f0efec;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+
+.zz-mail-toast button {
+    border: 0;
+    background: transparent;
+    color: #7ab4f5;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.zz-mail-scrim {
+    display: none;
+}
+
+[x-cloak] {
+    display: none !important;
+}
+
+/* A narrower desktop: the list gets a little less room. */
+@media (max-width: 1180px) {
+    .zz-mail-body {
+        grid-template-columns: 188px 300px minmax(0, 1fr);
+    }
+}
+
+/* A tablet or a phone held wide: the list and the conversation take turns. */
+@media (max-width: 980px) {
+    .zz-mail-body {
+        grid-template-columns: 188px minmax(0, 1fr);
+    }
+
+    .zz-mail-read {
+        display: none;
+    }
+
+    .zz-mail-body.has-thread .zz-mail-list {
+        display: none;
+    }
+
+    .zz-mail-body.has-thread .zz-mail-read {
+        display: flex;
+    }
+
+    .zz-mail-back {
+        display: inline-grid;
+    }
+
+    .zz-mail-list {
+        border-right: 0;
+    }
+}
+
+/* A phone: the folders become a drawer over the list. */
+@media (max-width: 760px) {
+    /* Leaves room for the app's own bottom bar, so the last rows are never under it. */
+    .zz-mail {
+        height: calc(100dvh - 14rem);
+        min-height: 460px;
+    }
+
+    .zz-mail-menu-btn {
+        display: inline-grid;
+    }
+
+    .zz-mail-top {
+        flex-wrap: wrap;
+        row-gap: 8px;
+    }
+
+    /* Row one: menu, mailbox, refresh. Row two: the search box. */
+    .zz-mail-mbx-dd,
+    .zz-mail-mbx-static {
+        flex: 1 1 0;
+    }
+
+    .zz-mail-mbx {
+        width: 100%;
+        max-width: none;
+    }
+
+    .zz-mail-search {
+        order: 5;
+        flex: 1 1 100%;
+        max-width: none;
+    }
+
+    .zz-mail-spacer,
+    .zz-mail-pill {
+        display: none;
+    }
+
+    .zz-mail-body,
+    .zz-mail-body.has-thread {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .zz-mail-folders {
+        position: absolute;
+        inset-block: 0;
+        inset-inline-start: 0;
+        z-index: 15;
+        width: 264px;
+        max-width: 84%;
+        transform: translateX(-102%);
+        transition: transform 0.18s ease;
+        box-shadow: 0 0 24px rgba(0, 0, 0, 0.25);
+    }
+
+    .zz-mail-folders.is-open {
+        transform: none;
+    }
+
+    .zz-mail-scrim {
+        position: absolute;
+        inset: 0;
+        z-index: 14;
+        display: block;
+        background: rgba(0, 0, 0, 0.35);
+    }
+
+    .zz-mail-thread {
+        padding: 12px;
+    }
+
+    .zz-mail-msgbody {
+        padding: 0 12px 12px;
+    }
+
+    .zz-mail-ib {
+        width: 44px;
+        height: 44px;
+    }
+
+    .zz-mail-nav {
+        min-height: 44px;
+    }
+
+    .zz-mail-row {
+        padding: 12px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .zz-mail-folders,
+    .zz-mail-spin {
+        transition: none;
+        animation: none;
+    }
+}
+
+/* CRM -> Email: writing (step 5). The compose window, its Quick Replies list, the thread's action row and the note box. */
+.zz-mail-compose {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 0 4px 10px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--m-blue);
+    color: var(--m-on-blue);
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.zz-mail-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 4px;
+}
+
+.zz-mail-noteform {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border: 1px dashed var(--m-note-line);
+    border-radius: 10px;
+    background: var(--m-note);
+}
+
+.zz-mail-noteform label {
+    color: var(--m-ink2);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.zz-mail-noteform textarea {
+    width: 100%;
+    min-height: 72px;
+    padding: 8px 10px;
+    border: 1px solid var(--m-line2);
+    border-radius: 8px;
+    background: var(--m-surface);
+    color: var(--m-ink);
+    resize: vertical;
+}
+
+.zz-mail-noteform-row {
+    display: flex;
+    gap: 8px;
+}
+
+.zz-mail-composer {
+    position: absolute;
+    inset-inline-end: 16px;
+    bottom: 0;
+    z-index: 25;
+    display: flex;
+    width: min(620px, calc(100% - 32px));
+    max-height: calc(100% - 24px);
+    flex-direction: column;
+    border: 1px solid var(--m-line2);
+    border-bottom: 0;
+    border-radius: 12px 12px 0 0;
+    background: var(--m-surface);
+    box-shadow: 0 -6px 32px rgba(0, 0, 0, 0.22);
+}
+
+.zz-mail-composer-head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 8px 8px 14px;
+    border-radius: 12px 12px 0 0;
+    background: var(--m-hover);
+}
+
+.zz-mail-composer-head h2 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zz-mail-saved {
+    color: var(--m-ink3);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.zz-mail-composer-body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.zz-mail-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--m-line);
+}
+
+.zz-mail-label {
+    flex: none;
+    min-width: 52px;
+    color: var(--m-ink3);
+    font-size: 13px;
+}
+
+.zz-mail-field input {
+    flex: 1;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--m-ink);
+    outline: none;
+    box-shadow: none;
+}
+
+.zz-mail-field input.is-bad {
+    color: var(--m-bad);
+}
+
+.zz-mail-from {
+    min-width: 0;
+    min-height: 40px;
+    padding: 10px 0;
+    overflow: hidden;
+    color: var(--m-ink2);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zz-mail-ccs {
+    display: flex;
+    flex: none;
+    gap: 8px;
+}
+
+.zz-mail-ccs button {
+    border: 0;
+    background: transparent;
+    color: var(--m-ink3);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.zz-mail-composer .zz-mail-err {
+    margin: 0;
+    padding: 4px 14px;
+}
+
+.zz-mail-editorwrap {
+    min-height: 220px;
+    padding: 6px 8px;
+}
+
+.zz-mail-editor .fi-fo-rich-editor,
+.zz-mail-editorwrap .fi-fo-rich-editor {
+    border: 0;
+    box-shadow: none;
+}
+
+.zz-mail-composer .zz-mail-files {
+    padding: 4px 14px 0;
+}
+
+.zz-mail-composer .zz-mail-hint {
+    padding: 4px 14px 8px;
+}
+
+.zz-mail-composer-foot {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 10px;
+    border-top: 1px solid var(--m-line);
+}
+
+.zz-mail-send {
+    display: inline-flex;
+    height: 38px;
+    align-items: center;
+    gap: 8px;
+    margin-inline-end: 6px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--m-blue);
+    color: var(--m-on-blue);
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.zz-mail-send:disabled {
+    opacity: 0.6;
+    cursor: progress;
+}
+
+.zz-mail-qr {
+    position: relative;
+}
+
+.zz-mail-qr-pop {
+    position: absolute;
+    inset-inline-start: 0;
+    bottom: calc(100% + 8px);
+    z-index: 30;
+    display: flex;
+    width: min(340px, 86vw);
+    max-height: 320px;
+    flex-direction: column;
+    border: 1px solid var(--m-line2);
+    border-radius: 10px;
+    background: var(--m-surface);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+}
+
+.zz-mail-qr-pop input {
+    margin: 8px;
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--m-line2);
+    border-radius: 8px;
+    background: var(--m-surface);
+    color: var(--m-ink);
+}
+
+.zz-mail-qr-pop ul {
+    margin: 0;
+    padding: 0 0 6px;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.zz-mail-qr-pop li button {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 8px 12px;
+    border: 0;
+    background: transparent;
+    text-align: start;
+    cursor: pointer;
+}
+
+.zz-mail-qr-pop li button:hover {
+    background: var(--m-hover);
+}
+
+.zz-mail-qr-pop li button span {
+    color: var(--m-ink3);
+    font-size: 12px;
+}
+
+@media (max-width: 760px) {
+    /* On a phone the compose window is the whole screen. */
+    .zz-mail-composer {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        width: auto;
+        max-height: none;
+        border: 0;
+        border-radius: 0;
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .zz-mail-composer-head {
+        border-radius: 0;
+    }
+
+    .zz-mail-editorwrap {
+        min-height: 180px;
+    }
+
+    .zz-mail-qr-pop {
+        position: fixed;
+        inset-inline: 12px;
+        bottom: 70px;
+        width: auto;
+    }
+}
+
+/* CRM -> Email: who the conversation is with (step 5b). The assignee and status pickers and the customer panel. */
+.zz-mail-sel {
+    display: inline-flex;
+    height: 32px;
+    max-width: 180px;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px 0 6px;
+    border: 1px solid var(--m-line2);
+    border-radius: 8px;
+    background: var(--m-surface);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.zz-mail-sel-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.zz-mail-sel-pending {
+    border-color: var(--m-warn);
+    color: var(--m-warn-ink);
+}
+
+.zz-mail-sel-closed {
+    color: var(--m-ink3);
+}
+
+.zz-mail-av-s {
+    width: 20px;
+    height: 20px;
+    font-size: 9px;
+}
+
+/* The panel: over the conversation by default, beside it when the page is wide (the page sets .is-wide). */
+.zz-mail-cust {
+    display: none;
+}
+
+.zz-mail-cust.is-open {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
+    z-index: 12;
+    display: flex;
+    width: min(320px, 100%);
+    flex-direction: column;
+    border-inline-start: 1px solid var(--m-line);
+    background: var(--m-surface);
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.14);
+}
+
+.zz-mail-body.is-wide.has-cust {
+    grid-template-columns: 208px 340px minmax(0, 1fr) 300px;
+}
+
+.zz-mail-body.is-wide .zz-mail-cust.is-open {
+    position: static;
+    width: auto;
+    box-shadow: none;
+}
+
+.zz-mail-cust-head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 48px;
+    padding: 0 8px 0 16px;
+    border-bottom: 1px solid var(--m-line);
+}
+
+.zz-mail-cust-head h3,
+.zz-mail-cust-h {
+    margin: 0;
+    color: var(--m-ink3);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.zz-mail-cust-body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.zz-mail-cust-who {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.zz-mail-cust-who > div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+.zz-mail-cust-who b {
+    overflow-wrap: anywhere;
+    font-size: 15px;
+}
+
+.zz-mail-cust-who > div span:not(.zz-mail-chip) {
+    overflow-wrap: anywhere;
+    color: var(--m-ink3);
+    font-size: 12px;
+}
+
+.zz-mail-kv,
+.zz-mail-linkrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    color: var(--m-ink2);
+    font-size: 13px;
+}
+
+.zz-mail-linkrow {
+    color: var(--m-blue-ink);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.zz-mail-linkrow:hover {
+    text-decoration: underline;
+}
+
+.zz-mail-tiles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.zz-mail-tile {
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--m-line);
+    border-radius: 10px;
+}
+
+.zz-mail-tile b {
+    display: block;
+    overflow: hidden;
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zz-mail-tile span {
+    color: var(--m-ink3);
+    font-size: 12px;
+}
+
+.zz-mail-orders {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.zz-mail-orders a {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--m-line);
+    color: var(--m-ink);
+    font-size: 13px;
+    text-decoration: none;
+}
+
+.zz-mail-orders small {
+    display: block;
+    color: var(--m-ink3);
+}
+
+.zz-mail-linked {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--m-line);
+    border-radius: 10px;
+    color: var(--m-ink3);
+    font-size: 12px;
+}
+
+.zz-mail-linked a {
+    margin-inline-end: auto;
+    color: var(--m-blue-ink);
+    font-size: 13px;
+}
+
+.zz-mail-cust-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.zz-mail-btn2 {
+    display: flex;
+    width: 100%;
+    min-height: 40px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 1px solid var(--m-line2);
+    border-radius: 8px;
+    background: var(--m-surface);
+    color: var(--m-ink);
+    font-weight: 600;
+    text-align: start;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.zz-mail-btn2 .zz-mail-i {
+    color: var(--m-ink2);
+}
+
+.zz-mail-orderlink {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.zz-mail-orderlink label {
+    color: var(--m-ink3);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.zz-mail-orderlink > div {
+    display: flex;
+    gap: 8px;
+}
+
+.zz-mail-orderlink input {
+    min-width: 0;
+    flex: 1;
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--m-line2);
+    border-radius: 8px;
+    background: var(--m-surface);
+    color: var(--m-ink);
+}
+
+@media (max-width: 760px) {
+    .zz-mail-cust.is-open {
+        position: fixed;
+        inset: 0;
+        z-index: 55;
+        width: auto;
+        box-shadow: none;
+    }
+
+    .zz-mail-sel-text {
+        max-width: 84px;
+    }
+}

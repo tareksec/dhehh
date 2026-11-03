@@ -1,0 +1,31 @@
+From: Mahbub Hasan <mahbub@example.test>
+To: info@zamzamgadgetbd.com
+Subject: Return request, floor mats
+Date: Sun, 01 Nov 2026 18:00:00 +0600
+Message-ID: <att-1@example.test>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="BOUNDARY-MIX"
+
+--BOUNDARY-MIX
+Content-Type: multipart/related; boundary="BOUNDARY-REL"
+
+--BOUNDARY-REL
+Content-Type: text/html; charset=UTF-8
+
+<p>Photos attached. <img src="cid:logo@example.test"></p>
+--BOUNDARY-REL
+Content-Type: image/png; name="logo.png"
+Content-Transfer-Encoding: base64
+Content-ID: <logo@example.test>
+Content-Disposition: inline; filename="logo.png"
+
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==
+--BOUNDARY-REL--
+
+--BOUNDARY-MIX
+Content-Type: application/pdf; name="../../invoice.pdf"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="../../invoice.pdf"
+
+JVBERi0xLjQKJSB0ZXN0IGRvY3VtZW50Cg==
+--BOUNDARY-MIX--

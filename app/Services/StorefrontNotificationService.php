@@ -50,6 +50,9 @@ class StorefrontNotificationService
      */
     public const SES_CREDENTIAL_KEYS = ['ses_api_key_id', 'ses_api_secret', 'ses_api_region', 'ses_config_set', 'ses_topic_arn', 'ses_tracking_enabled', 'ses_subscription_confirmed_at', 'ses_free_limit', 'ses_price_per_1000'];
 
+    /** notification_credentials keys edited on Settings → Email delivery: the free emails each month and the price of 1,000 (EmailUsageService). */
+    public const EMAIL_COST_KEYS = ['email_free_limit', 'email_price_per_1000'];
+
     /** Reply code BulkSMSBD-style gateways send (inside an HTTP 200) when the SMS was accepted. */
     public const SMS_GATEWAY_SUCCESS_CODE = 202;
 
@@ -448,6 +451,62 @@ class StorefrontNotificationService
     public function sendMailable(StorefrontSetting $setting, string $email, Mailable $mail, string $kind = EmailLog::KIND_OTHER): bool
     {
         return $this->deliver($setting, $email, $mail, $kind, 'Company email failed');
+    }
+
+    /**
+     * One message a staff member wrote in the Email inbox, to several people, through this site's own SMTP account
+     * (else the server's default mailer when that is a real one). Every recipient (To, Cc and Bcc) gets its own
+     * row in the email log, kind $kind. Returns whether the mail server took it, the error text when it did not
+     * (for Amazon SES that says what is wrong: unverified sender, sandbox recipient, wrong credentials), and the
+     * ID Amazon SES gave the message, when there is one.
+     *
+     * @param  list<string>  $to
+     * @param  list<string>  $cc
+     * @param  list<string>  $bcc
+     * @return array{ok: bool, error: ?string, provider_message_id: ?string}
+     */
+    public function sendComposed(StorefrontSetting $setting, Mailable $mail, array $to, array $cc, array $bcc, string $kind = EmailLog::KIND_STAFF_REPLY): array
+    {
+        $logs = app(EmailLogService::class);
+        $ownSmtp = $this->mailConfigured($setting);
+        $via = $logs->via($setting, $ownSmtp);
+        $recipients = array_values(array_unique([...$to, ...$cc, ...$bcc]));
+
+        if (! $ownSmtp && ! $this->emailDeliveryAvailable($setting)) {
+            foreach ($recipients as $recipient) {
+                $logs->skipped((int) $setting->company_id, $kind, $recipient, EmailLogService::REASON_NOT_CONFIGURED, $via);
+            }
+
+            return ['ok' => false, 'error' => __('No email account is set up for this site (Settings → Integrations → Email Setup).'), 'provider_message_id' => null];
+        }
+
+        $configSet = $ownSmtp ? $this->trackingConfigSet($setting) : null;
+
+        try {
+            $mailer = $ownSmtp ? $this->companyMailer($setting) : Mail::mailer();
+
+            if ($configSet !== null) {
+                $mail->withSymfonyMessage(fn (Email $message) => $message->getHeaders()->addTextHeader('X-SES-CONFIGURATION-SET', $configSet));
+            }
+
+            $sent = $mailer->to($to)->cc($cc)->bcc($bcc)->send($mail);
+        } catch (\Throwable $exception) {
+            Log::warning('Inbox email failed', ['error' => $exception->getMessage(), 'mail' => $mail::class]);
+
+            foreach ($recipients as $recipient) {
+                $logs->failed($setting, $kind, $recipient, $via, $exception->getMessage());
+            }
+
+            return ['ok' => false, 'error' => $exception->getMessage(), 'provider_message_id' => null];
+        }
+
+        $providerId = $ownSmtp ? $this->sesMessageId($sent) : null;
+
+        foreach ($recipients as $recipient) {
+            $logs->sent($setting, $kind, $recipient, $via, $providerId);
+        }
+
+        return ['ok' => true, 'error' => null, 'provider_message_id' => $providerId];
     }
 
     public function sendResellerPasswordResetEmail(StorefrontSetting $setting, string $email, string $companyName, string $url, int $minutes): bool

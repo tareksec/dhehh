@@ -93,7 +93,7 @@ The Sales, Orders & Couriers module orchestrates customer acquisition, order ful
 | `app/Filament/Clusters/Courier.php` | Navigation cluster grouping courier bookings, providers, returns, and reports. |
 | `app/Filament/Resources/Orders/OrderResource.php` | Primary sales order management resource with filters for stages and payment statuses. |
 | `app/Filament/Resources/Orders/Pages/ListOrders.php` | Tabbed order listing (All, Confirmed, Processing, Completed, Cancelled, Returned). |
-| `app/Filament/Resources/Orders/Pages/CreateOrder.php` | Form for entering customer details, selecting line items, and setting shipping. |
+| `app/Filament/Resources/Orders/Pages/CreateOrder.php` | Form for entering customer details, selecting line items, and setting shipping. Opened with `?customer=ID` (CRM → Email's "Create order") it picks that active customer of the company and runs the customer field's own after-update (name, shipping fee, courier check). |
 | `app/Filament/Resources/Orders/Pages/EditOrder.php` | Edit page for adjusting order items, courier booking, and operational costs. |
 | `app/Filament/Resources/Orders/Pages/ViewOrder.php` | Infolist view with activity feed, fraud checks, and summary KPI cards. |
 | `app/Filament/Resources/Orders/Actions/ChangeOrderWorkflowAction.php` | Quick action dropdown to advance order workflow stages. |

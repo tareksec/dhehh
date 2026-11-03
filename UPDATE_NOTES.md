@@ -2,7 +2,163 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-01 (latest) - Supplier Account reports and a restructured Report module
+## 2026-11-02 (latest) - Email inbox, Phase 2 step 8: Snooze and a Trash that empties itself
+
+Plan: `docs/email-inbox-plan.md` (Phase 2 steps 8-12 are listed there). Phase 1 (steps 1-7) is on the feature branch `ccr-3799b463-p4pv7n`; this is the first Phase 2 step on the same branch.
+
+Decisions made while building (owner please read):
+
+- **Snooze times are fixed presets**: Later today = 3 hours; Tomorrow morning, In 3 days and Next week = 8:00 in the company's time zone; or any time typed (must be ahead, at most a year). No weekday rules were assumed (the usual Gmail "This weekend" / "Monday" were left out because the shop's working week is the owner's to define). Tell me the times you want and I change them.
+- **A snoozed conversation comes back unread, but in the list it keeps its place by its last message date** (it does not jump to the top). The bell message is what points to it. Putting it at the top needs a second sort column; say if you want that.
+- **The Trash empties itself after 30 days by default**, and this deletes real mail for good (files too). It is per mailbox (Never / 7 / 30 / 60 / 90 days) in Settings -> Email inbox -> Inbox behaviour. Spam is **not** emptied by itself. Conversations that were already in Trash when this is deployed start their 30 days on that day.
+- The bell message goes to the person who snoozed (else the assignee, else everyone with "CRM Inbox: Reply and Manage"); it is always on (it is the point of snoozing), unlike the new-mail alert.
+- Snoozing is for the Inbox only; a conversation in Archive, Spam or Trash cannot be snoozed.
+
+Needs Bangla review: "স্নুজ" for Snooze, "Later today / Tomorrow morning" (আজ একটু পরে / আগামীকাল সকালে).
+
+**Full `php artisan test`: 3773 passed, 7 skipped, 0 failed.** Browser check (throwaway database, never the demo one): the Snooze drop-down, the Snoozed view and the chips at 1440 px light and 390 px dark, no console errors.
+
+Not verified: the scheduler on the real server (`schedule:run` must already be running for `email:send-due`; the two new commands use the same scheduler); the bell message on a real device.
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main`.
+
+## 2026-11-02 - Email inbox, step 6: Settings -> Email inbox (mailboxes, forwarding address, signature, behaviour, labels)
+
+Plan: `docs/email-inbox-plan.md`. Steps 1-5 are commits `131d66a`, `4af2d2c`, `d080370`, `deb331a`, `cfc196b` and `631a60f` on the feature branch `ccr-3799b463-p4pv7n`.
+
+Now a mailbox can be made by the owner (no developer needed), and the page tells step by step how to connect it to Cloudflare.
+
+Decisions made while building (owner please read):
+
+- **New mail alerts staff by default** (ERP bell + push to everyone with "CRM Inbox: Reply and Manage"; only the assignee when the conversation is assigned). A mailbox that receives many newsletters will be noisy: switch **Alert staff on new mail** off in Settings -> Email inbox. Spam and Trash are never alerted.
+- **A mailbox cannot be deleted from the page**, only switched off (**Mailbox is on**), because deleting it would delete all its mail. A developer can still remove one.
+- **Receiving by IMAP (the ERP checking a mailbox) is not built**; the page offers instant forwarding (Cloudflare) or send only. IMAP and Amazon SES inbound are Phase 2.
+- **Reading pane position** (right / off) from the canvas is not offered: only the right-hand pane is built, and a setting that does nothing would mislead.
+- The **forwarding address cannot be shown again** (only its hash is stored). If it is lost, **New token** makes another, and the Cloudflare Worker's `INBOX_URL` must be updated.
+- The **test mail** is sent *to* the mailbox address from the site's email account. It only comes back into the inbox when Cloudflare Email Routing and the Worker are already set up; before that it shows whether sending works.
+- The signature is plain text (lines); in a message it is put under "-- ".
+
+Needs Bangla review: the six setup steps and "তাৎক্ষণিক ফরওয়ার্ডিং" (Instant forwarding).
+
+Not verified: the Cloudflare steps themselves and the Worker on real Cloudflare; the push notification on a real device; adding a mailbox for a company with two sites.
+
+Step 7 (the closing commit): the plan document records the finished state; a gear button on the Email page opens the settings. **Full `php artisan test`: 3750 passed, 7 skipped, 0 failed** (run on the step 6 commit, before the gear button; the page and settings tests were run again after it). `npm run build` passes. Checked in a real browser (Chromium, a throwaway database, never the demo one) at 1440 px light and dark and at 390 px: the Email page, an open conversation, the compose window with the editor, a file and a Quick reply, the customer panel inline, over the page and full screen, and the settings page.
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main`.
+
+## 2026-11-02 - Email inbox, step 5b: assignee, status and the customer panel
+
+Plan: `docs/email-inbox-plan.md`. Step 5a (writing) is commit `cfc196b`; this is 5b on the same branch `ccr-3799b463-p4pv7n`.
+
+Decisions made while building (owner please read):
+
+- **A lead needs a phone.** The CRM's lead table (`leads.phone`) cannot be empty, and the follow-up and broadcast tools work from it, so "Create lead" asks for the phone (filled from the customer when there is one). A new lead source **Email** was added to `Lead::SOURCES` (it shows in the Leads filter and the Broadcast audience list).
+- **Create order opens the existing New Order page with the customer picked** (`?customer=ID`). It does not create an order by itself. This touches `CreateOrder` (a few lines, only when the address has `?customer=`); everything else on that page is unchanged.
+- **Who can be assigned:** active staff with "CRM Inbox: View" who belong to the company (super admins too). A conversation can be assigned to a person who then reads it in the Inbox with the filter **Mine**.
+- **No notification is sent to the assignee** yet (the plan's Phase 2 "rules" step); they see it under **Mine**.
+- "Total spent" counts confirmed, processing and completed orders (the same orders the customer's balance counts); cancelled and draft orders are shown in the list but not added up.
+- The customer is matched by the sender's **email only** (when the mail arrives). A customer who writes from an address that is not saved on their record shows as "not a customer yet"; staff can tie the conversation to an order to connect them.
+
+Needs Bangla review: "দায়িত্ব দিন" (Assign to), "কাউকে দেওয়া হয়নি" (Unassigned), "মোট কেনাকাটা" (Total spent), "ব্যালেন্স" (Balance).
+
+Not verified: Create order on a customer with a courier-risk history (the same code as picking the customer by hand runs, but only the unit test exercises it); the panel on a real phone.
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main`.
+
+## 2026-11-02 - Email inbox, step 5a: writing mail in the Email page (compose, reply, forward, drafts, undo send, notes)
+
+Plan: `docs/email-inbox-plan.md`. Steps 1-4 are commits `131d66a`, `4af2d2c`, `d080370` and `deb331a` on the feature branch `ccr-3799b463-p4pv7n`. Step 5 is split in two commits: 5a (this one) is writing; 5b is the customer panel, assigning and status.
+
+Decisions made while building (owner please read):
+
+- **Undo send:** the **Undo** bar counts down in the page; when it reaches 0 the page sends the message. If the person closes the page first, the scheduled `email:send-due` (every minute) sends it, so a message is never stuck, but it may go up to a minute after the countdown.
+- **Quick Replies go in at the cursor** (at the top of the message, above the signature, when the person has not clicked in the text). Quick Replies have no title in the database, only a "shortcut" and a text; the list shows both.
+- **Closing an unchanged compose window deletes the draft** (a new message nobody typed in; a reply that was only opened). A draft that was changed, or opened again from Drafts, is kept.
+- **Drafts are private:** staff see only their own drafts. Two people can each have a draft reply in the same conversation.
+- **To / Cc / Bcc are plain text boxes** (addresses separated by commas or semicolons, "Name <address>" is understood). Address suggestions from customers and earlier mail are not built yet.
+- A mailbox's **signature** is added when a draft is started, from the mailbox settings (step 6); until then it is empty unless a developer sets it.
+
+Needs Bangla review: "দ্রুত উত্তর" (Quick replies), "পাঠানো ফেরান" (Undo send), "নতুন মেইল লিখুন" (Compose).
+
+Not verified: sending through a real SMTP server from the page (the tests use the mail fake); the compose window on a real phone keyboard (only a 390 px desktop browser); pasting formatted text from Word into the editor.
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main`.
+
+## 2026-11-02 - Email inbox, step 4: the Email page (folders, list, conversation, labels, search)
+
+Plan: `docs/email-inbox-plan.md`. Steps 1-3 are commits `131d66a`, `4af2d2c` and `d080370` on the feature branch `ccr-3799b463-p4pv7n`.
+
+Step 4 (this commit): **CRM -> Email**, the first screen staff see. Reading and organising only; writing (the Compose / Reply buttons), the customer panel, assigning, status and notes arrive in step 5, the mailbox settings page in step 6, so until then a mailbox is made by a developer.
+
+Decisions made while building (owner please read):
+
+- **Who may do what.** Open and read: `crm.view`. Star, move, label, delete: `crm.manage` ("CRM Inbox: Reply and Manage"). Opening a conversation marks it read for everyone, as in a shared Gmail inbox.
+- **Folders are views.** Sent, Drafts, Starred and All mail are not stored folders. **Drafts shows only your own drafts.** A conversation that is only a draft is thrown away (not put in Trash) when deleted.
+- **Search ignores the folder** (it looks through Inbox, archive, Sent) but not Spam and Trash, unless you are in them. It uses `LIKE`, which is fine for a few thousand mails; a very large mailbox would need a full-text index (Phase 2).
+- **Pictures from the internet are hidden by default** in HTML mail, with a "Show pictures" button per message; the mailbox's `load_remote_images` setting (step 6) can switch this off for the whole mailbox. Plain HTML layouts that depend on `<style>` blocks look plainer than in Gmail (the cleaner removes them).
+- **Undo** after Archive / Spam / Delete is a bar at the bottom for eight seconds. It puts each conversation back where it came from.
+- The Trash is **not emptied by itself** yet; **Empty Trash** is a button. (Gmail empties after 30 days; that can be a scheduled job later if you want it.)
+- The page draws itself again every 30 seconds only when something changed (a count and a time are compared first).
+- The reading pane is on the right (the default). A bottom pane and a "list only" mode are not built.
+
+Needs Bangla review: the folder names (ইনবক্স, তারকা চিহ্নিত, ড্রাফট, স্প্যাম, ট্র্যাশ, সব মেইল), "উত্তর দরকার" (Needs reply) and the sentence about hidden pictures.
+
+Not verified: real mail from Gmail / newsletters (only seeded messages); the page with thousands of conversations (the list loads 30 at a time); Safari. The phone layout was checked in a desktop browser at 390 px, not on a real phone.
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main`.
+
+## 2026-11-02 - Email inbox, step 3: writing and sending mail (reply, reply all, forward, drafts, undo send)
+
+Plan: `docs/email-inbox-plan.md`. Steps 1 and 2 are commits `131d66a` and `4af2d2c` on the feature branch `ccr-3799b463-p4pv7n`.
+
+Step 3 (this commit): the sending side, still nothing visible to staff. `OutboundEmailService` starts a new message, a reply, a reply to all and a forward (the signature first, the original quoted below), saves the draft (cleaned HTML, valid addresses kept and the bad ones returned, files on the company's private storage, 12 MB in all), queues it for sending behind the undo window and delivers it through the site's own SMTP account. `email:send-due` runs every minute and sends what the open pages did not. `ComposedEmail` is the message as sent (HTML plus plain-text twin, files, Message-ID / In-Reply-To / References). `sendComposed()` in `StorefrontNotificationService` logs one Email Log row per recipient and adds the Amazon SES configuration set when tracking is on.
+
+Decisions made while building (owner please read):
+
+- **Undo send is 10 seconds** by default; the mailbox settings (step 6) will let you choose 0 to 60. With 0 the message goes at once.
+- A **reply goes to the Reply-To address** when the mail has one, not to the From address. This matters for website contact forms, which mail from the site's own address; the customer's address is in Reply-To.
+- **Reply all** never adds our own mailbox address, and never lists a person twice (a Cc that is already in To is dropped).
+- A **forward** starts a conversation of its own (no reply headers), keeps the original's files and writes the "Forwarded message" block (From, Date, Subject, To).
+- A message **stuck "sending" for ten minutes** is marked failed with "The sending was interrupted. Check the Email Log, then send it again." We cannot know whether the mail server took it, so it is never re-sent on its own.
+- Messages are limited to **50 people** (To + Cc + Bcc) in all, the same limit Cloudflare Email Sending has.
+
+Needs Bangla review: the sentence "ফরোয়ার্ড করা মেইল" and the quote line ":date তারিখে :who লিখেছেন:".
+
+Not verified: sending through a real SMTP server (the tests use the mail fake and the `array` mailer for the rendered message). The rendered message was checked for its headers, text and HTML parts and the attachment; it has not been opened in Gmail or Outlook.
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main`.
+
+## 2026-11-02 - Email inbox, step 2: receiving mail (tables, parser, webhook, Worker)
+
+Plan: `docs/email-inbox-plan.md`. Step 1 (Email delivery page) is commit `131d66a` on the feature branch `ccr-3799b463-p4pv7n`.
+
+Step 2 (this commit): the receiving side, nothing visible to staff yet. Migration `2026_11_02_100000_create_email_inbox_tables` (mailboxes, threads, messages, attachments, labels, label pivot); models `EmailMailbox`, `EmailThread`, `EmailMessage`, `EmailAttachment`, `EmailLabel` (company-owned, in the isolation test); `App\Services\Email\Inbox\*` (parser, sanitizer, thread resolver, contact matcher, inbound service); `InboundEmailController` on `POST /webhooks/email/{mailbox}/{token}`; the Cloudflare Worker `docs/email-inbox/cloudflare-email-worker.js` and the guide `docs/email-inbox-setup.md`. New direct dependencies: `zbateson/mail-mime-parser` ^4.0, `symfony/html-sanitizer` ^8.1.
+
+Decisions made while building (owner please read):
+
+- The Worker posts the **raw message** and the ERP parses it, so the Worker stays a pasteable 40-line file with no npm packages and the same parser serves any future source (IMAP, SES inbound).
+- A message over **15 MB** is refused (nginx and PHP allow 16 MB per request); the Worker then forwards it to the fallback address, or rejects it when none is set.
+- `<style>` blocks in received HTML are removed (inline `style` stays). Some newsletters will look plainer than in Gmail. The next steps show the mail in a sandboxed frame that also blocks scripts and remote pictures.
+- A reply joins its conversation by `In-Reply-To` / `References`; without them by the same subject (no Re:/Fwd:) from the same address within 14 days. A message that arrives for an archived or deleted conversation brings it back to the Inbox and reopens a closed one; spam stays spam.
+- The mailbox token is shown once and only its SHA-256 hash is kept. A mailbox is made from Settings → Email in step 6; until then only a developer can create one.
+
+Not verified: the Worker was run against stand-in messages (success, ERP error with and without fallback, too large) but not on Cloudflare itself. Real mail (large HTML newsletters, unusual character sets) has not been tried; only the `.eml` fixtures in `tests/Fixtures/email`.
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main`.
+
+## 2026-11-02 - Email inbox, step 1: Email delivery page for any provider
+
+Owner request (2026-11-02): a Gmail-like **Email** inbox in the ERP, and the SES usage dashboard made provider-neutral. The design was approved on the canvas "ERP Email Inbox Design"; the plan is `docs/email-inbox-plan.md` (7 steps, one commit each, all on the feature branch `ccr-3799b463-p4pv7n`).
+
+Step 1 (this commit): **Settings → Email delivery**. `EmailProvider` finds the service from the SMTP host; `EmailUsageService` (was `SesUsageService`) counts the Email Log of the company for that host; the page shows the gauge, numbers, kinds, months, weeks, an "About this service" card and the cost settings (`email_free_limit`, `email_price_per_1000`, with the old `ses_*` values as a fallback). The Amazon SES page keeps the account box and links to the new page. Email Log gets the kind `staff_reply` for the coming inbox.
+
+Needs Bangla review: the phrases that name what a service "reports back" ("ফেরত জানায়") and "চেনা সেবা".
+
+Open points: the provider list is a guess from the host (no API call); an unknown host is shown as "Other SMTP service". The Delivered / Bounced numbers exist only for Amazon SES with tracking on. Cloudflare Email Sending, Brevo and the others show every accepted email as "Sent".
+
+Commit status: committed to the feature branch `ccr-3799b463-p4pv7n`; not on `main` (the owner decides).
+
+## 2026-11-01 - Supplier Account reports and a restructured Report module
 
 Owner request (2026-10-26, plan `C:\Users\user\.claude\plans\enumerated-kindling-karp.md`, phases P0 to P7): use what was worked out in the Shahin Khan workbook to arrange the Report module. Owner answers: goods the supplier gives his own customers leave **our** stock and are entered through a **separate order form for the supplier**; the old workbook is imported once, so receipts carry the **receive date, cartons and pieces**; the nine existing reports are restructured too. The work was built uncommitted while the owner waited for the GitHub limit; on 2026-11-01 the owner said "commit and push, and push to main".
 
