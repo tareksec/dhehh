@@ -2,7 +2,11 @@
 
 This file is a working update log for changes that may become commits. Use it to see what a commit contains. Finished work is committed to a topic-named feature branch; `main` moves only on the owner's explicit approval (see `CLAUDE.md` Commit policy).
 
-## 2026-11-03 (latest) - Bulk delete asks for the word DELETE (plan question 1)
+## 2026-11-03 (latest) - T5b mapped: Product to Trash (docs only)
+
+Owner: keep the ⓘ icon work in the same queue, to start after the delete/Trash phases (task list; plan `docs/info-icon-instructions-plan.md`, its 5 questions still to ask). Wrote section 7 of `docs/delete-and-trash-plan.md`: what a product delete does today, the design, 10 things to handle, questions A-C. No code changed. Commit status: docs only, pushed to the feature branch.
+
+## 2026-11-03 - Bulk delete asks for the word DELETE (plan question 1)
 
 Owner answered the open plan questions: 1 = the word `DELETE` (changed: `TypeToConfirmDelete::BULK_WORD`, `matchesNumber()` removed, `countFields()` takes no count), 2 and 5 = as they are, 3 = do T5b (products) first, T6/T7 later. Tests that confirmed a bulk delete with a count now pass `DELETE`. Bilingual: 3 values reworded in `lang/en.json` and `lang/bn.json` (same keys renamed) - Needs Bangla review: "নিশ্চিত করতে শব্দটি লিখুন". Commit status: see below.
 
